@@ -478,7 +478,7 @@ Confidence: 🟢 High (98%)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    FRONTEND (Next.js 15 + React)            │
+│                    FRONTEND (Next.js 16 + React)            │
 │  - Dashboard  - Timeline  - Entity Graph  - PDF Viewer      │
 └─────────────────┬───────────────────────────────────────────┘
                   │ REST API / WebSocket
@@ -523,7 +523,7 @@ Confidence: 🟢 High (98%)
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Framework** | Next.js 15 + React 18 | Modern, stable framework with App Router and SSR |
+| **Framework** | Next.js 16 + React 19 | Modern, stable framework with App Router and SSR |
 | **UI Components** | shadcn/ui + Tailwind CSS | Accessible, responsive component library |
 | **State Management** | Zustand | Lightweight state management for React |
 | **PDF Viewer** | PDF.js | Open-source PDF rendering with annotation support |
@@ -904,7 +904,7 @@ top_chunks = [retrieved_chunks[r.index] for r in reranked.results]
 | **Version Control** | GitHub | Code repository |
 | **CI/CD** | GitHub Actions | Automated testing, deployment |
 | **Hosting (Backend)** | Railway or Render | Python backend hosting |
-| **Hosting (Frontend)** | Vercel | Static site + SSR for Next.js 15 |
+| **Hosting (Frontend)** | Vercel | Static site + SSR for Next.js 16 |
 | **Database** | Supabase (managed PostgreSQL) | Scalable database with RLS |
 | **Secrets Management** | GitHub Secrets + Vault | API keys, credentials |
 | **Testing** | Pytest + Playwright | Unit, integration, E2E tests |
@@ -1306,7 +1306,7 @@ Backend API
     "processing_time_ms": 3250
   }
 
-Frontend (Next.js 15)
+Frontend (Next.js 16)
   ↓ Render answer with inline citation links
   ↓ User clicks citation [View Highlight]
   ↓ Open PDF viewer:
@@ -1913,7 +1913,7 @@ Frontend Display:
 
 ---
 
-#### Week 15: Next.js 15 Frontend Integration
+#### Week 15: Next.js 16 Frontend Integration
 
 **Tasks:**
 1. Dashboard page

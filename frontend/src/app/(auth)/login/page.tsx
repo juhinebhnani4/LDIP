@@ -7,5 +7,5 @@ export default function LoginPage() {
       </div>
       {/* Login form will be implemented in Story 1-3 */}
     </div>
-  );
+  )
 }

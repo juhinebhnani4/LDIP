@@ -723,7 +723,7 @@ CREATE INDEX idx_verifications_matter ON finding_verifications(matter_id);
 CREATE INDEX idx_verifications_attorney ON finding_verifications(verified_by);
 ```
 
-**UI Components (Next.js 15 + React):**
+**UI Components (Next.js 16 + React):**
 ```tsx
 // components/VerificationQueue.tsx
 'use client';
@@ -809,7 +809,7 @@ export function VerificationQueue() {
 - CORS configuration
 
 **Week 7-8: Frontend Scaffolding**
-- Next.js 15 project setup with App Router
+- Next.js 16 project setup with App Router
 - shadcn/ui installation and theming
 - Tailwind CSS configuration
 - Next.js routing (file-based)
@@ -897,7 +897,7 @@ See [Infrastructure Setup](#infrastructure-setup) above
 - Responsibility: Gemini + GPT integration, MIG + RAG pipelines
 
 **3. Frontend Developer** - 1 person
-- Skills: Next.js 15, React, TypeScript, shadcn/ui, D3.js (for timeline visualization)
+- Skills: Next.js 16, React, TypeScript, shadcn/ui, D3.js (for timeline visualization)
 - Responsibility: UI components, verification workflow, visual citations
 
 **4. DevOps Engineer** - 0.5 person (part-time)

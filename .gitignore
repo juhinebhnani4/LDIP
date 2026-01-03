@@ -57,3 +57,6 @@ next-env.d.ts
 *.pem
 *.key
 credentials.json
+
+# Sample files (large PDFs)
+docs/sample_files/

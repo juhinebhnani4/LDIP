@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react"
 
 interface DashboardLayoutProps {
-  children: ReactNode;
+  children: ReactNode
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -10,5 +10,5 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Dashboard header will be implemented in Epic 9 */}
       <main className="container mx-auto py-6">{children}</main>
     </div>
-  );
+  )
 }

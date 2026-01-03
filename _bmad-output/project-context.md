@@ -18,7 +18,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ## Technology Stack & Versions
 
 ### Frontend
-- **Next.js 15** with App Router (NOT Pages Router)
+- **Next.js 16** with App Router (NOT Pages Router)
 - **TypeScript 5.x** in strict mode - no `any` types allowed
 - **React 19** - use new concurrent features where appropriate
 - **Tailwind CSS 4.x** with CSS variables
@@ -90,7 +90,7 @@ def get_matter(matter_id) -> Union[Matter, None]:
 
 ### Framework-Specific Rules
 
-#### Next.js 15 App Router
+#### Next.js 16 App Router
 
 - **Server Components by default** - add `'use client'` only when needed
 - **Route groups** for layout sharing: `(auth)`, `(dashboard)`, `(matter)`

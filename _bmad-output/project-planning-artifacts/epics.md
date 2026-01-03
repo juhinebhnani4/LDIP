@@ -169,7 +169,7 @@ NFR33: Deleted matters: 30 days soft-delete, then hard delete
 ### Additional Requirements
 
 **From Architecture - Starter Template:**
-- Frontend: Next.js 15 with App Router, TypeScript, shadcn/ui, Tailwind CSS, Zustand
+- Frontend: Next.js 16 with App Router, TypeScript, shadcn/ui, Tailwind CSS, Zustand
 - Backend: FastAPI, Python 3.12+, Pydantic v2, SQLAlchemy 2.0
 - Project initialization using `create-next-app` and `uv init` (Epic 1, Story 1)
 
@@ -263,7 +263,7 @@ NFR33: Deleted matters: 30 days soft-delete, then hard delete
 **User Value:** Attorneys can sign in securely and only access matters they're authorized for, with proper role-based permissions.
 
 **Stories:**
-- 1.1: Initialize Next.js 15 frontend project with TypeScript, shadcn/ui, Tailwind CSS, Zustand
+- 1.1: Initialize Next.js 16 frontend project with TypeScript, shadcn/ui, Tailwind CSS, Zustand
 - 1.2: Initialize FastAPI backend project with Python 3.12+, Pydantic v2, SQLAlchemy 2.0
 - 1.3: Implement Supabase Auth integration (email/password, magic link, Google OAuth)
 - 1.4: Implement JWT token handling with automatic refresh and session management
@@ -563,17 +563,17 @@ NFR33: Deleted matters: 30 days soft-delete, then hard delete
 
 ### Epic 1: Project Foundation & Authentication
 
-#### Story 1.1: Initialize Next.js 15 Frontend Project
+#### Story 1.1: Initialize Next.js 16 Frontend Project
 
 As a **developer**,
-I want **a properly configured Next.js 15 frontend project with TypeScript, shadcn/ui, Tailwind CSS, and Zustand**,
+I want **a properly configured Next.js 16 frontend project with TypeScript, shadcn/ui, Tailwind CSS, and Zustand**,
 So that **I have a production-ready foundation for building the LDIP user interface**.
 
 **Acceptance Criteria:**
 
 **Given** the LDIP repository is empty
 **When** I run the project initialization commands
-**Then** a Next.js 15 project is created with App Router enabled
+**Then** a Next.js 16 project is created with App Router enabled
 **And** TypeScript is configured with strict mode
 **And** Tailwind CSS is installed and configured with the LDIP design tokens
 **And** shadcn/ui is initialized with the default components

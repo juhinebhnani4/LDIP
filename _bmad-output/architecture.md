@@ -435,7 +435,7 @@ uv add --dev pytest pytest-asyncio httpx ruff mypy
 ### Architectural Decisions Provided by Starter
 
 **Language & Runtime:**
-- Frontend: TypeScript 5.x strict mode, React 19, Next.js 15 App Router
+- Frontend: TypeScript 5.x strict mode, React 19, Next.js 16 App Router
 - Backend: Python 3.12+, FastAPI 0.115+, Pydantic v2
 
 **Styling Solution:**
@@ -464,7 +464,7 @@ uv add --dev pytest pytest-asyncio httpx ruff mypy
 
 ```
 ldip/
-├── frontend/                    # Next.js 15 App
+├── frontend/                    # Next.js 16 App
 │   ├── src/
 │   │   ├── app/                 # App Router pages
 │   │   │   ├── (auth)/          # Auth routes group
@@ -1311,7 +1311,7 @@ ldip/
 │       ├── deploy-production.yml    # Manual production deploy
 │       └── security-scan.yml        # Weekly dependency scan
 │
-├── frontend/                         # Next.js 15 Application
+├── frontend/                         # Next.js 16 Application
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── next.config.ts
@@ -1898,7 +1898,7 @@ celery -A app.workers.celery worker --loglevel=info
 ### Coherence Validation ✅
 
 **Decision Compatibility:**
-- Technology stack verified compatible: Next.js 15 + FastAPI + Supabase PostgreSQL + Celery + Redis (Upstash)
+- Technology stack verified compatible: Next.js 16 + FastAPI + Supabase PostgreSQL + Celery + Redis (Upstash)
 - All versions are current and stable (as of January 2026)
 - Hybrid LLM strategy (Gemini ingestion + GPT-4 reasoning) properly isolated with clear routing rules
 - No conflicting decisions found

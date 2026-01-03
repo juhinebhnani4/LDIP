@@ -1,18 +1,18 @@
-# Story 1.1: Initialize Next.js 15 Frontend Project
+# Story 1.1: Initialize Next.js 16 Frontend Project
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
 ## Story
 
 As a **developer**,
-I want **a properly configured Next.js 15 frontend project with TypeScript, shadcn/ui, Tailwind CSS, and Zustand**,
+I want **a properly configured Next.js 16 frontend project with TypeScript, shadcn/ui, Tailwind CSS, and Zustand**,
 So that **I have a production-ready foundation for building the LDIP user interface**.
 
 ## Acceptance Criteria
 
-1. **Given** the LDIP repository is empty, **When** I run the project initialization commands, **Then** a Next.js 15 project is created with App Router enabled
+1. **Given** the LDIP repository is empty, **When** I run the project initialization commands, **Then** a Next.js 16 project is created with App Router enabled
 2. **And** TypeScript is configured with strict mode (`"strict": true` in tsconfig.json)
 3. **And** Tailwind CSS 4.x is installed and configured with CSS variables and dark mode support
 4. **And** shadcn/ui is initialized with default components (button, card, dialog, dropdown-menu, input, label, tabs, toast, table)
@@ -23,7 +23,7 @@ So that **I have a production-ready foundation for building the LDIP user interf
 
 ## Tasks / Subtasks
 
-- [x] Task 1: Initialize Next.js 15 project (AC: #1)
+- [x] Task 1: Initialize Next.js 16 project (AC: #1)
   - [x] Run `npx create-next-app@latest frontend --typescript --tailwind --eslint --app --src-dir`
   - [x] Verify App Router is enabled (no pages directory)
   - [x] Verify src directory structure created
@@ -76,6 +76,17 @@ So that **I have a production-ready foundation for building the LDIP user interf
   - [x] Verify no TypeScript errors
   - [x] Verify no ESLint errors
   - [x] Verify hot reload works
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][HIGH] Align Story AC #1 and baseline docs with actual dependency versions (Next.js 16). `frontend/package.json:21` and `_bmad-output/project-context.md:21`
+- [x] [AI-Review][HIGH] Implement real dark-mode toggling: add `next-themes` provider + mount `Toaster`; `.dark` is now controlled via ThemeProvider. `frontend/src/app/providers.tsx:1-15` and `frontend/src/app/layout.tsx:1-40`
+- [x] [AI-Review][HIGH] Fix `next-env.d.ts` importing generated `.next` types (breaks fresh installs/CI before first build). `frontend/next-env.d.ts:1-6`
+- [x] [AI-Review][MEDIUM] Add `ThemeProvider` (from `next-themes`) for theme-dependent UI (`Toaster`). `frontend/src/app/providers.tsx:1-15` and `frontend/src/components/ui/sonner.tsx:10-40`
+- [x] [AI-Review][MEDIUM] Avoid hard crash at module import when Supabase env vars are missing; defer init or provide a safer dev-time failure mode. `frontend/src/lib/supabase.ts:1-22`
+- [x] [AI-Review][MEDIUM] Enforce Prettier formatting consistently by aligning Prettier config with the repo’s existing style. `frontend/.prettierrc:1-9`
+- [x] [AI-Review][LOW] Gate `console.error` logging to non-production. `frontend/src/app/error.tsx:12-18`
+- [x] [AI-Review][LOW] Replace leftover create-next-app template content (home page + README) with LDIP-specific copy. `frontend/src/app/(dashboard)/page.tsx:1-35` and `frontend/README.md:1-45`
 
 ## Dev Notes
 
@@ -132,7 +143,7 @@ frontend/
 - **Prefer `const` over `let`** - use `let` only when reassignment needed
 - **Import React types** - `import type { FC } from 'react'`
 
-#### Next.js 15 App Router Rules
+#### Next.js 16 App Router Rules
 - **Server Components by default** - add `'use client'` only when needed
 - **Route groups** for layout sharing: `(auth)`, `(dashboard)`, `(matter)`
 - **Use `loading.tsx`** and `error.tsx` for suspense boundaries
@@ -153,7 +164,7 @@ const { currentMatter, setCurrentMatter } = useMatterStore();
 
 | Technology | Version | Notes |
 |------------|---------|-------|
-| Next.js | 15.x | App Router, NOT Pages Router |
+| Next.js | 16.x | App Router, NOT Pages Router |
 | React | 19.x | Use new concurrent features |
 | TypeScript | 5.x | Strict mode |
 | Tailwind CSS | 4.x | With CSS variables |
@@ -211,7 +222,7 @@ app/(matter)/[id]/page.tsx  // Should be [matterId]
 - [Source: _bmad-output/architecture.md#Frontend-Structure]
 - [Source: _bmad-output/architecture.md#Naming-Patterns]
 - [Source: _bmad-output/project-context.md#TypeScript-Rules]
-- [Source: _bmad-output/project-context.md#Next.js-15-App-Router]
+- [Source: _bmad-output/project-context.md#Next.js-16-App-Router]
 - [Source: _bmad-output/project-context.md#Zustand-State-Management]
 - [Source: _bmad-output/project-planning-artifacts/Requirements-Baseline-v1.0.md#Infrastructure]
 - [Source: _bmad-output/project-planning-artifacts/epics.md#Story-1.1]
@@ -248,6 +259,30 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 ### Change Log
 
 - 2026-01-03: Story 1-1 completed - Frontend project initialized with full architecture-compliant structure
+- 2026-01-03: Review follow-ups implemented (Next.js 16 baseline docs aligned; dark mode provider; next-env fix; safer Supabase init; template cleanup)
+- 2026-01-03: Code-review fixes applied (route conflict removed; next-env cleaned; metadata updated; docs + file list synced)
+
+### Senior Developer Review (AI)
+
+**Reviewer:** Juhi  
+**Date:** 2026-01-03  
+**Outcome:** Changes Requested (action items added; no code changes applied)
+
+- **Git evidence**: repository is clean at time of review (no staged/uncommitted diffs), so review validated by direct file inspection.
+- **Key blockers**: Next.js version mismatch vs AC (#1), dark mode not wired, `next-env.d.ts` imports generated `.next` types.
+
+**Follow-up status (2026-01-03):** All review follow-ups have been implemented; story moved back to `review` for final verification.
+
+---
+
+**Reviewer:** Juhi  
+**Date:** 2026-01-03  
+**Outcome:** Approved (fixes applied during review)
+
+- Fixed duplicate `/` route by removing `frontend/src/app/page.tsx` and using `(dashboard)/page.tsx` as the root dashboard/landing page.
+- Removed generated `.next` import from `frontend/next-env.d.ts` (TypeScript route types are handled via `tsconfig.json` includes).
+- Updated root metadata from template defaults to LDIP.
+- Cleaned up untracked/accidental files (e.g., `tatus --porcelain`) and documented `providers.tsx` + `.gitignore` changes.
 
 ### File List
 
@@ -285,4 +320,26 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - frontend/next.config.ts
 - frontend/eslint.config.mjs
 - frontend/components.json
+
+**Modified Files (review follow-ups + doc alignment):**
+- .gitignore
+- _bmad-output/architecture.md
+- _bmad-output/implementation-artifacts/1-1-initialize-nextjs-frontend.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- _bmad-output/project-context.md
+- _bmad-output/project-planning-artifacts/LDIP-MVP-Complete-Specification.md
+- _bmad-output/project-planning-artifacts/MVP-Scope-Definition-v1.0.md
+- _bmad-output/project-planning-artifacts/epics.md
+- frontend/.prettierrc
+- frontend/README.md
+- frontend/next-env.d.ts
+- frontend/src/app/error.tsx
+- frontend/src/app/layout.tsx
+- frontend/src/app/(dashboard)/page.tsx
+- frontend/src/app/providers.tsx
+- frontend/src/lib/supabase.ts
+- frontend/tsconfig.json
+
+**Deleted Files:**
+- frontend/src/app/page.tsx
 

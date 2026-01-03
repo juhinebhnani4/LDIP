@@ -1,0 +1,206 @@
+# Sprint Status - LDIP
+# generated: 2026-01-03
+# project: LDIP
+# project_key: LDIP
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+#
+# REQUIRED REFERENCE DOCUMENTS:
+# =============================
+# Always check these files when creating/developing stories:
+# - PRD/Requirements: _bmad-output/project-planning-artifacts/Requirements-Baseline-v1.0.md
+# - UX Decisions: _bmad-output/project-planning-artifacts/UX-Decisions-Log.md
+# - Architecture: _bmad-output/architecture.md
+# - Project Context: _bmad-output/project-context.md
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-01-03
+project: LDIP
+project_key: LDIP
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Project Foundation & Authentication
+  epic-1: in-progress
+  1-1-initialize-nextjs-frontend: review
+  1-2-initialize-fastapi-backend: backlog
+  1-3-supabase-auth-integration: backlog
+  1-4-jwt-token-handling: backlog
+  1-5-password-reset-flow: backlog
+  1-6-role-per-matter-model: backlog
+  1-7-postgresql-rls-policies: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2A: Document Upload & Storage
+  epic-2a: backlog
+  2a-1-document-upload-ui: backlog
+  2a-2-supabase-storage-integration: backlog
+  2a-3-documents-table: backlog
+  epic-2a-retrospective: optional
+
+  # Epic 2B: OCR & RAG Pipeline
+  epic-2b: backlog
+  2b-1-google-document-ai-ocr: backlog
+  2b-2-gemini-ocr-validation: backlog
+  2b-3-ocr-quality-assessment: backlog
+  2b-4-bounding-boxes-table: backlog
+  2b-5-parent-child-chunking: backlog
+  2b-6-hybrid-search-bm25-pgvector: backlog
+  2b-7-cohere-rerank-integration: backlog
+  epic-2b-retrospective: optional
+
+  # Epic 2C: Entity Extraction & MIG
+  epic-2c: backlog
+  2c-1-mig-entity-extraction: backlog
+  2c-2-alias-resolution: backlog
+  2c-3-background-job-tracking: backlog
+  epic-2c-retrospective: optional
+
+  # Epic 3: Citation Verification Engine
+  epic-3: backlog
+  3-1-act-citation-extraction: backlog
+  3-2-act-discovery-report-ui: backlog
+  3-3-citation-verification: backlog
+  3-4-split-view-citation-highlighting: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Timeline Construction Engine
+  epic-4: backlog
+  4-1-date-extraction-gemini: backlog
+  4-2-event-classification: backlog
+  4-3-events-table-mig-integration: backlog
+  4-4-timeline-anomaly-detection: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Consistency & Contradiction Engine
+  epic-5: backlog
+  5-1-entity-grouped-statement-querying: backlog
+  5-2-statement-pair-comparison-gpt4: backlog
+  5-3-contradiction-type-classification: backlog
+  5-4-severity-scoring-explanation: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Engine Orchestrator
+  epic-6: backlog
+  6-1-query-intent-analysis: backlog
+  6-2-engine-execution-ordering: backlog
+  6-3-audit-trail-logging: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Three-Layer Memory System
+  epic-7: backlog
+  7-1-session-memory-redis: backlog
+  7-2-ttl-sliding-window-pronoun-resolution: backlog
+  7-3-matter-memory-postgresql-jsonb: backlog
+  7-4-key-findings-research-notes: backlog
+  7-5-query-cache-redis: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Safety Layer (Guardrails, Policing, Verification)
+  epic-8: backlog
+  8-1-regex-pattern-detection: backlog
+  8-2-gpt4o-mini-violation-detection: backlog
+  8-3-language-policing: backlog
+  8-4-finding-verifications-table: backlog
+  8-5-verification-queue-ui: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Dashboard & Upload Experience
+  epic-9: backlog
+  9-1-dashboard-header: backlog
+  9-2-matter-cards-grid: backlog
+  9-3-activity-feed-quick-stats: backlog
+  9-4-upload-stage-1-2: backlog
+  9-5-upload-stage-3-4: backlog
+  9-6-upload-stage-5-completion: backlog
+  epic-9-retrospective: optional
+
+  # Epic 10A: Workspace Shell & Navigation
+  epic-10a: backlog
+  10a-1-workspace-shell-header: backlog
+  10a-2-tab-bar-navigation: backlog
+  10a-3-content-area-qa-panel: backlog
+  epic-10a-retrospective: optional
+
+  # Epic 10B: Summary & Timeline Tabs
+  epic-10b: backlog
+  10b-1-summary-tab: backlog
+  10b-2-summary-inline-verification: backlog
+  10b-3-timeline-vertical-list: backlog
+  10b-4-timeline-horizontal-multitrack: backlog
+  10b-5-timeline-filtering-manual-events: backlog
+  epic-10b-retrospective: optional
+
+  # Epic 10C: Entities & Citations Tabs
+  epic-10c: backlog
+  10c-1-entities-mig-graph: backlog
+  10c-2-entities-detail-merge: backlog
+  10c-3-citations-act-discovery: backlog
+  10c-4-citations-split-view: backlog
+  epic-10c-retrospective: optional
+
+  # Epic 10D: Verification & Documents Tabs
+  epic-10d: backlog
+  10d-1-verification-queue-datatable: backlog
+  10d-2-verification-statistics-filtering: backlog
+  10d-3-documents-file-list: backlog
+  10d-4-documents-file-actions: backlog
+  epic-10d-retrospective: optional
+
+  # Epic 11: Q&A Panel & PDF Viewer
+  epic-11: backlog
+  11-1-qa-panel-header-position: backlog
+  11-2-conversation-history: backlog
+  11-3-streaming-response-engine-trace: backlog
+  11-4-suggested-questions-input: backlog
+  11-5-pdf-viewer-split-view: backlog
+  11-6-pdf-viewer-full-modal: backlog
+  11-7-bounding-box-overlays: backlog
+  epic-11-retrospective: optional
+
+  # Epic 12: Export Builder
+  epic-12: backlog
+  12-1-export-modal-section-selection: backlog
+  12-2-inline-editing-preview: backlog
+  12-3-verification-check-format-generation: backlog
+  12-4-partner-executive-summary: backlog
+  epic-12-retrospective: optional
+
+  # Epic 13: Observability & Production Hardening
+  epic-13: backlog
+  13-1-axiom-logging-integration: backlog
+  13-2-circuit-breakers-tenacity: backlog
+  13-3-rate-limiting-slowapi: backlog
+  13-4-graceful-degradation-error-states: backlog
+  13-5-production-deployment-config: backlog
+  13-6-user-facing-error-messages: backlog
+  epic-13-retrospective: optional

@@ -1,0 +1,54 @@
+# Workflow Status Template
+
+# This tracks progress through BMM methodology Analysis, Planning, and Solutioning phases.
+# Implementation phase is tracked separately in sprint-status.yaml
+
+# STATUS DEFINITIONS:
+# ==================
+# Initial Status (before completion):
+#   - required: Must be completed to progress
+#   - optional: Can be completed but not required
+#   - recommended: Strongly suggested but not required
+#   - conditional: Required only if certain conditions met (e.g., if_has_ui)
+#
+# Completion Status:
+#   - {file-path}: File created/found (e.g., "docs/product-brief.md")
+#   - skipped: Optional/conditional workflow that was skipped
+
+generated: "2026-01-02T00:04:49"
+last_updated: "2026-01-03"
+epics_completed: "2026-01-03"
+implementation_readiness_completed: "2026-01-03"
+project: "LDIP"
+project_type: "software"
+selected_track: "enterprise"
+field_type: "greenfield"
+workflow_path: "_bmad/bmm/workflows/workflow-status/paths/enterprise-greenfield.yaml"
+
+# Epic structure (updated per Decision 13 - Epic 2 split)
+epic_count: 19
+story_count: 85
+epic_splits:
+  epic_2: ["2A", "2B", "2C"]  # Decision 13
+  epic_10: ["10A", "10B", "10C", "10D"]  # Decision 11
+
+workflow_status:
+  # Phase 0: Discovery (Optional - all skipped)
+  brainstorm-project: skipped
+  research: "_bmad-output/project-planning-artifacts/research/technical-ocr-llm-latest-technologies-research-2025-12-28.md"
+  product-brief: skipped
+
+  # Phase 1: Planning
+  prd: "_bmad-output/project-planning-artifacts/Requirements-Baseline-v1.0.md"
+  create-ux-design: "_bmad-output/project-planning-artifacts/UX-Decisions-Log.md"
+
+  # Phase 2: Solutioning
+  create-architecture: "_bmad-output/architecture.md"
+  generate-project-context: "_bmad-output/project-context.md"
+  test-design: required
+  validate-architecture: recommended
+  create-epics-and-stories: "_bmad-output/project-planning-artifacts/epics.md"
+  implementation-readiness: "_bmad-output/project-planning-artifacts/implementation-readiness-report-2026-01-03.md"
+
+  # Phase 3: Implementation
+  sprint-planning: required

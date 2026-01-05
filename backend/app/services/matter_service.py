@@ -99,6 +99,26 @@ class MatterService:
         """
         self.db = db
 
+    def _batch_fetch_user_info(self, user_ids: list[str]) -> dict[str, dict[str, str | None]]:
+        """Batch fetch user info for multiple user IDs.
+
+        Args:
+            user_ids: List of user IDs to fetch info for.
+
+        Returns:
+            Dictionary mapping user_id to {email, full_name}.
+        """
+        if not user_ids:
+            return {}
+
+        # Fetch all users in a single query
+        result = self.db.table("users").select("id, email, full_name").in_("id", user_ids).execute()
+
+        return {
+            user["id"]: {"email": user.get("email"), "full_name": user.get("full_name")}
+            for user in result.data
+        }
+
     def create_matter(
         self, user_id: str, data: MatterCreate
     ) -> Matter:
@@ -227,15 +247,18 @@ class MatterService:
             raise MatterNotFoundError(matter_id)
 
         row = result.data[0]
+        matter_attorneys = row.get("matter_attorneys", [])
+
+        # Batch fetch all user info in a single query (fixes N+1)
+        user_ids = [ma["user_id"] for ma in matter_attorneys]
+        user_info_map = self._batch_fetch_user_info(user_ids)
 
         # Build members list with user info
         members = []
         user_role = None
 
-        for ma in row.get("matter_attorneys", []):
-            # Get user info
-            user_result = self.db.table("users").select("email, full_name").eq("id", ma["user_id"]).execute()
-            user_info = user_result.data[0] if user_result.data else {}
+        for ma in matter_attorneys:
+            user_info = user_info_map.get(ma["user_id"], {})
 
             member = MatterMember(
                 id=ma["id"],
@@ -340,6 +363,13 @@ class MatterService:
             raise MatterNotFoundError(matter_id)
 
         row = result.data[0]
+
+        # Get actual member count
+        member_count_result = self.db.table("matter_attorneys").select(
+            "id", count="exact"
+        ).eq("matter_id", matter_id).execute()
+        member_count = member_count_result.count or 0
+
         return Matter(
             id=row["id"],
             title=row["title"],
@@ -348,7 +378,7 @@ class MatterService:
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             role=role,
-            member_count=0,  # Would need separate query
+            member_count=member_count,
         )
 
     def delete_matter(
@@ -489,11 +519,13 @@ class MatterService:
             "id, user_id, role, invited_by, invited_at"
         ).eq("matter_id", matter_id).execute()
 
+        # Batch fetch all user info in a single query (fixes N+1)
+        user_ids = [ma["user_id"] for ma in result.data]
+        user_info_map = self._batch_fetch_user_info(user_ids)
+
         members = []
         for ma in result.data:
-            # Get user info
-            user_result = self.db.table("users").select("email, full_name").eq("id", ma["user_id"]).execute()
-            user_info = user_result.data[0] if user_result.data else {}
+            user_info = user_info_map.get(ma["user_id"], {})
 
             members.append(MatterMember(
                 id=ma["id"],
@@ -559,9 +591,9 @@ class MatterService:
 
         ma = result.data[0]
 
-        # Get user info
-        user_result = self.db.table("users").select("email, full_name").eq("id", member_user_id).execute()
-        user_info = user_result.data[0] if user_result.data else {}
+        # Get user info (single lookup, consistent with batch pattern)
+        user_info_map = self._batch_fetch_user_info([member_user_id])
+        user_info = user_info_map.get(member_user_id, {})
 
         return MatterMember(
             id=ma["id"],

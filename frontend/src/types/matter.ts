@@ -111,21 +111,21 @@ export interface ApiError {
 }
 
 /**
- * Type guard for checking if a role has edit permissions
+ * Check if a role has edit permissions (owner or editor).
  */
 export function canEdit(role: MatterRole | null): boolean {
   return role === 'owner' || role === 'editor';
 }
 
 /**
- * Type guard for checking if a role has owner permissions
+ * Check if a role has owner permissions.
  */
 export function isOwner(role: MatterRole | null): boolean {
   return role === 'owner';
 }
 
 /**
- * Type guard for checking if user has any access
+ * Check if user has any access to the matter.
  */
 export function hasAccess(role: MatterRole | null): boolean {
   return role !== null;

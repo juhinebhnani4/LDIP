@@ -23,6 +23,8 @@ export const createMockSupabaseClient = (overrides?: {
   signUpError?: Error | null;
   signOutError?: Error | null;
   refreshError?: Error | null;
+  resetPasswordError?: Error | null;
+  updateUserError?: Error | null;
 }) => {
   const {
     user = mockUser,
@@ -31,6 +33,8 @@ export const createMockSupabaseClient = (overrides?: {
     signUpError = null,
     signOutError = null,
     refreshError = null,
+    resetPasswordError = null,
+    updateUserError = null,
   } = overrides ?? {};
 
   // Track subscription callbacks for auth state changes
@@ -72,6 +76,18 @@ export const createMockSupabaseClient = (overrides?: {
       refreshSession: vi.fn().mockResolvedValue({
         data: refreshError ? null : { session },
         error: refreshError,
+      }),
+      resetPasswordForEmail: vi.fn().mockResolvedValue({
+        data: resetPasswordError ? null : {},
+        error: resetPasswordError,
+      }),
+      updateUser: vi.fn().mockResolvedValue({
+        data: updateUserError ? null : { user },
+        error: updateUserError,
+      }),
+      verifyOtp: vi.fn().mockResolvedValue({
+        data: signInError ? null : { user, session },
+        error: signInError,
       }),
       onAuthStateChange: vi.fn().mockImplementation((callback) => {
         authStateCallbacks.push(callback);

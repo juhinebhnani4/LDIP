@@ -145,8 +145,8 @@ describe('LoginForm', () => {
       expect(magicLinkTab).toHaveAttribute('aria-selected', 'true');
     });
 
-    // Find the "Send Magic Link" button
-    const sendButton = await screen.findByRole('button', { name: /send magic link/i });
+    // Find the "Send Verification Code" button (OTP flow, not magic link redirect)
+    const sendButton = await screen.findByRole('button', { name: /send verification code/i });
 
     // Fill in email in the magic link form
     const emailInput = document.getElementById('email-magic') as HTMLInputElement;
@@ -154,11 +154,11 @@ describe('LoginForm', () => {
 
     await user.click(sendButton);
 
+    // Implementation sends OTP code (not redirect link) for manual verification
     await waitFor(() => {
       expect(mockClient.auth.signInWithOtp).toHaveBeenCalledWith({
         email: "test@example.com",
         options: {
-          emailRedirectTo: expect.stringContaining("/auth/callback"),
           shouldCreateUser: true,
         },
       });

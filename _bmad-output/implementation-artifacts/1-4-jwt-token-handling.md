@@ -1,6 +1,6 @@
 # Story 1.4: Implement JWT Token Handling and Session Management
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -530,8 +530,15 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
-- All 26 backend tests passing (11 security tests + 11 integration tests + 4 health tests)
-- All 35 frontend tests passing (12 auth hook tests + 23 existing auth tests)
+**Backend Tests (22 passing):**
+- `backend/tests/core/test_security.py` - 11 tests (JWT validation, token expiry, invalid signatures)
+- `backend/tests/api/test_auth_integration.py` - 11 tests (protected endpoints, auth headers, public endpoints)
+
+**Frontend Tests (35 passing):**
+- `frontend/src/hooks/useAuth.test.ts` - 12 tests (useSession, useUser, useAuthActions, useAuth)
+- `frontend/src/components/features/auth/LoginForm.test.tsx` - 8 tests (password login, OTP flow, validation)
+- `frontend/src/components/features/auth/SignupForm.test.tsx` - 8 tests (registration flow)
+- `frontend/src/components/features/auth/LogoutButton.test.tsx` - 7 tests (logout actions)
 
 ### Completion Notes List
 
@@ -549,33 +556,61 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 | Date | Change |
 |------|--------|
 | 2026-01-05 | Implemented all 12 tasks for JWT token handling and session management |
+| 2026-01-05 | [Code Review] Fixed LoginForm.test.tsx - updated test to match OTP verification flow |
 
 ### File List
 
-**Backend (modified):**
-- backend/pyproject.toml - Added PyJWT>=2.8.0 dependency
-- backend/app/core/config.py - Added supabase_jwt_secret configuration
-- backend/app/core/security.py - Full JWT validation implementation
-- backend/app/api/deps.py - Added require_role dependency
-- backend/app/api/routes/health.py - Added protected /me endpoint
-- backend/.env.example - Added SUPABASE_JWT_SECRET documentation
+**Backend - New Files (10):**
+- `backend/app/models/auth.py` - JWTClaims and AuthenticatedUser Pydantic models
+- `backend/tests/core/__init__.py` - Test package init
+- `backend/tests/core/test_security.py` - 11 JWT validation unit tests
+- `backend/tests/api/test_auth_integration.py` - 11 integration tests
+- `backend/.python-version` - Python version specification
+- `backend/uv.lock` - Dependency lock file
+- `backend/migrations/versions/0001_initial.py` - Initial migration
+- `backend/app/workers/tasks/document_tasks.py` - Document processing tasks
+- `backend/app/workers/tasks/engine_tasks.py` - Engine processing tasks
 
-**Backend (new):**
-- backend/app/models/auth.py - JWTClaims and AuthenticatedUser models
-- backend/tests/core/__init__.py - Test package init
-- backend/tests/core/test_security.py - 11 JWT validation tests
-- backend/tests/api/test_auth_integration.py - 11 integration tests
+**Backend - Modified Files (12):**
+- `backend/pyproject.toml` - Added PyJWT>=2.8.0 dependency
+- `backend/app/core/config.py` - Added supabase_jwt_secret configuration
+- `backend/app/core/security.py` - Full JWT validation implementation
+- `backend/app/core/logging.py` - Logging configuration updates
+- `backend/app/api/deps.py` - Added require_role dependency
+- `backend/app/api/routes/health.py` - Added protected /me endpoint
+- `backend/app/main.py` - App initialization updates
+- `backend/app/workers/celery.py` - Celery worker config
+- `backend/app/workers/tasks/__init__.py` - Task exports
+- `backend/migrations/env.py` - Alembic environment config
+- `backend/.env.example` - Added SUPABASE_JWT_SECRET documentation
+- `backend/.gitignore` - Ignore patterns
+- `backend/README.md` - Documentation updates
 
-**Frontend (new):**
-- frontend/src/lib/api/client.ts - API client with auth
-- frontend/src/lib/api/types.ts - API response types
-- frontend/src/hooks/useAuth.ts - Auth hooks
-- frontend/src/hooks/useAuth.test.ts - 12 hook tests
+**Frontend - New Files (5):**
+- `frontend/src/lib/api/client.ts` - API client with automatic auth token injection
+- `frontend/src/lib/api/types.ts` - API response type definitions
+- `frontend/src/hooks/useAuth.ts` - Auth hooks (useSession, useUser, useAuth, useAuthActions)
+- `frontend/src/hooks/useAuth.test.ts` - 12 auth hook tests
+- `frontend/next-env.d.ts` - Next.js TypeScript declarations
+- `frontend/tailwind.config.ts` - Tailwind configuration
 
-**Frontend (modified):**
-- frontend/src/hooks/index.ts - Export auth hooks
-- frontend/src/middleware.ts - Token expiry handling
-- frontend/src/app/auth/logout/route.ts - GET support + cookie clearing
-- frontend/src/app/(auth)/login/page.tsx - Session expired message
-- frontend/src/tests/mocks/supabase.ts - Added refreshSession and onAuthStateChange mocks
+**Frontend - Modified Files (9):**
+- `frontend/src/hooks/index.ts` - Export auth hooks
+- `frontend/src/middleware.ts` - Token expiry handling with 5-minute refresh threshold
+- `frontend/src/app/auth/logout/route.ts` - GET support + server-side cookie clearing
+- `frontend/src/app/auth/callback/route.ts` - OAuth callback handling
+- `frontend/src/app/(auth)/login/page.tsx` - Session expired message banner
+- `frontend/src/components/features/auth/LoginForm.tsx` - OTP verification flow
+- `frontend/src/components/features/auth/LoginForm.test.tsx` - Updated magic link test
+- `frontend/src/components/features/auth/LogoutButton.tsx` - Logout button component
+- `frontend/src/tests/mocks/supabase.ts` - Added refreshSession and onAuthStateChange mocks
+- `frontend/.gitignore` - Ignore patterns
+
+**Project Root - Modified (5):**
+- `.gitignore` - Root ignore patterns
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` - Story status tracking
+- `_bmad-output/implementation-artifacts/1-1-initialize-nextjs-frontend.md` - Previous story refs
+- `_bmad-output/implementation-artifacts/1-2-initialize-fastapi-backend.md` - Previous story refs
+- `_bmad-output/implementation-artifacts/1-3-supabase-auth-integration.md` - Previous story refs
+- `_bmad/bmm/workflows/4-implementation/code-review/workflow.yaml` - Workflow config
 

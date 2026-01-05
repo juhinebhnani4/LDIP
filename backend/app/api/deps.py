@@ -10,6 +10,7 @@ CRITICAL: All matter-related routes MUST use `validate_matter_access` or
 `require_matter_role` to enforce Layer 4 security.
 """
 
+import asyncio
 import re
 import time
 from collections.abc import AsyncGenerator, Callable
@@ -248,7 +249,7 @@ def _validate_uuid(value: str, name: str) -> None:
         )
 
 
-def _apply_timing_mitigation(start_time: float) -> None:
+async def _apply_timing_mitigation(start_time: float) -> None:
     """Apply timing attack mitigation by ensuring minimum response time.
 
     This prevents attackers from using response time differences to
@@ -261,7 +262,7 @@ def _apply_timing_mitigation(start_time: float) -> None:
 
     if elapsed_ms < MIN_ACCESS_DENIED_TIME_MS:
         sleep_time = (MIN_ACCESS_DENIED_TIME_MS - elapsed_ms) / 1000
-        time.sleep(sleep_time)
+        await asyncio.sleep(sleep_time)
 
 
 def validate_matter_access(
@@ -324,7 +325,7 @@ def validate_matter_access(
             )
 
             # Apply timing mitigation
-            _apply_timing_mitigation(start_time)
+            await _apply_timing_mitigation(start_time)
 
             # Return 404 (not 403) to prevent matter enumeration
             raise HTTPException(
@@ -362,7 +363,7 @@ def validate_matter_access(
                 )
 
                 # Apply timing mitigation
-                _apply_timing_mitigation(start_time)
+                await _apply_timing_mitigation(start_time)
 
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

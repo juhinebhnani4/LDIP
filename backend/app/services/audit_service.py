@@ -96,8 +96,7 @@ class AuditLogEntry(BaseModel):
     details: dict[str, Any] | None
     timestamp: datetime
 
-    class Config:
-        use_enum_values = True
+    model_config = {"use_enum_values": True}
 
 
 # =============================================================================

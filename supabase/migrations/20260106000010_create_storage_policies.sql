@@ -6,6 +6,30 @@
 --   documents/{matter_id}/acts/{filename}      - Act/reference documents
 --   documents/{matter_id}/exports/{filename}   - Generated exports (optional)
 --
+-- =============================================================================
+-- ⚠️  IMPORTANT: MANUAL SETUP REQUIRED
+-- =============================================================================
+--
+-- This migration creates RLS policies for Supabase Storage. Before running:
+--
+-- 1. CREATE THE BUCKET (required before policies can work):
+--    Option A - Via Supabase Dashboard:
+--      Storage > New Bucket > Name: "documents" > Public: OFF
+--      File size limit: 50MB (free tier) or 500MB (paid tier)
+--
+--    Option B - Via Supabase CLI:
+--      supabase storage create documents
+--
+-- 2. PERMISSIONS NOTE:
+--    - This migration uses helper functions in PUBLIC schema
+--    - The storage.objects policies reference these functions
+--    - If policies fail to create, run with service role or via dashboard
+--
+-- 3. VERIFICATION after migration:
+--    SELECT * FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage';
+--
+-- =============================================================================
+--
 -- NOTE: This migration requires specific Supabase permissions.
 -- The helper functions are placed in the PUBLIC schema (not storage schema)
 -- because creating functions in the storage schema requires elevated permissions.
@@ -22,7 +46,7 @@
 -- Bucket configuration:
 --   - Name: documents
 --   - Public: false
---   - File size limit: 500MB
+--   - File size limit: 50MB (free tier) or 500MB (paid tier)
 --   - Allowed MIME types: application/pdf, application/zip
 
 -- =============================================================================

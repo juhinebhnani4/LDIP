@@ -1,6 +1,6 @@
 # Story 1.7: Implement PostgreSQL RLS Policies for 4-Layer Matter Isolation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -520,3 +520,37 @@ N/A
 **Security Tests (backend/tests/security/):**
 - test_4_layer_isolation.py [NEW]
 - test_cross_matter_penetration.py [NEW]
+
+## Code Review Record
+
+### Review Date
+2026-01-05
+
+### Reviewer
+Claude Opus 4.5 (Adversarial Code Review)
+
+### Issues Found & Fixed
+
+| # | Severity | Issue | Fix Applied |
+|---|----------|-------|-------------|
+| 1 | MEDIUM | `time.sleep()` blocked event loop in async `_apply_timing_mitigation()` | Changed to `await asyncio.sleep()` |
+| 2 | N/A | Missing `update_updated_at_column()` function | FALSE POSITIVE - exists in matters migration |
+| 3 | LOW | Pydantic v1 `Config` class syntax in `AuditLogEntry` | Changed to `model_config = {...}` |
+| 4 | MEDIUM | Storage migration lacked setup instructions | Added detailed header documentation |
+| 5 | LOW | `__init__.py` missing exports for test imports | Added `session_pattern`, `cache_pattern`, etc. |
+
+### Files Modified During Review
+
+- `backend/app/api/deps.py` - Added `asyncio` import, fixed async sleep
+- `backend/app/services/audit_service.py` - Pydantic v2 syntax
+- `backend/app/services/memory/__init__.py` - Added missing exports
+- `backend/app/services/rag/__init__.py` - Added missing exports
+- `supabase/migrations/20260106000010_create_storage_policies.sql` - Added setup documentation
+
+### Security Assessment
+
+**PASS** - 4-layer matter isolation correctly implemented:
+- Layer 1 (RLS): All 10 tables have proper policies
+- Layer 2 (Vector): `match_chunks` raises exception if matter_id is NULL
+- Layer 3 (Redis): UUID validation prevents key injection
+- Layer 4 (API): Timing attack mitigation with constant-time responses

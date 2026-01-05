@@ -57,7 +57,7 @@ development_status:
   1-4-jwt-token-handling: done
   1-5-password-reset-flow: done
   1-6-role-per-matter-model: done
-  1-7-postgresql-rls-policies: backlog
+  1-7-postgresql-rls-policies: review
   epic-1-retrospective: optional
 
   # Epic 2A: Document Upload & Storage

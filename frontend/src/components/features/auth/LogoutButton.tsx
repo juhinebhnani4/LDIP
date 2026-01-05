@@ -1,10 +1,10 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { createClient } from '@/lib/supabase/client'
+import { LogOut } from 'lucide-react'
 
 interface LogoutButtonProps {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
@@ -19,26 +19,24 @@ export function LogoutButton({
   showIcon = true,
   className,
 }: LogoutButtonProps) {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleLogout = async () => {
-    setIsLoading(true);
-
+    setIsLoading(true)
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      router.push('/login');
-      router.refresh();
-    } catch (error) {
-      console.error('Error signing out:', error);
-      // Still redirect to login even if there's an error
-      router.push('/login');
-      router.refresh();
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      // Clear cookies server-side (Supabase SSR) via route handler.
+      await fetch('/auth/logout', { method: 'POST' })
+    } catch {
+      // Ignore; still redirect user to login.
     } finally {
-      setIsLoading(false);
+      router.push('/login')
+      router.refresh()
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <Button
@@ -51,5 +49,5 @@ export function LogoutButton({
       {showIcon && <LogOut className="mr-2 h-4 w-4" />}
       {isLoading ? 'Signing out...' : 'Sign Out'}
     </Button>
-  );
+  )
 }

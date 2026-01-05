@@ -22,6 +22,7 @@ export const createMockSupabaseClient = (overrides?: {
   signInError?: Error | null;
   signUpError?: Error | null;
   signOutError?: Error | null;
+  refreshError?: Error | null;
 }) => {
   const {
     user = mockUser,
@@ -29,7 +30,11 @@ export const createMockSupabaseClient = (overrides?: {
     signInError = null,
     signUpError = null,
     signOutError = null,
+    refreshError = null,
   } = overrides ?? {};
+
+  // Track subscription callbacks for auth state changes
+  const authStateCallbacks: ((event: string, session: typeof mockSession | null) => void)[] = [];
 
   return {
     auth: {
@@ -64,6 +69,24 @@ export const createMockSupabaseClient = (overrides?: {
         data: { session },
         error: null,
       }),
+      refreshSession: vi.fn().mockResolvedValue({
+        data: refreshError ? null : { session },
+        error: refreshError,
+      }),
+      onAuthStateChange: vi.fn().mockImplementation((callback) => {
+        authStateCallbacks.push(callback);
+        return {
+          data: {
+            subscription: {
+              unsubscribe: vi.fn(),
+            },
+          },
+        };
+      }),
+      // Helper to trigger auth state change in tests
+      _triggerAuthStateChange: (event: string, newSession: typeof mockSession | null) => {
+        authStateCallbacks.forEach((cb) => cb(event, newSession));
+      },
     },
   };
 };

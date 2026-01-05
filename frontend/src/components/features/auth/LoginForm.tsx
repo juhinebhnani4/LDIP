@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 interface FormErrors {
   email?: string;
   password?: string;
+  otp?: string;
   general?: string;
 }
 
@@ -20,12 +21,14 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    otp: '',
   });
 
   // Check for auth errors from callback
@@ -57,6 +60,7 @@ export function LoginForm() {
 
     setIsLoading(true);
     setErrors({});
+    setNotice(null);
 
     try {
       const supabase = createClient();
@@ -101,16 +105,15 @@ export function LoginForm() {
 
     setIsLoading(true);
     setErrors({});
+    setNotice(null);
 
     try {
       const supabase = createClient();
 
-      // Use email OTP without redirect - user will enter the code manually
-      // This avoids PKCE issues when magic link opens in a new tab
+      // Send OTP code to email (no redirect - user enters code manually)
       const { error } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
-          // Don't use emailRedirectTo - we'll verify the code manually
           shouldCreateUser: true,
         },
       });
@@ -120,7 +123,10 @@ export function LoginForm() {
         return;
       }
 
-      setShowOtpInput(true);
+      // Store email and show OTP input
+      setOtpEmail(formData.email);
+      setOtpSent(true);
+      setNotice("Check your email for a 6-digit verification code.");
     } catch {
       setErrors({ general: 'An unexpected error occurred. Please try again.' });
     } finally {
@@ -131,8 +137,13 @@ export function LoginForm() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!otpCode || otpCode.length < 6) {
-      setErrors({ general: 'Please enter the code from your email' });
+    if (!formData.otp) {
+      setErrors({ otp: 'Verification code is required' });
+      return;
+    }
+
+    if (formData.otp.length !== 6) {
+      setErrors({ otp: 'Please enter the 6-digit code' });
       return;
     }
 
@@ -143,8 +154,8 @@ export function LoginForm() {
       const supabase = createClient();
 
       const { error } = await supabase.auth.verifyOtp({
-        email: formData.email,
-        token: otpCode,
+        email: otpEmail,
+        token: formData.otp,
         type: 'email',
       });
 
@@ -162,9 +173,37 @@ export function LoginForm() {
     }
   };
 
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: otpEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) {
+        setErrors({ general: error.message });
+        return;
+      }
+
+      setNotice("New code sent! Check your email.");
+    } catch {
+      setErrors({ general: 'An unexpected error occurred. Please try again.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setErrors({});
+    setNotice(null);
 
     try {
       const supabase = createClient();
@@ -193,59 +232,11 @@ export function LoginForm() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setNotice(null);
     if (errors[name as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
   };
-
-  if (showOtpInput) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-center text-green-600">Check your email</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground text-center">
-            We&apos;ve sent a verification code to <strong>{formData.email}</strong>
-          </p>
-          {errors.general && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {errors.general}
-            </div>
-          )}
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="otp-code">Verification Code</Label>
-              <Input
-                id="otp-code"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={8}
-                placeholder="Enter code"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                disabled={isLoading}
-                className="text-center text-2xl tracking-widest"
-                autoFocus
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading || otpCode.length < 6}>
-              {isLoading ? 'Verifying...' : 'Verify Code'}
-            </Button>
-          </form>
-          <p className="text-sm text-muted-foreground text-center">
-            The code will expire in 1 hour.
-          </p>
-        </CardContent>
-        <CardFooter className="justify-center">
-          <Button variant="outline" onClick={() => { setShowOtpInput(false); setOtpCode(''); setErrors({}); }}>
-            Back to Login
-          </Button>
-        </CardFooter>
-      </Card>
-    );
-  }
 
   return (
     <Card>
@@ -253,6 +244,11 @@ export function LoginForm() {
         <CardTitle className="text-center">Sign In</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {notice && (
+          <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 border border-green-200">
+            {notice}
+          </div>
+        )}
         {(authError || errors.general) && (
           <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {authError === 'auth_callback_error'
@@ -306,26 +302,80 @@ export function LoginForm() {
           </TabsContent>
 
           <TabsContent value="magic-link" className="space-y-4">
-            <form onSubmit={handleMagicLinkLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email-magic">Email</Label>
-                <Input
-                  id="email-magic"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  disabled={isLoading}
-                  aria-invalid={!!errors.email}
-                />
-                {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-              </div>
+            {!otpSent ? (
+              <form onSubmit={handleMagicLinkLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email-magic">Email</Label>
+                  <Input
+                    id="email-magic"
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.email}
+                  />
+                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Sending link...' : 'Send Magic Link'}
-              </Button>
-            </form>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Sending code...' : 'Send Verification Code'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  Enter the 6-digit code sent to <strong>{otpEmail}</strong>
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="otp">Verification Code</Label>
+                  <Input
+                    id="otp"
+                    name="otp"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={formData.otp}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.otp}
+                    className="text-center text-lg tracking-widest"
+                  />
+                  {errors.otp && <p className="text-sm text-destructive">{errors.otp}</p>}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Verifying...' : 'Verify Code'}
+                </Button>
+
+                <div className="flex justify-between text-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setFormData(prev => ({ ...prev, otp: '' }));
+                      setNotice(null);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={isLoading}
+                  >
+                    Change email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    className="text-primary hover:underline"
+                    disabled={isLoading}
+                  >
+                    Resend code
+                  </button>
+                </div>
+              </form>
+            )}
           </TabsContent>
         </Tabs>
 

@@ -90,8 +90,12 @@ async def root() -> dict[str, str]:
     Returns:
         Welcome message with API documentation link.
     """
-    return {
+    payload: dict[str, str] = {
         "message": "LDIP Backend API",
-        "docs": "/docs",
         "health": "/api/health",
     }
+
+    if get_settings().debug:
+        payload["docs"] = "/docs"
+
+    return payload

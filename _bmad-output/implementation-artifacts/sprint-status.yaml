@@ -54,7 +54,7 @@ development_status:
   1-1-initialize-nextjs-frontend: done
   1-2-initialize-fastapi-backend: done
   1-3-supabase-auth-integration: done
-  1-4-jwt-token-handling: backlog
+  1-4-jwt-token-handling: in-progress
   1-5-password-reset-flow: backlog
   1-6-role-per-matter-model: backlog
   1-7-postgresql-rls-policies: backlog

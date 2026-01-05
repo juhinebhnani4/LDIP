@@ -155,7 +155,13 @@ describe('LoginForm', () => {
     await user.click(sendButton);
 
     await waitFor(() => {
-      expect(mockClient.auth.signInWithOtp).toHaveBeenCalled();
+      expect(mockClient.auth.signInWithOtp).toHaveBeenCalledWith({
+        email: "test@example.com",
+        options: {
+          emailRedirectTo: expect.stringContaining("/auth/callback"),
+          shouldCreateUser: true,
+        },
+      });
     });
   });
 

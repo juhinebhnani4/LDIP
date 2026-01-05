@@ -81,7 +81,9 @@ profile_default/
 ipython_config.py
 
 # pyenv
-.python-version
+# NOTE (LDIP): We DO commit `.python-version` to pin the repo's Python version.
+# If you use pyenv locally and don't want it, use a global gitignore instead.
+# .python-version
 
 # pipenv
 Pipfile.lock
@@ -154,7 +156,8 @@ cython_debug/
 Thumbs.db
 
 # uv
-uv.lock
+# NOTE (LDIP): We DO commit `uv.lock` for reproducible installs (`uv sync --frozen`).
+# uv.lock
 
 # Alembic
 migrations/versions/*.pyc

@@ -1,6 +1,6 @@
 # Story 1.2: Initialize FastAPI Backend Project
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -458,6 +458,27 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 ### Change Log
 
 - 2026-01-03: Story 1-2 completed - FastAPI backend project initialized with full architecture-compliant structure
+- 2026-01-03: Senior Developer Review (AI) - Fixed reproducibility + Celery task wiring + Alembic usability gaps; updated backend README
+
+### Senior Developer Review (AI)
+
+**Reviewer:** Juhi  
+**Date:** 2026-01-03  
+**Outcome:** Changes applied (fixed HIGH/MEDIUM issues)
+
+#### Issues Found (and fixed)
+
+1. **HIGH** - `backend/uv.lock` and `backend/.python-version` were created but ignored by `backend/.gitignore`, making installs non-reproducible and contradicting the story’s File List.  
+   - **Fix**: Updated `backend/.gitignore` to allow tracking these files.
+
+2. **HIGH** - Celery routes referenced task modules that did not exist (`document_tasks`, `engine_tasks`), so routing/autodiscovery was broken by default.  
+   - **Fix**: Added minimal placeholder task modules and aligned Celery queue naming.
+
+3. **MEDIUM** - Alembic was scaffolded but not practically usable (placeholder DB URL, no baseline revision, no env override).  
+   - **Fix**: Added `DATABASE_URL` override support, conditional async support, and a baseline empty migration.
+
+4. **MEDIUM** - `backend/README.md` was empty (no run/test instructions).  
+   - **Fix**: Added setup/run/test/lint/typecheck instructions and Alembic notes.
 
 ### File List
 
@@ -474,6 +495,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - backend/migrations/README
 - backend/migrations/script.py.mako
 - backend/migrations/versions/ (directory)
+- backend/migrations/versions/0001_initial.py
 - backend/app/__init__.py
 - backend/app/main.py
 - backend/app/api/__init__.py
@@ -494,6 +516,8 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - backend/app/workers/__init__.py
 - backend/app/workers/celery.py
 - backend/app/workers/tasks/__init__.py
+- backend/app/workers/tasks/document_tasks.py
+- backend/app/workers/tasks/engine_tasks.py
 - backend/tests/__init__.py
 - backend/tests/conftest.py
 - backend/tests/api/__init__.py

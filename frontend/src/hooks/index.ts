@@ -5,6 +5,5 @@
  * - Hooks: camelCase with `use` prefix (e.g., useMatter, useDocuments)
  */
 
-// Hooks will be added here as they are created
-// Example: export { useMatter } from './useMatter';
-// Example: export { useDocuments } from './useDocuments';
+// Auth hooks
+export { useSession, useUser, useAuthActions, useAuth } from './useAuth';

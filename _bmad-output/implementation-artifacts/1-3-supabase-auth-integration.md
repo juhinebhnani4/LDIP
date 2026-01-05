@@ -472,6 +472,7 @@ None
 | Date | Change |
 |------|--------|
 | 2026-01-05 | Completed all 11 tasks for Supabase Auth integration |
+| 2026-01-05 | Code-review fixups: magic link uses real email redirect; callback supports `next`; logout clears cookies server-side; removed noisy debug logging; tests re-verified |
 
 ### File List
 
@@ -496,5 +497,10 @@ None
 **Modified Files:**
 - `frontend/package.json` - Added test scripts and dependencies
 - `frontend/src/app/(auth)/login/page.tsx` - Updated with LoginForm
+- `frontend/src/app/auth/callback/route.ts` - Fix: handle `next` param and remove debug logging
+- `frontend/src/app/auth/logout/route.ts` - Fix: server-side cookie logout handler
+- `frontend/src/components/features/auth/LoginForm.tsx` - Fix: magic link flow uses redirect + user notice
+- `frontend/src/components/features/auth/LoginForm.test.tsx` - Update tests for magic link redirect behavior
+- `frontend/src/components/features/auth/LogoutButton.tsx` - Fix: call Supabase signOut + clear SSR cookies
 - `frontend/src/app/(dashboard)/page.tsx` - Added auth check and user display
 - `frontend/README.md` - Added auth setup documentation

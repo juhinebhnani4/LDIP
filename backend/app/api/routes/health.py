@@ -5,7 +5,7 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user, AuthenticatedUser
 from app.core.config import Settings, get_settings
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -70,5 +70,26 @@ async def liveness_check() -> dict[str, Any]:
     return {
         "data": {
             "status": "alive",
+        }
+    }
+
+
+@router.get("/me")
+async def get_authenticated_user(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Protected endpoint to verify authentication.
+
+    Returns the authenticated user's information from the JWT token.
+    Used for testing JWT validation and auth flow.
+
+    Returns:
+        Authenticated user information.
+    """
+    return {
+        "data": {
+            "user_id": current_user.id,
+            "email": current_user.email,
+            "role": current_user.role,
         }
     }

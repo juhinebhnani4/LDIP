@@ -31,13 +31,16 @@ celery_app.conf.update(
     worker_concurrency=4,
     # Priority queues configuration
     task_queues={
+        # Align with architecture convention: high / default / low
         "default": {"exchange": "default", "binding_key": "default"},
-        "high_priority": {"exchange": "high_priority", "binding_key": "high_priority"},
-        "low_priority": {"exchange": "low_priority", "binding_key": "low_priority"},
+        "high": {"exchange": "high", "binding_key": "high"},
+        "low": {"exchange": "low", "binding_key": "low"},
     },
     task_default_queue="default",
     # Task routing based on priority
     task_routes={
+        # Document ingestion tasks can be long-running; keep in default until
+        # we implement true priority routing by story.
         "app.workers.tasks.document_tasks.*": {"queue": "default"},
         "app.workers.tasks.engine_tasks.*": {"queue": "default"},
     },

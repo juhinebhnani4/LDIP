@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_key: str = ""  # anon key for client operations
     supabase_service_key: str = ""  # service role key for admin operations
+    supabase_jwt_secret: str = ""  # JWT secret for local token validation
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

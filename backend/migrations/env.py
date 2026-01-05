@@ -1,9 +1,12 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -64,15 +67,48 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        _run_migrations_with_connection(connection)
 
-        with context.begin_transaction():
-            context.run_migrations()
+
+def _run_migrations_with_connection(connection: Connection) -> None:
+    """Configure Alembic context and run migrations using a sync connection."""
+    context.configure(connection=connection, target_metadata=target_metadata)
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    """Run migrations using an async engine when an async URL is configured.
+
+    If you set DATABASE_URL to an async driver (e.g. postgresql+asyncpg://...),
+    Alembic will use SQLAlchemy's async engine.
+    """
+    section = config.get_section(config.config_ini_section, {})
+    connectable: AsyncEngine = async_engine_from_config(
+        section,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(_run_migrations_with_connection)
+
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    # Allow overriding the URL from environment without editing alembic.ini.
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        config.set_main_option("sqlalchemy.url", database_url)
+
+    url = config.get_main_option("sqlalchemy.url")
+    if url and ("+asyncpg" in url or "+aiosqlite" in url):
+        import asyncio
+
+        asyncio.run(run_async_migrations())
+    else:
+        run_migrations_online()

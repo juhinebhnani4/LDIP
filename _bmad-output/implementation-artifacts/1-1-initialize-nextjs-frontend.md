@@ -261,6 +261,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - 2026-01-03: Story 1-1 completed - Frontend project initialized with full architecture-compliant structure
 - 2026-01-03: Review follow-ups implemented (Next.js 16 baseline docs aligned; dark mode provider; next-env fix; safer Supabase init; template cleanup)
 - 2026-01-03: Code-review fixes applied (route conflict removed; next-env cleaned; metadata updated; docs + file list synced)
+- 2026-01-05: Code-review fixups applied (ensure `next-env.d.ts` is tracked + remove generated `.next` import; add `tailwind.config.ts` so repo matches architecture/docs)
 
 ### Senior Developer Review (AI)
 
@@ -288,6 +289,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 **New Files Created:**
 - frontend/ (entire directory created)
+- frontend/tailwind.config.ts
 - frontend/src/app/(auth)/layout.tsx
 - frontend/src/app/(auth)/login/page.tsx
 - frontend/src/app/(dashboard)/layout.tsx
@@ -323,6 +325,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 **Modified Files (review follow-ups + doc alignment):**
 - .gitignore
+- frontend/.gitignore
 - _bmad-output/architecture.md
 - _bmad-output/implementation-artifacts/1-1-initialize-nextjs-frontend.md
 - _bmad-output/implementation-artifacts/sprint-status.yaml

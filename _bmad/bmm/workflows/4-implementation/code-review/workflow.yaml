@@ -12,6 +12,7 @@ document_output_language: "{config_source}:document_output_language"
 date: system-generated
 implementation_artifacts: "{config_source}:implementation_artifacts"
 output_folder: "{implementation_artifacts}"
+reference_output_folder: "{project-root}/_bmad-output"
 sprint_status: "{implementation_artifacts}/sprint-status.yaml || {output_folder}/sprint-status.yaml"
 
 # Workflow components
@@ -31,23 +32,23 @@ variables:
 input_file_patterns:
   architecture:
     description: "System architecture for review context"
-    whole: "{output_folder}/*architecture*.md"
-    sharded: "{output_folder}/*architecture*/*.md"
+    whole: "{reference_output_folder}/*architecture*.md"
+    sharded: "{reference_output_folder}/*architecture*/*.md"
     load_strategy: "FULL_LOAD"
   ux_design:
     description: "UX design specification (if UI review)"
-    whole: "{output_folder}/*ux*.md"
-    sharded: "{output_folder}/*ux*/*.md"
+    whole: "{reference_output_folder}/project-planning-artifacts/*ux*.md"
+    sharded: "{reference_output_folder}/project-planning-artifacts/*ux*/*.md"
     load_strategy: "FULL_LOAD"
   epics:
     description: "Epic containing story being reviewed"
-    whole: "{output_folder}/*epic*.md"
-    sharded_index: "{output_folder}/*epic*/index.md"
-    sharded_single: "{output_folder}/*epic*/epic-{{epic_num}}.md"
+    whole: "{reference_output_folder}/project-planning-artifacts/*epic*.md"
+    sharded_index: "{reference_output_folder}/project-planning-artifacts/*epic*/index.md"
+    sharded_single: "{reference_output_folder}/project-planning-artifacts/*epic*/epic-{{epic_num}}.md"
     load_strategy: "SELECTIVE_LOAD"
   document_project:
     description: "Brownfield project documentation (optional)"
-    sharded: "{output_folder}/index.md"
+    sharded: "{reference_output_folder}/index.md"
     load_strategy: "INDEX_GUIDED"
 
 standalone: true

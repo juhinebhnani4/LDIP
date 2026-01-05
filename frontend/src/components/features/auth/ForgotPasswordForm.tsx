@@ -13,6 +13,16 @@ interface FormErrors {
   general?: string;
 }
 
+// Sanitize error messages to avoid exposing internal details
+const sanitizeErrorMessage = (errorMessage: string): string => {
+  const lowerMessage = errorMessage.toLowerCase();
+  if (lowerMessage.includes('rate') || lowerMessage.includes('limit')) {
+    return 'Too many requests. Please try again later.';
+  }
+  // Default to generic message for security
+  return 'An error occurred. Please try again.';
+};
+
 export function ForgotPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,7 +62,7 @@ export function ForgotPasswordForm() {
       });
 
       if (error) {
-        setErrors({ general: error.message });
+        setErrors({ general: sanitizeErrorMessage(error.message) });
         return;
       }
 
@@ -86,7 +96,7 @@ export function ForgotPasswordForm() {
       });
 
       if (error) {
-        setErrors({ general: error.message });
+        setErrors({ general: sanitizeErrorMessage(error.message) });
         return;
       }
 

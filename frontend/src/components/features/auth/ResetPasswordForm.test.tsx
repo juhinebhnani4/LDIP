@@ -37,8 +37,8 @@ describe('ResetPasswordForm', () => {
     render(<ResetPasswordForm />);
 
     expect(screen.getByText(/set new password/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/new password/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('New Password')).toBeInTheDocument();
+    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /reset password/i })).toBeInTheDocument();
   });
 
@@ -106,8 +106,8 @@ describe('ResetPasswordForm', () => {
     vi.useRealTimers();
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'DifferentPass123' } });
@@ -127,8 +127,8 @@ describe('ResetPasswordForm', () => {
 
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'ValidPass123' } });
@@ -147,8 +147,8 @@ describe('ResetPasswordForm', () => {
     vi.useRealTimers();
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'ValidPass123' } });
@@ -163,11 +163,11 @@ describe('ResetPasswordForm', () => {
   });
 
   it('redirects to login after successful reset', async () => {
-    vi.useRealTimers(); // Use real timers for simpler async handling
+    vi.useRealTimers(); // Use real timers for this test
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'ValidPass123' } });
@@ -180,8 +180,16 @@ describe('ResetPasswordForm', () => {
       expect(screen.getByText(/password reset successful/i)).toBeInTheDocument();
     });
 
-    // Verify success UI shows redirect message (redirect will happen via setTimeout)
+    // Verify success UI shows redirect message
     expect(screen.getByText(/redirecting to login/i)).toBeInTheDocument();
+
+    // Wait for the 3 second timeout to trigger the redirect
+    await waitFor(
+      () => {
+        expect(mockPush).toHaveBeenCalledWith('/login?password_reset=success');
+      },
+      { timeout: 4000 }
+    );
   });
 
   it('shows error message for expired token', async () => {
@@ -193,8 +201,8 @@ describe('ResetPasswordForm', () => {
 
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'ValidPass123' } });
@@ -220,8 +228,8 @@ describe('ResetPasswordForm', () => {
 
     render(<ResetPasswordForm />);
 
-    const passwordInput = screen.getByLabelText(/new password/i);
-    const confirmPasswordInput = screen.getByLabelText(/confirm password/i);
+    const passwordInput = screen.getByLabelText('New Password');
+    const confirmPasswordInput = screen.getByLabelText('Confirm Password');
 
     fireEvent.change(passwordInput, { target: { value: 'ValidPass123' } });
     fireEvent.change(confirmPasswordInput, { target: { value: 'ValidPass123' } });

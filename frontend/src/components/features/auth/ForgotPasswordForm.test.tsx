@@ -141,7 +141,7 @@ describe('ForgotPasswordForm', () => {
     });
   });
 
-  it('shows error message on API failure', async () => {
+  it('shows sanitized error message on rate limit', async () => {
     const mockClient = createMockSupabaseClient({
       resetPasswordError: new Error('Rate limit exceeded'),
     });
@@ -156,7 +156,28 @@ describe('ForgotPasswordForm', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/rate limit exceeded/i)).toBeInTheDocument();
+      // Error message should be sanitized, not expose raw API error
+      expect(screen.getByText(/too many requests. please try again later/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows generic error message on API failure', async () => {
+    const mockClient = createMockSupabaseClient({
+      resetPasswordError: new Error('Internal server error details'),
+    });
+    mockedCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    render(<ForgotPasswordForm />);
+
+    const emailInput = screen.getByLabelText(/email/i);
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+
+    const submitButton = screen.getByRole('button', { name: /send reset link/i });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      // Error message should be generic, not expose internal details
+      expect(screen.getByText(/an error occurred. please try again/i)).toBeInTheDocument();
     });
   });
 

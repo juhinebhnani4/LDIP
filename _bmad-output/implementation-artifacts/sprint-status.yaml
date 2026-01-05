@@ -55,8 +55,8 @@ development_status:
   1-2-initialize-fastapi-backend: done
   1-3-supabase-auth-integration: done
   1-4-jwt-token-handling: done
-  1-5-password-reset-flow: review
-  1-6-role-per-matter-model: backlog
+  1-5-password-reset-flow: done
+  1-6-role-per-matter-model: ready-for-dev
   1-7-postgresql-rls-policies: backlog
   epic-1-retrospective: optional
 

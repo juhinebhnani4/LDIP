@@ -1,21 +1,20 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+/**
+ * Supabase Client Re-exports
+ *
+ * This file provides backward compatibility and convenience exports.
+ * For new code, prefer importing directly from:
+ * - '@/lib/supabase/client' for browser/client components
+ * - '@/lib/supabase/server' for server components and actions
+ */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Re-export client creator for browser contexts
+export { createClient as createBrowserClient } from './supabase/client';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+// Note: Server client cannot be re-exported here as it uses 'server-only'
+// Import directly from '@/lib/supabase/server' in server components
 
-export function getSupabaseClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
-    )
-  }
+// Configuration check utility
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  return createClient(supabaseUrl, supabaseAnonKey)
-}
-
-// Convenience export for call sites that can handle null (e.g., optional Supabase features in local dev).
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
-  : null
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

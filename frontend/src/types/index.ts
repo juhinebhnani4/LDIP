@@ -7,6 +7,27 @@
  * - No `any` types - use `unknown` + type guards instead
  */
 
-// Types will be added here as they are created
-// Example: export type { Matter, MatterMember } from './matter';
-// Example: export type { Document, DocumentUpload } from './document';
+// Matter types
+export type {
+  ApiError,
+  Matter,
+  MatterCreateRequest,
+  MatterInviteRequest,
+  MatterListMeta,
+  MatterListResponse,
+  MatterMember,
+  MatterMemberUpdateRequest,
+  MatterResponse,
+  MatterRole,
+  MatterStatus,
+  MatterUpdateRequest,
+  MatterWithMembers,
+  MatterWithMembersResponse,
+  MemberListResponse,
+  MemberResponse,
+} from './matter';
+
+export { canEdit, hasAccess, isOwner } from './matter';
+
+// Future types (to be added in later stories):
+// export type { Document, DocumentUpload } from './document';

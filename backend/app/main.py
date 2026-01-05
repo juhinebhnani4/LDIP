@@ -7,7 +7,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health
+from app.api.routes import health, matters
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -68,9 +68,9 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health.router, prefix="/api")
+    app.include_router(matters.router, prefix="/api")
 
     # Future routers (to be implemented in later stories):
-    # app.include_router(matters.router, prefix="/api")
     # app.include_router(documents.router, prefix="/api")
     # app.include_router(engines.router, prefix="/api")
     # app.include_router(chat.router, prefix="/api")

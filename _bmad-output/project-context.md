@@ -244,6 +244,48 @@ async def test_get_matter(client: AsyncClient, test_matter: Matter):
 
 ### Development Workflow Rules
 
+#### Story Completion Requirements (MANDATORY)
+
+After completing each story, the dev agent MUST explicitly inform the user of:
+
+1. **Supabase Migrations to Run**
+   - List all migration files that need to be applied
+   - Note any that require service role execution
+   - Example: `supabase migration up` or specific file paths
+
+2. **Environment Variables to Add**
+   - List new variables for frontend (`.env.local`)
+   - List new variables for backend (`.env`)
+   - Include where to find values (e.g., "Supabase Dashboard → Settings → API")
+
+3. **Dashboard Configurations**
+   - Supabase: Auth settings, redirect URLs, storage buckets, RLS policies
+   - External services: Google Cloud, OAuth providers, etc.
+   - Any manual toggles or settings required
+
+4. **Manual Tests to Perform**
+   - User-facing flows that should be tested manually
+   - Specific scenarios beyond automated test coverage
+   - Example: "Test login flow end-to-end with real email"
+
+**Format for Story Completion:**
+```
+## Manual Steps Required
+
+### Migrations
+- [ ] Run: `supabase/migrations/YYYYMMDD_name.sql`
+
+### Environment Variables
+- [ ] Add to `frontend/.env.local`: `NEXT_PUBLIC_XXX=value`
+- [ ] Add to `backend/.env`: `XXX=value` (from: location)
+
+### Dashboard Configuration
+- [ ] Supabase: Configure X in Y section
+
+### Manual Tests
+- [ ] Test: Description of manual test
+```
+
 #### Git Conventions
 
 - **Branch naming**: `feature/ldip-{number}-short-description`, `fix/ldip-{number}-description`

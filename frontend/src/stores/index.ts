@@ -11,7 +11,10 @@
  * const { currentMatter, setCurrentMatter } = useMatterStore();
  */
 
-// Stores will be added here as they are created
-// Example: export { useMatterStore } from './matterStore';
-// Example: export { useSessionStore } from './sessionStore';
-// Example: export { useChatStore } from './chatStore';
+// Upload store for document upload management
+export { useUploadStore } from './uploadStore';
+
+// Future stores (to be added in later stories):
+// export { useMatterStore } from './matterStore';
+// export { useSessionStore } from './sessionStore';
+// export { useChatStore } from './chatStore';

@@ -29,5 +29,16 @@ export type {
 
 export { canEdit, hasAccess, isOwner } from './matter';
 
-// Future types (to be added in later stories):
-// export type { Document, DocumentUpload } from './document';
+// Document types
+export type {
+  Document,
+  DocumentStatus,
+  DocumentType,
+  UploadFile,
+  UploadRequest,
+  UploadResponse,
+  UploadStatus,
+  ValidationError,
+  ValidationResult,
+  ValidationWarning,
+} from './document';

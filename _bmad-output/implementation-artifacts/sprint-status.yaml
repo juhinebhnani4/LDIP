@@ -50,7 +50,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   # Epic 1: Project Foundation & Authentication
-  epic-1: in-progress
+  epic-1: done
   1-1-initialize-nextjs-frontend: done
   1-2-initialize-fastapi-backend: done
   1-3-supabase-auth-integration: done
@@ -58,11 +58,11 @@ development_status:
   1-5-password-reset-flow: done
   1-6-role-per-matter-model: done
   1-7-postgresql-rls-policies: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2A: Document Upload & Storage
-  epic-2a: backlog
-  2a-1-document-upload-ui: backlog
+  epic-2a: in-progress
+  2a-1-document-upload-ui: review
   2a-2-supabase-storage-integration: backlog
   2a-3-documents-table: backlog
   epic-2a-retrospective: optional

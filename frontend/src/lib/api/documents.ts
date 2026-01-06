@@ -3,22 +3,34 @@
  *
  * Handles document upload to backend API.
  * All operations MUST include matter_id for isolation.
- *
- * NOTE: Actual backend endpoint will be implemented in Story 2a-2.
- * This file provides the frontend upload integration with progress tracking.
  */
 
 import type { DocumentType, UploadResponse } from '@/types/document';
+import { createClient } from '@/lib/supabase/client';
 import { useUploadStore } from '@/stores/uploadStore';
 
-/** Upload API endpoint (to be implemented in Story 2a-2) */
-const UPLOAD_ENDPOINT = '/api/documents/upload';
+/** Backend API base URL */
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/** Upload API endpoint */
+const UPLOAD_ENDPOINT = `${API_BASE_URL}/api/documents/upload`;
 
 interface UploadOptions {
   matterId: string;
   documentType?: DocumentType;
   onProgress?: (progress: number) => void;
   abortSignal?: AbortSignal;
+}
+
+/**
+ * Get the current auth token from Supabase session
+ *
+ * @returns JWT access token or null if not authenticated
+ */
+async function getAuthToken(): Promise<string | null> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
 /**
@@ -38,6 +50,14 @@ export async function uploadFile(
   options: UploadOptions
 ): Promise<UploadResponse> {
   const { matterId, documentType = 'case_file', onProgress, abortSignal } = options;
+
+  // Get auth token before starting upload
+  const token = await getAuthToken();
+  if (!token) {
+    const error = new Error('Not authenticated');
+    useUploadStore.getState().updateStatus(fileId, 'error', error.message);
+    throw error;
+  }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -105,11 +125,8 @@ export async function uploadFile(
 
     xhr.open('POST', UPLOAD_ENDPOINT);
 
-    // TODO(Story 2a-2): Add auth header when integrating with real backend
-    // Authentication will be handled via JWT token from Supabase auth.
-    // See: frontend/src/lib/supabase/client.ts for getSupabaseClient()
-    // const token = await getAuthToken();
-    // xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    // Add authentication header
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     xhr.send(formData);
   });

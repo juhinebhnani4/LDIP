@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-from fastapi import Depends, HTTPException, Path, Request, status
+from fastapi import Depends, Form, HTTPException, Path, Request, status
 
 from app.core.config import get_settings
 from app.core.security import get_current_user, get_optional_user
@@ -195,6 +195,83 @@ def require_matter_role(
         return MatterMembership(matter_id=matter_id, user_id=user.id, role=role)
 
     return matter_role_checker
+
+
+def require_matter_role_from_form(
+    allowed_roles: list[MatterRole],
+) -> Callable[..., Any]:
+    """Create a dependency that requires specific matter roles with matter_id from Form.
+
+    Similar to require_matter_role but gets matter_id from Form data instead of Path.
+    Use this for endpoints that receive matter_id as part of multipart form data
+    (e.g., file uploads).
+
+    Args:
+        allowed_roles: List of MatterRole enums that are allowed.
+
+    Returns:
+        A dependency function that validates the user's role on the matter.
+
+    Example:
+        @router.post("/documents/upload")
+        async def upload_document(
+            file: UploadFile = File(...),
+            matter_id: str = Form(...),
+            membership: MatterMembership = Depends(
+                require_matter_role_from_form([MatterRole.OWNER, MatterRole.EDITOR])
+            )
+        ):
+            # Only editors/owners can upload
+            ...
+    """
+
+    async def matter_role_checker_form(
+        matter_id: str = Form(..., description="Matter ID"),
+        user: AuthenticatedUser = Depends(get_current_user),
+        matter_service: MatterService = Depends(get_matter_service),
+    ) -> MatterMembership:
+        role = matter_service.get_user_role(matter_id, user.id)
+
+        if role is None:
+            logger.warning(
+                "matter_access_denied",
+                user_id=user.id,
+                matter_id=matter_id,
+                reason="no_membership",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "MATTER_NOT_FOUND",
+                        "message": "Matter not found or you don't have access",
+                        "details": {},
+                    }
+                },
+            )
+
+        if role not in allowed_roles:
+            logger.warning(
+                "matter_access_denied",
+                user_id=user.id,
+                matter_id=matter_id,
+                user_role=role.value,
+                required_roles=[r.value for r in allowed_roles],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": {
+                        "code": "INSUFFICIENT_PERMISSIONS",
+                        "message": f"This action requires one of these roles: {', '.join(r.value for r in allowed_roles)}",
+                        "details": {},
+                    }
+                },
+            )
+
+        return MatterMembership(matter_id=matter_id, user_id=user.id, role=role)
+
+    return matter_role_checker_form
 
 
 # =============================================================================
@@ -466,6 +543,7 @@ __all__ = [
     "get_optional_user",
     "require_role",
     "require_matter_role",
+    "require_matter_role_from_form",
     "get_matter_service",
     "MatterMembership",
     "MatterAccessContext",

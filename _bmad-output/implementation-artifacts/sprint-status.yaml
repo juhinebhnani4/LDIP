@@ -62,7 +62,7 @@ development_status:
 
   # Epic 2A: Document Upload & Storage
   epic-2a: in-progress
-  2a-1-document-upload-ui: review
+  2a-1-document-upload-ui: done
   2a-2-supabase-storage-integration: backlog
   2a-3-documents-table: backlog
   epic-2a-retrospective: optional

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # Google Cloud
     google_cloud_project_id: str = ""
     google_cloud_location: str = "us"
+    google_document_ai_processor_id: str = ""
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]

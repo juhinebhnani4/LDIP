@@ -28,12 +28,16 @@ class DocumentStatus(str, Enum):
     States:
     - pending: Uploaded, awaiting OCR processing
     - processing: OCR/extraction in progress
-    - completed: Successfully processed
-    - failed: Processing failed
+    - ocr_complete: OCR successfully extracted text
+    - ocr_failed: OCR processing failed
+    - completed: All processing complete
+    - failed: Processing failed (non-OCR)
     """
 
     PENDING = "pending"
     PROCESSING = "processing"
+    OCR_COMPLETE = "ocr_complete"
+    OCR_FAILED = "ocr_failed"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -86,6 +90,23 @@ class Document(DocumentBase):
     processing_completed_at: datetime | None = Field(
         None,
         description="When OCR processing completed"
+    )
+    # OCR result fields
+    extracted_text: str | None = Field(
+        None,
+        description="Full OCR-extracted text content"
+    )
+    ocr_confidence: float | None = Field(
+        None, ge=0, le=1,
+        description="Average OCR confidence score (0-1)"
+    )
+    ocr_quality_score: float | None = Field(
+        None, ge=0, le=1,
+        description="Document AI image quality score (0-1)"
+    )
+    ocr_error: str | None = Field(
+        None,
+        description="Error details if OCR processing failed"
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")

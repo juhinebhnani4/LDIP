@@ -612,6 +612,232 @@ class DocumentService:
             return None
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
+    def _parse_document(self, doc_data: dict) -> Document:
+        """Parse a document record from database row.
+
+        Args:
+            doc_data: Dictionary from database query.
+
+        Returns:
+            Document model instance.
+        """
+        return Document(
+            id=doc_data["id"],
+            matter_id=doc_data["matter_id"],
+            filename=doc_data["filename"],
+            storage_path=doc_data["storage_path"],
+            file_size=doc_data["file_size"],
+            page_count=doc_data.get("page_count"),
+            document_type=DocumentType(doc_data["document_type"]),
+            is_reference_material=doc_data["is_reference_material"],
+            uploaded_by=doc_data["uploaded_by"],
+            uploaded_at=datetime.fromisoformat(
+                doc_data["uploaded_at"].replace("Z", "+00:00")
+            ),
+            status=DocumentStatus(doc_data["status"]),
+            processing_started_at=self._parse_datetime(
+                doc_data.get("processing_started_at")
+            ),
+            processing_completed_at=self._parse_datetime(
+                doc_data.get("processing_completed_at")
+            ),
+            extracted_text=doc_data.get("extracted_text"),
+            ocr_confidence=doc_data.get("ocr_confidence"),
+            ocr_quality_score=doc_data.get("ocr_quality_score"),
+            ocr_error=doc_data.get("ocr_error"),
+            created_at=datetime.fromisoformat(
+                doc_data["created_at"].replace("Z", "+00:00")
+            ),
+            updated_at=datetime.fromisoformat(
+                doc_data["updated_at"].replace("Z", "+00:00")
+            ),
+        )
+
+    def update_ocr_status(
+        self,
+        document_id: str,
+        status: DocumentStatus,
+        extracted_text: str | None = None,
+        page_count: int | None = None,
+        ocr_confidence: float | None = None,
+        ocr_quality_score: float | None = None,
+        ocr_error: str | None = None,
+    ) -> None:
+        """Update document OCR processing status and results.
+
+        Used by Celery tasks to update document after OCR processing.
+
+        Args:
+            document_id: Document UUID.
+            status: New document status.
+            extracted_text: Full extracted text content.
+            page_count: Number of pages in document.
+            ocr_confidence: Average OCR confidence score (0-1).
+            ocr_quality_score: Document AI image quality score (0-1).
+            ocr_error: Error message if processing failed.
+
+        Raises:
+            DocumentServiceError: If update fails.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        update_data: dict[str, str | int | float | None] = {
+            "status": status.value,
+        }
+
+        # Set processing timestamps based on status
+        now = datetime.now(timezone.utc).isoformat()
+        if status == DocumentStatus.PROCESSING:
+            update_data["processing_started_at"] = now
+        elif status in (DocumentStatus.OCR_COMPLETE, DocumentStatus.OCR_FAILED):
+            update_data["processing_completed_at"] = now
+
+        # Add OCR results if provided
+        if extracted_text is not None:
+            update_data["extracted_text"] = extracted_text
+        if page_count is not None:
+            update_data["page_count"] = page_count
+        if ocr_confidence is not None:
+            update_data["ocr_confidence"] = ocr_confidence
+        if ocr_quality_score is not None:
+            update_data["ocr_quality_score"] = ocr_quality_score
+        if ocr_error is not None:
+            update_data["ocr_error"] = ocr_error
+
+        try:
+            result = self.client.table("documents").update(
+                update_data
+            ).eq("id", document_id).execute()
+
+            if not result.data:
+                logger.warning(
+                    "document_ocr_status_update_no_rows",
+                    document_id=document_id,
+                    status=status.value,
+                )
+                return
+
+            logger.info(
+                "document_ocr_status_updated",
+                document_id=document_id,
+                status=status.value,
+                page_count=page_count,
+                ocr_confidence=ocr_confidence,
+            )
+
+        except Exception as e:
+            logger.error(
+                "document_ocr_status_update_failed",
+                document_id=document_id,
+                status=status.value,
+                error=str(e),
+            )
+            raise DocumentServiceError(
+                message=f"Failed to update OCR status: {e!s}",
+                code="OCR_STATUS_UPDATE_FAILED"
+            ) from e
+
+    def increment_ocr_retry_count(self, document_id: str) -> int:
+        """Increment OCR retry count for a document.
+
+        Args:
+            document_id: Document UUID.
+
+        Returns:
+            New retry count.
+
+        Raises:
+            DocumentServiceError: If update fails.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        try:
+            # Get current retry count
+            result = self.client.table("documents").select(
+                "ocr_retry_count"
+            ).eq("id", document_id).execute()
+
+            current_count = 0
+            if result.data:
+                current_count = result.data[0].get("ocr_retry_count") or 0
+
+            new_count = current_count + 1
+
+            # Update retry count
+            self.client.table("documents").update({
+                "ocr_retry_count": new_count,
+            }).eq("id", document_id).execute()
+
+            logger.info(
+                "document_ocr_retry_incremented",
+                document_id=document_id,
+                retry_count=new_count,
+            )
+
+            return new_count
+
+        except Exception as e:
+            logger.error(
+                "document_ocr_retry_increment_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            raise DocumentServiceError(
+                message=f"Failed to increment retry count: {e!s}",
+                code="RETRY_INCREMENT_FAILED"
+            ) from e
+
+    def get_document_for_processing(self, document_id: str) -> tuple[str, str]:
+        """Get document storage path and matter_id for OCR processing.
+
+        Args:
+            document_id: Document UUID.
+
+        Returns:
+            Tuple of (storage_path, matter_id).
+
+        Raises:
+            DocumentNotFoundError: If document doesn't exist.
+            DocumentServiceError: If query fails.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        try:
+            result = self.client.table("documents").select(
+                "storage_path, matter_id"
+            ).eq("id", document_id).execute()
+
+            if not result.data:
+                raise DocumentNotFoundError(document_id)
+
+            doc_data = result.data[0]
+            return doc_data["storage_path"], doc_data["matter_id"]
+
+        except DocumentNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(
+                "document_get_for_processing_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            raise DocumentServiceError(
+                message=f"Failed to get document for processing: {e!s}",
+                code="GET_FOR_PROCESSING_FAILED"
+            ) from e
+
 
 from functools import lru_cache
 

@@ -44,12 +44,14 @@ from app.services.storage_service import (
     StorageService,
     get_storage_service,
 )
+from app.workers.tasks.document_tasks import process_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = structlog.get_logger(__name__)
 
 # File size limits
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+SMALL_DOCUMENT_THRESHOLD_PAGES = 100  # Documents under this use 'high' priority queue
 
 
 def _verify_matter_access(
@@ -198,6 +200,35 @@ def _get_subfolder(document_type: DocumentType) -> str:
     return "uploads"
 
 
+def _queue_ocr_task(document_id: str, file_size: int) -> None:
+    """Queue OCR processing task for a document.
+
+    Uses priority queue based on estimated document size.
+    Smaller documents (<10MB, ~100 pages) get 'high' priority.
+
+    Args:
+        document_id: Document UUID to process.
+        file_size: File size in bytes.
+    """
+    # Heuristic: ~100KB per page average for scanned PDFs
+    # 10MB ~ 100 pages
+    is_small_document = file_size < 10 * 1024 * 1024
+
+    queue_name = "high" if is_small_document else "default"
+
+    process_document.apply_async(
+        args=[document_id],
+        queue=queue_name,
+    )
+
+    logger.info(
+        "ocr_task_queued",
+        document_id=document_id,
+        queue=queue_name,
+        file_size=file_size,
+    )
+
+
 async def _extract_and_upload_zip(
     zip_content: bytes,
     matter_id: str,
@@ -282,6 +313,9 @@ async def _extract_and_upload_zip(
                 )
                 documents.append(doc)
                 created_doc_ids.append(doc.document_id)
+
+                # Queue OCR processing for this document
+                _queue_ocr_task(doc.document_id, len(pdf_content))
 
             logger.info(
                 "zip_extraction_complete",
@@ -459,10 +493,15 @@ async def upload_document(
                 uploaded_by=membership.user_id,
             )
 
+            # Queue OCR processing task
+            # Use 'high' priority for small files (under 10MB heuristic for <100 pages)
+            _queue_ocr_task(doc.document_id, len(file_content))
+
             logger.info(
                 "document_upload_complete",
                 document_id=doc.document_id,
                 matter_id=matter_id,
+                ocr_queued=True,
             )
 
             return DocumentResponse(data=doc)

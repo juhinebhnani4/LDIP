@@ -242,6 +242,48 @@ class StorageService:
                 code="SIGNED_URL_FAILED"
             ) from e
 
+    def download_file(self, storage_path: str) -> bytes:
+        """Download a file from Supabase Storage.
+
+        Args:
+            storage_path: Full storage path to download.
+
+        Returns:
+            File content as bytes.
+
+        Raises:
+            StorageError: If download fails.
+        """
+        if self.client is None:
+            raise StorageError(
+                message="Storage client not configured",
+                code="STORAGE_NOT_CONFIGURED"
+            )
+
+        logger.info("storage_download_starting", storage_path=storage_path)
+
+        try:
+            response = self.client.storage.from_(self.bucket).download(storage_path)
+
+            logger.info(
+                "storage_download_complete",
+                storage_path=storage_path,
+                file_size=len(response),
+            )
+
+            return response
+
+        except Exception as e:
+            logger.error(
+                "storage_download_failed",
+                storage_path=storage_path,
+                error=str(e),
+            )
+            raise StorageError(
+                message=f"Failed to download file: {e!s}",
+                code="DOWNLOAD_FAILED"
+            ) from e
+
 
 from functools import lru_cache
 

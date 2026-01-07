@@ -33,7 +33,7 @@ function PasswordResetSuccessBanner({ passwordReset }: { passwordReset: boolean 
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const params = await searchParams
+  const params = searchParams ? await searchParams : {}
   const sessionExpired = params?.session_expired === "true"
   const passwordReset = params?.password_reset === "success"
   return (

@@ -61,10 +61,10 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2A: Document Upload & Storage
-  epic-2a: in-progress
+  epic-2a: done
   2a-1-document-upload-ui: done
   2a-2-supabase-storage-integration: done
-  2a-3-documents-table: backlog
+  2a-3-documents-table: done
   epic-2a-retrospective: optional
 
   # Epic 2B: OCR & RAG Pipeline

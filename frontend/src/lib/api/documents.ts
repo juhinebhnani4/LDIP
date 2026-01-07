@@ -1,11 +1,22 @@
 /**
  * Document API Functions
  *
- * Handles document upload to backend API.
+ * Handles document upload and management via backend API.
  * All operations MUST include matter_id for isolation.
  */
 
-import type { DocumentType, UploadResponse } from '@/types/document';
+import type {
+  BulkDocumentUpdateRequest,
+  BulkUpdateResponse,
+  Document,
+  DocumentDetailResponse,
+  DocumentFilters,
+  DocumentListResponse,
+  DocumentSort,
+  DocumentType,
+  DocumentUpdateRequest,
+  UploadResponse,
+} from '@/types/document';
 import { createClient } from '@/lib/supabase/client';
 import { useUploadStore } from '@/stores/uploadStore';
 
@@ -157,4 +168,225 @@ export async function uploadFiles(
   } finally {
     useUploadStore.getState().setUploading(false);
   }
+}
+
+// =============================================================================
+// Document List and Management API Functions
+// =============================================================================
+
+interface FetchDocumentsOptions {
+  page?: number;
+  perPage?: number;
+  filters?: DocumentFilters;
+  sort?: DocumentSort;
+}
+
+/**
+ * Convert object keys from snake_case to camelCase
+ */
+function toCamelCase<T>(obj: Record<string, unknown>): T {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const camelKey = key.replace(/_([a-z])/g, (_, letter: string) =>
+      letter.toUpperCase()
+    );
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      result[camelKey] = toCamelCase(value as Record<string, unknown>);
+    } else if (Array.isArray(value)) {
+      result[camelKey] = value.map((item) =>
+        typeof item === 'object' && item !== null
+          ? toCamelCase(item as Record<string, unknown>)
+          : item
+      );
+    } else {
+      result[camelKey] = value;
+    }
+  }
+  return result as T;
+}
+
+/**
+ * Fetch documents for a matter with pagination and filtering
+ *
+ * @param matterId - Matter ID
+ * @param options - Pagination and filter options
+ * @returns Paginated document list
+ */
+export async function fetchDocuments(
+  matterId: string,
+  options: FetchDocumentsOptions = {}
+): Promise<DocumentListResponse> {
+  const { page = 1, perPage = 20, filters = {}, sort } = options;
+
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  // Build query params
+  const params = new URLSearchParams({
+    page: page.toString(),
+    per_page: perPage.toString(),
+  });
+
+  if (filters.documentType) {
+    params.set('document_type', filters.documentType);
+  }
+  if (filters.status) {
+    params.set('status', filters.status);
+  }
+  if (filters.isReferenceMaterial !== undefined) {
+    params.set('is_reference_material', filters.isReferenceMaterial.toString());
+  }
+
+  // Add sorting params
+  if (sort) {
+    params.set('sort_by', sort.column);
+    params.set('sort_order', sort.order);
+  }
+
+  const url = `${API_BASE_URL}/api/matters/${matterId}/documents?${params.toString()}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to fetch documents: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  return toCamelCase<DocumentListResponse>(data);
+}
+
+/**
+ * Fetch a single document's details with signed URL
+ *
+ * @param documentId - Document ID
+ * @returns Document details
+ */
+export async function fetchDocument(documentId: string): Promise<Document> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/${documentId}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to fetch document: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const result = toCamelCase<DocumentDetailResponse>(data);
+  return result.data;
+}
+
+/**
+ * Update a document's metadata
+ *
+ * @param documentId - Document ID
+ * @param update - Fields to update
+ * @returns Updated document
+ */
+export async function updateDocument(
+  documentId: string,
+  update: DocumentUpdateRequest
+): Promise<Document> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/${documentId}`;
+
+  // Convert to snake_case for API
+  const body: Record<string, unknown> = {};
+  if (update.documentType !== undefined) {
+    body.document_type = update.documentType;
+  }
+  if (update.isReferenceMaterial !== undefined) {
+    body.is_reference_material = update.isReferenceMaterial;
+  }
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to update document: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const result = toCamelCase<DocumentDetailResponse>(data);
+  return result.data;
+}
+
+/**
+ * Bulk update document types
+ *
+ * @param update - Bulk update request
+ * @returns Update result
+ */
+export async function bulkUpdateDocuments(
+  update: BulkDocumentUpdateRequest
+): Promise<BulkUpdateResponse['data']> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/bulk`;
+
+  // Convert to snake_case for API
+  const body = {
+    document_ids: update.documentIds,
+    document_type: update.documentType,
+  };
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to bulk update documents: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const result = toCamelCase<BulkUpdateResponse>(data);
+  return result.data;
 }

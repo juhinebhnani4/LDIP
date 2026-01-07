@@ -9,20 +9,32 @@ import os
 import zipfile
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
 
 from app.api.deps import (
     MatterMembership,
     MatterRole,
+    get_matter_service,
+    require_matter_role,
     require_matter_role_from_form,
 )
+from app.core.security import get_current_user
+from app.models.auth import AuthenticatedUser
+from app.services.matter_service import MatterService
 from app.models.document import (
+    BulkDocumentUpdate,
+    BulkUpdateResponse,
     BulkUploadResponse,
+    Document,
+    DocumentDetailResponse,
+    DocumentListResponseWithPagination,
     DocumentResponse,
     DocumentType,
+    DocumentUpdate,
     UploadedDocument,
 )
 from app.services.document_service import (
+    DocumentNotFoundError,
     DocumentService,
     DocumentServiceError,
     get_document_service,
@@ -38,6 +50,68 @@ logger = structlog.get_logger(__name__)
 
 # File size limits
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+
+
+def _verify_matter_access(
+    matter_id: str,
+    user_id: str,
+    matter_service: MatterService,
+    allowed_roles: list[MatterRole],
+) -> MatterRole:
+    """Verify user has required role on a matter (Layer 4 defense-in-depth).
+
+    Args:
+        matter_id: Matter UUID to check access for.
+        user_id: User UUID requesting access.
+        matter_service: MatterService instance.
+        allowed_roles: List of roles that permit this action.
+
+    Returns:
+        The user's role on the matter.
+
+    Raises:
+        HTTPException: 404 if no access, 403 if insufficient role.
+    """
+    role = matter_service.get_user_role(matter_id, user_id)
+
+    if role is None:
+        logger.warning(
+            "document_access_denied",
+            user_id=user_id,
+            matter_id=matter_id,
+            reason="no_membership",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+
+    if role not in allowed_roles:
+        logger.warning(
+            "document_access_denied",
+            user_id=user_id,
+            matter_id=matter_id,
+            user_role=role.value,
+            required_roles=[r.value for r in allowed_roles],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "INSUFFICIENT_PERMISSIONS",
+                    "message": f"This action requires one of these roles: {', '.join(r.value for r in allowed_roles)}",
+                    "details": {},
+                }
+            },
+        )
+
+    return role
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {
@@ -409,6 +483,321 @@ async def upload_document(
                 "error": {
                     "code": "UPLOAD_FAILED",
                     "message": f"Failed to upload document: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+# =============================================================================
+# Matter-scoped document endpoints
+# =============================================================================
+
+
+# Create a separate router for matter-scoped endpoints
+matters_router = APIRouter(prefix="/matters", tags=["documents"])
+
+
+@matters_router.get(
+    "/{matter_id}/documents",
+    response_model=DocumentListResponseWithPagination,
+)
+async def list_documents(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    document_type: DocumentType | None = Query(
+        None, description="Filter by document type"
+    ),
+    doc_status: str | None = Query(
+        None,
+        alias="status",
+        description="Filter by processing status",
+    ),
+    is_reference_material: bool | None = Query(
+        None, description="Filter by reference material flag"
+    ),
+    sort_by: str = Query(
+        "uploaded_at",
+        description="Column to sort by (uploaded_at, filename, file_size, document_type, status)",
+    ),
+    sort_order: str = Query(
+        "desc",
+        description="Sort direction (asc or desc)",
+    ),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    document_service: DocumentService = Depends(get_document_service),
+) -> DocumentListResponseWithPagination:
+    """List documents in a matter with filtering, sorting, and pagination.
+
+    Returns paginated list with metadata (filename, type, status, uploaded_at).
+    Supports filtering by document_type, status, and is_reference_material.
+    Supports sorting by uploaded_at, filename, file_size, document_type, or status.
+
+    Requires viewer, editor, or owner role on the matter.
+    """
+    try:
+        documents, meta = document_service.list_documents(
+            matter_id=membership.matter_id,
+            page=page,
+            per_page=per_page,
+            document_type=document_type,
+            status=doc_status,
+            is_reference_material=is_reference_material,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+        return DocumentListResponseWithPagination(data=documents, meta=meta)
+
+    except DocumentServiceError as e:
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "document_list_failed",
+            matter_id=membership.matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "LIST_FAILED",
+                    "message": f"Failed to list documents: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+# =============================================================================
+# Bulk Operations (must be defined BEFORE /{document_id} to avoid conflict)
+# =============================================================================
+
+
+@router.patch(
+    "/bulk",
+    response_model=BulkUpdateResponse,
+)
+async def bulk_update_documents(
+    update: BulkDocumentUpdate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> BulkUpdateResponse:
+    """Bulk update document types.
+
+    Accepts a list of document IDs and a document type to assign to all.
+    When document_type is 'act', is_reference_material is automatically set to true.
+
+    User must have editor or owner role on each document's matter.
+    Validates access for ALL documents before performing any updates.
+    """
+    try:
+        # Verify user has EDITOR/OWNER access to all documents' matters
+        # by checking each document's matter_id
+        matter_ids_checked: set[str] = set()
+        for doc_id in update.document_ids:
+            try:
+                doc = document_service.get_document(doc_id)
+                # Only check each matter once
+                if doc.matter_id not in matter_ids_checked:
+                    _verify_matter_access(
+                        matter_id=doc.matter_id,
+                        user_id=current_user.id,
+                        matter_service=matter_service,
+                        allowed_roles=[MatterRole.OWNER, MatterRole.EDITOR],
+                    )
+                    matter_ids_checked.add(doc.matter_id)
+            except DocumentNotFoundError:
+                # Document doesn't exist - will be skipped by bulk update
+                continue
+
+        updated_count = document_service.bulk_update_documents(
+            document_ids=update.document_ids,
+            document_type=update.document_type,
+        )
+
+        return BulkUpdateResponse(
+            data={
+                "updated_count": updated_count,
+                "requested_count": len(update.document_ids),
+                "document_type": update.document_type.value,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except DocumentServiceError as e:
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "document_bulk_update_failed",
+            document_ids=update.document_ids,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "BULK_UPDATE_FAILED",
+                    "message": f"Failed to bulk update documents: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+# =============================================================================
+# Document-scoped endpoints
+# =============================================================================
+
+
+@router.get(
+    "/{document_id}",
+    response_model=DocumentDetailResponse,
+)
+async def get_document(
+    document_id: str = Path(..., description="Document UUID"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+    storage_service: StorageService = Depends(get_storage_service),
+) -> DocumentDetailResponse:
+    """Get document details with signed URL.
+
+    Returns full document metadata including a signed URL for file access.
+    User must have access to the document's matter.
+    """
+    try:
+        # Get document (RLS will filter if user doesn't have access)
+        doc = document_service.get_document(document_id)
+
+        # Generate signed URL for storage access (valid for 1 hour)
+        signed_url = storage_service.get_signed_url(doc.storage_path, expires_in=3600)
+
+        # Create response with signed URL in storage_path field
+        doc_with_url = Document(
+            id=doc.id,
+            matter_id=doc.matter_id,
+            filename=doc.filename,
+            storage_path=signed_url,
+            file_size=doc.file_size,
+            page_count=doc.page_count,
+            document_type=doc.document_type,
+            is_reference_material=doc.is_reference_material,
+            uploaded_by=doc.uploaded_by,
+            uploaded_at=doc.uploaded_at,
+            status=doc.status,
+            processing_started_at=doc.processing_started_at,
+            processing_completed_at=doc.processing_completed_at,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+        )
+
+        return DocumentDetailResponse(data=doc_with_url)
+
+    except DocumentNotFoundError:
+        # Return 404 to prevent enumeration
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+    except DocumentServiceError as e:
+        raise _handle_service_error(e)
+    except StorageError as e:
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "document_get_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "GET_FAILED",
+                    "message": f"Failed to get document: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.patch(
+    "/{document_id}",
+    response_model=DocumentDetailResponse,
+)
+async def update_document(
+    document_id: str = Path(..., description="Document UUID"),
+    update: DocumentUpdate = ...,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> DocumentDetailResponse:
+    """Update document metadata.
+
+    Allows updating document_type and is_reference_material.
+    When document_type is changed to 'act', is_reference_material is automatically
+    set to true unless explicitly overridden.
+
+    User must have editor or owner role on the document's matter.
+    """
+    try:
+        # Get document first to get matter_id for access verification
+        doc = document_service.get_document(document_id)
+
+        # Verify user has EDITOR/OWNER role on the document's matter (Layer 4)
+        _verify_matter_access(
+            matter_id=doc.matter_id,
+            user_id=current_user.id,
+            matter_service=matter_service,
+            allowed_roles=[MatterRole.OWNER, MatterRole.EDITOR],
+        )
+
+        # Perform the update
+        updated_doc = document_service.update_document(
+            document_id=document_id,
+            document_type=update.document_type,
+            is_reference_material=update.is_reference_material,
+        )
+
+        return DocumentDetailResponse(data=updated_doc)
+
+    except HTTPException:
+        raise
+    except DocumentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+    except DocumentServiceError as e:
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "document_update_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "UPDATE_FAILED",
+                    "message": f"Failed to update document: {e!s}",
                     "details": {},
                 }
             },

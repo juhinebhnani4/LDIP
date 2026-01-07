@@ -80,3 +80,75 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Document list item (subset of Document for list views) */
+export interface DocumentListItem {
+  id: string;
+  matterId: string;
+  filename: string;
+  fileSize: number;
+  documentType: DocumentType;
+  isReferenceMaterial: boolean;
+  status: DocumentStatus;
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+/** Pagination metadata */
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+}
+
+/** Paginated document list response */
+export interface DocumentListResponse {
+  data: DocumentListItem[];
+  meta: PaginationMeta;
+}
+
+/** Document detail response (includes signed URL) */
+export interface DocumentDetailResponse {
+  data: Document;
+}
+
+/** Document update request */
+export interface DocumentUpdateRequest {
+  documentType?: DocumentType;
+  isReferenceMaterial?: boolean;
+}
+
+/** Bulk update request */
+export interface BulkDocumentUpdateRequest {
+  documentIds: string[];
+  documentType: DocumentType;
+}
+
+/** Bulk update response */
+export interface BulkUpdateResponse {
+  data: {
+    updatedCount: number;
+    requestedCount: number;
+    documentType: DocumentType;
+  };
+}
+
+/** Document list filters */
+export interface DocumentFilters {
+  documentType?: DocumentType;
+  status?: DocumentStatus;
+  isReferenceMaterial?: boolean;
+}
+
+/** Sortable columns for document list */
+export type DocumentSortColumn = 'uploaded_at' | 'filename' | 'file_size' | 'document_type' | 'status';
+
+/** Sort direction */
+export type SortOrder = 'asc' | 'desc';
+
+/** Sorting state for document list */
+export interface DocumentSort {
+  column: DocumentSortColumn;
+  order: SortOrder;
+}

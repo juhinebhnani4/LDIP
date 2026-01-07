@@ -1,7 +1,7 @@
 import { LoginForm } from "@/components/features/auth/LoginForm"
 
 interface LoginPageProps {
-  searchParams?: { session_expired?: string; password_reset?: string }
+  searchParams?: Promise<{ session_expired?: string; password_reset?: string }>
 }
 
 function SessionExpiredBanner({ sessionExpired }: { sessionExpired: boolean }) {
@@ -32,9 +32,10 @@ function PasswordResetSuccessBanner({ passwordReset }: { passwordReset: boolean 
   )
 }
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
-  const sessionExpired = searchParams?.session_expired === "true"
-  const passwordReset = searchParams?.password_reset === "success"
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams
+  const sessionExpired = params?.session_expired === "true"
+  const passwordReset = params?.password_reset === "success"
   return (
     <div className="space-y-6">
       <SessionExpiredBanner sessionExpired={sessionExpired} />

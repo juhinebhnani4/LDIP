@@ -135,7 +135,7 @@ class MatterService:
         """
         logger.info("creating_matter", user_id=user_id, title=data.title)
 
-        # Insert matter - trigger auto-assigns owner
+        # Insert matter
         result = self.db.table("matters").insert({
             "title": data.title,
             "description": data.description,
@@ -150,8 +150,17 @@ class MatterService:
             )
 
         matter_data = result.data[0]
+        matter_id = matter_data["id"]
 
-        logger.info("matter_created", matter_id=matter_data["id"], user_id=user_id)
+        # Explicitly create matter_attorney record for owner
+        # (We do this explicitly because auth.uid() is null with service role key)
+        self.db.table("matter_attorneys").insert({
+            "matter_id": matter_id,
+            "user_id": user_id,
+            "role": "owner",
+        }).execute()
+
+        logger.info("matter_created", matter_id=matter_id, user_id=user_id)
 
         return Matter(
             id=matter_data["id"],

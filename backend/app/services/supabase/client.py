@@ -16,25 +16,32 @@ _supabase_client: Client | None = None
 def _create_supabase_client() -> Client | None:
     """Create and configure Supabase client.
 
+    Uses service role key to bypass RLS since authorization is handled
+    by the application layer (Layer 4 of 4-layer security model).
+
     Returns:
         Configured Supabase client or None if not configured.
     """
     settings = get_settings()
 
-    if not settings.supabase_url or not settings.supabase_key:
+    # Use service role key for backend operations (bypasses RLS)
+    # Application handles authorization via 4-layer security model
+    key = settings.supabase_service_key or settings.supabase_key
+
+    if not settings.supabase_url or not key:
         logger.warning(
             "supabase_not_configured",
             has_url=bool(settings.supabase_url),
-            has_key=bool(settings.supabase_key),
+            has_key=bool(key),
         )
         return None
 
     try:
         client = create_client(
             supabase_url=settings.supabase_url,
-            supabase_key=settings.supabase_key,
+            supabase_key=key,
         )
-        logger.info("supabase_client_created")
+        logger.info("supabase_client_created", using_service_key=bool(settings.supabase_service_key))
         return client
     except Exception as e:
         logger.error("supabase_client_creation_failed", error=str(e))

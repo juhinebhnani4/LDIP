@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from app.api.routes import documents, health, matters
 from app.core.config import get_settings
@@ -55,7 +56,41 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.debug else None,
         openapi_url="/openapi.json" if settings.debug else None,
         lifespan=lifespan,
+        swagger_ui_init_oauth={
+            "usePkceWithAuthorizationCodeGrant": True,
+        },
     )
+
+    # Custom OpenAPI schema with Bearer token auth
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        openapi_schema = get_openapi(
+            title=settings.app_name,
+            version=settings.api_version,
+            description="Legal Document Intelligence Platform - Backend API",
+            routes=app.routes,
+        )
+        # Override security schemes - rename HTTPBearer to BearerAuth
+        openapi_schema["components"]["securitySchemes"] = {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Enter your Supabase JWT token",
+            }
+        }
+        # Apply security globally to all endpoints
+        openapi_schema["security"] = [{"BearerAuth": []}]
+        # Fix per-endpoint security to use BearerAuth instead of HTTPBearer
+        for path in openapi_schema.get("paths", {}).values():
+            for operation in path.values():
+                if isinstance(operation, dict) and "security" in operation:
+                    operation["security"] = [{"BearerAuth": []}]
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
 
     # Configure CORS
     app.add_middleware(

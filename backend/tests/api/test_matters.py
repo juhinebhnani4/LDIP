@@ -42,6 +42,7 @@ def get_test_settings() -> Settings:
     """Create test settings with JWT secret configured."""
     settings = MagicMock(spec=Settings)
     settings.supabase_jwt_secret = TEST_JWT_SECRET
+    settings.supabase_url = "https://test.supabase.co"
     settings.is_configured = True
     settings.debug = True
     return settings

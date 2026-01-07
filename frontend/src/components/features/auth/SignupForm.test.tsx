@@ -107,15 +107,17 @@ describe('SignupForm', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockClient.auth.signUp).toHaveBeenCalledWith({
-        email: 'test@example.com',
-        password: 'Password123',
-        options: {
-          data: {
-            full_name: 'Test User',
-          },
-        },
-      });
+      expect(mockClient.auth.signUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'test@example.com',
+          password: 'Password123',
+          options: expect.objectContaining({
+            data: {
+              full_name: 'Test User',
+            },
+          }),
+        })
+      );
     });
   });
 

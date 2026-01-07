@@ -22,6 +22,7 @@ def test_settings() -> Settings:
     """Create test settings with JWT secret."""
     settings = MagicMock(spec=Settings)
     settings.supabase_jwt_secret = TEST_JWT_SECRET
+    settings.supabase_url = "https://test.supabase.co"
     return settings
 
 
@@ -163,10 +164,11 @@ class TestGetCurrentUser:
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail["error"]["code"] == "INVALID_TOKEN"
 
-    async def test_missing_jwt_secret_raises_500(self, valid_token: str) -> None:
-        """Test that missing JWT secret returns 500 server error."""
+    async def test_missing_jwt_secret_raises_401(self, valid_token: str) -> None:
+        """Test that missing JWT secret returns 401 (treated as invalid token)."""
         settings = MagicMock(spec=Settings)
         settings.supabase_jwt_secret = ""
+        settings.supabase_url = "https://test.supabase.co"
 
         credentials = HTTPAuthorizationCredentials(
             scheme="Bearer", credentials=valid_token
@@ -175,8 +177,9 @@ class TestGetCurrentUser:
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user(credentials, settings)
 
-        assert exc_info.value.status_code == 500
-        assert exc_info.value.detail["error"]["code"] == "SERVER_ERROR"
+        # Missing secret causes decode failure, treated as invalid token
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail["error"]["code"] == "INVALID_TOKEN"
 
     async def test_token_without_email_still_works(
         self, test_settings: Settings

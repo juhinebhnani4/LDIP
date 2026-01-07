@@ -1,7 +1,7 @@
 import { LoginForm } from "@/components/features/auth/LoginForm"
 
 interface LoginPageProps {
-  searchParams?: Promise<{ session_expired?: string; password_reset?: string }>
+  searchParams?: Promise<{ session_expired?: string; password_reset?: string; info?: string }>
 }
 
 function SessionExpiredBanner({ sessionExpired }: { sessionExpired: boolean }) {
@@ -32,14 +32,30 @@ function PasswordResetSuccessBanner({ passwordReset }: { passwordReset: boolean 
   )
 }
 
+function VerificationLinkInfoBanner({ show }: { show: boolean }) {
+  if (!show) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md bg-blue-50 p-4 border border-blue-200">
+      <p className="text-sm text-blue-800">
+        The verification link was opened in a different browser. Your account is ready - please sign in with your email and password.
+      </p>
+    </div>
+  )
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : {}
   const sessionExpired = params?.session_expired === "true"
   const passwordReset = params?.password_reset === "success"
+  const verificationLinkExpired = params?.info === "verification_link_expired"
   return (
     <div className="space-y-6">
       <SessionExpiredBanner sessionExpired={sessionExpired} />
       <PasswordResetSuccessBanner passwordReset={passwordReset} />
+      <VerificationLinkInfoBanner show={verificationLinkExpired} />
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-bold">Welcome Back</h1>
         <p className="text-muted-foreground">Sign in to access your LDIP account</p>

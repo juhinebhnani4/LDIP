@@ -44,6 +44,18 @@ export async function GET(request: Request) {
         new URL("/forgot-password?error=invalid_link", requestUrl.origin)
       )
     }
+
+    // PKCE verifier errors usually mean the link was opened in a different browser/context
+    // The user account still exists and can log in with password
+    if (exchangeError.message.includes("PKCE") || exchangeError.code === "pkce_not_found") {
+      return NextResponse.redirect(
+        new URL(
+          `/login?info=verification_link_expired`,
+          requestUrl.origin
+        )
+      )
+    }
+
     return NextResponse.redirect(
       new URL(
         `/login?error=auth_callback_error&message=${encodeURIComponent(exchangeError.message)}`,

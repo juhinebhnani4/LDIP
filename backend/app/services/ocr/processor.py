@@ -125,6 +125,11 @@ class OCRProcessor:
     ) -> OCRResult:
         """Process a PDF document and extract text with bounding boxes.
 
+        Note: This method is SYNCHRONOUS and makes a blocking API call to
+        Google Document AI. It is designed to be called from Celery tasks
+        (which run in separate worker processes). Do NOT call this directly
+        from async FastAPI endpoints - use Celery task queuing instead.
+
         Args:
             pdf_content: PDF file content as bytes.
             document_id: Optional document ID for logging and result.

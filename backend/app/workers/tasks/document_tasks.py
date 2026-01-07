@@ -28,6 +28,32 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES = 3
 RETRY_DELAYS = [30, 60, 120]  # Exponential backoff: 30s, 60s, 120s
 
+# PDF magic bytes signature
+PDF_MAGIC_BYTES = b"%PDF-"
+
+
+def _validate_pdf_content(content: bytes, document_id: str) -> None:
+    """Validate that content appears to be a PDF file.
+
+    Args:
+        content: File content bytes.
+        document_id: Document ID for logging.
+
+    Raises:
+        OCRServiceError: If content is not a valid PDF.
+    """
+    if not content.startswith(PDF_MAGIC_BYTES):
+        logger.error(
+            "document_invalid_pdf",
+            document_id=document_id,
+            first_bytes=content[:20].hex() if content else "empty",
+        )
+        raise OCRServiceError(
+            message="File does not appear to be a valid PDF",
+            code="INVALID_PDF_FORMAT",
+            is_retryable=False,
+        )
+
 
 @celery_app.task(
     name="app.workers.tasks.document_tasks.process_document",
@@ -101,6 +127,9 @@ def process_document(
             storage_path=storage_path,
         )
         pdf_content = store_service.download_file(storage_path)
+
+        # Validate PDF format before sending to OCR
+        _validate_pdf_content(pdf_content, document_id)
 
         # Process with OCR
         logger.info(

@@ -5,6 +5,7 @@ Works with StorageService for file operations.
 """
 
 from datetime import datetime, timezone
+from functools import lru_cache
 
 import structlog
 from supabase import Client
@@ -163,7 +164,7 @@ class DocumentService:
             document_id: Document UUID.
 
         Returns:
-            Document record.
+            Document record including OCR fields if available.
 
         Raises:
             DocumentNotFoundError: If document doesn't exist.
@@ -183,25 +184,7 @@ class DocumentService:
             if not result.data:
                 raise DocumentNotFoundError(document_id)
 
-            doc_data = result.data[0]
-
-            return Document(
-                id=doc_data["id"],
-                matter_id=doc_data["matter_id"],
-                filename=doc_data["filename"],
-                storage_path=doc_data["storage_path"],
-                file_size=doc_data["file_size"],
-                page_count=doc_data.get("page_count"),
-                document_type=DocumentType(doc_data["document_type"]),
-                is_reference_material=doc_data["is_reference_material"],
-                uploaded_by=doc_data["uploaded_by"],
-                uploaded_at=datetime.fromisoformat(doc_data["uploaded_at"].replace("Z", "+00:00")),
-                status=DocumentStatus(doc_data["status"]),
-                processing_started_at=self._parse_datetime(doc_data.get("processing_started_at")),
-                processing_completed_at=self._parse_datetime(doc_data.get("processing_completed_at")),
-                created_at=datetime.fromisoformat(doc_data["created_at"].replace("Z", "+00:00")),
-                updated_at=datetime.fromisoformat(doc_data["updated_at"].replace("Z", "+00:00")),
-            )
+            return self._parse_document(result.data[0])
 
         except DocumentNotFoundError:
             raise
@@ -837,9 +820,6 @@ class DocumentService:
                 message=f"Failed to get document for processing: {e!s}",
                 code="GET_FOR_PROCESSING_FAILED"
             ) from e
-
-
-from functools import lru_cache
 
 
 @lru_cache(maxsize=1)

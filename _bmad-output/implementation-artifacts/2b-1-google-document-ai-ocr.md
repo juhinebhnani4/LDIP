@@ -76,8 +76,8 @@ So that **scanned documents become searchable and analyzable**.
 - [x] Task 7: Create OCR Queue Trigger on Document Upload (AC: #1)
   - [x] Update `backend/app/api/routes/documents.py` upload endpoint
   - [x] After successful document creation, queue `process_document` Celery task
-  - [x] Use 'high' priority queue for small documents (<100 pages)
-  - [x] Use 'default' queue for large documents
+  - [x] Use 'high' priority queue for small documents (<10MB file size)
+  - [x] Use 'default' queue for large documents (>=10MB)
 
 - [x] Task 8: Implement Status Update Broadcasting (AC: #4)
   - [x] Create Supabase Realtime subscription trigger for document status changes

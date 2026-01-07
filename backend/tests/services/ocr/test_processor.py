@@ -187,6 +187,87 @@ class TestOCRProcessorProcessDocument:
         assert result.processing_time_ms is not None
         assert result.processing_time_ms >= 0
 
+    @patch("app.services.ocr.processor.documentai")
+    def test_process_document_configures_indian_language_hints(
+        self,
+        mock_documentai: MagicMock,
+        mock_processor: OCRProcessor,
+    ) -> None:
+        """Should configure language hints for Hindi, Gujarati, English.
+
+        Verifies that ProcessRequest is constructed with OcrConfig containing
+        language hints for Indian languages (en, hi, gu) per AC#3.
+        """
+        # Setup documentai mock to capture the ProcessRequest
+        mock_process_request = MagicMock()
+        mock_documentai.ProcessRequest = mock_process_request
+
+        mock_ocr_config = MagicMock()
+        mock_documentai.OcrConfig = mock_ocr_config
+
+        mock_process_options = MagicMock()
+        mock_documentai.ProcessOptions = mock_process_options
+
+        mock_ocr_hints = MagicMock()
+        mock_documentai.OcrConfig.Hints = mock_ocr_hints
+
+        mock_raw_document = MagicMock()
+        mock_documentai.RawDocument = mock_raw_document
+
+        # Setup client mock
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.document = self._create_mock_document_response(
+            text="English text मराठी ગુજરાતી"
+        )
+        mock_client.process_document.return_value = mock_response
+
+        mock_processor._client = mock_client
+
+        mock_processor.process_document(
+            pdf_content=b"fake multilingual pdf content",
+            document_id="doc-multilingual",
+        )
+
+        # Verify OcrConfig.Hints was called with language hints
+        mock_ocr_hints.assert_called_once()
+        hints_call_kwargs = mock_ocr_hints.call_args.kwargs
+        assert "language_hints" in hints_call_kwargs
+        language_hints = hints_call_kwargs["language_hints"]
+        assert "en" in language_hints
+        assert "hi" in language_hints
+        assert "gu" in language_hints
+
+    @patch("app.services.ocr.processor.documentai")
+    def test_process_document_handles_multilingual_content(
+        self,
+        mock_documentai: MagicMock,
+        mock_processor: OCRProcessor,
+    ) -> None:
+        """Should correctly extract text from multilingual documents."""
+        # Multilingual content: English, Hindi, Gujarati
+        multilingual_text = "Legal Document\nधारा 302 भारतीय दंड संहिता\nકલમ 302 ભારતીય દંડ સંહિતા"
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.document = self._create_mock_document_response(
+            text=multilingual_text
+        )
+        mock_client.process_document.return_value = mock_response
+
+        mock_processor._client = mock_client
+
+        result = mock_processor.process_document(
+            pdf_content=b"fake multilingual pdf",
+            document_id="doc-multilingual",
+        )
+
+        # Verify multilingual text is preserved
+        assert result.full_text == multilingual_text
+        assert "Legal Document" in result.full_text  # English
+        assert "धारा" in result.full_text  # Hindi
+        assert "કલમ" in result.full_text  # Gujarati
+
     def test_raises_configuration_error_when_not_configured(
         self,
     ) -> None:

@@ -10,6 +10,7 @@ Storage path structure:
 """
 
 import uuid
+from functools import lru_cache
 
 import structlog
 from supabase import Client
@@ -28,9 +29,10 @@ DEFAULT_SIGNED_URL_EXPIRES = 3600
 class StorageError(Exception):
     """Base exception for storage operations."""
 
-    def __init__(self, message: str, code: str = "STORAGE_ERROR"):
+    def __init__(self, message: str, code: str = "STORAGE_ERROR", status_code: int = 500):
         self.message = message
         self.code = code
+        self.status_code = status_code
         super().__init__(message)
 
 
@@ -283,9 +285,6 @@ class StorageService:
                 message=f"Failed to download file: {e!s}",
                 code="DOWNLOAD_FAILED"
             ) from e
-
-
-from functools import lru_cache
 
 
 @lru_cache(maxsize=1)

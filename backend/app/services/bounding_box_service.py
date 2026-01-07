@@ -3,6 +3,8 @@
 Handles saving OCR bounding boxes to the bounding_boxes table.
 """
 
+from functools import lru_cache
+
 import structlog
 from supabase import Client
 
@@ -174,9 +176,6 @@ class BoundingBoxService:
                 message=f"Failed to delete bounding boxes: {e!s}",
                 code="DELETE_FAILED"
             ) from e
-
-
-from functools import lru_cache
 
 
 @lru_cache(maxsize=1)

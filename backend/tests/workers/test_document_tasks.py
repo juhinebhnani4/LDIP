@@ -11,7 +11,9 @@ from app.services.ocr import OCRServiceError
 from app.services.storage_service import StorageError
 from app.workers.tasks.document_tasks import (
     MAX_RETRIES,
+    PDF_MAGIC_BYTES,
     _handle_max_retries_exceeded,
+    _validate_pdf_content,
     process_document,
 )
 
@@ -29,7 +31,8 @@ class TestProcessDocumentTask:
         )
 
         storage_service = MagicMock()
-        storage_service.download_file.return_value = b"fake pdf content"
+        # Use valid PDF magic bytes for content validation
+        storage_service.download_file.return_value = b"%PDF-1.4 fake pdf content"
 
         ocr_processor = MagicMock()
         ocr_processor.process_document.return_value = OCRResult(
@@ -395,3 +398,36 @@ class TestHandleMaxRetriesExceeded:
         )
 
         assert result["status"] == "ocr_failed"
+
+
+class TestValidatePdfContent:
+    """Tests for PDF content validation."""
+
+    def test_valid_pdf_passes(self) -> None:
+        """Should not raise for valid PDF content."""
+        valid_content = b"%PDF-1.4 some pdf content here"
+        # Should not raise
+        _validate_pdf_content(valid_content, "doc-123")
+
+    def test_invalid_pdf_raises_error(self) -> None:
+        """Should raise OCRServiceError for non-PDF content."""
+        invalid_content = b"This is not a PDF file"
+
+        with pytest.raises(OCRServiceError) as exc_info:
+            _validate_pdf_content(invalid_content, "doc-123")
+
+        assert exc_info.value.code == "INVALID_PDF_FORMAT"
+        assert exc_info.value.is_retryable is False
+
+    def test_empty_content_raises_error(self) -> None:
+        """Should raise OCRServiceError for empty content."""
+        empty_content = b""
+
+        with pytest.raises(OCRServiceError) as exc_info:
+            _validate_pdf_content(empty_content, "doc-123")
+
+        assert exc_info.value.code == "INVALID_PDF_FORMAT"
+
+    def test_pdf_magic_bytes_constant(self) -> None:
+        """Should have correct PDF magic bytes constant."""
+        assert PDF_MAGIC_BYTES == b"%PDF-"

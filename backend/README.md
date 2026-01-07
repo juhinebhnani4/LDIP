@@ -52,3 +52,4 @@ export DATABASE_URL="postgresql://user:pass@localhost:5432/dbname"
 uv run alembic upgrade head
 ```
 
+

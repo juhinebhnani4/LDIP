@@ -243,17 +243,14 @@ class StorageService:
             ) from e
 
 
-# Singleton instance
-_storage_service: StorageService | None = None
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_storage_service() -> StorageService:
-    """Get singleton storage service instance.
+    """Get singleton storage service instance (thread-safe via lru_cache).
 
     Returns:
         StorageService instance.
     """
-    global _storage_service
-    if _storage_service is None:
-        _storage_service = StorageService()
-    return _storage_service
+    return StorageService()

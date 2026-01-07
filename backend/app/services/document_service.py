@@ -335,17 +335,14 @@ class DocumentService:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-# Singleton instance
-_document_service: DocumentService | None = None
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_document_service() -> DocumentService:
-    """Get singleton document service instance.
+    """Get singleton document service instance (thread-safe via lru_cache).
 
     Returns:
         DocumentService instance.
     """
-    global _document_service
-    if _document_service is None:
-        _document_service = DocumentService()
-    return _document_service
+    return DocumentService()

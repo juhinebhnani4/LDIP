@@ -48,7 +48,17 @@ ALLOWED_MIME_TYPES = {
 
 
 def _handle_service_error(error: DocumentServiceError | StorageError) -> HTTPException:
-    """Convert service errors to HTTP exceptions."""
+    """Convert service layer errors to HTTP exceptions.
+
+    Maps service-specific error codes to appropriate HTTP status codes
+    and formats the response according to the API error response standard.
+
+    Args:
+        error: Service error from DocumentService or StorageService.
+
+    Returns:
+        HTTPException with properly formatted error detail.
+    """
     status_code = getattr(error, "status_code", 500)
     return HTTPException(
         status_code=status_code,
@@ -137,7 +147,8 @@ async def _extract_and_upload_zip(
         HTTPException: If extraction fails or ZIP contains no PDFs.
     """
     documents: list[UploadedDocument] = []
-    uploaded_paths: list[str] = []  # Track for rollback
+    uploaded_paths: list[str] = []  # Track storage paths for rollback
+    created_doc_ids: list[str] = []  # Track document IDs for rollback
 
     try:
         with zipfile.ZipFile(io.BytesIO(zip_content)) as zf:
@@ -196,6 +207,7 @@ async def _extract_and_upload_zip(
                     uploaded_by=user_id,
                 )
                 documents.append(doc)
+                created_doc_ids.append(doc.document_id)
 
             logger.info(
                 "zip_extraction_complete",
@@ -220,21 +232,34 @@ async def _extract_and_upload_zip(
         # Re-raise HTTP exceptions without modification
         raise
     except Exception as e:
-        # Rollback: delete any uploaded files on failure
+        # Rollback: delete uploaded files AND document records on failure
         logger.error(
             "zip_extraction_failed",
             matter_id=matter_id,
             error=str(e),
             uploaded_paths=uploaded_paths,
+            created_doc_ids=created_doc_ids,
         )
 
+        # Delete storage files
         for path in uploaded_paths:
             try:
                 storage_service.delete_file(path)
             except Exception as delete_error:
                 logger.warning(
-                    "rollback_delete_failed",
+                    "rollback_storage_delete_failed",
                     storage_path=path,
+                    error=str(delete_error),
+                )
+
+        # Delete document records
+        for doc_id in created_doc_ids:
+            try:
+                document_service.delete_document(doc_id)
+            except Exception as delete_error:
+                logger.warning(
+                    "rollback_document_delete_failed",
+                    document_id=doc_id,
                     error=str(delete_error),
                 )
 

@@ -33,6 +33,8 @@ from app.models.document import (
     DocumentUpdate,
     UploadedDocument,
 )
+from app.models.ocr_confidence import OCRConfidenceResult, OCRQualityResponse
+from pydantic import BaseModel, Field
 from app.services.document_service import (
     DocumentNotFoundError,
     DocumentService,
@@ -44,10 +46,44 @@ from app.services.storage_service import (
     StorageService,
     get_storage_service,
 )
-from app.workers.tasks.document_tasks import process_document, validate_ocr
+from app.services.ocr.confidence_calculator import (
+    ConfidenceCalculatorError,
+    calculate_document_confidence,
+)
+from app.services.ocr.human_review_service import (
+    HumanReviewService,
+    HumanReviewServiceError,
+    get_human_review_service,
+)
+from app.workers.tasks.document_tasks import (
+    calculate_confidence,
+    process_document,
+    validate_ocr,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Request/Response Models for Manual Review
+# =============================================================================
+
+
+class ManualReviewRequest(BaseModel):
+    """Request body for requesting manual review of specific pages."""
+
+    pages: list[int] = Field(
+        ...,
+        min_length=1,
+        description="List of page numbers to flag for manual review"
+    )
+
+
+class ManualReviewResponse(BaseModel):
+    """Response for manual review request."""
+
+    data: dict[str, str | int | bool]
 
 # File size limits
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
@@ -201,14 +237,15 @@ def _get_subfolder(document_type: DocumentType) -> str:
 
 
 def _queue_ocr_task(document_id: str, file_size: int) -> None:
-    """Queue OCR processing and validation tasks for a document.
+    """Queue OCR processing, validation, and confidence tasks for a document.
 
-    Uses Celery chain to run validation after OCR completes.
+    Uses Celery chain to run validation and confidence calculation after OCR.
     Smaller documents (<10MB, ~100 pages) get 'high' priority.
 
     The task chain:
     1. process_document: OCR with Google Document AI
     2. validate_ocr: Gemini validation + pattern correction
+    3. calculate_confidence: Calculate and store OCR quality metrics
 
     Args:
         document_id: Document UUID to process.
@@ -222,18 +259,19 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
 
     queue_name = "high" if is_small_document else "default"
 
-    # Create task chain: OCR -> Validation
-    # validate_ocr receives the result from process_document as first argument
+    # Create task chain: OCR -> Validation -> Confidence
+    # Each task receives the result from the previous task as first argument
     task_chain = chain(
         process_document.s(document_id),
         validate_ocr.s(),
+        calculate_confidence.s(),
     )
 
     # Apply the chain to the appropriate queue
     task_chain.apply_async(queue=queue_name)
 
     logger.info(
-        "ocr_validation_chain_queued",
+        "ocr_validation_confidence_chain_queued",
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,
@@ -741,6 +779,12 @@ async def get_document(
             status=doc.status,
             processing_started_at=doc.processing_started_at,
             processing_completed_at=doc.processing_completed_at,
+            extracted_text=doc.extracted_text,
+            ocr_confidence=doc.ocr_confidence,
+            ocr_quality_score=doc.ocr_quality_score,
+            ocr_confidence_per_page=doc.ocr_confidence_per_page,
+            ocr_quality_status=doc.ocr_quality_status,
+            ocr_error=doc.ocr_error,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
@@ -848,6 +892,175 @@ async def update_document(
                 "error": {
                     "code": "UPDATE_FAILED",
                     "message": f"Failed to update document: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.get(
+    "/{document_id}/ocr-quality",
+    response_model=OCRQualityResponse,
+)
+async def get_ocr_quality(
+    document_id: str = Path(..., description="Document UUID"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+) -> OCRQualityResponse:
+    """Get detailed OCR quality breakdown for a document.
+
+    Returns overall confidence, per-page confidence breakdown,
+    and quality status determination.
+
+    User must have access to the document's matter.
+    """
+    try:
+        # Verify access to document (RLS will filter)
+        document_service.get_document(document_id)
+
+        # Calculate confidence metrics
+        result = calculate_document_confidence(document_id)
+
+        return OCRQualityResponse(data=result)
+
+    except DocumentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+    except ConfidenceCalculatorError as e:
+        logger.error(
+            "ocr_quality_calculation_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "OCR_QUALITY_CALCULATION_FAILED",
+                    "message": f"Failed to calculate OCR quality: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "ocr_quality_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "OCR_QUALITY_FAILED",
+                    "message": f"Failed to get OCR quality: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.post(
+    "/{document_id}/request-manual-review",
+    response_model=ManualReviewResponse,
+)
+async def request_manual_review(
+    document_id: str = Path(..., description="Document UUID"),
+    request: ManualReviewRequest = ...,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+    matter_service: MatterService = Depends(get_matter_service),
+    human_review_service: HumanReviewService = Depends(get_human_review_service),
+) -> ManualReviewResponse:
+    """Request manual review for specific pages of a document.
+
+    Adds the specified pages to the human review queue for manual verification.
+    User must have editor or owner role on the document's matter.
+    """
+    try:
+        # Get document to get matter_id for access verification
+        doc = document_service.get_document(document_id)
+
+        # Verify user has EDITOR/OWNER role on the document's matter
+        _verify_matter_access(
+            matter_id=doc.matter_id,
+            user_id=current_user.id,
+            matter_service=matter_service,
+            allowed_roles=[MatterRole.OWNER, MatterRole.EDITOR],
+        )
+
+        # Add pages to review queue
+        added_count = human_review_service.add_pages_to_queue(
+            document_id=document_id,
+            matter_id=doc.matter_id,
+            pages=request.pages,
+        )
+
+        logger.info(
+            "manual_review_requested",
+            document_id=document_id,
+            pages=request.pages,
+            added_count=added_count,
+            user_id=current_user.id,
+        )
+
+        return ManualReviewResponse(
+            data={
+                "document_id": document_id,
+                "pages_added": added_count,
+                "success": True,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except DocumentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+    except HumanReviewServiceError as e:
+        logger.error(
+            "manual_review_request_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "manual_review_request_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "MANUAL_REVIEW_REQUEST_FAILED",
+                    "message": f"Failed to request manual review: {e!s}",
                     "details": {},
                 }
             },

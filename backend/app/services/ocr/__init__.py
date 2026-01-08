@@ -2,10 +2,15 @@
 
 This module provides OCR processing capabilities using Google Document AI,
 including text extraction, bounding box extraction, confidence scoring,
-and Gemini-based validation for low-confidence results.
+Gemini-based validation for low-confidence results, and quality assessment.
 """
 
 from app.services.ocr.bbox_extractor import extract_bounding_boxes
+from app.services.ocr.confidence_calculator import (
+    ConfidenceCalculatorError,
+    calculate_document_confidence,
+    update_document_confidence,
+)
 from app.services.ocr.gemini_validator import (
     GeminiOCRValidator,
     GeminiValidatorError,
@@ -50,4 +55,8 @@ __all__ = [
     "HumanReviewService",
     "HumanReviewServiceError",
     "get_human_review_service",
+    # Confidence calculation
+    "ConfidenceCalculatorError",
+    "calculate_document_confidence",
+    "update_document_confidence",
 ]

@@ -35,6 +35,8 @@ const mockDocuments: DocumentListItem[] = [
     status: 'completed',
     uploadedAt: '2024-01-15T10:00:00Z',
     uploadedBy: 'user-1',
+    ocrConfidence: 0.92,
+    ocrQualityStatus: 'good',
   },
   {
     id: 'doc-2',
@@ -46,6 +48,8 @@ const mockDocuments: DocumentListItem[] = [
     status: 'pending',
     uploadedAt: '2024-01-14T10:00:00Z',
     uploadedBy: 'user-1',
+    ocrConfidence: null,
+    ocrQualityStatus: null,
   },
   {
     id: 'doc-3',
@@ -57,6 +61,8 @@ const mockDocuments: DocumentListItem[] = [
     status: 'processing',
     uploadedAt: '2024-01-13T10:00:00Z',
     uploadedBy: 'user-1',
+    ocrConfidence: 0.65,
+    ocrQualityStatus: 'poor',
   },
 ];
 
@@ -138,7 +144,8 @@ describe('DocumentList', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Completed')).toBeInTheDocument();
-        expect(screen.getByText('Pending')).toBeInTheDocument();
+        // "Pending" appears in both status column and OCR Quality badge for pending docs
+        expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText('Processing')).toBeInTheDocument();
       });
     });

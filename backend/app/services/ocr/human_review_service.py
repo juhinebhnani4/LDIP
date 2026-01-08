@@ -418,6 +418,82 @@ class HumanReviewService:
                 code="SKIP_FAILED"
             ) from e
 
+    def add_pages_to_queue(
+        self,
+        document_id: str,
+        matter_id: str,
+        pages: list[int],
+    ) -> int:
+        """Add specific pages to the human review queue.
+
+        Used when user explicitly requests manual review for poor OCR pages.
+
+        Args:
+            document_id: Document UUID.
+            matter_id: Matter UUID.
+            pages: List of page numbers to flag for review.
+
+        Returns:
+            Number of items added to the queue.
+
+        Raises:
+            HumanReviewServiceError: If adding fails.
+        """
+        if self.client is None:
+            raise HumanReviewServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        if not pages:
+            return 0
+
+        logger.info(
+            "human_review_adding_pages",
+            document_id=document_id,
+            matter_id=matter_id,
+            page_count=len(pages),
+            pages=pages,
+        )
+
+        try:
+            records = [
+                {
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "bbox_id": None,  # Page-level review, not bbox-specific
+                    "original_text": f"[Page {page} manual review requested]",
+                    "context_before": None,
+                    "context_after": None,
+                    "page_number": page,
+                    "status": HumanReviewStatus.PENDING.value,
+                }
+                for page in pages
+            ]
+
+            result = self.client.table("ocr_human_review").insert(records).execute()
+
+            added_count = len(result.data) if result.data else 0
+
+            logger.info(
+                "human_review_pages_added",
+                document_id=document_id,
+                added_count=added_count,
+            )
+
+            return added_count
+
+        except Exception as e:
+            logger.error(
+                "human_review_add_pages_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            raise HumanReviewServiceError(
+                message=f"Failed to add pages to review queue: {e!s}",
+                code="ADD_PAGES_FAILED"
+            ) from e
+
     def get_review_stats(
         self,
         matter_id: str,

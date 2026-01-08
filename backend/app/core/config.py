@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     ocr_validation_human_threshold: float = 0.50   # Below this -> Human review
     ocr_validation_batch_size: int = 20            # Max words per Gemini request
 
+    # OCR Quality Assessment Thresholds
+    ocr_quality_good_threshold: float = 0.85       # Above this = Good
+    ocr_quality_fair_threshold: float = 0.70       # Above this = Fair, below = Poor
+    ocr_page_highlight_threshold: float = 0.60     # Pages below this are highlighted
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

@@ -334,6 +334,8 @@ class DocumentService:
                         doc["uploaded_at"].replace("Z", "+00:00")
                     ),
                     uploaded_by=doc["uploaded_by"],
+                    ocr_confidence=doc.get("ocr_confidence"),
+                    ocr_quality_status=doc.get("ocr_quality_status"),
                 )
                 for doc in result.data
             ]
@@ -627,6 +629,8 @@ class DocumentService:
             extracted_text=doc_data.get("extracted_text"),
             ocr_confidence=doc_data.get("ocr_confidence"),
             ocr_quality_score=doc_data.get("ocr_quality_score"),
+            ocr_confidence_per_page=doc_data.get("ocr_confidence_per_page"),
+            ocr_quality_status=doc_data.get("ocr_quality_status"),
             ocr_error=doc_data.get("ocr_error"),
             created_at=datetime.fromisoformat(
                 doc_data["created_at"].replace("Z", "+00:00")

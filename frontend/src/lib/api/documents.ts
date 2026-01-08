@@ -15,6 +15,10 @@ import type {
   DocumentSort,
   DocumentType,
   DocumentUpdateRequest,
+  ManualReviewRequest,
+  ManualReviewResponse,
+  OCRConfidenceResult,
+  OCRQualityResponse,
   UploadResponse,
 } from '@/types/document';
 import { createClient } from '@/lib/supabase/client';
@@ -388,5 +392,82 @@ export async function bulkUpdateDocuments(
 
   const data = await response.json();
   const result = toCamelCase<BulkUpdateResponse>(data);
+  return result.data;
+}
+
+// =============================================================================
+// OCR Quality Assessment API Functions
+// =============================================================================
+
+/**
+ * Fetch OCR quality metrics for a document
+ *
+ * @param documentId - Document ID
+ * @returns OCR confidence result with per-page breakdown
+ */
+export async function fetchOCRQuality(documentId: string): Promise<OCRConfidenceResult> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/${documentId}/ocr-quality`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to fetch OCR quality: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const result = toCamelCase<OCRQualityResponse>(data);
+  return result.data;
+}
+
+/**
+ * Request manual review for specific pages
+ *
+ * @param documentId - Document ID
+ * @param pages - List of page numbers to flag for review
+ * @returns Manual review response
+ */
+export async function requestManualReview(
+  documentId: string,
+  pages: number[]
+): Promise<ManualReviewResponse['data']> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/${documentId}/request-manual-review`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ pages }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to request manual review: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const result = toCamelCase<ManualReviewResponse>(data);
   return result.data;
 }

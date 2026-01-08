@@ -104,6 +104,14 @@ class Document(DocumentBase):
         None, ge=0, le=1,
         description="Document AI image quality score (0-1)"
     )
+    ocr_confidence_per_page: list[float] | None = Field(
+        None,
+        description="Per-page OCR confidence scores (0-1)"
+    )
+    ocr_quality_status: str | None = Field(
+        None,
+        description="OCR quality level: 'good' (>85%), 'fair' (70-85%), 'poor' (<70%)"
+    )
     ocr_error: str | None = Field(
         None,
         description="Error details if OCR processing failed"
@@ -170,6 +178,14 @@ class DocumentListItem(BaseModel):
     status: DocumentStatus = Field(..., description="Processing status")
     uploaded_at: datetime = Field(..., description="Upload timestamp")
     uploaded_by: str = Field(..., description="User UUID who uploaded")
+    ocr_confidence: float | None = Field(
+        None, ge=0, le=1,
+        description="Average OCR confidence score (0-1)"
+    )
+    ocr_quality_status: str | None = Field(
+        None,
+        description="OCR quality level: 'good', 'fair', or 'poor'"
+    )
 
 
 class DocumentListResponseWithPagination(BaseModel):

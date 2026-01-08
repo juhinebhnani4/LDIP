@@ -19,6 +19,10 @@ from app.services.document_service import (
     get_document_service,
 )
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
+from app.services.ocr.confidence_calculator import (
+    ConfidenceCalculatorError,
+    update_document_confidence,
+)
 from app.services.ocr.gemini_validator import (
     GeminiOCRValidator,
     GeminiValidatorError,
@@ -792,3 +796,158 @@ def _handle_validation_failure(
         "error_code": error_code,
         "error_message": error_message,
     }
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.calculate_confidence",
+    bind=True,
+    autoretry_for=(ConfidenceCalculatorError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def calculate_confidence(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Calculate and store OCR confidence metrics for a document.
+
+    This task runs after validate_ocr to calculate overall and per-page
+    confidence metrics, determine quality status, and update the document.
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+
+    Returns:
+        Task result with confidence metrics.
+
+    Raises:
+        ConfidenceCalculatorError: If calculation fails (will trigger retry).
+    """
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("calculate_confidence_no_document_id")
+        return {
+            "status": "confidence_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if OCR/validation wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        if prev_status not in ("validated", "validated_with_warnings", "validation_skipped"):
+            logger.info(
+                "calculate_confidence_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "confidence_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    doc_service = document_service or get_document_service()
+
+    logger.info(
+        "calculate_confidence_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for broadcasting
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Calculate and update confidence metrics
+        result = update_document_confidence(doc_id)
+
+        logger.info(
+            "calculate_confidence_task_completed",
+            document_id=doc_id,
+            overall_confidence=result.overall_confidence,
+            quality_status=result.quality_status,
+            total_words=result.total_words,
+            page_count=len(result.page_confidences),
+        )
+
+        # Broadcast confidence update
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="confidence_calculated",
+            ocr_confidence=result.overall_confidence,
+            quality_status=result.quality_status,
+        )
+
+        return {
+            "status": "confidence_calculated",
+            "document_id": doc_id,
+            "overall_confidence": result.overall_confidence,
+            "quality_status": result.quality_status,
+            "total_words": result.total_words,
+            "page_count": len(result.page_confidences),
+        }
+
+    except ConfidenceCalculatorError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "calculate_confidence_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=2,
+            error=str(e),
+        )
+
+        if retry_count >= 2:
+            logger.error(
+                "calculate_confidence_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "confidence_failed",
+                "document_id": doc_id,
+                "error_code": "CONFIDENCE_CALCULATION_FAILED",
+                "error_message": str(e),
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "calculate_confidence_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "confidence_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "calculate_confidence_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "confidence_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }

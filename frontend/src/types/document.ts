@@ -9,7 +9,10 @@
 export type DocumentType = 'case_file' | 'act' | 'annexure' | 'other';
 
 /** Document status from processing pipeline */
-export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type DocumentStatus = 'pending' | 'processing' | 'ocr_complete' | 'completed' | 'ocr_failed' | 'failed';
+
+/** OCR quality status based on confidence thresholds */
+export type OCRQualityStatus = 'good' | 'fair' | 'poor';
 
 /** Upload file status for UI tracking */
 export type UploadStatus = 'pending' | 'uploading' | 'completed' | 'error';
@@ -77,6 +80,12 @@ export interface Document {
   status: DocumentStatus;
   processingStartedAt: string | null;
   processingCompletedAt: string | null;
+  extractedText: string | null;
+  ocrConfidence: number | null;
+  ocrQualityScore: number | null;
+  ocrConfidencePerPage: number[] | null;
+  ocrQualityStatus: OCRQualityStatus | null;
+  ocrError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +101,8 @@ export interface DocumentListItem {
   status: DocumentStatus;
   uploadedAt: string;
   uploadedBy: string;
+  ocrConfidence: number | null;
+  ocrQualityStatus: OCRQualityStatus | null;
 }
 
 /** Pagination metadata */
@@ -151,4 +162,43 @@ export type SortOrder = 'asc' | 'desc';
 export interface DocumentSort {
   column: DocumentSortColumn;
   order: SortOrder;
+}
+
+// =============================================================================
+// OCR Quality Assessment Types
+// =============================================================================
+
+/** Per-page confidence information */
+export interface PageConfidence {
+  pageNumber: number;
+  confidence: number;
+  wordCount: number;
+}
+
+/** OCR confidence result with per-page breakdown */
+export interface OCRConfidenceResult {
+  documentId: string;
+  overallConfidence: number | null;
+  pageConfidences: PageConfidence[];
+  qualityStatus: OCRQualityStatus | null;
+  totalWords: number;
+}
+
+/** Response for OCR quality endpoint */
+export interface OCRQualityResponse {
+  data: OCRConfidenceResult;
+}
+
+/** Request for manual review of specific pages */
+export interface ManualReviewRequest {
+  pages: number[];
+}
+
+/** Response from manual review request */
+export interface ManualReviewResponse {
+  data: {
+    documentId: string;
+    pagesAdded: number;
+    success: boolean;
+  };
 }

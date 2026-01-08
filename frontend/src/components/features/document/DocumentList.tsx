@@ -17,6 +17,7 @@ import {
   updateDocument,
 } from '@/lib/api/documents';
 import { DocumentTypeBadge } from './DocumentTypeBadge';
+import { OCRQualityBadge } from './OCRQualityBadge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -52,7 +53,9 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
 const STATUS_LABELS: Record<DocumentStatus, string> = {
   pending: 'Pending',
   processing: 'Processing',
+  ocr_complete: 'OCR Complete',
   completed: 'Completed',
+  ocr_failed: 'OCR Failed',
   failed: 'Failed',
 };
 
@@ -105,6 +108,7 @@ function DocumentListSkeleton() {
               <TableHead><Skeleton className="h-4 w-24" /></TableHead>
               <TableHead><Skeleton className="h-4 w-16" /></TableHead>
               <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+              <TableHead><Skeleton className="h-4 w-16" /></TableHead>
               <TableHead><Skeleton className="h-4 w-12" /></TableHead>
               <TableHead><Skeleton className="h-4 w-20" /></TableHead>
             </TableRow>
@@ -116,6 +120,7 @@ function DocumentListSkeleton() {
                 <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-12" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-20" /></TableCell>
               </TableRow>
@@ -380,6 +385,7 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                     </div>
                   </TableHead>
                 ))}
+                <TableHead>OCR Quality</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -432,15 +438,22 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                   <TableCell>
                     <span
                       className={`text-sm ${
-                        doc.status === 'failed'
+                        doc.status === 'failed' || doc.status === 'ocr_failed'
                           ? 'text-destructive'
-                          : doc.status === 'completed'
+                          : doc.status === 'completed' || doc.status === 'ocr_complete'
                             ? 'text-green-600'
                             : 'text-muted-foreground'
                       }`}
                     >
                       {STATUS_LABELS[doc.status]}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <OCRQualityBadge
+                      status={doc.ocrQualityStatus}
+                      confidence={doc.ocrConfidence}
+                      showPercentage={true}
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatFileSize(doc.fileSize)}

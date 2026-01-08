@@ -24,6 +24,16 @@ from app.services.rag.hybrid_search import (
     SearchWeights,
     SearchResult,
     HybridSearchResult,
+    RerankedSearchResult,
+    RerankedSearchResultItem,
+)
+from app.services.rag.reranker import (
+    CohereRerankService,
+    CohereRerankServiceError,
+    get_cohere_rerank_service,
+    RerankResult,
+    RerankResultItem,
+    RERANK_MODEL,
 )
 
 __all__ = [
@@ -49,4 +59,13 @@ __all__ = [
     "SearchWeights",
     "SearchResult",
     "HybridSearchResult",
+    "RerankedSearchResult",
+    "RerankedSearchResultItem",
+    # Cohere reranker service
+    "CohereRerankService",
+    "CohereRerankServiceError",
+    "get_cohere_rerank_service",
+    "RerankResult",
+    "RerankResultItem",
+    "RERANK_MODEL",
 ]

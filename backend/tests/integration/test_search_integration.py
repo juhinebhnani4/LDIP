@@ -12,8 +12,10 @@ import pytest
 from app.services.rag.embedder import EMBEDDING_DIMENSIONS
 from app.services.rag.hybrid_search import (
     HybridSearchService,
+    RerankedSearchResult,
     SearchWeights,
 )
+from app.services.rag.reranker import CohereRerankServiceError
 
 
 class TestSearchPipelineIntegration:
@@ -335,3 +337,241 @@ class TestSearchEdgeCases:
 
         # Should handle long query without error
         assert result.query == long_query
+
+
+class TestRerankPipelineIntegration:
+    """Integration tests for the rerank pipeline (hybrid + Cohere rerank)."""
+
+    @pytest.fixture
+    def mock_hybrid_results(self) -> list[dict]:
+        """Create mock hybrid search results for reranking."""
+        return [
+            {
+                "id": str(uuid4()),
+                "matter_id": "550e8400-e29b-41d4-a716-446655440000",
+                "document_id": str(uuid4()),
+                "content": "The contract termination clause specifies 30 days notice...",
+                "page_number": 5,
+                "chunk_type": "child",
+                "token_count": 150,
+                "bm25_rank": 1,
+                "semantic_rank": 3,
+                "rrf_score": 0.032,
+            },
+            {
+                "id": str(uuid4()),
+                "matter_id": "550e8400-e29b-41d4-a716-446655440000",
+                "document_id": str(uuid4()),
+                "content": "Payment terms require settlement within 15 business days...",
+                "page_number": 8,
+                "chunk_type": "parent",
+                "token_count": 200,
+                "bm25_rank": 2,
+                "semantic_rank": 2,
+                "rrf_score": 0.031,
+            },
+            {
+                "id": str(uuid4()),
+                "matter_id": "550e8400-e29b-41d4-a716-446655440000",
+                "document_id": str(uuid4()),
+                "content": "Either party may terminate for material breach of obligations...",
+                "page_number": 12,
+                "chunk_type": "child",
+                "token_count": 180,
+                "bm25_rank": 3,
+                "semantic_rank": 1,
+                "rrf_score": 0.030,
+            },
+        ]
+
+    @pytest.fixture
+    def mock_embedder(self) -> MagicMock:
+        """Create a mock embedding service."""
+        embedder = MagicMock()
+        embedder.embed_text = AsyncMock(return_value=[0.1] * EMBEDDING_DIMENSIONS)
+        return embedder
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.hybrid_search.get_supabase_client")
+    @patch("app.services.rag.hybrid_search.validate_search_results")
+    @patch("app.services.rag.hybrid_search.validate_namespace")
+    async def test_complete_rerank_pipeline(
+        self,
+        mock_validate_ns: MagicMock,
+        mock_validate_results: MagicMock,
+        mock_get_client: MagicMock,
+        mock_get_rerank: MagicMock,
+        mock_hybrid_results: list[dict],
+        mock_embedder: MagicMock,
+    ) -> None:
+        """Test complete hybrid search + rerank pipeline."""
+        # Mock Supabase client
+        client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = mock_hybrid_results
+        client.rpc.return_value.execute.return_value = mock_response
+        mock_get_client.return_value = client
+        mock_validate_results.return_value = mock_hybrid_results
+
+        # Mock reranker - returns results reordered by relevance
+        # Note: Index 2 (material breach) is most relevant to "termination" query
+        mock_reranker = MagicMock()
+        mock_reranker.rerank = AsyncMock(return_value=MagicMock(
+            results=[
+                MagicMock(index=2, relevance_score=0.95),  # material breach
+                MagicMock(index=0, relevance_score=0.87),  # termination clause
+            ],
+        ))
+        mock_get_rerank.return_value = mock_reranker
+
+        service = HybridSearchService(embedder=mock_embedder)
+        result = await service.search_with_rerank(
+            query="contract termination",
+            matter_id="550e8400-e29b-41d4-a716-446655440000",
+            hybrid_limit=20,
+            rerank_top_n=2,
+        )
+
+        # Verify pipeline execution
+        assert isinstance(result, RerankedSearchResult)
+        assert result.rerank_used is True
+        assert result.fallback_reason is None
+
+        # Verify reranked order (material breach should be first)
+        assert len(result.results) == 2
+        assert "material breach" in result.results[0].content
+        assert result.results[0].relevance_score == 0.95
+        assert result.results[1].relevance_score == 0.87
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.hybrid_search.get_supabase_client")
+    @patch("app.services.rag.hybrid_search.validate_search_results")
+    @patch("app.services.rag.hybrid_search.validate_namespace")
+    async def test_rerank_fallback_to_rrf(
+        self,
+        mock_validate_ns: MagicMock,
+        mock_validate_results: MagicMock,
+        mock_get_client: MagicMock,
+        mock_get_rerank: MagicMock,
+        mock_hybrid_results: list[dict],
+        mock_embedder: MagicMock,
+    ) -> None:
+        """Test graceful fallback to RRF when Cohere API fails."""
+        # Mock Supabase client
+        client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = mock_hybrid_results
+        client.rpc.return_value.execute.return_value = mock_response
+        mock_get_client.return_value = client
+        mock_validate_results.return_value = mock_hybrid_results
+
+        # Mock reranker to fail
+        mock_reranker = MagicMock()
+        mock_reranker.rerank = AsyncMock(side_effect=CohereRerankServiceError(
+            message="Cohere API rate limit exceeded",
+            code="COHERE_API_ERROR",
+        ))
+        mock_get_rerank.return_value = mock_reranker
+
+        service = HybridSearchService(embedder=mock_embedder)
+        result = await service.search_with_rerank(
+            query="contract termination",
+            matter_id="550e8400-e29b-41d4-a716-446655440000",
+            hybrid_limit=20,
+            rerank_top_n=2,
+        )
+
+        # Verify fallback behavior
+        assert isinstance(result, RerankedSearchResult)
+        assert result.rerank_used is False
+        assert "rate limit" in result.fallback_reason
+
+        # Results should be in RRF order (not reranked)
+        assert len(result.results) == 2
+        assert result.results[0].rrf_score >= result.results[1].rrf_score
+
+        # Relevance scores should be None (no reranking)
+        assert result.results[0].relevance_score is None
+        assert result.results[1].relevance_score is None
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.hybrid_search.get_supabase_client")
+    @patch("app.services.rag.hybrid_search.validate_namespace")
+    async def test_rerank_with_no_hybrid_results(
+        self,
+        mock_validate_ns: MagicMock,
+        mock_get_client: MagicMock,
+        mock_embedder: MagicMock,
+    ) -> None:
+        """Test rerank pipeline with no hybrid search results."""
+        # Mock empty results
+        client = MagicMock()
+        client.rpc.return_value.execute.return_value.data = None
+        mock_get_client.return_value = client
+
+        service = HybridSearchService(embedder=mock_embedder)
+        result = await service.search_with_rerank(
+            query="xyznonexistenttermxyz",
+            matter_id="550e8400-e29b-41d4-a716-446655440000",
+        )
+
+        # Should handle gracefully
+        assert result.results == []
+        assert result.total_candidates == 0
+        assert result.rerank_used is False
+        assert "No hybrid search results" in result.fallback_reason
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.hybrid_search.get_supabase_client")
+    @patch("app.services.rag.hybrid_search.validate_search_results")
+    @patch("app.services.rag.hybrid_search.validate_namespace")
+    async def test_rerank_preserves_metadata(
+        self,
+        mock_validate_ns: MagicMock,
+        mock_validate_results: MagicMock,
+        mock_get_client: MagicMock,
+        mock_get_rerank: MagicMock,
+        mock_hybrid_results: list[dict],
+        mock_embedder: MagicMock,
+    ) -> None:
+        """Test that reranked results preserve original metadata."""
+        # Mock Supabase client
+        client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = mock_hybrid_results
+        client.rpc.return_value.execute.return_value = mock_response
+        mock_get_client.return_value = client
+        mock_validate_results.return_value = mock_hybrid_results
+
+        # Mock reranker
+        mock_reranker = MagicMock()
+        mock_reranker.rerank = AsyncMock(return_value=MagicMock(
+            results=[MagicMock(index=0, relevance_score=0.9)],
+        ))
+        mock_get_rerank.return_value = mock_reranker
+
+        service = HybridSearchService(embedder=mock_embedder)
+        result = await service.search_with_rerank(
+            query="test",
+            matter_id="550e8400-e29b-41d4-a716-446655440000",
+            rerank_top_n=1,
+        )
+
+        # Verify metadata is preserved from original hybrid result
+        reranked = result.results[0]
+        original = mock_hybrid_results[0]
+
+        assert reranked.id == original["id"]
+        assert reranked.document_id == original["document_id"]
+        assert reranked.content == original["content"]
+        assert reranked.page_number == original["page_number"]
+        assert reranked.chunk_type == original["chunk_type"]
+        assert reranked.token_count == original["token_count"]
+        assert reranked.bm25_rank == original["bm25_rank"]
+        assert reranked.semantic_rank == original["semantic_rank"]
+        assert reranked.rrf_score == original["rrf_score"]
+        # Plus relevance score from reranker
+        assert reranked.relevance_score == 0.9

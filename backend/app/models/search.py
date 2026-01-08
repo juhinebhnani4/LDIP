@@ -35,6 +35,16 @@ class SearchRequest(BaseModel):
         le=2.0,
         description="Weight for semantic similarity search (0.0-2.0)",
     )
+    rerank: bool = Field(
+        False,
+        description="Apply Cohere Rerank v3.5 to refine results (default: false)",
+    )
+    rerank_top_n: int = Field(
+        3,
+        ge=1,
+        le=20,
+        description="Number of top results after reranking (only used when rerank=true)",
+    )
 
 
 class SearchResultItem(BaseModel):
@@ -49,6 +59,10 @@ class SearchResultItem(BaseModel):
     bm25_rank: int | None = Field(None, description="Rank from BM25 search")
     semantic_rank: int | None = Field(None, description="Rank from semantic search")
     rrf_score: float = Field(..., description="Combined RRF fusion score")
+    relevance_score: float | None = Field(
+        None,
+        description="Cohere relevance score (0.0-1.0). Only present when rerank=true.",
+    )
 
 
 class SearchMeta(BaseModel):
@@ -59,6 +73,14 @@ class SearchMeta(BaseModel):
     total_candidates: int = Field(..., description="Total candidates before limit")
     bm25_weight: float = Field(..., description="BM25 weight used")
     semantic_weight: float = Field(..., description="Semantic weight used")
+    rerank_used: bool | None = Field(
+        None,
+        description="True if Cohere reranking was used. None if rerank was not requested.",
+    )
+    fallback_reason: str | None = Field(
+        None,
+        description="Reason for fallback if rerank_used is False.",
+    )
 
 
 class SearchResponse(BaseModel):

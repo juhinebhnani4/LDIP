@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     # LLM API Keys
     openai_api_key: str = ""
     google_api_key: str = ""
+    cohere_api_key: str = ""  # For Cohere Rerank v3.5
 
     # Google Cloud
     google_cloud_project_id: str = ""

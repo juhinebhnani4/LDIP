@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { OCRConfidenceResult, PageConfidence, OCRQualityStatus } from '@/types/document';
 import { fetchOCRQuality } from '@/lib/api/documents';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import {
+  OCR_QUALITY_GOOD_THRESHOLD,
+  OCR_QUALITY_FAIR_THRESHOLD,
+} from '@/lib/constants/ocr';
+import { ManualReviewDialog } from './ManualReviewDialog';
 
 interface OCRQualityDetailProps {
   documentId: string;
@@ -21,8 +26,8 @@ const STATUS_CONFIG: Record<OCRQualityStatus, { label: string; color: string }> 
 };
 
 function getProgressColor(confidence: number): string {
-  if (confidence >= 0.85) return 'bg-green-500';
-  if (confidence >= 0.70) return 'bg-yellow-500';
+  if (confidence >= OCR_QUALITY_GOOD_THRESHOLD) return 'bg-green-500';
+  if (confidence >= OCR_QUALITY_FAIR_THRESHOLD) return 'bg-yellow-500';
   return 'bg-red-500';
 }
 
@@ -56,6 +61,7 @@ export function OCRQualityDetail({
   const [quality, setQuality] = useState<OCRConfidenceResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
 
   const loadQuality = useCallback(async () => {
     setIsLoading(true);
@@ -160,7 +166,29 @@ export function OCRQualityDetail({
             </div>
           </div>
         )}
+
+        {/* Request Manual Review button - shown when quality is poor or fair */}
+        {quality.qualityStatus && quality.qualityStatus !== 'good' && (
+          <Button
+            variant="outline"
+            className="w-full mt-4"
+            onClick={() => setShowReviewDialog(true)}
+          >
+            Request Manual Review
+          </Button>
+        )}
       </CardContent>
+
+      {/* Manual Review Dialog */}
+      {quality.pageConfidences.length > 0 && (
+        <ManualReviewDialog
+          documentId={documentId}
+          pageConfidences={quality.pageConfidences}
+          open={showReviewDialog}
+          onOpenChange={setShowReviewDialog}
+          onSuccess={loadQuality}
+        />
+      )}
     </Card>
   );
 }
@@ -172,9 +200,9 @@ interface PageConfidenceButtonProps {
 
 function PageConfidenceButton({ page, onClick }: PageConfidenceButtonProps) {
   const percentage = Math.round(page.confidence * 100);
-  const bgColor = page.confidence >= 0.85
+  const bgColor = page.confidence >= OCR_QUALITY_GOOD_THRESHOLD
     ? 'bg-green-100 hover:bg-green-200 border-green-200'
-    : page.confidence >= 0.70
+    : page.confidence >= OCR_QUALITY_FAIR_THRESHOLD
       ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-200'
       : 'bg-red-100 hover:bg-red-200 border-red-200';
 

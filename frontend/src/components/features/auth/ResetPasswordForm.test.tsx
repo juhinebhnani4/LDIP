@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ResetPasswordForm } from './ResetPasswordForm';
 import { createMockSupabaseClient } from '@/tests/mocks/supabase';
@@ -257,14 +257,15 @@ describe('ResetPasswordForm', () => {
     });
 
     // Click the first toggle button (for new password field)
-    fireEvent.click(toggleButtons[0]);
+    expect(toggleButtons[0]).toBeDefined();
+    fireEvent.click(toggleButtons[0]!);
 
     await waitFor(() => {
       expect(passwordInput).toHaveAttribute('type', 'text');
     });
 
     // Toggle back
-    fireEvent.click(toggleButtons[0]);
+    fireEvent.click(toggleButtons[0]!);
 
     await waitFor(() => {
       expect(passwordInput).toHaveAttribute('type', 'password');

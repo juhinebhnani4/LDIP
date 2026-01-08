@@ -2,6 +2,12 @@
 
 import type { OCRQualityStatus } from '@/types/document';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface OCRQualityBadgeProps {
@@ -65,7 +71,7 @@ export function OCRQualityBadge({
     ? ` (${Math.round(confidence * 100)}%)`
     : '';
 
-  return (
+  const badge = (
     <Badge
       variant="outline"
       className={cn(config.className, className)}
@@ -73,4 +79,22 @@ export function OCRQualityBadge({
       {config.label}{percentageText}
     </Badge>
   );
+
+  // Show tooltip for poor quality explaining manual review may be needed
+  if (status === 'poor') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {badge}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>OCR quality is low. Manual review may be needed for accuracy.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return badge;
 }

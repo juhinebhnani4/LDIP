@@ -49,6 +49,16 @@ describe('UploadProgressList', () => {
     });
   };
 
+  // Helper to safely get file ID from queue
+  const getFileId = (index: number): string => {
+    const queue = useUploadStore.getState().uploadQueue;
+    const file = queue[index];
+    if (!file) {
+      throw new Error(`No file at index ${index} in upload queue`);
+    }
+    return file.id;
+  };
+
   // Helper to update file progress
   const updateFileProgress = (id: string, progress: number): void => {
     act(() => {
@@ -105,7 +115,7 @@ describe('UploadProgressList', () => {
 
     it('shows progress bar and percentage for uploading files', () => {
       addFilesToStore([createMockFile('uploading.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileProgress(fileId, 45);
 
       render(<UploadProgressList />);
@@ -116,7 +126,7 @@ describe('UploadProgressList', () => {
 
     it('shows success message for completed files', () => {
       addFilesToStore([createMockFile('done.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileStatus(fileId, 'completed');
 
       render(<UploadProgressList />);
@@ -126,7 +136,7 @@ describe('UploadProgressList', () => {
 
     it('shows error message for failed files', () => {
       addFilesToStore([createMockFile('failed.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileStatus(fileId, 'error', 'Network error');
 
       render(<UploadProgressList />);
@@ -148,7 +158,7 @@ describe('UploadProgressList', () => {
 
     it('shows cancel button for uploading files', () => {
       addFilesToStore([createMockFile('uploading.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileProgress(fileId, 50);
 
       render(<UploadProgressList />);
@@ -160,7 +170,7 @@ describe('UploadProgressList', () => {
 
     it('hides cancel button for completed files', () => {
       addFilesToStore([createMockFile('done.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileStatus(fileId, 'completed');
 
       render(<UploadProgressList />);
@@ -172,7 +182,7 @@ describe('UploadProgressList', () => {
 
     it('hides cancel button for error files', () => {
       addFilesToStore([createMockFile('error.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileStatus(fileId, 'error', 'Failed');
 
       render(<UploadProgressList />);
@@ -203,7 +213,7 @@ describe('UploadProgressList', () => {
       const user = userEvent.setup();
       const onCancelFile = vi.fn();
       addFilesToStore([createMockFile('callback.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
 
       render(<UploadProgressList onCancelFile={onCancelFile} />);
 
@@ -220,7 +230,7 @@ describe('UploadProgressList', () => {
   describe('Clear Completed Button', () => {
     it('shows Clear completed button when completed files exist', () => {
       addFilesToStore([createMockFile('done.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileStatus(fileId, 'completed');
 
       render(<UploadProgressList />);
@@ -247,8 +257,8 @@ describe('UploadProgressList', () => {
         createMockFile('done.pdf', 1024, 'application/pdf'),
       ]);
 
-      const queue = useUploadStore.getState().uploadQueue;
-      updateFileStatus(queue[1].id, 'completed');
+      const fileId = getFileId(1);
+      updateFileStatus(fileId, 'completed');
 
       render(<UploadProgressList />);
 
@@ -258,7 +268,8 @@ describe('UploadProgressList', () => {
       await waitFor(() => {
         const finalQueue = useUploadStore.getState().uploadQueue;
         expect(finalQueue).toHaveLength(1);
-        expect(finalQueue[0].file.name).toBe('pending.pdf');
+        const firstFile = finalQueue[0];
+        expect(firstFile?.file.name).toBe('pending.pdf');
       });
     });
   });
@@ -284,7 +295,7 @@ describe('UploadProgressList', () => {
 
     it('progress bar is accessible with aria-label', () => {
       addFilesToStore([createMockFile('uploading.pdf', 1024, 'application/pdf')]);
-      const fileId = useUploadStore.getState().uploadQueue[0].id;
+      const fileId = getFileId(0);
       updateFileProgress(fileId, 75);
 
       render(<UploadProgressList />);
@@ -318,9 +329,8 @@ describe('UploadProgressList', () => {
         createMockFile('done.pdf', 1024, 'application/pdf'),
       ]);
 
-      const queue = useUploadStore.getState().uploadQueue;
-      updateFileProgress(queue[1].id, 50);
-      updateFileStatus(queue[2].id, 'completed');
+      updateFileProgress(getFileId(1), 50);
+      updateFileStatus(getFileId(2), 'completed');
 
       render(<UploadProgressList />);
 

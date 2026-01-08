@@ -9,7 +9,18 @@ import os
 import zipfile
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Path,
+    Query,
+    UploadFile,
+    status,
+)
+from pydantic import BaseModel, Field
 
 from app.api.deps import (
     MatterMembership,
@@ -33,8 +44,7 @@ from app.models.document import (
     DocumentUpdate,
     UploadedDocument,
 )
-from app.models.ocr_confidence import OCRConfidenceResult, OCRQualityResponse
-from pydantic import BaseModel, Field
+from app.models.ocr_confidence import OCRQualityResponse
 from app.services.document_service import (
     DocumentNotFoundError,
     DocumentService,
@@ -138,12 +148,13 @@ def _verify_matter_access(
             user_role=role.value,
             required_roles=[r.value for r in allowed_roles],
         )
+        roles_str = ", ".join(r.value for r in allowed_roles)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": {
                     "code": "INSUFFICIENT_PERMISSIONS",
-                    "message": f"This action requires one of these roles: {', '.join(r.value for r in allowed_roles)}",
+                    "message": f"This action requires one of these roles: {roles_str}",
                     "details": {},
                 }
             },

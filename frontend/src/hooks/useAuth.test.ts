@@ -69,7 +69,9 @@ describe('useSession', () => {
     });
 
     // Get the subscription from the mock
-    const subscriptionResult = mockClient.auth.onAuthStateChange.mock.results[0].value;
+    const mockResults = mockClient.auth.onAuthStateChange.mock.results;
+    expect(mockResults[0]).toBeDefined();
+    const subscriptionResult = mockResults[0]!.value;
     const unsubscribe = subscriptionResult.data.subscription.unsubscribe;
 
     unmount();

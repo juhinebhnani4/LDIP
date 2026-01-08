@@ -475,6 +475,11 @@ class HumanReviewService:
 
             added_count = len(result.data) if result.data else 0
 
+            # Update document validation status to indicate manual review requested
+            self.client.table("documents").update({
+                "validation_status": "requires_human_review",
+            }).eq("id", document_id).execute()
+
             logger.info(
                 "human_review_pages_added",
                 document_id=document_id,

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { OCR_PAGE_REVIEW_THRESHOLD } from '@/lib/constants/ocr';
 
 interface ManualReviewDialogProps {
   documentId: string;
@@ -34,9 +35,9 @@ export function ManualReviewDialog({
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Pages below 60% confidence are auto-highlighted
+  // Pages below review threshold are auto-highlighted
   const lowConfidencePages = pageConfidences
-    .filter((p) => p.confidence < 0.60)
+    .filter((p) => p.confidence < OCR_PAGE_REVIEW_THRESHOLD)
     .map((p) => p.pageNumber);
 
   const handleTogglePage = (pageNumber: number) => {
@@ -124,7 +125,7 @@ export function ManualReviewDialog({
           {/* Page grid */}
           <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto p-2 border rounded">
             {pageConfidences.map((page) => {
-              const isLowConfidence = page.confidence < 0.60;
+              const isLowConfidence = page.confidence < OCR_PAGE_REVIEW_THRESHOLD;
               const isSelected = selectedPages.has(page.pageNumber);
               const percentage = Math.round(page.confidence * 100);
 

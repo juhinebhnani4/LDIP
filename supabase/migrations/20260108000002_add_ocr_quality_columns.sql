@@ -47,3 +47,15 @@ SET ocr_quality_status =
     ELSE NULL
   END
 WHERE ocr_confidence IS NOT NULL AND ocr_quality_status IS NULL;
+
+-- =============================================================================
+-- NOTE: Per-page confidence data limitation for existing documents
+-- =============================================================================
+-- The ocr_confidence_per_page column is initialized as empty '[]' for existing
+-- documents. To populate per-page data for documents processed before this
+-- migration, you would need to either:
+--   1. Re-process documents through the OCR pipeline
+--   2. Calculate from bounding_boxes table with a separate migration/script
+--
+-- New documents processed after this migration will have per-page data
+-- populated automatically by the calculate_confidence Celery task.

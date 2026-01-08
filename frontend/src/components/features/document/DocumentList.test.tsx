@@ -225,7 +225,8 @@ describe('DocumentList', () => {
 
       // Find checkbox for first document
       const checkboxes = screen.getAllByRole('checkbox');
-      await user.click(checkboxes[1]); // Index 0 is "select all"
+      expect(checkboxes[1]).toBeDefined();
+      await user.click(checkboxes[1]!); // Index 0 is "select all"
 
       // Should show selection count
       expect(screen.getByText('1 selected')).toBeInTheDocument();
@@ -240,8 +241,9 @@ describe('DocumentList', () => {
       });
 
       // Click "select all" checkbox
-      const selectAllCheckbox = screen.getAllByRole('checkbox')[0];
-      await user.click(selectAllCheckbox);
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes[0]).toBeDefined();
+      await user.click(checkboxes[0]!);
 
       // Should show all selected
       expect(screen.getByText('3 selected')).toBeInTheDocument();
@@ -255,14 +257,15 @@ describe('DocumentList', () => {
         expect(screen.getByText('petition.pdf')).toBeInTheDocument();
       });
 
-      const selectAllCheckbox = screen.getAllByRole('checkbox')[0];
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes[0]).toBeDefined();
 
       // Select all
-      await user.click(selectAllCheckbox);
+      await user.click(checkboxes[0]!);
       expect(screen.getByText('3 selected')).toBeInTheDocument();
 
       // Deselect all
-      await user.click(selectAllCheckbox);
+      await user.click(checkboxes[0]!);
       expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
     });
   });
@@ -278,8 +281,8 @@ describe('DocumentList', () => {
 
       // Open type filter dropdown - find the trigger with "All types" text
       const typeFilters = screen.getAllByRole('combobox');
-      const typeFilter = typeFilters[0]; // First combobox is the type filter
-      await user.click(typeFilter);
+      expect(typeFilters[0]).toBeDefined();
+      await user.click(typeFilters[0]!); // First combobox is the type filter
 
       // Select "Act"
       const actOption = screen.getByRole('option', { name: /^act$/i });
@@ -306,8 +309,8 @@ describe('DocumentList', () => {
 
       // Open status filter dropdown - second combobox
       const statusFilters = screen.getAllByRole('combobox');
-      const statusFilter = statusFilters[1]; // Second combobox is the status filter
-      await user.click(statusFilter);
+      expect(statusFilters[1]).toBeDefined();
+      await user.click(statusFilters[1]!); // Second combobox is the status filter
 
       // Select "Completed"
       const completedOption = screen.getByRole('option', { name: /completed/i });
@@ -448,7 +451,8 @@ describe('DocumentList', () => {
 
       // Select a document
       const checkboxes = screen.getAllByRole('checkbox');
-      await user.click(checkboxes[1]);
+      expect(checkboxes[1]).toBeDefined();
+      await user.click(checkboxes[1]!);
 
       // Should now show "Change type" bulk dropdown, making it 6 total
       const comboboxes = screen.getAllByRole('combobox');
@@ -468,8 +472,10 @@ describe('DocumentList', () => {
 
       // Select two documents
       const checkboxes = screen.getAllByRole('checkbox');
-      await user.click(checkboxes[1]);
-      await user.click(checkboxes[2]);
+      expect(checkboxes[1]).toBeDefined();
+      expect(checkboxes[2]).toBeDefined();
+      await user.click(checkboxes[1]!);
+      await user.click(checkboxes[2]!);
 
       // Verify selection is tracked
       expect(screen.getByText('2 selected')).toBeInTheDocument();
@@ -488,11 +494,13 @@ describe('DocumentList', () => {
       });
 
       // Select all
-      await user.click(screen.getAllByRole('checkbox')[0]);
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      expect(allCheckboxes[0]).toBeDefined();
+      await user.click(allCheckboxes[0]!);
       expect(screen.getByText('3 selected')).toBeInTheDocument();
 
       // Deselect all by clicking the select-all checkbox again
-      await user.click(screen.getAllByRole('checkbox')[0]);
+      await user.click(allCheckboxes[0]!);
 
       // Selection should be cleared
       await waitFor(() => {

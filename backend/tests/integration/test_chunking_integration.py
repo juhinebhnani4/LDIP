@@ -248,10 +248,12 @@ class TestChunkingWithMockedDatabase:
 
     @pytest.fixture
     def mock_chunk_service(self) -> MagicMock:
-        """Create a mock chunk service."""
+        """Create a mock chunk service with async methods."""
+        from unittest.mock import AsyncMock
+
         mock = MagicMock()
-        mock.save_chunks.return_value = 10
-        mock.delete_chunks_for_document.return_value = 5
+        mock.save_chunks = AsyncMock(return_value=10)
+        mock.delete_chunks_for_document = AsyncMock(return_value=5)
         return mock
 
     @pytest.mark.asyncio

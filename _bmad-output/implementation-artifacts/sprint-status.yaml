@@ -75,7 +75,7 @@ development_status:
   2b-4-bounding-boxes-table: review
   2b-5-parent-child-chunking: review
   2b-6-hybrid-search-bm25-pgvector: done
-  2b-7-cohere-rerank-integration: review
+  2b-7-cohere-rerank-integration: done
   epic-2b-retrospective: optional
 
   # Epic 2C: Entity Extraction & MIG

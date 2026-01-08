@@ -232,36 +232,39 @@ class TestCohereRerankServiceRerank:
 
     @pytest.mark.asyncio
     async def test_rerank_handles_timeout(self) -> None:
-        """Test rerank raises CohereRerankServiceError on timeout."""
+        """Test rerank raises CohereRerankServiceError on internal timeout.
+
+        This tests the service's internal RERANK_TIMEOUT_SECONDS timeout,
+        not an external asyncio.wait_for timeout.
+        """
         with patch("app.services.rag.reranker.get_settings") as mock_settings:
             mock_settings.return_value.cohere_api_key = "test-key"
 
-            service = CohereRerankService()
+            # Patch the timeout to a very short value for testing
+            with patch("app.services.rag.reranker.RERANK_TIMEOUT_SECONDS", 0.01):
+                service = CohereRerankService()
 
-            # Create a mock that sleeps longer than timeout
-            def slow_rerank(*args, **kwargs):
-                import time
-                time.sleep(15)  # Longer than RERANK_TIMEOUT_SECONDS
-                return MagicMock()
+                # Create a mock that sleeps longer than our patched timeout
+                def slow_rerank(*args, **kwargs):
+                    import time
+                    time.sleep(0.1)  # Longer than patched 0.01s timeout
+                    return MagicMock()
 
-            mock_client = MagicMock()
-            mock_client.rerank.side_effect = slow_rerank
-            service._client = mock_client
+                mock_client = MagicMock()
+                mock_client.rerank.side_effect = slow_rerank
+                service._client = mock_client
 
-            with pytest.raises(CohereRerankServiceError) as exc_info:
-                await asyncio.wait_for(
-                    service.rerank(
+                with pytest.raises(CohereRerankServiceError) as exc_info:
+                    await service.rerank(
                         query="test",
                         documents=["doc1"],
                         top_n=1,
-                    ),
-                    timeout=0.1,  # Short timeout for test
-                )
+                    )
 
-            # Will raise TimeoutError which gets wrapped
-            assert "timeout" in str(exc_info.value).lower() or isinstance(
-                exc_info.value.__cause__, asyncio.TimeoutError
-            )
+                # Verify error is from service's internal timeout handling
+                assert exc_info.value.code == "COHERE_TIMEOUT"
+                assert "timeout" in exc_info.value.message.lower()
+                assert exc_info.value.is_retryable is True
 
     @pytest.mark.asyncio
     async def test_rerank_uses_correct_model(self) -> None:

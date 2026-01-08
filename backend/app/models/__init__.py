@@ -18,6 +18,12 @@ from app.models.matter import (
     MemberListResponse,
     MemberResponse,
 )
+from app.models.rerank import (
+    RerankRequest,
+    RerankedSearchMeta,
+    RerankedSearchResponse,
+    RerankedSearchResultItem,
+)
 
 __all__ = [
     # Auth models
@@ -39,4 +45,9 @@ __all__ = [
     "MatterWithMembersResponse",
     "MemberListResponse",
     "MemberResponse",
+    # Rerank models
+    "RerankRequest",
+    "RerankedSearchMeta",
+    "RerankedSearchResponse",
+    "RerankedSearchResultItem",
 ]

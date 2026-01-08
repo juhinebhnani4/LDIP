@@ -77,12 +77,12 @@ class TestValidateBatchSync:
             LowConfidenceWord(
                 bbox_id=f"bbox-{i}",
                 text=f"word{i}",
-                confidence=0.60 + i * 0.01,
-                page=1,
+                confidence=0.60 + (i % 20) * 0.01,  # Keep confidence in valid range
+                page=(i // 10) + 1,  # Spread across pages
                 context_before="before",
                 context_after="after",
-                x=10.0 + i * 10,
-                y=20.0,
+                x=10.0 + (i % 10) * 8,  # Keep x in 0-100 range
+                y=20.0 + (i // 10) * 5,  # Spread y values
                 width=8.0,
                 height=5.0,
             )

@@ -447,13 +447,13 @@ class TestGetPatternCorrector:
 
         assert isinstance(corrector, PatternCorrector)
 
-    def test_returns_new_instance_each_time(self) -> None:
-        """Should return new instance each call (not singleton)."""
+    def test_returns_same_instance_each_time(self) -> None:
+        """Should return same cached instance (singleton pattern)."""
         corrector1 = get_pattern_corrector()
         corrector2 = get_pattern_corrector()
 
-        # Not the same object (not cached)
-        assert corrector1 is not corrector2
+        # Same object (cached with @lru_cache for consistency with other services)
+        assert corrector1 is corrector2
 
 
 class TestPatternReasoning:

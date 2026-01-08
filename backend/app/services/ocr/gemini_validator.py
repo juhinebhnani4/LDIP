@@ -20,6 +20,12 @@ from app.models.ocr_validation import (
 
 logger = structlog.get_logger(__name__)
 
+# Rate limiting configuration
+MAX_RETRIES_PER_BATCH = 3
+INITIAL_RETRY_DELAY = 1.0  # seconds
+MAX_RETRY_DELAY = 30.0  # seconds
+DELAY_BETWEEN_BATCHES = 0.5  # seconds
+
 
 class GeminiValidatorError(Exception):
     """Base exception for Gemini validator operations."""
@@ -139,6 +145,7 @@ Example response:
         """Synchronously validate a batch of words using Gemini.
 
         This is a synchronous wrapper for use in Celery tasks.
+        Includes retry logic with exponential backoff for rate limiting.
 
         Args:
             words: List of words to validate (max batch_size).
@@ -148,7 +155,7 @@ Example response:
             List of ValidationResult for each word.
 
         Raises:
-            GeminiValidatorError: If validation fails.
+            GeminiValidatorError: If validation fails after retries.
         """
         if not words:
             return []
@@ -163,53 +170,85 @@ Example response:
 
         start_time = time.time()
 
-        try:
-            # Build prompt
-            words_data = [
-                {
-                    "index": i,
-                    "text": word.text,
-                    "confidence": word.confidence,
-                    "context_before": word.context_before,
-                    "context_after": word.context_after,
-                    "page": word.page,
-                }
-                for i, word in enumerate(words)
-            ]
+        # Build prompt
+        words_data = [
+            {
+                "index": i,
+                "text": word.text,
+                "confidence": word.confidence,
+                "context_before": word.context_before,
+                "context_after": word.context_after,
+                "page": word.page,
+            }
+            for i, word in enumerate(words)
+        ]
 
-            prompt = self.VALIDATION_PROMPT.format(
-                words_json=json.dumps(words_data, indent=2)
-            )
+        prompt = self.VALIDATION_PROMPT.format(
+            words_json=json.dumps(words_data, indent=2)
+        )
 
-            # Call Gemini synchronously
-            response = self.model.generate_content(prompt)
+        # Retry with exponential backoff for rate limiting
+        last_error: Exception | None = None
+        retry_delay = INITIAL_RETRY_DELAY
 
-            # Parse response
-            results = self._parse_response(response.text, words)
+        for attempt in range(MAX_RETRIES_PER_BATCH):
+            try:
+                # Call Gemini synchronously
+                response = self.model.generate_content(prompt)
 
-            processing_time = int((time.time() - start_time) * 1000)
+                # Parse response
+                results = self._parse_response(response.text, words)
 
-            logger.info(
-                "gemini_validation_complete",
-                word_count=len(words),
-                results_count=len(results),
-                processing_time_ms=processing_time,
-            )
+                processing_time = int((time.time() - start_time) * 1000)
 
-            return results
+                logger.info(
+                    "gemini_validation_complete",
+                    word_count=len(words),
+                    results_count=len(results),
+                    processing_time_ms=processing_time,
+                    attempts=attempt + 1,
+                )
 
-        except GeminiConfigurationError:
-            raise
-        except Exception as e:
-            logger.error(
-                "gemini_validation_failed",
-                error=str(e),
-                word_count=len(words),
-            )
-            raise GeminiValidatorError(
-                f"Gemini validation failed: {e}",
-                is_retryable=True,
-            ) from e
+                return results
+
+            except GeminiConfigurationError:
+                raise
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+
+                # Check for rate limit errors (429) or quota exceeded
+                is_rate_limit = (
+                    "429" in error_str
+                    or "rate" in error_str
+                    or "quota" in error_str
+                    or "resource exhausted" in error_str
+                )
+
+                if is_rate_limit and attempt < MAX_RETRIES_PER_BATCH - 1:
+                    logger.warning(
+                        "gemini_rate_limited_retrying",
+                        attempt=attempt + 1,
+                        max_attempts=MAX_RETRIES_PER_BATCH,
+                        retry_delay=retry_delay,
+                        error=str(e),
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                elif not is_rate_limit:
+                    # Non-rate-limit error, don't retry
+                    break
+
+        logger.error(
+            "gemini_validation_failed",
+            error=str(last_error),
+            word_count=len(words),
+            attempts=MAX_RETRIES_PER_BATCH,
+        )
+        raise GeminiValidatorError(
+            f"Gemini validation failed after {MAX_RETRIES_PER_BATCH} attempts: {last_error}",
+            is_retryable=True,
+        ) from last_error
 
     async def validate_batch_async(
         self,
@@ -218,6 +257,8 @@ Example response:
     ) -> list[ValidationResult]:
         """Asynchronously validate a batch of words using Gemini.
 
+        Includes retry logic with exponential backoff for rate limiting.
+
         Args:
             words: List of words to validate (max batch_size).
             document_type: Optional document type hint.
@@ -226,7 +267,7 @@ Example response:
             List of ValidationResult for each word.
 
         Raises:
-            GeminiValidatorError: If validation fails.
+            GeminiValidatorError: If validation fails after retries.
         """
         if not words:
             return []
@@ -241,53 +282,85 @@ Example response:
 
         start_time = time.time()
 
-        try:
-            # Build prompt
-            words_data = [
-                {
-                    "index": i,
-                    "text": word.text,
-                    "confidence": word.confidence,
-                    "context_before": word.context_before,
-                    "context_after": word.context_after,
-                    "page": word.page,
-                }
-                for i, word in enumerate(words)
-            ]
+        # Build prompt
+        words_data = [
+            {
+                "index": i,
+                "text": word.text,
+                "confidence": word.confidence,
+                "context_before": word.context_before,
+                "context_after": word.context_after,
+                "page": word.page,
+            }
+            for i, word in enumerate(words)
+        ]
 
-            prompt = self.VALIDATION_PROMPT.format(
-                words_json=json.dumps(words_data, indent=2)
-            )
+        prompt = self.VALIDATION_PROMPT.format(
+            words_json=json.dumps(words_data, indent=2)
+        )
 
-            # Call Gemini asynchronously
-            response = await self.model.generate_content_async(prompt)
+        # Retry with exponential backoff for rate limiting
+        last_error: Exception | None = None
+        retry_delay = INITIAL_RETRY_DELAY
 
-            # Parse response
-            results = self._parse_response(response.text, words)
+        for attempt in range(MAX_RETRIES_PER_BATCH):
+            try:
+                # Call Gemini asynchronously
+                response = await self.model.generate_content_async(prompt)
 
-            processing_time = int((time.time() - start_time) * 1000)
+                # Parse response
+                results = self._parse_response(response.text, words)
 
-            logger.info(
-                "gemini_validation_async_complete",
-                word_count=len(words),
-                results_count=len(results),
-                processing_time_ms=processing_time,
-            )
+                processing_time = int((time.time() - start_time) * 1000)
 
-            return results
+                logger.info(
+                    "gemini_validation_async_complete",
+                    word_count=len(words),
+                    results_count=len(results),
+                    processing_time_ms=processing_time,
+                    attempts=attempt + 1,
+                )
 
-        except GeminiConfigurationError:
-            raise
-        except Exception as e:
-            logger.error(
-                "gemini_validation_async_failed",
-                error=str(e),
-                word_count=len(words),
-            )
-            raise GeminiValidatorError(
-                f"Gemini validation failed: {e}",
-                is_retryable=True,
-            ) from e
+                return results
+
+            except GeminiConfigurationError:
+                raise
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+
+                # Check for rate limit errors (429) or quota exceeded
+                is_rate_limit = (
+                    "429" in error_str
+                    or "rate" in error_str
+                    or "quota" in error_str
+                    or "resource exhausted" in error_str
+                )
+
+                if is_rate_limit and attempt < MAX_RETRIES_PER_BATCH - 1:
+                    logger.warning(
+                        "gemini_rate_limited_retrying_async",
+                        attempt=attempt + 1,
+                        max_attempts=MAX_RETRIES_PER_BATCH,
+                        retry_delay=retry_delay,
+                        error=str(e),
+                    )
+                    await asyncio.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                elif not is_rate_limit:
+                    # Non-rate-limit error, don't retry
+                    break
+
+        logger.error(
+            "gemini_validation_async_failed",
+            error=str(last_error),
+            word_count=len(words),
+            attempts=MAX_RETRIES_PER_BATCH,
+        )
+        raise GeminiValidatorError(
+            f"Gemini validation failed after {MAX_RETRIES_PER_BATCH} attempts: {last_error}",
+            is_retryable=True,
+        ) from last_error
 
     def _parse_response(
         self,
@@ -421,7 +494,7 @@ async def validate_all_words(
 ) -> list[ValidationResult]:
     """Validate all words using batched Gemini requests.
 
-    Processes words in parallel batches for efficiency.
+    Processes words in batches with rate limiting delays.
 
     Args:
         words: List of words to validate.
@@ -444,9 +517,19 @@ async def validate_all_words(
         batch_count=len(batches),
     )
 
-    # Process batches in parallel
-    tasks = [validator.validate_batch_async(batch) for batch in batches]
-    batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Process batches sequentially with delay to respect rate limits
+    # (parallel requests can quickly exhaust quota)
+    batch_results: list[list[ValidationResult] | Exception] = []
+    for i, batch in enumerate(batches):
+        if i > 0:
+            # Add delay between batches to avoid rate limiting
+            await asyncio.sleep(DELAY_BETWEEN_BATCHES)
+
+        try:
+            result = await validator.validate_batch_async(batch)
+            batch_results.append(result)
+        except Exception as e:
+            batch_results.append(e)
 
     # Flatten results
     all_results: list[ValidationResult] = []

@@ -327,6 +327,19 @@ class HumanReviewService:
 
             was_corrected = corrected_text != original_text
 
+            # Log the correction to validation log (per AC #4)
+            if was_corrected:
+                self.client.table("ocr_validation_log").insert({
+                    "document_id": item["document_id"],
+                    "bbox_id": bbox_id,
+                    "original_text": original_text,
+                    "corrected_text": corrected_text,
+                    "old_confidence": 0.0,  # Was below human threshold
+                    "new_confidence": 1.0,  # Human-verified
+                    "validation_type": "human",
+                    "reasoning": f"Human correction by user {user_id}",
+                }).execute()
+
             logger.info(
                 "human_review_correction_submitted",
                 review_id=review_id,

@@ -6,6 +6,7 @@ like O/0 confusion, l/1 confusion, and date/currency format errors.
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 import structlog
 
@@ -28,6 +29,19 @@ class PatternRule:
 # Order matters: more specific patterns should come first
 COMMON_OCR_PATTERNS: list[PatternRule] = [
     # Letter O vs Zero in numbers (most common OCR error)
+    # Handle Indian number format with commas (e.g., 1O,OOO -> 10,000)
+    PatternRule(
+        name="digit_comma_ooo",
+        pattern=r"(\d),OOO",
+        replacement=r"\g<1>,000",
+        description="OOO confused with 000 in Indian format",
+    ),
+    PatternRule(
+        name="digit_comma_oo",
+        pattern=r"(\d),OO",
+        replacement=r"\g<1>,00",
+        description="OO confused with 00 in Indian format",
+    ),
     PatternRule(
         name="digit_o_middle",
         pattern=r"(\d+)O(\d+)",
@@ -167,6 +181,9 @@ class PatternCorrector:
     def correct(self, text: str) -> ValidationResult | None:
         """Apply pattern corrections to text.
 
+        Applies patterns iteratively until no more changes occur,
+        to handle chained corrections (e.g., 1O,OOO -> 10,000).
+
         Args:
             text: Text to correct.
 
@@ -178,12 +195,20 @@ class PatternCorrector:
 
         corrected = text
         applied_rules: list[str] = []
+        max_iterations = 10  # Safety limit to prevent infinite loops
 
-        for pattern, replacement, name, description in self.patterns:
-            new_text = pattern.sub(replacement, corrected)
-            if new_text != corrected:
-                applied_rules.append(description)
-                corrected = new_text
+        for _ in range(max_iterations):
+            changed = False
+            for pattern, replacement, _name, description in self.patterns:
+                new_text = pattern.sub(replacement, corrected)
+                if new_text != corrected:
+                    if description not in applied_rules:
+                        applied_rules.append(description)
+                    corrected = new_text
+                    changed = True
+
+            if not changed:
+                break
 
         if corrected == text:
             return None
@@ -291,8 +316,13 @@ def apply_pattern_corrections(
     return corrected, remaining
 
 
+@lru_cache(maxsize=1)
 def get_pattern_corrector() -> PatternCorrector:
-    """Get pattern corrector instance.
+    """Get singleton pattern corrector instance.
+
+    Uses lru_cache to maintain consistent factory pattern with other
+    OCR validation services (gemini_validator, human_review_service,
+    validation_extractor).
 
     Returns:
         PatternCorrector instance.

@@ -124,6 +124,7 @@ class TestBoundingBoxService:
                 height=10.0,
                 text="Test text",
                 confidence=0.95,
+                reading_order_index=0,
             ),
         ]
 
@@ -148,6 +149,7 @@ class TestBoundingBoxService:
         assert record["height"] == 10.0
         assert record["text"] == "Test text"
         assert record["confidence"] == 0.95
+        assert record["reading_order_index"] == 0
 
     def test_save_bounding_boxes_raises_on_error(
         self,
@@ -254,3 +256,138 @@ class TestBoundingBoxServiceClientNotConfigured:
             service.delete_bounding_boxes("doc-123")
 
         assert exc_info.value.code == "DATABASE_NOT_CONFIGURED"
+
+
+class TestBoundingBoxServiceRetrievalMethods:
+    """Tests for bounding box retrieval methods."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        """Create mock Supabase client."""
+        return MagicMock()
+
+    @pytest.fixture
+    def service(self, mock_client: MagicMock) -> BoundingBoxService:
+        """Create service with mock client."""
+        return BoundingBoxService(client=mock_client)
+
+    @pytest.fixture
+    def sample_bbox_rows(self) -> list[dict]:
+        """Sample bounding box database rows."""
+        return [
+            {
+                "id": "bbox-1",
+                "document_id": "doc-123",
+                "page_number": 1,
+                "x": 10.0,
+                "y": 20.0,
+                "width": 30.0,
+                "height": 10.0,
+                "text": "Hello",
+                "confidence": 0.95,
+                "reading_order_index": 0,
+            },
+            {
+                "id": "bbox-2",
+                "document_id": "doc-123",
+                "page_number": 1,
+                "x": 50.0,
+                "y": 20.0,
+                "width": 30.0,
+                "height": 10.0,
+                "text": "World",
+                "confidence": 0.90,
+                "reading_order_index": 1,
+            },
+        ]
+
+    def test_get_bounding_boxes_for_page(
+        self,
+        service: BoundingBoxService,
+        mock_client: MagicMock,
+        sample_bbox_rows: list[dict],
+    ) -> None:
+        """Should get bounding boxes for a page ordered by reading order."""
+        mock_query = MagicMock()
+        mock_client.table.return_value.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.order.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=sample_bbox_rows)
+
+        result = service.get_bounding_boxes_for_page("doc-123", 1)
+
+        assert len(result) == 2
+        assert result[0]["id"] == "bbox-1"
+        assert result[0]["reading_order_index"] == 0
+        assert result[1]["id"] == "bbox-2"
+        mock_client.table.assert_called_with("bounding_boxes")
+
+    def test_get_bounding_boxes_for_document(
+        self,
+        service: BoundingBoxService,
+        mock_client: MagicMock,
+        sample_bbox_rows: list[dict],
+    ) -> None:
+        """Should get bounding boxes for document with pagination."""
+        # Mock count query
+        mock_count_query = MagicMock()
+        mock_count_query.eq.return_value = mock_count_query
+        mock_count_query.execute.return_value = MagicMock(count=100)
+
+        # Mock data query
+        mock_data_query = MagicMock()
+        mock_data_query.eq.return_value = mock_data_query
+        mock_data_query.order.return_value = mock_data_query
+        mock_data_query.limit.return_value = mock_data_query
+        mock_data_query.range.return_value = mock_data_query
+        mock_data_query.execute.return_value = MagicMock(data=sample_bbox_rows)
+
+        mock_client.table.return_value.select.side_effect = [
+            mock_count_query,
+            mock_data_query,
+        ]
+
+        boxes, total = service.get_bounding_boxes_for_document("doc-123", page=1)
+
+        assert len(boxes) == 2
+        assert total == 100
+        assert boxes[0]["id"] == "bbox-1"
+
+    def test_get_bounding_boxes_by_ids(
+        self,
+        service: BoundingBoxService,
+        mock_client: MagicMock,
+        sample_bbox_rows: list[dict],
+    ) -> None:
+        """Should get bounding boxes by their IDs."""
+        mock_query = MagicMock()
+        mock_client.table.return_value.select.return_value = mock_query
+        mock_query.in_.return_value = mock_query
+        mock_query.order.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=sample_bbox_rows)
+
+        result = service.get_bounding_boxes_by_ids(["bbox-1", "bbox-2"])
+
+        assert len(result) == 2
+        mock_query.in_.assert_called_with("id", ["bbox-1", "bbox-2"])
+
+    def test_get_bounding_boxes_by_ids_empty_list(
+        self,
+        service: BoundingBoxService,
+    ) -> None:
+        """Should return empty list for empty bbox_ids."""
+        result = service.get_bounding_boxes_by_ids([])
+        assert result == []
+
+    def test_get_bounding_boxes_for_page_raises_on_error(
+        self,
+        service: BoundingBoxService,
+        mock_client: MagicMock,
+    ) -> None:
+        """Should raise BoundingBoxServiceError on retrieval error."""
+        mock_client.table.return_value.select.side_effect = Exception("DB error")
+
+        with pytest.raises(BoundingBoxServiceError) as exc_info:
+            service.get_bounding_boxes_for_page("doc-123", 1)
+
+        assert exc_info.value.code == "GET_PAGE_FAILED"

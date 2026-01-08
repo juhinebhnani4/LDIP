@@ -202,3 +202,39 @@ export interface ManualReviewResponse {
     success: boolean;
   };
 }
+
+// =============================================================================
+// Bounding Box Types
+// =============================================================================
+
+/** Bounding box for OCR text positioning and highlighting */
+export interface BoundingBox {
+  id: string;
+  documentId: string;
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  confidence: number | null;
+  readingOrderIndex: number | null;
+}
+
+/** Pagination metadata for bounding box responses */
+export interface BoundingBoxPaginationMeta {
+  total: number;
+  page: number;
+  perPage: number;
+}
+
+/** Response for bounding box list endpoints */
+export interface BoundingBoxListResponse {
+  data: BoundingBox[];
+  meta?: BoundingBoxPaginationMeta;
+}
+
+/** Response for page-specific bounding box endpoint */
+export interface BoundingBoxPageResponse {
+  data: BoundingBox[];
+}

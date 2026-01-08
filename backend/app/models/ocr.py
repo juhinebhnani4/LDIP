@@ -40,6 +40,9 @@ class OCRBoundingBox(BaseModel):
     confidence: float | None = Field(
         None, ge=0, le=1, description="OCR confidence score (0-1)"
     )
+    reading_order_index: int | None = Field(
+        None, ge=0, description="Reading order within page (0-indexed, top-to-bottom, left-to-right)"
+    )
 
 
 class OCRPage(BaseModel):

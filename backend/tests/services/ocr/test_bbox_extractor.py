@@ -4,9 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.ocr import OCRBoundingBox
 from app.services.ocr.bbox_extractor import (
     _extract_text_from_anchor,
     _get_vertex_coordinate,
+    calculate_reading_order,
     extract_bounding_boxes,
 )
 
@@ -245,3 +247,129 @@ class TestExtractBoundingBoxes:
         result = extract_bounding_boxes(document)
 
         assert result[0].confidence == 0.95
+
+    def test_applies_reading_order_by_default(self) -> None:
+        """Should apply reading order by default."""
+        document = self._create_mock_document(page_count=1, block_count_per_page=2)
+
+        result = extract_bounding_boxes(document)
+
+        # All boxes should have reading_order_index assigned
+        assert all(box.reading_order_index is not None for box in result)
+        assert result[0].reading_order_index == 0
+        assert result[1].reading_order_index == 1
+
+    def test_skips_reading_order_when_disabled(self) -> None:
+        """Should skip reading order calculation when disabled."""
+        document = self._create_mock_document(page_count=1, block_count_per_page=2)
+
+        result = extract_bounding_boxes(document, apply_reading_order=False)
+
+        # All boxes should have None reading_order_index
+        assert all(box.reading_order_index is None for box in result)
+
+
+class TestCalculateReadingOrder:
+    """Tests for reading order calculation."""
+
+    def test_empty_list(self) -> None:
+        """Should return empty list for empty input."""
+        result = calculate_reading_order([])
+        assert result == []
+
+    def test_single_box(self) -> None:
+        """Should assign index 0 to single box."""
+        boxes = [
+            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"),
+        ]
+
+        result = calculate_reading_order(boxes)
+
+        assert len(result) == 1
+        assert result[0].reading_order_index == 0
+
+    def test_horizontal_ordering(self) -> None:
+        """Should order boxes left to right on same line."""
+        boxes = [
+            OCRBoundingBox(page=1, x=50.0, y=10.0, width=20.0, height=5.0, text="World"),
+            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"),
+        ]
+
+        result = calculate_reading_order(boxes)
+
+        # "Hello" (x=10) should come before "World" (x=50)
+        assert result[0].text == "Hello"
+        assert result[0].reading_order_index == 0
+        assert result[1].text == "World"
+        assert result[1].reading_order_index == 1
+
+    def test_vertical_ordering(self) -> None:
+        """Should order boxes top to bottom on different lines."""
+        boxes = [
+            OCRBoundingBox(page=1, x=10.0, y=50.0, width=20.0, height=5.0, text="Second"),
+            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="First"),
+        ]
+
+        result = calculate_reading_order(boxes)
+
+        # "First" (y=10) should come before "Second" (y=50)
+        assert result[0].text == "First"
+        assert result[0].reading_order_index == 0
+        assert result[1].text == "Second"
+        assert result[1].reading_order_index == 1
+
+    def test_multiline_ordering(self) -> None:
+        """Should order boxes top-to-bottom, then left-to-right."""
+        boxes = [
+            # Line 2
+            OCRBoundingBox(page=1, x=50.0, y=30.0, width=20.0, height=5.0, text="D"),
+            OCRBoundingBox(page=1, x=10.0, y=30.0, width=20.0, height=5.0, text="C"),
+            # Line 1
+            OCRBoundingBox(page=1, x=50.0, y=10.0, width=20.0, height=5.0, text="B"),
+            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="A"),
+        ]
+
+        result = calculate_reading_order(boxes)
+
+        # Expected order: A, B, C, D (top-to-bottom, left-to-right)
+        assert [box.text for box in result] == ["A", "B", "C", "D"]
+        assert [box.reading_order_index for box in result] == [0, 1, 2, 3]
+
+    def test_y_tolerance_groups_nearby_boxes(self) -> None:
+        """Should group boxes within y_tolerance as same line."""
+        boxes = [
+            OCRBoundingBox(page=1, x=50.0, y=10.5, width=20.0, height=5.0, text="B"),
+            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="A"),
+        ]
+
+        # Default tolerance of 2.0 should group these as same line
+        result = calculate_reading_order(boxes, y_tolerance=2.0)
+
+        # "A" should come before "B" (same line, left-to-right)
+        assert result[0].text == "A"
+        assert result[1].text == "B"
+
+    def test_preserves_original_box_data(self) -> None:
+        """Should preserve all original box data."""
+        boxes = [
+            OCRBoundingBox(
+                page=1,
+                x=10.0,
+                y=10.0,
+                width=20.0,
+                height=5.0,
+                text="Test",
+                confidence=0.95,
+            ),
+        ]
+
+        result = calculate_reading_order(boxes)
+
+        assert result[0].page == 1
+        assert result[0].x == 10.0
+        assert result[0].y == 10.0
+        assert result[0].width == 20.0
+        assert result[0].height == 5.0
+        assert result[0].text == "Test"
+        assert result[0].confidence == 0.95
+        assert result[0].reading_order_index == 0

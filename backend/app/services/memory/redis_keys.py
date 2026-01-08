@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 SESSION_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
 CACHE_TTL = 60 * 60  # 1 hour in seconds
 MATTER_MEMORY_TTL = None  # No expiration for matter memory
+EMBEDDING_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 
 # =============================================================================
 # Key Type Definitions
@@ -347,3 +348,35 @@ def matter_pattern(matter_id: str) -> str:
     """
     _validate_uuid(matter_id, "matter_id")
     return f"matter:{matter_id}:*"
+
+
+# =============================================================================
+# Embedding Cache Key Functions
+# =============================================================================
+
+def embedding_cache_key(text_hash: str) -> str:
+    """Generate a Redis key for cached embeddings.
+
+    Embedding cache keys store OpenAI embeddings to avoid re-generating
+    for the same text content.
+    TTL: 24 hours.
+
+    Args:
+        text_hash: SHA256 hash of the text content.
+
+    Returns:
+        Redis key in format: embedding:{text_hash}
+
+    Raises:
+        ValueError: If text_hash is invalid.
+
+    Example:
+        >>> key = embedding_cache_key("a1b2c3d4...")
+        >>> key
+        'embedding:a1b2c3d4...'
+    """
+    # Text hash should be a hex string (SHA256 = 64 chars)
+    if not text_hash or not re.match(r"^[a-f0-9]{32,64}$", text_hash, re.IGNORECASE):
+        raise ValueError("text_hash must be a valid hex hash (32-64 characters)")
+
+    return f"embedding:{text_hash}"

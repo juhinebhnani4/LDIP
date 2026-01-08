@@ -46,6 +46,11 @@ from app.services.ocr.validation_extractor import (
     get_validation_extractor,
 )
 from app.services.pubsub_service import broadcast_document_status
+from app.services.rag.embedder import (
+    EmbeddingService,
+    EmbeddingServiceError,
+    get_embedding_service,
+)
 from app.services.storage_service import StorageError, StorageService, get_storage_service
 from app.workers.celery import celery_app
 
@@ -1160,6 +1165,281 @@ def chunk_document(
         )
         return {
             "status": "chunking_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Embedding Population Constants
+# =============================================================================
+
+EMBEDDING_BATCH_SIZE = 50  # Chunks per OpenAI API call
+EMBEDDING_RATE_LIMIT_DELAY = 0.5  # Seconds between batches to respect rate limits
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.embed_chunks",
+    bind=True,
+    autoretry_for=(EmbeddingServiceError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def embed_chunks(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    embedding_service: EmbeddingService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Generate embeddings for document chunks.
+
+    This task runs after chunk_document to populate embeddings for
+    semantic search. Processes chunks in batches of 50 to respect
+    OpenAI API rate limits.
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        embedding_service: Optional EmbeddingService instance (for testing).
+
+    Returns:
+        Task result with embedding summary.
+
+    Raises:
+        EmbeddingServiceError: If embedding generation fails (will trigger retry).
+    """
+    import time
+
+    from app.services.supabase.client import get_service_client
+
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("embed_chunks_no_document_id")
+        return {
+            "status": "embedding_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "chunking_complete",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "embed_chunks_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "embedding_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    embedder = embedding_service or get_embedding_service()
+
+    logger.info(
+        "embed_chunks_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for broadcasting
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Get service client to query and update chunks
+        client = get_service_client()
+        if client is None:
+            raise EmbeddingServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+                is_retryable=False,
+            )
+
+        # Get chunks without embeddings for this document
+        response = (
+            client.table("chunks")
+            .select("id, content")
+            .eq("document_id", doc_id)
+            .is_("embedding", "null")
+            .order("chunk_index", desc=False)
+            .execute()
+        )
+
+        chunks = response.data or []
+
+        if not chunks:
+            logger.info(
+                "embed_chunks_no_chunks_to_embed",
+                document_id=doc_id,
+            )
+            return {
+                "status": "embedding_complete",
+                "document_id": doc_id,
+                "embedded_count": 0,
+                "reason": "No chunks without embeddings",
+            }
+
+        logger.info(
+            "embed_chunks_processing",
+            document_id=doc_id,
+            chunk_count=len(chunks),
+            batch_size=EMBEDDING_BATCH_SIZE,
+        )
+
+        # Process chunks in batches
+        embedded_count = 0
+        failed_count = 0
+
+        # Run async operations in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
+                batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
+                batch_texts = [c["content"] for c in batch]
+                batch_ids = [c["id"] for c in batch]
+
+                try:
+                    # Generate embeddings for batch
+                    embeddings = loop.run_until_complete(
+                        embedder.embed_batch(batch_texts, skip_empty=True)
+                    )
+
+                    # Update chunks with embeddings
+                    for j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings)):
+                        if embedding is None:
+                            failed_count += 1
+                            continue
+
+                        try:
+                            client.table("chunks").update({
+                                "embedding": embedding,
+                            }).eq("id", chunk_id).execute()
+                            embedded_count += 1
+                        except Exception as e:
+                            logger.warning(
+                                "embed_chunks_update_failed",
+                                document_id=doc_id,
+                                chunk_id=chunk_id,
+                                error=str(e),
+                            )
+                            failed_count += 1
+
+                    logger.debug(
+                        "embed_chunks_batch_complete",
+                        document_id=doc_id,
+                        batch_number=i // EMBEDDING_BATCH_SIZE + 1,
+                        batch_embedded=len([e for e in embeddings if e is not None]),
+                    )
+
+                    # Rate limit delay between batches
+                    if i + EMBEDDING_BATCH_SIZE < len(chunks):
+                        time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
+
+                except EmbeddingServiceError as e:
+                    logger.warning(
+                        "embed_chunks_batch_failed",
+                        document_id=doc_id,
+                        batch_start=i,
+                        error=str(e),
+                    )
+                    failed_count += len(batch)
+                    if e.is_retryable:
+                        raise  # Let Celery retry
+
+        finally:
+            loop.close()
+
+        # Broadcast embedding completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="embedding_complete",
+            embedded_count=embedded_count,
+            failed_count=failed_count,
+        )
+
+        logger.info(
+            "embed_chunks_task_completed",
+            document_id=doc_id,
+            embedded_count=embedded_count,
+            failed_count=failed_count,
+            total_chunks=len(chunks),
+        )
+
+        return {
+            "status": "embedding_complete",
+            "document_id": doc_id,
+            "embedded_count": embedded_count,
+            "failed_count": failed_count,
+            "total_chunks": len(chunks),
+        }
+
+    except EmbeddingServiceError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "embed_chunks_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=3,
+            error=str(e),
+        )
+
+        if retry_count >= 3:
+            logger.error(
+                "embed_chunks_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "embedding_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "embed_chunks_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "embedding_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "embed_chunks_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "embedding_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),

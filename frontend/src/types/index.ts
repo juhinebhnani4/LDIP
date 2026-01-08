@@ -42,3 +42,18 @@ export type {
   ValidationResult,
   ValidationWarning,
 } from './document';
+
+// Search types
+export type {
+  BM25SearchRequest,
+  SearchMeta,
+  SearchMode,
+  SearchRequest,
+  SearchResponse,
+  SearchResult,
+  SemanticSearchRequest,
+  SingleModeSearchMeta,
+  SingleModeSearchResponse,
+} from './search';
+
+export { DEFAULT_SEARCH_WEIGHTS, SEARCH_LIMITS } from './search';

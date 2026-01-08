@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     ocr_quality_fair_threshold: float = 0.70       # Above this = Fair, below = Poor
     ocr_page_highlight_threshold: float = 0.60     # Pages below this are highlighted
 
+    # Chunking Configuration (Parent-Child for RAG)
+    chunk_parent_size: int = 1750       # Target: 1500-2000 tokens for context
+    chunk_parent_overlap: int = 100     # 5-7% overlap for parent chunks
+    chunk_child_size: int = 550         # Target: 400-700 tokens for retrieval
+    chunk_child_overlap: int = 75       # 50-100 tokens (~14%) for child chunks
+    chunk_min_size: int = 100           # Minimum viable chunk size
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

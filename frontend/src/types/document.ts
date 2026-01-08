@@ -236,3 +236,63 @@ export interface BoundingBoxListResponse {
 export interface BoundingBoxPageResponse {
   data: BoundingBox[];
 }
+
+// =============================================================================
+// Chunk Types (Parent-Child RAG)
+// =============================================================================
+
+/** Chunk type in parent-child hierarchy */
+export type ChunkType = 'parent' | 'child';
+
+/** Base chunk fields */
+export interface ChunkBase {
+  id: string;
+  documentId: string;
+  chunkType: ChunkType;
+  chunkIndex: number;
+  tokenCount: number;
+  parentChunkId: string | null;
+  pageNumber: number | null;
+}
+
+/** Chunk with full content */
+export interface Chunk extends ChunkBase {
+  matterId: string;
+  content: string;
+  bboxIds: string[] | null;
+  entityIds: string[] | null;
+  createdAt: string;
+}
+
+/** Chunk for list views (includes content) */
+export interface ChunkWithContent extends ChunkBase {
+  content: string;
+}
+
+/** Chunk statistics metadata */
+export interface ChunkStatsMeta {
+  total: number;
+  parentCount: number;
+  childCount: number;
+}
+
+/** Response for chunk list endpoints */
+export interface ChunkListResponse {
+  data: ChunkWithContent[];
+  meta: ChunkStatsMeta;
+}
+
+/** Response for single chunk retrieval */
+export interface ChunkResponse {
+  data: Chunk;
+}
+
+/** Response for chunk with context */
+export interface ChunkContextResponse {
+  data: {
+    chunk: Chunk;
+    parent?: Chunk;
+    siblings?: Chunk[];
+    children?: Chunk[];
+  };
+}

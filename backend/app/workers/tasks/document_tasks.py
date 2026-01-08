@@ -1,8 +1,11 @@
 """Celery tasks related to document processing.
 
 Implements OCR processing using Google Document AI with retry logic
-and proper status updates. Includes Gemini-based OCR validation.
+and proper status updates. Includes Gemini-based OCR validation
+and parent-child chunking for RAG pipelines.
 """
+
+import asyncio
 
 import structlog
 from celery.exceptions import MaxRetriesExceededError
@@ -13,6 +16,9 @@ from app.services.bounding_box_service import (
     BoundingBoxService,
     get_bounding_box_service,
 )
+from app.services.chunk_service import ChunkService, ChunkServiceError, get_chunk_service
+from app.services.chunking.bbox_linker import link_chunks_to_bboxes
+from app.services.chunking.parent_child_chunker import ParentChildChunker
 from app.services.document_service import (
     DocumentService,
     DocumentServiceError,
@@ -947,6 +953,213 @@ def calculate_confidence(
         )
         return {
             "status": "confidence_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.chunk_document",
+    bind=True,
+    autoretry_for=(ChunkServiceError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def chunk_document(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    chunk_service: ChunkService | None = None,
+    bounding_box_service: BoundingBoxService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Chunk a document into parent-child hierarchy for RAG.
+
+    This task runs after confidence calculation to create document chunks.
+    Parent chunks (1500-2000 tokens) provide context, while child chunks
+    (400-700 tokens) enable precise retrieval.
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        chunk_service: Optional ChunkService instance (for testing).
+        bounding_box_service: Optional BoundingBoxService instance (for testing).
+
+    Returns:
+        Task result with chunking summary.
+
+    Raises:
+        ChunkServiceError: If chunking fails (will trigger retry).
+    """
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("chunk_document_no_document_id")
+        return {
+            "status": "chunking_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "confidence_calculated",
+            "confidence_skipped",
+            "validated",
+            "validated_with_warnings",
+            "validation_skipped",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "chunk_document_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "chunking_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    chunks_service = chunk_service or get_chunk_service()
+    bbox_service = bounding_box_service or get_bounding_box_service()
+
+    logger.info(
+        "chunk_document_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get document info including extracted text
+        storage_path, matter_id = doc_service.get_document_for_processing(doc_id)
+        doc = doc_service.get_document(doc_id)
+
+        if not doc.extracted_text:
+            logger.warning(
+                "chunk_document_no_text",
+                document_id=doc_id,
+            )
+            return {
+                "status": "chunking_skipped",
+                "document_id": doc_id,
+                "reason": "No extracted text available",
+            }
+
+        # Create chunker and process document
+        chunker = ParentChildChunker()
+        result = chunker.chunk_document(doc_id, doc.extracted_text)
+
+        # Link chunks to bounding boxes
+        all_chunks = result.parent_chunks + result.child_chunks
+
+        # Run async operations in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            # Link chunks to bboxes
+            loop.run_until_complete(
+                link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
+            )
+
+            # Save chunks to database
+            saved_count = loop.run_until_complete(
+                chunks_service.save_chunks(
+                    document_id=doc_id,
+                    matter_id=matter_id,
+                    parent_chunks=result.parent_chunks,
+                    child_chunks=result.child_chunks,
+                )
+            )
+        finally:
+            loop.close()
+
+        # Broadcast chunking completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="chunking_complete",
+            parent_chunks=len(result.parent_chunks),
+            child_chunks=len(result.child_chunks),
+        )
+
+        logger.info(
+            "chunk_document_task_completed",
+            document_id=doc_id,
+            parent_chunks=len(result.parent_chunks),
+            child_chunks=len(result.child_chunks),
+            total_tokens=result.total_tokens,
+            saved_count=saved_count,
+        )
+
+        return {
+            "status": "chunking_complete",
+            "document_id": doc_id,
+            "parent_chunks": len(result.parent_chunks),
+            "child_chunks": len(result.child_chunks),
+            "total_tokens": result.total_tokens,
+            "saved_count": saved_count,
+        }
+
+    except ChunkServiceError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "chunk_document_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=2,
+            error=str(e),
+        )
+
+        if retry_count >= 2:
+            logger.error(
+                "chunk_document_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "chunking_failed",
+                "document_id": doc_id,
+                "error_code": "CHUNKING_FAILED",
+                "error_message": str(e),
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "chunk_document_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "chunking_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "chunk_document_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "chunking_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),

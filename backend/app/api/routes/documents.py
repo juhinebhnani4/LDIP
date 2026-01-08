@@ -67,6 +67,8 @@ from app.services.ocr.human_review_service import (
 )
 from app.workers.tasks.document_tasks import (
     calculate_confidence,
+    chunk_document,
+    embed_chunks,
     process_document,
     validate_ocr,
 )
@@ -248,15 +250,19 @@ def _get_subfolder(document_type: DocumentType) -> str:
 
 
 def _queue_ocr_task(document_id: str, file_size: int) -> None:
-    """Queue OCR processing, validation, and confidence tasks for a document.
+    """Queue full document processing pipeline for a document.
 
-    Uses Celery chain to run validation and confidence calculation after OCR.
+    Uses Celery chain to run the complete document ingestion pipeline.
     Smaller documents (<10MB, ~100 pages) get 'high' priority.
 
     The task chain:
     1. process_document: OCR with Google Document AI
     2. validate_ocr: Gemini validation + pattern correction
     3. calculate_confidence: Calculate and store OCR quality metrics
+    4. chunk_document: Create parent-child chunks for RAG
+    5. embed_chunks: Generate OpenAI embeddings for semantic search
+
+    After completion, documents are fully searchable via hybrid search.
 
     Args:
         document_id: Document UUID to process.
@@ -270,22 +276,26 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
 
     queue_name = "high" if is_small_document else "default"
 
-    # Create task chain: OCR -> Validation -> Confidence
+    # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding
     # Each task receives the result from the previous task as first argument
+    # Full pipeline makes documents searchable via hybrid search (BM25 + semantic)
     task_chain = chain(
         process_document.s(document_id),
         validate_ocr.s(),
         calculate_confidence.s(),
+        chunk_document.s(),
+        embed_chunks.s(),
     )
 
     # Apply the chain to the appropriate queue
     task_chain.apply_async(queue=queue_name)
 
     logger.info(
-        "ocr_validation_confidence_chain_queued",
+        "document_processing_chain_queued",
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,
+        stages="ocr->validation->confidence->chunking->embedding",
     )
 
 

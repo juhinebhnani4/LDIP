@@ -1367,11 +1367,28 @@ def embed_chunks(
         finally:
             loop.close()
 
+        # Update document status to searchable
+        try:
+            client.table("documents").update({
+                "status": "searchable",
+            }).eq("id", doc_id).execute()
+
+            logger.info(
+                "document_status_updated_to_searchable",
+                document_id=doc_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "embed_chunks_status_update_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+
         # Broadcast embedding completion
         broadcast_document_status(
             matter_id=matter_id,
             document_id=doc_id,
-            status="embedding_complete",
+            status="searchable",
             embedded_count=embedded_count,
             failed_count=failed_count,
         )
@@ -1385,7 +1402,7 @@ def embed_chunks(
         )
 
         return {
-            "status": "embedding_complete",
+            "status": "searchable",
             "document_id": doc_id,
             "embedded_count": embedded_count,
             "failed_count": failed_count,

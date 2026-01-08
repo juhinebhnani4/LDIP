@@ -30,7 +30,12 @@ class DocumentStatus(str, Enum):
     - processing: OCR/extraction in progress
     - ocr_complete: OCR successfully extracted text
     - ocr_failed: OCR processing failed
-    - completed: All processing complete
+    - chunking: Creating parent-child chunks for RAG
+    - chunking_failed: Chunking process failed
+    - embedding: Generating embeddings for semantic search
+    - embedding_failed: Embedding generation failed
+    - searchable: Fully processed and searchable via hybrid search
+    - completed: All processing complete (alias for searchable)
     - failed: Processing failed (non-OCR)
     """
 
@@ -38,6 +43,11 @@ class DocumentStatus(str, Enum):
     PROCESSING = "processing"
     OCR_COMPLETE = "ocr_complete"
     OCR_FAILED = "ocr_failed"
+    CHUNKING = "chunking"
+    CHUNKING_FAILED = "chunking_failed"
+    EMBEDDING = "embedding"
+    EMBEDDING_FAILED = "embedding_failed"
+    SEARCHABLE = "searchable"
     COMPLETED = "completed"
     FAILED = "failed"
 

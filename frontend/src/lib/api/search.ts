@@ -9,6 +9,10 @@ import type {
   SemanticSearchRequest,
   SingleModeSearchResponse,
 } from '@/types/search'
+import {
+  DEFAULT_SEARCH_WEIGHTS,
+  SEARCH_LIMITS,
+} from '@/types/search'
 
 /**
  * Search API client for hybrid search operations.
@@ -91,9 +95,9 @@ export async function hybridSearch(
 ): Promise<SearchResponse> {
   const body = {
     query: request.query,
-    limit: request.limit ?? 20,
-    bm25_weight: request.bm25Weight ?? 1.0,
-    semantic_weight: request.semanticWeight ?? 1.0,
+    limit: request.limit ?? SEARCH_LIMITS.default,
+    bm25_weight: request.bm25Weight ?? DEFAULT_SEARCH_WEIGHTS.bm25,
+    semantic_weight: request.semanticWeight ?? DEFAULT_SEARCH_WEIGHTS.semantic,
   }
 
   const response = await api.post<{
@@ -128,7 +132,7 @@ export async function bm25Search(
 ): Promise<SingleModeSearchResponse> {
   const body = {
     query: request.query,
-    limit: request.limit ?? 30,
+    limit: request.limit ?? SEARCH_LIMITS.defaultSingleMode,
   }
 
   const response = await api.post<{
@@ -163,7 +167,7 @@ export async function semanticSearch(
 ): Promise<SingleModeSearchResponse> {
   const body = {
     query: request.query,
-    limit: request.limit ?? 30,
+    limit: request.limit ?? SEARCH_LIMITS.defaultSingleMode,
   }
 
   const response = await api.post<{

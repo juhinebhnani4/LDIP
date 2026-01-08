@@ -302,14 +302,42 @@ class EmbeddingService:
             ) from e
 
 
-@lru_cache(maxsize=1)
+_embedding_service_instance: EmbeddingService | None = None
+
+
 def get_embedding_service() -> EmbeddingService:
     """Get singleton embedding service instance.
 
-    Note: This returns an instance without Redis caching.
-    For production with caching, create instance with Redis client.
+    Attempts to initialize with Redis caching for cost savings.
+    Falls back to non-cached mode if Redis is unavailable.
 
     Returns:
-        EmbeddingService instance.
+        EmbeddingService instance (with or without caching).
     """
-    return EmbeddingService()
+    global _embedding_service_instance
+
+    if _embedding_service_instance is not None:
+        return _embedding_service_instance
+
+    # Try to get Redis client for caching
+    redis_client = None
+    try:
+        import redis.asyncio as aioredis
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        if settings.redis_url:
+            redis_client = aioredis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+            )
+            logger.info("embedding_service_redis_caching_enabled")
+    except Exception as e:
+        logger.warning(
+            "embedding_service_redis_unavailable",
+            error=str(e),
+            message="Embedding caching disabled - each request will hit OpenAI API",
+        )
+
+    _embedding_service_instance = EmbeddingService(redis_client=redis_client)
+    return _embedding_service_instance

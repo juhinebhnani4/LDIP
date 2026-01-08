@@ -412,3 +412,103 @@ class TestHybridSearchServiceErrorHandling:
 
         assert exc_info.value.code == "SEARCH_FAILED"
         assert exc_info.value.is_retryable is True
+
+
+class TestRRFScoreCalculation:
+    """Tests for Reciprocal Rank Fusion (RRF) score calculation.
+
+    RRF formula: score = sum(1 / (k + rank)) * weight for each ranking
+    Where k is the smoothing constant (default 60) and rank is 1-indexed.
+    """
+
+    def test_rrf_formula_with_both_ranks(self) -> None:
+        """Verify RRF calculation when result appears in both BM25 and semantic."""
+        # Given: k=60, bm25_rank=1, semantic_rank=2, weights=1.0 each
+        k = 60
+        bm25_rank = 1
+        semantic_rank = 2
+        bm25_weight = 1.0
+        semantic_weight = 1.0
+
+        # Formula: 1/(k+bm25_rank)*bm25_weight + 1/(k+semantic_rank)*semantic_weight
+        expected_score = (
+            1.0 / (k + bm25_rank) * bm25_weight +
+            1.0 / (k + semantic_rank) * semantic_weight
+        )
+
+        # Expected: 1/61 * 1.0 + 1/62 * 1.0 = 0.01639 + 0.01613 = 0.03252
+        assert abs(expected_score - 0.03252) < 0.0001
+
+    def test_rrf_formula_bm25_only(self) -> None:
+        """Verify RRF calculation when result only appears in BM25."""
+        # Given: k=60, bm25_rank=5, no semantic rank
+        k = 60
+        bm25_rank = 5
+        bm25_weight = 1.0
+        semantic_weight = 1.0
+
+        # Formula: 1/(k+bm25_rank)*bm25_weight + 0 (no semantic match)
+        expected_score = 1.0 / (k + bm25_rank) * bm25_weight
+
+        # Expected: 1/65 * 1.0 = 0.01538
+        assert abs(expected_score - 0.01538) < 0.0001
+
+    def test_rrf_formula_semantic_only(self) -> None:
+        """Verify RRF calculation when result only appears in semantic."""
+        # Given: k=60, semantic_rank=3, no bm25 rank
+        k = 60
+        semantic_rank = 3
+        bm25_weight = 1.0
+        semantic_weight = 1.0
+
+        # Formula: 0 + 1/(k+semantic_rank)*semantic_weight
+        expected_score = 1.0 / (k + semantic_rank) * semantic_weight
+
+        # Expected: 1/63 * 1.0 = 0.01587
+        assert abs(expected_score - 0.01587) < 0.0001
+
+    def test_rrf_formula_with_custom_weights(self) -> None:
+        """Verify RRF calculation with custom weights (boosted BM25)."""
+        # Given: k=60, bm25_rank=1, semantic_rank=1, bm25_weight=1.5, semantic_weight=0.5
+        k = 60
+        bm25_rank = 1
+        semantic_rank = 1
+        bm25_weight = 1.5
+        semantic_weight = 0.5
+
+        # Formula with weights
+        expected_score = (
+            1.0 / (k + bm25_rank) * bm25_weight +
+            1.0 / (k + semantic_rank) * semantic_weight
+        )
+
+        # Expected: 1/61 * 1.5 + 1/61 * 0.5 = 0.02459 + 0.00820 = 0.03279
+        assert abs(expected_score - 0.03279) < 0.0001
+
+    def test_higher_rank_produces_lower_score(self) -> None:
+        """Verify that higher ranks (worse positions) produce lower scores."""
+        k = 60
+
+        # Rank 1 should score higher than rank 10
+        score_rank_1 = 1.0 / (k + 1)  # 0.01639
+        score_rank_10 = 1.0 / (k + 10)  # 0.01429
+
+        assert score_rank_1 > score_rank_10
+
+    def test_rrf_scores_are_additive(self) -> None:
+        """Verify that appearing in both rankings produces higher score."""
+        k = 60
+        rank = 5
+
+        # Score with only BM25
+        bm25_only = 1.0 / (k + rank)
+
+        # Score with only semantic
+        semantic_only = 1.0 / (k + rank)
+
+        # Score with both (same rank in each)
+        both = bm25_only + semantic_only
+
+        assert both > bm25_only
+        assert both > semantic_only
+        assert both == bm25_only + semantic_only

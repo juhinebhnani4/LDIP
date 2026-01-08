@@ -12,11 +12,9 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import (
-    MatterAccessContext,
     MatterMembership,
     MatterRole,
     require_matter_role,
-    validate_matter_access,
 )
 from app.models.search import (
     BM25SearchRequest,

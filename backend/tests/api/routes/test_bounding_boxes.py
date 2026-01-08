@@ -161,6 +161,48 @@ class TestGetDocumentBoundingBoxes:
 
         assert response.status_code == 401
 
+    @pytest.mark.anyio
+    async def test_returns_404_for_unauthorized_matter(
+        self,
+        mock_document: MagicMock,
+        sample_bbox_data: list[dict],
+    ) -> None:
+        """Should return 404 when user doesn't have access to document's matter."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.services.document_service import get_document_service
+        from app.services.bounding_box_service import get_bounding_box_service
+
+        mock_matter_service = MagicMock(spec=MatterService)
+        mock_matter_service.get_user_role.return_value = None  # No access
+
+        mock_doc_service = MagicMock(spec=DocumentService)
+        mock_doc_service.get_document.return_value = mock_document
+
+        mock_bbox_service = MagicMock(spec=BoundingBoxService)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[get_document_service] = lambda: mock_doc_service
+        app.dependency_overrides[get_bounding_box_service] = lambda: mock_bbox_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/documents/doc-789/bounding-boxes",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
 
 class TestGetPageBoundingBoxes:
     """Tests for GET /api/documents/{document_id}/pages/{page_number}/bounding-boxes."""
@@ -207,6 +249,7 @@ class TestGetChunkBoundingBoxes:
         """Should return bounding boxes for a chunk."""
         from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.api.routes.bounding_boxes import get_supabase_client
         from app.services.bounding_box_service import get_bounding_box_service
 
         mock_chunk_data = {
@@ -220,7 +263,7 @@ class TestGetChunkBoundingBoxes:
         mock_bbox_service = MagicMock(spec=BoundingBoxService)
         mock_bbox_service.get_bounding_boxes_by_ids.return_value = sample_bbox_data
 
-        # Mock Supabase client
+        # Mock Supabase client via DI
         mock_client = MagicMock()
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[mock_chunk_data]
@@ -229,21 +272,18 @@ class TestGetChunkBoundingBoxes:
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
         app.dependency_overrides[get_bounding_box_service] = lambda: mock_bbox_service
+        app.dependency_overrides[get_supabase_client] = lambda: mock_client
 
-        with patch(
-            "app.services.supabase.client.get_service_client",
-            return_value=mock_client,
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport,
-                base_url="http://test",
-            ) as client:
-                token = create_test_token()
-                response = await client.get(
-                    "/api/chunks/chunk-123/bounding-boxes",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/chunks/chunk-123/bounding-boxes",
+                headers={"Authorization": f"Bearer {token}"},
+            )
 
         app.dependency_overrides.clear()
 
@@ -256,12 +296,13 @@ class TestGetChunkBoundingBoxes:
         """Should return 404 for nonexistent chunk."""
         from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.api.routes.bounding_boxes import get_supabase_client
         from app.services.bounding_box_service import get_bounding_box_service
 
         mock_matter_service = MagicMock(spec=MatterService)
         mock_bbox_service = MagicMock(spec=BoundingBoxService)
 
-        # Mock Supabase client returning no data
+        # Mock Supabase client returning no data via DI
         mock_client = MagicMock()
         mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[]
@@ -270,22 +311,68 @@ class TestGetChunkBoundingBoxes:
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
         app.dependency_overrides[get_bounding_box_service] = lambda: mock_bbox_service
+        app.dependency_overrides[get_supabase_client] = lambda: mock_client
 
-        with patch(
-            "app.services.supabase.client.get_service_client",
-            return_value=mock_client,
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport,
-                base_url="http://test",
-            ) as client:
-                token = create_test_token()
-                response = await client.get(
-                    "/api/chunks/nonexistent/bounding-boxes",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/chunks/nonexistent/bounding-boxes",
+                headers={"Authorization": f"Bearer {token}"},
+            )
 
         app.dependency_overrides.clear()
 
         assert response.status_code == 404
+
+    @pytest.mark.anyio
+    async def test_returns_404_for_unauthorized_matter(
+        self,
+        sample_bbox_data: list[dict],
+    ) -> None:
+        """Should return 404 when user doesn't have access to chunk's matter."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.bounding_boxes import get_supabase_client
+        from app.services.bounding_box_service import get_bounding_box_service
+
+        mock_chunk_data = {
+            "matter_id": "matter-456",
+            "bbox_ids": ["bbox-1", "bbox-2"],
+        }
+
+        mock_matter_service = MagicMock(spec=MatterService)
+        mock_matter_service.get_user_role.return_value = None  # No access
+
+        mock_bbox_service = MagicMock(spec=BoundingBoxService)
+
+        # Mock Supabase client returning chunk data via DI
+        mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[mock_chunk_data]
+        )
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[get_bounding_box_service] = lambda: mock_bbox_service
+        app.dependency_overrides[get_supabase_client] = lambda: mock_client
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/chunks/chunk-123/bounding-boxes",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "CHUNK_NOT_FOUND"

@@ -222,11 +222,9 @@ export interface BoundingBox {
 }
 
 /** Pagination metadata for bounding box responses */
-export interface BoundingBoxPaginationMeta {
-  total: number;
-  page: number;
-  perPage: number;
-}
+export type BoundingBoxPaginationMeta = Omit<PaginationMeta, 'totalPages'> & {
+  totalPages: number;
+};
 
 /** Response for bounding box list endpoints */
 export interface BoundingBoxListResponse {

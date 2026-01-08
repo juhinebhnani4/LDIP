@@ -28,10 +28,17 @@ from app.services.document_service import (
     get_document_service,
 )
 from app.services.matter_service import MatterService
+from app.services.supabase.client import get_service_client
+from supabase import Client
 
 router = APIRouter(prefix="/documents", tags=["bounding-boxes"])
 chunks_router = APIRouter(prefix="/chunks", tags=["bounding-boxes"])
 logger = structlog.get_logger(__name__)
+
+
+def get_supabase_client() -> Client | None:
+    """Dependency for Supabase service client."""
+    return get_service_client()
 
 
 # =============================================================================
@@ -62,6 +69,7 @@ class PaginationMeta(BaseModel):
     total: int = Field(..., ge=0, description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
     per_page: int = Field(..., ge=1, description="Items per page")
+    total_pages: int = Field(..., ge=0, description="Total number of pages")
 
 
 class BoundingBoxListResponse(BaseModel):
@@ -182,12 +190,16 @@ async def get_document_bounding_boxes(
             per_page=per_page,
         )
 
+        # Calculate total pages
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+
         return BoundingBoxListResponse(
             data=[BoundingBoxData(**box) for box in boxes],
             meta=PaginationMeta(
                 total=total,
                 page=page or 1,
                 per_page=per_page,
+                total_pages=total_pages,
             ),
         )
 
@@ -278,6 +290,7 @@ async def get_chunk_bounding_boxes(
     current_user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
     bbox_service: BoundingBoxService = Depends(get_bounding_box_service),
+    db_client: Client | None = Depends(get_supabase_client),
 ) -> BoundingBoxPageResponse:
     """Get bounding boxes linked to a chunk via its bbox_ids array.
 
@@ -290,10 +303,7 @@ async def get_chunk_bounding_boxes(
     # This requires a ChunkService which will be created in Story 2b-5
     # For now, we'll use the service client to get the chunk directly
 
-    from app.services.supabase.client import get_service_client
-
-    client = get_service_client()
-    if client is None:
+    if db_client is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -308,7 +318,7 @@ async def get_chunk_bounding_boxes(
     try:
         # Get chunk to access matter_id and bbox_ids
         chunk_result = (
-            client.table("chunks")
+            db_client.table("chunks")
             .select("matter_id, bbox_ids")
             .eq("id", chunk_id)
             .execute()

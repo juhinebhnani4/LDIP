@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * Bounding Box API Client
  *
@@ -17,19 +15,20 @@ import type {
 /**
  * Transform backend bounding box response to frontend format.
  * Maps snake_case from backend to camelCase for frontend.
+ * Uses safe type coercion to handle unexpected data types.
  */
 function transformBoundingBox(bbox: Record<string, unknown>): BoundingBox {
   return {
-    id: bbox.id as string,
-    documentId: bbox.document_id as string,
-    pageNumber: bbox.page_number as number,
-    x: bbox.x as number,
-    y: bbox.y as number,
-    width: bbox.width as number,
-    height: bbox.height as number,
-    text: bbox.text as string,
-    confidence: bbox.confidence as number | null,
-    readingOrderIndex: bbox.reading_order_index as number | null,
+    id: String(bbox.id ?? ''),
+    documentId: String(bbox.document_id ?? ''),
+    pageNumber: Number(bbox.page_number ?? 0),
+    x: Number(bbox.x ?? 0),
+    y: Number(bbox.y ?? 0),
+    width: Number(bbox.width ?? 0),
+    height: Number(bbox.height ?? 0),
+    text: String(bbox.text ?? ''),
+    confidence: bbox.confidence != null ? Number(bbox.confidence) : null,
+    readingOrderIndex: bbox.reading_order_index != null ? Number(bbox.reading_order_index) : null,
   }
 }
 
@@ -38,7 +37,7 @@ function transformBoundingBox(bbox: Record<string, unknown>): BoundingBox {
  */
 function transformListResponse(response: {
   data: Record<string, unknown>[]
-  meta?: { total: number; page: number; per_page: number }
+  meta?: { total: number; page: number; per_page: number; total_pages: number }
 }): BoundingBoxListResponse {
   return {
     data: response.data.map(transformBoundingBox),
@@ -47,6 +46,7 @@ function transformListResponse(response: {
           total: response.meta.total,
           page: response.meta.page,
           perPage: response.meta.per_page,
+          totalPages: response.meta.total_pages,
         }
       : undefined,
   }
@@ -86,7 +86,7 @@ export async function fetchBoundingBoxesForDocument(
 
   const response = await api.get<{
     data: Record<string, unknown>[]
-    meta?: { total: number; page: number; per_page: number }
+    meta?: { total: number; page: number; per_page: number; total_pages: number }
   }>(endpoint)
 
   return transformListResponse(response)

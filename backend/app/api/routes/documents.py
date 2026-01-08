@@ -44,7 +44,7 @@ from app.services.storage_service import (
     StorageService,
     get_storage_service,
 )
-from app.workers.tasks.document_tasks import process_document
+from app.workers.tasks.document_tasks import process_document, validate_ocr
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = structlog.get_logger(__name__)
@@ -201,28 +201,39 @@ def _get_subfolder(document_type: DocumentType) -> str:
 
 
 def _queue_ocr_task(document_id: str, file_size: int) -> None:
-    """Queue OCR processing task for a document.
+    """Queue OCR processing and validation tasks for a document.
 
-    Uses priority queue based on estimated document size.
+    Uses Celery chain to run validation after OCR completes.
     Smaller documents (<10MB, ~100 pages) get 'high' priority.
+
+    The task chain:
+    1. process_document: OCR with Google Document AI
+    2. validate_ocr: Gemini validation + pattern correction
 
     Args:
         document_id: Document UUID to process.
         file_size: File size in bytes.
     """
+    from celery import chain
+
     # Heuristic: ~100KB per page average for scanned PDFs
     # 10MB ~ 100 pages
     is_small_document = file_size < 10 * 1024 * 1024
 
     queue_name = "high" if is_small_document else "default"
 
-    process_document.apply_async(
-        args=[document_id],
-        queue=queue_name,
+    # Create task chain: OCR -> Validation
+    # validate_ocr receives the result from process_document as first argument
+    task_chain = chain(
+        process_document.s(document_id),
+        validate_ocr.s(),
     )
 
+    # Apply the chain to the appropriate queue
+    task_chain.apply_async(queue=queue_name)
+
     logger.info(
-        "ocr_task_queued",
+        "ocr_validation_chain_queued",
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,

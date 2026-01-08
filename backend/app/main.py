@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from app.api.routes import documents, health, matters
+from app.api.routes import documents, health, matters, ocr_validation
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -106,6 +106,8 @@ def create_app() -> FastAPI:
     app.include_router(matters.router, prefix="/api")
     app.include_router(documents.router, prefix="/api")
     app.include_router(documents.matters_router, prefix="/api")
+    app.include_router(ocr_validation.router, prefix="/api")
+    app.include_router(ocr_validation.matters_router, prefix="/api")
 
     # Future routers (to be implemented in later stories):
     # app.include_router(engines.router, prefix="/api")

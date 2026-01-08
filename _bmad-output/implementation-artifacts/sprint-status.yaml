@@ -70,7 +70,7 @@ development_status:
   # Epic 2B: OCR & RAG Pipeline
   epic-2b: in-progress
   2b-1-google-document-ai-ocr: done
-  2b-2-gemini-ocr-validation: backlog
+  2b-2-gemini-ocr-validation: review
   2b-3-ocr-quality-assessment: backlog
   2b-4-bounding-boxes-table: backlog
   2b-5-parent-child-chunking: backlog

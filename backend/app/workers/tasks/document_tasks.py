@@ -1,13 +1,14 @@
 """Celery tasks related to document processing.
 
 Implements OCR processing using Google Document AI with retry logic
-and proper status updates.
+and proper status updates. Includes Gemini-based OCR validation.
 """
 
 import structlog
 from celery.exceptions import MaxRetriesExceededError
 
 from app.models.document import DocumentStatus
+from app.models.ocr_validation import CorrectionType, ValidationStatus
 from app.services.bounding_box_service import (
     BoundingBoxService,
     get_bounding_box_service,
@@ -18,6 +19,22 @@ from app.services.document_service import (
     get_document_service,
 )
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
+from app.services.ocr.gemini_validator import (
+    GeminiOCRValidator,
+    GeminiValidatorError,
+    get_gemini_validator,
+)
+from app.services.ocr.human_review_service import (
+    HumanReviewService,
+    HumanReviewServiceError,
+    get_human_review_service,
+)
+from app.services.ocr.pattern_corrector import apply_pattern_corrections
+from app.services.ocr.validation_extractor import (
+    ValidationExtractor,
+    ValidationExtractorError,
+    get_validation_extractor,
+)
 from app.services.pubsub_service import broadcast_document_status
 from app.services.storage_service import StorageError, StorageService, get_storage_service
 from app.workers.celery import celery_app
@@ -402,3 +419,376 @@ def retry_ocr(document_id: str) -> dict[str, str]:
             "document_id": document_id,
             "error": e.message,
         }
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.validate_ocr",
+    bind=True,
+    autoretry_for=(GeminiValidatorError, ValidationExtractorError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=MAX_RETRIES,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def validate_ocr(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    validation_extractor: ValidationExtractor | None = None,
+    gemini_validator: GeminiOCRValidator | None = None,
+    human_review_service: HumanReviewService | None = None,
+    document_service: DocumentService | None = None,
+    bounding_box_service: BoundingBoxService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Validate OCR results using pattern correction and Gemini.
+
+    This task runs after process_document to validate low-confidence words.
+    It applies pattern corrections first, then uses Gemini for remaining
+    low-confidence words, and queues very low confidence words for human review.
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        validation_extractor: Optional ValidationExtractor instance (for testing).
+        gemini_validator: Optional GeminiOCRValidator instance (for testing).
+        human_review_service: Optional HumanReviewService instance (for testing).
+        document_service: Optional DocumentService instance (for testing).
+        bounding_box_service: Optional BoundingBoxService instance (for testing).
+
+    Returns:
+        Task result with validation summary.
+
+    Raises:
+        GeminiValidatorError: If Gemini validation fails (will trigger retry).
+        ValidationExtractorError: If extraction fails (will trigger retry).
+    """
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("validate_ocr_no_document_id")
+        return {
+            "status": "validation_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Check if OCR was successful
+    if prev_result and prev_result.get("status") != "ocr_complete":
+        logger.info(
+            "validate_ocr_skipped_ocr_not_complete",
+            document_id=doc_id,
+            ocr_status=prev_result.get("status"),
+        )
+        return {
+            "status": "validation_skipped",
+            "document_id": doc_id,
+            "reason": "OCR not complete",
+        }
+
+    # Use injected services or get defaults
+    extractor = validation_extractor or get_validation_extractor()
+    gemini = gemini_validator or get_gemini_validator()
+    human_review = human_review_service or get_human_review_service()
+    doc_service = document_service or get_document_service()
+    bbox_service = bounding_box_service or get_bounding_box_service()
+
+    logger.info(
+        "validate_ocr_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for the document
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Step 1: Extract low-confidence words
+        words_for_gemini, words_for_human = extractor.extract_low_confidence_words(doc_id)
+
+        total_low_confidence = len(words_for_gemini) + len(words_for_human)
+
+        if total_low_confidence == 0:
+            # No validation needed - update status and return
+            _update_validation_status(doc_service, doc_id, ValidationStatus.VALIDATED)
+            logger.info(
+                "validate_ocr_no_low_confidence_words",
+                document_id=doc_id,
+            )
+            return {
+                "status": "validated",
+                "document_id": doc_id,
+                "validation_status": "validated",
+                "total_validated": 0,
+                "pattern_corrections": 0,
+                "gemini_corrections": 0,
+                "human_review_queued": 0,
+            }
+
+        # Step 2: Apply pattern corrections first
+        pattern_results, remaining_for_gemini = apply_pattern_corrections(words_for_gemini)
+
+        # Step 3: Validate remaining words with Gemini
+        gemini_results = []
+        if remaining_for_gemini:
+            try:
+                gemini_results = gemini.validate_batch_sync(remaining_for_gemini)
+            except GeminiValidatorError as e:
+                logger.warning(
+                    "validate_ocr_gemini_failed",
+                    document_id=doc_id,
+                    error=str(e),
+                )
+                # Continue with pattern results only if Gemini fails
+                # but re-raise if retryable
+                if e.is_retryable:
+                    raise
+
+        # Step 4: Queue very low confidence words for human review
+        human_review_count = 0
+        if words_for_human:
+            human_review_count = human_review.add_to_queue(
+                document_id=doc_id,
+                matter_id=matter_id,
+                words=words_for_human,
+            )
+
+        # Step 5: Apply corrections to bounding boxes and log
+        all_results = pattern_results + gemini_results
+        corrections_applied = _apply_validation_results(
+            bbox_service=bbox_service,
+            doc_service=doc_service,
+            document_id=doc_id,
+            results=all_results,
+        )
+
+        # Step 6: Update document validation status
+        final_status = ValidationStatus.VALIDATED
+        if human_review_count > 0:
+            final_status = ValidationStatus.REQUIRES_HUMAN_REVIEW
+
+        _update_validation_status(doc_service, doc_id, final_status)
+
+        # Count corrections by type
+        pattern_count = sum(
+            1 for r in all_results
+            if r.was_corrected and r.correction_type == CorrectionType.PATTERN
+        )
+        gemini_count = sum(
+            1 for r in all_results
+            if r.was_corrected and r.correction_type == CorrectionType.GEMINI
+        )
+
+        logger.info(
+            "validate_ocr_task_completed",
+            document_id=doc_id,
+            total_validated=len(all_results),
+            pattern_corrections=pattern_count,
+            gemini_corrections=gemini_count,
+            human_review_queued=human_review_count,
+            validation_status=final_status.value,
+        )
+
+        # Broadcast validation status
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="validation_complete",
+            validation_status=final_status.value,
+        )
+
+        return {
+            "status": "validated",
+            "document_id": doc_id,
+            "validation_status": final_status.value,
+            "total_validated": len(all_results),
+            "pattern_corrections": pattern_count,
+            "gemini_corrections": gemini_count,
+            "human_review_queued": human_review_count,
+            "corrections_applied": corrections_applied,
+        }
+
+    except (GeminiValidatorError, ValidationExtractorError) as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "validate_ocr_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=MAX_RETRIES,
+            error=str(e),
+            error_code=getattr(e, "code", "UNKNOWN"),
+        )
+
+        if retry_count >= MAX_RETRIES:
+            return _handle_validation_failure(doc_service, doc_id, e)
+
+        raise
+
+    except HumanReviewServiceError as e:
+        # Human review errors are not critical - log and continue
+        logger.warning(
+            "validate_ocr_human_review_failed",
+            document_id=doc_id,
+            error=str(e),
+        )
+        # Don't fail the whole task for human review issues
+        return {
+            "status": "validated_with_warnings",
+            "document_id": doc_id,
+            "warning": "Human review queue failed",
+            "error_message": str(e),
+        }
+
+    except DocumentServiceError as e:
+        logger.error(
+            "validate_ocr_document_service_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return _handle_validation_failure(doc_service, doc_id, e)
+
+    except Exception as e:
+        logger.error(
+            "validate_ocr_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return _handle_validation_failure(doc_service, doc_id, e)
+
+
+def _apply_validation_results(
+    bbox_service: BoundingBoxService,
+    doc_service: DocumentService,
+    document_id: str,
+    results: list,
+) -> int:
+    """Apply validation results to bounding boxes and log corrections.
+
+    Args:
+        bbox_service: BoundingBoxService instance.
+        doc_service: DocumentService instance.
+        document_id: Document UUID.
+        results: List of ValidationResult.
+
+    Returns:
+        Number of corrections applied.
+    """
+    from app.services.supabase.client import get_service_client
+
+    client = get_service_client()
+    if client is None:
+        return 0
+
+    corrections_applied = 0
+
+    for result in results:
+        if not result.was_corrected:
+            continue
+
+        try:
+            # Update bounding box with corrected text
+            if result.bbox_id:
+                client.table("bounding_boxes").update({
+                    "text": result.corrected,
+                    "confidence": result.new_confidence,
+                }).eq("id", result.bbox_id).execute()
+
+            # Log the correction
+            client.table("ocr_validation_log").insert({
+                "document_id": document_id,
+                "bbox_id": result.bbox_id if result.bbox_id else None,
+                "original_text": result.original,
+                "corrected_text": result.corrected,
+                "old_confidence": result.old_confidence,
+                "new_confidence": result.new_confidence,
+                "validation_type": result.correction_type.value if result.correction_type else "pattern",
+                "reasoning": result.reasoning,
+            }).execute()
+
+            corrections_applied += 1
+
+        except Exception as e:
+            logger.warning(
+                "validate_ocr_apply_result_failed",
+                document_id=document_id,
+                bbox_id=result.bbox_id,
+                error=str(e),
+            )
+
+    return corrections_applied
+
+
+def _update_validation_status(
+    doc_service: DocumentService,
+    document_id: str,
+    status: ValidationStatus,
+) -> None:
+    """Update document validation status.
+
+    Args:
+        doc_service: DocumentService instance.
+        document_id: Document UUID.
+        status: New validation status.
+    """
+    from app.services.supabase.client import get_service_client
+
+    client = get_service_client()
+    if client is None:
+        return
+
+    try:
+        client.table("documents").update({
+            "validation_status": status.value,
+        }).eq("id", document_id).execute()
+    except Exception as e:
+        logger.warning(
+            "validate_ocr_status_update_failed",
+            document_id=document_id,
+            status=status.value,
+            error=str(e),
+        )
+
+
+def _handle_validation_failure(
+    doc_service: DocumentService,
+    document_id: str,
+    error: Exception,
+) -> dict[str, str]:
+    """Handle validation task failure.
+
+    Args:
+        doc_service: DocumentService instance.
+        document_id: Document UUID.
+        error: The error that caused the failure.
+
+    Returns:
+        Task result indicating failure.
+    """
+    error_code = getattr(error, "code", "VALIDATION_FAILED")
+    error_message = str(error)
+
+    logger.error(
+        "validate_ocr_task_failed",
+        document_id=document_id,
+        error=error_message,
+        error_code=error_code,
+    )
+
+    # Update status to indicate validation is pending (not failed OCR)
+    # The document OCR is still valid, just validation couldn't complete
+    _update_validation_status(
+        doc_service,
+        document_id,
+        ValidationStatus.PENDING,
+    )
+
+    return {
+        "status": "validation_failed",
+        "document_id": document_id,
+        "error_code": error_code,
+        "error_message": error_message,
+    }

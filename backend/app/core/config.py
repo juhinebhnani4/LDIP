@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     google_cloud_location: str = "us"
     google_document_ai_processor_id: str = ""
 
+    # Gemini Configuration
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-1.5-flash"
+
+    # OCR Validation Thresholds
+    ocr_validation_gemini_threshold: float = 0.85  # Below this -> Gemini validation
+    ocr_validation_human_threshold: float = 0.50   # Below this -> Human review
+    ocr_validation_batch_size: int = 20            # Max words per Gemini request
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

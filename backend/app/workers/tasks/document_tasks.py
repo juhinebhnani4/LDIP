@@ -46,6 +46,13 @@ from app.services.ocr.validation_extractor import (
     get_validation_extractor,
 )
 from app.services.pubsub_service import broadcast_document_status
+from app.services.mig import (
+    MIGEntityExtractor,
+    MIGGraphService,
+    get_mig_extractor,
+    get_mig_graph_service,
+)
+from app.services.mig.extractor import MIGExtractorError
 from app.services.rag.embedder import (
     EmbeddingService,
     EmbeddingServiceError,
@@ -1457,6 +1464,295 @@ def embed_chunks(
         )
         return {
             "status": "embedding_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Entity Extraction Task (MIG)
+# =============================================================================
+
+ENTITY_EXTRACTION_BATCH_SIZE = 10  # Chunks per Gemini API call
+ENTITY_EXTRACTION_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.extract_entities",
+    bind=True,
+    autoretry_for=(MIGExtractorError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def extract_entities(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    mig_extractor: MIGEntityExtractor | None = None,
+    mig_graph_service: MIGGraphService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Extract entities from document chunks using Gemini.
+
+    This task runs after embed_chunks to populate the Matter Identity Graph
+    with extracted entities (people, organizations, institutions, assets).
+
+    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> **Extract Entities**
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        mig_extractor: Optional MIGEntityExtractor instance (for testing).
+        mig_graph_service: Optional MIGGraphService instance (for testing).
+
+    Returns:
+        Task result with entity extraction summary.
+
+    Raises:
+        MIGExtractorError: If extraction fails (will trigger retry).
+    """
+    import time
+
+    from app.services.supabase.client import get_service_client
+
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("extract_entities_no_document_id")
+        return {
+            "status": "entity_extraction_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "searchable",
+            "embedding_complete",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "extract_entities_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "entity_extraction_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    extractor = mig_extractor or get_mig_extractor()
+    graph_service = mig_graph_service or get_mig_graph_service()
+
+    logger.info(
+        "extract_entities_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for the document
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Get database client
+        client = get_service_client()
+        if client is None:
+            raise MIGExtractorError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+                is_retryable=False,
+            )
+
+        # Get all chunks for this document (child chunks for more granular extraction)
+        response = (
+            client.table("chunks")
+            .select("id, content, chunk_type, page_number")
+            .eq("document_id", doc_id)
+            .eq("chunk_type", "child")  # Extract from child chunks for precision
+            .order("chunk_index", desc=False)
+            .execute()
+        )
+
+        chunks = response.data or []
+
+        if not chunks:
+            logger.info(
+                "extract_entities_no_chunks",
+                document_id=doc_id,
+            )
+            return {
+                "status": "entity_extraction_complete",
+                "document_id": doc_id,
+                "entities_extracted": 0,
+                "reason": "No chunks found for entity extraction",
+            }
+
+        logger.info(
+            "extract_entities_processing",
+            document_id=doc_id,
+            chunk_count=len(chunks),
+            batch_size=ENTITY_EXTRACTION_BATCH_SIZE,
+        )
+
+        # Process chunks and extract entities
+        total_entities = 0
+        total_relationships = 0
+        failed_chunks = 0
+
+        # Run async operations in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            for i in range(0, len(chunks), ENTITY_EXTRACTION_BATCH_SIZE):
+                batch = chunks[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
+
+                for chunk in batch:
+                    try:
+                        # Extract entities from chunk
+                        extraction_result = extractor.extract_entities_sync(
+                            text=chunk["content"],
+                            document_id=doc_id,
+                            matter_id=matter_id,
+                            chunk_id=chunk["id"],
+                            page_number=chunk.get("page_number"),
+                        )
+
+                        if extraction_result.entities:
+                            # Save entities to database
+                            saved_entities = loop.run_until_complete(
+                                graph_service.save_entities(
+                                    matter_id=matter_id,
+                                    extraction_result=extraction_result,
+                                )
+                            )
+                            total_entities += len(saved_entities)
+
+                        if extraction_result.relationships:
+                            # Note: Relationships require entity resolution (Story 2C.2)
+                            # For now, just count them
+                            total_relationships += len(extraction_result.relationships)
+
+                    except MIGExtractorError as e:
+                        if e.is_retryable:
+                            raise  # Let Celery retry
+                        logger.warning(
+                            "extract_entities_chunk_failed",
+                            document_id=doc_id,
+                            chunk_id=chunk["id"],
+                            error=str(e),
+                        )
+                        failed_chunks += 1
+                    except Exception as e:
+                        logger.warning(
+                            "extract_entities_chunk_error",
+                            document_id=doc_id,
+                            chunk_id=chunk["id"],
+                            error=str(e),
+                        )
+                        failed_chunks += 1
+
+                # Rate limit delay between batches
+                if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks):
+                    time.sleep(ENTITY_EXTRACTION_RATE_LIMIT_DELAY)
+
+                logger.debug(
+                    "extract_entities_batch_complete",
+                    document_id=doc_id,
+                    batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
+                    total_batches=(len(chunks) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
+                )
+
+        finally:
+            loop.close()
+
+        # Broadcast entity extraction completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="entities_extracted",
+            entities_extracted=total_entities,
+            relationships_found=total_relationships,
+        )
+
+        logger.info(
+            "extract_entities_task_completed",
+            document_id=doc_id,
+            entities_extracted=total_entities,
+            relationships_found=total_relationships,
+            chunks_processed=len(chunks),
+            failed_chunks=failed_chunks,
+        )
+
+        return {
+            "status": "entities_extracted",
+            "document_id": doc_id,
+            "entities_extracted": total_entities,
+            "relationships_found": total_relationships,
+            "chunks_processed": len(chunks),
+            "failed_chunks": failed_chunks,
+        }
+
+    except MIGExtractorError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "extract_entities_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=3,
+            error=str(e),
+        )
+
+        if retry_count >= 3:
+            logger.error(
+                "extract_entities_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "entity_extraction_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "extract_entities_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "entity_extraction_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "extract_entities_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "entity_extraction_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),

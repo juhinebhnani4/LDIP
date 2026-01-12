@@ -57,3 +57,21 @@ export type {
 } from './search';
 
 export { DEFAULT_SEARCH_WEIGHTS, SEARCH_LIMITS } from './search';
+
+// Entity types (MIG)
+export type {
+  EntitiesListResponse,
+  Entity,
+  EntityBase,
+  EntityEdge,
+  EntityListItem,
+  EntityListOptions,
+  EntityMention,
+  EntityMentionsOptions,
+  EntityMentionsResponse,
+  EntityMetadata,
+  EntityResponse,
+  EntityType,
+  EntityWithRelations,
+  RelationshipType,
+} from './entity';

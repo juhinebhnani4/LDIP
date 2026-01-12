@@ -1,6 +1,27 @@
 """Pydantic models module."""
 
 from app.models.auth import AuthenticatedUser, JWTClaims
+from app.models.entity import (
+    EntitiesListResponse,
+    EntityEdge,
+    EntityEdgeCreate,
+    EntityErrorDetail,
+    EntityErrorResponse,
+    EntityExtractionResult,
+    EntityListItem,
+    EntityMention,
+    EntityMentionCreate,
+    EntityMentionsResponse,
+    EntityNode,
+    EntityNodeCreate,
+    EntityNodeWithRelations,
+    EntityResponse,
+    EntityType,
+    ExtractedEntity,
+    ExtractedEntityMention,
+    ExtractedRelationship,
+    RelationshipType,
+)
 from app.models.matter import (
     Matter,
     MatterCreate,
@@ -29,6 +50,26 @@ __all__ = [
     # Auth models
     "AuthenticatedUser",
     "JWTClaims",
+    # Entity models
+    "EntitiesListResponse",
+    "EntityEdge",
+    "EntityEdgeCreate",
+    "EntityErrorDetail",
+    "EntityErrorResponse",
+    "EntityExtractionResult",
+    "EntityListItem",
+    "EntityMention",
+    "EntityMentionCreate",
+    "EntityMentionsResponse",
+    "EntityNode",
+    "EntityNodeCreate",
+    "EntityNodeWithRelations",
+    "EntityResponse",
+    "EntityType",
+    "ExtractedEntity",
+    "ExtractedEntityMention",
+    "ExtractedRelationship",
+    "RelationshipType",
     # Matter models
     "Matter",
     "MatterCreate",

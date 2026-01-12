@@ -140,3 +140,87 @@ class SingleModeSearchResponse(BaseModel):
 
     data: list[SearchResultItem] = Field(..., description="Search results")
     meta: SingleModeSearchMeta = Field(..., description="Search metadata")
+
+
+# =============================================================================
+# Alias-Expanded Search Models (Story 2c-2)
+# =============================================================================
+
+
+class AliasExpandedSearchRequest(BaseModel):
+    """Request model for alias-expanded search."""
+
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Search query text (entity names will be expanded with aliases)",
+        examples=["N.D. Jobalia contract"],
+    )
+    limit: int = Field(
+        20,
+        ge=1,
+        le=100,
+        description="Maximum number of results to return",
+    )
+    expand_aliases: bool = Field(
+        True,
+        description="Expand entity names in query to include known aliases",
+    )
+    bm25_weight: float = Field(
+        1.0,
+        ge=0.0,
+        le=2.0,
+        description="Weight for BM25 keyword search (0.0-2.0)",
+    )
+    semantic_weight: float = Field(
+        1.0,
+        ge=0.0,
+        le=2.0,
+        description="Weight for semantic similarity search (0.0-2.0)",
+    )
+    rerank: bool = Field(
+        False,
+        description="Apply Cohere Rerank v3.5 to refine results (default: false)",
+    )
+    rerank_top_n: int = Field(
+        3,
+        ge=1,
+        le=20,
+        description="Number of top results after reranking (only used when rerank=true)",
+    )
+
+
+class AliasExpandedSearchMeta(BaseModel):
+    """Metadata for alias-expanded search results."""
+
+    query: str = Field(..., description="Original search query")
+    expanded_query: str | None = Field(
+        None, description="Query after alias expansion (if expansion was applied)"
+    )
+    matter_id: str = Field(..., description="Matter UUID searched")
+    total_candidates: int = Field(..., description="Total candidates before limit")
+    bm25_weight: float = Field(..., description="BM25 weight used")
+    semantic_weight: float = Field(..., description="Semantic weight used")
+    aliases_found: list[str] = Field(
+        default_factory=list,
+        description="List of aliases that were expanded",
+    )
+    entities_matched: list[str] = Field(
+        default_factory=list,
+        description="Entity names from query that matched MIG entities",
+    )
+    rerank_used: bool | None = Field(
+        None,
+        description="True if Cohere reranking was used. None if not requested.",
+    )
+    fallback_reason: str | None = Field(
+        None, description="Reason for fallback if rerank_used is False."
+    )
+
+
+class AliasExpandedSearchResponse(BaseModel):
+    """Response model for alias-expanded search."""
+
+    data: list[SearchResultItem] = Field(..., description="Search results")
+    meta: AliasExpandedSearchMeta = Field(..., description="Search metadata")

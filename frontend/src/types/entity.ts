@@ -114,3 +114,90 @@ export interface EntityMentionsOptions {
   page?: number;
   perPage?: number;
 }
+
+
+// =============================================================================
+// Alias Management Types (Story 2c-2)
+// =============================================================================
+
+/** Request to add an alias to an entity */
+export interface AddAliasRequest {
+  alias: string;
+}
+
+/** Request to remove an alias from an entity */
+export interface RemoveAliasRequest {
+  alias: string;
+}
+
+/** Request to merge two entities */
+export interface MergeEntitiesRequest {
+  sourceEntityId: string;
+  targetEntityId: string;
+  reason?: string;
+}
+
+/** Response containing an entity's aliases */
+export interface AliasesListResponse {
+  data: string[];
+  entityId: string;
+  canonicalName: string;
+}
+
+/** Result of entity merge operation */
+export interface MergeResultResponse {
+  success: boolean;
+  keptEntityId: string;
+  deletedEntityId: string;
+  aliasesAdded: string[];
+}
+
+
+// =============================================================================
+// Alias-Expanded Search Types (Story 2c-2)
+// =============================================================================
+
+/** Request for alias-expanded search */
+export interface AliasExpandedSearchRequest {
+  query: string;
+  limit?: number;
+  expandAliases?: boolean;
+  bm25Weight?: number;
+  semanticWeight?: number;
+  rerank?: boolean;
+  rerankTopN?: number;
+}
+
+/** Single search result item */
+export interface SearchResultItem {
+  id: string;
+  documentId: string;
+  content: string;
+  pageNumber: number | null;
+  chunkType: 'parent' | 'child';
+  tokenCount: number;
+  bm25Rank: number | null;
+  semanticRank: number | null;
+  rrfScore: number;
+  relevanceScore: number | null;
+}
+
+/** Metadata for alias-expanded search */
+export interface AliasExpandedSearchMeta {
+  query: string;
+  expandedQuery: string | null;
+  matterId: string;
+  totalCandidates: number;
+  bm25Weight: number;
+  semanticWeight: number;
+  aliasesFound: string[];
+  entitiesMatched: string[];
+  rerankUsed: boolean | null;
+  fallbackReason: string | null;
+}
+
+/** Response for alias-expanded search */
+export interface AliasExpandedSearchResponse {
+  data: SearchResultItem[];
+  meta: AliasExpandedSearchMeta;
+}

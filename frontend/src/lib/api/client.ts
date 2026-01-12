@@ -101,8 +101,95 @@ export const api = {
     apiClient<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
   patch: <T>(endpoint: string, data: unknown) =>
     apiClient<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: <T>(endpoint: string) => apiClient<T>(endpoint, { method: 'DELETE' }),
+  delete: <T>(endpoint: string, data?: unknown) =>
+    apiClient<T>(endpoint, {
+      method: 'DELETE',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
 }
+
+
+// =============================================================================
+// Entity Alias Management API (Story 2c-2)
+// =============================================================================
+
+import type {
+  AddAliasRequest,
+  AliasesListResponse,
+  AliasExpandedSearchRequest,
+  AliasExpandedSearchResponse,
+  MergeEntitiesRequest,
+  MergeResultResponse,
+  RemoveAliasRequest,
+} from '@/types/entity'
+
+/**
+ * Entity alias management API methods.
+ */
+export const entityAliasApi = {
+  /**
+   * Get all aliases for an entity.
+   */
+  getAliases: (matterId: string, entityId: string) =>
+    api.get<AliasesListResponse>(
+      `/api/v1/matters/${matterId}/entities/${entityId}/aliases`
+    ),
+
+  /**
+   * Add an alias to an entity.
+   */
+  addAlias: (matterId: string, entityId: string, alias: string) =>
+    api.post<AliasesListResponse>(
+      `/api/v1/matters/${matterId}/entities/${entityId}/aliases`,
+      { alias } as AddAliasRequest
+    ),
+
+  /**
+   * Remove an alias from an entity.
+   */
+  removeAlias: (matterId: string, entityId: string, alias: string) =>
+    api.delete<AliasesListResponse>(
+      `/api/v1/matters/${matterId}/entities/${entityId}/aliases`,
+      { alias } as RemoveAliasRequest
+    ),
+
+  /**
+   * Merge two entities (source into target).
+   * Requires owner permission.
+   */
+  mergeEntities: (matterId: string, request: MergeEntitiesRequest) =>
+    api.post<MergeResultResponse>(
+      `/api/v1/matters/${matterId}/entities/merge`,
+      {
+        source_entity_id: request.sourceEntityId,
+        target_entity_id: request.targetEntityId,
+        reason: request.reason,
+      }
+    ),
+}
+
+/**
+ * Alias-expanded search API.
+ */
+export const aliasSearchApi = {
+  /**
+   * Execute search with automatic alias expansion.
+   */
+  search: (matterId: string, request: AliasExpandedSearchRequest) =>
+    api.post<AliasExpandedSearchResponse>(
+      `/api/v1/matters/${matterId}/search/alias-expanded`,
+      {
+        query: request.query,
+        limit: request.limit ?? 20,
+        expand_aliases: request.expandAliases ?? true,
+        bm25_weight: request.bm25Weight ?? 1.0,
+        semantic_weight: request.semanticWeight ?? 1.0,
+        rerank: request.rerank ?? false,
+        rerank_top_n: request.rerankTopN ?? 3,
+      }
+    ),
+}
+
 
 
 

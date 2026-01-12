@@ -5,6 +5,7 @@ Provides endpoints for:
 - BM25-only keyword search
 - Semantic-only vector search
 - Reranked search (hybrid + Cohere Rerank v3.5)
+- Alias-expanded search (expands person/org names to include aliases)
 
 All endpoints enforce 4-layer matter isolation via the API layer.
 """
@@ -18,6 +19,9 @@ from app.api.deps import (
     require_matter_role,
 )
 from app.models.search import (
+    AliasExpandedSearchMeta,
+    AliasExpandedSearchRequest,
+    AliasExpandedSearchResponse,
     BM25SearchRequest,
     SearchMeta,
     SearchRequest,
@@ -27,6 +31,7 @@ from app.models.search import (
     SingleModeSearchMeta,
     SingleModeSearchResponse,
 )
+from app.services.mig import MIGGraphService, get_mig_graph_service
 from app.models.rerank import (
     RerankRequest,
     RerankedSearchMeta,
@@ -480,6 +485,197 @@ async def rerank_search(
                 "error": {
                     "code": "RERANK_FAILED",
                     "message": "An unexpected error occurred during rerank search",
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.post("/alias-expanded", response_model=AliasExpandedSearchResponse)
+async def alias_expanded_search(
+    request: AliasExpandedSearchRequest,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+) -> AliasExpandedSearchResponse:
+    """Execute search with automatic alias expansion.
+
+    Expands entity names in the query to include known aliases from the
+    Matter Identity Graph (MIG). For example, searching for "N.D. Jobalia"
+    will also match documents containing "Nirav D. Jobalia" or "Mr. Jobalia".
+
+    Process:
+    1. Extract potential entity names from the query
+    2. Match against MIG entities (by canonical name or alias)
+    3. Expand query to include all known aliases
+    4. Execute hybrid search with expanded query
+    5. Optionally apply Cohere Rerank
+
+    Args:
+        request: Search parameters including query and alias expansion options.
+        membership: Validated matter membership (ensures access).
+
+    Returns:
+        Search results with alias expansion metadata.
+
+    Example query: "N.D. Jobalia contract"
+    Expanded query: "(N.D. Jobalia OR Nirav D. Jobalia OR Mr. Jobalia) contract"
+    """
+    logger.info(
+        "alias_expanded_search_request",
+        matter_id=membership.matter_id,
+        user_id=membership.user_id,
+        query_len=len(request.query),
+        limit=request.limit,
+        expand_aliases=request.expand_aliases,
+        rerank=request.rerank,
+    )
+
+    try:
+        search_service = get_hybrid_search_service()
+        mig_service = get_mig_graph_service()
+
+        # Track expansion metadata
+        aliases_found: list[str] = []
+        entities_matched: list[str] = []
+        expanded_query = request.query
+
+        # Expand aliases if enabled
+        if request.expand_aliases:
+            # Get all entities for this matter
+            import asyncio
+            entities = await mig_service.get_entities(matter_id=membership.matter_id)
+
+            if entities:
+                # Find entity names that appear in the query
+                query_lower = request.query.lower()
+
+                for entity in entities:
+                    canonical_lower = entity.canonical_name.lower()
+                    aliases_list = entity.aliases or []
+
+                    # Check if canonical name or any alias appears in query
+                    matched = False
+                    matched_name = ""
+
+                    if canonical_lower in query_lower:
+                        matched = True
+                        matched_name = entity.canonical_name
+                    else:
+                        for alias in aliases_list:
+                            if alias.lower() in query_lower:
+                                matched = True
+                                matched_name = alias
+                                break
+
+                    if matched:
+                        entities_matched.append(entity.canonical_name)
+
+                        # Collect all name variants for this entity
+                        all_variants = [entity.canonical_name] + (aliases_list or [])
+
+                        # Remove the matched name from variants for expansion
+                        other_variants = [v for v in all_variants if v.lower() != matched_name.lower()]
+
+                        if other_variants:
+                            aliases_found.extend(other_variants)
+
+                            # Build OR query: replace matched name with (name OR alias1 OR alias2)
+                            # Use case-insensitive replacement
+                            import re
+                            or_clause = f'({matched_name} OR {" OR ".join(other_variants)})'
+                            expanded_query = re.sub(
+                                re.escape(matched_name),
+                                or_clause,
+                                expanded_query,
+                                flags=re.IGNORECASE,
+                                count=1,  # Only replace first occurrence
+                            )
+
+        weights = SearchWeights(
+            bm25=request.bm25_weight,
+            semantic=request.semantic_weight,
+        )
+
+        # Execute search (with expanded query for BM25, original for semantic)
+        if request.rerank:
+            result = await search_service.search_with_rerank(
+                query=expanded_query,
+                matter_id=membership.matter_id,
+                hybrid_limit=request.limit,
+                rerank_top_n=request.rerank_top_n,
+                weights=weights,
+            )
+
+            items = [
+                _result_to_item(r, relevance_score=r.relevance_score)
+                for r in result.results
+            ]
+
+            return AliasExpandedSearchResponse(
+                data=items,
+                meta=AliasExpandedSearchMeta(
+                    query=request.query,
+                    expanded_query=expanded_query if expanded_query != request.query else None,
+                    matter_id=membership.matter_id,
+                    total_candidates=result.total_candidates,
+                    bm25_weight=result.weights.bm25,
+                    semantic_weight=result.weights.semantic,
+                    aliases_found=aliases_found,
+                    entities_matched=entities_matched,
+                    rerank_used=result.rerank_used,
+                    fallback_reason=result.fallback_reason,
+                ),
+            )
+
+        # Standard hybrid search
+        result = await search_service.search(
+            query=expanded_query,
+            matter_id=membership.matter_id,
+            limit=request.limit,
+            weights=weights,
+        )
+
+        items = [_result_to_item(r) for r in result.results]
+
+        return AliasExpandedSearchResponse(
+            data=items,
+            meta=AliasExpandedSearchMeta(
+                query=request.query,
+                expanded_query=expanded_query if expanded_query != request.query else None,
+                matter_id=membership.matter_id,
+                total_candidates=result.total_candidates,
+                bm25_weight=result.weights.bm25,
+                semantic_weight=result.weights.semantic,
+                aliases_found=aliases_found,
+                entities_matched=entities_matched,
+                rerank_used=None,
+                fallback_reason=None,
+            ),
+        )
+
+    except HybridSearchServiceError as e:
+        logger.error(
+            "alias_expanded_search_failed",
+            matter_id=membership.matter_id,
+            error=e.message,
+            error_code=e.code,
+        )
+        raise _handle_search_error(e)
+
+    except Exception as e:
+        logger.error(
+            "alias_expanded_search_unexpected_error",
+            matter_id=membership.matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "ALIAS_SEARCH_FAILED",
+                    "message": "An unexpected error occurred during alias-expanded search",
                     "details": {},
                 }
             },

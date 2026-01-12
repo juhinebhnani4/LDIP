@@ -690,6 +690,343 @@ class MIGGraphService:
             additional_mentions=increment,
         )
 
+    # =========================================================================
+    # Alias Operations (Story 2c-2)
+    # =========================================================================
+
+    async def create_alias_edge(
+        self,
+        matter_id: str,
+        source_id: str,
+        target_id: str,
+        confidence: float,
+        metadata: dict | None = None,
+    ) -> EntityEdge | None:
+        """Create an ALIAS_OF edge between two entities.
+
+        Args:
+            matter_id: Matter UUID for isolation.
+            source_id: Source entity UUID (the alias).
+            target_id: Target entity UUID (the canonical entity).
+            confidence: Confidence score (0-1).
+            metadata: Optional metadata about the alias link.
+
+        Returns:
+            Created EntityEdge or None if failed.
+        """
+        from app.models.entity import RelationshipType
+
+        def _insert():
+            return (
+                self.client.table("identity_edges")
+                .insert({
+                    "matter_id": matter_id,
+                    "source_node_id": source_id,
+                    "target_node_id": target_id,
+                    "relationship_type": RelationshipType.ALIAS_OF.value,
+                    "confidence": confidence,
+                    "metadata": metadata or {},
+                })
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_insert)
+
+            if response.data:
+                logger.info(
+                    "mig_alias_edge_created",
+                    matter_id=matter_id,
+                    source_id=source_id,
+                    target_id=target_id,
+                    confidence=confidence,
+                )
+                return self._db_row_to_entity_edge(response.data[0])
+
+        except Exception as e:
+            # Likely duplicate (unique constraint)
+            logger.debug(
+                "mig_alias_edge_exists",
+                source_id=source_id,
+                target_id=target_id,
+                error=str(e),
+            )
+
+        return None
+
+    async def get_all_aliases(
+        self,
+        entity_id: str,
+        matter_id: str,
+    ) -> list[EntityNode]:
+        """Get all aliases of an entity (following ALIAS_OF edges).
+
+        Includes both direct aliases (where entity is source/target)
+        and transitive aliases.
+
+        Args:
+            entity_id: Entity UUID.
+            matter_id: Matter UUID for isolation.
+
+        Returns:
+            List of EntityNode objects representing all aliases.
+        """
+        from app.models.entity import RelationshipType
+
+        # Validate entity exists in matter
+        entity = await self.get_entity(entity_id, matter_id)
+        if not entity:
+            return []
+
+        # Get all ALIAS_OF edges involving this entity
+        def _query_aliases():
+            return (
+                self.client.table("identity_edges")
+                .select("source_node_id, target_node_id")
+                .eq("matter_id", matter_id)
+                .eq("relationship_type", RelationshipType.ALIAS_OF.value)
+                .or_(f"source_node_id.eq.{entity_id},target_node_id.eq.{entity_id}")
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query_aliases)
+
+        if not response.data:
+            return []
+
+        # Collect all related entity IDs
+        related_ids: set[str] = set()
+        for row in response.data:
+            related_ids.add(row["source_node_id"])
+            related_ids.add(row["target_node_id"])
+
+        # Remove the original entity
+        related_ids.discard(entity_id)
+
+        if not related_ids:
+            return []
+
+        # Fetch all alias entities
+        def _fetch_entities():
+            return (
+                self.client.table("identity_nodes")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .in_("id", list(related_ids))
+                .execute()
+            )
+
+        entities_response = await asyncio.to_thread(_fetch_entities)
+
+        if not entities_response.data:
+            return []
+
+        return [self._db_row_to_entity_node(row) for row in entities_response.data]
+
+    async def get_canonical_entity(
+        self,
+        alias_entity_id: str,
+        matter_id: str,
+    ) -> EntityNode | None:
+        """Get the canonical entity for an alias.
+
+        Follows ALIAS_OF edges to find the primary/canonical entity.
+        Uses a simple heuristic: entity with most mentions is canonical.
+
+        Args:
+            alias_entity_id: Alias entity UUID.
+            matter_id: Matter UUID for isolation.
+
+        Returns:
+            Canonical EntityNode or the entity itself if no aliases.
+        """
+        # Get the entity and all its aliases
+        entity = await self.get_entity(alias_entity_id, matter_id)
+        if not entity:
+            return None
+
+        aliases = await self.get_all_aliases(alias_entity_id, matter_id)
+
+        if not aliases:
+            return entity
+
+        # Find entity with most mentions (canonical)
+        all_entities = [entity] + aliases
+        canonical = max(all_entities, key=lambda e: e.mention_count)
+
+        return canonical
+
+    async def update_entity_aliases_array(
+        self,
+        entity_id: str,
+        matter_id: str,
+        aliases: list[str],
+    ) -> EntityNode | None:
+        """Update the aliases array on an entity.
+
+        The aliases array stores name variants as strings
+        for quick lookup without traversing edges.
+
+        Args:
+            entity_id: Entity UUID.
+            matter_id: Matter UUID for isolation.
+            aliases: List of alias name strings.
+
+        Returns:
+            Updated EntityNode or None if failed.
+        """
+        def _update():
+            return (
+                self.client.table("identity_nodes")
+                .update({
+                    "aliases": aliases,
+                    "updated_at": datetime.utcnow().isoformat(),
+                })
+                .eq("id", entity_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_update)
+
+        if response.data:
+            logger.info(
+                "mig_aliases_array_updated",
+                entity_id=entity_id,
+                alias_count=len(aliases),
+            )
+            return self._db_row_to_entity_node(response.data[0])
+
+        return None
+
+    async def add_alias_to_entity(
+        self,
+        entity_id: str,
+        matter_id: str,
+        alias: str,
+    ) -> EntityNode | None:
+        """Add a single alias to an entity's aliases array.
+
+        Args:
+            entity_id: Entity UUID.
+            matter_id: Matter UUID for isolation.
+            alias: Alias name to add.
+
+        Returns:
+            Updated EntityNode or None if failed.
+        """
+        # Get current entity
+        entity = await self.get_entity(entity_id, matter_id)
+        if not entity:
+            return None
+
+        # Add alias if not already present
+        current_aliases = entity.aliases or []
+        if alias not in current_aliases:
+            current_aliases.append(alias)
+            return await self.update_entity_aliases_array(
+                entity_id, matter_id, current_aliases
+            )
+
+        return entity
+
+    async def remove_alias_from_entity(
+        self,
+        entity_id: str,
+        matter_id: str,
+        alias: str,
+    ) -> EntityNode | None:
+        """Remove a single alias from an entity's aliases array.
+
+        Args:
+            entity_id: Entity UUID.
+            matter_id: Matter UUID for isolation.
+            alias: Alias name to remove.
+
+        Returns:
+            Updated EntityNode or None if failed.
+        """
+        entity = await self.get_entity(entity_id, matter_id)
+        if not entity:
+            return None
+
+        current_aliases = entity.aliases or []
+        if alias in current_aliases:
+            current_aliases.remove(alias)
+            return await self.update_entity_aliases_array(
+                entity_id, matter_id, current_aliases
+            )
+
+        return entity
+
+    async def get_entities_by_alias(
+        self,
+        matter_id: str,
+        alias: str,
+    ) -> list[EntityNode]:
+        """Find entities that have the given alias in their aliases array.
+
+        Uses GIN index on aliases column for fast lookup.
+
+        Args:
+            matter_id: Matter UUID for isolation.
+            alias: Alias name to search for.
+
+        Returns:
+            List of EntityNode objects with matching alias.
+        """
+        def _query():
+            return (
+                self.client.table("identity_nodes")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .contains("aliases", [alias])
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
+
+        if not response.data:
+            return []
+
+        return [self._db_row_to_entity_node(row) for row in response.data]
+
+    async def sync_aliases_from_edges(
+        self,
+        entity_id: str,
+        matter_id: str,
+    ) -> EntityNode | None:
+        """Sync the aliases array from ALIAS_OF edges.
+
+        Updates the aliases array on an entity to include
+        the canonical_name of all linked alias entities.
+
+        Args:
+            entity_id: Entity UUID.
+            matter_id: Matter UUID for isolation.
+
+        Returns:
+            Updated EntityNode or None if failed.
+        """
+        entity = await self.get_entity(entity_id, matter_id)
+        if not entity:
+            return None
+
+        aliases = await self.get_all_aliases(entity_id, matter_id)
+
+        # Collect alias names
+        alias_names = [a.canonical_name for a in aliases]
+
+        # Also include existing aliases that might not be entities
+        existing_aliases = entity.aliases or []
+        for existing in existing_aliases:
+            if existing not in alias_names:
+                alias_names.append(existing)
+
+        return await self.update_entity_aliases_array(
+            entity_id, matter_id, alias_names
+        )
+
 
 # =============================================================================
 # Service Factory

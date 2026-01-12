@@ -47,11 +47,14 @@ from app.services.ocr.validation_extractor import (
 )
 from app.services.pubsub_service import broadcast_document_status
 from app.services.mig import (
+    EntityResolver,
     MIGEntityExtractor,
     MIGGraphService,
+    get_entity_resolver,
     get_mig_extractor,
     get_mig_graph_service,
 )
+from app.services.mig.entity_resolver import AliasResolutionError
 from app.services.mig.extractor import MIGExtractorError
 from app.services.rag.embedder import (
     EmbeddingService,
@@ -1753,6 +1756,293 @@ def extract_entities(
         )
         return {
             "status": "entity_extraction_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Alias Resolution Task (Story 2c-2)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.resolve_aliases",
+    bind=True,
+    autoretry_for=(AliasResolutionError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def resolve_aliases(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    entity_resolver: EntityResolver | None = None,
+    mig_graph_service: MIGGraphService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Resolve entity aliases after extraction.
+
+    This task runs after extract_entities to find and link name variants
+    (e.g., "N.D. Jobalia" -> "Nirav D. Jobalia") as aliases.
+
+    Pipeline: ... -> Extract Entities -> **Resolve Aliases**
+
+    Three-phase resolution:
+    1. High similarity (>0.85): Auto-link as aliases
+    2. Medium similarity (0.60-0.85): Use Gemini context analysis
+    3. Low similarity (<0.60): Skip
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        entity_resolver: Optional EntityResolver instance (for testing).
+        mig_graph_service: Optional MIGGraphService instance (for testing).
+
+    Returns:
+        Task result with alias resolution summary.
+
+    Raises:
+        AliasResolutionError: If resolution fails (will trigger retry).
+    """
+    from app.services.supabase.client import get_service_client
+    from app.models.entity import EntityNode
+
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("resolve_aliases_no_document_id")
+        return {
+            "status": "alias_resolution_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "entities_extracted",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "resolve_aliases_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "alias_resolution_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    resolver = entity_resolver or get_entity_resolver()
+    graph_service = mig_graph_service or get_mig_graph_service()
+
+    logger.info(
+        "resolve_aliases_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for the document
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Get database client
+        client = get_service_client()
+        if client is None:
+            raise AliasResolutionError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+            )
+
+        # Run async operations in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            # Get all entities for this matter
+            entities = loop.run_until_complete(
+                graph_service.get_entities(matter_id=matter_id)
+            )
+
+            if not entities:
+                logger.info(
+                    "resolve_aliases_no_entities",
+                    document_id=doc_id,
+                    matter_id=matter_id,
+                )
+                return {
+                    "status": "alias_resolution_complete",
+                    "document_id": doc_id,
+                    "aliases_created": 0,
+                    "reason": "No entities found for alias resolution",
+                }
+
+            # Build entity contexts from mentions for Gemini analysis
+            entity_contexts: dict[str, str] = {}
+
+            # Query entity_mentions for context
+            mentions_response = client.table("entity_mentions").select(
+                "entity_id, context"
+            ).execute()
+
+            if mentions_response.data:
+                for mention in mentions_response.data:
+                    entity_id = mention["entity_id"]
+                    context = mention.get("context", "")
+                    if entity_id not in entity_contexts:
+                        entity_contexts[entity_id] = context
+                    else:
+                        # Append additional context
+                        entity_contexts[entity_id] += f" | {context}"
+
+            # Run alias resolution
+            resolution_result, edges_to_create = loop.run_until_complete(
+                resolver.resolve_aliases(
+                    matter_id=matter_id,
+                    entities=entities,
+                    entity_contexts=entity_contexts,
+                )
+            )
+
+            # Create alias edges in the database
+            aliases_created = 0
+            for edge in edges_to_create:
+                created_edge = loop.run_until_complete(
+                    graph_service.create_alias_edge(
+                        matter_id=matter_id,
+                        source_id=edge.source_entity_id,
+                        target_id=edge.target_entity_id,
+                        confidence=edge.confidence or 0.0,
+                        metadata=edge.metadata,
+                    )
+                )
+                if created_edge:
+                    aliases_created += 1
+
+                    # Also update the aliases array on the canonical entity
+                    # (entity with higher mention count gets the alias name)
+                    source_entity = next(
+                        (e for e in entities if e.id == edge.source_entity_id), None
+                    )
+                    target_entity = next(
+                        (e for e in entities if e.id == edge.target_entity_id), None
+                    )
+
+                    if source_entity and target_entity:
+                        # Canonical is the one with more mentions
+                        if source_entity.mention_count >= target_entity.mention_count:
+                            loop.run_until_complete(
+                                graph_service.add_alias_to_entity(
+                                    entity_id=source_entity.id,
+                                    matter_id=matter_id,
+                                    alias=target_entity.canonical_name,
+                                )
+                            )
+                        else:
+                            loop.run_until_complete(
+                                graph_service.add_alias_to_entity(
+                                    entity_id=target_entity.id,
+                                    matter_id=matter_id,
+                                    alias=source_entity.canonical_name,
+                                )
+                            )
+
+        finally:
+            loop.close()
+
+        # Broadcast alias resolution completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="aliases_resolved",
+            aliases_created=aliases_created,
+            entities_processed=resolution_result.entities_processed,
+            pairs_found=resolution_result.alias_pairs_found,
+        )
+
+        logger.info(
+            "resolve_aliases_task_completed",
+            document_id=doc_id,
+            matter_id=matter_id,
+            entities_processed=resolution_result.entities_processed,
+            pairs_found=resolution_result.alias_pairs_found,
+            aliases_created=aliases_created,
+            high_confidence=resolution_result.high_confidence_links,
+            medium_confidence=resolution_result.medium_confidence_links,
+            skipped=resolution_result.skipped_low_confidence,
+        )
+
+        return {
+            "status": "aliases_resolved",
+            "document_id": doc_id,
+            "entities_processed": resolution_result.entities_processed,
+            "pairs_found": resolution_result.alias_pairs_found,
+            "aliases_created": aliases_created,
+            "high_confidence_links": resolution_result.high_confidence_links,
+            "medium_confidence_links": resolution_result.medium_confidence_links,
+            "skipped_low_confidence": resolution_result.skipped_low_confidence,
+        }
+
+    except AliasResolutionError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "resolve_aliases_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=3,
+            error=str(e),
+        )
+
+        if retry_count >= 3:
+            logger.error(
+                "resolve_aliases_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "alias_resolution_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "resolve_aliases_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "resolve_aliases_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "alias_resolution_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),

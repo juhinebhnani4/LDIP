@@ -431,3 +431,159 @@ class TestValidatePdfContent:
     def test_pdf_magic_bytes_constant(self) -> None:
         """Should have correct PDF magic bytes constant."""
         assert PDF_MAGIC_BYTES == b"%PDF-"
+
+
+class TestExtractEntitiesTask:
+    """Tests for extract_entities Celery task."""
+
+    @pytest.fixture
+    def mock_mig_services(self) -> dict:
+        """Create mock MIG services for testing."""
+        from app.models.entity import (
+            EntityExtractionResult,
+            EntityNode,
+            EntityType,
+            ExtractedEntity,
+        )
+        from datetime import datetime, timezone
+
+        doc_service = MagicMock()
+        doc_service.get_document_for_processing.return_value = (
+            "path/to/file.pdf",
+            "matter-123",
+        )
+
+        # Mock extractor
+        extractor = MagicMock()
+        extractor.extract_entities_sync.return_value = EntityExtractionResult(
+            entities=[
+                ExtractedEntity(
+                    name="Test Person",
+                    canonical_name="Test Person",
+                    type=EntityType.PERSON,
+                    roles=["plaintiff"],
+                    confidence=0.95,
+                ),
+            ],
+            relationships=[],
+            source_document_id="doc-123",
+            source_chunk_id="chunk-456",
+        )
+
+        # Mock graph service
+        graph_service = MagicMock()
+        graph_service.save_entities = MagicMock(return_value=[
+            EntityNode(
+                id="entity-123",
+                matter_id="matter-123",
+                canonical_name="Test Person",
+                entity_type=EntityType.PERSON,
+                metadata={},
+                mention_count=1,
+                aliases=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        ])
+
+        return {
+            "document_service": doc_service,
+            "mig_extractor": extractor,
+            "mig_graph_service": graph_service,
+        }
+
+    @patch("app.workers.tasks.document_tasks.get_service_client")
+    def test_successful_entity_extraction(
+        self,
+        mock_get_client: MagicMock,
+        mock_mig_services: dict,
+    ) -> None:
+        """Should extract entities from document chunks."""
+        from app.workers.tasks.document_tasks import extract_entities
+
+        # Mock database client
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        # Mock chunks query
+        mock_response = MagicMock()
+        mock_response.data = [
+            {"id": "chunk-1", "content": "Test content", "chunk_type": "child", "page_number": 1},
+        ]
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
+
+        # Make graph_service.save_entities an async mock
+        import asyncio
+        async def mock_save_entities(*args, **kwargs):
+            return mock_mig_services["mig_graph_service"].save_entities.return_value
+        mock_mig_services["mig_graph_service"].save_entities = mock_save_entities
+
+        # Execute task with prev_result indicating successful embedding
+        result = extract_entities.run(
+            prev_result={"status": "searchable", "document_id": "doc-123"},
+            document_service=mock_mig_services["document_service"],
+            mig_extractor=mock_mig_services["mig_extractor"],
+            mig_graph_service=mock_mig_services["mig_graph_service"],
+        )
+
+        # Verify result
+        assert result["status"] == "entity_extraction_complete"
+        assert result["document_id"] == "doc-123"
+        assert result["entities_extracted"] == 1
+
+    @patch("app.workers.tasks.document_tasks.get_service_client")
+    def test_skips_when_previous_task_failed(
+        self,
+        mock_get_client: MagicMock,
+        mock_mig_services: dict,
+    ) -> None:
+        """Should skip extraction when previous task failed."""
+        from app.workers.tasks.document_tasks import extract_entities
+
+        # Execute task with failed embedding status
+        result = extract_entities.run(
+            prev_result={"status": "embedding_failed", "document_id": "doc-123"},
+            document_service=mock_mig_services["document_service"],
+        )
+
+        # Verify result - should skip
+        assert result["status"] == "entity_extraction_skipped"
+        assert "embedding_failed" in result["reason"]
+
+    def test_returns_error_when_no_document_id(self) -> None:
+        """Should return error when no document_id provided."""
+        from app.workers.tasks.document_tasks import extract_entities
+
+        result = extract_entities.run(prev_result=None, document_id=None)
+
+        assert result["status"] == "entity_extraction_failed"
+        assert result["error_code"] == "NO_DOCUMENT_ID"
+
+    @patch("app.workers.tasks.document_tasks.get_service_client")
+    def test_handles_no_chunks(
+        self,
+        mock_get_client: MagicMock,
+        mock_mig_services: dict,
+    ) -> None:
+        """Should handle documents with no chunks gracefully."""
+        from app.workers.tasks.document_tasks import extract_entities
+
+        # Mock database client
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        # Mock empty chunks query
+        mock_response = MagicMock()
+        mock_response.data = []
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
+
+        # Execute task
+        result = extract_entities.run(
+            prev_result={"status": "searchable", "document_id": "doc-123"},
+            document_service=mock_mig_services["document_service"],
+        )
+
+        # Verify result
+        assert result["status"] == "entity_extraction_complete"
+        assert result["entities_extracted"] == 0
+        assert "No chunks found" in result["reason"]

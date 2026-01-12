@@ -6,8 +6,12 @@ Provides database operations for the Matter Identity Graph:
 - Entity mentions (entity_mentions table)
 
 CRITICAL: Always validates matter_id for Layer 4 matter isolation.
+
+NOTE: Uses asyncio.to_thread() to run synchronous Supabase client calls
+without blocking the event loop.
 """
 
+import asyncio
 import math
 from datetime import datetime
 from functools import lru_cache
@@ -69,6 +73,9 @@ class MIGGraphService:
     - entity_mentions: Where entities appear in documents
 
     CRITICAL: All operations validate matter_id for security.
+
+    All async methods use asyncio.to_thread() to run synchronous Supabase
+    client calls without blocking the event loop.
 
     Example:
         >>> service = MIGGraphService()
@@ -191,15 +198,18 @@ class MIGGraphService:
         entity_type: EntityType,
     ) -> dict | None:
         """Find existing entity by canonical name and type."""
-        response = (
-            self.client.table("identity_nodes")
-            .select("*")
-            .eq("matter_id", matter_id)
-            .eq("entity_type", entity_type.value)
-            .ilike("canonical_name", canonical_name)
-            .limit(1)
-            .execute()
-        )
+        def _query():
+            return (
+                self.client.table("identity_nodes")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("entity_type", entity_type.value)
+                .ilike("canonical_name", canonical_name)
+                .limit(1)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
 
         if response.data:
             return response.data[0]
@@ -217,17 +227,20 @@ class MIGGraphService:
             "first_extraction_confidence": extracted.confidence,
         }
 
-        response = (
-            self.client.table("identity_nodes")
-            .insert({
-                "matter_id": matter_id,
-                "canonical_name": extracted.canonical_name,
-                "entity_type": extracted.type.value,
-                "metadata": metadata,
-                "mention_count": len(extracted.mentions) or 1,
-            })
-            .execute()
-        )
+        def _insert():
+            return (
+                self.client.table("identity_nodes")
+                .insert({
+                    "matter_id": matter_id,
+                    "canonical_name": extracted.canonical_name,
+                    "entity_type": extracted.type.value,
+                    "metadata": metadata,
+                    "mention_count": len(extracted.mentions) or 1,
+                })
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_insert)
 
         if response.data:
             return self._db_row_to_entity_node(response.data[0])
@@ -246,30 +259,36 @@ class MIGGraphService:
     ) -> dict | None:
         """Increment mention count for existing entity."""
         # First get current count
-        current = (
-            self.client.table("identity_nodes")
-            .select("mention_count")
-            .eq("id", entity_id)
-            .eq("matter_id", matter_id)
-            .limit(1)
-            .execute()
-        )
+        def _get_current():
+            return (
+                self.client.table("identity_nodes")
+                .select("mention_count")
+                .eq("id", entity_id)
+                .eq("matter_id", matter_id)
+                .limit(1)
+                .execute()
+            )
+
+        current = await asyncio.to_thread(_get_current)
 
         if not current.data:
             return None
 
         new_count = (current.data[0].get("mention_count", 0) or 0) + additional_mentions
 
-        response = (
-            self.client.table("identity_nodes")
-            .update({
-                "mention_count": new_count,
-                "updated_at": datetime.utcnow().isoformat(),
-            })
-            .eq("id", entity_id)
-            .eq("matter_id", matter_id)
-            .execute()
-        )
+        def _update():
+            return (
+                self.client.table("identity_nodes")
+                .update({
+                    "mention_count": new_count,
+                    "updated_at": datetime.utcnow().isoformat(),
+                })
+                .eq("id", entity_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_update)
 
         if response.data:
             return response.data[0]
@@ -300,7 +319,10 @@ class MIGGraphService:
 
         if mentions_to_insert:
             try:
-                self.client.table("entity_mentions").insert(mentions_to_insert).execute()
+                def _insert_mentions():
+                    return self.client.table("entity_mentions").insert(mentions_to_insert).execute()
+
+                await asyncio.to_thread(_insert_mentions)
             except Exception as e:
                 logger.warning(
                     "mig_save_mentions_failed",
@@ -347,18 +369,21 @@ class MIGGraphService:
 
         for edge in edges:
             try:
-                response = (
-                    self.client.table("identity_edges")
-                    .insert({
-                        "matter_id": matter_id,
-                        "source_node_id": edge.source_entity_id,
-                        "target_node_id": edge.target_entity_id,
-                        "relationship_type": edge.relationship_type.value,
-                        "confidence": edge.confidence,
-                        "metadata": edge.metadata,
-                    })
-                    .execute()
-                )
+                def _insert_edge():
+                    return (
+                        self.client.table("identity_edges")
+                        .insert({
+                            "matter_id": matter_id,
+                            "source_node_id": edge.source_entity_id,
+                            "target_node_id": edge.target_entity_id,
+                            "relationship_type": edge.relationship_type.value,
+                            "confidence": edge.confidence,
+                            "metadata": edge.metadata,
+                        })
+                        .execute()
+                    )
+
+                response = await asyncio.to_thread(_insert_edge)
 
                 if response.data:
                     saved_edges.append(self._db_row_to_entity_edge(response.data[0]))
@@ -433,11 +458,14 @@ class MIGGraphService:
         ]
 
         try:
-            response = (
-                self.client.table("entity_mentions")
-                .insert(mentions_to_insert)
-                .execute()
-            )
+            def _insert_mentions():
+                return (
+                    self.client.table("entity_mentions")
+                    .insert(mentions_to_insert)
+                    .execute()
+                )
+
+            response = await asyncio.to_thread(_insert_mentions)
 
             if response.data:
                 return [self._db_row_to_entity_mention(row) for row in response.data]
@@ -485,14 +513,17 @@ class MIGGraphService:
         Returns:
             EntityNode if found, None otherwise.
         """
-        response = (
-            self.client.table("identity_nodes")
-            .select("*")
-            .eq("id", entity_id)
-            .eq("matter_id", matter_id)
-            .limit(1)
-            .execute()
-        )
+        def _query():
+            return (
+                self.client.table("identity_nodes")
+                .select("*")
+                .eq("id", entity_id)
+                .eq("matter_id", matter_id)
+                .limit(1)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
 
         if response.data:
             return self._db_row_to_entity_node(response.data[0])
@@ -516,24 +547,27 @@ class MIGGraphService:
         Returns:
             Tuple of (entities list, total count).
         """
-        # Build query
-        query = (
-            self.client.table("identity_nodes")
-            .select("*", count="exact")
-            .eq("matter_id", matter_id)
-        )
+        def _query():
+            # Build query
+            query = (
+                self.client.table("identity_nodes")
+                .select("*", count="exact")
+                .eq("matter_id", matter_id)
+            )
 
-        if entity_type:
-            query = query.eq("entity_type", entity_type.value)
+            if entity_type:
+                query = query.eq("entity_type", entity_type.value)
 
-        # Order by mention_count descending (most mentioned first)
-        query = query.order("mention_count", desc=True)
+            # Order by mention_count descending (most mentioned first)
+            query = query.order("mention_count", desc=True)
 
-        # Pagination
-        offset = (page - 1) * per_page
-        query = query.range(offset, offset + per_page - 1)
+            # Pagination
+            offset = (page - 1) * per_page
+            query = query.range(offset, offset + per_page - 1)
 
-        response = query.execute()
+            return query.execute()
+
+        response = await asyncio.to_thread(_query)
 
         entities = [self._db_row_to_entity_node(row) for row in (response.data or [])]
         total = response.count or 0
@@ -565,14 +599,18 @@ class MIGGraphService:
 
         # Get mentions
         offset = (page - 1) * per_page
-        response = (
-            self.client.table("entity_mentions")
-            .select("*", count="exact")
-            .eq("entity_id", entity_id)
-            .order("created_at", desc=True)
-            .range(offset, offset + per_page - 1)
-            .execute()
-        )
+
+        def _query():
+            return (
+                self.client.table("entity_mentions")
+                .select("*", count="exact")
+                .eq("entity_id", entity_id)
+                .order("created_at", desc=True)
+                .range(offset, offset + per_page - 1)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
 
         mentions = [self._db_row_to_entity_mention(row) for row in (response.data or [])]
         total = response.count or 0
@@ -599,20 +637,28 @@ class MIGGraphService:
             return []
 
         # Get edges where entity is source or target
-        source_response = (
-            self.client.table("identity_edges")
-            .select("*")
-            .eq("matter_id", matter_id)
-            .eq("source_node_id", entity_id)
-            .execute()
-        )
+        def _query_source():
+            return (
+                self.client.table("identity_edges")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("source_node_id", entity_id)
+                .execute()
+            )
 
-        target_response = (
-            self.client.table("identity_edges")
-            .select("*")
-            .eq("matter_id", matter_id)
-            .eq("target_node_id", entity_id)
-            .execute()
+        def _query_target():
+            return (
+                self.client.table("identity_edges")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("target_node_id", entity_id)
+                .execute()
+            )
+
+        # Run both queries concurrently
+        source_response, target_response = await asyncio.gather(
+            asyncio.to_thread(_query_source),
+            asyncio.to_thread(_query_target),
         )
 
         edges = []

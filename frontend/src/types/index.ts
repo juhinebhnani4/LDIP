@@ -73,5 +73,6 @@ export type {
   EntityResponse,
   EntityType,
   EntityWithRelations,
+  PaginationMeta,
   RelationshipType,
 } from './entity';

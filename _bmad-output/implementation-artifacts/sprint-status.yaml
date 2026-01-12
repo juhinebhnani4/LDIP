@@ -80,7 +80,7 @@ development_status:
 
   # Epic 2C: Entity Extraction & MIG
   epic-2c: in-progress
-  2c-1-mig-entity-extraction: review
+  2c-1-mig-entity-extraction: done
   2c-2-alias-resolution: backlog
   2c-3-background-job-tracking: backlog
   epic-2c-retrospective: optional

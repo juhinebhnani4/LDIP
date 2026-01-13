@@ -1347,12 +1347,27 @@ async def get_citation_split_view(
 
         # Build verification result
         if citation.verification_status != VerificationStatus.PENDING:
+            # Extract diff_details and convert to DiffDetail model if present
+            diff_details_raw = citation.extraction_metadata.get("diff_details")
+            diff_details = None
+            if diff_details_raw and isinstance(diff_details_raw, dict):
+                from app.models.citation import DiffDetail
+                diff_details = DiffDetail(
+                    citation_text=diff_details_raw.get("citation_text", ""),
+                    act_text=diff_details_raw.get("act_text", ""),
+                    match_type=diff_details_raw.get("match_type", "mismatch"),
+                    differences=diff_details_raw.get("differences", []),
+                )
+
             verification_result = VerificationResult(
                 status=citation.verification_status,
                 section_found=citation.target_page is not None,
+                section_text=citation.extraction_metadata.get("section_text"),
+                target_page=citation.target_page,
+                target_bbox_ids=citation.target_bbox_ids or [],
                 similarity_score=citation.confidence,
-                explanation=citation.extraction_metadata.get("verification_explanation"),
-                diff_details=citation.extraction_metadata.get("diff_details"),
+                explanation=citation.extraction_metadata.get("verification_explanation", ""),
+                diff_details=diff_details,
             )
 
         split_view_data = SplitViewDataModel(

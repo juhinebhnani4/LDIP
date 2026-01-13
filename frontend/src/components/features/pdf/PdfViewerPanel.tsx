@@ -54,6 +54,8 @@ export interface PdfViewerPanelProps {
   initialPage?: number;
   /** Bounding boxes to highlight */
   boundingBoxes?: SplitViewBoundingBox[];
+  /** Page number the bounding boxes belong to (for filtering) */
+  bboxPageNumber?: number;
   /** Verification status for highlight colors */
   verificationStatus?: VerificationStatus;
   /** Whether this is the source (left) panel */
@@ -84,6 +86,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
   documentUrl,
   initialPage = 1,
   boundingBoxes = [],
+  bboxPageNumber,
   verificationStatus = 'pending',
   isSource = false,
   currentPage: controlledPage,
@@ -152,8 +155,12 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
         // Dynamic import of PDF.js
         const pdfjs = await import('pdfjs-dist');
 
-        // Configure worker
-        pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+        // Configure worker - use unpkg as primary CDN with version lock for reliability
+        // PDF.js requires a web worker for performance. Using a CDN is standard practice.
+        // Alternative: copy worker to public/ and serve locally if CDN is blocked
+        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+          pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+        }
 
         const loadingTask = pdfjs.getDocument(documentUrl);
         const doc = await loadingTask.promise;
@@ -265,12 +272,11 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     }
   };
 
-  // Filter bboxes for current page
-  const currentPageBboxes = boundingBoxes.filter((bbox) => {
-    // If bbox doesn't have page info, show on all pages
-    // In practice, bbox coordinates are for specific pages
-    return true;
-  });
+  // Filter bboxes for current page - only show bboxes when viewing their specific page
+  // bboxPageNumber indicates which page the bboxes belong to
+  const currentPageBboxes = bboxPageNumber !== undefined && page === bboxPageNumber
+    ? boundingBoxes
+    : [];
 
   // Render loading state
   if (isLoading) {

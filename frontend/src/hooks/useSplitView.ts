@@ -104,6 +104,8 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
   const storeCitationIds = useSplitViewStore((state) => state.setCitationIds);
   const storeNavigateToPrev = useSplitViewStore((state) => state.navigateToPrevCitation);
   const storeNavigateToNext = useSplitViewStore((state) => state.navigateToNextCitation);
+  const setSourceZoom = useSplitViewStore((state) => state.setSourceZoom);
+  const setTargetZoom = useSplitViewStore((state) => state.setTargetZoom);
 
   // Computed navigation info
   const navigationInfo = {
@@ -187,6 +189,20 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
           }
           break;
 
+        // Zoom shortcuts - apply to both panels simultaneously
+        case PDF_KEYBOARD_SHORTCUTS.zoomIn:
+        case PDF_KEYBOARD_SHORTCUTS.zoomInAlt:
+          event.preventDefault();
+          setSourceZoom(Math.min(sourceViewState.scale + 0.25, 3.0));
+          setTargetZoom(Math.min(targetViewState.scale + 0.25, 3.0));
+          break;
+
+        case PDF_KEYBOARD_SHORTCUTS.zoomOut:
+          event.preventDefault();
+          setSourceZoom(Math.max(sourceViewState.scale - 0.25, 0.5));
+          setTargetZoom(Math.max(targetViewState.scale - 0.25, 0.5));
+          break;
+
         default:
           break;
       }
@@ -206,6 +222,10 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
     navigationInfo.canNext,
     navigateToPrev,
     navigateToNext,
+    setSourceZoom,
+    setTargetZoom,
+    sourceViewState.scale,
+    targetViewState.scale,
   ]);
 
   return {

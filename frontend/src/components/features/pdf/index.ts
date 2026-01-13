@@ -11,3 +11,5 @@ export type { PdfViewerPanelProps } from './PdfViewerPanel';
 
 export { BboxOverlay } from './BboxOverlay';
 export type { BboxOverlayProps } from './BboxOverlay';
+
+export { PdfErrorBoundary } from './PdfErrorBoundary';

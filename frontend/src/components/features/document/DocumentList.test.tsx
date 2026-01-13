@@ -146,7 +146,9 @@ describe('DocumentList', () => {
         expect(screen.getByText('Completed')).toBeInTheDocument();
         // "Pending" appears in both status column and OCR Quality badge for pending docs
         expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByText('Processing')).toBeInTheDocument();
+        // "Processing" appears in both table header column AND status label for docs with status: 'processing'
+        // Use getAllByText since there are multiple matches (header + status label)
+        expect(screen.getAllByText('Processing').length).toBeGreaterThanOrEqual(2);
       });
     });
 

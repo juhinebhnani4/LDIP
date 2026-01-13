@@ -9,8 +9,8 @@
  * This is the basic integration component for the Citations Tab.
  */
 
-import { useState, useEffect } from 'react';
-import { Eye, AlertTriangle, CheckCircle, Clock, HelpCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Eye, AlertTriangle, CheckCircle, Clock, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -88,10 +88,15 @@ function getStatusBadge(status: VerificationStatus): {
  * <CitationsList matterId="matter-123" />
  * ```
  */
+const ITEMS_PER_PAGE = 20;
+
 export function CitationsList({ matterId, actName }: CitationsListProps) {
   const [citations, setCitations] = useState<CitationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   const {
     isOpen,
@@ -108,32 +113,43 @@ export function CitationsList({ matterId, actName }: CitationsListProps) {
     setCitationIds,
   } = useSplitView({ enableKeyboardShortcuts: true });
 
-  // Load citations
-  useEffect(() => {
-    const loadCitations = async () => {
-      setLoading(true);
-      setError(null);
+  // Load citations with pagination
+  const loadCitations = useCallback(async (page: number) => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const response = await getCitations(matterId, {
-          page: 1,
-          perPage: 100,
-          actName,
-        });
-        setCitations(response.data);
+    try {
+      const response = await getCitations(matterId, {
+        page,
+        perPage: ITEMS_PER_PAGE,
+        actName,
+      });
+      setCitations(response.data);
+      setTotalCount(response.meta.total);
+      setTotalPages(response.meta.totalPages ?? Math.ceil(response.meta.total / ITEMS_PER_PAGE));
+      setCurrentPage(page);
 
-        // Set citation IDs for navigation
-        setCitationIds(response.data.map((c) => c.id));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load citations';
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCitations();
+      // Set citation IDs for navigation
+      setCitationIds(response.data.map((c) => c.id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load citations';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   }, [matterId, actName, setCitationIds]);
+
+  // Initial load and reload on filter change
+  useEffect(() => {
+    loadCitations(1);
+  }, [loadCitations]);
+
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      loadCitations(newPage);
+    }
+  };
 
   // Handle view citation click
   const handleViewCitation = (citationId: string) => {
@@ -170,6 +186,37 @@ export function CitationsList({ matterId, actName }: CitationsListProps) {
     <div className="space-y-4">
       {/* Citations Table */}
       <div className="rounded-lg border">
+        {/* Pagination header */}
+        {totalCount > ITEMS_PER_PAGE && (
+          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+            <span className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} of {totalCount} citations
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>

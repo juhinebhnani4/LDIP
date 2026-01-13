@@ -9,7 +9,7 @@
  * Story 3-4: Split-View Citation Highlighting (AC: #1, #4, #5)
  */
 
-import { type FC, useCallback, useEffect } from 'react';
+import { type FC, useCallback } from 'react';
 import {
   Panel,
   PanelGroup,
@@ -17,7 +17,8 @@ import {
 } from 'react-resizable-panels';
 import { FileText, Book, GripVertical, Loader2 } from 'lucide-react';
 import { SplitViewHeader } from './SplitViewHeader';
-import { PdfViewerPanel } from '../pdf/PdfViewerPanel';
+import { MismatchExplanation } from './MismatchExplanation';
+import { PdfViewerPanel, PdfErrorBoundary } from '../pdf';
 import { useSplitViewStore } from '@/stores/splitViewStore';
 import type { SplitViewData } from '@/types/citation';
 
@@ -144,6 +145,11 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
         onNext={onNext}
       />
 
+      {/* Mismatch explanation panel (AC: #3) */}
+      {verification && verification.status === 'mismatch' && verification.diffDetails && (
+        <MismatchExplanation verification={verification} />
+      )}
+
       {/* Split panels */}
       <div className="flex-1 min-h-0">
         {hasTargetDocument ? (
@@ -157,19 +163,22 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
                   <span className="text-sm font-medium">Source Document</span>
                 </div>
                 <div className="flex-1 min-h-0">
-                  <PdfViewerPanel
-                    documentUrl={sourceDocument.documentUrl}
-                    initialPage={sourceDocument.pageNumber}
-                    boundingBoxes={sourceDocument.boundingBoxes}
-                    verificationStatus={citation.verificationStatus}
-                    isSource={true}
-                    currentPage={sourceViewState.currentPage}
-                    scale={sourceViewState.scale}
-                    onPageChange={handleSourcePageChange}
-                    onScaleChange={handleSourceZoomChange}
-                    panelTitle="Case Document"
-                    className="h-full"
-                  />
+                  <PdfErrorBoundary fallbackMessage="Failed to load the source document.">
+                    <PdfViewerPanel
+                      documentUrl={sourceDocument.documentUrl}
+                      initialPage={sourceDocument.pageNumber}
+                      boundingBoxes={sourceDocument.boundingBoxes}
+                      bboxPageNumber={sourceDocument.pageNumber}
+                      verificationStatus={citation.verificationStatus}
+                      isSource={true}
+                      currentPage={sourceViewState.currentPage}
+                      scale={sourceViewState.scale}
+                      onPageChange={handleSourcePageChange}
+                      onScaleChange={handleSourceZoomChange}
+                      panelTitle="Case Document"
+                      className="h-full"
+                    />
+                  </PdfErrorBoundary>
                 </div>
               </div>
             </Panel>
@@ -190,19 +199,22 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-h-0">
-                  <PdfViewerPanel
-                    documentUrl={targetDocument.documentUrl}
-                    initialPage={targetDocument.pageNumber}
-                    boundingBoxes={targetDocument.boundingBoxes}
-                    verificationStatus={citation.verificationStatus}
-                    isSource={false}
-                    currentPage={targetViewState.currentPage}
-                    scale={targetViewState.scale}
-                    onPageChange={handleTargetPageChange}
-                    onScaleChange={handleTargetZoomChange}
-                    panelTitle="Act Document"
-                    className="h-full"
-                  />
+                  <PdfErrorBoundary fallbackMessage="Failed to load the Act document.">
+                    <PdfViewerPanel
+                      documentUrl={targetDocument.documentUrl}
+                      initialPage={targetDocument.pageNumber}
+                      boundingBoxes={targetDocument.boundingBoxes}
+                      bboxPageNumber={targetDocument.pageNumber}
+                      verificationStatus={citation.verificationStatus}
+                      isSource={false}
+                      currentPage={targetViewState.currentPage}
+                      scale={targetViewState.scale}
+                      onPageChange={handleTargetPageChange}
+                      onScaleChange={handleTargetZoomChange}
+                      panelTitle="Act Document"
+                      className="h-full"
+                    />
+                  </PdfErrorBoundary>
                 </div>
               </div>
             </Panel>
@@ -218,19 +230,22 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
               </span>
             </div>
             <div className="flex-1 min-h-0">
-              <PdfViewerPanel
-                documentUrl={sourceDocument.documentUrl}
-                initialPage={sourceDocument.pageNumber}
-                boundingBoxes={sourceDocument.boundingBoxes}
-                verificationStatus="act_unavailable"
-                isSource={true}
-                currentPage={sourceViewState.currentPage}
-                scale={sourceViewState.scale}
-                onPageChange={handleSourcePageChange}
-                onScaleChange={handleSourceZoomChange}
-                panelTitle="Case Document"
-                className="h-full"
-              />
+              <PdfErrorBoundary fallbackMessage="Failed to load the document.">
+                <PdfViewerPanel
+                  documentUrl={sourceDocument.documentUrl}
+                  initialPage={sourceDocument.pageNumber}
+                  boundingBoxes={sourceDocument.boundingBoxes}
+                  bboxPageNumber={sourceDocument.pageNumber}
+                  verificationStatus="act_unavailable"
+                  isSource={true}
+                  currentPage={sourceViewState.currentPage}
+                  scale={sourceViewState.scale}
+                  onPageChange={handleSourcePageChange}
+                  onScaleChange={handleSourceZoomChange}
+                  panelTitle="Case Document"
+                  className="h-full"
+                />
+              </PdfErrorBoundary>
             </div>
           </div>
         )}

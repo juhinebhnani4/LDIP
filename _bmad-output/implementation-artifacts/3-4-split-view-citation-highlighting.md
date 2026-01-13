@@ -145,7 +145,7 @@ So that **I can visually verify the citation accuracy**.
     - Test mismatch explanation
     - Test navigation buttons
   - [x] Create `frontend/src/lib/pdf/highlightUtils.test.ts`
-    - Test position calculations (39 tests)
+    - Test position calculations (18 tests across 4 describe blocks)
     - Test color utilities
     - Test bbox rendering
   - [x] Create `frontend/src/stores/splitViewStore.test.ts`

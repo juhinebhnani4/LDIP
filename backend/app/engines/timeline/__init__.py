@@ -44,6 +44,15 @@ from app.engines.timeline.classification_prompts import (
     EVENT_CLASSIFICATION_USER_PROMPT,
     EVENT_CLASSIFICATION_BATCH_PROMPT,
 )
+from app.engines.timeline.anomaly_detector import (
+    TimelineAnomalyDetector,
+    get_anomaly_detector,
+)
+from app.engines.timeline.legal_sequences import (
+    CaseType,
+    LegalSequenceValidator,
+    get_legal_sequence_validator,
+)
 
 __all__ = [
     # Date Extractor
@@ -75,4 +84,10 @@ __all__ = [
     "EVENT_CLASSIFICATION_SYSTEM_PROMPT",
     "EVENT_CLASSIFICATION_USER_PROMPT",
     "EVENT_CLASSIFICATION_BATCH_PROMPT",
+    # Anomaly Detection (Story 4-4)
+    "TimelineAnomalyDetector",
+    "get_anomaly_detector",
+    "CaseType",
+    "LegalSequenceValidator",
+    "get_legal_sequence_validator",
 ]

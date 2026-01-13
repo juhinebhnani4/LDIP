@@ -3,6 +3,8 @@
 Implements background tasks for:
 - Timeline Engine: Date extraction from documents (Story 4-1)
 - Timeline Engine: Event classification (Story 4-2)
+- Timeline Engine: Entity linking (Story 4-3)
+- Timeline Engine: Anomaly detection (Story 4-4)
 - Citation Engine: (Future)
 - Contradiction Engine: (Future)
 
@@ -23,6 +25,9 @@ from app.engines.timeline import (
     get_event_classifier,
     EventEntityLinker,
     get_event_entity_linker,
+    TimelineAnomalyDetector,
+    get_anomaly_detector,
+    get_timeline_builder,
 )
 from app.models.job import JobStatus, JobType
 from app.services.chunk_service import get_chunk_service
@@ -31,6 +36,7 @@ from app.services.job_tracking import get_job_tracking_service
 from app.services.mig.graph import get_mig_graph_service
 from app.services.timeline_service import TimelineService, get_timeline_service
 from app.services.timeline_cache import get_timeline_cache_service
+from app.services.anomaly_service import get_anomaly_service
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -1241,3 +1247,225 @@ def link_entities_after_extraction(
             }
 
         raise
+
+
+# =============================================================================
+# Anomaly Detection Tasks (Story 4-4)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.engine_tasks.detect_timeline_anomalies",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)  # type: ignore[untyped-decorator]
+def detect_timeline_anomalies(
+    self,
+    matter_id: str,
+    force_redetect: bool = False,
+    job_id: str | None = None,
+) -> dict:
+    """Detect anomalies in a matter's timeline.
+
+    Analyzes timeline events for sequence violations, unusual gaps,
+    potential duplicates, and statistical outliers.
+
+    Args:
+        matter_id: Matter UUID.
+        force_redetect: If True, delete existing anomalies before detection.
+        job_id: Optional job ID for progress tracking.
+
+    Returns:
+        Dict with detection results.
+    """
+    logger.info(
+        "anomaly_detection_started",
+        matter_id=matter_id,
+        force_redetect=force_redetect,
+        job_id=job_id,
+    )
+
+    job_tracker = get_job_tracking_service()
+    anomaly_service = get_anomaly_service()
+    timeline_builder = get_timeline_builder()
+    anomaly_detector = get_anomaly_detector()
+    cache_service = get_timeline_cache_service()
+
+    try:
+        # Update job status if job exists
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="anomaly_detection",
+                    progress_pct=10,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Delete existing anomalies if force redetect
+        if force_redetect:
+            deleted = anomaly_service.delete_anomalies_for_matter_sync(matter_id)
+            logger.info(
+                "anomaly_detection_cleared_existing",
+                matter_id=matter_id,
+                deleted_count=deleted,
+            )
+
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="anomaly_detection",
+                    progress_pct=20,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Build timeline to get all events
+        timeline = _run_async(
+            timeline_builder.build_timeline(
+                matter_id=matter_id,
+                include_entities=True,
+                include_raw_dates=False,  # Only classified events
+                page=1,
+                per_page=10000,  # Get all events
+            )
+        )
+
+        events = timeline.events
+
+        if not events:
+            logger.info(
+                "anomaly_detection_no_events",
+                matter_id=matter_id,
+            )
+            if job_id:
+                _run_async(
+                    job_tracker.update_job_status(
+                        job_id=job_id,
+                        status=JobStatus.COMPLETED,
+                        stage="anomaly_detection",
+                        progress_pct=100,
+                        matter_id=matter_id,
+                    )
+                )
+            return {
+                "status": "completed",
+                "matter_id": matter_id,
+                "events_analyzed": 0,
+                "anomalies_detected": 0,
+                "reason": "no_events",
+            }
+
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="anomaly_detection",
+                    progress_pct=40,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Run anomaly detection
+        anomalies = _run_async(
+            anomaly_detector.detect_anomalies(
+                matter_id=matter_id,
+                events=events,
+            )
+        )
+
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="anomaly_detection",
+                    progress_pct=70,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Save detected anomalies
+        anomaly_ids = []
+        if anomalies:
+            anomaly_ids = anomaly_service.save_anomalies_sync(anomalies)
+
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="anomaly_detection",
+                    progress_pct=90,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Invalidate timeline cache since anomalies may affect display
+        _run_async(cache_service.invalidate_timeline(matter_id))
+
+        # Mark job complete
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.COMPLETED,
+                    stage="anomaly_detection",
+                    progress_pct=100,
+                    matter_id=matter_id,
+                )
+            )
+
+        logger.info(
+            "anomaly_detection_complete",
+            matter_id=matter_id,
+            events_analyzed=len(events),
+            anomalies_detected=len(anomalies),
+        )
+
+        return {
+            "status": "completed",
+            "matter_id": matter_id,
+            "events_analyzed": len(events),
+            "anomalies_detected": len(anomalies),
+            "anomaly_ids": anomaly_ids,
+        }
+
+    except Exception as e:
+        logger.error(
+            "anomaly_detection_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+
+        if job_id:
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.FAILED,
+                    stage="anomaly_detection",
+                    error_message=str(e),
+                    error_code="ANOMALY_DETECTION_FAILED",
+                    matter_id=matter_id,
+                )
+            )
+
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                "status": "failed",
+                "matter_id": matter_id,
+                "error": str(e),
+            }
+
+        raise
+
+    finally:
+        _cleanup_task_loop()

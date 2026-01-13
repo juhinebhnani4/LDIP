@@ -20,6 +20,7 @@ class JobType(str, Enum):
     - DATE_EXTRACTION: Timeline date extraction stage (Story 4-1)
     - EVENT_CLASSIFICATION: Timeline event classification stage (Story 4-2)
     - ENTITY_LINKING: Timeline event to MIG entity linking stage (Story 4-3)
+    - ANOMALY_DETECTION: Timeline anomaly detection stage (Story 4-4)
     """
 
     DOCUMENT_PROCESSING = "DOCUMENT_PROCESSING"
@@ -32,6 +33,7 @@ class JobType(str, Enum):
     DATE_EXTRACTION = "DATE_EXTRACTION"
     EVENT_CLASSIFICATION = "EVENT_CLASSIFICATION"
     ENTITY_LINKING = "ENTITY_LINKING"
+    ANOMALY_DETECTION = "ANOMALY_DETECTION"
 
 
 class JobStatus(str, Enum):

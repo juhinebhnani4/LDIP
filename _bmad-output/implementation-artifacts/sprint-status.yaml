@@ -98,7 +98,7 @@ development_status:
   4-1-date-extraction-gemini: done
   4-2-event-classification: review-passed  # Code review passed 2026-01-13
   4-3-events-table-mig-integration: dev-complete
-  4-4-timeline-anomaly-detection: backlog
+  4-4-timeline-anomaly-detection: dev-complete
   epic-4-retrospective: optional
 
   # Epic 5: Consistency & Contradiction Engine

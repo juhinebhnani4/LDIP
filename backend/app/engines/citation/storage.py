@@ -624,6 +624,223 @@ class CitationStorageService:
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
         )
 
+    # =========================================================================
+    # Verification Methods (Story 3-3)
+    # =========================================================================
+
+    async def update_citation_verification(
+        self,
+        citation_id: str,
+        matter_id: str,
+        verification_status: VerificationStatus,
+        target_act_document_id: str | None = None,
+        target_page: int | None = None,
+        target_bbox_ids: list[str] | None = None,
+        confidence: float | None = None,
+    ) -> Citation | None:
+        """Update citation with verification results.
+
+        Args:
+            citation_id: Citation UUID.
+            matter_id: Matter UUID for validation.
+            verification_status: New verification status.
+            target_act_document_id: Act document UUID if verified.
+            target_page: Page in Act document.
+            target_bbox_ids: Bounding boxes in Act document.
+            confidence: Verification confidence (0-100).
+
+        Returns:
+            Updated Citation or None on error.
+        """
+        try:
+            update_data: dict = {
+                "verification_status": verification_status.value,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+            if target_act_document_id is not None:
+                update_data["target_act_document_id"] = target_act_document_id
+
+            if target_page is not None:
+                update_data["target_page"] = target_page
+
+            if target_bbox_ids is not None:
+                update_data["target_bbox_ids"] = target_bbox_ids
+
+            if confidence is not None:
+                # Convert 0-100 to 0-1 for storage
+                update_data["confidence"] = confidence / 100.0
+
+            def _update():
+                return self.client.table("citations").update(update_data).eq(
+                    "id", citation_id
+                ).eq("matter_id", matter_id).execute()
+
+            result = await asyncio.to_thread(_update)
+
+            if result.data and len(result.data) > 0:
+                logger.info(
+                    "citation_verification_updated",
+                    citation_id=citation_id,
+                    status=verification_status.value,
+                )
+                return self._row_to_citation(result.data[0])
+
+            return None
+
+        except Exception as e:
+            logger.error(
+                "update_citation_verification_failed",
+                citation_id=citation_id,
+                error=str(e),
+            )
+            return None
+
+    async def get_citations_for_act(
+        self,
+        matter_id: str,
+        act_name: str,
+        exclude_verified: bool = False,
+    ) -> list[Citation]:
+        """Get all citations referencing a specific Act.
+
+        Args:
+            matter_id: Matter UUID.
+            act_name: Act name to filter by.
+            exclude_verified: If True, exclude already verified citations.
+
+        Returns:
+            List of citations referencing the Act.
+        """
+        try:
+            def _query():
+                query = self.client.table("citations").select("*").eq(
+                    "matter_id", matter_id
+                ).eq("act_name", act_name)
+
+                if exclude_verified:
+                    # Exclude verified and mismatch (already processed)
+                    query = query.not_.in_(
+                        "verification_status",
+                        [VerificationStatus.VERIFIED.value, VerificationStatus.MISMATCH.value],
+                    )
+
+                return query.order("source_page").execute()
+
+            result = await asyncio.to_thread(_query)
+
+            return [self._row_to_citation(row) for row in (result.data or [])]
+
+        except Exception as e:
+            logger.error(
+                "get_citations_for_act_failed",
+                matter_id=matter_id,
+                act_name=act_name,
+                error=str(e),
+            )
+            return []
+
+    async def get_citations_pending_verification(
+        self,
+        matter_id: str,
+        act_document_id: str | None = None,
+    ) -> list[Citation]:
+        """Get citations pending verification.
+
+        Args:
+            matter_id: Matter UUID.
+            act_document_id: Optional filter by Act document.
+
+        Returns:
+            List of citations needing verification.
+        """
+        try:
+            def _query():
+                query = self.client.table("citations").select("*").eq(
+                    "matter_id", matter_id
+                ).in_(
+                    "verification_status",
+                    [
+                        VerificationStatus.PENDING.value,
+                        VerificationStatus.ACT_UNAVAILABLE.value,
+                    ],
+                )
+
+                # Note: We can't filter by target_act_document_id here since
+                # unverified citations don't have it set yet.
+                # Filtering happens in the caller based on act_name.
+
+                return query.order("created_at").execute()
+
+            result = await asyncio.to_thread(_query)
+
+            return [self._row_to_citation(row) for row in (result.data or [])]
+
+        except Exception as e:
+            logger.error(
+                "get_citations_pending_verification_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return []
+
+    async def bulk_update_verification_status(
+        self,
+        matter_id: str,
+        act_name: str,
+        from_status: VerificationStatus,
+        to_status: VerificationStatus,
+    ) -> int:
+        """Bulk update verification status for citations.
+
+        Used when Act is uploaded to change status from act_unavailable to pending.
+
+        Args:
+            matter_id: Matter UUID.
+            act_name: Act name to filter by.
+            from_status: Current status to match.
+            to_status: New status to set.
+
+        Returns:
+            Number of citations updated.
+        """
+        try:
+            def _update():
+                return self.client.table("citations").update({
+                    "verification_status": to_status.value,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }).eq(
+                    "matter_id", matter_id
+                ).eq(
+                    "act_name", act_name
+                ).eq(
+                    "verification_status", from_status.value
+                ).execute()
+
+            result = await asyncio.to_thread(_update)
+
+            updated_count = len(result.data) if result.data else 0
+
+            logger.info(
+                "bulk_verification_status_updated",
+                matter_id=matter_id,
+                act_name=act_name,
+                from_status=from_status.value,
+                to_status=to_status.value,
+                updated_count=updated_count,
+            )
+
+            return updated_count
+
+        except Exception as e:
+            logger.error(
+                "bulk_update_verification_status_failed",
+                matter_id=matter_id,
+                act_name=act_name,
+                error=str(e),
+            )
+            return 0
+
 
 # =============================================================================
 # Service Factory

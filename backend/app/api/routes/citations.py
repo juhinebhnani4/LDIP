@@ -5,8 +5,10 @@ Provides endpoints for:
 - Getting citation details
 - Getting Act Discovery Report
 - Updating Act resolution status
+- Citation verification (Story 3-3)
 
 Story 3-1: Act Citation Extraction (AC: #4)
+Story 3-3: Citation Verification (AC: #6)
 """
 
 import math
@@ -29,6 +31,7 @@ from app.models.citation import (
     ActDiscoverySummary,
     ActResolution,
     ActResolutionStatus,
+    BatchVerificationResponse,
     Citation,
     CitationListItem,
     CitationResponse,
@@ -37,7 +40,14 @@ from app.models.citation import (
     CitationSummaryResponse,
     PaginationMeta,
     UserAction,
+    VerificationResult,
+    VerificationResultResponse,
     VerificationStatus,
+)
+from app.workers.tasks.verification_tasks import (
+    trigger_verification_on_act_upload,
+    verify_citations_for_act,
+    verify_single_citation,
 )
 
 
@@ -719,3 +729,310 @@ async def mark_act_skipped(
         ) from e
 
 
+# =============================================================================
+# Citation Verification (Story 3-3)
+# =============================================================================
+
+
+class VerifyActRequest(BaseModel):
+    """Request to verify citations for an Act."""
+
+    act_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Act name to verify citations for",
+        examples=["Negotiable Instruments Act, 1881"],
+    )
+    act_document_id: str = Field(
+        ...,
+        description="UUID of the uploaded Act document to verify against",
+    )
+
+
+class VerifyCitationRequest(BaseModel):
+    """Request to verify a single citation."""
+
+    act_document_id: str = Field(
+        ...,
+        description="UUID of the Act document to verify against",
+    )
+    act_name: str = Field(
+        ...,
+        description="Act name for context",
+    )
+
+
+@router.post("/verify", response_model=BatchVerificationResponse)
+async def verify_citations_batch(
+    request: VerifyActRequest,
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    storage_service=Depends(_get_storage_service),
+) -> BatchVerificationResponse:
+    """Start batch verification of citations for an Act.
+
+    Triggers an async Celery task to verify all citations referencing
+    the specified Act against the uploaded Act document.
+
+    Args:
+        request: Verification request with Act name and document ID.
+        matter_id: Matter UUID.
+        membership: Validated matter membership (editor/owner required).
+        storage_service: Citation storage service.
+
+    Returns:
+        BatchVerificationResponse with task ID and status.
+    """
+    logger.info(
+        "verify_citations_batch_request",
+        matter_id=matter_id,
+        act_name=request.act_name,
+        act_document_id=request.act_document_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Get citation count for this Act
+        citations, total = await storage_service.get_citations_by_matter(
+            matter_id=matter_id,
+            act_name=request.act_name,
+            page=1,
+            per_page=1,
+        )
+
+        # Start verification task
+        task = verify_citations_for_act.delay(
+            matter_id=matter_id,
+            act_name=request.act_name,
+            act_document_id=request.act_document_id,
+        )
+
+        logger.info(
+            "verify_citations_batch_started",
+            matter_id=matter_id,
+            act_name=request.act_name,
+            task_id=task.id,
+            total_citations=total,
+        )
+
+        return BatchVerificationResponse(
+            task_id=task.id,
+            status="started",
+            total_citations=total,
+            act_name=request.act_name,
+        )
+
+    except Exception as e:
+        logger.error(
+            "verify_citations_batch_error",
+            matter_id=matter_id,
+            act_name=request.act_name,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to start verification",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.post("/{citation_id}/verify", response_model=BatchVerificationResponse)
+async def verify_single_citation_endpoint(
+    request: VerifyCitationRequest,
+    matter_id: str = Path(..., description="Matter UUID"),
+    citation_id: str = Path(..., description="Citation UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    storage_service=Depends(_get_storage_service),
+) -> BatchVerificationResponse:
+    """Verify a single citation against an Act document.
+
+    Triggers an async task to verify the specific citation.
+    Useful for re-verification or on-demand verification.
+
+    Args:
+        request: Verification request with Act document ID.
+        matter_id: Matter UUID.
+        citation_id: Citation UUID to verify.
+        membership: Validated matter membership (editor/owner required).
+        storage_service: Citation storage service.
+
+    Returns:
+        BatchVerificationResponse with task ID.
+
+    Raises:
+        HTTPException 404: If citation not found.
+    """
+    logger.info(
+        "verify_single_citation_request",
+        matter_id=matter_id,
+        citation_id=citation_id,
+        act_document_id=request.act_document_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Verify citation exists
+        citation = await storage_service.get_citation(citation_id, matter_id)
+
+        if citation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "CITATION_NOT_FOUND",
+                        "message": f"Citation {citation_id} not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Start verification task
+        task = verify_single_citation.delay(
+            matter_id=matter_id,
+            citation_id=citation_id,
+            act_document_id=request.act_document_id,
+            act_name=request.act_name,
+        )
+
+        logger.info(
+            "verify_single_citation_started",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            task_id=task.id,
+        )
+
+        return BatchVerificationResponse(
+            task_id=task.id,
+            status="started",
+            total_citations=1,
+            act_name=request.act_name,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "verify_single_citation_error",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to start verification",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Act Upload with Auto-Verification Trigger
+# =============================================================================
+
+
+@router.post("/acts/mark-uploaded-verify", response_model=ActResolutionResponse)
+async def mark_act_uploaded_and_verify(
+    request: MarkActUploadedRequest,
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    discovery_service=Depends(_get_discovery_service),
+) -> ActResolutionResponse:
+    """Mark an Act as uploaded and automatically trigger verification.
+
+    Combines marking the Act as uploaded with triggering verification
+    of all citations referencing this Act.
+
+    Args:
+        request: Act upload details.
+        matter_id: Matter UUID.
+        membership: Validated matter membership (editor/owner required).
+        discovery_service: Act discovery service.
+
+    Returns:
+        Updated resolution status.
+    """
+    logger.info(
+        "mark_act_uploaded_verify_request",
+        matter_id=matter_id,
+        act_name=request.act_name,
+        act_document_id=request.act_document_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # First mark as uploaded
+        success = await discovery_service.mark_act_uploaded(
+            matter_id=matter_id,
+            act_name=request.act_name,
+            act_document_id=request.act_document_id,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "ACT_NOT_FOUND",
+                        "message": f"Act '{request.act_name}' not found in resolutions",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Trigger verification automatically
+        trigger_verification_on_act_upload.delay(
+            matter_id=matter_id,
+            act_name=request.act_name,
+            act_document_id=request.act_document_id,
+        )
+
+        logger.info(
+            "mark_act_uploaded_verify_success",
+            matter_id=matter_id,
+            act_name=request.act_name,
+        )
+
+        return ActResolutionResponse(
+            success=True,
+            act_name=request.act_name,
+            resolution_status=ActResolutionStatus.AVAILABLE,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "mark_act_uploaded_verify_error",
+            matter_id=matter_id,
+            act_name=request.act_name,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to mark Act as uploaded",
+                    "details": {},
+                }
+            },
+        ) from e

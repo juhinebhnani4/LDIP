@@ -110,13 +110,14 @@ export {
   STAGE_LABELS,
 } from './job';
 
-// Citation types (Story 3-1: Act Citation Extraction)
+// Citation types (Story 3-1: Act Citation Extraction, Story 3-3: Verification)
 export type {
   ActDiscoveryResponse,
   ActDiscoverySummary,
   ActResolution,
   ActResolutionResponse,
   ActResolutionStatus,
+  BatchVerificationResponse,
   Citation,
   CitationBase,
   CitationErrorDetail,
@@ -128,8 +129,20 @@ export type {
   CitationStats,
   CitationSummaryItem,
   CitationSummaryResponse,
+  CitationVerifiedEvent,
+  DiffDetail,
   MarkActSkippedRequest,
   MarkActUploadedRequest,
+  MatchType,
+  QuoteComparison,
+  SectionMatch,
   UserAction,
+  VerificationCompleteEvent,
+  VerificationEvent,
+  VerificationProgressEvent,
+  VerificationResult,
+  VerificationResultResponse,
   VerificationStatus,
+  VerifyActRequest,
+  VerifyCitationRequest,
 } from './citation';

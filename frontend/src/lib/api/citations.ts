@@ -1,15 +1,17 @@
 /**
- * Citation API Client for Act Citation Extraction
+ * Citation API Client for Act Citation Extraction and Verification
  *
  * Provides typed API functions for citation operations.
  *
  * Story 3-1: Act Citation Extraction
+ * Story 3-3: Citation Verification
  */
 
 import { api } from './client';
 import type {
   ActDiscoveryResponse,
   ActResolutionResponse,
+  BatchVerificationResponse,
   CitationListOptions,
   CitationResponse,
   CitationsListResponse,
@@ -17,6 +19,8 @@ import type {
   CitationSummaryResponse,
   MarkActSkippedRequest,
   MarkActUploadedRequest,
+  VerifyActRequest,
+  VerifyCitationRequest,
 } from '@/types';
 
 /**
@@ -252,6 +256,103 @@ export async function markActSkipped(
 ): Promise<ActResolutionResponse> {
   return api.post<ActResolutionResponse>(
     `/api/matters/${matterId}/citations/acts/mark-skipped`,
+    request
+  );
+}
+
+// =============================================================================
+// Citation Verification Operations (Story 3-3)
+// =============================================================================
+
+/**
+ * Start batch verification of citations for an Act.
+ *
+ * Triggers an async task to verify all citations referencing
+ * the specified Act against the uploaded Act document.
+ *
+ * @param matterId - Matter UUID
+ * @param request - Verification request with Act name and document ID
+ * @returns Batch verification response with task ID
+ *
+ * @example
+ * ```ts
+ * // Start verification for NI Act
+ * const result = await verifyCitationsBatch('matter-123', {
+ *   actName: 'Negotiable Instruments Act, 1881',
+ *   actDocumentId: 'doc-456',
+ * });
+ * console.log(result.taskId); // "task-789"
+ * console.log(result.totalCitations); // 25
+ * ```
+ */
+export async function verifyCitationsBatch(
+  matterId: string,
+  request: VerifyActRequest
+): Promise<BatchVerificationResponse> {
+  return api.post<BatchVerificationResponse>(
+    `/api/matters/${matterId}/citations/verify`,
+    request
+  );
+}
+
+/**
+ * Verify a single citation against an Act document.
+ *
+ * Triggers an async task to verify the specific citation.
+ * Useful for re-verification or on-demand verification.
+ *
+ * @param matterId - Matter UUID
+ * @param citationId - Citation UUID to verify
+ * @param request - Verification request with Act document ID
+ * @returns Batch verification response with task ID
+ *
+ * @example
+ * ```ts
+ * const result = await verifySingleCitation('matter-123', 'citation-456', {
+ *   actDocumentId: 'doc-789',
+ *   actName: 'Negotiable Instruments Act, 1881',
+ * });
+ * console.log(result.taskId); // "task-xyz"
+ * ```
+ */
+export async function verifySingleCitation(
+  matterId: string,
+  citationId: string,
+  request: VerifyCitationRequest
+): Promise<BatchVerificationResponse> {
+  return api.post<BatchVerificationResponse>(
+    `/api/matters/${matterId}/citations/${citationId}/verify`,
+    request
+  );
+}
+
+/**
+ * Mark an Act as uploaded and automatically trigger verification.
+ *
+ * Combines marking the Act as uploaded with triggering verification
+ * of all citations referencing this Act.
+ *
+ * @param matterId - Matter UUID
+ * @param request - Act upload details
+ * @returns Updated resolution status
+ *
+ * @example
+ * ```ts
+ * // Mark NI Act as uploaded and start verification
+ * const result = await markActUploadedAndVerify('matter-123', {
+ *   actName: 'Negotiable Instruments Act, 1881',
+ *   actDocumentId: 'doc-456',
+ * });
+ * // Verification runs automatically in the background
+ * console.log(result.success); // true
+ * ```
+ */
+export async function markActUploadedAndVerify(
+  matterId: string,
+  request: MarkActUploadedRequest
+): Promise<ActResolutionResponse> {
+  return api.post<ActResolutionResponse>(
+    `/api/matters/${matterId}/citations/acts/mark-uploaded-verify`,
     request
   );
 }

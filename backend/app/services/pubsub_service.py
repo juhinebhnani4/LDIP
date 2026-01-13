@@ -508,3 +508,179 @@ def broadcast_act_discovery_update(
             matter_id=matter_id,
             error=str(e),
         )
+
+
+# =============================================================================
+# Citation Verification Broadcasting (Story 3-3)
+# =============================================================================
+
+
+def broadcast_verification_progress(
+    matter_id: str,
+    act_name: str,
+    verified_count: int,
+    total_count: int,
+    task_id: str | None = None,
+) -> None:
+    """Broadcast verification progress update.
+
+    Called during batch verification to report progress.
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        act_name: Name of Act being verified against.
+        verified_count: Number of citations verified so far.
+        total_count: Total number of citations to verify.
+        task_id: Optional Celery task ID.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        progress_pct = int((verified_count / total_count) * 100) if total_count > 0 else 0
+
+        message = {
+            "event": "verification_progress",
+            "matter_id": matter_id,
+            "act_name": act_name,
+            "verified_count": verified_count,
+            "total_count": total_count,
+            "progress_pct": progress_pct,
+        }
+
+        if task_id:
+            message["task_id"] = task_id
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "verification_progress_broadcast",
+            matter_id=matter_id,
+            act_name=act_name,
+            verified_count=verified_count,
+            total_count=total_count,
+            progress_pct=progress_pct,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_verification_progress_failed",
+            matter_id=matter_id,
+            act_name=act_name,
+            error=str(e),
+        )
+
+
+def broadcast_citation_verified(
+    matter_id: str,
+    citation_id: str,
+    status: str,
+    explanation: str,
+    similarity_score: float | None = None,
+) -> None:
+    """Broadcast single citation verification complete.
+
+    Called when a citation is verified to update the UI.
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        citation_id: Citation UUID.
+        status: Verification status (verified, mismatch, section_not_found).
+        explanation: Human-readable explanation.
+        similarity_score: Optional similarity score.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "citation_verified",
+            "matter_id": matter_id,
+            "citation_id": citation_id,
+            "status": status,
+            "explanation": explanation,
+        }
+
+        if similarity_score is not None:
+            message["similarity_score"] = similarity_score
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "citation_verified_broadcast",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            status=status,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_citation_verified_failed",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            error=str(e),
+        )
+
+
+def broadcast_verification_complete(
+    matter_id: str,
+    act_name: str,
+    total_verified: int,
+    verified_count: int,
+    mismatch_count: int,
+    not_found_count: int,
+    task_id: str | None = None,
+) -> None:
+    """Broadcast verification batch complete.
+
+    Called when batch verification finishes for an Act.
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        act_name: Name of Act verified against.
+        total_verified: Total citations processed.
+        verified_count: Number successfully verified.
+        mismatch_count: Number with mismatches.
+        not_found_count: Number with section not found.
+        task_id: Optional Celery task ID.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "verification_complete",
+            "matter_id": matter_id,
+            "act_name": act_name,
+            "total_verified": total_verified,
+            "verified_count": verified_count,
+            "mismatch_count": mismatch_count,
+            "not_found_count": not_found_count,
+        }
+
+        if task_id:
+            message["task_id"] = task_id
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.info(
+            "verification_complete_broadcast",
+            matter_id=matter_id,
+            act_name=act_name,
+            total_verified=total_verified,
+            verified_count=verified_count,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_verification_complete_failed",
+            matter_id=matter_id,
+            act_name=act_name,
+            error=str(e),
+        )

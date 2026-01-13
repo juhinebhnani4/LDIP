@@ -343,3 +343,102 @@ class CitationErrorResponse(BaseModel):
     """Error response structure."""
 
     error: CitationErrorDetail
+
+
+# =============================================================================
+# Verification Result Models (Story 3-3)
+# =============================================================================
+
+
+class DiffDetail(BaseModel):
+    """Details of differences between citation text and Act text."""
+
+    citation_text: str = Field(..., description="Text from case document citation")
+    act_text: str = Field(..., description="Text from Act document")
+    match_type: str = Field(
+        ..., description="Match type: exact, paraphrase, mismatch"
+    )
+    differences: list[str] = Field(
+        default_factory=list, description="Specific differences found"
+    )
+
+
+class SectionMatch(BaseModel):
+    """Result of finding a section in an Act document."""
+
+    section_number: str = Field(..., description="Section number matched")
+    section_text: str = Field(..., description="Full text of the section")
+    chunk_id: str = Field(..., description="Source chunk UUID")
+    page_number: int = Field(..., description="Page in Act document")
+    bbox_ids: list[str] = Field(
+        default_factory=list, description="Bounding boxes for highlighting"
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=100.0, description="Match confidence (0-100)"
+    )
+
+
+class QuoteComparison(BaseModel):
+    """Result of comparing quoted text against Act text."""
+
+    similarity_score: float = Field(
+        ..., ge=0.0, le=100.0, description="Semantic similarity (0-100)"
+    )
+    match_type: str = Field(
+        ..., description="Match type: exact, paraphrase, mismatch"
+    )
+    explanation: str = Field(
+        ..., description="Human-readable explanation of comparison"
+    )
+
+
+class VerificationResult(BaseModel):
+    """Result of verifying a citation against Act text.
+
+    Used to communicate verification outcomes with detailed information
+    about what was found or why verification failed.
+    """
+
+    status: VerificationStatus = Field(
+        ..., description="Verification outcome status"
+    )
+    section_found: bool = Field(
+        ..., description="Whether the cited section was found in Act"
+    )
+    section_text: str | None = Field(
+        None, description="Matched section text from Act"
+    )
+    target_page: int | None = Field(
+        None, description="Page number in Act document"
+    )
+    target_bbox_ids: list[str] = Field(
+        default_factory=list, description="Bounding boxes in Act document"
+    )
+    similarity_score: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Semantic similarity (0-100)"
+    )
+    explanation: str = Field(
+        ..., description="Human-readable verification explanation"
+    )
+    diff_details: DiffDetail | None = Field(
+        None, description="Text difference details if mismatch"
+    )
+
+
+class VerificationResultResponse(BaseModel):
+    """API response for single verification result."""
+
+    data: VerificationResult
+
+
+class BatchVerificationResponse(BaseModel):
+    """API response for batch verification initiation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    task_id: str = Field(..., alias="taskId", description="Celery task UUID")
+    status: str = Field(..., description="Task status")
+    total_citations: int = Field(
+        ..., alias="totalCitations", description="Number of citations to verify"
+    )
+    act_name: str = Field(..., alias="actName", description="Act being verified against")

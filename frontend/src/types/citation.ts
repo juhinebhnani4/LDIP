@@ -1,10 +1,11 @@
 /**
- * Citation Types for Act Citation Extraction
+ * Citation Types for Act Citation Extraction and Verification
  *
- * Types for citations extracted from legal documents.
+ * Types for citations extracted from legal documents and verification results.
  * Matches backend Pydantic models in app/models/citation.py
  *
  * Story 3-1: Act Citation Extraction
+ * Story 3-3: Citation Verification
  */
 
 /** Verification status for citations */
@@ -178,6 +179,118 @@ export interface CitationListOptions {
   page?: number;
   perPage?: number;
 }
+
+// =============================================================================
+// Verification Types (Story 3-3)
+// =============================================================================
+
+/** Match type for text comparison */
+export type MatchType = 'exact' | 'paraphrase' | 'mismatch';
+
+/** Diff details for mismatched citations */
+export interface DiffDetail {
+  citationText: string;
+  actText: string;
+  matchType: MatchType;
+  differences: string[];
+}
+
+/** Section match result */
+export interface SectionMatch {
+  sectionNumber: string;
+  sectionText: string;
+  chunkId: string;
+  pageNumber: number;
+  bboxIds: string[];
+  confidence: number;
+}
+
+/** Quote comparison result */
+export interface QuoteComparison {
+  similarityScore: number;
+  matchType: MatchType;
+  explanation: string;
+}
+
+/** Verification result for a citation */
+export interface VerificationResult {
+  status: VerificationStatus;
+  sectionFound: boolean;
+  sectionText: string | null;
+  targetPage: number | null;
+  targetBboxIds: string[];
+  similarityScore: number;
+  explanation: string;
+  diffDetails: DiffDetail | null;
+}
+
+/** Verification result response */
+export interface VerificationResultResponse {
+  data: VerificationResult;
+}
+
+/** Batch verification response */
+export interface BatchVerificationResponse {
+  taskId: string;
+  status: string;
+  totalCitations: number;
+  actName: string;
+}
+
+/** Request to verify citations for an Act */
+export interface VerifyActRequest {
+  actName: string;
+  actDocumentId: string;
+}
+
+/** Request to verify a single citation */
+export interface VerifyCitationRequest {
+  actDocumentId: string;
+  actName: string;
+}
+
+// =============================================================================
+// Real-Time Verification Events (Story 3-3)
+// =============================================================================
+
+/** Verification progress event from WebSocket */
+export interface VerificationProgressEvent {
+  event: 'verification_progress';
+  matterId: string;
+  actName: string;
+  verifiedCount: number;
+  totalCount: number;
+  progressPct: number;
+  taskId?: string;
+}
+
+/** Single citation verified event */
+export interface CitationVerifiedEvent {
+  event: 'citation_verified';
+  matterId: string;
+  citationId: string;
+  status: VerificationStatus;
+  explanation: string;
+  similarityScore?: number;
+}
+
+/** Verification complete event */
+export interface VerificationCompleteEvent {
+  event: 'verification_complete';
+  matterId: string;
+  actName: string;
+  totalVerified: number;
+  verifiedCount: number;
+  mismatchCount: number;
+  notFoundCount: number;
+  taskId?: string;
+}
+
+/** Union type for all verification events */
+export type VerificationEvent =
+  | VerificationProgressEvent
+  | CitationVerifiedEvent
+  | VerificationCompleteEvent;
 
 // =============================================================================
 // Error Types

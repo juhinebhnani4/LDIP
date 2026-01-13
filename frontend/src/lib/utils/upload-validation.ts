@@ -13,8 +13,11 @@ import type {
   ValidationWarning,
 } from '@/types/document';
 
-/** Maximum file size in bytes (500MB) */
+/** Maximum file size in bytes (500MB) - for case files */
 export const MAX_FILE_SIZE = 500 * 1024 * 1024;
+
+/** Maximum file size in bytes for Act uploads (100MB) - Acts are typically smaller */
+export const MAX_ACT_FILE_SIZE = 100 * 1024 * 1024;
 
 /** Maximum files per upload batch */
 export const MAX_FILES_PER_UPLOAD = 100;

@@ -88,7 +88,7 @@ development_status:
   # Epic 3: Citation Verification Engine
   epic-3: in-progress
   3-1-act-citation-extraction: done
-  3-2-act-discovery-report-ui: backlog
+  3-2-act-discovery-report-ui: done
   3-3-citation-verification: backlog
   3-4-split-view-citation-highlighting: backlog
   epic-3-retrospective: optional

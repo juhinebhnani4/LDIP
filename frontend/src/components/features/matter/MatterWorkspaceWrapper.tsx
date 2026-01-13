@@ -10,6 +10,7 @@ import {
 } from '@/stores/processingStore';
 import { jobsApi } from '@/lib/api/jobs';
 import { createClient } from '@/lib/supabase/client';
+import { ActDiscoveryTrigger } from '@/components/features/citation';
 import type { JobProgressEvent, JobStatusChangeEvent } from '@/types/job';
 
 interface MatterWorkspaceWrapperProps {
@@ -115,6 +116,9 @@ export function MatterWorkspaceWrapper({
 
         {/* Workspace content */}
         <div className="flex-1">{children}</div>
+
+        {/* Act Discovery Modal - auto-shows when missing Acts detected (Story 3-2) */}
+        <ActDiscoveryTrigger matterId={matterId} />
       </div>
     </TooltipProvider>
   );

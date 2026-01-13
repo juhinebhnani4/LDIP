@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     chunk_child_overlap: int = 75       # 50-100 tokens (~14%) for child chunks
     chunk_min_size: int = 100           # Minimum viable chunk size
 
+    # Citation Verification Configuration (Story 3-3)
+    verification_batch_size: int = 10               # Citations to verify in parallel
+    verification_rate_limit_delay: float = 0.5      # Delay between API calls (seconds)
+    verification_min_similarity: float = 70.0       # Minimum similarity for VERIFIED status
+    verification_section_search_top_k: int = 5      # Max section candidates to retrieve
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

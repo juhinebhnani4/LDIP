@@ -19,6 +19,8 @@ import type {
   CitationSummaryResponse,
   MarkActSkippedRequest,
   MarkActUploadedRequest,
+  VerificationResultResponse,
+  VerificationStatus,
   VerifyActRequest,
   VerifyCitationRequest,
 } from '@/types';
@@ -355,4 +357,62 @@ export async function markActUploadedAndVerify(
     `/api/matters/${matterId}/citations/acts/mark-uploaded-verify`,
     request
   );
+}
+
+/**
+ * Get verification details for a citation.
+ *
+ * Returns the current verification status and any stored verification
+ * metadata for the specified citation.
+ *
+ * @param matterId - Matter UUID
+ * @param citationId - Citation UUID
+ * @returns Verification details
+ *
+ * @example
+ * ```ts
+ * const details = await getVerificationDetails('matter-123', 'citation-456');
+ * console.log(details.data.status); // "verified"
+ * console.log(details.data.similarityScore); // 95.0
+ * ```
+ */
+export async function getVerificationDetails(
+  matterId: string,
+  citationId: string
+): Promise<VerificationResultResponse> {
+  return api.get<VerificationResultResponse>(
+    `/api/matters/${matterId}/citations/${citationId}/verification`
+  );
+}
+
+/**
+ * Get citations filtered for verification purposes.
+ *
+ * Convenience wrapper around getCitations for fetching citations
+ * that need verification or have specific verification statuses.
+ *
+ * @param matterId - Matter UUID
+ * @param options - Optional filters for verification status
+ * @returns Paginated list of citations
+ *
+ * @example
+ * ```ts
+ * // Get all pending citations
+ * const pending = await getCitationsForVerification('matter-123', {
+ *   status: 'pending',
+ * });
+ *
+ * // Get all verified citations
+ * const verified = await getCitationsForVerification('matter-123', {
+ *   status: 'verified',
+ * });
+ * ```
+ */
+export async function getCitationsForVerification(
+  matterId: string,
+  options?: { status?: VerificationStatus }
+): Promise<CitationsListResponse> {
+  return getCitations(matterId, {
+    verificationStatus: options?.status,
+  });
 }

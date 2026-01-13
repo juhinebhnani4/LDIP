@@ -137,6 +137,7 @@ PIPELINE_STAGES = [
     "entity_extraction",
     "alias_resolution",
     "citation_extraction",
+    "citation_verification",  # Story 3-3: Citation Verification
 ]
 
 STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
@@ -146,6 +147,22 @@ def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks.
 
     Creates a new event loop to run async operations from sync Celery tasks.
+    This is necessary because Celery workers run synchronously, but our
+    database operations use asyncio.
+
+    Note:
+        This pattern creates a new event loop for each call. For better
+        performance in high-throughput scenarios, consider using
+        asyncio.to_thread() in Python 3.9+ or a shared event loop.
+
+    Args:
+        coro: An awaitable coroutine to execute.
+
+    Returns:
+        The result of the coroutine execution.
+
+    Example:
+        >>> result = _run_async(some_async_function(arg1, arg2))
     """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

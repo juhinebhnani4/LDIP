@@ -1,10 +1,11 @@
 """Integration tests for Citation API routes.
 
 Story 3-1: Act Citation Extraction (AC: #4)
+Story 3-3: Citation Verification
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import jwt
@@ -628,6 +629,315 @@ class TestMarkActSkippedEndpoint:
                 )
 
             assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestVerifyCitationsBatchEndpoint:
+    """Tests for POST /api/matters/{matter_id}/citations/verify endpoint."""
+
+    @pytest.mark.anyio
+    async def test_verify_citations_batch_success(self) -> None:
+        """Should start batch verification for an Act."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_storage_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        act_document_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        mock_storage = MagicMock()
+        mock_storage.get_citations_by_matter = AsyncMock(return_value=([], 5))
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_storage_service] = lambda: mock_storage
+
+        try:
+            with patch("app.api.routes.citations.verify_citations_for_act") as mock_task:
+                mock_task.delay.return_value = MagicMock(id="task-123")
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                ) as client:
+                    response = await client.post(
+                        f"/api/matters/{matter_id}/citations/verify",
+                        json={
+                            "act_name": "Negotiable Instruments Act, 1881",
+                            "act_document_id": act_document_id,
+                        },
+                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                    )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["taskId"] == "task-123"
+                assert data["status"] == "started"
+                assert data["totalCitations"] == 5
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
+    async def test_verify_citations_batch_viewer_forbidden(self) -> None:
+        """Viewer role should not be able to trigger verification."""
+        from app.api.deps import get_matter_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    f"/api/matters/{matter_id}/citations/verify",
+                    json={
+                        "act_name": "Test Act",
+                        "act_document_id": str(uuid4()),
+                    },
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            assert response.status_code == 403
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestVerifySingleCitationEndpoint:
+    """Tests for POST /api/matters/{matter_id}/citations/{citation_id}/verify endpoint."""
+
+    @pytest.mark.anyio
+    async def test_verify_single_citation_success(self) -> None:
+        """Should start verification for a single citation."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_storage_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        citation_id = str(uuid4())
+        act_document_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_citation = create_mock_citation(matter_id, citation_id)
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        mock_storage = MagicMock()
+        mock_storage.get_citation = AsyncMock(return_value=mock_citation)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_storage_service] = lambda: mock_storage
+
+        try:
+            with patch("app.api.routes.citations.verify_single_citation") as mock_task:
+                mock_task.delay.return_value = MagicMock(id="task-456")
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                ) as client:
+                    response = await client.post(
+                        f"/api/matters/{matter_id}/citations/{citation_id}/verify",
+                        json={
+                            "act_document_id": act_document_id,
+                            "act_name": "Negotiable Instruments Act, 1881",
+                        },
+                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                    )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["taskId"] == "task-456"
+                assert data["totalCitations"] == 1
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
+    async def test_verify_single_citation_not_found(self) -> None:
+        """Should return 404 when citation not found."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_storage_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        citation_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        mock_storage = MagicMock()
+        mock_storage.get_citation = AsyncMock(return_value=None)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_storage_service] = lambda: mock_storage
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    f"/api/matters/{matter_id}/citations/{citation_id}/verify",
+                    json={
+                        "act_document_id": str(uuid4()),
+                        "act_name": "Test Act",
+                    },
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            assert response.status_code == 404
+            data = response.json()
+            assert data["detail"]["error"]["code"] == "CITATION_NOT_FOUND"
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestGetVerificationDetailsEndpoint:
+    """Tests for GET /api/matters/{matter_id}/citations/{citation_id}/verification endpoint."""
+
+    @pytest.mark.anyio
+    async def test_get_verification_details_success(self) -> None:
+        """Should get verification details for a citation."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_storage_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        citation_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_citation = create_mock_citation(matter_id, citation_id)
+        mock_citation.verification_status = VerificationStatus.VERIFIED
+        mock_citation.target_page = 10
+        mock_citation.confidence = 95.0
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
+
+        mock_storage = MagicMock()
+        mock_storage.get_citation = AsyncMock(return_value=mock_citation)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_storage_service] = lambda: mock_storage
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.get(
+                    f"/api/matters/{matter_id}/citations/{citation_id}/verification",
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "data" in data
+            assert data["data"]["status"] == "verified"
+            assert data["data"]["similarityScore"] == 95.0
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
+    async def test_get_verification_details_not_found(self) -> None:
+        """Should return 404 when citation not found."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_storage_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        citation_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
+
+        mock_storage = MagicMock()
+        mock_storage.get_citation = AsyncMock(return_value=None)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_storage_service] = lambda: mock_storage
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.get(
+                    f"/api/matters/{matter_id}/citations/{citation_id}/verification",
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestMarkActUploadedAndVerifyEndpoint:
+    """Tests for POST /api/matters/{matter_id}/citations/acts/mark-uploaded-verify endpoint."""
+
+    @pytest.mark.anyio
+    async def test_mark_uploaded_and_verify_success(self) -> None:
+        """Should mark act as uploaded and trigger verification."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.citations import _get_discovery_service
+        from app.core.config import get_settings
+
+        matter_id = str(uuid4())
+        act_document_id = str(uuid4())
+        user_id = "test-user-id"
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        mock_discovery = MagicMock()
+        mock_discovery.mark_act_uploaded = AsyncMock(return_value=True)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_discovery_service] = lambda: mock_discovery
+
+        try:
+            with patch("app.api.routes.citations.trigger_verification_on_act_upload") as mock_task:
+                mock_task.delay.return_value = MagicMock(id="task-789")
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                ) as client:
+                    response = await client.post(
+                        f"/api/matters/{matter_id}/citations/acts/mark-uploaded-verify",
+                        json={
+                            "act_name": "Negotiable Instruments Act, 1881",
+                            "act_document_id": act_document_id,
+                        },
+                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                    )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert data["resolutionStatus"] == "available"
+                mock_task.delay.assert_called_once()
         finally:
             app.dependency_overrides.clear()
 

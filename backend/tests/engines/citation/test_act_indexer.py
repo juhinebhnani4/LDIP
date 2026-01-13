@@ -335,16 +335,15 @@ class TestActIndexer:
         assert indexer._normalize_section("138 (1)") == "138(1)"
         assert indexer._normalize_section("  138  ") == "138"
 
-    def test_get_available_sections(self, mock_chunk_service):
+    @pytest.mark.asyncio
+    async def test_get_available_sections(self, mock_chunk_service):
         """Test getting available sections."""
         indexer = ActIndexer(chunk_service=mock_chunk_service)
 
         # First must index
-        asyncio.get_event_loop().run_until_complete(
-            indexer.index_act_document(
-                document_id="act-doc-123",
-                matter_id="matter-456",
-            )
+        await indexer.index_act_document(
+            document_id="act-doc-123",
+            matter_id="matter-456",
         )
 
         sections = indexer.get_available_sections("act-doc-123")
@@ -357,16 +356,15 @@ class TestActIndexer:
         with pytest.raises(ActNotIndexedError):
             indexer.get_available_sections("not-indexed")
 
-    def test_clear_cache(self, mock_chunk_service):
+    @pytest.mark.asyncio
+    async def test_clear_cache(self, mock_chunk_service):
         """Test clearing index cache."""
         indexer = ActIndexer(chunk_service=mock_chunk_service)
 
         # Index a document
-        asyncio.get_event_loop().run_until_complete(
-            indexer.index_act_document(
-                document_id="act-doc-123",
-                matter_id="matter-456",
-            )
+        await indexer.index_act_document(
+            document_id="act-doc-123",
+            matter_id="matter-456",
         )
 
         # Clear specific document
@@ -375,16 +373,15 @@ class TestActIndexer:
         with pytest.raises(ActNotIndexedError):
             indexer.get_available_sections("act-doc-123")
 
-    def test_clear_cache_all(self, mock_chunk_service):
+    @pytest.mark.asyncio
+    async def test_clear_cache_all(self, mock_chunk_service):
         """Test clearing entire cache."""
         indexer = ActIndexer(chunk_service=mock_chunk_service)
 
         # Index documents
-        asyncio.get_event_loop().run_until_complete(
-            indexer.index_act_document(
-                document_id="act-doc-123",
-                matter_id="matter-456",
-            )
+        await indexer.index_act_document(
+            document_id="act-doc-123",
+            matter_id="matter-456",
         )
 
         # Clear all

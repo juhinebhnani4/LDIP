@@ -4,6 +4,7 @@ Provides functionality for the Act Discovery Report showing which Acts
 are referenced but not yet uploaded, enabling user action.
 
 Story 3-1: Act Citation Extraction (AC: #4)
+Story 3-3: Citation Verification (trigger_verification_on_upload)
 """
 
 from datetime import datetime
@@ -275,6 +276,61 @@ class ActDiscoveryService:
                 error=str(e),
             )
             return False
+
+    async def trigger_verification_on_upload(
+        self,
+        matter_id: str,
+        act_name: str,
+        act_document_id: str,
+    ) -> str | None:
+        """Trigger verification for all citations when an Act is uploaded.
+
+        Called after an Act document is uploaded to verify all citations
+        referencing this Act.
+
+        Args:
+            matter_id: Matter UUID.
+            act_name: Act name (will be normalized).
+            act_document_id: UUID of the uploaded Act document.
+
+        Returns:
+            Celery task ID if verification was triggered, None otherwise.
+        """
+        try:
+            # Import here to avoid circular import
+            from app.workers.tasks.verification_tasks import verify_citations_for_act
+
+            logger.info(
+                "triggering_verification_on_upload",
+                matter_id=matter_id,
+                act_name=act_name,
+                act_document_id=act_document_id,
+            )
+
+            # Start verification task
+            task = verify_citations_for_act.delay(
+                matter_id=matter_id,
+                act_name=act_name,
+                act_document_id=act_document_id,
+            )
+
+            logger.info(
+                "verification_triggered_on_upload",
+                matter_id=matter_id,
+                act_name=act_name,
+                task_id=task.id,
+            )
+
+            return task.id
+
+        except Exception as e:
+            logger.error(
+                "trigger_verification_on_upload_failed",
+                matter_id=matter_id,
+                act_name=act_name,
+                error=str(e),
+            )
+            return None
 
     async def get_discovery_stats(
         self,

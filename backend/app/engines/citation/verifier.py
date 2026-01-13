@@ -46,12 +46,25 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES: Final[int] = 3
 INITIAL_RETRY_DELAY: Final[float] = 1.0
 MAX_RETRY_DELAY: Final[float] = 30.0
-RATE_LIMIT_DELAY: Final[float] = 0.5  # Delay between API calls
 
 # Similarity thresholds
 EXACT_MATCH_THRESHOLD: Final[float] = 95.0
-PARAPHRASE_THRESHOLD: Final[float] = 70.0
 MISMATCH_THRESHOLD: Final[float] = 50.0
+
+
+def _get_rate_limit_delay() -> float:
+    """Get rate limit delay from config or use default."""
+    return get_settings().verification_rate_limit_delay
+
+
+def _get_paraphrase_threshold() -> float:
+    """Get minimum similarity threshold for VERIFIED status from config."""
+    return get_settings().verification_min_similarity
+
+
+def _get_section_search_top_k() -> int:
+    """Get max section candidates to retrieve from config."""
+    return get_settings().verification_section_search_top_k
 
 
 # =============================================================================
@@ -241,7 +254,10 @@ class CitationVerifier:
 
             # Step 3: Compare quoted text if present
             diff_details = None
-            similarity_score = 100.0  # Default for section-only verification
+            # Default to 100% for section-only verification (no quoted_text).
+            # When only a section reference is cited without quoted text,
+            # finding the section is considered a complete match.
+            similarity_score = 100.0
             status = VerificationStatus.VERIFIED
 
             if citation.quoted_text and citation.quoted_text.strip():

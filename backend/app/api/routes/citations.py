@@ -942,6 +942,104 @@ async def verify_single_citation_endpoint(
 
 
 # =============================================================================
+# Verification Details Endpoint
+# =============================================================================
+
+
+class VerificationDetailsResponse(BaseModel):
+    """Response containing verification details for a citation."""
+
+    data: dict = Field(
+        ...,
+        description="Verification details",
+    )
+
+
+@router.get("/{citation_id}/verification")
+async def get_verification_details(
+    matter_id: str = Path(..., description="Matter UUID"),
+    citation_id: str = Path(..., description="Citation UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    storage_service=Depends(_get_storage_service),
+) -> VerificationDetailsResponse:
+    """Get verification details for a citation.
+
+    Returns the current verification status and any stored verification
+    metadata for the specified citation.
+
+    Args:
+        matter_id: Matter UUID.
+        citation_id: Citation UUID.
+        membership: Validated matter membership.
+        storage_service: Citation storage service.
+
+    Returns:
+        VerificationDetailsResponse with verification details.
+
+    Raises:
+        HTTPException 404: If citation not found.
+    """
+    logger.info(
+        "get_verification_details_request",
+        matter_id=matter_id,
+        citation_id=citation_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        citation = await storage_service.get_citation(citation_id, matter_id)
+
+        if citation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "CITATION_NOT_FOUND",
+                        "message": f"Citation {citation_id} not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Build verification details from citation
+        verification_data = {
+            "status": citation.verification_status.value,
+            "sectionFound": citation.target_page is not None,
+            "sectionText": None,  # Not stored in citation model
+            "targetPage": citation.target_page,
+            "targetBboxIds": citation.target_bbox_ids,
+            "similarityScore": citation.confidence,
+            "explanation": citation.extraction_metadata.get("verification_explanation"),
+            "diffDetails": citation.extraction_metadata.get("diff_details"),
+        }
+
+        return VerificationDetailsResponse(data=verification_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "get_verification_details_error",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to get verification details",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
 # Act Upload with Auto-Verification Trigger
 # =============================================================================
 

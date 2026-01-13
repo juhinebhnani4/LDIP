@@ -594,3 +594,45 @@ None
 - `frontend/src/types/citation.ts` - Added verification types and events
 - `frontend/src/lib/api/citations.ts` - Added verification API functions
 - `frontend/src/types/index.ts` - Updated exports
+
+### Code Review Fixes Applied (2026-01-13)
+
+**HIGH Priority Issues Fixed:**
+1. **HIGH-1**: Added missing API tests for verification endpoints in `test_citations.py`:
+   - `TestVerifyCitationsBatchEndpoint` - batch verification tests
+   - `TestVerifySingleCitationEndpoint` - single citation verification tests
+   - `TestGetVerificationDetailsEndpoint` - GET /verification endpoint tests
+   - `TestMarkActUploadedAndVerifyEndpoint` - combined upload+verify tests
+
+2. **HIGH-2**: Added `GET /api/matters/{matter_id}/citations/{citation_id}/verification` endpoint in `citations.py` and `getVerificationDetails()` function in frontend `citations.ts`
+
+3. **HIGH-3**: The `mark_act_uploaded_and_verify` endpoint properly triggers verification via `trigger_verification_on_act_upload.delay()`
+
+4. **HIGH-4**: Added `trigger_verification_on_upload()` method to `discovery.py` per story spec
+
+**MEDIUM Priority Issues Fixed:**
+1. **MEDIUM-1**: Added `getCitationsForVerification()` convenience function to frontend API client
+2. **MEDIUM-2**: Verified `VerificationResultResponse` is properly exported from `types/index.ts`
+3. **MEDIUM-3**: Improved docstrings for `_run_async()` helper in both `document_tasks.py` and `verification_tasks.py` with proper documentation of asyncio pattern caveats
+4. **MEDIUM-4**: Added `citation_verification` to `PIPELINE_STAGES` in `document_tasks.py`
+5. **MEDIUM-5**: Added environment variable configuration in `config.py`:
+   - `verification_batch_size` (default: 10)
+   - `verification_rate_limit_delay` (default: 0.5s)
+   - `verification_min_similarity` (default: 70.0)
+   - `verification_section_search_top_k` (default: 5)
+
+**LOW Priority Issues Fixed:**
+1. **LOW-1**: Fixed deprecated `asyncio.get_event_loop()` pattern in `test_act_indexer.py` - converted to `@pytest.mark.asyncio` async tests
+2. **LOW-2**: Added clarifying comment for similarity_score default (100.0) explaining it's intentional for section-only verification
+3. **LOW-3**: Enhanced `_run_async()` docstrings with Args, Returns, Example, and Note sections
+
+**Files Modified in Review:**
+- `backend/tests/api/routes/test_citations.py` - Added verification endpoint tests
+- `backend/app/api/routes/citations.py` - Added GET verification details endpoint
+- `backend/app/engines/citation/discovery.py` - Added trigger_verification_on_upload method
+- `backend/app/workers/tasks/document_tasks.py` - Added citation_verification to PIPELINE_STAGES, improved docstring
+- `backend/app/workers/tasks/verification_tasks.py` - Improved _run_async docstring
+- `backend/app/engines/citation/verifier.py` - Added config helper functions, improved similarity score comment
+- `backend/app/core/config.py` - Added verification configuration settings
+- `backend/tests/engines/citation/test_act_indexer.py` - Fixed deprecated asyncio patterns
+- `frontend/src/lib/api/citations.ts` - Added getVerificationDetails and getCitationsForVerification functions

@@ -23,6 +23,10 @@ from app.engines.contradiction.comparator import (
     StatementPair,
     get_statement_comparator,
 )
+from app.engines.contradiction.scorer import (
+    ContradictionScorer,
+    get_contradiction_scorer,
+)
 from app.engines.contradiction.statement_query import (
     StatementQueryEngine,
     ValueExtractor,
@@ -45,4 +49,7 @@ __all__ = [
     # Story 5-3
     "ContradictionClassifier",
     "get_contradiction_classifier",
+    # Story 5-4
+    "ContradictionScorer",
+    "get_contradiction_scorer",
 ]

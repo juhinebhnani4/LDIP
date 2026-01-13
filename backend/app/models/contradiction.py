@@ -504,3 +504,161 @@ class ClassificationResult(BaseModel):
     processing_time_ms: int = Field(
         ..., alias="processingTimeMs", ge=0, description="Processing time in milliseconds"
     )
+
+
+# =============================================================================
+# Severity Scoring Models (Story 5-4)
+# =============================================================================
+
+
+class SeverityLevel(str, Enum):
+    """Severity level for contradiction prioritization.
+
+    Story 5-4: Attorneys can prioritize by severity to focus on critical issues first.
+
+    Values:
+        HIGH: Clear factual differences (dates, amounts) with high confidence
+        MEDIUM: Interpretive conflicts or moderate confidence factual conflicts
+        LOW: Uncertain conflicts or low confidence findings
+    """
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class EvidenceLink(BaseModel):
+    """Link to source document evidence for a statement.
+
+    Story 5-4: Provides document source references for attorney verification.
+
+    Contains:
+    - Statement reference (chunk_id)
+    - Document reference (UUID and display name)
+    - Page reference for navigation
+    - Excerpt for quick preview
+    - Bounding box references for future UI overlay support
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    statement_id: str = Field(
+        ..., alias="statementId", description="Chunk ID reference"
+    )
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
+    document_name: str = Field(
+        ..., alias="documentName", description="Document filename for display"
+    )
+    page_number: int | None = Field(
+        None, alias="pageNumber", description="Page reference for navigation"
+    )
+    excerpt: str = Field(
+        ..., description="Statement content excerpt (truncated to 200 chars)"
+    )
+    bbox_ids: list[str] = Field(
+        default_factory=list,
+        alias="bboxIds",
+        description="Bounding box references for future UI overlay support",
+    )
+
+
+class ScoredContradiction(BaseModel):
+    """A contradiction with severity scoring and attorney-ready explanation.
+
+    Story 5-4: Final stage of the Contradiction Engine pipeline.
+    Extends ClassifiedContradiction with severity and explanation.
+
+    Contains:
+    - Reference to the classified contradiction
+    - Severity level (HIGH, MEDIUM, LOW)
+    - Severity reasoning (brief justification)
+    - Attorney-ready explanation with document references
+    - Evidence links for both statements
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    comparison_id: str = Field(
+        ...,
+        alias="comparisonId",
+        description="Reference to the comparison (statement_a_id + statement_b_id)",
+    )
+    statement_a_id: str = Field(
+        ..., alias="statementAId", description="UUID of first statement (chunk_id)"
+    )
+    statement_b_id: str = Field(
+        ..., alias="statementBId", description="UUID of second statement (chunk_id)"
+    )
+    contradiction_type: ContradictionType = Field(
+        ..., alias="contradictionType", description="Classification of contradiction"
+    )
+    severity: SeverityLevel = Field(
+        ..., description="Severity level: high, medium, or low"
+    )
+    severity_reasoning: str = Field(
+        ...,
+        alias="severityReasoning",
+        description="Brief explanation of why this severity was assigned",
+    )
+    explanation: str = Field(
+        ..., description="Attorney-ready natural language explanation"
+    )
+    evidence_links: list[EvidenceLink] = Field(
+        ...,
+        alias="evidenceLinks",
+        description="Evidence links for both statements with document sources",
+    )
+    extracted_values: ExtractedValues | None = Field(
+        None,
+        alias="extractedValues",
+        description="Structured values for date/amount display",
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Confidence score from comparison"
+    )
+
+
+class ScoringResult(BaseModel):
+    """API response model for scoring operation.
+
+    Story 5-4: Contains scored contradiction with metadata.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    scored_contradiction: ScoredContradiction = Field(
+        ..., alias="scoredContradiction", description="The scored contradiction"
+    )
+    processing_time_ms: int = Field(
+        ..., alias="processingTimeMs", ge=0, description="Processing time in milliseconds"
+    )
+
+
+class ScoringBatchResult(BaseModel):
+    """API response model for batch scoring operation.
+
+    Story 5-4: Contains all scored contradictions with summary metadata.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    scored_contradictions: list[ScoredContradiction] = Field(
+        ..., alias="scoredContradictions", description="All scored contradictions"
+    )
+    total_scored: int = Field(
+        ..., alias="totalScored", description="Total number of contradictions scored"
+    )
+    high_count: int = Field(
+        ..., alias="highCount", description="Number of HIGH severity contradictions"
+    )
+    medium_count: int = Field(
+        ..., alias="mediumCount", description="Number of MEDIUM severity contradictions"
+    )
+    low_count: int = Field(
+        ..., alias="lowCount", description="Number of LOW severity contradictions"
+    )
+    processing_time_ms: int = Field(
+        ..., alias="processingTimeMs", ge=0, description="Total processing time in milliseconds"
+    )

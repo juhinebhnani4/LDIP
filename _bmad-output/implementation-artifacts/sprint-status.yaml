@@ -106,7 +106,7 @@ development_status:
   5-1-entity-grouped-statement-querying: complete  # Implemented 2026-01-14
   5-2-statement-pair-comparison-gpt4: complete  # Implemented 2026-01-14
   5-3-contradiction-type-classification: done  # Code review complete 2026-01-14
-  5-4-severity-scoring-explanation: backlog
+  5-4-severity-scoring-explanation: review
   epic-5-retrospective: optional
 
   # Epic 6: Engine Orchestrator

@@ -1,6 +1,7 @@
 # Story 2B.3: Display OCR Quality Assessment
 
-Status: done
+Status: review
+<!-- Code complete, manual steps pending + deferred test tasks - see Tasks 13-14 and "Manual Steps" section -->
 
 ## Story
 
@@ -562,6 +563,8 @@ OCR_PAGE_HIGHLIGHT_THRESHOLD=0.60
 ```
 
 ### Manual Steps Required After Implementation
+
+**⚠️ NOTE: Manual steps still pending - complete before marking story truly "done"**
 
 #### Migrations
 - [ ] Run: `supabase db push` or apply `YYYYMMDD_add_ocr_quality_columns.sql`

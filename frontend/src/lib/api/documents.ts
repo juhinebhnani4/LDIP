@@ -30,6 +30,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 /** Upload API endpoint */
 const UPLOAD_ENDPOINT = `${API_BASE_URL}/api/documents/upload`;
 
+/** Maximum concurrent uploads to prevent browser/network saturation */
+const MAX_CONCURRENT_UPLOADS = 3;
+
 interface UploadOptions {
   matterId: string;
   documentType?: DocumentType;
@@ -148,7 +151,10 @@ export async function uploadFile(
 }
 
 /**
- * Upload multiple files sequentially
+ * Upload multiple files with concurrency throttling
+ *
+ * Limits concurrent uploads to MAX_CONCURRENT_UPLOADS to prevent
+ * browser/network saturation when uploading many files at once.
  *
  * @param files - Array of UploadFile objects from store
  * @param matterId - Matter ID for isolation
@@ -163,11 +169,19 @@ export async function uploadFiles(
   useUploadStore.getState().setUploading(true);
 
   try {
-    const results = await Promise.allSettled(
-      files.map(({ id, file }) =>
-        uploadFile(file, id, { matterId, documentType })
-      )
-    );
+    const results: PromiseSettledResult<UploadResponse>[] = [];
+
+    // Process files in batches of MAX_CONCURRENT_UPLOADS
+    for (let i = 0; i < files.length; i += MAX_CONCURRENT_UPLOADS) {
+      const batch = files.slice(i, i + MAX_CONCURRENT_UPLOADS);
+      const batchResults = await Promise.allSettled(
+        batch.map(({ id, file }) =>
+          uploadFile(file, id, { matterId, documentType })
+        )
+      );
+      results.push(...batchResults);
+    }
+
     return results;
   } finally {
     useUploadStore.getState().setUploading(false);

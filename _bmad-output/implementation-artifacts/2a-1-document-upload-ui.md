@@ -374,8 +374,11 @@ N/A
 - frontend/src/stores/index.ts (added uploadStore export)
 - frontend/vitest.setup.ts (added sonner toast mock)
 - frontend/package.json (added @radix-ui/react-progress dependency)
+- frontend/src/lib/api/documents.ts (added MAX_CONCURRENT_UPLOADS throttling)
+- frontend/src/components/features/document/UploadDropzone.test.tsx (added matter isolation tests)
 
 ## Change Log
 
 - 2026-01-06: Initial implementation of document upload UI (Story 2a-1)
 - 2026-01-06: Code review fixes - added UploadProgress.test.tsx (22 tests), fixed act() warnings, added AbortController cleanup on unmount, added mounted state tracking, replaced magic number with INVALID_STATE_DISPLAY_MS constant, removed redundant aria attributes from Progress component
+- 2026-01-13: Code review fixes - added upload concurrency throttling (MAX_CONCURRENT_UPLOADS=3) to prevent browser saturation; added matter isolation tests to ensure matterId is always passed for RLS enforcement

@@ -96,6 +96,11 @@ So that **I have a production-ready foundation for building the LDIP API**.
   - [x] Run `pytest` to verify test setup works
   - [x] Verify no linting errors with `ruff check .`
 
+### Review Follow-ups (AI)
+
+- [ ] [AI-Review][MEDIUM] Add JWT validation and RLS behavior smoke tests - current tests limited to health/wiring (Story 1-7 or Epic 13 scope)
+- [ ] [AI-Review][MEDIUM] Add migration health check test or step to verify Alembic migrations run in each environment (Epic 13 scope)
+
 ## Dev Notes
 
 ### Critical Architecture Constraints

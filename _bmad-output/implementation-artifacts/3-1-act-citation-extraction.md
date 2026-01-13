@@ -1,6 +1,7 @@
 # Story 3.1: Implement Act Citation Extraction
 
-Status: done
+Status: review
+<!-- Code complete, manual steps pending - see "Manual Steps Required After Implementation" section -->
 
 ## Story
 
@@ -506,6 +507,8 @@ CITATION_MIN_CONFIDENCE=70
 
 ### Manual Steps Required After Implementation
 
+**⚠️ NOTE: Manual steps still pending - complete before marking story truly "done"**
+
 #### Migrations
 - [ ] Run: `supabase migration up` for citations and act_resolutions tables
 
@@ -513,7 +516,7 @@ CITATION_MIN_CONFIDENCE=70
 - [ ] Optionally add citation extraction tuning variables to backend `.env`
 
 #### Dashboard Configuration
-- [ ] No dashboard changes required
+- [x] No dashboard changes required
 
 #### Manual Tests
 - [ ] Upload a case document with known citations

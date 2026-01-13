@@ -87,6 +87,7 @@ So that **I have a production-ready foundation for building the LDIP user interf
 - [x] [AI-Review][MEDIUM] Enforce Prettier formatting consistently by aligning Prettier config with the repo’s existing style. `frontend/.prettierrc:1-9`
 - [x] [AI-Review][LOW] Gate `console.error` logging to non-production. `frontend/src/app/error.tsx:12-18`
 - [x] [AI-Review][LOW] Replace leftover create-next-app template content (home page + README) with LDIP-specific copy. `frontend/src/app/(dashboard)/page.tsx:1-35` and `frontend/README.md:1-45`
+- [ ] [AI-Review][MEDIUM] Add CI workflow for lint/test gates - treating "project boots locally" as sufficient leaves room for silent regressions (Epic 13 scope)
 
 ## Dev Notes
 
@@ -262,6 +263,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - 2026-01-03: Review follow-ups implemented (Next.js 16 baseline docs aligned; dark mode provider; next-env fix; safer Supabase init; template cleanup)
 - 2026-01-03: Code-review fixes applied (route conflict removed; next-env cleaned; metadata updated; docs + file list synced)
 - 2026-01-05: Code-review fixups applied (ensure `next-env.d.ts` is tracked + remove generated `.next` import; add `tailwind.config.ts` so repo matches architecture/docs)
+- 2026-01-13: Code-review fix: Removed `.env.local` from File List (secrets should never be tracked; only `.env.local.example` is tracked)
 
 ### Senior Developer Review (AI)
 
@@ -314,7 +316,6 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - frontend/src/types/index.ts
 - frontend/src/hooks/index.ts
 - frontend/.env.local.example
-- frontend/.env.local
 - frontend/.prettierrc
 - frontend/.prettierignore
 - frontend/tsconfig.json (modified from default)

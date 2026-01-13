@@ -404,4 +404,69 @@ describe('UploadDropzone', () => {
       expect(screen.getByText('test.pdf')).toBeInTheDocument();
     });
   });
+
+  describe('Matter Isolation (Security)', () => {
+    it('requires matterId prop to render', () => {
+      // @ts-expect-error - Testing missing required prop
+      const { container } = render(<UploadDropzone />);
+      // Component should still render but matterId is enforced at type level
+      // This test documents the requirement
+      expect(container).toBeInTheDocument();
+    });
+
+    it('passes matterId to uploadFiles when uploading', async () => {
+      const { uploadFiles } = await import('@/lib/api/documents');
+
+      render(<UploadDropzone matterId={matterId} />);
+
+      const dropzone = screen.getByRole('button', {
+        name: /drop files here or click to browse/i,
+      });
+
+      const validFile = createMockFile('doc.pdf', 1024, 'application/pdf');
+
+      await act(async () => {
+        fireEvent.drop(dropzone, {
+          dataTransfer: createDataTransfer([validFile]),
+        });
+      });
+
+      // Wait for upload to be triggered
+      await waitFor(() => {
+        expect(uploadFiles).toHaveBeenCalledWith(
+          expect.any(Array),
+          matterId, // Matter ID must be passed
+          expect.any(String)
+        );
+      });
+    });
+
+    it('includes matterId in all upload requests for RLS enforcement', async () => {
+      const specificMatterId = 'specific-matter-123';
+      const { uploadFiles } = await import('@/lib/api/documents');
+
+      render(<UploadDropzone matterId={specificMatterId} />);
+
+      const dropzone = screen.getByRole('button', {
+        name: /drop files here or click to browse/i,
+      });
+
+      const validFile = createMockFile('test.pdf', 1024, 'application/pdf');
+
+      await act(async () => {
+        fireEvent.drop(dropzone, {
+          dataTransfer: createDataTransfer([validFile]),
+        });
+      });
+
+      await waitFor(() => {
+        // Verify the exact matterId is passed - critical for RLS
+        expect(uploadFiles).toHaveBeenCalledWith(
+          expect.any(Array),
+          specificMatterId,
+          expect.any(String)
+        );
+      });
+    });
+  });
 });

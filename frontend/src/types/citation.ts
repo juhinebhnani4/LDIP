@@ -307,3 +307,38 @@ export interface CitationErrorDetail {
 export interface CitationErrorResponse {
   error: CitationErrorDetail;
 }
+
+// =============================================================================
+// Split-View Types (Story 3-4)
+// =============================================================================
+
+/** Bounding box data for split view display */
+export interface SplitViewBoundingBox {
+  bboxId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+}
+
+/** Document view data for one side of split view */
+export interface DocumentViewData {
+  documentId: string;
+  documentUrl: string;
+  pageNumber: number;
+  boundingBoxes: SplitViewBoundingBox[];
+}
+
+/** Complete split view data for citation display */
+export interface SplitViewData {
+  citation: Citation;
+  sourceDocument: DocumentViewData;
+  targetDocument: DocumentViewData | null;
+  verification: VerificationResult | null;
+}
+
+/** Response for split view endpoint */
+export interface SplitViewResponse {
+  data: SplitViewData;
+}

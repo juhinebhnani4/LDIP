@@ -23,6 +23,22 @@ export {
   selectIsProcessing,
 } from './processingStore';
 
+// Split view store for citation highlighting (Story 3-4)
+export {
+  useSplitViewStore,
+  selectIsOpen,
+  selectIsFullScreen,
+  selectCurrentCitationId,
+  selectSplitViewData,
+  selectIsLoading,
+  selectError,
+  selectSourceViewState,
+  selectTargetViewState,
+  selectCanNavigatePrev,
+  selectCanNavigateNext,
+  selectNavigationInfo,
+} from './splitViewStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

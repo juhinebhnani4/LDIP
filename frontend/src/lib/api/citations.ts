@@ -19,6 +19,7 @@ import type {
   CitationSummaryResponse,
   MarkActSkippedRequest,
   MarkActUploadedRequest,
+  SplitViewResponse,
   VerificationResultResponse,
   VerificationStatus,
   VerifyActRequest,
@@ -415,4 +416,36 @@ export async function getCitationsForVerification(
   return getCitations(matterId, {
     verificationStatus: options?.status,
   });
+}
+
+// =============================================================================
+// Split-View Operations (Story 3-4)
+// =============================================================================
+
+/**
+ * Get split-view data for a citation.
+ *
+ * Returns all data needed to render the split-view panel including:
+ * - Source document URL, page, and bounding boxes
+ * - Target Act document URL, page, and bounding boxes (if available)
+ * - Verification result with explanation
+ *
+ * @param matterId - Matter UUID
+ * @param citationId - Citation UUID
+ * @returns Split view data for rendering
+ *
+ * @example
+ * ```ts
+ * const splitView = await getCitationSplitViewData('matter-123', 'citation-456');
+ * console.log(splitView.data.sourceDocument.pageNumber); // 45
+ * console.log(splitView.data.targetDocument?.pageNumber); // 89
+ * ```
+ */
+export async function getCitationSplitViewData(
+  matterId: string,
+  citationId: string
+): Promise<SplitViewResponse> {
+  return api.get<SplitViewResponse>(
+    `/api/matters/${matterId}/citations/${citationId}/split-view`
+  );
 }

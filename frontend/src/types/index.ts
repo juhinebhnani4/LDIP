@@ -110,7 +110,7 @@ export {
   STAGE_LABELS,
 } from './job';
 
-// Citation types (Story 3-1: Act Citation Extraction, Story 3-3: Verification)
+// Citation types (Story 3-1: Act Citation Extraction, Story 3-3: Verification, Story 3-4: Split View)
 export type {
   ActDiscoveryResponse,
   ActDiscoverySummary,
@@ -131,11 +131,15 @@ export type {
   CitationSummaryResponse,
   CitationVerifiedEvent,
   DiffDetail,
+  DocumentViewData,
   MarkActSkippedRequest,
   MarkActUploadedRequest,
   MatchType,
   QuoteComparison,
   SectionMatch,
+  SplitViewBoundingBox,
+  SplitViewData,
+  SplitViewResponse,
   UserAction,
   VerificationCompleteEvent,
   VerificationEvent,
@@ -146,3 +150,17 @@ export type {
   VerifyActRequest,
   VerifyCitationRequest,
 } from './citation';
+
+// PDF types (Story 3-4: Split-View Citation Highlighting)
+export type {
+  BoundingBox as PdfBoundingBox,
+  BoundingBoxData,
+  CanvasRect,
+  HighlightColors,
+  HighlightStatus,
+  PdfViewerError,
+  PdfViewerState,
+  ZoomLevel,
+} from './pdf';
+
+export { HIGHLIGHT_COLORS, PDF_KEYBOARD_SHORTCUTS } from './pdf';

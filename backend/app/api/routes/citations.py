@@ -50,6 +50,11 @@ from app.workers.tasks.verification_tasks import (
     verify_single_citation,
 )
 
+# Split-view specific imports
+from app.services.storage_service import get_storage_service
+from app.services.bounding_box_service import get_bounding_box_service
+from app.services.supabase.client import get_service_client
+
 
 # =============================================================================
 # Request/Response Models
@@ -1130,6 +1135,258 @@ async def mark_act_uploaded_and_verify(
                 "error": {
                     "code": "INTERNAL_ERROR",
                     "message": "Failed to mark Act as uploaded",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Split-View Endpoint (Story 3-4)
+# =============================================================================
+
+
+class SplitViewBoundingBox(BaseModel):
+    """Bounding box data for split view display."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    bbox_id: str = Field(..., alias="bboxId", description="Bounding box UUID")
+    x: float = Field(..., description="Normalized x coordinate (0-1)")
+    y: float = Field(..., description="Normalized y coordinate (0-1)")
+    width: float = Field(..., description="Normalized width (0-1)")
+    height: float = Field(..., description="Normalized height (0-1)")
+    text: str = Field(default="", description="Text content of bbox")
+
+
+class DocumentViewDataModel(BaseModel):
+    """Document view data for one side of split view."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    document_id: str = Field(..., alias="documentId", description="Document UUID")
+    document_url: str = Field(..., alias="documentUrl", description="Signed URL for PDF")
+    page_number: int = Field(..., alias="pageNumber", description="Page to display (1-indexed)")
+    bounding_boxes: list[SplitViewBoundingBox] = Field(
+        ..., alias="boundingBoxes", description="Bounding boxes to highlight"
+    )
+
+
+class SplitViewDataModel(BaseModel):
+    """Complete split view data for citation display."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    citation: Citation
+    source_document: DocumentViewDataModel = Field(..., alias="sourceDocument")
+    target_document: DocumentViewDataModel | None = Field(None, alias="targetDocument")
+    verification: VerificationResult | None = None
+
+
+class SplitViewResponseModel(BaseModel):
+    """Response for split view endpoint."""
+
+    data: SplitViewDataModel
+
+
+@router.get("/{citation_id}/split-view", response_model=SplitViewResponseModel)
+async def get_citation_split_view(
+    matter_id: str = Path(..., description="Matter UUID"),
+    citation_id: str = Path(..., description="Citation UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    storage_service=Depends(_get_storage_service),
+    discovery_service=Depends(_get_discovery_service),
+) -> SplitViewResponseModel:
+    """Get split-view data for a citation.
+
+    Returns all data needed to render the split-view panel including:
+    - Source document URL, page, and bounding boxes (case file)
+    - Target Act document URL, page, and bounding boxes (if available)
+    - Verification result with explanation
+
+    Args:
+        matter_id: Matter UUID.
+        citation_id: Citation UUID.
+        membership: Validated matter membership.
+        storage_service: Citation storage service.
+        discovery_service: Act discovery service.
+
+    Returns:
+        SplitViewResponseModel with source and target document data.
+
+    Raises:
+        HTTPException 404: If citation not found.
+    """
+    logger.info(
+        "get_citation_split_view_request",
+        matter_id=matter_id,
+        citation_id=citation_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Get citation
+        citation = await storage_service.get_citation(citation_id, matter_id)
+
+        if citation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "CITATION_NOT_FOUND",
+                        "message": f"Citation {citation_id} not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        import asyncio
+        # Get storage service for signed URLs
+        file_storage = get_storage_service()
+        bbox_service = get_bounding_box_service()
+
+        # Build source document data (case file where citation was found)
+        source_document_id = citation.document_id
+        source_page = citation.source_page or 1
+
+        # Get source document storage path
+        client = get_service_client()
+        doc_result = await asyncio.to_thread(
+            lambda: client.table("documents").select("storage_path, filename").eq("id", source_document_id).single().execute()
+        )
+
+        if not doc_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "SOURCE_DOCUMENT_NOT_FOUND",
+                        "message": "Source document not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        source_storage_path = doc_result.data["storage_path"]
+        source_url = file_storage.get_signed_url(source_storage_path, expires_in=3600)
+
+        # Get source bounding boxes (sync service, use to_thread)
+        source_bboxes: list[SplitViewBoundingBox] = []
+        if citation.source_bbox_ids:
+            bboxes = await asyncio.to_thread(
+                bbox_service.get_bounding_boxes_by_ids, citation.source_bbox_ids
+            )
+            source_bboxes = [
+                SplitViewBoundingBox(
+                    bbox_id=str(bbox["id"]),
+                    x=bbox["x"],
+                    y=bbox["y"],
+                    width=bbox["width"],
+                    height=bbox["height"],
+                    text=bbox.get("text", ""),
+                )
+                for bbox in bboxes
+            ]
+
+        source_doc_data = DocumentViewDataModel(
+            document_id=source_document_id,
+            document_url=source_url,
+            page_number=source_page,
+            bounding_boxes=source_bboxes,
+        )
+
+        # Build target document data (Act document) if available
+        target_doc_data: DocumentViewDataModel | None = None
+        verification_result: VerificationResult | None = None
+
+        if citation.verification_status not in (VerificationStatus.PENDING, VerificationStatus.ACT_UNAVAILABLE):
+            # Get Act document info from act resolution
+            act_resolution = await discovery_service.get_act_resolution_by_name(
+                matter_id=matter_id,
+                act_name=citation.act_name,
+            )
+
+            if act_resolution and act_resolution.act_document_id:
+                # Get target document storage path
+                target_doc_result = await asyncio.to_thread(
+                    lambda: client.table("documents").select("storage_path, filename").eq("id", act_resolution.act_document_id).single().execute()
+                )
+
+                if target_doc_result.data:
+                    target_storage_path = target_doc_result.data["storage_path"]
+                    target_url = file_storage.get_signed_url(target_storage_path, expires_in=3600)
+
+                    target_page = citation.target_page or 1
+
+                    # Get target bounding boxes
+                    target_bboxes: list[SplitViewBoundingBox] = []
+                    if citation.target_bbox_ids:
+                        target_bbox_data = await asyncio.to_thread(
+                            bbox_service.get_bounding_boxes_by_ids, citation.target_bbox_ids
+                        )
+                        target_bboxes = [
+                            SplitViewBoundingBox(
+                                bbox_id=str(bbox["id"]),
+                                x=bbox["x"],
+                                y=bbox["y"],
+                                width=bbox["width"],
+                                height=bbox["height"],
+                                text=bbox.get("text", ""),
+                            )
+                            for bbox in target_bbox_data
+                        ]
+
+                    target_doc_data = DocumentViewDataModel(
+                        document_id=act_resolution.act_document_id,
+                        document_url=target_url,
+                        page_number=target_page,
+                        bounding_boxes=target_bboxes,
+                    )
+
+        # Build verification result
+        if citation.verification_status != VerificationStatus.PENDING:
+            verification_result = VerificationResult(
+                status=citation.verification_status,
+                section_found=citation.target_page is not None,
+                similarity_score=citation.confidence,
+                explanation=citation.extraction_metadata.get("verification_explanation"),
+                diff_details=citation.extraction_metadata.get("diff_details"),
+            )
+
+        split_view_data = SplitViewDataModel(
+            citation=citation,
+            source_document=source_doc_data,
+            target_document=target_doc_data,
+            verification=verification_result,
+        )
+
+        logger.info(
+            "get_citation_split_view_success",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            has_target=target_doc_data is not None,
+        )
+
+        return SplitViewResponseModel(data=split_view_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "get_citation_split_view_error",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to get split view data",
                     "details": {},
                 }
             },

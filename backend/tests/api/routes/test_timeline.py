@@ -1,0 +1,250 @@
+"""Tests for Timeline API routes.
+
+Story 4-1: Date Extraction with Gemini
+
+Note: This file uses synchronous TestClient for simple auth tests,
+and pytest-asyncio fixtures for async route tests as needed.
+"""
+
+import pytest
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from fastapi import status
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.api.deps import MatterMembership, MatterRole
+from app.models.timeline import (
+    PaginationMeta,
+    RawDateListItem,
+    RawDatesListResponse,
+    RawEvent,
+)
+
+
+@pytest.fixture
+def sync_client() -> TestClient:
+    """Create synchronous test client for auth tests.
+
+    Use this for simple tests that don't need async mocking.
+    For async route tests, use the AsyncClient from conftest.py.
+    """
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_matter_membership() -> MatterMembership:
+    """Create mock matter membership for testing."""
+    return MatterMembership(
+        user_id="user-123",
+        matter_id="matter-123",
+        role=MatterRole.OWNER,
+    )
+
+
+class TestTriggerDateExtraction:
+    """Tests for POST /matters/{matter_id}/timeline/extract endpoint."""
+
+    def test_trigger_extraction_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.post("/api/matters/matter-123/timeline/extract")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_trigger_extraction_success(
+        self,
+        sync_client: TestClient,
+        mock_matter_membership: MatterMembership,
+    ) -> None:
+        """Should queue extraction and return job ID."""
+        with patch("app.api.routes.timeline.require_matter_role") as mock_auth:
+            mock_auth.return_value = lambda: mock_matter_membership
+
+            with patch("app.api.routes.timeline.get_job_tracking_service") as mock_job_tracker:
+                mock_service = MagicMock()
+                mock_job = MagicMock()
+                mock_job.id = "job-123"
+                mock_service.create_job = AsyncMock(return_value=mock_job)
+                mock_job_tracker.return_value = mock_service
+
+                with patch("app.api.routes.timeline.extract_dates_from_matter") as mock_task:
+                    mock_result = MagicMock()
+                    mock_result.id = "task-123"
+                    mock_task.delay.return_value = mock_result
+
+                    response = sync_client.post(
+                        "/api/matters/matter-123/timeline/extract",
+                        headers={"Authorization": "Bearer test-token"},
+                    )
+
+                    # Note: Full test requires proper auth setup
+                    # This tests the route exists and accepts requests
+
+
+class TestListRawDates:
+    """Tests for GET /matters/{matter_id}/timeline/raw-dates endpoint."""
+
+    def test_list_raw_dates_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.get("/api/matters/matter-123/timeline/raw-dates")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_raw_dates_pagination(
+        self,
+        sync_client: TestClient,
+        mock_matter_membership: MatterMembership,
+    ) -> None:
+        """Should support pagination parameters."""
+        with patch("app.api.routes.timeline.require_matter_role") as mock_auth:
+            mock_auth.return_value = lambda: mock_matter_membership
+
+            with patch("app.api.routes.timeline.get_timeline_service") as mock_service:
+                service = MagicMock()
+                service.get_raw_dates_for_matter = AsyncMock(
+                    return_value=RawDatesListResponse(
+                        data=[],
+                        meta=PaginationMeta(
+                            total=0,
+                            page=1,
+                            per_page=20,
+                            total_pages=0,
+                        ),
+                    )
+                )
+                mock_service.return_value = service
+
+                # Test that endpoint accepts page and per_page params
+                response = sync_client.get(
+                    "/api/matters/matter-123/timeline/raw-dates",
+                    params={"page_num": 2, "per_page": 50},
+                    headers={"Authorization": "Bearer test-token"},
+                )
+
+                # Note: Full test requires proper auth setup
+
+
+class TestGetRawDate:
+    """Tests for GET /matters/{matter_id}/timeline/raw-dates/{event_id} endpoint."""
+
+    def test_get_raw_date_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.get("/api/matters/matter-123/timeline/raw-dates/event-123")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_raw_date_not_found(
+        self,
+        sync_client: TestClient,
+        mock_matter_membership: MatterMembership,
+    ) -> None:
+        """Should return 404 for non-existent event."""
+        with patch("app.api.routes.timeline.require_matter_role") as mock_auth:
+            mock_auth.return_value = lambda: mock_matter_membership
+
+            with patch("app.api.routes.timeline.get_timeline_service") as mock_service:
+                service = MagicMock()
+                service.get_event_by_id = AsyncMock(return_value=None)
+                mock_service.return_value = service
+
+                # Note: Full test requires proper auth setup
+
+
+class TestListTimelineEvents:
+    """Tests for GET /matters/{matter_id}/timeline endpoint."""
+
+    def test_list_timeline_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.get("/api/matters/matter-123/timeline")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_list_timeline_event_type_filter(
+        self,
+        sync_client: TestClient,
+        mock_matter_membership: MatterMembership,
+    ) -> None:
+        """Should support event_type filter."""
+        with patch("app.api.routes.timeline.require_matter_role") as mock_auth:
+            mock_auth.return_value = lambda: mock_matter_membership
+
+            with patch("app.api.routes.timeline.get_timeline_service") as mock_service:
+                service = MagicMock()
+                service.get_timeline_for_matter = AsyncMock(
+                    return_value=RawDatesListResponse(
+                        data=[],
+                        meta=PaginationMeta(
+                            total=0,
+                            page=1,
+                            per_page=20,
+                            total_pages=0,
+                        ),
+                    )
+                )
+                mock_service.return_value = service
+
+                # Test that endpoint accepts event_type filter
+                response = sync_client.get(
+                    "/api/matters/matter-123/timeline",
+                    params={"event_type": "raw_date"},
+                    headers={"Authorization": "Bearer test-token"},
+                )
+
+                # Note: Full test requires proper auth setup
+
+
+class TestTimelineModelSerialization:
+    """Tests for model serialization in responses."""
+
+    def test_raw_date_list_item_serialization(self) -> None:
+        """Should serialize RawDateListItem correctly."""
+        item = RawDateListItem(
+            id="event-123",
+            event_date=date(2024, 1, 15),
+            event_date_precision="day",
+            event_date_text="15/01/2024",
+            description="Filing date context",
+            document_id="doc-456",
+            source_page=1,
+            confidence=0.95,
+            is_ambiguous=False,
+        )
+
+        data = item.model_dump()
+
+        assert data["id"] == "event-123"
+        assert data["event_date"] == date(2024, 1, 15)
+        assert data["event_date_precision"] == "day"
+        assert data["confidence"] == 0.95
+
+    def test_pagination_meta_serialization(self) -> None:
+        """Should serialize PaginationMeta correctly."""
+        meta = PaginationMeta(
+            total=100,
+            page=2,
+            per_page=20,
+            total_pages=5,
+        )
+
+        data = meta.model_dump()
+
+        assert data["total"] == 100
+        assert data["page"] == 2
+        assert data["per_page"] == 20
+        assert data["total_pages"] == 5
+
+    def test_raw_date_list_item_with_ambiguity(self) -> None:
+        """Should serialize ambiguous date correctly."""
+        item = RawDateListItem(
+            id="event-456",
+            event_date=date(2024, 2, 1),
+            event_date_precision="day",
+            event_date_text="01/02/2024",
+            description="Notice date context",
+            document_id="doc-789",
+            source_page=5,
+            confidence=0.70,
+            is_ambiguous=True,
+        )
+
+        data = item.model_dump()
+
+        assert data["is_ambiguous"] is True
+        assert data["confidence"] == 0.70

@@ -17,6 +17,7 @@ class JobType(str, Enum):
     - EMBEDDING: Vector embedding generation stage
     - ENTITY_EXTRACTION: MIG entity extraction stage
     - ALIAS_RESOLUTION: Entity alias resolution stage
+    - DATE_EXTRACTION: Timeline date extraction stage (Story 4-1)
     """
 
     DOCUMENT_PROCESSING = "DOCUMENT_PROCESSING"
@@ -26,6 +27,7 @@ class JobType(str, Enum):
     EMBEDDING = "EMBEDDING"
     ENTITY_EXTRACTION = "ENTITY_EXTRACTION"
     ALIAS_RESOLUTION = "ALIAS_RESOLUTION"
+    DATE_EXTRACTION = "DATE_EXTRACTION"
 
 
 class JobStatus(str, Enum):

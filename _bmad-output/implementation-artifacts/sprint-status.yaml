@@ -86,24 +86,24 @@ development_status:
   epic-2c-retrospective: done
 
   # Epic 3: Citation Verification Engine
-  epic-3: in-progress
-  3-1-act-citation-extraction: review  # Code complete, manual steps pending
+  epic-3: done  # Retrospective completed 2026-01-14
+  3-1-act-citation-extraction: done  # Manual tests completed
   3-2-act-discovery-report-ui: done
   3-3-citation-verification: done
   3-4-split-view-citation-highlighting: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done  # Combined with Epic 4: epic-3-4-retro-2026-01-14.md
 
   # Epic 4: Timeline Construction Engine
-  epic-4: in-progress
+  epic-4: done  # Retrospective completed 2026-01-14
   4-1-date-extraction-gemini: done
-  4-2-event-classification: review-passed  # Code review passed 2026-01-13
-  4-3-events-table-mig-integration: dev-complete
-  4-4-timeline-anomaly-detection: dev-complete
-  epic-4-retrospective: optional
+  4-2-event-classification: done  # Code review passed 2026-01-13
+  4-3-events-table-mig-integration: done
+  4-4-timeline-anomaly-detection: done
+  epic-4-retrospective: done  # Combined with Epic 3: epic-3-4-retro-2026-01-14.md
 
   # Epic 5: Consistency & Contradiction Engine
-  epic-5: backlog
-  5-1-entity-grouped-statement-querying: backlog
+  epic-5: in-progress  # First story created 2026-01-14
+  5-1-entity-grouped-statement-querying: complete  # Implemented 2026-01-14
   5-2-statement-pair-comparison-gpt4: backlog
   5-3-contradiction-type-classification: backlog
   5-4-severity-scoring-explanation: backlog

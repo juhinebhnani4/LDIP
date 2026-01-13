@@ -1,6 +1,24 @@
 """Pydantic models module."""
 
 from app.models.auth import AuthenticatedUser, JWTClaims
+from app.models.job import (
+    JobDetailResponse,
+    JobErrorDetail,
+    JobErrorResponse,
+    JobListItem,
+    JobQueueStats,
+    JobResponse,
+    JobsListResponse,
+    JobStageHistory,
+    JobStatsResponse,
+    JobStatus,
+    JobType,
+    ProcessingJob,
+    ProcessingJobCreate,
+    ProcessingJobUpdate,
+    ProcessingJobWithHistory,
+    StageStatus,
+)
 from app.models.entity import (
     EntitiesListResponse,
     EntityEdge,
@@ -50,6 +68,23 @@ __all__ = [
     # Auth models
     "AuthenticatedUser",
     "JWTClaims",
+    # Job models
+    "JobDetailResponse",
+    "JobErrorDetail",
+    "JobErrorResponse",
+    "JobListItem",
+    "JobQueueStats",
+    "JobResponse",
+    "JobsListResponse",
+    "JobStageHistory",
+    "JobStatsResponse",
+    "JobStatus",
+    "JobType",
+    "ProcessingJob",
+    "ProcessingJobCreate",
+    "ProcessingJobUpdate",
+    "ProcessingJobWithHistory",
+    "StageStatus",
     # Entity models
     "EntitiesListResponse",
     "EntityEdge",

@@ -2153,6 +2153,11 @@ So that **I can switch between timeline, entities, citations, etc.**.
 **Then** affected tabs show a badge with count (e.g., Citations (3))
 **And** the badge indicates issues to review
 
+**Given** documents are still processing (from Story 2C.3 AC#5)
+**When** the tab bar renders
+**Then** tabs show what's ready vs. still processing (e.g., "Timeline (12 events)" vs. "Entities (processing...)")
+**And** loading placeholders appear for tabs still receiving data
+
 ---
 
 #### Story 10A.3: Implement Main Content Area and Q&A Panel Integration

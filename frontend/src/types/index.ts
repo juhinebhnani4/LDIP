@@ -76,3 +76,36 @@ export type {
   PaginationMeta,
   RelationshipType,
 } from './entity';
+
+// Job types (Story 2c-3: Background Job Tracking)
+export type {
+  DocumentProcessingStatus,
+  JobCancelResponse,
+  JobDetailResponse,
+  JobEvent,
+  JobListResponse,
+  JobProgressEvent,
+  JobQueueStats,
+  JobRetryRequest,
+  JobRetryResponse,
+  JobSkipResponse,
+  JobStageHistory,
+  JobStatus,
+  JobStatusChangeEvent,
+  JobType,
+  ProcessingJob,
+  ProcessingJobWithHistory,
+  ProcessingSummaryEvent,
+  StageStatus,
+} from './job';
+
+export {
+  canCancelJob,
+  canRetryJob,
+  canSkipJob,
+  getJobStatusColor,
+  getJobStatusLabel,
+  isJobActive,
+  isJobTerminal,
+  STAGE_LABELS,
+} from './job';

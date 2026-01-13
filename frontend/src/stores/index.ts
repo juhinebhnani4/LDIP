@@ -14,6 +14,15 @@
 // Upload store for document upload management
 export { useUploadStore } from './uploadStore';
 
+// Processing store for background job tracking (Story 2c-3)
+export {
+  useProcessingStore,
+  selectJobsArray,
+  selectActiveJobCount,
+  selectFailedJobCount,
+  selectIsProcessing,
+} from './processingStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

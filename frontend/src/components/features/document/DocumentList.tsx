@@ -18,7 +18,9 @@ import {
 } from '@/lib/api/documents';
 import { DocumentTypeBadge } from './DocumentTypeBadge';
 import { OCRQualityBadge } from './OCRQualityBadge';
+import { DocumentProcessingStatus } from './DocumentProcessingStatus';
 import { Button } from '@/components/ui/button';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -293,6 +295,7 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
   const someSelected = selectedIds.size > 0 && !allSelected;
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       {/* Filters and bulk actions */}
       <div className="flex flex-wrap items-center gap-4">
@@ -386,6 +389,7 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                   </TableHead>
                 ))}
                 <TableHead>OCR Quality</TableHead>
+                <TableHead>Processing</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -461,6 +465,13 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                   <TableCell className="text-muted-foreground">
                     {formatDate(doc.uploadedAt)}
                   </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DocumentProcessingStatus
+                      documentId={doc.id}
+                      compact={false}
+                      onStatusChange={loadDocuments}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -498,5 +509,6 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }

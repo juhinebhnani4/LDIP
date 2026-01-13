@@ -3,14 +3,22 @@
 Implements OCR processing using Google Document AI with retry logic
 and proper status updates. Includes Gemini-based OCR validation
 and parent-child chunking for RAG pipelines.
+
+Job Tracking Integration (Story 2c-3):
+- Creates processing jobs when document processing starts
+- Updates job status and progress as each stage completes
+- Records stage history for granular tracking
+- Preserves partial progress for failure recovery
 """
 
 import asyncio
+from datetime import datetime
 
 import structlog
 from celery.exceptions import MaxRetriesExceededError
 
 from app.models.document import DocumentStatus
+from app.models.job import JobStatus, JobType
 from app.models.ocr_validation import CorrectionType, ValidationStatus
 from app.services.bounding_box_service import (
     BoundingBoxService,
@@ -24,6 +32,13 @@ from app.services.document_service import (
     DocumentServiceError,
     get_document_service,
 )
+from app.services.job_tracking import (
+    JobTrackingService,
+    PartialProgressTracker,
+    create_progress_tracker,
+    get_job_tracking_service,
+)
+from app.services.job_tracking.time_estimator import TimeEstimator, get_time_estimator
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -45,7 +60,11 @@ from app.services.ocr.validation_extractor import (
     ValidationExtractorError,
     get_validation_extractor,
 )
-from app.services.pubsub_service import broadcast_document_status
+from app.services.pubsub_service import (
+    broadcast_document_status,
+    broadcast_job_progress,
+    broadcast_job_status_change,
+)
 from app.services.mig import (
     EntityResolver,
     MIGEntityExtractor,
@@ -97,6 +116,399 @@ def _validate_pdf_content(content: bytes, document_id: str) -> None:
         )
 
 
+# =============================================================================
+# Job Tracking Helper Functions (Story 2c-3)
+# =============================================================================
+
+# Stage names for the processing pipeline (must match TimeEstimator stages)
+PIPELINE_STAGES = [
+    "ocr",
+    "validation",
+    "confidence",
+    "chunking",
+    "embedding",
+    "entity_extraction",
+    "alias_resolution",
+]
+
+STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
+
+
+def _run_async(coro):
+    """Run async coroutine in sync context for Celery tasks.
+
+    Creates a new event loop to run async operations from sync Celery tasks.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+def _get_or_create_job(
+    matter_id: str,
+    document_id: str,
+    celery_task_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+) -> str | None:
+    """Get existing active job or create a new one for document processing.
+
+    Args:
+        matter_id: Matter UUID.
+        document_id: Document UUID.
+        celery_task_id: Optional Celery task ID for correlation.
+        job_tracker: Optional JobTrackingService instance (for testing).
+
+    Returns:
+        Job ID if created/found, None if failed.
+    """
+    tracker = job_tracker or get_job_tracking_service()
+
+    try:
+        # Check for existing active job
+        existing_job = _run_async(
+            tracker.get_active_job_for_document(document_id, matter_id)
+        )
+
+        if existing_job:
+            logger.debug(
+                "job_tracking_existing_job_found",
+                job_id=existing_job.id,
+                document_id=document_id,
+            )
+            return existing_job.id
+
+        # Create new job
+        job = _run_async(
+            tracker.create_job(
+                matter_id=matter_id,
+                document_id=document_id,
+                job_type=JobType.DOCUMENT_PROCESSING,
+                celery_task_id=celery_task_id,
+            )
+        )
+
+        logger.info(
+            "job_tracking_job_created",
+            job_id=job.id,
+            document_id=document_id,
+            matter_id=matter_id,
+        )
+
+        return job.id
+
+    except Exception as e:
+        # Job tracking failures are non-critical - log and continue
+        logger.warning(
+            "job_tracking_create_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return None
+
+
+def _update_job_stage_start(
+    job_id: str | None,
+    stage_name: str,
+    matter_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+    time_estimator: TimeEstimator | None = None,
+    page_count: int | None = None,
+) -> None:
+    """Record stage start and update job progress.
+
+    Args:
+        job_id: Job UUID.
+        stage_name: Stage name (ocr, validation, etc.).
+        matter_id: Matter UUID for broadcasting.
+        job_tracker: Optional JobTrackingService instance.
+        time_estimator: Optional TimeEstimator instance.
+        page_count: Document page count for time estimation.
+    """
+    if not job_id:
+        return
+
+    tracker = job_tracker or get_job_tracking_service()
+    estimator = time_estimator or get_time_estimator()
+
+    try:
+        # Record stage start
+        _run_async(tracker.record_stage_start(job_id, stage_name))
+
+        # Calculate progress percentage
+        progress_pct = estimator.estimate_stage_progress(stage_name, 0.0)
+
+        # Calculate estimated completion if we have page count
+        estimated_completion = None
+        if page_count and page_count > 0:
+            estimated_completion = estimator.estimate_completion_time(
+                page_count=page_count,
+                current_stage=stage_name,
+            )
+
+        # Update job status
+        _run_async(
+            tracker.update_job_status(
+                job_id=job_id,
+                status=JobStatus.PROCESSING,
+                stage=stage_name,
+                progress_pct=progress_pct,
+            )
+        )
+
+        # Update estimated completion if available
+        if estimated_completion:
+            _run_async(
+                tracker.set_estimated_completion(job_id, estimated_completion)
+            )
+
+        # Broadcast progress
+        if matter_id:
+            broadcast_job_progress(
+                matter_id=matter_id,
+                job_id=job_id,
+                stage=stage_name,
+                progress_pct=progress_pct,
+                estimated_completion=estimated_completion,
+            )
+
+        logger.debug(
+            "job_tracking_stage_started",
+            job_id=job_id,
+            stage=stage_name,
+            progress_pct=progress_pct,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "job_tracking_stage_start_failed",
+            job_id=job_id,
+            stage=stage_name,
+            error=str(e),
+        )
+
+
+def _update_job_stage_complete(
+    job_id: str | None,
+    stage_name: str,
+    matter_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+    time_estimator: TimeEstimator | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Record stage completion and update job progress.
+
+    Args:
+        job_id: Job UUID.
+        stage_name: Stage name that completed.
+        matter_id: Matter UUID for broadcasting.
+        job_tracker: Optional JobTrackingService instance.
+        time_estimator: Optional TimeEstimator instance.
+        metadata: Optional stage metadata to record.
+    """
+    if not job_id:
+        return
+
+    tracker = job_tracker or get_job_tracking_service()
+    estimator = time_estimator or get_time_estimator()
+
+    try:
+        # Record stage complete
+        _run_async(tracker.record_stage_complete(job_id, stage_name, metadata))
+
+        # Calculate progress (stage 100% complete)
+        progress_pct = estimator.estimate_stage_progress(stage_name, 1.0)
+
+        # Update completed stages count
+        stage_idx = STAGE_INDEX.get(stage_name, -1)
+        completed_stages = stage_idx + 1 if stage_idx >= 0 else None
+
+        # Get current job to update
+        job = _run_async(tracker.get_job(job_id))
+        if job:
+            from app.models.job import ProcessingJobUpdate
+
+            update = ProcessingJobUpdate(
+                progress_pct=progress_pct,
+                completed_stages=completed_stages,
+            )
+            _run_async(tracker.update_job(job_id, update))
+
+        # Broadcast progress
+        if matter_id:
+            broadcast_job_progress(
+                matter_id=matter_id,
+                job_id=job_id,
+                stage=stage_name,
+                progress_pct=progress_pct,
+            )
+
+        logger.debug(
+            "job_tracking_stage_completed",
+            job_id=job_id,
+            stage=stage_name,
+            progress_pct=progress_pct,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "job_tracking_stage_complete_failed",
+            job_id=job_id,
+            stage=stage_name,
+            error=str(e),
+        )
+
+
+def _update_job_stage_failure(
+    job_id: str | None,
+    stage_name: str,
+    error_message: str,
+    error_code: str | None = None,
+    matter_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+) -> None:
+    """Record stage failure and update job status.
+
+    Args:
+        job_id: Job UUID.
+        stage_name: Stage name that failed.
+        error_message: Error description.
+        error_code: Machine-readable error code.
+        matter_id: Matter UUID for broadcasting.
+        job_tracker: Optional JobTrackingService instance.
+    """
+    if not job_id:
+        return
+
+    tracker = job_tracker or get_job_tracking_service()
+
+    try:
+        # Record stage failure
+        _run_async(tracker.record_stage_failure(job_id, stage_name, error_message))
+
+        # Increment retry count
+        _run_async(tracker.increment_retry_count(job_id))
+
+        logger.debug(
+            "job_tracking_stage_failed",
+            job_id=job_id,
+            stage=stage_name,
+            error=error_message,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "job_tracking_stage_failure_record_failed",
+            job_id=job_id,
+            stage=stage_name,
+            error=str(e),
+        )
+
+
+def _mark_job_failed(
+    job_id: str | None,
+    error_message: str,
+    error_code: str | None = None,
+    matter_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+) -> None:
+    """Mark job as failed after all retries exhausted.
+
+    Args:
+        job_id: Job UUID.
+        error_message: Error description.
+        error_code: Machine-readable error code.
+        matter_id: Matter UUID for broadcasting.
+        job_tracker: Optional JobTrackingService instance.
+    """
+    if not job_id:
+        return
+
+    tracker = job_tracker or get_job_tracking_service()
+
+    try:
+        _run_async(
+            tracker.update_job_status(
+                job_id=job_id,
+                status=JobStatus.FAILED,
+                error_message=error_message,
+                error_code=error_code,
+            )
+        )
+
+        # Broadcast status change
+        if matter_id:
+            broadcast_job_status_change(
+                matter_id=matter_id,
+                job_id=job_id,
+                old_status=JobStatus.PROCESSING.value,
+                new_status=JobStatus.FAILED.value,
+            )
+
+        logger.info(
+            "job_tracking_job_failed",
+            job_id=job_id,
+            error_code=error_code,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "job_tracking_mark_failed_error",
+            job_id=job_id,
+            error=str(e),
+        )
+
+
+def _mark_job_completed(
+    job_id: str | None,
+    matter_id: str | None = None,
+    job_tracker: JobTrackingService | None = None,
+) -> None:
+    """Mark job as completed successfully.
+
+    Args:
+        job_id: Job UUID.
+        matter_id: Matter UUID for broadcasting.
+        job_tracker: Optional JobTrackingService instance.
+    """
+    if not job_id:
+        return
+
+    tracker = job_tracker or get_job_tracking_service()
+
+    try:
+        _run_async(
+            tracker.update_job_status(
+                job_id=job_id,
+                status=JobStatus.COMPLETED,
+                progress_pct=100,
+            )
+        )
+
+        # Broadcast status change
+        if matter_id:
+            broadcast_job_status_change(
+                matter_id=matter_id,
+                job_id=job_id,
+                old_status=JobStatus.PROCESSING.value,
+                new_status=JobStatus.COMPLETED.value,
+            )
+
+        logger.info(
+            "job_tracking_job_completed",
+            job_id=job_id,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "job_tracking_mark_completed_error",
+            job_id=job_id,
+            error=str(e),
+        )
+
+
 @celery_app.task(
     name="app.workers.tasks.document_tasks.process_document",
     bind=True,
@@ -113,6 +525,7 @@ def process_document(
     storage_service: StorageService | None = None,
     ocr_processor: OCRProcessor | None = None,
     bounding_box_service: BoundingBoxService | None = None,
+    job_tracker: JobTrackingService | None = None,
 ) -> dict[str, str | int | float | None]:
     """Process a document through OCR pipeline.
 
@@ -125,6 +538,7 @@ def process_document(
         storage_service: Optional StorageService instance (for testing).
         ocr_processor: Optional OCRProcessor instance (for testing).
         bounding_box_service: Optional BoundingBoxService instance (for testing).
+        job_tracker: Optional JobTrackingService instance (for testing).
 
     Returns:
         Task result with status, page_count, and processing details.
@@ -139,6 +553,10 @@ def process_document(
     ocr = ocr_processor or get_ocr_processor()
     bbox_service = bounding_box_service or get_bounding_box_service()
 
+    # Job tracking context (initialized below)
+    job_id: str | None = None
+    matter_id: str | None = None
+
     logger.info(
         "document_processing_task_started",
         document_id=document_id,
@@ -148,6 +566,14 @@ def process_document(
     try:
         # Get document info
         storage_path, matter_id = doc_service.get_document_for_processing(document_id)
+
+        # Create or get existing job for tracking (Story 2c-3)
+        job_id = _get_or_create_job(
+            matter_id=matter_id,
+            document_id=document_id,
+            celery_task_id=self.request.id,
+            job_tracker=job_tracker,
+        )
 
         # Update status to processing
         doc_service.update_ocr_status(
@@ -161,6 +587,9 @@ def process_document(
             document_id=document_id,
             status="processing",
         )
+
+        # Track OCR stage start
+        _update_job_stage_start(job_id, "ocr", matter_id)
 
         # Download PDF from storage
         logger.info(
@@ -230,6 +659,18 @@ def process_document(
             ocr_confidence=ocr_result.overall_confidence,
         )
 
+        # Track OCR stage completion with metadata
+        _update_job_stage_complete(
+            job_id,
+            "ocr",
+            matter_id,
+            metadata={
+                "page_count": ocr_result.page_count,
+                "bbox_count": saved_bbox_count,
+                "confidence": ocr_result.overall_confidence,
+            },
+        )
+
         logger.info(
             "document_processing_task_completed",
             document_id=document_id,
@@ -246,11 +687,13 @@ def process_document(
             "bbox_count": saved_bbox_count,
             "processing_time_ms": ocr_result.processing_time_ms,
             "overall_confidence": ocr_result.overall_confidence,
+            "job_id": job_id,
         }
 
     except (OCRServiceError, StorageError) as e:
         # Handle retryable errors
         retry_count = self.request.retries
+        error_code = getattr(e, "code", "UNKNOWN")
 
         logger.warning(
             "document_processing_task_retry",
@@ -258,7 +701,12 @@ def process_document(
             retry_count=retry_count,
             max_retries=MAX_RETRIES,
             error=str(e),
-            error_code=getattr(e, "code", "UNKNOWN"),
+            error_code=error_code,
+        )
+
+        # Track stage failure for job tracking
+        _update_job_stage_failure(
+            job_id, "ocr", str(e), error_code, matter_id
         )
 
         # Increment retry count in database
@@ -270,22 +718,33 @@ def process_document(
         # Check if we've exhausted retries
         # Note: matter_id may not be available if it failed before retrieval
         if retry_count >= MAX_RETRIES:
-            _matter_id = None
-            try:
-                _, _matter_id = doc_service.get_document_for_processing(document_id)
-            except Exception:
-                pass
+            _matter_id = matter_id
+            if not _matter_id:
+                try:
+                    _, _matter_id = doc_service.get_document_for_processing(document_id)
+                except Exception:
+                    pass
+            # Mark job as failed
+            _mark_job_failed(job_id, str(e), error_code, _matter_id)
             return _handle_max_retries_exceeded(doc_service, document_id, e, _matter_id)
 
         # Re-raise to trigger retry
         raise
 
     except MaxRetriesExceededError as e:
-        _matter_id = None
-        try:
-            _, _matter_id = doc_service.get_document_for_processing(document_id)
-        except Exception:
-            pass
+        _matter_id = matter_id
+        if not _matter_id:
+            try:
+                _, _matter_id = doc_service.get_document_for_processing(document_id)
+            except Exception:
+                pass
+        # Mark job as failed
+        _mark_job_failed(
+            job_id,
+            f"Max retries exceeded: {e.__cause__ or e}",
+            "MAX_RETRIES_EXCEEDED",
+            _matter_id,
+        )
         return _handle_max_retries_exceeded(
             doc_service, document_id, e.__cause__ or e, _matter_id
         )
@@ -298,6 +757,9 @@ def process_document(
             error=str(e),
             error_code=e.code,
         )
+
+        # Mark job as failed
+        _mark_job_failed(job_id, e.message, e.code, matter_id)
 
         try:
             doc_service.update_ocr_status(
@@ -313,6 +775,7 @@ def process_document(
             "document_id": document_id,
             "error_code": e.code,
             "error_message": e.message,
+            "job_id": job_id,
         }
 
     except Exception as e:
@@ -323,6 +786,9 @@ def process_document(
             error=str(e),
             error_type=type(e).__name__,
         )
+
+        # Mark job as failed
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
 
         try:
             doc_service.update_ocr_status(
@@ -338,6 +804,7 @@ def process_document(
             "document_id": document_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
+            "job_id": job_id,
         }
 
 
@@ -464,6 +931,7 @@ def validate_ocr(
     human_review_service: HumanReviewService | None = None,
     document_service: DocumentService | None = None,
     bounding_box_service: BoundingBoxService | None = None,
+    job_tracker: JobTrackingService | None = None,
 ) -> dict[str, str | int | float | None]:
     """Validate OCR results using pattern correction and Gemini.
 
@@ -479,6 +947,7 @@ def validate_ocr(
         human_review_service: Optional HumanReviewService instance (for testing).
         document_service: Optional DocumentService instance (for testing).
         bounding_box_service: Optional BoundingBoxService instance (for testing).
+        job_tracker: Optional JobTrackingService instance (for testing).
 
     Returns:
         Task result with validation summary.
@@ -487,10 +956,15 @@ def validate_ocr(
         GeminiValidatorError: If Gemini validation fails (will trigger retry).
         ValidationExtractorError: If extraction fails (will trigger retry).
     """
-    # Get document_id from prev_result or parameter
+    # Get document_id and job_id from prev_result or parameter
     doc_id = document_id
-    if doc_id is None and prev_result:
-        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+    job_id: str | None = None
+    matter_id: str | None = None
+
+    if prev_result:
+        if doc_id is None:
+            doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+        job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
     if not doc_id:
         logger.error("validate_ocr_no_document_id")
@@ -511,6 +985,7 @@ def validate_ocr(
             "status": "validation_skipped",
             "document_id": doc_id,
             "reason": "OCR not complete",
+            "job_id": job_id,
         }
 
     # Use injected services or get defaults
@@ -530,6 +1005,9 @@ def validate_ocr(
         # Get matter_id for the document
         _, matter_id = doc_service.get_document_for_processing(doc_id)
 
+        # Track validation stage start (Story 2c-3)
+        _update_job_stage_start(job_id, "validation", matter_id)
+
         # Step 1: Extract low-confidence words
         words_for_gemini, words_for_human = extractor.extract_low_confidence_words(doc_id)
 
@@ -538,6 +1016,8 @@ def validate_ocr(
         if total_low_confidence == 0:
             # No validation needed - update status and return
             _update_validation_status(doc_service, doc_id, ValidationStatus.VALIDATED)
+            # Mark validation stage complete immediately
+            _update_job_stage_complete(job_id, "validation", matter_id)
             logger.info(
                 "validate_ocr_no_low_confidence_words",
                 document_id=doc_id,
@@ -550,6 +1030,7 @@ def validate_ocr(
                 "pattern_corrections": 0,
                 "gemini_corrections": 0,
                 "human_review_queued": 0,
+                "job_id": job_id,
             }
 
         # Step 2: Apply pattern corrections first
@@ -616,6 +1097,18 @@ def validate_ocr(
             validation_status=final_status.value,
         )
 
+        # Track validation stage completion (Story 2c-3)
+        _update_job_stage_complete(
+            job_id,
+            "validation",
+            matter_id,
+            metadata={
+                "total_validated": len(all_results),
+                "pattern_corrections": pattern_count,
+                "gemini_corrections": gemini_count,
+            },
+        )
+
         # Broadcast validation status
         broadcast_document_status(
             matter_id=matter_id,
@@ -633,10 +1126,12 @@ def validate_ocr(
             "gemini_corrections": gemini_count,
             "human_review_queued": human_review_count,
             "corrections_applied": corrections_applied,
+            "job_id": job_id,
         }
 
     except (GeminiValidatorError, ValidationExtractorError) as e:
         retry_count = self.request.retries
+        error_code = getattr(e, "code", "UNKNOWN")
 
         logger.warning(
             "validate_ocr_task_retry",
@@ -644,10 +1139,14 @@ def validate_ocr(
             retry_count=retry_count,
             max_retries=MAX_RETRIES,
             error=str(e),
-            error_code=getattr(e, "code", "UNKNOWN"),
+            error_code=error_code,
         )
 
+        # Track stage failure
+        _update_job_stage_failure(job_id, "validation", str(e), error_code, matter_id)
+
         if retry_count >= MAX_RETRIES:
+            _mark_job_failed(job_id, str(e), error_code, matter_id)
             return _handle_validation_failure(doc_service, doc_id, e)
 
         raise
@@ -659,12 +1158,15 @@ def validate_ocr(
             document_id=doc_id,
             error=str(e),
         )
+        # Track stage complete despite warning
+        _update_job_stage_complete(job_id, "validation", matter_id)
         # Don't fail the whole task for human review issues
         return {
             "status": "validated_with_warnings",
             "document_id": doc_id,
             "warning": "Human review queue failed",
             "error_message": str(e),
+            "job_id": job_id,
         }
 
     except DocumentServiceError as e:
@@ -673,6 +1175,7 @@ def validate_ocr(
             document_id=doc_id,
             error=str(e),
         )
+        _mark_job_failed(job_id, e.message, e.code, matter_id)
         return _handle_validation_failure(doc_service, doc_id, e)
 
     except Exception as e:
@@ -682,6 +1185,7 @@ def validate_ocr(
             error=str(e),
             error_type=type(e).__name__,
         )
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
         return _handle_validation_failure(doc_service, doc_id, e)
 
 
@@ -850,10 +1354,13 @@ def calculate_confidence(
     Raises:
         ConfidenceCalculatorError: If calculation fails (will trigger retry).
     """
-    # Get document_id from prev_result or parameter
+    # Get document_id and job_id from prev_result or parameter
     doc_id = document_id
-    if doc_id is None and prev_result:
-        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+    job_id: str | None = None
+    if prev_result:
+        if doc_id is None:
+            doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+        job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
     if not doc_id:
         logger.error("calculate_confidence_no_document_id")
@@ -861,6 +1368,7 @@ def calculate_confidence(
             "status": "confidence_failed",
             "error_code": "NO_DOCUMENT_ID",
             "error_message": "No document_id provided",
+            "job_id": job_id,
         }
 
     # Skip if OCR/validation wasn't successful
@@ -875,6 +1383,7 @@ def calculate_confidence(
             return {
                 "status": "confidence_skipped",
                 "document_id": doc_id,
+                "job_id": job_id,
                 "reason": f"Previous task status: {prev_status}",
             }
 
@@ -883,6 +1392,7 @@ def calculate_confidence(
     logger.info(
         "calculate_confidence_task_started",
         document_id=doc_id,
+        job_id=job_id,
         retry_count=self.request.retries,
     )
 
@@ -890,12 +1400,19 @@ def calculate_confidence(
         # Get matter_id for broadcasting
         _, matter_id = doc_service.get_document_for_processing(doc_id)
 
+        # Record stage start for job tracking (Story 2c-3)
+        _update_job_stage_start(job_id, "confidence", matter_id)
+
         # Calculate and update confidence metrics
         result = update_document_confidence(doc_id)
+
+        # Record stage completion for job tracking (Story 2c-3)
+        _update_job_stage_complete(job_id, "confidence", matter_id)
 
         logger.info(
             "calculate_confidence_task_completed",
             document_id=doc_id,
+            job_id=job_id,
             overall_confidence=result.overall_confidence,
             quality_status=result.quality_status,
             total_words=result.total_words,
@@ -914,6 +1431,7 @@ def calculate_confidence(
         return {
             "status": "confidence_calculated",
             "document_id": doc_id,
+            "job_id": job_id,
             "overall_confidence": result.overall_confidence,
             "quality_status": result.quality_status,
             "total_words": result.total_words,
@@ -922,25 +1440,33 @@ def calculate_confidence(
 
     except ConfidenceCalculatorError as e:
         retry_count = self.request.retries
+        error_code = "CONFIDENCE_CALCULATION_FAILED"
 
         logger.warning(
             "calculate_confidence_task_retry",
             document_id=doc_id,
+            job_id=job_id,
             retry_count=retry_count,
             max_retries=2,
             error=str(e),
         )
 
+        # Record stage failure for job tracking (Story 2c-3)
+        _update_job_stage_failure(job_id, "confidence", str(e), error_code, matter_id)
+
         if retry_count >= 2:
             logger.error(
                 "calculate_confidence_task_failed",
                 document_id=doc_id,
+                job_id=job_id,
                 error=str(e),
             )
+            _mark_job_failed(job_id, str(e), error_code, matter_id)
             return {
                 "status": "confidence_failed",
                 "document_id": doc_id,
-                "error_code": "CONFIDENCE_CALCULATION_FAILED",
+                "job_id": job_id,
+                "error_code": error_code,
                 "error_message": str(e),
             }
 
@@ -950,11 +1476,15 @@ def calculate_confidence(
         logger.error(
             "calculate_confidence_document_error",
             document_id=doc_id,
+            job_id=job_id,
             error=str(e),
         )
+        _update_job_stage_failure(job_id, "confidence", str(e), e.code, None)
+        _mark_job_failed(job_id, e.message, e.code, None)
         return {
             "status": "confidence_failed",
             "document_id": doc_id,
+            "job_id": job_id,
             "error_code": e.code,
             "error_message": e.message,
         }
@@ -963,12 +1493,16 @@ def calculate_confidence(
         logger.error(
             "calculate_confidence_unexpected_error",
             document_id=doc_id,
+            job_id=job_id,
             error=str(e),
             error_type=type(e).__name__,
         )
+        _update_job_stage_failure(job_id, "confidence", str(e), "UNEXPECTED_ERROR", None)
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
         return {
             "status": "confidence_failed",
             "document_id": doc_id,
+            "job_id": job_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
         }
@@ -1010,10 +1544,13 @@ def chunk_document(
     Raises:
         ChunkServiceError: If chunking fails (will trigger retry).
     """
-    # Get document_id from prev_result or parameter
+    # Get document_id and job_id from prev_result or parameter
     doc_id = document_id
-    if doc_id is None and prev_result:
-        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+    job_id: str | None = None
+    if prev_result:
+        if doc_id is None:
+            doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+        job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
     if not doc_id:
         logger.error("chunk_document_no_document_id")
@@ -1021,6 +1558,7 @@ def chunk_document(
             "status": "chunking_failed",
             "error_code": "NO_DOCUMENT_ID",
             "error_message": "No document_id provided",
+            "job_id": job_id,
         }
 
     # Skip if previous task wasn't successful
@@ -1042,6 +1580,7 @@ def chunk_document(
             return {
                 "status": "chunking_skipped",
                 "document_id": doc_id,
+                "job_id": job_id,
                 "reason": f"Previous task status: {prev_status}",
             }
 
@@ -1053,6 +1592,7 @@ def chunk_document(
     logger.info(
         "chunk_document_task_started",
         document_id=doc_id,
+        job_id=job_id,
         retry_count=self.request.retries,
     )
 
@@ -1065,12 +1605,17 @@ def chunk_document(
             logger.warning(
                 "chunk_document_no_text",
                 document_id=doc_id,
+                job_id=job_id,
             )
             return {
                 "status": "chunking_skipped",
                 "document_id": doc_id,
+                "job_id": job_id,
                 "reason": "No extracted text available",
             }
+
+        # Record stage start for job tracking (Story 2c-3)
+        _update_job_stage_start(job_id, "chunking", matter_id)
 
         # Create chunker and process document
         chunker = ParentChildChunker()
@@ -1100,6 +1645,9 @@ def chunk_document(
         finally:
             loop.close()
 
+        # Record stage completion for job tracking (Story 2c-3)
+        _update_job_stage_complete(job_id, "chunking", matter_id)
+
         # Broadcast chunking completion
         broadcast_document_status(
             matter_id=matter_id,
@@ -1112,6 +1660,7 @@ def chunk_document(
         logger.info(
             "chunk_document_task_completed",
             document_id=doc_id,
+            job_id=job_id,
             parent_chunks=len(result.parent_chunks),
             child_chunks=len(result.child_chunks),
             total_tokens=result.total_tokens,
@@ -1121,6 +1670,7 @@ def chunk_document(
         return {
             "status": "chunking_complete",
             "document_id": doc_id,
+            "job_id": job_id,
             "parent_chunks": len(result.parent_chunks),
             "child_chunks": len(result.child_chunks),
             "total_tokens": result.total_tokens,
@@ -1129,25 +1679,33 @@ def chunk_document(
 
     except ChunkServiceError as e:
         retry_count = self.request.retries
+        error_code = "CHUNKING_FAILED"
 
         logger.warning(
             "chunk_document_task_retry",
             document_id=doc_id,
+            job_id=job_id,
             retry_count=retry_count,
             max_retries=2,
             error=str(e),
         )
 
+        # Record stage failure for job tracking (Story 2c-3)
+        _update_job_stage_failure(job_id, "chunking", str(e), error_code, matter_id)
+
         if retry_count >= 2:
             logger.error(
                 "chunk_document_task_failed",
                 document_id=doc_id,
+                job_id=job_id,
                 error=str(e),
             )
+            _mark_job_failed(job_id, str(e), error_code, matter_id)
             return {
                 "status": "chunking_failed",
                 "document_id": doc_id,
-                "error_code": "CHUNKING_FAILED",
+                "job_id": job_id,
+                "error_code": error_code,
                 "error_message": str(e),
             }
 
@@ -1157,11 +1715,15 @@ def chunk_document(
         logger.error(
             "chunk_document_document_error",
             document_id=doc_id,
+            job_id=job_id,
             error=str(e),
         )
+        _update_job_stage_failure(job_id, "chunking", str(e), e.code, None)
+        _mark_job_failed(job_id, e.message, e.code, None)
         return {
             "status": "chunking_failed",
             "document_id": doc_id,
+            "job_id": job_id,
             "error_code": e.code,
             "error_message": e.message,
         }
@@ -1170,12 +1732,16 @@ def chunk_document(
         logger.error(
             "chunk_document_unexpected_error",
             document_id=doc_id,
+            job_id=job_id,
             error=str(e),
             error_type=type(e).__name__,
         )
+        _update_job_stage_failure(job_id, "chunking", str(e), "UNEXPECTED_ERROR", None)
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
         return {
             "status": "chunking_failed",
             "document_id": doc_id,
+            "job_id": job_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
         }
@@ -1281,6 +1847,11 @@ def embed_chunks(
                 is_retryable=False,
             )
 
+        # Get job_id for partial progress tracking
+        job_id: str | None = None
+        if prev_result:
+            job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
         # Get chunks without embeddings for this document
         response = (
             client.table("chunks")
@@ -1303,18 +1874,33 @@ def embed_chunks(
                 "document_id": doc_id,
                 "embedded_count": 0,
                 "reason": "No chunks without embeddings",
+                "job_id": job_id,
             }
+
+        # Initialize partial progress tracker (Story 2c-3)
+        progress_tracker = create_progress_tracker(job_id, matter_id)
+        stage_progress = None
+        if progress_tracker:
+            stage_progress = progress_tracker.get_or_create_stage("embedding")
+            stage_progress.total_items = len(chunks)
+
+        # Get already-processed chunk IDs from previous run (for retry)
+        already_processed: set[str] = set()
+        if stage_progress:
+            already_processed = stage_progress.processed_items
 
         logger.info(
             "embed_chunks_processing",
             document_id=doc_id,
             chunk_count=len(chunks),
+            already_processed=len(already_processed),
             batch_size=EMBEDDING_BATCH_SIZE,
         )
 
         # Process chunks in batches
         embedded_count = 0
         failed_count = 0
+        skipped_count = 0
 
         # Run async operations in sync context
         loop = asyncio.new_event_loop()
@@ -1323,8 +1909,19 @@ def embed_chunks(
         try:
             for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
                 batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
-                batch_texts = [c["content"] for c in batch]
-                batch_ids = [c["id"] for c in batch]
+
+                # Filter out already-processed chunks (partial progress)
+                chunks_to_process = [
+                    c for c in batch
+                    if c["id"] not in already_processed
+                ]
+
+                if not chunks_to_process:
+                    skipped_count += len(batch)
+                    continue
+
+                batch_texts = [c["content"] for c in chunks_to_process]
+                batch_ids = [c["id"] for c in chunks_to_process]
 
                 try:
                     # Generate embeddings for batch
@@ -1336,6 +1933,8 @@ def embed_chunks(
                     for j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings)):
                         if embedding is None:
                             failed_count += 1
+                            if stage_progress:
+                                stage_progress.mark_failed(chunk_id, "Empty embedding")
                             continue
 
                         try:
@@ -1343,6 +1942,11 @@ def embed_chunks(
                                 "embedding": embedding,
                             }).eq("id", chunk_id).execute()
                             embedded_count += 1
+
+                            # Track partial progress
+                            if stage_progress:
+                                stage_progress.mark_processed(chunk_id)
+
                         except Exception as e:
                             logger.warning(
                                 "embed_chunks_update_failed",
@@ -1351,6 +1955,12 @@ def embed_chunks(
                                 error=str(e),
                             )
                             failed_count += 1
+                            if stage_progress:
+                                stage_progress.mark_failed(chunk_id, str(e))
+
+                    # Persist partial progress periodically
+                    if progress_tracker and stage_progress:
+                        progress_tracker.save_progress(stage_progress)
 
                     logger.debug(
                         "embed_chunks_batch_complete",
@@ -1370,11 +1980,19 @@ def embed_chunks(
                         batch_start=i,
                         error=str(e),
                     )
-                    failed_count += len(batch)
+                    failed_count += len(chunks_to_process)
+
+                    # Save progress before retry
+                    if progress_tracker and stage_progress:
+                        progress_tracker.save_progress(stage_progress, force=True)
+
                     if e.is_retryable:
                         raise  # Let Celery retry
 
         finally:
+            # Save final progress
+            if progress_tracker and stage_progress:
+                progress_tracker.save_progress(stage_progress, force=True)
             loop.close()
 
         # Update document status to searchable
@@ -1408,6 +2026,7 @@ def embed_chunks(
             document_id=doc_id,
             embedded_count=embedded_count,
             failed_count=failed_count,
+            skipped_count=skipped_count,
             total_chunks=len(chunks),
         )
 
@@ -1416,7 +2035,9 @@ def embed_chunks(
             "document_id": doc_id,
             "embedded_count": embedded_count,
             "failed_count": failed_count,
+            "skipped_count": skipped_count,
             "total_chunks": len(chunks),
+            "job_id": job_id,
         }
 
     except EmbeddingServiceError as e:
@@ -1578,6 +2199,11 @@ def extract_entities(
                 is_retryable=False,
             )
 
+        # Get job_id for partial progress tracking
+        job_id: str | None = None
+        if prev_result:
+            job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
         # Get all chunks for this document (child chunks for more granular extraction)
         response = (
             client.table("chunks")
@@ -1600,12 +2226,26 @@ def extract_entities(
                 "document_id": doc_id,
                 "entities_extracted": 0,
                 "reason": "No chunks found for entity extraction",
+                "job_id": job_id,
             }
+
+        # Initialize partial progress tracker (Story 2c-3)
+        progress_tracker = create_progress_tracker(job_id, matter_id)
+        stage_progress = None
+        if progress_tracker:
+            stage_progress = progress_tracker.get_or_create_stage("entity_extraction")
+            stage_progress.total_items = len(chunks)
+
+        # Get already-processed chunk IDs from previous run (for retry)
+        already_processed: set[str] = set()
+        if stage_progress:
+            already_processed = stage_progress.processed_items
 
         logger.info(
             "extract_entities_processing",
             document_id=doc_id,
             chunk_count=len(chunks),
+            already_processed=len(already_processed),
             batch_size=ENTITY_EXTRACTION_BATCH_SIZE,
         )
 
@@ -1613,6 +2253,7 @@ def extract_entities(
         total_entities = 0
         total_relationships = 0
         failed_chunks = 0
+        skipped_chunks = 0
 
         # Run async operations in sync context
         loop = asyncio.new_event_loop()
@@ -1623,13 +2264,20 @@ def extract_entities(
                 batch = chunks[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
 
                 for chunk in batch:
+                    chunk_id = chunk["id"]
+
+                    # Skip already-processed chunks (partial progress)
+                    if chunk_id in already_processed:
+                        skipped_chunks += 1
+                        continue
+
                     try:
                         # Extract entities from chunk
                         extraction_result = extractor.extract_entities_sync(
                             text=chunk["content"],
                             document_id=doc_id,
                             matter_id=matter_id,
-                            chunk_id=chunk["id"],
+                            chunk_id=chunk_id,
                             page_number=chunk.get("page_number"),
                         )
 
@@ -1648,13 +2296,23 @@ def extract_entities(
                             # For now, just count them
                             total_relationships += len(extraction_result.relationships)
 
+                        # Track partial progress
+                        if stage_progress:
+                            stage_progress.mark_processed(chunk_id)
+
                     except MIGExtractorError as e:
+                        if stage_progress:
+                            stage_progress.mark_failed(chunk_id, str(e))
+
                         if e.is_retryable:
+                            # Save progress before retry
+                            if progress_tracker and stage_progress:
+                                progress_tracker.save_progress(stage_progress, force=True)
                             raise  # Let Celery retry
                         logger.warning(
                             "extract_entities_chunk_failed",
                             document_id=doc_id,
-                            chunk_id=chunk["id"],
+                            chunk_id=chunk_id,
                             error=str(e),
                         )
                         failed_chunks += 1
@@ -1662,10 +2320,16 @@ def extract_entities(
                         logger.warning(
                             "extract_entities_chunk_error",
                             document_id=doc_id,
-                            chunk_id=chunk["id"],
+                            chunk_id=chunk_id,
                             error=str(e),
                         )
                         failed_chunks += 1
+                        if stage_progress:
+                            stage_progress.mark_failed(chunk_id, str(e))
+
+                # Persist partial progress periodically
+                if progress_tracker and stage_progress:
+                    progress_tracker.save_progress(stage_progress)
 
                 # Rate limit delay between batches
                 if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks):
@@ -1679,6 +2343,9 @@ def extract_entities(
                 )
 
         finally:
+            # Save final progress
+            if progress_tracker and stage_progress:
+                progress_tracker.save_progress(stage_progress, force=True)
             loop.close()
 
         # Broadcast entity extraction completion
@@ -1697,6 +2364,7 @@ def extract_entities(
             relationships_found=total_relationships,
             chunks_processed=len(chunks),
             failed_chunks=failed_chunks,
+            skipped_chunks=skipped_chunks,
         )
 
         return {
@@ -1706,6 +2374,8 @@ def extract_entities(
             "relationships_found": total_relationships,
             "chunks_processed": len(chunks),
             "failed_chunks": failed_chunks,
+            "skipped_chunks": skipped_chunks,
+            "job_id": job_id,
         }
 
     except MIGExtractorError as e:
@@ -1783,6 +2453,7 @@ def resolve_aliases(
     document_service: DocumentService | None = None,
     entity_resolver: EntityResolver | None = None,
     mig_graph_service: MIGGraphService | None = None,
+    job_tracker: JobTrackingService | None = None,
 ) -> dict[str, str | int | float | None]:
     """Resolve entity aliases after extraction.
 
@@ -1802,6 +2473,7 @@ def resolve_aliases(
         document_service: Optional DocumentService instance (for testing).
         entity_resolver: Optional EntityResolver instance (for testing).
         mig_graph_service: Optional MIGGraphService instance (for testing).
+        job_tracker: Optional JobTrackingService instance (for testing).
 
     Returns:
         Task result with alias resolution summary.
@@ -1812,10 +2484,15 @@ def resolve_aliases(
     from app.services.supabase.client import get_service_client
     from app.models.entity import EntityNode
 
-    # Get document_id from prev_result or parameter
+    # Get document_id and job_id from prev_result or parameter
     doc_id = document_id
-    if doc_id is None and prev_result:
-        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+    job_id: str | None = None
+    matter_id: str | None = None
+
+    if prev_result:
+        if doc_id is None:
+            doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+        job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
     if not doc_id:
         logger.error("resolve_aliases_no_document_id")
@@ -1841,6 +2518,7 @@ def resolve_aliases(
                 "status": "alias_resolution_skipped",
                 "document_id": doc_id,
                 "reason": f"Previous task status: {prev_status}",
+                "job_id": job_id,
             }
 
     # Use injected services or get defaults
@@ -1857,6 +2535,9 @@ def resolve_aliases(
     try:
         # Get matter_id for the document
         _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Track alias resolution stage start (Story 2c-3)
+        _update_job_stage_start(job_id, "alias_resolution", matter_id)
 
         # Get database client
         client = get_service_client()
@@ -1877,6 +2558,9 @@ def resolve_aliases(
             )
 
             if not entities:
+                # No entities to resolve - mark stage and job complete
+                _update_job_stage_complete(job_id, "alias_resolution", matter_id)
+                _mark_job_completed(job_id, matter_id)
                 logger.info(
                     "resolve_aliases_no_entities",
                     document_id=doc_id,
@@ -1887,6 +2571,7 @@ def resolve_aliases(
                     "document_id": doc_id,
                     "aliases_created": 0,
                     "reason": "No entities found for alias resolution",
+                    "job_id": job_id,
                 }
 
             # Build entity contexts from mentions for Gemini analysis
@@ -1972,6 +2657,20 @@ def resolve_aliases(
             pairs_found=resolution_result.alias_pairs_found,
         )
 
+        # Track alias resolution stage completion (Story 2c-3)
+        _update_job_stage_complete(
+            job_id,
+            "alias_resolution",
+            matter_id,
+            metadata={
+                "entities_processed": resolution_result.entities_processed,
+                "aliases_created": aliases_created,
+            },
+        )
+
+        # Mark the entire job as COMPLETED since this is the final stage
+        _mark_job_completed(job_id, matter_id)
+
         logger.info(
             "resolve_aliases_task_completed",
             document_id=doc_id,
@@ -1993,6 +2692,7 @@ def resolve_aliases(
             "high_confidence_links": resolution_result.high_confidence_links,
             "medium_confidence_links": resolution_result.medium_confidence_links,
             "skipped_low_confidence": resolution_result.skipped_low_confidence,
+            "job_id": job_id,
         }
 
     except AliasResolutionError as e:
@@ -2006,17 +2706,23 @@ def resolve_aliases(
             error=str(e),
         )
 
+        # Track stage failure
+        _update_job_stage_failure(job_id, "alias_resolution", str(e), e.code, matter_id)
+
         if retry_count >= 3:
             logger.error(
                 "resolve_aliases_task_failed",
                 document_id=doc_id,
                 error=str(e),
             )
+            # Mark job as failed
+            _mark_job_failed(job_id, e.message, e.code, matter_id)
             return {
                 "status": "alias_resolution_failed",
                 "document_id": doc_id,
                 "error_code": e.code,
                 "error_message": e.message,
+                "job_id": job_id,
             }
 
         raise
@@ -2027,11 +2733,13 @@ def resolve_aliases(
             document_id=doc_id,
             error=str(e),
         )
+        _mark_job_failed(job_id, e.message, e.code, matter_id)
         return {
             "status": "alias_resolution_failed",
             "document_id": doc_id,
             "error_code": e.code,
             "error_message": e.message,
+            "job_id": job_id,
         }
 
     except Exception as e:
@@ -2041,9 +2749,11 @@ def resolve_aliases(
             error=str(e),
             error_type=type(e).__name__,
         )
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
         return {
             "status": "alias_resolution_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
+            "job_id": job_id,
         }

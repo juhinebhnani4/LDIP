@@ -5,6 +5,7 @@ for real-time frontend updates.
 """
 
 import json
+from datetime import datetime
 from functools import lru_cache
 
 import redis
@@ -231,5 +232,163 @@ def broadcast_document_status(
             "broadcast_document_status_failed",
             document_id=document_id,
             status=status,
+            error=str(e),
+        )
+
+
+# =============================================================================
+# Job Progress Broadcasting (Story 2c-3)
+# =============================================================================
+
+# Channel pattern for processing jobs: processing:{matter_id}
+JOB_CHANNEL_PATTERN = "processing:{matter_id}"
+
+
+def broadcast_job_progress(
+    matter_id: str,
+    job_id: str,
+    stage: str,
+    progress_pct: int,
+    estimated_completion: datetime | None = None,
+) -> None:
+    """Broadcast job progress update.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        job_id: Job UUID.
+        stage: Current processing stage.
+        progress_pct: Progress percentage (0-100).
+        estimated_completion: Optional estimated completion timestamp.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = JOB_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "job_progress",
+            "job_id": job_id,
+            "matter_id": matter_id,
+            "stage": stage,
+            "progress_pct": progress_pct,
+        }
+
+        if estimated_completion:
+            message["estimated_completion"] = estimated_completion.isoformat()
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "job_progress_broadcast",
+            job_id=job_id,
+            stage=stage,
+            progress_pct=progress_pct,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_job_progress_failed",
+            job_id=job_id,
+            stage=stage,
+            error=str(e),
+        )
+
+
+def broadcast_job_status_change(
+    matter_id: str,
+    job_id: str,
+    old_status: str,
+    new_status: str,
+) -> None:
+    """Broadcast job status change.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        job_id: Job UUID.
+        old_status: Previous status.
+        new_status: New status.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = JOB_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "job_status_change",
+            "job_id": job_id,
+            "matter_id": matter_id,
+            "old_status": old_status,
+            "new_status": new_status,
+        }
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.info(
+            "job_status_change_broadcast",
+            job_id=job_id,
+            old_status=old_status,
+            new_status=new_status,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_job_status_change_failed",
+            job_id=job_id,
+            new_status=new_status,
+            error=str(e),
+        )
+
+
+def broadcast_processing_summary(
+    matter_id: str,
+    queued: int,
+    processing: int,
+    completed: int,
+    failed: int,
+) -> None:
+    """Broadcast matter processing summary update.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        queued: Number of queued jobs.
+        processing: Number of processing jobs.
+        completed: Number of completed jobs.
+        failed: Number of failed jobs.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = JOB_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "processing_summary",
+            "matter_id": matter_id,
+            "stats": {
+                "queued": queued,
+                "processing": processing,
+                "completed": completed,
+                "failed": failed,
+            },
+        }
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "processing_summary_broadcast",
+            matter_id=matter_id,
+            queued=queued,
+            processing=processing,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_processing_summary_failed",
+            matter_id=matter_id,
             error=str(e),
         )

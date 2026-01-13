@@ -65,25 +65,25 @@ development_status:
   2a-1-document-upload-ui: done
   2a-2-supabase-storage-integration: done
   2a-3-documents-table: done
-  epic-2a-retrospective: optional
+  epic-2a-retrospective: done
 
   # Epic 2B: OCR & RAG Pipeline
-  epic-2b: in-progress
+  epic-2b: done
   2b-1-google-document-ai-ocr: done
-  2b-2-gemini-ocr-validation: review
+  2b-2-gemini-ocr-validation: done
   2b-3-ocr-quality-assessment: done
-  2b-4-bounding-boxes-table: review
-  2b-5-parent-child-chunking: review
+  2b-4-bounding-boxes-table: done
+  2b-5-parent-child-chunking: done
   2b-6-hybrid-search-bm25-pgvector: done
   2b-7-cohere-rerank-integration: done
-  epic-2b-retrospective: optional
+  epic-2b-retrospective: done
 
   # Epic 2C: Entity Extraction & MIG
   epic-2c: in-progress
   2c-1-mig-entity-extraction: done
-  2c-2-alias-resolution: backlog
-  2c-3-background-job-tracking: backlog
-  epic-2c-retrospective: optional
+  2c-2-alias-resolution: done
+  2c-3-background-job-tracking: in-progress
+  epic-2c-retrospective: done
 
   # Epic 3: Citation Verification Engine
   epic-3: backlog

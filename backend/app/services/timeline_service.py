@@ -777,22 +777,32 @@ class TimelineService:
         self,
         matter_id: str,
         limit: int = 100,
+        document_id: str | None = None,
     ) -> list[RawEvent]:
         """Synchronous version for Celery tasks.
 
         Args:
             matter_id: Matter UUID.
             limit: Maximum events to return.
+            document_id: Optional filter to specific document.
 
         Returns:
             List of RawEvent objects.
         """
         try:
-            response = (
+            query = (
                 self.client.table("events")
                 .select("*")
                 .eq("matter_id", matter_id)
                 .eq("event_type", "raw_date")
+            )
+
+            # Apply document filter if provided (Issue #3 fix)
+            if document_id:
+                query = query.eq("document_id", document_id)
+
+            response = (
+                query
                 .order("event_date", desc=False)
                 .limit(limit)
                 .execute()

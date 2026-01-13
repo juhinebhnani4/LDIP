@@ -36,17 +36,43 @@ from app.workers.celery import celery_app
 logger = structlog.get_logger(__name__)
 
 
+# Thread-local storage for reusing event loops within a task
+import threading
+_task_loop_storage = threading.local()
+
+
+def _get_task_event_loop() -> asyncio.AbstractEventLoop:
+    """Get or create an event loop for the current Celery task.
+
+    Reuses event loop within a single task to avoid overhead of
+    creating/destroying loops for each async call.
+
+    Returns:
+        Event loop for the current task.
+    """
+    loop = getattr(_task_loop_storage, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        _task_loop_storage.loop = loop
+    return loop
+
+
 def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks.
 
-    Creates a new event loop to run async operations from sync Celery tasks.
+    Uses a per-task event loop to reduce overhead from repeated async calls.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
+    loop = _get_task_event_loop()
+    return loop.run_until_complete(coro)
+
+
+def _cleanup_task_loop():
+    """Clean up event loop at end of task execution."""
+    loop = getattr(_task_loop_storage, "loop", None)
+    if loop is not None and not loop.is_closed():
         loop.close()
+        _task_loop_storage.loop = None
 
 
 @celery_app.task(name="app.workers.tasks.engine_tasks.run_engine")  # type: ignore[untyped-decorator]
@@ -521,14 +547,12 @@ def classify_events_for_document(
                 )
             )
 
-        # Get raw_date events for this document
-        raw_events = timeline_service.get_events_for_classification_sync(
+        # Get raw_date events for this document (Issue #3 fix - filter at DB level)
+        doc_events = timeline_service.get_events_for_classification_sync(
             matter_id=matter_id,
-            limit=1000,  # Get all for document
+            document_id=document_id,  # Filter at database level
+            limit=1000,
         )
-
-        # Filter to only events from this document
-        doc_events = [e for e in raw_events if e.document_id == document_id]
 
         if not doc_events:
             logger.info(
@@ -935,14 +959,34 @@ def link_entities_for_matter(
             )
         )
 
-        # Load all entities for the matter once
-        entities, _ = _run_async(
-            mig_service.get_entities_by_matter(
-                matter_id=matter_id,
-                page=1,
-                per_page=10000,
+        # Load all entities for the matter using pagination (Issue #2 fix)
+        # Fetch in pages to avoid memory issues for large matters
+        entities = []
+        page = 1
+        per_page = 500  # Reasonable page size
+        while True:
+            page_entities, total = _run_async(
+                mig_service.get_entities_by_matter(
+                    matter_id=matter_id,
+                    page=page,
+                    per_page=per_page,
+                )
             )
-        )
+            if not page_entities:
+                break
+            entities.extend(page_entities)
+            # Check if we've loaded all entities
+            if len(entities) >= total:
+                break
+            page += 1
+            # Safety limit to prevent infinite loops
+            if page > 100:
+                logger.warning(
+                    "entity_loading_page_limit_reached",
+                    matter_id=matter_id,
+                    entities_loaded=len(entities),
+                )
+                break
 
         if not entities:
             logger.info(
@@ -1058,6 +1102,10 @@ def link_entities_for_matter(
             }
 
         raise
+
+    finally:
+        # Clean up event loop at end of task (Issue #4/#8 fix)
+        _cleanup_task_loop()
 
 
 @celery_app.task(

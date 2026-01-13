@@ -48,34 +48,58 @@ CACHE_SUFFIX_ENTITY_VIEW = "timeline_entity"
 # =============================================================================
 
 
+# Type markers for JSON serialization - use unique prefix to avoid collision
+# with user data (Issue #5 fix)
+_TYPE_MARKER_PREFIX = "__timeline_cache_"
+_DATE_MARKER = f"{_TYPE_MARKER_PREFIX}date__"
+_DATETIME_MARKER = f"{_TYPE_MARKER_PREFIX}datetime__"
+_EVENT_TYPE_MARKER = f"{_TYPE_MARKER_PREFIX}event_type__"
+_ENTITY_TYPE_MARKER = f"{_TYPE_MARKER_PREFIX}entity_type__"
+
+
 class TimelineCacheEncoder(json.JSONEncoder):
     """JSON encoder for timeline cache data."""
 
     def default(self, obj: Any) -> Any:
         # datetime must be checked before date (datetime is a subclass of date)
         if isinstance(obj, datetime):
-            return {"__datetime__": obj.isoformat()}
+            return {_DATETIME_MARKER: obj.isoformat()}
         if isinstance(obj, date):
-            return {"__date__": obj.isoformat()}
+            return {_DATE_MARKER: obj.isoformat()}
         if isinstance(obj, EventType):
-            return {"__event_type__": obj.value}
+            return {_EVENT_TYPE_MARKER: obj.value}
         if isinstance(obj, EntityType):
-            return {"__entity_type__": obj.value}
+            return {_ENTITY_TYPE_MARKER: obj.value}
         return super().default(obj)
 
 
 def timeline_decoder(obj: dict) -> Any:
     """JSON decoder hook for timeline cache data."""
-    if "__date__" in obj:
+    # Support both old and new marker formats for backwards compatibility
+    if _DATE_MARKER in obj:
+        return date.fromisoformat(obj[_DATE_MARKER])
+    if "__date__" in obj:  # Legacy format
         return date.fromisoformat(obj["__date__"])
-    if "__datetime__" in obj:
+    if _DATETIME_MARKER in obj:
+        return datetime.fromisoformat(obj[_DATETIME_MARKER])
+    if "__datetime__" in obj:  # Legacy format
         return datetime.fromisoformat(obj["__datetime__"])
-    if "__event_type__" in obj:
+    if _EVENT_TYPE_MARKER in obj:
+        try:
+            return EventType(obj[_EVENT_TYPE_MARKER])
+        except ValueError:
+            return EventType.UNCLASSIFIED
+    if "__event_type__" in obj:  # Legacy format
         try:
             return EventType(obj["__event_type__"])
         except ValueError:
             return EventType.UNCLASSIFIED
-    if "__entity_type__" in obj:
+    if _ENTITY_TYPE_MARKER in obj:
+        try:
+            return EntityType(obj[_ENTITY_TYPE_MARKER])
+        except ValueError:
+            return EntityType.PERSON
+    if "__entity_type__" in obj:  # Legacy format
         try:
             return EntityType(obj["__entity_type__"])
         except ValueError:

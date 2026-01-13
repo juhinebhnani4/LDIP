@@ -578,3 +578,19 @@ This story enables:
 
 ### File List
 
+**New Files Created:**
+- `backend/app/engines/timeline/entity_linker.py` - Entity linking service
+- `backend/app/engines/timeline/timeline_builder.py` - Timeline construction service
+- `backend/app/services/timeline_cache.py` - Redis cache for timeline data
+- `backend/tests/engines/timeline/test_entity_linker.py` - Entity linker unit tests
+- `backend/tests/engines/timeline/test_timeline_builder.py` - Timeline builder unit tests
+- `backend/tests/services/test_timeline_cache.py` - Timeline cache unit tests
+
+**Modified Files:**
+- `backend/app/engines/timeline/__init__.py` - Added exports for entity_linker, timeline_builder
+- `backend/app/models/job.py` - Added ENTITY_LINKING job type
+- `backend/app/models/timeline.py` - Added TimelineFilters, TimelineEvent, Timeline models
+- `backend/app/services/timeline_service.py` - Added entity linking methods
+- `backend/app/api/routes/timeline.py` - Added timeline and entity endpoints
+- `backend/app/workers/tasks/engine_tasks.py` - Added entity linking tasks
+

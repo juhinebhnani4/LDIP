@@ -33,7 +33,11 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Confidence threshold for entity linking
-LINK_CONFIDENCE_THRESHOLD = 0.7
+# Can be overridden via ENTITY_LINK_CONFIDENCE_THRESHOLD env var
+import os as _os
+LINK_CONFIDENCE_THRESHOLD = float(
+    _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.7")
+)
 
 # Maximum retries for Gemini calls
 MAX_RETRIES = 3
@@ -454,78 +458,97 @@ class EventEntityLinker:
         Returns:
             List of EntityMention objects.
         """
+        if not text:
+            return []
+
         mentions: list[EntityMention] = []
         seen_texts: set[str] = set()
 
         # Pattern 1: Title + Name (e.g., "Shri Nirav Jobalia")
-        title_pattern = (
-            r"(?:" + "|".join(INDIAN_TITLE_PATTERNS) + r")\s+"
-            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})"
-        )
-        for match in re.finditer(title_pattern, text, re.IGNORECASE):
-            full_match = match.group(0).strip()
-            if full_match.lower() not in seen_texts:
-                mentions.append(
-                    EntityMention(
-                        text=full_match,
-                        entity_type=EntityType.PERSON,
-                        confidence=0.9,
+        try:
+            title_pattern = (
+                r"(?:" + "|".join(INDIAN_TITLE_PATTERNS) + r")\s+"
+                r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})"
+            )
+            for match in re.finditer(title_pattern, text, re.IGNORECASE):
+                full_match = match.group(0).strip()
+                if full_match.lower() not in seen_texts:
+                    mentions.append(
+                        EntityMention(
+                            text=full_match,
+                            entity_type=EntityType.PERSON,
+                            confidence=0.9,
+                        )
                     )
-                )
-                seen_texts.add(full_match.lower())
+                    seen_texts.add(full_match.lower())
+        except re.error as e:
+            logger.warning("entity_extraction_title_pattern_error", error=str(e))
 
         # Pattern 2: Organizations with indicators
         for indicator in ORG_INDICATORS:
-            org_pattern = rf"([A-Z][A-Za-z\s&]+\s*{indicator})"
-            for match in re.finditer(org_pattern, text):
-                org_text = match.group(1).strip()
-                if len(org_text) > 3 and org_text.lower() not in seen_texts:
+            try:
+                org_pattern = rf"([A-Z][A-Za-z\s&]+\s*{indicator})"
+                for match in re.finditer(org_pattern, text):
+                    org_text = match.group(1).strip()
+                    if len(org_text) > 3 and org_text.lower() not in seen_texts:
+                        mentions.append(
+                            EntityMention(
+                                text=org_text,
+                                entity_type=EntityType.ORG,
+                                confidence=0.85,
+                            )
+                        )
+                        seen_texts.add(org_text.lower())
+            except re.error as e:
+                logger.warning(
+                    "entity_extraction_org_pattern_error",
+                    indicator=indicator,
+                    error=str(e),
+                )
+
+        # Pattern 3: Court/Institution names
+        try:
+            court_pattern = (
+                r"((?:High Court|Supreme Court|District Court|Sessions Court|"
+                r"Tribunal|Authority|Commission|Board|Council)[^,\.]*)"
+            )
+            for match in re.finditer(court_pattern, text, re.IGNORECASE):
+                inst_text = match.group(1).strip()
+                if len(inst_text) > 5 and inst_text.lower() not in seen_texts:
                     mentions.append(
                         EntityMention(
-                            text=org_text,
-                            entity_type=EntityType.ORG,
+                            text=inst_text,
+                            entity_type=EntityType.INSTITUTION,
                             confidence=0.85,
                         )
                     )
-                    seen_texts.add(org_text.lower())
-
-        # Pattern 3: Court/Institution names
-        court_pattern = (
-            r"((?:High Court|Supreme Court|District Court|Sessions Court|"
-            r"Tribunal|Authority|Commission|Board|Council)[^,\.]*)"
-        )
-        for match in re.finditer(court_pattern, text, re.IGNORECASE):
-            inst_text = match.group(1).strip()
-            if len(inst_text) > 5 and inst_text.lower() not in seen_texts:
-                mentions.append(
-                    EntityMention(
-                        text=inst_text,
-                        entity_type=EntityType.INSTITUTION,
-                        confidence=0.85,
-                    )
-                )
-                seen_texts.add(inst_text.lower())
+                    seen_texts.add(inst_text.lower())
+        except re.error as e:
+            logger.warning("entity_extraction_court_pattern_error", error=str(e))
 
         # Pattern 4: Capitalized proper nouns (potential person names)
         # Match 2-4 consecutive capitalized words
-        proper_noun_pattern = r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b"
-        for match in re.finditer(proper_noun_pattern, text):
-            name = match.group(1).strip()
-            # Filter out common false positives
-            lower_name = name.lower()
-            if (
-                lower_name not in seen_texts
-                and len(name) > 5
-                and not self._is_common_phrase(lower_name)
-            ):
-                mentions.append(
-                    EntityMention(
-                        text=name,
-                        entity_type=EntityType.PERSON,
-                        confidence=0.6,  # Lower confidence for bare proper nouns
+        try:
+            proper_noun_pattern = r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b"
+            for match in re.finditer(proper_noun_pattern, text):
+                name = match.group(1).strip()
+                # Filter out common false positives
+                lower_name = name.lower()
+                if (
+                    lower_name not in seen_texts
+                    and len(name) > 5
+                    and not self._is_common_phrase(lower_name)
+                ):
+                    mentions.append(
+                        EntityMention(
+                            text=name,
+                            entity_type=EntityType.PERSON,
+                            confidence=0.6,  # Lower confidence for bare proper nouns
+                        )
                     )
-                )
-                seen_texts.add(lower_name)
+                    seen_texts.add(lower_name)
+        except re.error as e:
+            logger.warning("entity_extraction_proper_noun_pattern_error", error=str(e))
 
         return mentions
 

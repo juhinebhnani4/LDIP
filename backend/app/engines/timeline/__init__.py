@@ -21,6 +21,20 @@ from app.engines.timeline.event_classifier import (
     ClassifierConfigurationError,
     get_event_classifier,
 )
+from app.engines.timeline.entity_linker import (
+    EventEntityLinker,
+    EntityLinkerError,
+    LinkerConfigurationError,
+    get_event_entity_linker,
+)
+from app.engines.timeline.timeline_builder import (
+    TimelineBuilder,
+    ConstructedTimeline,
+    TimelineEvent,
+    TimelineStatistics,
+    EntityTimelineView,
+    get_timeline_builder,
+)
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
@@ -42,6 +56,18 @@ __all__ = [
     "EventClassifierError",
     "ClassifierConfigurationError",
     "get_event_classifier",
+    # Entity Linker (Story 4-3)
+    "EventEntityLinker",
+    "EntityLinkerError",
+    "LinkerConfigurationError",
+    "get_event_entity_linker",
+    # Timeline Builder (Story 4-3)
+    "TimelineBuilder",
+    "ConstructedTimeline",
+    "TimelineEvent",
+    "TimelineStatistics",
+    "EntityTimelineView",
+    "get_timeline_builder",
     # Date Extraction Prompts
     "DATE_EXTRACTION_SYSTEM_PROMPT",
     "DATE_EXTRACTION_USER_PROMPT",

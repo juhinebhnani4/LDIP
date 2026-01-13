@@ -1354,6 +1354,359 @@ class TimelineService:
             updated_at=updated_at,
         )
 
+    # =========================================================================
+    # Entity Linking Methods (Story 4-3)
+    # =========================================================================
+
+    async def update_event_entities(
+        self,
+        event_id: str,
+        matter_id: str,
+        entity_ids: list[str],
+    ) -> bool:
+        """Update entities linked to an event.
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID for validation.
+            entity_ids: List of entity UUIDs to link.
+
+        Returns:
+            True if update succeeded.
+        """
+        def _update():
+            return (
+                self.client.table("events")
+                .update({"entities_involved": entity_ids})
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+
+            if response.data:
+                logger.debug(
+                    "event_entities_updated",
+                    event_id=event_id,
+                    entity_count=len(entity_ids),
+                )
+                return True
+            return False
+
+        except Exception as e:
+            logger.error(
+                "event_entities_update_failed",
+                event_id=event_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to update event entities: {e}")
+
+    def update_event_entities_sync(
+        self,
+        event_id: str,
+        matter_id: str,
+        entity_ids: list[str],
+    ) -> bool:
+        """Synchronous version for Celery tasks.
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID.
+            entity_ids: List of entity UUIDs.
+
+        Returns:
+            True if update succeeded.
+        """
+        try:
+            response = (
+                self.client.table("events")
+                .update({"entities_involved": entity_ids})
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+            if response.data:
+                logger.debug(
+                    "event_entities_updated_sync",
+                    event_id=event_id,
+                    entity_count=len(entity_ids),
+                )
+                return True
+            return False
+
+        except Exception as e:
+            logger.error(
+                "event_entities_update_sync_failed",
+                event_id=event_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to update event entities: {e}")
+
+    async def bulk_update_event_entities(
+        self,
+        event_entities: dict[str, list[str]],
+        matter_id: str,
+    ) -> int:
+        """Bulk update entities for multiple events.
+
+        Args:
+            event_entities: Dict mapping event_id to list of entity_ids.
+            matter_id: Matter UUID for validation.
+
+        Returns:
+            Number of successfully updated events.
+        """
+        if not event_entities:
+            return 0
+
+        updated_count = 0
+
+        for event_id, entity_ids in event_entities.items():
+            try:
+                success = await self.update_event_entities(
+                    event_id=event_id,
+                    matter_id=matter_id,
+                    entity_ids=entity_ids,
+                )
+                if success:
+                    updated_count += 1
+            except Exception as e:
+                logger.warning(
+                    "bulk_entity_update_item_failed",
+                    event_id=event_id,
+                    error=str(e),
+                )
+                continue
+
+        logger.info(
+            "bulk_entity_update_complete",
+            matter_id=matter_id,
+            total=len(event_entities),
+            updated=updated_count,
+        )
+
+        return updated_count
+
+    def bulk_update_event_entities_sync(
+        self,
+        event_entities: dict[str, list[str]],
+        matter_id: str,
+    ) -> int:
+        """Synchronous bulk update for Celery tasks.
+
+        Args:
+            event_entities: Dict mapping event_id to list of entity_ids.
+            matter_id: Matter UUID.
+
+        Returns:
+            Number of successfully updated events.
+        """
+        if not event_entities:
+            return 0
+
+        updated_count = 0
+
+        for event_id, entity_ids in event_entities.items():
+            try:
+                success = self.update_event_entities_sync(
+                    event_id=event_id,
+                    matter_id=matter_id,
+                    entity_ids=entity_ids,
+                )
+                if success:
+                    updated_count += 1
+            except Exception as e:
+                logger.warning(
+                    "bulk_entity_update_sync_item_failed",
+                    event_id=event_id,
+                    error=str(e),
+                )
+                continue
+
+        logger.info(
+            "bulk_entity_update_sync_complete",
+            matter_id=matter_id,
+            total=len(event_entities),
+            updated=updated_count,
+        )
+
+        return updated_count
+
+    async def get_events_for_entity_linking(
+        self,
+        matter_id: str,
+        limit: int = 100,
+    ) -> list[RawEvent]:
+        """Get events that need entity linking.
+
+        Returns events where entities_involved is empty/null.
+
+        Args:
+            matter_id: Matter UUID.
+            limit: Maximum events to return.
+
+        Returns:
+            List of RawEvent objects without entity links.
+        """
+        def _query():
+            return (
+                self.client.table("events")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .or_("entities_involved.is.null,entities_involved.eq.{}")
+                .order("event_date", desc=False)
+                .limit(limit)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_query)
+
+            if response.data:
+                return [self._db_row_to_raw_event(row) for row in response.data]
+            return []
+
+        except Exception as e:
+            logger.error(
+                "get_events_for_entity_linking_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+
+    def get_events_for_entity_linking_sync(
+        self,
+        matter_id: str,
+        limit: int = 100,
+    ) -> list[RawEvent]:
+        """Synchronous version for Celery tasks.
+
+        Args:
+            matter_id: Matter UUID.
+            limit: Maximum events to return.
+
+        Returns:
+            List of RawEvent objects without entity links.
+        """
+        try:
+            response = (
+                self.client.table("events")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .or_("entities_involved.is.null,entities_involved.eq.{}")
+                .order("event_date", desc=False)
+                .limit(limit)
+                .execute()
+            )
+
+            if response.data:
+                return [self._db_row_to_raw_event(row) for row in response.data]
+            return []
+
+        except Exception as e:
+            logger.error(
+                "get_events_for_entity_linking_sync_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+
+    async def get_events_by_entity(
+        self,
+        entity_id: str,
+        matter_id: str,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> RawDatesListResponse:
+        """Get events involving a specific entity.
+
+        Args:
+            entity_id: Entity UUID to filter by.
+            matter_id: Matter UUID for validation.
+            page: Page number.
+            per_page: Items per page.
+
+        Returns:
+            RawDatesListResponse with events involving the entity.
+        """
+        def _query():
+            return (
+                self.client.table("events")
+                .select("*", count="exact")
+                .eq("matter_id", matter_id)
+                .contains("entities_involved", [entity_id])
+                .order("event_date", desc=False)
+                .range((page - 1) * per_page, page * per_page - 1)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_query)
+
+            items = [
+                self._db_row_to_list_item(row)
+                for row in (response.data or [])
+            ]
+
+            total = response.count or 0
+            total_pages = ceil(total / per_page) if per_page > 0 else 0
+
+            return RawDatesListResponse(
+                data=items,
+                meta=PaginationMeta(
+                    total=total,
+                    page=page,
+                    per_page=per_page,
+                    total_pages=total_pages,
+                ),
+            )
+
+        except Exception as e:
+            logger.error(
+                "get_events_by_entity_failed",
+                entity_id=entity_id,
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to get events by entity: {e}")
+
+    async def count_events_for_entity_linking(
+        self,
+        matter_id: str,
+    ) -> int:
+        """Count events needing entity linking.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            Count of events without entity links.
+        """
+        def _query():
+            return (
+                self.client.table("events")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .or_("entities_involved.is.null,entities_involved.eq.{}")
+                .limit(1)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_query)
+            return response.count or 0
+
+        except Exception as e:
+            logger.error(
+                "count_events_for_entity_linking_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return 0
+
 
 # =============================================================================
 # Service Factory

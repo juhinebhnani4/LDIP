@@ -16,12 +16,21 @@ import asyncio
 
 import structlog
 
-from app.engines.timeline import DateExtractor, get_date_extractor, EventClassifier, get_event_classifier
+from app.engines.timeline import (
+    DateExtractor,
+    get_date_extractor,
+    EventClassifier,
+    get_event_classifier,
+    EventEntityLinker,
+    get_event_entity_linker,
+)
 from app.models.job import JobStatus, JobType
 from app.services.chunk_service import get_chunk_service
 from app.services.document_service import get_document_service
 from app.services.job_tracking import get_job_tracking_service
+from app.services.mig.graph import get_mig_graph_service
 from app.services.timeline_service import TimelineService, get_timeline_service
+from app.services.timeline_cache import get_timeline_cache_service
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -822,4 +831,365 @@ def classify_events_for_matter(
             matter_id=matter_id,
             error=str(e),
         )
+        raise
+
+
+# =============================================================================
+# Entity Linking Tasks (Story 4-3)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.engine_tasks.link_entities_for_matter",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)  # type: ignore[untyped-decorator]
+def link_entities_for_matter(
+    self,
+    matter_id: str,
+    force_relink: bool = False,
+) -> dict:
+    """Link entities to timeline events for a matter.
+
+    Processes events without entity links, extracting entity mentions
+    from descriptions and matching them to MIG entities.
+
+    Args:
+        matter_id: Matter UUID.
+        force_relink: If True, reprocess all events (not just unlinked).
+
+    Returns:
+        Dict with linking results.
+    """
+    logger.info(
+        "entity_linking_matter_started",
+        matter_id=matter_id,
+        force_relink=force_relink,
+    )
+
+    job_tracker = get_job_tracking_service()
+    timeline_service = get_timeline_service()
+    mig_service = get_mig_graph_service()
+    entity_linker = get_event_entity_linker()
+    cache_service = get_timeline_cache_service()
+
+    try:
+        # Create job for tracking
+        master_job = _run_async(
+            job_tracker.create_job(
+                matter_id=matter_id,
+                job_type=JobType.ENTITY_LINKING,
+                celery_task_id=self.request.id,
+                metadata={
+                    "scope": "matter",
+                    "force_relink": force_relink,
+                },
+            )
+        )
+
+        # Get events to process
+        if force_relink:
+            # Get all events
+            events = timeline_service.get_all_events_for_reclassification_sync(
+                matter_id=matter_id,
+                limit=10000,
+            )
+        else:
+            # Get only unlinked events
+            events = timeline_service.get_events_for_entity_linking_sync(
+                matter_id=matter_id,
+                limit=10000,
+            )
+
+        if not events:
+            logger.info(
+                "entity_linking_matter_no_events",
+                matter_id=matter_id,
+                reason="no_unlinked_events" if not force_relink else "no_events",
+            )
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=master_job.id,
+                    status=JobStatus.COMPLETED,
+                    progress_pct=100,
+                    matter_id=matter_id,
+                )
+            )
+            return {
+                "status": "completed",
+                "matter_id": matter_id,
+                "job_id": master_job.id,
+                "events_processed": 0,
+                "events_linked": 0,
+                "reason": "no_events_to_process",
+            }
+
+        _run_async(
+            job_tracker.update_job_status(
+                job_id=master_job.id,
+                status=JobStatus.PROCESSING,
+                stage="entity_linking",
+                progress_pct=10,
+                matter_id=matter_id,
+            )
+        )
+
+        # Load all entities for the matter once
+        entities, _ = _run_async(
+            mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                page=1,
+                per_page=10000,
+            )
+        )
+
+        if not entities:
+            logger.info(
+                "entity_linking_matter_no_mig_entities",
+                matter_id=matter_id,
+            )
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=master_job.id,
+                    status=JobStatus.COMPLETED,
+                    progress_pct=100,
+                    matter_id=matter_id,
+                )
+            )
+            return {
+                "status": "completed",
+                "matter_id": matter_id,
+                "job_id": master_job.id,
+                "events_processed": len(events),
+                "events_linked": 0,
+                "reason": "no_mig_entities",
+            }
+
+        # Process events in batches
+        batch_size = 50
+        total_events = len(events)
+        events_with_links = 0
+        total_entity_links = 0
+
+        for i in range(0, total_events, batch_size):
+            batch = events[i : i + batch_size]
+
+            # Link entities for each event in batch
+            event_entities: dict[str, list[str]] = {}
+            for event in batch:
+                entity_ids = entity_linker.link_entities_to_event_sync(
+                    event_id=event.id,
+                    description=event.description,
+                    matter_id=matter_id,
+                    entities=entities,
+                )
+
+                if entity_ids:
+                    event_entities[event.id] = entity_ids
+                    events_with_links += 1
+                    total_entity_links += len(entity_ids)
+
+            # Bulk update events with entity links
+            if event_entities:
+                timeline_service.bulk_update_event_entities_sync(
+                    event_entities=event_entities,
+                    matter_id=matter_id,
+                )
+
+            # Update progress
+            progress = min(10 + int((i + batch_size) / total_events * 85), 95)
+            _run_async(
+                job_tracker.update_job_status(
+                    job_id=master_job.id,
+                    status=JobStatus.PROCESSING,
+                    stage="entity_linking",
+                    progress_pct=progress,
+                    matter_id=matter_id,
+                )
+            )
+
+        # Invalidate timeline cache since entity links changed
+        _run_async(cache_service.invalidate_timeline(matter_id))
+
+        # Mark complete
+        _run_async(
+            job_tracker.update_job_status(
+                job_id=master_job.id,
+                status=JobStatus.COMPLETED,
+                stage="entity_linking",
+                progress_pct=100,
+                matter_id=matter_id,
+            )
+        )
+
+        logger.info(
+            "entity_linking_matter_complete",
+            matter_id=matter_id,
+            job_id=master_job.id,
+            events_processed=total_events,
+            events_with_links=events_with_links,
+            total_entity_links=total_entity_links,
+        )
+
+        return {
+            "status": "completed",
+            "matter_id": matter_id,
+            "job_id": master_job.id,
+            "events_processed": total_events,
+            "events_with_links": events_with_links,
+            "total_entity_links": total_entity_links,
+        }
+
+    except Exception as e:
+        logger.error(
+            "entity_linking_matter_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                "status": "failed",
+                "matter_id": matter_id,
+                "error": str(e),
+            }
+
+        raise
+
+
+@celery_app.task(
+    name="app.workers.tasks.engine_tasks.link_entities_after_extraction",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+)  # type: ignore[untyped-decorator]
+def link_entities_after_extraction(
+    self,
+    document_id: str,
+    matter_id: str,
+) -> dict:
+    """Link entities to events immediately after date extraction.
+
+    Called automatically after extract_dates_from_document when
+    auto_link_entities=True.
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID.
+
+    Returns:
+        Dict with linking results.
+    """
+    logger.info(
+        "entity_linking_doc_started",
+        document_id=document_id,
+        matter_id=matter_id,
+    )
+
+    timeline_service = get_timeline_service()
+    mig_service = get_mig_graph_service()
+    entity_linker = get_event_entity_linker()
+    cache_service = get_timeline_cache_service()
+
+    try:
+        # Get events for this document that don't have entity links
+        all_events = timeline_service.get_events_for_entity_linking_sync(
+            matter_id=matter_id,
+            limit=10000,
+        )
+
+        # Filter to document
+        events = [e for e in all_events if e.document_id == document_id]
+
+        if not events:
+            logger.debug(
+                "entity_linking_doc_no_events",
+                document_id=document_id,
+                matter_id=matter_id,
+            )
+            return {
+                "status": "completed",
+                "document_id": document_id,
+                "events_processed": 0,
+                "events_linked": 0,
+            }
+
+        # Load entities
+        entities, _ = _run_async(
+            mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                page=1,
+                per_page=10000,
+            )
+        )
+
+        if not entities:
+            return {
+                "status": "completed",
+                "document_id": document_id,
+                "events_processed": len(events),
+                "events_linked": 0,
+                "reason": "no_mig_entities",
+            }
+
+        # Link entities
+        events_linked = 0
+        event_entities: dict[str, list[str]] = {}
+
+        for event in events:
+            entity_ids = entity_linker.link_entities_to_event_sync(
+                event_id=event.id,
+                description=event.description,
+                matter_id=matter_id,
+                entities=entities,
+            )
+
+            if entity_ids:
+                event_entities[event.id] = entity_ids
+                events_linked += 1
+
+        # Update events
+        if event_entities:
+            timeline_service.bulk_update_event_entities_sync(
+                event_entities=event_entities,
+                matter_id=matter_id,
+            )
+            # Invalidate cache
+            _run_async(cache_service.invalidate_timeline(matter_id))
+
+        logger.info(
+            "entity_linking_doc_complete",
+            document_id=document_id,
+            matter_id=matter_id,
+            events_processed=len(events),
+            events_linked=events_linked,
+        )
+
+        return {
+            "status": "completed",
+            "document_id": document_id,
+            "matter_id": matter_id,
+            "events_processed": len(events),
+            "events_linked": events_linked,
+        }
+
+    except Exception as e:
+        logger.error(
+            "entity_linking_doc_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                "status": "failed",
+                "document_id": document_id,
+                "error": str(e),
+            }
+
         raise

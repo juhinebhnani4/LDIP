@@ -406,7 +406,120 @@ class ManualClassificationResponse(BaseModel):
     data: ClassifiedEvent
 
 
+# =============================================================================
+# Entity Linking API Models (Story 4-3)
+# =============================================================================
+
+
+class EntityReference(BaseModel):
+    """Lightweight entity reference for timeline events."""
+
+    entity_id: str = Field(..., description="Entity UUID")
+    canonical_name: str = Field(..., description="Entity canonical name")
+    entity_type: str = Field(..., description="Entity type (PERSON, ORG, etc.)")
+    role: str | None = Field(None, description="Entity role in matter")
+
+
+class TimelineEventWithEntities(BaseModel):
+    """Timeline event enriched with entity information."""
+
+    id: str = Field(..., description="Event UUID")
+    event_date: date = Field(..., description="Event date")
+    event_date_precision: str = Field(..., description="Date precision")
+    event_date_text: str | None = Field(None, description="Original date text")
+    event_type: str = Field(..., description="Event type")
+    description: str = Field(..., description="Event description")
+    document_id: str | None = Field(None, description="Source document UUID")
+    source_page: int | None = Field(None, description="Source page number")
+    confidence: float = Field(..., description="Classification confidence")
+    entities: list[EntityReference] = Field(
+        default_factory=list, description="Linked entities"
+    )
+    is_ambiguous: bool = Field(default=False, description="Whether date is ambiguous")
+    is_verified: bool = Field(default=False, description="Whether manually verified")
+
+
+class TimelineWithEntitiesResponse(BaseModel):
+    """API response for timeline with entity information.
+
+    GET /api/matters/{matter_id}/timeline/full
+    """
+
+    data: list[TimelineEventWithEntities]
+    meta: PaginationMeta
+
+
+class TimelineStatisticsData(BaseModel):
+    """Statistics about a matter's timeline."""
+
+    total_events: int = Field(..., description="Total number of events")
+    events_by_type: dict[str, int] = Field(
+        default_factory=dict, description="Event count by type"
+    )
+    entities_involved: int = Field(..., description="Number of unique entities")
+    date_range_start: date | None = Field(None, description="Earliest event date")
+    date_range_end: date | None = Field(None, description="Latest event date")
+    events_with_entities: int = Field(..., description="Events with entity links")
+    events_without_entities: int = Field(..., description="Events without entity links")
+    verified_events: int = Field(..., description="Manually verified events")
+
+
+class TimelineStatisticsResponse(BaseModel):
+    """API response for timeline statistics.
+
+    GET /api/matters/{matter_id}/timeline/stats
+    """
+
+    data: TimelineStatisticsData
+
+
+class EntityLinkingJobData(BaseModel):
+    """Job data for entity linking."""
+
+    job_id: str = Field(..., description="Job UUID for progress tracking")
+    status: str = Field(default="queued", description="Job status")
+    events_to_process: int = Field(..., description="Number of events to process")
+
+
+class EntityLinkingJobResponse(BaseModel):
+    """API response for entity linking job trigger.
+
+    POST /api/matters/{matter_id}/timeline/link-entities
+    """
+
+    data: EntityLinkingJobData
+
+
+class EntityTimelineRequest(BaseModel):
+    """Request for entity-focused timeline view."""
+
+    entity_id: str = Field(..., description="Entity UUID to focus on")
+
+
+class EntityEventCount(BaseModel):
+    """Entity with event count for timeline."""
+
+    entity_id: str = Field(..., description="Entity UUID")
+    canonical_name: str = Field(..., description="Entity name")
+    entity_type: str = Field(..., description="Entity type")
+    event_count: int = Field(..., description="Number of events involving entity")
+    first_appearance: date | None = Field(None, description="First event date")
+    last_appearance: date | None = Field(None, description="Last event date")
+
+
+class EntitiesInTimelineResponse(BaseModel):
+    """API response for entities involved in timeline.
+
+    GET /api/matters/{matter_id}/timeline/entities
+    """
+
+    data: list[EntityEventCount]
+    meta: PaginationMeta
+
+
 # Forward reference resolution
 DateExtractionJobResponse.model_rebuild()
 ClassifiedEventsListResponse.model_rebuild()
 UnclassifiedEventsResponse.model_rebuild()
+TimelineWithEntitiesResponse.model_rebuild()
+EntitiesInTimelineResponse.model_rebuild()

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from app.api.routes import bounding_boxes, chunks, documents, entities, health, jobs, matters, ocr_validation, search
+from app.api.routes import bounding_boxes, chunks, citations, documents, entities, health, jobs, matters, ocr_validation, search
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -115,6 +115,7 @@ def create_app() -> FastAPI:
     app.include_router(search.router, prefix="/api")
     app.include_router(entities.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
+    app.include_router(citations.router, prefix="/api")
 
     # Future routers (to be implemented in later stories):
     # app.include_router(engines.router, prefix="/api")

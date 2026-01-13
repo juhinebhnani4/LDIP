@@ -89,6 +89,7 @@ class PubSubService:
         page_count: int | None = None,
         ocr_confidence: float | None = None,
         error_message: str | None = None,
+        **kwargs,
     ) -> bool:
         """Publish document processing status update.
 
@@ -99,6 +100,7 @@ class PubSubService:
             page_count: Number of pages (on completion).
             ocr_confidence: OCR confidence score (on completion).
             error_message: Error message (on failure).
+            **kwargs: Additional event-specific data.
 
         Returns:
             True if message was published successfully.
@@ -117,6 +119,11 @@ class PubSubService:
             message["ocr_confidence"] = ocr_confidence
         if error_message is not None:
             message["error_message"] = error_message
+
+        # Add any additional kwargs to the message
+        for key, value in kwargs.items():
+            if value is not None:
+                message[key] = value
 
         try:
             # Publish to channel
@@ -203,6 +210,7 @@ def broadcast_document_status(
     page_count: int | None = None,
     ocr_confidence: float | None = None,
     error_message: str | None = None,
+    **kwargs,
 ) -> None:
     """Convenience function to broadcast document status.
 
@@ -215,6 +223,7 @@ def broadcast_document_status(
         page_count: Number of pages (on completion).
         ocr_confidence: OCR confidence score (on completion).
         error_message: Error message (on failure).
+        **kwargs: Additional event-specific data (e.g., citations_extracted, unique_acts_found).
     """
     try:
         service = get_pubsub_service()
@@ -225,6 +234,7 @@ def broadcast_document_status(
             page_count=page_count,
             ocr_confidence=ocr_confidence,
             error_message=error_message,
+            **kwargs,
         )
     except Exception as e:
         # Never fail because of pub/sub issues

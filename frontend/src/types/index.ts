@@ -109,3 +109,27 @@ export {
   isJobTerminal,
   STAGE_LABELS,
 } from './job';
+
+// Citation types (Story 3-1: Act Citation Extraction)
+export type {
+  ActDiscoveryResponse,
+  ActDiscoverySummary,
+  ActResolution,
+  ActResolutionResponse,
+  ActResolutionStatus,
+  Citation,
+  CitationBase,
+  CitationErrorDetail,
+  CitationErrorResponse,
+  CitationListItem,
+  CitationListOptions,
+  CitationResponse,
+  CitationsListResponse,
+  CitationStats,
+  CitationSummaryItem,
+  CitationSummaryResponse,
+  MarkActSkippedRequest,
+  MarkActUploadedRequest,
+  UserAction,
+  VerificationStatus,
+} from './citation';

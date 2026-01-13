@@ -1,0 +1,257 @@
+/**
+ * Citation API Client for Act Citation Extraction
+ *
+ * Provides typed API functions for citation operations.
+ *
+ * Story 3-1: Act Citation Extraction
+ */
+
+import { api } from './client';
+import type {
+  ActDiscoveryResponse,
+  ActResolutionResponse,
+  CitationListOptions,
+  CitationResponse,
+  CitationsListResponse,
+  CitationStats,
+  CitationSummaryResponse,
+  MarkActSkippedRequest,
+  MarkActUploadedRequest,
+} from '@/types';
+
+/**
+ * Build query string from options object.
+ */
+function buildQueryString(options: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined) {
+      // Convert camelCase to snake_case for API
+      const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      params.append(snakeKey, String(value));
+    }
+  }
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
+// =============================================================================
+// Citation Operations
+// =============================================================================
+
+/**
+ * Get paginated list of citations in a matter.
+ *
+ * @param matterId - Matter UUID
+ * @param options - Query options (actName, verificationStatus, documentId, page, perPage)
+ * @returns Paginated list of citations
+ *
+ * @example
+ * ```ts
+ * const citations = await getCitations('matter-123', {
+ *   actName: 'Negotiable Instruments Act',
+ *   verificationStatus: 'pending',
+ *   page: 1,
+ *   perPage: 20,
+ * });
+ * console.log(citations.data); // CitationListItem[]
+ * console.log(citations.meta.total); // Total count
+ * ```
+ */
+export async function getCitations(
+  matterId: string,
+  options: CitationListOptions = {}
+): Promise<CitationsListResponse> {
+  const queryString = buildQueryString({
+    actName: options.actName,
+    verificationStatus: options.verificationStatus,
+    documentId: options.documentId,
+    page: options.page,
+    perPage: options.perPage,
+  });
+
+  return api.get<CitationsListResponse>(`/api/matters/${matterId}/citations${queryString}`);
+}
+
+/**
+ * Get a single citation by ID.
+ *
+ * @param matterId - Matter UUID
+ * @param citationId - Citation UUID
+ * @returns Citation details
+ *
+ * @example
+ * ```ts
+ * const citation = await getCitation('matter-123', 'citation-456');
+ * console.log(citation.data.actName); // "Negotiable Instruments Act, 1881"
+ * console.log(citation.data.sectionNumber); // "138"
+ * console.log(citation.data.verificationStatus); // "pending"
+ * ```
+ */
+export async function getCitation(
+  matterId: string,
+  citationId: string
+): Promise<CitationResponse> {
+  return api.get<CitationResponse>(`/api/matters/${matterId}/citations/${citationId}`);
+}
+
+/**
+ * Get citation counts grouped by Act.
+ *
+ * Useful for showing which Acts are most frequently cited.
+ *
+ * @param matterId - Matter UUID
+ * @returns Citation summary grouped by Act
+ *
+ * @example
+ * ```ts
+ * const summary = await getCitationSummary('matter-123');
+ * for (const item of summary.data) {
+ *   console.log(`${item.actName}: ${item.citationCount} citations`);
+ * }
+ * ```
+ */
+export async function getCitationSummary(
+  matterId: string
+): Promise<CitationSummaryResponse> {
+  return api.get<CitationSummaryResponse>(`/api/matters/${matterId}/citations/summary/by-act`);
+}
+
+/**
+ * Get citation statistics for a matter.
+ *
+ * Returns summary statistics including total citations,
+ * unique Acts, and verification status breakdown.
+ *
+ * @param matterId - Matter UUID
+ * @returns Citation statistics
+ *
+ * @example
+ * ```ts
+ * const stats = await getCitationStats('matter-123');
+ * console.log(`Total: ${stats.totalCitations}`);
+ * console.log(`Missing Acts: ${stats.missingActsCount}`);
+ * ```
+ */
+export async function getCitationStats(
+  matterId: string
+): Promise<CitationStats> {
+  return api.get<CitationStats>(`/api/matters/${matterId}/citations/stats`);
+}
+
+// =============================================================================
+// Act Discovery Operations
+// =============================================================================
+
+/**
+ * Get Act Discovery Report.
+ *
+ * Returns list of all Acts referenced in the matter with their resolution status.
+ * Shows which Acts are uploaded, missing, or skipped.
+ *
+ * This is the primary function for the "Missing Acts" UI.
+ *
+ * @param matterId - Matter UUID
+ * @param includeAvailable - Whether to include Acts that are already available (default true)
+ * @returns Act Discovery Report
+ *
+ * @example
+ * ```ts
+ * // Get all acts
+ * const report = await getActDiscoveryReport('matter-123');
+ *
+ * // Get only missing acts
+ * const missing = await getActDiscoveryReport('matter-123', false);
+ * for (const act of missing.data) {
+ *   if (act.resolutionStatus === 'missing') {
+ *     console.log(`Missing: ${act.actName} (${act.citationCount} citations)`);
+ *   }
+ * }
+ * ```
+ */
+export async function getActDiscoveryReport(
+  matterId: string,
+  includeAvailable: boolean = true
+): Promise<ActDiscoveryResponse> {
+  const queryString = buildQueryString({ includeAvailable: includeAvailable ? 1 : 0 });
+  return api.get<ActDiscoveryResponse>(`/api/matters/${matterId}/citations/acts/discovery${queryString}`);
+}
+
+/**
+ * Get only missing Acts that need user action.
+ *
+ * Convenience wrapper around getActDiscoveryReport that filters for missing Acts.
+ *
+ * @param matterId - Matter UUID
+ * @returns List of missing Acts
+ */
+export async function getMissingActs(matterId: string): Promise<ActDiscoveryResponse> {
+  const report = await getActDiscoveryReport(matterId, false);
+  return {
+    data: report.data.filter(
+      (act) => act.resolutionStatus === 'missing' && act.userAction === 'pending'
+    ),
+  };
+}
+
+// =============================================================================
+// Act Resolution Operations
+// =============================================================================
+
+/**
+ * Mark an Act as uploaded.
+ *
+ * Call this after uploading an Act document to update the resolution status.
+ *
+ * @param matterId - Matter UUID
+ * @param request - Act upload details
+ * @returns Updated resolution status
+ *
+ * @example
+ * ```ts
+ * // After uploading the NI Act document
+ * const result = await markActUploaded('matter-123', {
+ *   actName: 'Negotiable Instruments Act, 1881',
+ *   actDocumentId: 'doc-789',
+ * });
+ * console.log(result.success); // true
+ * ```
+ */
+export async function markActUploaded(
+  matterId: string,
+  request: MarkActUploadedRequest
+): Promise<ActResolutionResponse> {
+  return api.post<ActResolutionResponse>(
+    `/api/matters/${matterId}/citations/acts/mark-uploaded`,
+    request
+  );
+}
+
+/**
+ * Mark an Act as skipped.
+ *
+ * User chooses not to upload this Act (maybe they don't have it).
+ * The Act will no longer appear in the "missing" list.
+ *
+ * @param matterId - Matter UUID
+ * @param request - Act to skip
+ * @returns Updated resolution status
+ *
+ * @example
+ * ```ts
+ * // User doesn't have the Arbitration Act
+ * const result = await markActSkipped('matter-123', {
+ *   actName: 'Arbitration and Conciliation Act, 1996',
+ * });
+ * console.log(result.success); // true
+ * ```
+ */
+export async function markActSkipped(
+  matterId: string,
+  request: MarkActSkippedRequest
+): Promise<ActResolutionResponse> {
+  return api.post<ActResolutionResponse>(
+    `/api/matters/${matterId}/citations/acts/mark-skipped`,
+    request
+  );
+}

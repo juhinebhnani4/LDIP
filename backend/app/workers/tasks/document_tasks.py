@@ -73,6 +73,13 @@ from app.services.mig import (
     get_mig_extractor,
     get_mig_graph_service,
 )
+from app.engines.citation import (
+    CitationExtractor,
+    CitationExtractorError,
+    CitationStorageService,
+    get_citation_extractor,
+    get_citation_storage_service,
+)
 from app.services.mig.entity_resolver import AliasResolutionError
 from app.services.mig.extractor import MIGExtractorError
 from app.services.rag.embedder import (
@@ -129,6 +136,7 @@ PIPELINE_STAGES = [
     "embedding",
     "entity_extraction",
     "alias_resolution",
+    "citation_extraction",
 ]
 
 STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
@@ -2756,4 +2764,359 @@ def resolve_aliases(
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
             "job_id": job_id,
+        }
+
+
+# =============================================================================
+# Citation Extraction Task (Story 3-1)
+# =============================================================================
+
+CITATION_EXTRACTION_BATCH_SIZE = 10  # Chunks per Gemini API call
+CITATION_EXTRACTION_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.extract_citations",
+    bind=True,
+    autoretry_for=(CitationExtractorError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def extract_citations(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    citation_extractor: CitationExtractor | None = None,
+    citation_storage: CitationStorageService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Extract Act citations from document chunks using Gemini.
+
+    This task runs after embed_chunks to identify Act references.
+    Can run in parallel with entity extraction.
+
+    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> **Extract Citations**
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        citation_extractor: Optional CitationExtractor instance (for testing).
+        citation_storage: Optional CitationStorageService instance (for testing).
+
+    Returns:
+        Task result with citation extraction summary.
+
+    Raises:
+        CitationExtractorError: If extraction fails (will trigger retry).
+    """
+    import time
+
+    from app.services.supabase.client import get_service_client
+
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("extract_citations_no_document_id")
+        return {
+            "status": "citation_extraction_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "searchable",
+            "embedding_complete",
+            "entities_extracted",
+            "aliases_resolved",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "extract_citations_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "citation_extraction_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    extractor = citation_extractor or get_citation_extractor()
+    storage = citation_storage or get_citation_storage_service()
+
+    logger.info(
+        "extract_citations_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for the document
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Get database client
+        client = get_service_client()
+        if client is None:
+            raise CitationExtractorError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+                is_retryable=False,
+            )
+
+        # Get job_id for partial progress tracking
+        job_id: str | None = None
+        if prev_result:
+            job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
+        # Track citation extraction stage start (Story 2c-3)
+        _update_job_stage_start(job_id, "citation_extraction", matter_id)
+
+        # Get all chunks for this document (child chunks for granular extraction)
+        response = (
+            client.table("chunks")
+            .select("id, content, chunk_type, page_number")
+            .eq("document_id", doc_id)
+            .eq("chunk_type", "child")  # Extract from child chunks for precision
+            .order("chunk_index", desc=False)
+            .execute()
+        )
+
+        chunks = response.data or []
+
+        if not chunks:
+            logger.info(
+                "extract_citations_no_chunks",
+                document_id=doc_id,
+            )
+            return {
+                "status": "citation_extraction_complete",
+                "document_id": doc_id,
+                "citations_extracted": 0,
+                "unique_acts_found": 0,
+                "reason": "No chunks found for citation extraction",
+                "job_id": job_id,
+            }
+
+        # Initialize partial progress tracker
+        progress_tracker = create_progress_tracker(job_id, matter_id)
+        stage_progress = None
+        if progress_tracker:
+            stage_progress = progress_tracker.get_or_create_stage("citation_extraction")
+            stage_progress.total_items = len(chunks)
+
+        # Get already-processed chunk IDs from previous run (for retry)
+        already_processed: set[str] = set()
+        if stage_progress:
+            already_processed = stage_progress.processed_items
+
+        logger.info(
+            "extract_citations_processing",
+            document_id=doc_id,
+            chunk_count=len(chunks),
+            already_processed=len(already_processed),
+            batch_size=CITATION_EXTRACTION_BATCH_SIZE,
+        )
+
+        # Process chunks and extract citations
+        total_citations = 0
+        total_unique_acts: set[str] = set()
+        failed_chunks = 0
+        skipped_chunks = 0
+
+        # Run async operations in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            for i in range(0, len(chunks), CITATION_EXTRACTION_BATCH_SIZE):
+                batch = chunks[i : i + CITATION_EXTRACTION_BATCH_SIZE]
+
+                for chunk in batch:
+                    chunk_id = chunk["id"]
+
+                    # Skip already-processed chunks (partial progress)
+                    if chunk_id in already_processed:
+                        skipped_chunks += 1
+                        continue
+
+                    try:
+                        # Extract citations from chunk
+                        extraction_result = extractor.extract_from_text_sync(
+                            text=chunk["content"],
+                            document_id=doc_id,
+                            matter_id=matter_id,
+                            chunk_id=chunk_id,
+                            page_number=chunk.get("page_number"),
+                        )
+
+                        if extraction_result.citations:
+                            # Save citations to database
+                            saved_count = loop.run_until_complete(
+                                storage.save_citations(
+                                    matter_id=matter_id,
+                                    document_id=doc_id,
+                                    extraction_result=extraction_result,
+                                )
+                            )
+                            total_citations += saved_count
+
+                        if extraction_result.unique_acts:
+                            total_unique_acts.update(extraction_result.unique_acts)
+
+                        # Track partial progress
+                        if stage_progress:
+                            stage_progress.mark_processed(chunk_id)
+
+                    except CitationExtractorError as e:
+                        if stage_progress:
+                            stage_progress.mark_failed(chunk_id, str(e))
+
+                        if e.is_retryable:
+                            # Save progress before retry
+                            if progress_tracker and stage_progress:
+                                progress_tracker.save_progress(stage_progress, force=True)
+                            raise  # Let Celery retry
+                        logger.warning(
+                            "extract_citations_chunk_failed",
+                            document_id=doc_id,
+                            chunk_id=chunk_id,
+                            error=str(e),
+                        )
+                        failed_chunks += 1
+                    except Exception as e:
+                        logger.warning(
+                            "extract_citations_chunk_error",
+                            document_id=doc_id,
+                            chunk_id=chunk_id,
+                            error=str(e),
+                        )
+                        failed_chunks += 1
+                        if stage_progress:
+                            stage_progress.mark_failed(chunk_id, str(e))
+
+                # Persist partial progress periodically
+                if progress_tracker and stage_progress:
+                    progress_tracker.save_progress(stage_progress)
+
+                # Rate limit delay between batches
+                if i + CITATION_EXTRACTION_BATCH_SIZE < len(chunks):
+                    time.sleep(CITATION_EXTRACTION_RATE_LIMIT_DELAY)
+
+                logger.debug(
+                    "extract_citations_batch_complete",
+                    document_id=doc_id,
+                    batch_number=i // CITATION_EXTRACTION_BATCH_SIZE + 1,
+                    total_batches=(len(chunks) + CITATION_EXTRACTION_BATCH_SIZE - 1) // CITATION_EXTRACTION_BATCH_SIZE,
+                )
+
+        finally:
+            # Save final progress
+            if progress_tracker and stage_progress:
+                progress_tracker.save_progress(stage_progress, force=True)
+            loop.close()
+
+        # Broadcast citation extraction completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="citations_extracted",
+            citations_extracted=total_citations,
+            unique_acts_found=len(total_unique_acts),
+        )
+
+        # Track citation extraction stage completion
+        _update_job_stage_complete(
+            job_id,
+            "citation_extraction",
+            matter_id,
+            metadata={
+                "citations_extracted": total_citations,
+                "unique_acts_found": len(total_unique_acts),
+            },
+        )
+
+        logger.info(
+            "extract_citations_task_completed",
+            document_id=doc_id,
+            citations_extracted=total_citations,
+            unique_acts_found=len(total_unique_acts),
+            chunks_processed=len(chunks),
+            failed_chunks=failed_chunks,
+            skipped_chunks=skipped_chunks,
+        )
+
+        return {
+            "status": "citations_extracted",
+            "document_id": doc_id,
+            "citations_extracted": total_citations,
+            "unique_acts_found": len(total_unique_acts),
+            "unique_acts": list(total_unique_acts),
+            "chunks_processed": len(chunks),
+            "failed_chunks": failed_chunks,
+            "skipped_chunks": skipped_chunks,
+            "job_id": job_id,
+        }
+
+    except CitationExtractorError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "extract_citations_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=3,
+            error=str(e),
+        )
+
+        if retry_count >= 3:
+            logger.error(
+                "extract_citations_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "citation_extraction_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "extract_citations_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "citation_extraction_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "extract_citations_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "citation_extraction_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
         }

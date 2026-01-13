@@ -5,12 +5,106 @@ Supports the Timeline Construction Engine for tracking events
 extracted from legal documents.
 
 Story 4-1: Date Extraction with Gemini
+Story 4-2: Event Classification
 """
 
 from datetime import date, datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+# =============================================================================
+# Event Type Enum (Story 4-2)
+# =============================================================================
+
+
+class EventType(str, Enum):
+    """Event types for timeline classification.
+
+    Raw dates are initially stored as RAW_DATE, then classified
+    into specific event types by the EventClassifier.
+    """
+
+    FILING = "filing"
+    NOTICE = "notice"
+    HEARING = "hearing"
+    ORDER = "order"
+    TRANSACTION = "transaction"
+    DOCUMENT = "document"
+    DEADLINE = "deadline"
+    UNCLASSIFIED = "unclassified"
+    RAW_DATE = "raw_date"
+
+
+# =============================================================================
+# Event Classification Models (Story 4-2)
+# =============================================================================
+
+
+class SecondaryTypeScore(BaseModel):
+    """Secondary event type with confidence score."""
+
+    type: EventType
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class EventClassificationResult(BaseModel):
+    """Result from classifying a single event.
+
+    Contains the primary classification and metadata about
+    how the classification was determined.
+    """
+
+    event_id: str = Field(..., description="Event UUID that was classified")
+    event_type: EventType = Field(..., description="Classified event type")
+    classification_confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Confidence score for classification"
+    )
+    secondary_types: list[SecondaryTypeScore] = Field(
+        default_factory=list, description="Alternative classifications with scores"
+    )
+    keywords_matched: list[str] = Field(
+        default_factory=list, description="Keywords that matched for classification"
+    )
+    classification_reasoning: str | None = Field(
+        None, description="LLM explanation for the classification"
+    )
+
+
+class ClassifiedEvent(BaseModel):
+    """A fully classified timeline event.
+
+    Extends RawEvent with classification data. Used for API responses
+    after events have been classified.
+    """
+
+    id: str = Field(..., description="Event UUID")
+    matter_id: str = Field(..., description="Matter UUID")
+    document_id: str | None = Field(None, description="Source document UUID")
+    event_date: date = Field(..., description="Event date")
+    event_date_precision: Literal["day", "month", "year", "approximate"] = Field(
+        default="day", description="Date precision level"
+    )
+    event_date_text: str | None = Field(
+        None, description="Original date text from document"
+    )
+    event_type: EventType = Field(..., description="Classified event type")
+    description: str = Field(..., description="Context text surrounding the date")
+    classification_confidence: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Classification confidence"
+    )
+    source_page: int | None = Field(None, description="Source page number")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list, description="Bounding box UUIDs"
+    )
+    verified: bool = Field(
+        default=False, description="Whether event has been manually verified"
+    )
+    is_manual: bool = Field(default=False, description="Whether manually created")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
 
 
 # =============================================================================
@@ -221,5 +315,98 @@ class TimelineErrorResponse(BaseModel):
     error: TimelineErrorDetail
 
 
+# =============================================================================
+# Event Classification API Models (Story 4-2)
+# =============================================================================
+
+
+class EventClassificationListItem(BaseModel):
+    """Event item for classified events list responses."""
+
+    id: str = Field(..., description="Event UUID")
+    event_date: date = Field(..., description="Event date")
+    event_date_precision: str = Field(..., description="Date precision")
+    event_date_text: str | None = Field(None, description="Original date text")
+    event_type: str = Field(..., description="Classified event type")
+    description: str = Field(..., description="Context text")
+    classification_confidence: float = Field(
+        ..., description="Classification confidence"
+    )
+    document_id: str | None = Field(None, description="Source document UUID")
+    source_page: int | None = Field(None, description="Source page number")
+    verified: bool = Field(default=False, description="Whether verified")
+
+
+class ClassifiedEventsListResponse(BaseModel):
+    """API response for classified events list endpoint.
+
+    GET /api/matters/{matter_id}/timeline/events
+    """
+
+    data: list[EventClassificationListItem]
+    meta: PaginationMeta
+
+
+class UnclassifiedEventItem(BaseModel):
+    """Event item for unclassified events list responses.
+
+    Includes suggested types for manual classification.
+    """
+
+    id: str = Field(..., description="Event UUID")
+    event_date: date = Field(..., description="Event date")
+    event_type: str = Field(..., description="Current event type (unclassified)")
+    description: str = Field(..., description="Context text")
+    classification_confidence: float = Field(..., description="Confidence score")
+    suggested_types: list[SecondaryTypeScore] = Field(
+        default_factory=list, description="Suggested event types for manual selection"
+    )
+    document_id: str | None = Field(None, description="Source document UUID")
+
+
+class UnclassifiedEventsResponse(BaseModel):
+    """API response for unclassified events endpoint.
+
+    GET /api/matters/{matter_id}/timeline/unclassified
+    """
+
+    data: list[UnclassifiedEventItem]
+    meta: PaginationMeta
+
+
+class ClassificationJobData(BaseModel):
+    """Job data for event classification."""
+
+    job_id: str = Field(..., description="Job UUID for progress tracking")
+    status: str = Field(default="queued", description="Job status")
+    events_to_classify: int = Field(..., description="Number of events to classify")
+
+
+class ClassificationJobResponse(BaseModel):
+    """API response for classification job trigger.
+
+    POST /api/matters/{matter_id}/timeline/classify
+    """
+
+    data: ClassificationJobData
+
+
+class ManualClassificationRequest(BaseModel):
+    """Request body for manual event classification.
+
+    PATCH /api/matters/{matter_id}/timeline/events/{event_id}
+    """
+
+    event_type: EventType = Field(..., description="New event type")
+
+
+class ManualClassificationResponse(BaseModel):
+    """Response for manual classification update."""
+
+    data: ClassifiedEvent
+
+
 # Forward reference resolution
 DateExtractionJobResponse.model_rebuild()
+ClassifiedEventsListResponse.model_rebuild()
+UnclassifiedEventsResponse.model_rebuild()

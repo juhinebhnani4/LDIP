@@ -15,18 +15,38 @@ from app.engines.timeline.date_extractor import (
     DateConfigurationError,
     get_date_extractor,
 )
+from app.engines.timeline.event_classifier import (
+    EventClassifier,
+    EventClassifierError,
+    ClassifierConfigurationError,
+    get_event_classifier,
+)
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
 )
+from app.engines.timeline.classification_prompts import (
+    EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+    EVENT_CLASSIFICATION_USER_PROMPT,
+    EVENT_CLASSIFICATION_BATCH_PROMPT,
+)
 
 __all__ = [
-    # Extractor
+    # Date Extractor
     "DateExtractor",
     "DateExtractorError",
     "DateConfigurationError",
     "get_date_extractor",
-    # Prompts
+    # Event Classifier (Story 4-2)
+    "EventClassifier",
+    "EventClassifierError",
+    "ClassifierConfigurationError",
+    "get_event_classifier",
+    # Date Extraction Prompts
     "DATE_EXTRACTION_SYSTEM_PROMPT",
     "DATE_EXTRACTION_USER_PROMPT",
+    # Classification Prompts (Story 4-2)
+    "EVENT_CLASSIFICATION_SYSTEM_PROMPT",
+    "EVENT_CLASSIFICATION_USER_PROMPT",
+    "EVENT_CLASSIFICATION_BATCH_PROMPT",
 ]

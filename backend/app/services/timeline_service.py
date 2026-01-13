@@ -4,6 +4,7 @@ Handles saving and retrieving extracted dates/events
 for the Timeline Construction Engine.
 
 Story 4-1: Date Extraction with Gemini
+Story 4-2: Event Classification
 """
 
 import asyncio
@@ -13,11 +14,19 @@ from math import ceil
 import structlog
 
 from app.models.timeline import (
+    ClassifiedEvent,
+    ClassifiedEventsListResponse,
+    EventClassificationListItem,
+    EventClassificationResult,
+    EventType,
     ExtractedDate,
     PaginationMeta,
     RawDateListItem,
     RawDatesListResponse,
     RawEvent,
+    SecondaryTypeScore,
+    UnclassifiedEventItem,
+    UnclassifiedEventsResponse,
 )
 from app.services.supabase.client import get_service_client
 
@@ -538,6 +547,556 @@ class TimelineService:
             return False
 
     # =========================================================================
+    # Event Classification Methods (Story 4-2)
+    # =========================================================================
+
+    async def update_event_classification(
+        self,
+        event_id: str,
+        matter_id: str,
+        event_type: str,
+        confidence: float,
+    ) -> bool:
+        """Update an event's classification.
+
+        Args:
+            event_id: Event UUID to update.
+            matter_id: Matter UUID for validation.
+            event_type: New event type (filing, notice, etc.).
+            confidence: Classification confidence (0-1).
+
+        Returns:
+            True if update succeeded.
+
+        Raises:
+            TimelineServiceError: If update fails.
+        """
+        def _update():
+            return (
+                self.client.table("events")
+                .update({
+                    "event_type": event_type,
+                    "confidence": confidence,
+                })
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+
+            if response.data:
+                logger.info(
+                    "event_classification_updated",
+                    event_id=event_id,
+                    matter_id=matter_id,
+                    event_type=event_type,
+                    confidence=confidence,
+                )
+                return True
+
+            logger.warning(
+                "event_classification_no_match",
+                event_id=event_id,
+                matter_id=matter_id,
+            )
+            return False
+
+        except Exception as e:
+            logger.error(
+                "event_classification_update_failed",
+                error=str(e),
+                event_id=event_id,
+            )
+            raise TimelineServiceError(f"Failed to update event classification: {e}")
+
+    def update_event_classification_sync(
+        self,
+        event_id: str,
+        matter_id: str,
+        event_type: str,
+        confidence: float,
+    ) -> bool:
+        """Synchronous version of update_event_classification.
+
+        For use in Celery tasks.
+
+        Args:
+            event_id: Event UUID to update.
+            matter_id: Matter UUID.
+            event_type: New event type.
+            confidence: Classification confidence.
+
+        Returns:
+            True if update succeeded.
+        """
+        try:
+            response = (
+                self.client.table("events")
+                .update({
+                    "event_type": event_type,
+                    "confidence": confidence,
+                })
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+
+            if response.data:
+                logger.info(
+                    "event_classification_updated_sync",
+                    event_id=event_id,
+                    event_type=event_type,
+                )
+                return True
+            return False
+
+        except Exception as e:
+            logger.error(
+                "event_classification_sync_failed",
+                error=str(e),
+                event_id=event_id,
+            )
+            raise TimelineServiceError(f"Failed to update event classification: {e}")
+
+    async def get_unclassified_events(
+        self,
+        matter_id: str,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> UnclassifiedEventsResponse:
+        """Get events needing manual classification.
+
+        Returns events where:
+        - event_type = 'raw_date' OR 'unclassified'
+        - OR confidence < 0.7
+
+        Args:
+            matter_id: Matter UUID.
+            page: Page number.
+            per_page: Items per page.
+
+        Returns:
+            UnclassifiedEventsResponse with paginated events.
+        """
+        def _query():
+            # Use OR filter for multiple conditions
+            return (
+                self.client.table("events")
+                .select("*", count="exact")
+                .eq("matter_id", matter_id)
+                .or_("event_type.eq.raw_date,event_type.eq.unclassified,confidence.lt.0.7")
+                .order("event_date", desc=False)
+                .range((page - 1) * per_page, page * per_page - 1)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_query)
+
+            items = [
+                self._db_row_to_unclassified_item(row)
+                for row in (response.data or [])
+            ]
+
+            total = response.count or 0
+            total_pages = ceil(total / per_page) if per_page > 0 else 0
+
+            return UnclassifiedEventsResponse(
+                data=items,
+                meta=PaginationMeta(
+                    total=total,
+                    page=page,
+                    per_page=per_page,
+                    total_pages=total_pages,
+                ),
+            )
+
+        except Exception as e:
+            logger.error(
+                "get_unclassified_events_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to get unclassified events: {e}")
+
+    async def get_events_for_classification(
+        self,
+        matter_id: str,
+        limit: int = 100,
+    ) -> list[RawEvent]:
+        """Get raw_date events ready for classification.
+
+        Args:
+            matter_id: Matter UUID.
+            limit: Maximum events to return.
+
+        Returns:
+            List of RawEvent objects with event_type='raw_date'.
+        """
+        def _query():
+            return (
+                self.client.table("events")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("event_type", "raw_date")
+                .order("event_date", desc=False)
+                .limit(limit)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_query)
+
+            if response.data:
+                return [self._db_row_to_raw_event(row) for row in response.data]
+            return []
+
+        except Exception as e:
+            logger.error(
+                "get_events_for_classification_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+
+    def get_events_for_classification_sync(
+        self,
+        matter_id: str,
+        limit: int = 100,
+    ) -> list[RawEvent]:
+        """Synchronous version for Celery tasks.
+
+        Args:
+            matter_id: Matter UUID.
+            limit: Maximum events to return.
+
+        Returns:
+            List of RawEvent objects.
+        """
+        try:
+            response = (
+                self.client.table("events")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("event_type", "raw_date")
+                .order("event_date", desc=False)
+                .limit(limit)
+                .execute()
+            )
+
+            if response.data:
+                return [self._db_row_to_raw_event(row) for row in response.data]
+            return []
+
+        except Exception as e:
+            logger.error(
+                "get_events_for_classification_sync_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+
+    async def bulk_update_classifications(
+        self,
+        classifications: list[EventClassificationResult],
+        matter_id: str,
+    ) -> int:
+        """Update multiple events with classification results.
+
+        Args:
+            classifications: List of classification results.
+            matter_id: Matter UUID for validation.
+
+        Returns:
+            Number of successfully updated events.
+
+        Raises:
+            TimelineServiceError: If bulk update fails.
+        """
+        if not classifications:
+            return 0
+
+        updated_count = 0
+
+        for result in classifications:
+            try:
+                success = await self.update_event_classification(
+                    event_id=result.event_id,
+                    matter_id=matter_id,
+                    event_type=result.event_type.value,
+                    confidence=result.classification_confidence,
+                )
+                if success:
+                    updated_count += 1
+
+            except Exception as e:
+                logger.warning(
+                    "bulk_classification_item_failed",
+                    event_id=result.event_id,
+                    error=str(e),
+                )
+                continue
+
+        logger.info(
+            "bulk_classifications_updated",
+            matter_id=matter_id,
+            total=len(classifications),
+            updated=updated_count,
+        )
+
+        return updated_count
+
+    def bulk_update_classifications_sync(
+        self,
+        classifications: list[EventClassificationResult],
+        matter_id: str,
+    ) -> int:
+        """Synchronous bulk update for Celery tasks.
+
+        Args:
+            classifications: List of classification results.
+            matter_id: Matter UUID.
+
+        Returns:
+            Number of successfully updated events.
+        """
+        if not classifications:
+            return 0
+
+        updated_count = 0
+
+        for result in classifications:
+            try:
+                success = self.update_event_classification_sync(
+                    event_id=result.event_id,
+                    matter_id=matter_id,
+                    event_type=result.event_type.value,
+                    confidence=result.classification_confidence,
+                )
+                if success:
+                    updated_count += 1
+
+            except Exception as e:
+                logger.warning(
+                    "bulk_classification_sync_item_failed",
+                    event_id=result.event_id,
+                    error=str(e),
+                )
+                continue
+
+        logger.info(
+            "bulk_classifications_updated_sync",
+            matter_id=matter_id,
+            total=len(classifications),
+            updated=updated_count,
+        )
+
+        return updated_count
+
+    async def get_classified_events(
+        self,
+        matter_id: str,
+        event_type: str | None = None,
+        confidence_min: float | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> ClassifiedEventsListResponse:
+        """Get classified events for a matter.
+
+        Returns events where event_type is NOT 'raw_date'.
+
+        Args:
+            matter_id: Matter UUID.
+            event_type: Optional filter by event type.
+            confidence_min: Optional minimum confidence filter.
+            page: Page number.
+            per_page: Items per page.
+
+        Returns:
+            ClassifiedEventsListResponse with paginated events.
+        """
+        def _query():
+            query = (
+                self.client.table("events")
+                .select("*", count="exact")
+                .eq("matter_id", matter_id)
+                .neq("event_type", "raw_date")
+            )
+
+            if event_type:
+                query = query.eq("event_type", event_type)
+
+            if confidence_min is not None:
+                query = query.gte("confidence", confidence_min)
+
+            query = query.order("event_date", desc=False)
+
+            offset = (page - 1) * per_page
+            query = query.range(offset, offset + per_page - 1)
+
+            return query.execute()
+
+        try:
+            response = await asyncio.to_thread(_query)
+
+            items = [
+                self._db_row_to_classification_list_item(row)
+                for row in (response.data or [])
+            ]
+
+            total = response.count or 0
+            total_pages = ceil(total / per_page) if per_page > 0 else 0
+
+            return ClassifiedEventsListResponse(
+                data=items,
+                meta=PaginationMeta(
+                    total=total,
+                    page=page,
+                    per_page=per_page,
+                    total_pages=total_pages,
+                ),
+            )
+
+        except Exception as e:
+            logger.error(
+                "get_classified_events_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to get classified events: {e}")
+
+    async def update_manual_classification(
+        self,
+        event_id: str,
+        matter_id: str,
+        event_type: EventType,
+    ) -> ClassifiedEvent | None:
+        """Update event with manual classification.
+
+        Sets is_manual=True and confidence=1.0 (human verified).
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID.
+            event_type: New event type.
+
+        Returns:
+            Updated ClassifiedEvent or None if not found.
+        """
+        def _update():
+            return (
+                self.client.table("events")
+                .update({
+                    "event_type": event_type.value,
+                    "confidence": 1.0,  # Human verified
+                    "is_manual": True,
+                })
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .select()
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+
+            if response.data:
+                row = response.data[0]
+                logger.info(
+                    "manual_classification_updated",
+                    event_id=event_id,
+                    event_type=event_type.value,
+                )
+                return self._db_row_to_classified_event(row)
+
+            logger.warning(
+                "manual_classification_not_found",
+                event_id=event_id,
+                matter_id=matter_id,
+            )
+            return None
+
+        except Exception as e:
+            logger.error(
+                "manual_classification_failed",
+                error=str(e),
+                event_id=event_id,
+            )
+            raise TimelineServiceError(f"Failed to update manual classification: {e}")
+
+    async def count_events_for_classification(
+        self,
+        matter_id: str,
+        document_ids: list[str] | None = None,
+    ) -> int:
+        """Count raw_date events needing classification.
+
+        Args:
+            matter_id: Matter UUID.
+            document_ids: Optional filter to specific documents.
+
+        Returns:
+            Count of events with event_type='raw_date'.
+        """
+        def _query():
+            query = (
+                self.client.table("events")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("event_type", "raw_date")
+            )
+
+            if document_ids:
+                query = query.in_("document_id", document_ids)
+
+            return query.limit(1).execute()
+
+        try:
+            response = await asyncio.to_thread(_query)
+            return response.count or 0
+
+        except Exception as e:
+            logger.error(
+                "count_events_for_classification_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            return 0
+
+    def count_events_for_classification_sync(
+        self,
+        matter_id: str,
+        document_ids: list[str] | None = None,
+    ) -> int:
+        """Synchronous count for Celery tasks.
+
+        Args:
+            matter_id: Matter UUID.
+            document_ids: Optional filter to specific documents.
+
+        Returns:
+            Count of raw_date events.
+        """
+        try:
+            query = (
+                self.client.table("events")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("event_type", "raw_date")
+            )
+
+            if document_ids:
+                query = query.in_("document_id", document_ids)
+
+            response = query.limit(1).execute()
+            return response.count or 0
+
+        except Exception:
+            return 0
+
+    # =========================================================================
     # Helper Methods
     # =========================================================================
 
@@ -636,6 +1195,98 @@ class TimelineService:
             source_page=row.get("source_page"),
             confidence=row.get("confidence", 0.8),
             is_ambiguous=is_ambiguous,
+        )
+
+    def _db_row_to_classification_list_item(self, row: dict) -> EventClassificationListItem:
+        """Convert database row to classification list item."""
+        from datetime import date
+
+        event_date = row.get("event_date")
+        if isinstance(event_date, str):
+            event_date = date.fromisoformat(event_date)
+
+        # Extract clean description
+        description = row.get("description", "")
+        _, _, clean_description = self._parse_ambiguity_from_description(description)
+
+        return EventClassificationListItem(
+            id=row["id"],
+            event_date=event_date,
+            event_date_precision=row.get("event_date_precision", "day"),
+            event_date_text=row.get("event_date_text"),
+            event_type=row.get("event_type", "unclassified"),
+            description=clean_description,
+            classification_confidence=row.get("confidence", 0.8),
+            document_id=row.get("document_id"),
+            source_page=row.get("source_page"),
+            verified=row.get("is_manual", False),
+        )
+
+    def _db_row_to_unclassified_item(self, row: dict) -> UnclassifiedEventItem:
+        """Convert database row to unclassified event item."""
+        from datetime import date
+
+        event_date = row.get("event_date")
+        if isinstance(event_date, str):
+            event_date = date.fromisoformat(event_date)
+
+        # Extract clean description
+        description = row.get("description", "")
+        _, _, clean_description = self._parse_ambiguity_from_description(description)
+
+        return UnclassifiedEventItem(
+            id=row["id"],
+            event_date=event_date,
+            event_type=row.get("event_type", "unclassified"),
+            description=clean_description,
+            classification_confidence=row.get("confidence", 0.0),
+            suggested_types=[],  # Can be populated by classifier if needed
+            document_id=row.get("document_id"),
+        )
+
+    def _db_row_to_classified_event(self, row: dict) -> ClassifiedEvent:
+        """Convert database row to ClassifiedEvent model."""
+        from datetime import datetime, date
+
+        event_date = row.get("event_date")
+        if isinstance(event_date, str):
+            event_date = date.fromisoformat(event_date)
+
+        created_at = row.get("created_at")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+
+        updated_at = row.get("updated_at")
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+
+        # Extract clean description
+        description = row.get("description", "")
+        _, _, clean_description = self._parse_ambiguity_from_description(description)
+
+        # Parse event type
+        raw_type = row.get("event_type", "unclassified")
+        try:
+            event_type = EventType(raw_type)
+        except ValueError:
+            event_type = EventType.UNCLASSIFIED
+
+        return ClassifiedEvent(
+            id=row["id"],
+            matter_id=row["matter_id"],
+            document_id=row.get("document_id"),
+            event_date=event_date,
+            event_date_precision=row.get("event_date_precision", "day"),
+            event_date_text=row.get("event_date_text"),
+            event_type=event_type,
+            description=clean_description,
+            classification_confidence=row.get("confidence", 0.8),
+            source_page=row.get("source_page"),
+            source_bbox_ids=row.get("source_bbox_ids") or [],
+            verified=row.get("is_manual", False),
+            is_manual=row.get("is_manual", False),
+            created_at=created_at,
+            updated_at=updated_at,
         )
 
 

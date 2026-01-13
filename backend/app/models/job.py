@@ -18,6 +18,7 @@ class JobType(str, Enum):
     - ENTITY_EXTRACTION: MIG entity extraction stage
     - ALIAS_RESOLUTION: Entity alias resolution stage
     - DATE_EXTRACTION: Timeline date extraction stage (Story 4-1)
+    - EVENT_CLASSIFICATION: Timeline event classification stage (Story 4-2)
     """
 
     DOCUMENT_PROCESSING = "DOCUMENT_PROCESSING"
@@ -28,6 +29,7 @@ class JobType(str, Enum):
     ENTITY_EXTRACTION = "ENTITY_EXTRACTION"
     ALIAS_RESOLUTION = "ALIAS_RESOLUTION"
     DATE_EXTRACTION = "DATE_EXTRACTION"
+    EVENT_CLASSIFICATION = "EVENT_CLASSIFICATION"
 
 
 class JobStatus(str, Enum):

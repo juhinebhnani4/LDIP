@@ -94,9 +94,9 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Timeline Construction Engine
-  epic-4: backlog
-  4-1-date-extraction-gemini: backlog
-  4-2-event-classification: backlog
+  epic-4: in-progress
+  4-1-date-extraction-gemini: done
+  4-2-event-classification: dev-complete
   4-3-events-table-mig-integration: backlog
   4-4-timeline-anomaly-detection: backlog
   epic-4-retrospective: optional
@@ -110,8 +110,12 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Engine Orchestrator
+  # NOTE: Story 6-1 implements semantic routing via LLM classification
+  # (confirmed approach from brainstorming session 2026-01-13)
+  # Classification outputs: question_type + required_engine
+  # Fallback: run multiple engines if classification uncertain
   epic-6: backlog
-  6-1-query-intent-analysis: backlog
+  6-1-query-intent-analysis: backlog  # Semantic routing - LLM classification approach
   6-2-engine-execution-ordering: backlog
   6-3-audit-trail-logging: backlog
   epic-6-retrospective: optional
@@ -204,3 +208,17 @@ development_status:
   13-5-production-deployment-config: backlog
   13-6-user-facing-error-messages: backlog
   epic-13-retrospective: optional
+
+# =============================================================================
+# PHASE 2 BACKLOG (NOT IN MVP SCOPE)
+# =============================================================================
+# These items are tracked in Phase-2-Backlog.md with full details and triggers.
+# Added from brainstorming session 2026-01-13.
+#
+# RAG Quality Improvements:
+# - Table Extraction Enhancement (Docling): Stories TE-1 to TE-4
+#   Trigger: Lawyers report table data not searchable
+# - RAG Evaluation Framework: Stories EF-1 to EF-5
+#   Trigger: MVP stable, lawyer available for verification
+#
+# See: _bmad-output/project-planning-artifacts/Phase-2-Backlog.md

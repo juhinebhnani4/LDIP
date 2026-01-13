@@ -1,6 +1,7 @@
 """Tests for Timeline Service.
 
 Story 4-1: Date Extraction with Gemini
+Story 4-2: Event Classification
 """
 
 import pytest
@@ -8,9 +9,13 @@ from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.timeline import (
+    ClassifiedEventsListResponse,
+    EventClassificationResult,
+    EventType,
     ExtractedDate,
     RawDatesListResponse,
     RawEvent,
+    UnclassifiedEventsResponse,
 )
 from app.services.timeline_service import (
     TimelineService,
@@ -541,3 +546,461 @@ class TestAmbiguityPersistence:
         assert result.is_ambiguous is True
         assert result.ambiguity_reason == "DD/MM vs MM/DD uncertain"
         assert result.description == "Notice dated [01/02/2024] was issued."
+
+
+# =============================================================================
+# Event Classification Tests (Story 4-2)
+# =============================================================================
+
+
+class TestUpdateEventClassification:
+    """Tests for updating event classification."""
+
+    @pytest.mark.asyncio
+    async def test_update_classification_success(self) -> None:
+        """Should update event classification."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": "event-1"}]
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.update_event_classification(
+            event_id="event-1",
+            matter_id="matter-123",
+            event_type="filing",
+            confidence=0.95,
+        )
+
+        assert result is True
+        mock_client.table.assert_called_with("events")
+
+    @pytest.mark.asyncio
+    async def test_update_classification_not_found(self) -> None:
+        """Should return False when event not found."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = []
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.update_event_classification(
+            event_id="non-existent",
+            matter_id="matter-123",
+            event_type="filing",
+            confidence=0.95,
+        )
+
+        assert result is False
+
+    def test_update_classification_sync(self) -> None:
+        """Should update classification synchronously."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": "event-1"}]
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = service.update_event_classification_sync(
+            event_id="event-1",
+            matter_id="matter-123",
+            event_type="hearing",
+            confidence=0.88,
+        )
+
+        assert result is True
+
+
+class TestGetUnclassifiedEvents:
+    """Tests for getting unclassified events."""
+
+    @pytest.mark.asyncio
+    async def test_get_unclassified_events(self) -> None:
+        """Should get events needing classification."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "event_date": "2024-01-15",
+                "event_type": "raw_date",
+                "description": "Some context",
+                "confidence": 0.5,
+                "document_id": "doc-456",
+            },
+            {
+                "id": "event-2",
+                "event_date": "2024-02-01",
+                "event_type": "unclassified",
+                "description": "More context",
+                "confidence": 0.4,
+                "document_id": "doc-789",
+            },
+        ]
+        mock_response.count = 2
+        mock_client.table.return_value.select.return_value.eq.return_value.or_.return_value.order.return_value.range.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.get_unclassified_events(
+            matter_id="matter-123",
+            page=1,
+            per_page=20,
+        )
+
+        assert isinstance(result, UnclassifiedEventsResponse)
+        assert len(result.data) == 2
+        assert result.meta.total == 2
+
+
+class TestGetClassifiedEvents:
+    """Tests for getting classified events."""
+
+    @pytest.mark.asyncio
+    async def test_get_classified_events(self) -> None:
+        """Should get events that have been classified."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "event_date": "2024-01-15",
+                "event_date_precision": "day",
+                "event_date_text": "15/01/2024",
+                "event_type": "filing",
+                "description": "Filed petition",
+                "confidence": 0.95,
+                "document_id": "doc-456",
+                "source_page": 1,
+                "is_manual": False,
+            },
+        ]
+        mock_response.count = 1
+        mock_client.table.return_value.select.return_value.eq.return_value.neq.return_value.order.return_value.range.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.get_classified_events(
+            matter_id="matter-123",
+            page=1,
+            per_page=20,
+        )
+
+        assert isinstance(result, ClassifiedEventsListResponse)
+        assert len(result.data) == 1
+        assert result.data[0].event_type == "filing"
+
+    @pytest.mark.asyncio
+    async def test_get_classified_events_with_type_filter(self) -> None:
+        """Should filter by event type."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "event_date": "2024-01-15",
+                "event_date_precision": "day",
+                "event_date_text": "15/01/2024",
+                "event_type": "hearing",
+                "description": "Hearing scheduled",
+                "confidence": 0.88,
+                "document_id": "doc-456",
+                "source_page": 2,
+                "is_manual": False,
+            },
+        ]
+        mock_response.count = 1
+        mock_client.table.return_value.select.return_value.eq.return_value.neq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.get_classified_events(
+            matter_id="matter-123",
+            event_type="hearing",
+            page=1,
+            per_page=20,
+        )
+
+        assert len(result.data) == 1
+        assert result.data[0].event_type == "hearing"
+
+
+class TestGetEventsForClassification:
+    """Tests for getting raw_date events ready for classification."""
+
+    @pytest.mark.asyncio
+    async def test_get_events_for_classification(self) -> None:
+        """Should get raw_date events."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "matter_id": "matter-123",
+                "document_id": "doc-456",
+                "event_date": "2024-01-15",
+                "event_date_precision": "day",
+                "event_date_text": "15/01/2024",
+                "event_type": "raw_date",
+                "description": "Some context",
+                "source_page": 1,
+                "source_bbox_ids": [],
+                "confidence": 0.8,
+                "is_manual": False,
+                "created_at": "2024-01-20T10:00:00Z",
+                "updated_at": "2024-01-20T10:00:00Z",
+            },
+        ]
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.get_events_for_classification(
+            matter_id="matter-123",
+            limit=100,
+        )
+
+        assert len(result) == 1
+        assert result[0].event_type == "raw_date"
+
+    def test_get_events_for_classification_sync(self) -> None:
+        """Should get raw_date events synchronously."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "matter_id": "matter-123",
+                "document_id": "doc-456",
+                "event_date": "2024-01-15",
+                "event_date_precision": "day",
+                "event_date_text": "15/01/2024",
+                "event_type": "raw_date",
+                "description": "Context",
+                "source_page": 1,
+                "source_bbox_ids": [],
+                "confidence": 0.8,
+                "is_manual": False,
+                "created_at": "2024-01-20T10:00:00Z",
+                "updated_at": "2024-01-20T10:00:00Z",
+            },
+        ]
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = service.get_events_for_classification_sync(
+            matter_id="matter-123",
+            limit=100,
+        )
+
+        assert len(result) == 1
+
+
+class TestBulkUpdateClassifications:
+    """Tests for bulk classification updates."""
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_classifications(self) -> None:
+        """Should update multiple events."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": "event-1"}]
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        classifications = [
+            EventClassificationResult(
+                event_id="event-1",
+                event_type=EventType.FILING,
+                classification_confidence=0.95,
+                secondary_types=[],
+                keywords_matched=["filed"],
+                classification_reasoning="Clear filing",
+            ),
+            EventClassificationResult(
+                event_id="event-2",
+                event_type=EventType.HEARING,
+                classification_confidence=0.88,
+                secondary_types=[],
+                keywords_matched=["hearing"],
+                classification_reasoning="Court hearing",
+            ),
+        ]
+
+        count = await service.bulk_update_classifications(
+            classifications=classifications,
+            matter_id="matter-123",
+        )
+
+        assert count == 2  # Both should update successfully
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_empty_list(self) -> None:
+        """Should return 0 for empty list."""
+        service = TimelineService()
+
+        count = await service.bulk_update_classifications(
+            classifications=[],
+            matter_id="matter-123",
+        )
+
+        assert count == 0
+
+    def test_bulk_update_classifications_sync(self) -> None:
+        """Should update synchronously."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{"id": "event-1"}]
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        classifications = [
+            EventClassificationResult(
+                event_id="event-1",
+                event_type=EventType.NOTICE,
+                classification_confidence=0.90,
+                secondary_types=[],
+                keywords_matched=["notice"],
+                classification_reasoning="Notice served",
+            ),
+        ]
+
+        count = service.bulk_update_classifications_sync(
+            classifications=classifications,
+            matter_id="matter-123",
+        )
+
+        assert count == 1
+
+
+class TestManualClassification:
+    """Tests for manual classification updates."""
+
+    @pytest.mark.asyncio
+    async def test_manual_classification_success(self) -> None:
+        """Should update event with manual classification."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [
+            {
+                "id": "event-1",
+                "matter_id": "matter-123",
+                "document_id": "doc-456",
+                "event_date": "2024-01-15",
+                "event_date_precision": "day",
+                "event_date_text": "15/01/2024",
+                "event_type": "filing",
+                "description": "Some context",
+                "confidence": 1.0,
+                "is_manual": True,
+                "source_page": 1,
+                "source_bbox_ids": [],
+                "created_at": "2024-01-20T10:00:00Z",
+                "updated_at": "2024-01-21T10:00:00Z",
+            }
+        ]
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.update_manual_classification(
+            event_id="event-1",
+            matter_id="matter-123",
+            event_type=EventType.FILING,
+        )
+
+        assert result is not None
+        assert result.event_type == EventType.FILING
+        assert result.is_manual is True
+        assert result.classification_confidence == 1.0
+
+    @pytest.mark.asyncio
+    async def test_manual_classification_not_found(self) -> None:
+        """Should return None when event not found."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = []
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        result = await service.update_manual_classification(
+            event_id="non-existent",
+            matter_id="matter-123",
+            event_type=EventType.HEARING,
+        )
+
+        assert result is None
+
+
+class TestCountEventsForClassification:
+    """Tests for counting events needing classification."""
+
+    @pytest.mark.asyncio
+    async def test_count_events(self) -> None:
+        """Should count raw_date events."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.count = 15
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        count = await service.count_events_for_classification(
+            matter_id="matter-123",
+        )
+
+        assert count == 15
+
+    @pytest.mark.asyncio
+    async def test_count_events_with_document_filter(self) -> None:
+        """Should count events for specific documents."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.count = 5
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.in_.return_value.limit.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        count = await service.count_events_for_classification(
+            matter_id="matter-123",
+            document_ids=["doc-1", "doc-2"],
+        )
+
+        assert count == 5
+
+    def test_count_events_sync(self) -> None:
+        """Should count events synchronously."""
+        service = TimelineService()
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.count = 10
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
+        service._client = mock_client
+
+        count = service.count_events_for_classification_sync(
+            matter_id="matter-123",
+        )
+
+        assert count == 10

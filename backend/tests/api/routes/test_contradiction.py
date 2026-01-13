@@ -1,6 +1,7 @@
 """Tests for Contradiction API routes.
 
 Story 5-1: API endpoint tests for entity statement querying.
+Story 5-2: API endpoint tests for statement pair comparison.
 
 Uses FastAPI dependency_overrides for proper test isolation.
 """

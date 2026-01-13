@@ -20,9 +20,9 @@ import structlog
 
 from app.core.config import get_settings
 from app.engines.contradiction.prompts import (
-    COMPARISON_RESPONSE_SCHEMA,
     STATEMENT_COMPARISON_SYSTEM_PROMPT,
     format_comparison_prompt,
+    validate_comparison_response,
 )
 from app.models.contradiction import (
     ComparisonResult,
@@ -210,7 +210,7 @@ class StatementComparator:
         self._client = None
         settings = get_settings()
         self.api_key = settings.openai_api_key
-        self.model_name = "gpt-4-turbo-preview"  # Per Dev Notes
+        self.model_name = settings.openai_comparison_model  # Configurable via settings
 
     @property
     def client(self):
@@ -331,24 +331,37 @@ class StatementComparator:
                 last_error = e
                 error_str = str(e).lower()
 
-                # Check for rate limit errors
+                # Check for retryable errors (rate limit or transient)
                 is_rate_limit = (
                     "429" in error_str
                     or "rate" in error_str
                     or "quota" in error_str
                 )
+                is_transient = (
+                    "500" in error_str
+                    or "502" in error_str
+                    or "503" in error_str
+                    or "504" in error_str
+                    or "timeout" in error_str
+                    or "connection" in error_str
+                    or "temporary" in error_str
+                )
+                is_retryable = is_rate_limit or is_transient
 
-                if is_rate_limit and attempt < MAX_RETRIES - 1:
+                if is_retryable and attempt < MAX_RETRIES - 1:
                     logger.warning(
-                        "statement_comparison_rate_limited",
+                        "statement_comparison_retrying",
                         attempt=attempt + 1,
                         max_attempts=MAX_RETRIES,
                         retry_delay=retry_delay,
                         error=str(e),
+                        is_rate_limit=is_rate_limit,
+                        is_transient=is_transient,
                     )
                     await asyncio.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                elif not is_rate_limit:
+                elif not is_retryable:
+                    # Non-retryable error, fail immediately
                     break
 
         logger.error(
@@ -473,6 +486,7 @@ class StatementComparator:
         """Generate unique statement pairs for comparison.
 
         Story 5-2: Generates N*(N-1)/2 unique pairs, deduplicating (A,B) == (B,A).
+        Applies pre-filtering optimization to prioritize suspicious pairs.
 
         Args:
             entity_statements: All statements grouped by document.
@@ -480,7 +494,7 @@ class StatementComparator:
             cross_document_only: Only compare statements from different documents.
 
         Returns:
-            List of StatementPair objects.
+            List of StatementPair objects, sorted by suspiciousness score.
         """
         # Flatten all statements
         all_statements: list[tuple[Statement, str | None]] = []  # (statement, doc_name)
@@ -491,8 +505,8 @@ class StatementComparator:
         if len(all_statements) < 2:
             return []
 
-        # Generate unique pairs
-        pairs: list[StatementPair] = []
+        # Generate unique pairs with suspiciousness scores
+        scored_pairs: list[tuple[float, StatementPair]] = []  # (score, pair)
         seen_keys: set[tuple[str, str]] = set()
 
         for (stmt_a, doc_a_name), (stmt_b, doc_b_name) in itertools.combinations(all_statements, 2):
@@ -510,24 +524,73 @@ class StatementComparator:
             )
 
             # Deduplicate
-            if pair.pair_key not in seen_keys:
-                seen_keys.add(pair.pair_key)
-                pairs.append(pair)
+            if pair.pair_key in seen_keys:
+                continue
+            seen_keys.add(pair.pair_key)
 
-            # Stop at max_pairs
-            if len(pairs) >= max_pairs:
-                break
+            # Pre-filter optimization: Calculate suspiciousness score
+            # Pairs with conflicting extracted values are more likely contradictions
+            suspiciousness = self._calculate_suspiciousness(stmt_a, stmt_b)
+            scored_pairs.append((suspiciousness, pair))
+
+        # Sort by suspiciousness (highest first) to prioritize likely contradictions
+        scored_pairs.sort(key=lambda x: x[0], reverse=True)
+
+        # Take top max_pairs
+        pairs = [pair for _, pair in scored_pairs[:max_pairs]]
 
         logger.debug(
             "statement_pairs_generated",
             entity_id=entity_statements.entity_id,
             total_statements=len(all_statements),
-            total_pairs=len(pairs),
+            total_candidate_pairs=len(scored_pairs),
+            selected_pairs=len(pairs),
             max_pairs=max_pairs,
             cross_document_only=cross_document_only,
         )
 
         return pairs
+
+    def _calculate_suspiciousness(
+        self,
+        stmt_a: Statement,
+        stmt_b: Statement,
+    ) -> float:
+        """Calculate suspiciousness score for a statement pair.
+
+        Pre-filtering optimization: Pairs with conflicting extracted values
+        are more likely to be contradictions and should be compared first.
+
+        Args:
+            stmt_a: First statement.
+            stmt_b: Second statement.
+
+        Returns:
+            Suspiciousness score (0.0 - 1.0). Higher = more suspicious.
+        """
+        score = 0.0
+
+        # Check for date conflicts
+        if stmt_a.dates and stmt_b.dates:
+            dates_a = {d.normalized for d in stmt_a.dates}
+            dates_b = {d.normalized for d in stmt_b.dates}
+            # Different dates = suspicious
+            if dates_a and dates_b and dates_a != dates_b:
+                score += 0.4
+
+        # Check for amount conflicts
+        if stmt_a.amounts and stmt_b.amounts:
+            amounts_a = {a.normalized for a in stmt_a.amounts}
+            amounts_b = {b.normalized for b in stmt_b.amounts}
+            # Different amounts = very suspicious
+            if amounts_a and amounts_b and amounts_a != amounts_b:
+                score += 0.5
+
+        # Boost if both have extracted values (more comparable)
+        if (stmt_a.dates or stmt_a.amounts) and (stmt_b.dates or stmt_b.amounts):
+            score += 0.1
+
+        return min(score, 1.0)
 
     def _parse_comparison_response(
         self,
@@ -550,6 +613,17 @@ class StatementComparator:
         """
         try:
             parsed = json.loads(response_text)
+
+            # Validate against schema
+            validation_errors = validate_comparison_response(parsed)
+            if validation_errors:
+                logger.warning(
+                    "comparison_response_validation_failed",
+                    errors=validation_errors,
+                    response_preview=response_text[:200] if response_text else "",
+                )
+                # Continue parsing with defaults for missing/invalid fields
+                # This allows graceful degradation instead of hard failure
 
             # Parse result enum
             result_str = parsed.get("result", "uncertain").lower()

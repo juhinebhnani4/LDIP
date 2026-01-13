@@ -654,3 +654,236 @@ class TestComparatorFactory:
             assert comparator1 is comparator2
 
         get_statement_comparator.cache_clear()
+
+
+# =============================================================================
+# Retry Logic Tests (MEDIUM #6)
+# =============================================================================
+
+
+class TestRetryLogic:
+    """Tests for retry logic on transient errors."""
+
+    @pytest.mark.asyncio
+    async def test_retry_on_rate_limit_error(self) -> None:
+        """Should retry on 429 rate limit errors."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(
+                openai_api_key="test-key",
+                openai_comparison_model="gpt-4-turbo-preview",
+            )
+
+            comparator = StatementComparator()
+
+            # First call fails with rate limit, second succeeds
+            mock_client = AsyncMock()
+            success_response = MagicMock()
+            success_response.choices = [MagicMock()]
+            success_response.choices[0].message.content = json.dumps({
+                "reasoning": "Test",
+                "result": "consistent",
+                "confidence": 0.8,
+                "evidence": {"type": "none"}
+            })
+            success_response.usage = MagicMock()
+            success_response.usage.prompt_tokens = 100
+            success_response.usage.completion_tokens = 50
+
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[
+                    Exception("429 Rate limit exceeded"),
+                    success_response,
+                ]
+            )
+            comparator._client = mock_client
+
+            stmt = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="Test", page_number=1,
+            )
+
+            # Should succeed after retry
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                comparison, _ = await comparator.compare_statement_pair(
+                    statement_a=stmt,
+                    statement_b=stmt,
+                    entity_name="Test",
+                )
+
+            assert comparison.result == ComparisonResult.CONSISTENT
+            assert mock_client.chat.completions.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_on_transient_500_error(self) -> None:
+        """Should retry on 500 server errors."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(
+                openai_api_key="test-key",
+                openai_comparison_model="gpt-4-turbo-preview",
+            )
+
+            comparator = StatementComparator()
+
+            mock_client = AsyncMock()
+            success_response = MagicMock()
+            success_response.choices = [MagicMock()]
+            success_response.choices[0].message.content = json.dumps({
+                "reasoning": "Test",
+                "result": "consistent",
+                "confidence": 0.8,
+                "evidence": {"type": "none"}
+            })
+            success_response.usage = MagicMock()
+            success_response.usage.prompt_tokens = 100
+            success_response.usage.completion_tokens = 50
+
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[
+                    Exception("500 Internal Server Error"),
+                    success_response,
+                ]
+            )
+            comparator._client = mock_client
+
+            stmt = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="Test", page_number=1,
+            )
+
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                comparison, _ = await comparator.compare_statement_pair(
+                    statement_a=stmt,
+                    statement_b=stmt,
+                    entity_name="Test",
+                )
+
+            assert comparison.result == ComparisonResult.CONSISTENT
+            assert mock_client.chat.completions.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_non_retryable_error(self) -> None:
+        """Should not retry on non-retryable errors."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(
+                openai_api_key="test-key",
+                openai_comparison_model="gpt-4-turbo-preview",
+            )
+
+            comparator = StatementComparator()
+
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=Exception("401 Invalid API key")
+            )
+            comparator._client = mock_client
+
+            stmt = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="Test", page_number=1,
+            )
+
+            with pytest.raises(ComparatorError):
+                with patch("asyncio.sleep", new_callable=AsyncMock):
+                    await comparator.compare_statement_pair(
+                        statement_a=stmt,
+                        statement_b=stmt,
+                        entity_name="Test",
+                    )
+
+            # Should only be called once (no retry)
+            assert mock_client.chat.completions.create.call_count == 1
+
+
+# =============================================================================
+# Pre-filtering Tests
+# =============================================================================
+
+
+class TestPrefilteringSuspiciousness:
+    """Tests for pre-filtering optimization based on suspiciousness scoring."""
+
+    def test_suspiciousness_score_amount_conflict(self) -> None:
+        """Should score higher for amount conflicts."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(openai_api_key="test-key")
+
+            comparator = StatementComparator()
+
+            stmt_a = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="Rs. 5 lakhs", page_number=1,
+                amounts=[StatementValue(
+                    type=StatementValueType.AMOUNT,
+                    raw_text="5 lakhs",
+                    normalized="500000",
+                    confidence=0.9,
+                )],
+            )
+            stmt_b = Statement(
+                entity_id="e1", chunk_id="c2", document_id="d2",
+                content="Rs. 8 lakhs", page_number=2,
+                amounts=[StatementValue(
+                    type=StatementValueType.AMOUNT,
+                    raw_text="8 lakhs",
+                    normalized="800000",
+                    confidence=0.9,
+                )],
+            )
+
+            score = comparator._calculate_suspiciousness(stmt_a, stmt_b)
+
+            # Amount conflict = 0.5, both have values = 0.1
+            assert score >= 0.5
+
+    def test_suspiciousness_score_date_conflict(self) -> None:
+        """Should score higher for date conflicts."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(openai_api_key="test-key")
+
+            comparator = StatementComparator()
+
+            stmt_a = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="15/01/2024", page_number=1,
+                dates=[StatementValue(
+                    type=StatementValueType.DATE,
+                    raw_text="15/01/2024",
+                    normalized="2024-01-15",
+                    confidence=0.9,
+                )],
+            )
+            stmt_b = Statement(
+                entity_id="e1", chunk_id="c2", document_id="d2",
+                content="15/06/2024", page_number=2,
+                dates=[StatementValue(
+                    type=StatementValueType.DATE,
+                    raw_text="15/06/2024",
+                    normalized="2024-06-15",
+                    confidence=0.9,
+                )],
+            )
+
+            score = comparator._calculate_suspiciousness(stmt_a, stmt_b)
+
+            # Date conflict = 0.4, both have values = 0.1
+            assert score >= 0.4
+
+    def test_suspiciousness_score_no_conflict(self) -> None:
+        """Should score low when no extracted values conflict."""
+        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(openai_api_key="test-key")
+
+            comparator = StatementComparator()
+
+            stmt_a = Statement(
+                entity_id="e1", chunk_id="c1", document_id="d1",
+                content="Some text", page_number=1,
+            )
+            stmt_b = Statement(
+                entity_id="e1", chunk_id="c2", document_id="d2",
+                content="Other text", page_number=2,
+            )
+
+            score = comparator._calculate_suspiciousness(stmt_a, stmt_b)
+
+            assert score == 0.0

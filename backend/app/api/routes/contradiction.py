@@ -55,7 +55,11 @@ def _get_statement_service() -> StatementQueryService:
 
 
 def _get_comparison_service() -> StatementComparisonService:
-    """Get statement comparison service instance."""
+    """Get statement comparison service instance (Story 5-2).
+
+    Returns:
+        StatementComparisonService: Singleton service for GPT-4 statement comparison.
+    """
     return get_statement_comparison_service()
 
 
@@ -363,7 +367,7 @@ async def compare_entity_statements(
             threshold=e.threshold,
         )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,  # Unprocessable Content
             detail={
                 "error": {
                     "code": "TOO_MANY_STATEMENTS",

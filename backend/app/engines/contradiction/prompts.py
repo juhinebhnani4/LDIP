@@ -176,3 +176,49 @@ def format_comparison_prompt(
         page_a=page_a if page_a is not None else "unknown",
         page_b=page_b if page_b is not None else "unknown",
     )
+
+
+def validate_comparison_response(parsed: dict) -> list[str]:
+    """Validate parsed GPT-4 response against expected schema.
+
+    Args:
+        parsed: Parsed JSON response from GPT-4.
+
+    Returns:
+        List of validation errors (empty if valid).
+    """
+    errors: list[str] = []
+
+    # Check required fields
+    required_fields = ["reasoning", "result", "confidence", "evidence"]
+    for field in required_fields:
+        if field not in parsed:
+            errors.append(f"Missing required field: {field}")
+
+    # Validate result enum
+    valid_results = {"contradiction", "consistent", "uncertain", "unrelated"}
+    result = parsed.get("result", "").lower()
+    if result and result not in valid_results:
+        errors.append(f"Invalid result '{result}'. Must be one of: {valid_results}")
+
+    # Validate confidence range
+    confidence = parsed.get("confidence")
+    if confidence is not None:
+        try:
+            conf_val = float(confidence)
+            if conf_val < 0.0 or conf_val > 1.0:
+                errors.append(f"Confidence {conf_val} out of range [0.0, 1.0]")
+        except (TypeError, ValueError):
+            errors.append(f"Invalid confidence value: {confidence}")
+
+    # Validate evidence
+    evidence = parsed.get("evidence", {})
+    if isinstance(evidence, dict):
+        evidence_type = evidence.get("type", "").lower()
+        valid_types = {"date_mismatch", "amount_mismatch", "factual_conflict", "semantic_conflict", "none"}
+        if evidence_type and evidence_type not in valid_types:
+            errors.append(f"Invalid evidence type '{evidence_type}'. Must be one of: {valid_types}")
+    else:
+        errors.append("Evidence must be an object")
+
+    return errors

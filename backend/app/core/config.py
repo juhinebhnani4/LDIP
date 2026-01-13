@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
 
+    # GPT-4 Configuration (Story 5-2: Contradiction Detection)
+    openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
+
     # OCR Validation Thresholds
     ocr_validation_gemini_threshold: float = 0.85  # Below this -> Gemini validation
     ocr_validation_human_threshold: float = 0.50   # Below this -> Human review

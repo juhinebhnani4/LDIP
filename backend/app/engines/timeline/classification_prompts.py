@@ -1,7 +1,7 @@
 """Event classification prompt templates for Timeline Engine.
 
-Defines the prompts used by Gemini 3 Flash for classifying dates
-extracted from legal documents into event types.
+Defines the prompts used by Gemini 1.5 Flash (gemini-1.5-flash-latest)
+for classifying dates extracted from legal documents into event types.
 
 CRITICAL: Uses Gemini for event classification per LLM routing rules -
 this is an ingestion task, NOT user-facing reasoning.

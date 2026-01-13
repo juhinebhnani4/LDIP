@@ -665,7 +665,8 @@ def classify_events_for_matter(
     Args:
         matter_id: Matter UUID.
         document_ids: Optional list of specific documents. If None, all with raw_date events.
-        force_reclassify: If True, reclassify already classified events (not implemented).
+        force_reclassify: If True, reclassify already classified events (re-processes
+            all events including those already classified, not just raw_date).
 
     Returns:
         Dict with job information.
@@ -696,11 +697,19 @@ def classify_events_for_matter(
             )
         )
 
-        # Get raw_date events for classification
-        raw_events = timeline_service.get_events_for_classification_sync(
-            matter_id=matter_id,
-            limit=10000,  # Process up to 10k events
-        )
+        # Get events for classification
+        # If force_reclassify, get ALL events (not just raw_date)
+        # Otherwise, only get raw_date events
+        if force_reclassify:
+            raw_events = timeline_service.get_all_events_for_reclassification_sync(
+                matter_id=matter_id,
+                limit=10000,
+            )
+        else:
+            raw_events = timeline_service.get_events_for_classification_sync(
+                matter_id=matter_id,
+                limit=10000,  # Process up to 10k events
+            )
 
         # Filter by document_ids if specified
         if document_ids:

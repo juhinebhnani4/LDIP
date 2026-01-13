@@ -697,3 +697,173 @@ class TestIndianLegalTerminology:
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.FILING
+
+
+class TestErrorPaths:
+    """Tests for error handling and edge cases."""
+
+    def test_partial_json_response(self) -> None:
+        """Should handle truncated JSON gracefully."""
+        classifier = EventClassifier()
+        # Truncated JSON
+        response_text = '{"event_type": "filing", "classification_con'
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        assert result.event_type == EventType.UNCLASSIFIED
+        assert result.classification_confidence == 0.0
+
+    def test_empty_response_text(self) -> None:
+        """Should handle empty response text."""
+        classifier = EventClassifier()
+        response_text = ""
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        assert result.event_type == EventType.UNCLASSIFIED
+
+    def test_null_response_fields(self) -> None:
+        """Should handle null fields in response."""
+        classifier = EventClassifier()
+        response_text = json.dumps({
+            "event_type": "filing",
+            "classification_confidence": None,
+            "secondary_types": None,
+            "keywords_matched": None,
+            "classification_reasoning": None,
+        })
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        # Should handle gracefully with defaults
+        assert result.event_type == EventType.FILING
+        assert result.classification_confidence == 0.0 or result.classification_confidence is None
+
+    def test_missing_required_fields(self) -> None:
+        """Should handle missing required fields."""
+        classifier = EventClassifier()
+        response_text = json.dumps({
+            "event_type": "notice",
+            # Missing other fields
+        })
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        # Should still classify if event_type present
+        assert result.event_type == EventType.NOTICE
+
+    def test_batch_with_malformed_element(self) -> None:
+        """Should handle batch with some malformed elements."""
+        classifier = EventClassifier()
+        response_text = json.dumps([
+            {
+                "event_id": "event-1",
+                "event_type": "filing",
+                "classification_confidence": 0.95,
+                "secondary_types": [],
+                "keywords_matched": ["filed"],
+                "classification_reasoning": "Good result",
+            },
+            {
+                # Malformed - missing event_type
+                "event_id": "event-2",
+                "classification_confidence": 0.8,
+            },
+        ])
+
+        events = [
+            {"event_id": "event-1"},
+            {"event_id": "event-2"},
+        ]
+
+        results = classifier._parse_batch_response(response_text, events)
+
+        assert len(results) == 2
+        assert results[0].event_type == EventType.FILING
+        # Second should fall back gracefully
+        assert results[1].event_type == EventType.UNCLASSIFIED
+
+    def test_unicode_in_response(self) -> None:
+        """Should handle unicode characters in response."""
+        classifier = EventClassifier()
+        response_text = json.dumps({
+            "event_type": "filing",
+            "classification_confidence": 0.9,
+            "secondary_types": [],
+            "keywords_matched": ["याचिका", "दायर"],  # Hindi: petition, filed
+            "classification_reasoning": "Hindi legal terms detected",
+        })
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        assert result.event_type == EventType.FILING
+        assert "याचिका" in result.keywords_matched
+
+    def test_extra_unknown_fields_ignored(self) -> None:
+        """Should ignore unknown fields in response."""
+        classifier = EventClassifier()
+        response_text = json.dumps({
+            "event_type": "hearing",
+            "classification_confidence": 0.85,
+            "secondary_types": [],
+            "keywords_matched": [],
+            "classification_reasoning": "Hearing",
+            "unknown_field": "should be ignored",
+            "another_unknown": 12345,
+        })
+
+        result = classifier._parse_single_response(response_text, "event-1")
+
+        assert result.event_type == EventType.HEARING
+        assert result.classification_confidence == 0.85
+
+    @pytest.mark.asyncio
+    async def test_network_timeout_handling(self) -> None:
+        """Should handle network timeouts gracefully."""
+        import asyncio
+
+        classifier = EventClassifier()
+
+        async def mock_timeout(*args, **kwargs):
+            raise asyncio.TimeoutError("Connection timed out")
+
+        mock_model = MagicMock()
+        mock_model.generate_content_async = mock_timeout
+        classifier._model = mock_model
+
+        result = await classifier.classify_event(
+            event_id="event-123",
+            context_text="Some context",
+            date_text="15/01/2024",
+        )
+
+        # Should return unclassified on timeout
+        assert result.event_type == EventType.UNCLASSIFIED
+
+    def test_batch_result_count_mismatch(self) -> None:
+        """Should handle when LLM returns fewer results than events."""
+        classifier = EventClassifier()
+        # Only 1 result for 3 events
+        response_text = json.dumps([
+            {
+                "event_id": "event-1",
+                "event_type": "filing",
+                "classification_confidence": 0.95,
+                "secondary_types": [],
+                "keywords_matched": ["filed"],
+                "classification_reasoning": "Filing event",
+            },
+        ])
+
+        events = [
+            {"event_id": "event-1"},
+            {"event_id": "event-2"},
+            {"event_id": "event-3"},
+        ]
+
+        results = classifier._parse_batch_response(response_text, events)
+
+        assert len(results) == 3  # Should pad to match events
+        assert results[0].event_type == EventType.FILING
+        assert results[1].event_type == EventType.UNCLASSIFIED
+        assert results[2].event_type == EventType.UNCLASSIFIED

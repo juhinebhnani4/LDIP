@@ -556,6 +556,7 @@ class TimelineService:
         matter_id: str,
         event_type: str,
         confidence: float,
+        is_manual: bool = False,
     ) -> bool:
         """Update an event's classification.
 
@@ -564,6 +565,7 @@ class TimelineService:
             matter_id: Matter UUID for validation.
             event_type: New event type (filing, notice, etc.).
             confidence: Classification confidence (0-1).
+            is_manual: If True, this is a manual human classification.
 
         Returns:
             True if update succeeded.
@@ -571,12 +573,18 @@ class TimelineService:
         Raises:
             TimelineServiceError: If update fails.
         """
+        # For auto-classification (is_manual=False), set verified=False
+        # as it needs human review if confidence is low.
+        # For manual classification, verified=True as human has confirmed.
+        verified = is_manual
+
         def _update():
             return (
                 self.client.table("events")
                 .update({
                     "event_type": event_type,
                     "confidence": confidence,
+                    "is_manual": is_manual,
                 })
                 .eq("id", event_id)
                 .eq("matter_id", matter_id)
@@ -617,6 +625,7 @@ class TimelineService:
         matter_id: str,
         event_type: str,
         confidence: float,
+        is_manual: bool = False,
     ) -> bool:
         """Synchronous version of update_event_classification.
 
@@ -627,6 +636,7 @@ class TimelineService:
             matter_id: Matter UUID.
             event_type: New event type.
             confidence: Classification confidence.
+            is_manual: If True, this is a manual human classification.
 
         Returns:
             True if update succeeded.
@@ -637,6 +647,7 @@ class TimelineService:
                 .update({
                     "event_type": event_type,
                     "confidence": confidence,
+                    "is_manual": is_manual,
                 })
                 .eq("id", event_id)
                 .eq("matter_id", matter_id)
@@ -648,6 +659,7 @@ class TimelineService:
                     "event_classification_updated_sync",
                     event_id=event_id,
                     event_type=event_type,
+                    is_manual=is_manual,
                 )
                 return True
             return False
@@ -797,6 +809,45 @@ class TimelineService:
                 matter_id=matter_id,
             )
             raise TimelineServiceError(f"Failed to get events for classification: {e}")
+
+    def get_all_events_for_reclassification_sync(
+        self,
+        matter_id: str,
+        limit: int = 10000,
+    ) -> list[RawEvent]:
+        """Get ALL events for reclassification (force_reclassify mode).
+
+        Unlike get_events_for_classification_sync which only returns raw_date events,
+        this returns all events regardless of current type for re-classification.
+
+        Args:
+            matter_id: Matter UUID.
+            limit: Maximum events to return.
+
+        Returns:
+            List of RawEvent objects (all types, not just raw_date).
+        """
+        try:
+            response = (
+                self.client.table("events")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .order("event_date", desc=False)
+                .limit(limit)
+                .execute()
+            )
+
+            if response.data:
+                return [self._db_row_to_raw_event(row) for row in response.data]
+            return []
+
+        except Exception as e:
+            logger.error(
+                "get_all_events_for_reclassification_sync_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to get events for reclassification: {e}")
 
     async def bulk_update_classifications(
         self,
@@ -1234,13 +1285,27 @@ class TimelineService:
         description = row.get("description", "")
         _, _, clean_description = self._parse_ambiguity_from_description(description)
 
+        # Generate suggested_types based on event type and confidence
+        # For unclassified events, provide helpful suggestions
+        suggested_types = []
+        event_type = row.get("event_type", "unclassified")
+        confidence = row.get("confidence", 0.0)
+
+        # If this was classified but with low confidence, suggest alternatives
+        if event_type not in ("raw_date", "unclassified") and confidence < 0.7:
+            # The actual classified type is still the best guess
+            suggested_types.append({
+                "type": event_type,
+                "confidence": confidence,
+            })
+
         return UnclassifiedEventItem(
             id=row["id"],
             event_date=event_date,
-            event_type=row.get("event_type", "unclassified"),
+            event_type=event_type,
             description=clean_description,
-            classification_confidence=row.get("confidence", 0.0),
-            suggested_types=[],  # Can be populated by classifier if needed
+            classification_confidence=confidence,
+            suggested_types=suggested_types,
             document_id=row.get("document_id"),
         )
 

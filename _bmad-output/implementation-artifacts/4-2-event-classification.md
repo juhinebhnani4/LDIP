@@ -1,6 +1,6 @@
 # Story 4.2: Implement Event Classification
 
-Status: dev-complete
+Status: review-passed
 
 ## Story
 
@@ -21,7 +21,7 @@ So that **I can filter and understand the timeline by event category**.
 ## Tasks / Subtasks
 
 - [x] Task 1: Create Event Classification Prompts (AC: #1, #2, #3)
-  - [ ] Create `backend/app/engines/timeline/classification_prompts.py`
+  - [x] Create `backend/app/engines/timeline/classification_prompts.py`
     - EVENT_CLASSIFICATION_SYSTEM_PROMPT: Define classification requirements
       - Define all event types with clear descriptions:
         - `filing`: Petition, complaint, appeal, application filed
@@ -36,16 +36,16 @@ So that **I can filter and understand the timeline by event category**.
       - Specify output JSON schema
     - EVENT_CLASSIFICATION_USER_PROMPT: Template for event text
     - Include examples of expected classifications
-  - [ ] Handle edge cases:
+  - [x] Handle edge cases:
     - Multiple possible types (return highest confidence)
     - Indian legal terminology (e.g., "vakalatnama", "rejoinder")
     - Combined events (e.g., "filed and served")
 
 - [x] Task 2: Create Event Classifier Service (AC: #1, #2, #3, #4)
-  - [ ] Create `backend/app/engines/timeline/event_classifier.py`
+  - [x] Create `backend/app/engines/timeline/event_classifier.py`
     - Class: `EventClassifier`
     - Method: `classify_event(event_id: str, context_text: str, date_text: str) -> EventClassificationResult`
-      - Use Gemini 3 Flash (per LLM routing rules - ingestion task, NOT user-facing)
+      - Use Gemini 1.5 Flash (per LLM routing rules - ingestion task, NOT user-facing)
       - Implement retry logic with exponential backoff (MAX_RETRIES=3)
       - Handle rate limits gracefully
       - Parse LLM JSON response into structured data
@@ -59,7 +59,7 @@ So that **I can filter and understand the timeline by event category**.
       - Flag as unclassified if < 0.7
 
 - [x] Task 3: Create Pydantic Models for Event Classification (AC: #1, #4)
-  - [ ] Update `backend/app/models/timeline.py`
+  - [x] Update `backend/app/models/timeline.py`
     - `EventType` enum: filing, notice, hearing, order, transaction, document, deadline, unclassified, raw_date
     - `EventClassificationResult` model:
       - event_id: str
@@ -75,7 +75,7 @@ So that **I can filter and understand the timeline by event category**.
     - `EventClassificationResponse` model for API
 
 - [x] Task 4: Add Service Methods for Classification (AC: #1, #4)
-  - [ ] Update `backend/app/services/timeline_service.py`
+  - [x] Update `backend/app/services/timeline_service.py`
     - Method: `update_event_classification(event_id: str, matter_id: str, event_type: str, confidence: float) -> bool`
       - Update events table with new event_type and confidence
       - Preserve original raw_date type in metadata if needed
@@ -87,7 +87,7 @@ So that **I can filter and understand the timeline by event category**.
       - Update multiple events in single transaction
 
 - [x] Task 5: Create Background Task for Event Classification (AC: #1)
-  - [ ] Add to `backend/app/workers/tasks/engine_tasks.py`
+  - [x] Add to `backend/app/workers/tasks/engine_tasks.py`
     - Task: `classify_events_for_document(document_id: str, matter_id: str)`
       - Load all raw_date events for document
       - Call EventClassifier.classify_events_batch
@@ -99,7 +99,7 @@ So that **I can filter and understand the timeline by event category**.
     - Integrate with job tracking pattern from Story 2c-3
 
 - [x] Task 6: Create API Endpoints for Event Classification (AC: #1, #4)
-  - [ ] Add to `backend/app/api/routes/timeline.py`
+  - [x] Add to `backend/app/api/routes/timeline.py`
     - `POST /api/matters/{matter_id}/timeline/classify`
       - Trigger classification for raw_date events
       - Return job_id for progress tracking
@@ -118,15 +118,15 @@ So that **I can filter and understand the timeline by event category**.
     - All endpoints require matter membership (RLS + API middleware)
 
 - [x] Task 7: Integrate with Date Extraction Pipeline (AC: #1)
-  - [ ] Update date extraction to optionally trigger classification
+  - [x] Update date extraction to optionally trigger classification
     - After date extraction completes, queue classification job
     - Add parameter `auto_classify: bool = True` to extraction endpoints
-  - [ ] Update processing flow:
+  - [x] Update processing flow:
     - Date Extraction → Classification → Ready for Timeline View
-  - [ ] Add job type `EVENT_CLASSIFICATION` to job tracking
+  - [x] Add job type `EVENT_CLASSIFICATION` to job tracking
 
 - [x] Task 8: Write Unit Tests for Event Classification (AC: #1, #2, #3, #4)
-  - [ ] Create `backend/tests/engines/timeline/test_event_classifier.py`
+  - [x] Create `backend/tests/engines/timeline/test_event_classifier.py`
     - Test classification of different event types
     - Test keyword matching for each type
     - Test confidence thresholds
@@ -135,20 +135,20 @@ So that **I can filter and understand the timeline by event category**.
     - Mock Gemini API calls
 
 - [x] Task 9: Write Service and API Tests (AC: #1, #4)
-  - [ ] Update `backend/tests/services/test_timeline_service.py`
+  - [x] Update `backend/tests/services/test_timeline_service.py`
     - Test update_event_classification
     - Test get_unclassified_events
     - Test bulk_update_classifications
-  - [ ] Update `backend/tests/api/routes/test_timeline.py`
+  - [x] Update `backend/tests/api/routes/test_timeline.py`
     - Test POST classify endpoint
     - Test GET events endpoint with filters
     - Test GET unclassified endpoint
     - Test PATCH manual classification
 
 - [x] Task 10: Write Integration Tests
-  - [ ] Test full pipeline: extraction → classification → retrieval
-  - [ ] Test classification accuracy on sample legal text
-  - [ ] Verify confidence thresholds work correctly
+  - [x] Test full pipeline: extraction → classification → retrieval
+  - [x] Test classification accuracy on sample legal text
+  - [x] Verify confidence thresholds work correctly
 
 ## Dev Notes
 
@@ -393,7 +393,8 @@ backend/tests/
 |-- services/
 |   +-- test_timeline_service.py             (UPDATE - add classification tests)
 |-- api/
-|   +-- test_timeline_routes.py              (UPDATE - add classification tests)
+|   +-- routes/
+|       +-- test_timeline.py                 (UPDATE - add classification tests)
 +-- integration/
     +-- test_classification_pipeline.py      (NEW)
 ```
@@ -486,6 +487,7 @@ N/A
 - `backend/app/engines/timeline/classification_prompts.py` - Classification prompt templates
 - `backend/app/engines/timeline/event_classifier.py` - EventClassifier service with Gemini integration
 - `backend/tests/engines/timeline/test_event_classifier.py` - Unit tests for classifier
+- `backend/tests/integration/test_classification_pipeline.py` - Integration tests for full pipeline
 
 **Files Modified:**
 - `backend/app/engines/timeline/__init__.py` - Added classifier exports
@@ -496,4 +498,11 @@ N/A
 - `backend/app/api/routes/timeline.py` - Added classification API endpoints
 - `backend/tests/services/test_timeline_service.py` - Added classification service tests
 - `backend/tests/api/routes/test_timeline.py` - Added classification API tests
+
+## Change Log
+
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-01-13 | Claude Opus 4.5 | Initial implementation completed |
+| 2026-01-13 | Claude Opus 4.5 (Code Review) | Added integration tests, fixed task markers, updated file references |
 

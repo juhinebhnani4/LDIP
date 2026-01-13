@@ -633,6 +633,17 @@ class EventClassifier:
                 results.append(result)
 
             # If we got fewer results than events, add unclassified for remainder
+            # and log a warning about the count mismatch
+            if len(results) < len(events):
+                missing_count = len(events) - len(results)
+                logger.warning(
+                    "event_classification_batch_result_count_mismatch",
+                    expected=len(events),
+                    received=len(results),
+                    missing=missing_count,
+                    msg="LLM returned fewer results than events sent - padding with unclassified",
+                )
+
             for i in range(len(results), len(events)):
                 results.append(
                     self._unclassified_result(

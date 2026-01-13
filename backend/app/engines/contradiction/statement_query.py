@@ -412,7 +412,7 @@ class StatementQueryEngine:
         entity_name = await self._get_entity_name(entity_id, matter_id)
 
         # Convert to statements
-        return self._build_entity_statements(
+        return await self._build_entity_statements(
             entity_id=entity_id,
             entity_name=entity_name,
             chunks=response.data or [],
@@ -480,7 +480,7 @@ class StatementQueryEngine:
 
         entity_name = await self._get_entity_name(entity_id, matter_id)
 
-        return self._build_entity_statements(
+        return await self._build_entity_statements(
             entity_id=entity_id,
             entity_name=entity_name,
             chunks=response.data or [],
@@ -599,7 +599,7 @@ class StatementQueryEngine:
             for doc in (response.data or [])
         }
 
-    def _build_entity_statements(
+    async def _build_entity_statements(
         self,
         entity_id: str,
         entity_name: str,
@@ -619,8 +619,6 @@ class StatementQueryEngine:
         Returns:
             EntityStatements with grouped and enriched statements.
         """
-        import asyncio
-
         # Group chunks by document_id
         documents_map: dict[str, list[dict]] = {}
         document_ids: set[str] = set()
@@ -633,9 +631,8 @@ class StatementQueryEngine:
                     documents_map[doc_id] = []
                 documents_map[doc_id].append(chunk)
 
-        # Get document names (sync wrapper - will be called from async context)
-        # Note: In actual use, this would need to be awaited
-        doc_names: dict[str, str] = {}
+        # Fetch document names from database
+        doc_names = await self._get_document_names(list(document_ids))
 
         # Build DocumentStatements
         document_statements: list[DocumentStatements] = []

@@ -1,13 +1,21 @@
 """Tests for Contradiction API routes.
 
 Story 5-1: API endpoint tests for entity statement querying.
+
+Uses FastAPI dependency_overrides for proper test isolation.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
 
+import jwt
 import pytest
-from httpx import AsyncClient
+from fastapi import status
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
+from app.core.config import Settings
+from app.main import app
 from app.models.contradiction import (
     DocumentStatements,
     EntityStatements,
@@ -17,20 +25,61 @@ from app.models.contradiction import (
     StatementValue,
     StatementValueType,
 )
+from app.models.matter import MatterRole
 from app.services.contradiction.statement_query import EntityNotFoundError
+
+
+# Test JWT secret
+TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
+
+
+def get_test_settings() -> Settings:
+    """Create test settings with JWT secret configured."""
+    settings = MagicMock(spec=Settings)
+    settings.supabase_jwt_secret = TEST_JWT_SECRET
+    settings.supabase_url = "https://test.supabase.co"
+    settings.supabase_anon_key = "test-anon-key"
+    settings.is_configured = True
+    settings.debug = True
+    return settings
+
+
+def create_test_token(
+    user_id: str = "test-user-id",
+    email: str = "test@example.com",
+) -> str:
+    """Create a valid JWT token for testing."""
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": "authenticated",
+        "aud": "authenticated",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
+        "session_id": "test-session",
+    }
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+
+
+@pytest.fixture
+def sync_client() -> TestClient:
+    """Create synchronous test client for auth tests."""
+    return TestClient(app)
+
+
+class TestGetEntityStatementsAuth:
+    """Tests for authentication requirements."""
+
+    def test_get_entity_statements_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.get(
+            "/api/matters/matter-123/contradictions/entities/entity-123/statements"
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 class TestGetEntityStatements:
     """Tests for GET /api/matters/{matter_id}/contradictions/entities/{entity_id}/statements."""
-
-    @pytest.fixture
-    def mock_membership(self) -> MagicMock:
-        """Create mock membership dependency."""
-        membership = MagicMock()
-        membership.user_id = "test-user-id"
-        membership.matter_id = "test-matter-id"
-        membership.role = "editor"
-        return membership
 
     @pytest.fixture
     def mock_service_response(self) -> EntityStatementsResponse:
@@ -83,89 +132,111 @@ class TestGetEntityStatements:
             ),
         )
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_get_entity_statements_success(
         self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
         mock_service_response: EntityStatementsResponse,
     ) -> None:
         """Should return 200 with entity statements on success."""
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            # Mock authentication
-            mock_role.return_value = lambda: mock_membership
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
 
-            # Mock service
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                return_value=mock_service_response
-            )
-            mock_get_service.return_value = mock_service
+        # Mock matter service for auth
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
+        # Mock statement query service
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=mock_service_response)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            data = response.json()
-            assert data["data"]["entityId"] == "entity-123"
-            assert data["data"]["entityName"] == "Nirav Jobalia"
-            assert data["data"]["totalStatements"] == 2
-            assert len(data["data"]["documents"]) == 1
+        assert response.status_code == 200
 
-    @pytest.mark.asyncio
-    async def test_get_entity_statements_not_found(
-        self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
-    ) -> None:
+        data = response.json()
+        assert data["data"]["entityId"] == "entity-123"
+        assert data["data"]["entityName"] == "Nirav Jobalia"
+        assert data["data"]["totalStatements"] == 2
+        assert len(data["data"]["documents"]) == 1
+
+    @pytest.mark.anyio
+    async def test_get_entity_statements_not_found(self) -> None:
         """Should return 404 when entity not found."""
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                side_effect=EntityNotFoundError("entity-123", "matter-123")
-            )
-            mock_get_service.return_value = mock_service
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(side_effect=EntityNotFoundError(
+            "entity-123", "matter-123"
+        ))
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 404
-            data = response.json()
-            assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+        app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+
+    @pytest.mark.anyio
     async def test_get_entity_statements_with_query_params(
         self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
         mock_service_response: EntityStatementsResponse,
     ) -> None:
         """Should pass query parameters to service."""
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                return_value=mock_service_response
-            )
-            mock_get_service.return_value = mock_service
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=mock_service_response)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
                 params={
@@ -173,24 +244,26 @@ class TestGetEntityStatements:
                     "page": 2,
                     "perPage": 25,
                 },
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            # Verify service was called with correct params
-            call_args = mock_service.get_entity_statements.call_args
-            assert call_args.kwargs["include_aliases"] is False
-            assert call_args.kwargs["page"] == 2
-            assert call_args.kwargs["per_page"] == 25
+        assert response.status_code == 200
 
-    @pytest.mark.asyncio
-    async def test_get_entity_statements_empty_result(
-        self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
-    ) -> None:
+        # Verify service was called with correct params
+        call_args = mock_stmt_service.get_entity_statements.call_args
+        assert call_args.kwargs["include_aliases"] is False
+        assert call_args.kwargs["page"] == 2
+        assert call_args.kwargs["per_page"] == 25
+
+    @pytest.mark.anyio
+    async def test_get_entity_statements_empty_result(self) -> None:
         """Should return 200 with empty statements (AC #4)."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
+
         empty_response = EntityStatementsResponse(
             data=EntityStatements(
                 entity_id="entity-123",
@@ -207,46 +280,47 @@ class TestGetEntityStatements:
             ),
         )
 
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(return_value=empty_response)
-            mock_get_service.return_value = mock_service
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=empty_response)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            # Should return 200, not 404 (AC #4)
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            data = response.json()
-            assert data["data"]["totalStatements"] == 0
-            assert len(data["data"]["documents"]) == 0
+        # Should return 200, not 404 (AC #4)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["data"]["totalStatements"] == 0
+        assert len(data["data"]["documents"]) == 0
 
 
 class TestGetEntityStatementsValueExtraction:
     """Tests for value extraction in API responses (AC #3)."""
 
-    @pytest.fixture
-    def mock_membership(self) -> MagicMock:
-        """Create mock membership dependency."""
-        membership = MagicMock()
-        membership.user_id = "test-user-id"
-        return membership
-
-    @pytest.mark.asyncio
-    async def test_response_includes_extracted_dates(
-        self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
-    ) -> None:
+    @pytest.mark.anyio
+    async def test_response_includes_extracted_dates(self) -> None:
         """Should include extracted dates in statements."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
+
         response_with_dates = EntityStatementsResponse(
             data=EntityStatements(
                 entity_id="entity-123",
@@ -283,38 +357,44 @@ class TestGetEntityStatementsValueExtraction:
             meta=PaginationMeta(total=1, page=1, per_page=50, total_pages=1),
         )
 
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                return_value=response_with_dates
-            )
-            mock_get_service.return_value = mock_service
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_dates)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            data = response.json()
-            statement = data["data"]["documents"][0]["statements"][0]
-            assert len(statement["dates"]) == 1
-            assert statement["dates"][0]["type"] == "DATE"
-            assert statement["dates"][0]["normalized"] == "2024-01-15"
+        assert response.status_code == 200
 
-    @pytest.mark.asyncio
-    async def test_response_includes_extracted_amounts(
-        self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
-    ) -> None:
+        data = response.json()
+        statement = data["data"]["documents"][0]["statements"][0]
+        assert len(statement["dates"]) == 1
+        assert statement["dates"][0]["type"] == "DATE"
+        assert statement["dates"][0]["normalized"] == "2024-01-15"
+
+    @pytest.mark.anyio
+    async def test_response_includes_extracted_amounts(self) -> None:
         """Should include extracted amounts in statements."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
+
         response_with_amounts = EntityStatementsResponse(
             data=EntityStatements(
                 entity_id="entity-123",
@@ -351,49 +431,48 @@ class TestGetEntityStatementsValueExtraction:
             meta=PaginationMeta(total=1, page=1, per_page=50, total_pages=1),
         )
 
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                return_value=response_with_amounts
-            )
-            mock_get_service.return_value = mock_service
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_amounts)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            data = response.json()
-            statement = data["data"]["documents"][0]["statements"][0]
-            assert len(statement["amounts"]) == 1
-            assert statement["amounts"][0]["type"] == "AMOUNT"
-            assert statement["amounts"][0]["normalized"] == "500000"
+        assert response.status_code == 200
+
+        data = response.json()
+        statement = data["data"]["documents"][0]["statements"][0]
+        assert len(statement["amounts"]) == 1
+        assert statement["amounts"][0]["type"] == "AMOUNT"
+        assert statement["amounts"][0]["normalized"] == "500000"
 
 
 class TestGetEntityStatementsAliasResolution:
     """Tests for alias resolution in API responses (AC #2)."""
 
-    @pytest.fixture
-    def mock_membership(self) -> MagicMock:
-        """Create mock membership dependency."""
-        membership = MagicMock()
-        membership.user_id = "test-user-id"
-        return membership
-
-    @pytest.mark.asyncio
-    async def test_response_includes_aliases_searched(
-        self,
-        client: AsyncClient,
-        mock_membership: MagicMock,
-    ) -> None:
+    @pytest.mark.anyio
+    async def test_response_includes_aliases_searched(self) -> None:
         """Should include aliasesIncluded in response."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_statement_service
+
         response_with_aliases = EntityStatementsResponse(
             data=EntityStatements(
                 entity_id="entity-123",
@@ -405,26 +484,32 @@ class TestGetEntityStatementsAliasResolution:
             meta=PaginationMeta(total=3, page=1, per_page=50, total_pages=1),
         )
 
-        with (
-            patch("app.api.routes.contradiction.require_matter_role") as mock_role,
-            patch("app.api.routes.contradiction.get_statement_query_service") as mock_get_service,
-        ):
-            mock_role.return_value = lambda: mock_membership
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
-            mock_service = MagicMock()
-            mock_service.get_entity_statements = AsyncMock(
-                return_value=response_with_aliases
-            )
-            mock_get_service.return_value = mock_service
+        mock_stmt_service = MagicMock()
+        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_aliases)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_statement_service] = lambda: mock_stmt_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
             response = await client.get(
                 "/api/matters/matter-123/contradictions/entities/entity-123/statements",
                 params={"includeAliases": "true"},
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
-            assert response.status_code == 200
+        app.dependency_overrides.clear()
 
-            data = response.json()
-            assert "N.D. Jobalia" in data["data"]["aliasesIncluded"]
-            assert "Nirav D. Jobalia" in data["data"]["aliasesIncluded"]
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "N.D. Jobalia" in data["data"]["aliasesIncluded"]
+        assert "Nirav D. Jobalia" in data["data"]["aliasesIncluded"]

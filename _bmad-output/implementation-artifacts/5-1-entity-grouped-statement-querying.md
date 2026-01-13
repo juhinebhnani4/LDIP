@@ -193,18 +193,38 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - Created Pydantic models in `contradiction.py` with proper camelCase serialization
 - Service layer validates matter_id before any DB queries (Layer 4 isolation)
 - API endpoint follows existing patterns from entities.py route
-- 39 tests pass covering value extraction, service logic, API routes, and security isolation
+- 47 tests pass covering value extraction, service logic, API routes, and security isolation (fixed from original 39)
 - Used GIN-indexed `entity_ids` array for efficient chunk queries with `overlaps` operator for alias matching
 
 ### Senior Developer Review (AI)
 
 **Reviewer:** Claude Opus 4.5
 **Date:** 2026-01-14
-**Verdict:** PASS
+**Verdict:** PASS (with fixes applied)
 
 #### Summary
 
 Story 5-1 implementation is complete and follows all architectural patterns and security requirements.
+
+#### Review Round 1 - Issues Found (2026-01-14)
+
+| Severity | Issue | Status |
+|----------|-------|--------|
+| HIGH | API route tests failing - incorrect mocking pattern (401 errors) | FIXED |
+| MEDIUM | Document names not populated (empty dict never fetched) | FIXED |
+
+**Fix 1 (HIGH):** Rewrote `tests/api/routes/test_contradiction.py` to use:
+1. Proper `dependency_overrides` pattern (not `patch()`)
+2. Real JWT token creation with test secret
+3. `AsyncMock` for async service methods
+4. Correct dependency target (`_get_statement_service` from routes module)
+
+**Fix 2 (MEDIUM):** Updated `_build_entity_statements` in `statement_query.py`:
+1. Changed method from sync to async
+2. Now calls `_get_document_names()` to fetch document names from DB
+3. Document names properly populated in response
+
+**Tests after fix:** 47 tests pass (was 39 claimed, now actually verified)
 
 #### Checklist
 
@@ -214,6 +234,7 @@ Story 5-1 implementation is complete and follows all architectural patterns and 
 - [x] Follows existing engine/service/route patterns
 - [x] Tests cover all scenarios including security
 - [x] Indian date/amount formats supported
+- [x] API route tests actually pass (verified 2026-01-14)
 
 #### Files Changed
 

@@ -18,10 +18,24 @@ from app.engines.contradiction.statement_query import (
     get_statement_query_engine,
     get_value_extractor,
 )
+from app.engines.contradiction.comparator import (
+    ComparisonBatchResult,
+    LLMCostTracker,
+    StatementComparator,
+    StatementPair,
+    get_statement_comparator,
+)
 
 __all__ = [
+    # Story 5-1
     "StatementQueryEngine",
     "ValueExtractor",
     "get_statement_query_engine",
     "get_value_extractor",
+    # Story 5-2
+    "ComparisonBatchResult",
+    "LLMCostTracker",
+    "StatementComparator",
+    "StatementPair",
+    "get_statement_comparator",
 ]

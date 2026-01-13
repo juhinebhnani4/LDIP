@@ -104,7 +104,7 @@ development_status:
   # Epic 5: Consistency & Contradiction Engine
   epic-5: in-progress  # First story created 2026-01-14
   5-1-entity-grouped-statement-querying: complete  # Implemented 2026-01-14
-  5-2-statement-pair-comparison-gpt4: backlog
+  5-2-statement-pair-comparison-gpt4: complete  # Implemented 2026-01-14
   5-3-contradiction-type-classification: backlog
   5-4-severity-scoring-explanation: backlog
   epic-5-retrospective: optional

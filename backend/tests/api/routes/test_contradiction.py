@@ -513,3 +513,365 @@ class TestGetEntityStatementsAliasResolution:
         data = response.json()
         assert "N.D. Jobalia" in data["data"]["aliasesIncluded"]
         assert "Nirav D. Jobalia" in data["data"]["aliasesIncluded"]
+
+
+# =============================================================================
+# Story 5-2: Statement Comparison API Tests
+# =============================================================================
+
+
+class TestCompareEntityStatementsAuth:
+    """Tests for comparison endpoint authentication."""
+
+    def test_compare_entity_statements_requires_auth(self, sync_client: TestClient) -> None:
+        """Should require authentication."""
+        response = sync_client.post(
+            "/api/matters/matter-123/contradictions/entities/entity-123/compare"
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestCompareEntityStatements:
+    """Tests for POST /api/matters/{matter_id}/contradictions/entities/{entity_id}/compare."""
+
+    @pytest.fixture
+    def mock_comparison_response(self) -> "EntityComparisonsResponse":
+        """Create mock comparison response."""
+        from app.models.contradiction import (
+            ComparisonMeta,
+            ComparisonResult,
+            ContradictionEvidence,
+            EntityComparisons,
+            EntityComparisonsResponse,
+            EvidenceType,
+            StatementPairComparison,
+        )
+
+        return EntityComparisonsResponse(
+            data=EntityComparisons(
+                entity_id="entity-123",
+                entity_name="Nirav Jobalia",
+                comparisons=[
+                    StatementPairComparison(
+                        statement_a_id="chunk-1",
+                        statement_b_id="chunk-2",
+                        statement_a_content="The loan was Rs. 5 lakhs.",
+                        statement_b_content="The loan was Rs. 8 lakhs.",
+                        result=ComparisonResult.CONTRADICTION,
+                        reasoning="Statement A claims loan was Rs. 5 lakhs. Statement B claims Rs. 8 lakhs. These amounts conflict.",
+                        confidence=0.95,
+                        evidence=ContradictionEvidence(
+                            type=EvidenceType.AMOUNT_MISMATCH,
+                            value_a="500000",
+                            value_b="800000",
+                            page_refs={"statement_a": 5, "statement_b": 12},
+                        ),
+                        document_a_id="doc-1",
+                        document_b_id="doc-2",
+                        page_a=5,
+                        page_b=12,
+                    ),
+                ],
+                contradictions_found=1,
+                total_pairs_compared=10,
+            ),
+            meta=ComparisonMeta(
+                pairs_compared=10,
+                contradictions_found=1,
+                total_cost_usd=0.35,
+                processing_time_ms=5000,
+            ),
+        )
+
+    @pytest.mark.anyio
+    async def test_compare_entity_statements_success(
+        self,
+        mock_comparison_response: "EntityComparisonsResponse",
+    ) -> None:
+        """Should return 200 with comparison results on success."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        mock_comp_service.compare_entity_statements = AsyncMock(return_value=mock_comparison_response)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/matter-123/contradictions/entities/entity-123/compare",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["data"]["entityId"] == "entity-123"
+        assert data["data"]["contradictionsFound"] == 1
+        assert data["meta"]["pairsCompared"] == 10
+        assert data["meta"]["totalCostUsd"] == 0.35
+
+    @pytest.mark.anyio
+    async def test_compare_entity_statements_not_found(self) -> None:
+        """Should return 404 when entity not found."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            side_effect=EntityNotFoundError("entity-123", "matter-123")
+        )
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/matter-123/contradictions/entities/entity-123/compare",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+
+    @pytest.mark.anyio
+    async def test_compare_entity_statements_too_many(self) -> None:
+        """Should return 422 when too many statements."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+        from app.services.contradiction.comparator import TooManyStatementsError
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            side_effect=TooManyStatementsError(150, 100)
+        )
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/matter-123/contradictions/entities/entity-123/compare",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 422
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "TOO_MANY_STATEMENTS"
+        assert data["detail"]["error"]["details"]["statementCount"] == 150
+
+    @pytest.mark.anyio
+    async def test_compare_entity_statements_with_params(
+        self,
+        mock_comparison_response: "EntityComparisonsResponse",
+    ) -> None:
+        """Should pass query parameters to service."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        mock_comp_service.compare_entity_statements = AsyncMock(return_value=mock_comparison_response)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/matter-123/contradictions/entities/entity-123/compare",
+                params={
+                    "maxPairs": "25",
+                    "confidenceThreshold": "0.8",
+                    "includeAliases": "false",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+
+        # Verify service was called with correct params
+        call_args = mock_comp_service.compare_entity_statements.call_args
+        assert call_args.kwargs["max_pairs"] == 25
+        assert call_args.kwargs["confidence_threshold"] == 0.8
+        assert call_args.kwargs["include_aliases"] is False
+
+
+class TestCompareEntityStatementsChainOfThought:
+    """Tests for chain-of-thought reasoning in comparison results (AC #4)."""
+
+    @pytest.mark.anyio
+    async def test_response_includes_reasoning(self) -> None:
+        """Should include chain-of-thought reasoning in response."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+        from app.models.contradiction import (
+            ComparisonMeta,
+            ComparisonResult,
+            ContradictionEvidence,
+            EntityComparisons,
+            EntityComparisonsResponse,
+            EvidenceType,
+            StatementPairComparison,
+        )
+
+        response_with_reasoning = EntityComparisonsResponse(
+            data=EntityComparisons(
+                entity_id="entity-123",
+                entity_name="Test",
+                comparisons=[
+                    StatementPairComparison(
+                        statement_a_id="chunk-1",
+                        statement_b_id="chunk-2",
+                        statement_a_content="The contract was signed on 15/01/2024.",
+                        statement_b_content="The contract was signed on 15/06/2024.",
+                        result=ComparisonResult.CONTRADICTION,
+                        reasoning="Step 1: Statement A claims signing date was 15/01/2024. Step 2: Statement B claims 15/06/2024. Step 3: These dates conflict - same event with different dates.",
+                        confidence=0.92,
+                        evidence=ContradictionEvidence(
+                            type=EvidenceType.DATE_MISMATCH,
+                            value_a="2024-01-15",
+                            value_b="2024-06-15",
+                        ),
+                        document_a_id="doc-1",
+                        document_b_id="doc-2",
+                    ),
+                ],
+                contradictions_found=1,
+                total_pairs_compared=1,
+            ),
+            meta=ComparisonMeta(
+                pairs_compared=1,
+                contradictions_found=1,
+                total_cost_usd=0.04,
+                processing_time_ms=1500,
+            ),
+        )
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        mock_comp_service.compare_entity_statements = AsyncMock(return_value=response_with_reasoning)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/matter-123/contradictions/entities/entity-123/compare",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+
+        data = response.json()
+        comparison = data["data"]["comparisons"][0]
+
+        # Verify reasoning is present (AC #4)
+        assert "reasoning" in comparison
+        assert "Step 1" in comparison["reasoning"]
+        assert "dates conflict" in comparison["reasoning"]
+
+        # Verify evidence values
+        assert comparison["evidence"]["type"] == "date_mismatch"
+        assert comparison["evidence"]["valueA"] == "2024-01-15"
+        assert comparison["evidence"]["valueB"] == "2024-06-15"
+
+
+class TestCompareEntityStatementsMatterIsolation:
+    """Tests for matter isolation (CRITICAL security test)."""
+
+    @pytest.mark.anyio
+    async def test_matter_id_validated(self) -> None:
+        """Should validate matter_id for every request."""
+        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_comparison_service
+        from app.services.contradiction.comparator import ComparisonServiceError
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_comp_service = MagicMock()
+        # Simulate entity being validated against matter
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            side_effect=EntityNotFoundError("entity-123", "other-matter")
+        )
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_comparison_service] = lambda: mock_comp_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.post(
+                "/api/matters/other-matter/contradictions/entities/entity-123/compare",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        # Should return 404, not expose that entity exists in other matter
+        assert response.status_code == 404

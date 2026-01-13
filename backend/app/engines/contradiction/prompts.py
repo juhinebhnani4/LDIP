@@ -222,3 +222,116 @@ def validate_comparison_response(parsed: dict) -> list[str]:
         errors.append("Evidence must be an object")
 
     return errors
+
+
+# =============================================================================
+# Classification Enhancement Prompts (Story 5-3)
+# =============================================================================
+
+CLASSIFICATION_ENHANCEMENT_SYSTEM_PROMPT = """You are a legal analysis assistant specializing in classifying contradictions between statements.
+
+Your task is to analyze a detected contradiction and determine its classification type.
+
+CLASSIFICATION TYPES (in priority order):
+1. date_mismatch - Statements disagree on when something occurred
+2. amount_mismatch - Statements disagree on monetary values, quantities, or measurements
+3. factual_contradiction - Direct factual disagreement about a verifiable fact
+4. semantic_contradiction - Statements mean opposite things semantically, but not about specific facts
+
+RULES:
+1. Prioritize specific classifications (date, amount) over general ones (factual, semantic)
+2. If dates or amounts are mentioned but are the SAME, it's NOT a date/amount mismatch
+3. semantic_contradiction is used when statements conflict in meaning but not on specific verifiable facts
+4. Provide a clear, attorney-friendly explanation of the conflict
+
+You must respond ONLY with valid JSON matching the required schema."""
+
+CLASSIFICATION_ENHANCEMENT_USER_PROMPT = """Analyze this contradiction and classify it:
+
+Statement A:
+"{content_a}"
+
+Statement B:
+"{content_b}"
+
+Original reasoning (from comparison):
+"{reasoning}"
+
+Please classify this contradiction and provide:
+1. The most specific contradiction type that applies
+2. A clear explanation suitable for attorney review
+3. Your confidence in this classification
+
+Respond with JSON in this exact format:
+{{
+  "contradiction_type": "date_mismatch|amount_mismatch|factual_contradiction|semantic_contradiction",
+  "explanation": "Clear explanation of the conflict for attorney review...",
+  "confidence": 0.0-1.0
+}}"""
+
+
+def format_classification_prompt(
+    content_a: str,
+    content_b: str,
+    reasoning: str,
+) -> str:
+    """Format the user prompt for classification enhancement.
+
+    Story 5-3: Used when rule-based classification fails and LLM fallback is needed.
+
+    Args:
+        content_a: Content of statement A.
+        content_b: Content of statement B.
+        reasoning: Original reasoning from comparison.
+
+    Returns:
+        Formatted prompt string.
+    """
+    return CLASSIFICATION_ENHANCEMENT_USER_PROMPT.format(
+        content_a=content_a,
+        content_b=content_b,
+        reasoning=reasoning,
+    )
+
+
+def validate_classification_response(parsed: dict) -> list[str]:
+    """Validate parsed GPT-4 classification response.
+
+    Args:
+        parsed: Parsed JSON response from GPT-4.
+
+    Returns:
+        List of validation errors (empty if valid).
+    """
+    errors: list[str] = []
+
+    # Check required fields
+    required_fields = ["contradiction_type", "explanation", "confidence"]
+    for field in required_fields:
+        if field not in parsed:
+            errors.append(f"Missing required field: {field}")
+
+    # Validate contradiction_type enum
+    valid_types = {
+        "date_mismatch",
+        "amount_mismatch",
+        "factual_contradiction",
+        "semantic_contradiction",
+    }
+    contradiction_type = parsed.get("contradiction_type", "").lower()
+    if contradiction_type and contradiction_type not in valid_types:
+        errors.append(
+            f"Invalid contradiction_type '{contradiction_type}'. Must be one of: {valid_types}"
+        )
+
+    # Validate confidence range
+    confidence = parsed.get("confidence")
+    if confidence is not None:
+        try:
+            conf_val = float(confidence)
+            if conf_val < 0.0 or conf_val > 1.0:
+                errors.append(f"Confidence {conf_val} out of range [0.0, 1.0]")
+        except (TypeError, ValueError):
+            errors.append(f"Invalid confidence value: {confidence}")
+
+    return errors

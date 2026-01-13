@@ -9,11 +9,9 @@ Pydantic models for:
 Part of the Contradiction Engine pipeline in Epic 5.
 """
 
-from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # =============================================================================
 # Enums
@@ -258,6 +256,7 @@ class StatementPairComparison(BaseModel):
     """Result of comparing two statements for contradiction.
 
     Story 5-2: Captures the GPT-4 chain-of-thought comparison result.
+    Story 5-3: Extended with contradiction_type for classification.
 
     Contains:
     - References to the compared statements
@@ -265,6 +264,7 @@ class StatementPairComparison(BaseModel):
     - Chain-of-thought reasoning from GPT-4 (AC #4)
     - Confidence score
     - Evidence of conflict if applicable
+    - Contradiction type classification (Story 5-3)
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -304,6 +304,17 @@ class StatementPairComparison(BaseModel):
     )
     page_b: int | None = Field(
         None, alias="pageB", description="Page number for statement B"
+    )
+    # Story 5-3: Classification fields (populated after comparison)
+    contradiction_type: str | None = Field(
+        None,
+        alias="contradictionType",
+        description="Classification type: semantic_contradiction, factual_contradiction, date_mismatch, amount_mismatch. NULL for non-contradictions.",
+    )
+    extracted_values: dict | None = Field(
+        None,
+        alias="extractedValues",
+        description="Structured values for attorney display: {value_a: {original, normalized}, value_b: {original, normalized}}",
     )
 
 
@@ -369,4 +380,127 @@ class ComparisonJobResponse(BaseModel):
     )
     estimated_pairs: int = Field(
         ..., alias="estimatedPairs", description="Estimated number of pairs to compare"
+    )
+
+
+# =============================================================================
+# Contradiction Classification Models (Story 5-3)
+# =============================================================================
+
+
+class ContradictionType(str, Enum):
+    """Classification of contradiction type for attorney prioritization.
+
+    Story 5-3: Attorneys can prioritize factual contradictions over semantic ones.
+
+    Values:
+        SEMANTIC_CONTRADICTION: Statements mean opposite things when analyzed
+        FACTUAL_CONTRADICTION: Direct factual disagreement (e.g., ownership conflict)
+        DATE_MISMATCH: Same event/fact has different dates
+        AMOUNT_MISMATCH: Same transaction/value has different amounts
+    """
+
+    SEMANTIC_CONTRADICTION = "semantic_contradiction"
+    FACTUAL_CONTRADICTION = "factual_contradiction"
+    DATE_MISMATCH = "date_mismatch"
+    AMOUNT_MISMATCH = "amount_mismatch"
+
+
+class ExtractedValue(BaseModel):
+    """Extracted value with original and normalized forms for attorney display.
+
+    Story 5-3: Both dates and amounts are displayed with their original format
+    and normalized value for comparison.
+
+    Example:
+        >>> ExtractedValue(original="15/01/2024", normalized="2024-01-15")
+        >>> ExtractedValue(original="5 lakhs", normalized="500000")
+    """
+
+    original: str = Field(..., description="Original text as found in statement")
+    normalized: str = Field(
+        ..., description="Normalized value (ISO date or numeric amount)"
+    )
+
+
+class ExtractedValues(BaseModel):
+    """Structured conflicting values for attorney display.
+
+    Story 5-3: Contains the extracted values from both statements
+    for side-by-side comparison.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    value_a: ExtractedValue | None = Field(
+        None, alias="valueA", description="Extracted value from statement A"
+    )
+    value_b: ExtractedValue | None = Field(
+        None, alias="valueB", description="Extracted value from statement B"
+    )
+
+
+class ClassifiedContradiction(BaseModel):
+    """A contradiction with classification metadata.
+
+    Story 5-3: Extends StatementPairComparison with classification details
+    for attorney prioritization.
+
+    Contains:
+    - Reference to the original comparison
+    - Contradiction type classification
+    - Structured extracted values for display
+    - Enhanced explanation for semantic conflicts
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    comparison_id: str = Field(
+        ...,
+        alias="comparisonId",
+        description="Reference to the original StatementPairComparison (statement_a_id + statement_b_id)",
+    )
+    statement_a_id: str = Field(
+        ..., alias="statementAId", description="UUID of first statement (chunk_id)"
+    )
+    statement_b_id: str = Field(
+        ..., alias="statementBId", description="UUID of second statement (chunk_id)"
+    )
+    contradiction_type: ContradictionType = Field(
+        ..., alias="contradictionType", description="Classification of contradiction"
+    )
+    extracted_values: ExtractedValues | None = Field(
+        None,
+        alias="extractedValues",
+        description="Structured values for date/amount display",
+    )
+    explanation: str = Field(
+        ..., description="Explanation of the conflict (enhanced for semantic)"
+    )
+    classification_method: str = Field(
+        default="rule_based",
+        alias="classificationMethod",
+        description="How classification was determined: rule_based or llm_fallback",
+    )
+
+
+class ClassificationResult(BaseModel):
+    """API response model for classification operation.
+
+    Story 5-3: Contains classification results with metadata.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    classified_contradiction: ClassifiedContradiction = Field(
+        ..., alias="classifiedContradiction", description="The classified contradiction"
+    )
+    llm_cost_usd: float = Field(
+        default=0.0,
+        alias="llmCostUsd",
+        ge=0.0,
+        description="LLM API cost if fallback was used (0 for rule-based)",
+    )
+    processing_time_ms: int = Field(
+        ..., alias="processingTimeMs", ge=0, description="Processing time in milliseconds"
     )

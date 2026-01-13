@@ -12,11 +12,9 @@ This module provides the engine components for detecting contradictions
 and inconsistencies in legal documents.
 """
 
-from app.engines.contradiction.statement_query import (
-    StatementQueryEngine,
-    ValueExtractor,
-    get_statement_query_engine,
-    get_value_extractor,
+from app.engines.contradiction.classifier import (
+    ContradictionClassifier,
+    get_contradiction_classifier,
 )
 from app.engines.contradiction.comparator import (
     ComparisonBatchResult,
@@ -24,6 +22,12 @@ from app.engines.contradiction.comparator import (
     StatementComparator,
     StatementPair,
     get_statement_comparator,
+)
+from app.engines.contradiction.statement_query import (
+    StatementQueryEngine,
+    ValueExtractor,
+    get_statement_query_engine,
+    get_value_extractor,
 )
 
 __all__ = [
@@ -38,4 +42,7 @@ __all__ = [
     "StatementComparator",
     "StatementPair",
     "get_statement_comparator",
+    # Story 5-3
+    "ContradictionClassifier",
+    "get_contradiction_classifier",
 ]

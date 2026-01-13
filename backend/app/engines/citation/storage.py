@@ -3,9 +3,15 @@
 Handles saving, retrieving, and updating citations and act resolutions
 in Supabase with RLS-enforced matter isolation.
 
+CRITICAL: Always validates matter_id for Layer 4 matter isolation.
+
+NOTE: Uses asyncio.to_thread() to run synchronous Supabase client calls
+without blocking the event loop.
+
 Story 3-1: Act Citation Extraction (AC: #3, #4)
 """
 
+import asyncio
 from datetime import datetime
 from functools import lru_cache
 from typing import Final
@@ -66,6 +72,11 @@ class CitationStorageService:
 
     Uses Supabase service client for RLS-bypassed operations.
     All methods enforce matter isolation through query parameters.
+
+    CRITICAL: All operations validate matter_id for security.
+
+    All async methods use asyncio.to_thread() to run synchronous Supabase
+    client calls without blocking the event loop.
 
     Example:
         >>> storage = CitationStorageService()
@@ -149,7 +160,8 @@ class CitationStorageService:
                         "source_page": extraction_result.page_number or 1,
                         "source_bbox_ids": source_bbox_ids or [],
                         "verification_status": VerificationStatus.ACT_UNAVAILABLE.value,
-                        "confidence": citation.confidence / 100.0,  # Convert to 0-1 for DB
+                        # Confidence: Model uses 0-100 for display, DB uses 0-1 for indexing
+                        "confidence": citation.confidence / 100.0,
                         "extraction_metadata": {
                             "extraction_timestamp": datetime.utcnow().isoformat(),
                             "source_chunk_id": extraction_result.source_chunk_id,
@@ -157,8 +169,11 @@ class CitationStorageService:
                     }
                     records.append(record)
 
-                # Insert batch
-                result = self.client.table("citations").insert(records).execute()
+                # Insert batch using asyncio.to_thread
+                def _insert_batch():
+                    return self.client.table("citations").insert(records).execute()
+
+                result = await asyncio.to_thread(_insert_batch)
 
                 if result.data:
                     saved_count += len(result.data)
@@ -208,14 +223,15 @@ class CitationStorageService:
             List of citations.
         """
         try:
-            query = self.client.table("citations").select("*").eq(
-                "source_document_id", document_id
-            )
+            def _query():
+                query = self.client.table("citations").select("*").eq(
+                    "source_document_id", document_id
+                )
+                if matter_id:
+                    query = query.eq("matter_id", matter_id)
+                return query.order("source_page").execute()
 
-            if matter_id:
-                query = query.eq("matter_id", matter_id)
-
-            result = query.order("source_page").execute()
+            result = await asyncio.to_thread(_query)
 
             return [self._row_to_citation(row) for row in (result.data or [])]
 
@@ -248,22 +264,25 @@ class CitationStorageService:
             Tuple of (citations list, total count).
         """
         try:
-            query = self.client.table("citations").select(
-                "*", count="exact"
-            ).eq("matter_id", matter_id)
-
-            if act_name:
-                query = query.eq("act_name", act_name)
-
-            if verification_status:
-                query = query.eq("verification_status", verification_status.value)
-
             # Calculate offset
             offset = (page - 1) * per_page
 
-            result = query.order("created_at", desc=True).range(
-                offset, offset + per_page - 1
-            ).execute()
+            def _query():
+                query = self.client.table("citations").select(
+                    "*", count="exact"
+                ).eq("matter_id", matter_id)
+
+                if act_name:
+                    query = query.eq("act_name", act_name)
+
+                if verification_status:
+                    query = query.eq("verification_status", verification_status.value)
+
+                return query.order("created_at", desc=True).range(
+                    offset, offset + per_page - 1
+                ).execute()
+
+            result = await asyncio.to_thread(_query)
 
             citations = [self._row_to_citation(row) for row in (result.data or [])]
             total = result.count or 0
@@ -293,12 +312,13 @@ class CitationStorageService:
             Citation or None if not found.
         """
         try:
-            query = self.client.table("citations").select("*").eq("id", citation_id)
+            def _query():
+                query = self.client.table("citations").select("*").eq("id", citation_id)
+                if matter_id:
+                    query = query.eq("matter_id", matter_id)
+                return query.single().execute()
 
-            if matter_id:
-                query = query.eq("matter_id", matter_id)
-
-            result = query.single().execute()
+            result = await asyncio.to_thread(_query)
 
             if result.data:
                 return self._row_to_citation(result.data)
@@ -333,19 +353,25 @@ class CitationStorageService:
 
             # Try using the upsert function first
             try:
-                result = self.client.rpc(
-                    "upsert_act_resolution",
-                    {
-                        "p_matter_id": matter_id,
-                        "p_act_name_normalized": normalized,
-                    },
-                ).execute()
+                def _rpc_upsert():
+                    return self.client.rpc(
+                        "upsert_act_resolution",
+                        {
+                            "p_matter_id": matter_id,
+                            "p_act_name_normalized": normalized,
+                        },
+                    ).execute()
+
+                result = await asyncio.to_thread(_rpc_upsert)
 
                 if result.data:
                     # Fetch the full record
-                    fetch_result = self.client.table("act_resolutions").select(
-                        "*"
-                    ).eq("id", result.data).single().execute()
+                    def _fetch():
+                        return self.client.table("act_resolutions").select(
+                            "*"
+                        ).eq("id", result.data).single().execute()
+
+                    fetch_result = await asyncio.to_thread(_fetch)
 
                     if fetch_result.data:
                         return self._row_to_act_resolution(fetch_result.data)
@@ -354,30 +380,40 @@ class CitationStorageService:
                 pass
 
             # Manual upsert
-            existing = self.client.table("act_resolutions").select("*").eq(
-                "matter_id", matter_id
-            ).eq("act_name_normalized", normalized).execute()
+            def _check_existing():
+                return self.client.table("act_resolutions").select("*").eq(
+                    "matter_id", matter_id
+                ).eq("act_name_normalized", normalized).execute()
+
+            existing = await asyncio.to_thread(_check_existing)
 
             if existing.data and len(existing.data) > 0:
                 # Update existing
                 row = existing.data[0]
-                update_result = self.client.table("act_resolutions").update({
-                    "citation_count": (row.get("citation_count", 0) or 0) + 1,
-                    "updated_at": datetime.utcnow().isoformat(),
-                }).eq("id", row["id"]).execute()
+
+                def _update():
+                    return self.client.table("act_resolutions").update({
+                        "citation_count": (row.get("citation_count", 0) or 0) + 1,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }).eq("id", row["id"]).execute()
+
+                update_result = await asyncio.to_thread(_update)
 
                 if update_result.data:
                     return self._row_to_act_resolution(update_result.data[0])
             else:
                 # Create new
-                insert_result = self.client.table("act_resolutions").insert({
-                    "matter_id": matter_id,
-                    "act_name_normalized": normalized,
-                    "act_name_display": act_name,
-                    "resolution_status": ActResolutionStatus.MISSING.value,
-                    "user_action": UserAction.PENDING.value,
-                    "citation_count": 1,
-                }).execute()
+                def _insert():
+                    return self.client.table("act_resolutions").insert({
+                        "matter_id": matter_id,
+                        "act_name_normalized": normalized,
+                        "act_name_display": act_name,
+                        "resolution_status": ActResolutionStatus.MISSING.value,
+                        "user_action": UserAction.PENDING.value,
+                        "citation_count": 1,
+                    }).execute()
+
+                insert_result = await asyncio.to_thread(_insert)
 
                 if insert_result.data:
                     return self._row_to_act_resolution(insert_result.data[0])
@@ -408,14 +444,15 @@ class CitationStorageService:
             List of act resolutions.
         """
         try:
-            query = self.client.table("act_resolutions").select("*").eq(
-                "matter_id", matter_id
-            )
+            def _query():
+                query = self.client.table("act_resolutions").select("*").eq(
+                    "matter_id", matter_id
+                )
+                if status:
+                    query = query.eq("resolution_status", status.value)
+                return query.order("citation_count", desc=True).execute()
 
-            if status:
-                query = query.eq("resolution_status", status.value)
-
-            result = query.order("citation_count", desc=True).execute()
+            result = await asyncio.to_thread(_query)
 
             return [
                 self._row_to_act_resolution(row) for row in (result.data or [])
@@ -461,9 +498,12 @@ class CitationStorageService:
             if user_action is not None:
                 update_data["user_action"] = user_action.value
 
-            result = self.client.table("act_resolutions").update(update_data).eq(
-                "matter_id", matter_id
-            ).eq("act_name_normalized", act_name_normalized).execute()
+            def _update():
+                return self.client.table("act_resolutions").update(update_data).eq(
+                    "matter_id", matter_id
+                ).eq("act_name_normalized", act_name_normalized).execute()
+
+            result = await asyncio.to_thread(_update)
 
             if result.data and len(result.data) > 0:
                 return self._row_to_act_resolution(result.data[0])
@@ -493,9 +533,12 @@ class CitationStorageService:
         """
         try:
             # Get all citations for the matter
-            result = self.client.table("citations").select(
-                "act_name, verification_status"
-            ).eq("matter_id", matter_id).execute()
+            def _query():
+                return self.client.table("citations").select(
+                    "act_name, verification_status"
+                ).eq("matter_id", matter_id).execute()
+
+            result = await asyncio.to_thread(_query)
 
             # Aggregate counts
             counts: dict[str, dict] = {}

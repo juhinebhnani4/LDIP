@@ -2,8 +2,12 @@
 
 Handles chunk record creation, retrieval, and management in the chunks table.
 Works with the parent-child chunking system for RAG pipelines.
+
+NOTE: Uses asyncio.to_thread() to run synchronous Supabase client calls
+without blocking the event loop.
 """
 
+import asyncio
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
@@ -130,11 +134,15 @@ class ChunkService:
                 for chunk in parent_chunks
             ]
 
-            # Insert parents in batches
+            # Insert parents in batches using asyncio.to_thread()
             total_saved = 0
             for i in range(0, len(parent_records), batch_size):
                 batch = parent_records[i : i + batch_size]
-                result = self.client.table("chunks").insert(batch).execute()
+
+                def _insert_parent_batch(b: list = batch) -> Any:
+                    return self.client.table("chunks").insert(b).execute()
+
+                result = await asyncio.to_thread(_insert_parent_batch)
                 total_saved += len(result.data) if result.data else 0
 
             # Now insert children with parent references
@@ -156,7 +164,11 @@ class ChunkService:
 
             for i in range(0, len(child_records), batch_size):
                 batch = child_records[i : i + batch_size]
-                result = self.client.table("chunks").insert(batch).execute()
+
+                def _insert_child_batch(b: list = batch) -> Any:
+                    return self.client.table("chunks").insert(b).execute()
+
+                result = await asyncio.to_thread(_insert_child_batch)
                 total_saved += len(result.data) if result.data else 0
 
             logger.info(
@@ -203,14 +215,20 @@ class ChunkService:
 
         try:
             # Delete children first (foreign key constraint)
-            self.client.table("chunks").delete().eq(
-                "document_id", document_id
-            ).eq("chunk_type", "child").execute()
+            def _delete_children() -> Any:
+                return self.client.table("chunks").delete().eq(
+                    "document_id", document_id
+                ).eq("chunk_type", "child").execute()
+
+            await asyncio.to_thread(_delete_children)
 
             # Then delete parents
-            result = self.client.table("chunks").delete().eq(
-                "document_id", document_id
-            ).execute()
+            def _delete_parents() -> Any:
+                return self.client.table("chunks").delete().eq(
+                    "document_id", document_id
+                ).execute()
+
+            result = await asyncio.to_thread(_delete_parents)
 
             deleted_count = len(result.data) if result.data else 0
 

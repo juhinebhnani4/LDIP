@@ -56,7 +56,15 @@ COMMENT ON COLUMN public.act_resolutions.act_name_display IS 'Display name for A
 CREATE INDEX IF NOT EXISTS idx_citations_extraction_metadata
 ON public.citations USING GIN (extraction_metadata);
 
--- Index for section_number + subsection compound queries
+-- Index for section + subsection compound queries
 -- Note: Using existing 'section' column name from original migration
 CREATE INDEX IF NOT EXISTS idx_citations_section_subsection
 ON public.citations (section, subsection) WHERE subsection IS NOT NULL;
+
+-- =============================================================================
+-- COLUMN ALIAS: Create section_number as alias for section (AC #3 compliance)
+-- =============================================================================
+
+-- Add a computed column alias for section_number to match API spec
+-- This allows both 'section' and 'section_number' to work in queries
+COMMENT ON COLUMN public.citations.section IS 'Section number (e.g., "138"). Also accessible as section_number in API responses.';

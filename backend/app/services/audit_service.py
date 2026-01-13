@@ -8,8 +8,12 @@ This module provides comprehensive audit logging for:
 
 All security events are logged both to structured logs (for monitoring)
 and optionally to the audit_logs database table (for compliance).
+
+NOTE: Uses asyncio.to_thread() to run synchronous Supabase client calls
+without blocking the event loop.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -179,23 +183,30 @@ class AuditService:
             logger.error("audit_event", **log_data)
 
     async def _log_to_database(self, entry: AuditLogEntry) -> None:
-        """Log entry to audit_logs database table."""
+        """Log entry to audit_logs database table.
+
+        Uses asyncio.to_thread() to run the synchronous Supabase client
+        without blocking the event loop.
+        """
         try:
-            await self.db_client.table("audit_logs").insert(
-                {
-                    "event_type": entry.event_type,
-                    "user_id": entry.user_id,
-                    "matter_id": entry.matter_id,
-                    "action": entry.action,
-                    "result": entry.result,
-                    "ip_address": entry.ip_address,
-                    "user_agent": entry.user_agent,
-                    "path": entry.path,
-                    "method": entry.method,
-                    "details": entry.details,
-                    "created_at": entry.timestamp.isoformat(),
-                }
-            ).execute()
+            record = {
+                "event_type": entry.event_type,
+                "user_id": entry.user_id,
+                "matter_id": entry.matter_id,
+                "action": entry.action,
+                "result": entry.result,
+                "ip_address": entry.ip_address,
+                "user_agent": entry.user_agent,
+                "path": entry.path,
+                "method": entry.method,
+                "details": entry.details,
+                "created_at": entry.timestamp.isoformat(),
+            }
+
+            def _insert_audit_log() -> Any:
+                return self.db_client.table("audit_logs").insert(record).execute()
+
+            await asyncio.to_thread(_insert_audit_log)
         except Exception as e:
             # Don't fail the request if audit logging fails
             logger.error(

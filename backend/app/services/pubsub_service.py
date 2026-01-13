@@ -402,3 +402,109 @@ def broadcast_processing_summary(
             matter_id=matter_id,
             error=str(e),
         )
+
+
+# =============================================================================
+# Citation Extraction Broadcasting (Story 3-1)
+# =============================================================================
+
+# Channel pattern for citation updates: citations:{matter_id}
+CITATION_CHANNEL_PATTERN = "citations:{matter_id}"
+
+
+def broadcast_citation_extraction_progress(
+    matter_id: str,
+    document_id: str,
+    citations_found: int,
+    unique_acts: int,
+    progress_pct: int,
+) -> None:
+    """Broadcast citation extraction progress update.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        document_id: Document UUID being processed.
+        citations_found: Number of citations extracted so far.
+        unique_acts: Number of unique Acts found.
+        progress_pct: Progress percentage (0-100).
+    """
+    try:
+        service = get_pubsub_service()
+        channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "citation_extraction_progress",
+            "matter_id": matter_id,
+            "document_id": document_id,
+            "citations_found": citations_found,
+            "unique_acts": unique_acts,
+            "progress_pct": progress_pct,
+        }
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "citation_extraction_progress_broadcast",
+            matter_id=matter_id,
+            document_id=document_id,
+            citations_found=citations_found,
+            progress_pct=progress_pct,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_citation_extraction_progress_failed",
+            matter_id=matter_id,
+            document_id=document_id,
+            error=str(e),
+        )
+
+
+def broadcast_act_discovery_update(
+    matter_id: str,
+    total_acts: int,
+    missing_count: int,
+    available_count: int,
+) -> None:
+    """Broadcast act discovery report update.
+
+    Called when Act Discovery Report changes (new Acts found or status changes).
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        total_acts: Total number of unique Acts referenced.
+        missing_count: Number of Acts not yet uploaded.
+        available_count: Number of Acts that are available.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "act_discovery_update",
+            "matter_id": matter_id,
+            "total_acts": total_acts,
+            "missing_count": missing_count,
+            "available_count": available_count,
+        }
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.info(
+            "act_discovery_update_broadcast",
+            matter_id=matter_id,
+            total_acts=total_acts,
+            missing_count=missing_count,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_act_discovery_update_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )

@@ -128,19 +128,16 @@ So that **I know which laws are referenced without reading everything**.
       - Returns Acts that are still missing
 
 - [x] Task 8: Integrate Citation Extraction into Document Pipeline (AC: #1, #2, #3, #4)
-  - [x] Create `backend/app/workers/tasks/citation_tasks.py`
+  - [x] Add `extract_citations` Celery task in `backend/app/workers/tasks/document_tasks.py` (lines 2779-3118)
     - Celery task: `extract_citations`
       - Runs after alias_resolution in pipeline (or parallel with it)
       - Processes all chunks from document
       - Extracts and stores citations
       - Updates act_resolutions with discovered Acts
       - Uses job tracking pattern from Story 2c-3
-    - Add `citation_extraction` to PIPELINE_STAGES in document_tasks.py
-    - Chain task after resolve_aliases (or configure parallel execution)
-  - [x] Update `backend/app/workers/tasks/document_tasks.py`
-    - Add citation extraction to pipeline chain
-    - Option A: Chain after resolve_aliases (sequential)
-    - Option B: Group with resolve_aliases (parallel) - recommended for performance
+    - Note: Task implemented in document_tasks.py (not separate file) to follow existing pipeline pattern
+  - [x] Add `citation_extraction` to PIPELINE_STAGES in document_tasks.py
+  - [x] Chain task in pipeline after resolve_aliases
 
 - [x] Task 9: Create Citation API Endpoints (AC: #3, #4)
   - [x] Create `backend/app/api/routes/citations.py`
@@ -558,10 +555,62 @@ This story enables:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+- Code Review: 2026-01-13 - Found 12 issues, all resolved
+
 ### Completion Notes List
 
+1. **Task 8 Implementation Note:** The `extract_citations` task is implemented in `document_tasks.py` (lines 2779-3118) rather than a separate `citation_tasks.py` file. This follows the existing pattern of keeping all pipeline tasks together for maintainability.
+
+2. **Schema Note:** Database column is named `section` (not `section_number`) to match original migration. The Pydantic model maps this to `section_number` for API consistency with AC #3.
+
+3. **Test Coverage Note:** Integration tests primarily use mocks for database operations. For real RLS testing, run against actual Supabase instance.
+
+4. **Async/Sync Pattern:** Storage service methods use `asyncio.to_thread()` to wrap synchronous Supabase client calls, following the established pattern from `MIGGraphService` and `JobTracker`. This prevents blocking the event loop in API routes.
+
 ### File List
+
+**New Files Created:**
+
+Backend - Citation Engine:
+- `backend/app/engines/citation/__init__.py` - Module exports
+- `backend/app/engines/citation/abbreviations.py` - 120+ Act abbreviation mappings
+- `backend/app/engines/citation/prompts.py` - Gemini extraction prompts
+- `backend/app/engines/citation/extractor.py` - CitationExtractor service
+- `backend/app/engines/citation/storage.py` - CitationStorageService
+- `backend/app/engines/citation/discovery.py` - ActDiscoveryService
+
+Backend - Models:
+- `backend/app/models/citation.py` - Pydantic models for citations
+
+Backend - API:
+- `backend/app/api/routes/citations.py` - Citation API endpoints
+
+Backend - Tests:
+- `backend/tests/engines/citation/__init__.py` - Test package init
+- `backend/tests/engines/citation/test_extractor.py` - Extractor unit tests
+- `backend/tests/engines/citation/test_abbreviations.py` - Abbreviation tests
+- `backend/tests/engines/citation/test_storage.py` - Storage tests
+- `backend/tests/engines/citation/test_discovery.py` - Discovery tests
+- `backend/tests/api/routes/test_citations.py` - API route tests
+- `backend/tests/integration/test_citation_extraction.py` - Integration tests
+
+Frontend:
+- `frontend/src/types/citation.ts` - TypeScript types
+- `frontend/src/lib/api/citations.ts` - API client functions
+
+Database:
+- `supabase/migrations/20260106000006_create_citations_table.sql` - Citations table
+- `supabase/migrations/20260106000007_create_act_resolutions_table.sql` - Act resolutions table
+- `supabase/migrations/20260114000002_enhance_citations_table.sql` - Additional columns
+
+**Modified Files:**
+
+- `backend/app/main.py` - Registered citations router
+- `backend/app/models/__init__.py` - Exported citation models
+- `backend/app/workers/tasks/document_tasks.py` - Added `extract_citations` task (lines 2779-3118), added `citation_extraction` to PIPELINE_STAGES
+- `backend/app/services/pubsub_service.py` - Added citation progress broadcasting functions
+- `frontend/src/types/index.ts` - Exported citation types

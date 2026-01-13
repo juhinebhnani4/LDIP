@@ -16,6 +16,10 @@ from typing import Final
 # Maps abbreviated forms to canonical Act names
 # Key: lowercase abbreviation pattern (can include variations)
 # Value: (canonical_name, year if known)
+#
+# Note: `Final` provides static type-checker enforcement only.
+# Dictionary contents are immutable at runtime by convention.
+# Do not modify this dictionary after module load.
 ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     # -------------------------------------------------------------------------
     # Criminal Law
@@ -312,7 +316,9 @@ def get_canonical_name(abbreviated: str) -> tuple[str, int | None] | None:
         >>> get_canonical_name("NI Act")
         ("Negotiable Instruments Act", 1881)
         >>> get_canonical_name("SARFAESI")
-        ("Securitisation and Reconstruction of Financial Assets...", 2002)
+        ("Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act", 2002)
+        >>> get_canonical_name("Unknown Act")
+        None
     """
     key = _normalize_key(abbreviated)
 

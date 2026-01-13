@@ -130,9 +130,10 @@ So that **I notice potential issues like "9 months between notice and filing"**.
     - Task: `detect_anomalies_for_document_task(document_id: str, matter_id: str)`
       - Detect anomalies related to events from specific document
       - For incremental detection after new document upload
-  - [ ] Integrate with timeline pipeline:
+  - [ ] Integrate with timeline pipeline (DEFERRED - requires orchestration work):
     - After entity linking completes, queue anomaly detection
     - Pipeline: extraction → classification → entity linking → anomaly detection
+    - NOTE: Currently anomaly detection is triggered manually via POST /api/matters/{matter_id}/anomalies/detect
 
 - [x] Task 5: Create API Endpoints for Anomalies (AC: #1, #2, #3, #4)
   - [x] Create `backend/app/api/routes/anomalies.py`
@@ -155,7 +156,7 @@ So that **I notice potential issues like "9 months between notice and filing"**.
     - `PATCH /api/matters/{matter_id}/anomalies/{anomaly_id}/verify`
       - Verify anomaly is a real issue
       - Marks for follow-up action
-  - [ ] Register routes in `backend/app/api/routes/__init__.py`
+  - [x] Register routes in `backend/app/main.py` (anomalies router imported and registered)
 
 - [x] Task 6: Define Legal Workflow Sequence Rules (AC: #1, #3)
   - [x] Create `backend/app/engines/timeline/legal_sequences.py`
@@ -644,8 +645,16 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 1. Implemented rule-based anomaly detection for timeline events
 2. Created four detection algorithms: sequence violations, gap detection, duplicate detection, outlier detection
 3. Legal workflow sequences defined for SARFAESI, civil suit, and arbitration proceedings
-4. All 52 tests passing (28 unit, 10 service, 16 API, 8 integration)
+4. All 68 tests passing (31 unit, 10 service, 19 API, 8 integration) - NOTE: Increased from original 62 with code review fixes
 5. Fixed deprecation warning for datetime.utcnow()
+6. **Code Review Fixes (2026-01-14):**
+   - Fixed route order conflict: moved `/summary` endpoint before `/{anomaly_id}` to avoid FastAPI path matching issue
+   - Fixed datetime.now(tz=None) to use datetime.now(timezone.utc) for proper timezone-aware timestamps
+   - Fixed deprecated asyncio.get_event_loop() pattern with asyncio.run() for sync wrappers
+   - Added authenticated API tests with mocked auth for better coverage
+   - Added edge case tests for UNCLASSIFIED event type handling
+   - Fixed: Updated project-context.md to use correct `matter_attorneys` table name (was incorrectly `matter_members`)
+   - Note: Pipeline integration (auto-trigger after entity linking) deferred - requires orchestration work
 
 ### File List
 

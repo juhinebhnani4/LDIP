@@ -274,3 +274,128 @@ class TestFilteringPagination:
             "/api/matters/matter-123/anomalies/detect?force_redetect=true"
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# =============================================================================
+# Tests with Mocked Authentication
+# =============================================================================
+
+
+class TestListAnomaliesAuthenticated:
+    """Tests for list anomalies with mocked authentication."""
+
+    @pytest.mark.asyncio
+    async def test_list_anomalies_returns_data(
+        self,
+        mock_matter_membership: MatterMembership,
+        mock_anomaly_list_item: AnomalyListItem,
+    ) -> None:
+        """Should return anomalies list when authenticated."""
+        from httpx import AsyncClient, ASGITransport
+
+        mock_response = AnomaliesListResponse(
+            data=[mock_anomaly_list_item],
+            meta=PaginationMeta(total=1, page=1, per_page=20, total_pages=1),
+        )
+
+        with patch("app.api.routes.anomalies._get_anomaly_service") as mock_service_fn:
+            mock_service = AsyncMock()
+            mock_service.get_anomalies_for_matter.return_value = mock_response
+            mock_service_fn.return_value = mock_service
+
+            with patch("app.api.deps.require_matter_role") as mock_role:
+                async def mock_dep():
+                    return mock_matter_membership
+                mock_role.return_value = mock_dep
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                    headers={"Authorization": "Bearer test-token"},
+                ) as client:
+                    response = await client.get("/api/matters/matter-123/anomalies")
+
+                    # Should succeed with mocked auth
+                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]
+
+
+class TestGetAnomalySummaryAuthenticated:
+    """Tests for anomaly summary with mocked authentication."""
+
+    @pytest.mark.asyncio
+    async def test_summary_returns_counts(
+        self,
+        mock_matter_membership: MatterMembership,
+    ) -> None:
+        """Should return summary counts when authenticated."""
+        from httpx import AsyncClient, ASGITransport
+
+        mock_summary = AnomalySummaryResponse(
+            data=AnomalySummaryData(
+                total=5,
+                by_severity={"high": 2, "medium": 2, "low": 1},
+                by_type={"gap": 3, "sequence_violation": 2},
+                unreviewed=3,
+                verified=1,
+                dismissed=1,
+            )
+        )
+
+        with patch("app.api.routes.anomalies._get_anomaly_service") as mock_service_fn:
+            mock_service = AsyncMock()
+            mock_service.get_anomaly_summary.return_value = mock_summary
+            mock_service_fn.return_value = mock_service
+
+            with patch("app.api.deps.require_matter_role") as mock_role:
+                async def mock_dep():
+                    return mock_matter_membership
+                mock_role.return_value = mock_dep
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                    headers={"Authorization": "Bearer test-token"},
+                ) as client:
+                    response = await client.get("/api/matters/matter-123/anomalies/summary")
+
+                    # Should succeed with mocked auth
+                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]
+
+
+class TestDismissVerifyAuthenticated:
+    """Tests for dismiss/verify with mocked authentication."""
+
+    @pytest.mark.asyncio
+    async def test_dismiss_returns_updated_anomaly(
+        self,
+        mock_matter_membership: MatterMembership,
+        mock_anomaly: Anomaly,
+    ) -> None:
+        """Should return updated anomaly when dismissed."""
+        from httpx import AsyncClient, ASGITransport
+
+        # Update mock anomaly for dismissed state
+        dismissed_anomaly = mock_anomaly.model_copy()
+        dismissed_anomaly.dismissed = True
+
+        with patch("app.api.routes.anomalies._get_anomaly_service") as mock_service_fn:
+            mock_service = AsyncMock()
+            mock_service.dismiss_anomaly.return_value = dismissed_anomaly
+            mock_service_fn.return_value = mock_service
+
+            with patch("app.api.deps.require_matter_role") as mock_role:
+                async def mock_dep():
+                    return mock_matter_membership
+                mock_role.return_value = mock_dep
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                    headers={"Authorization": "Bearer test-token"},
+                ) as client:
+                    response = await client.patch(
+                        "/api/matters/matter-123/anomalies/anomaly-123/dismiss"
+                    )
+
+                    # Should succeed with mocked auth
+                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]

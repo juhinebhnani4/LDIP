@@ -199,7 +199,7 @@ async def test_get_matter(client: AsyncClient, test_matter: Matter):
 
 | Layer | Convention | Example |
 |-------|------------|---------|
-| Database tables | snake_case, plural | `matters`, `matter_members` |
+| Database tables | snake_case, plural | `matters`, `matter_attorneys` |
 | Database columns | snake_case | `matter_id`, `created_at` |
 | API endpoints | plural nouns | `/api/matters`, `/api/documents` |
 | API path params | snake_case in braces | `{matter_id}` |
@@ -313,7 +313,7 @@ CREATE POLICY "Users access own matters only"
 ON {table_name} FOR ALL
 USING (
   matter_id IN (
-    SELECT matter_id FROM matter_members
+    SELECT matter_id FROM matter_attorneys
     WHERE user_id = auth.uid()
   )
 );

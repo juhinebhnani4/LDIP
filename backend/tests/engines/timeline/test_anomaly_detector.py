@@ -511,3 +511,93 @@ class TestFullAnomalyDetection:
             # Event IDs should be from our test events
             for event_id in anomaly.event_ids:
                 assert event_id in ["event-abc-123", "event-xyz-456"]
+
+
+# =============================================================================
+# Tests for Edge Cases
+# =============================================================================
+
+
+class TestEdgeCases:
+    """Tests for edge cases documented in Dev Notes."""
+
+    @pytest.mark.asyncio
+    async def test_all_events_unclassified_skips_sequence_validation(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
+        """Should skip sequence validation when all events are UNCLASSIFIED.
+
+        Dev Note: All events unclassified: Skip sequence validation,
+        still check for duplicates/outliers.
+        """
+        events = [
+            create_event("e1", date(2024, 1, 10), EventType.UNCLASSIFIED, "Event A"),
+            create_event("e2", date(2024, 2, 15), EventType.UNCLASSIFIED, "Event B"),
+            create_event("e3", date(2024, 3, 20), EventType.UNCLASSIFIED, "Event C"),
+        ]
+
+        anomalies = await detector.detect_anomalies(
+            matter_id="matter-123",
+            events=events,
+            case_type=CaseType.SARFAESI,
+        )
+
+        # No sequence violations should be detected for UNCLASSIFIED events
+        seq_violations = [
+            a for a in anomalies
+            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+        ]
+        assert len(seq_violations) == 0
+
+    @pytest.mark.asyncio
+    async def test_mixed_classified_and_unclassified_events(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
+        """Should only validate sequence for classified events."""
+        events = [
+            create_event("e1", date(2024, 1, 10), EventType.UNCLASSIFIED, "Unclassified event"),
+            # Sequence violation: hearing before filing
+            create_event("e2", date(2024, 2, 15), EventType.HEARING, "Hearing held"),
+            create_event("e3", date(2024, 3, 20), EventType.FILING, "Filed"),
+            create_event("e4", date(2024, 4, 25), EventType.UNCLASSIFIED, "Another unclassified"),
+        ]
+
+        anomalies = await detector.detect_anomalies(
+            matter_id="matter-123",
+            events=events,
+            case_type=CaseType.SARFAESI,
+        )
+
+        # Should still detect sequence violation between HEARING and FILING
+        seq_violations = [
+            a for a in anomalies
+            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+        ]
+        assert len(seq_violations) >= 1
+
+    @pytest.mark.asyncio
+    async def test_document_type_events_not_in_sequence(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
+        """Should not flag DOCUMENT type events in sequence violations.
+
+        DOCUMENT is not part of legal workflow sequence.
+        """
+        events = [
+            create_event("e1", date(2024, 1, 10), EventType.DOCUMENT, "Document created"),
+            create_event("e2", date(2024, 2, 15), EventType.DOCUMENT, "Another doc"),
+            create_event("e3", date(2024, 3, 20), EventType.DOCUMENT, "Third doc"),
+        ]
+
+        anomalies = await detector.detect_anomalies(
+            matter_id="matter-123",
+            events=events,
+            case_type=CaseType.SARFAESI,
+        )
+
+        # No sequence violations for DOCUMENT-only events
+        seq_violations = [
+            a for a in anomalies
+            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+        ]
+        assert len(seq_violations) == 0

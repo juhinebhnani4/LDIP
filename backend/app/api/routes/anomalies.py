@@ -53,6 +53,41 @@ def _get_timeline_service() -> TimelineService:
 
 
 # =============================================================================
+# Anomaly Summary (MUST be before /{anomaly_id} to avoid route conflict)
+# =============================================================================
+
+
+@router.get(
+    "/summary",
+    response_model=AnomalySummaryResponse,
+    responses={
+        200: {"description": "Anomaly summary counts"},
+        404: {"model": AnomalyErrorResponse, "description": "Matter not found"},
+    },
+)
+async def get_anomaly_summary(
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    anomaly_service: AnomalyService = Depends(_get_anomaly_service),
+) -> AnomalySummaryResponse:
+    """Get anomaly summary counts for attention banner.
+
+    Returns counts by severity, type, and review status.
+
+    Args:
+        matter_id: Matter UUID.
+        membership: Validated matter membership.
+        anomaly_service: Anomaly service.
+
+    Returns:
+        AnomalySummaryResponse with summary counts.
+    """
+    return await anomaly_service.get_anomaly_summary(matter_id)
+
+
+# =============================================================================
 # List Anomalies
 # =============================================================================
 
@@ -174,41 +209,6 @@ async def get_anomaly(
         )
 
     return AnomalyDetailResponse(data=anomaly)
-
-
-# =============================================================================
-# Anomaly Summary
-# =============================================================================
-
-
-@router.get(
-    "/summary",
-    response_model=AnomalySummaryResponse,
-    responses={
-        200: {"description": "Anomaly summary counts"},
-        404: {"model": AnomalyErrorResponse, "description": "Matter not found"},
-    },
-)
-async def get_anomaly_summary(
-    matter_id: str = Path(..., description="Matter UUID"),
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
-    ),
-    anomaly_service: AnomalyService = Depends(_get_anomaly_service),
-) -> AnomalySummaryResponse:
-    """Get anomaly summary counts for attention banner.
-
-    Returns counts by severity, type, and review status.
-
-    Args:
-        matter_id: Matter UUID.
-        membership: Validated matter membership.
-        anomaly_service: Anomaly service.
-
-    Returns:
-        AnomalySummaryResponse with summary counts.
-    """
-    return await anomaly_service.get_anomaly_summary(matter_id)
 
 
 # =============================================================================

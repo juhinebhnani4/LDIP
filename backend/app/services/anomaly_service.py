@@ -6,7 +6,7 @@ for attorney review.
 Story 4-4: Timeline Anomaly Detection
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from math import ceil
 
@@ -151,9 +151,20 @@ class AnomalyService:
     ) -> list[str]:
         """Synchronous wrapper for save_anomalies (for Celery tasks)."""
         import asyncio
-        return asyncio.get_event_loop().run_until_complete(
-            self.save_anomalies(anomalies)
-        )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already in async context (shouldn't happen in Celery, but handle it)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, self.save_anomalies(anomalies))
+                return future.result()
+        else:
+            return asyncio.run(self.save_anomalies(anomalies))
 
     async def get_anomalies_for_matter(
         self,
@@ -341,7 +352,7 @@ class AnomalyService:
                     "dismissed": True,
                     "verified": False,  # Can't be both
                     "verified_by": user_id,
-                    "verified_at": datetime.now(tz=None).isoformat(),
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
                 })
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)
@@ -394,7 +405,7 @@ class AnomalyService:
                     "verified": True,
                     "dismissed": False,  # Can't be both
                     "verified_by": user_id,
-                    "verified_at": datetime.now(tz=None).isoformat(),
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
                 })
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)
@@ -476,9 +487,20 @@ class AnomalyService:
     ) -> int:
         """Synchronous wrapper for delete_anomalies_for_matter (for Celery tasks)."""
         import asyncio
-        return asyncio.get_event_loop().run_until_complete(
-            self.delete_anomalies_for_matter(matter_id)
-        )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already in async context (shouldn't happen in Celery, but handle it)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, self.delete_anomalies_for_matter(matter_id))
+                return future.result()
+        else:
+            return asyncio.run(self.delete_anomalies_for_matter(matter_id))
 
     async def get_anomaly_summary(
         self,

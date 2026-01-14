@@ -2,14 +2,33 @@
 
 Story 7-1: Added SessionMemoryService and Redis client.
 Story 7-2: Added MatterMemoryRepository for archived sessions.
+Story 7-3: Added MatterMemoryService for full matter memory.
 """
 
-from app.models.memory import ArchivedSession
+from app.models.memory import (
+    ArchivedSession,
+    CachedEntity,
+    EntityGraphCache,
+    EntityRelationship,
+    QueryHistory,
+    QueryHistoryEntry,
+    TimelineCache,
+    TimelineCacheEntry,
+)
 from app.services.memory.matter import (
     ARCHIVED_SESSION_TYPE,
+    ENTITY_GRAPH_TYPE,
+    QUERY_HISTORY_TYPE,
+    TIMELINE_CACHE_TYPE,
     MatterMemoryRepository,
     get_matter_memory_repository,
+    is_cache_stale,
     reset_matter_memory_repository,
+)
+from app.services.memory.matter_service import (
+    MatterMemoryService,
+    get_matter_memory_service,
+    reset_matter_memory_service,
 )
 from app.services.memory.redis_client import (
     get_redis_client,
@@ -62,10 +81,26 @@ __all__ = [
     "SessionMemoryService",
     "get_session_memory_service",
     "reset_session_memory_service",
-    # Matter memory repository (Story 7-2)
+    # Matter memory repository (Story 7-2, 7-3)
     "ARCHIVED_SESSION_TYPE",
+    "QUERY_HISTORY_TYPE",
+    "TIMELINE_CACHE_TYPE",
+    "ENTITY_GRAPH_TYPE",
     "ArchivedSession",
     "MatterMemoryRepository",
     "get_matter_memory_repository",
     "reset_matter_memory_repository",
+    "is_cache_stale",
+    # Matter memory service (Story 7-3)
+    "MatterMemoryService",
+    "get_matter_memory_service",
+    "reset_matter_memory_service",
+    # Matter memory models (Story 7-3)
+    "QueryHistoryEntry",
+    "QueryHistory",
+    "TimelineCacheEntry",
+    "TimelineCache",
+    "CachedEntity",
+    "EntityRelationship",
+    "EntityGraphCache",
 ]

@@ -140,7 +140,7 @@ development_status:
 
   # Epic 9: Dashboard & Upload Experience
   epic-9: in-progress  # First story created 2026-01-15
-  9-1-dashboard-header: code-review  # 48 tests passing 2026-01-15 - Header, notifications, user dropdown, global search
+  9-1-dashboard-header: done  # 48 tests passing 2026-01-15 - Header, notifications, user dropdown, global search - Code review passed
   9-2-matter-cards-grid: backlog
   9-3-activity-feed-quick-stats: backlog
   9-4-upload-stage-1-2: backlog

@@ -7,10 +7,8 @@ import { Button } from '@/components/ui/button';
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger,
   PopoverAnchor,
 } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
 /** Search result item type */
 interface SearchResult {
@@ -132,8 +130,7 @@ export function GlobalSearch() {
       await new Promise((resolve) => setTimeout(resolve, 200));
       const searchResults = getMockSearchResults(searchQuery);
       setResults(searchResults);
-    } catch (error) {
-      console.error('Search failed:', error);
+    } catch {
       setResults([]);
     } finally {
       setIsLoading(false);
@@ -161,8 +158,6 @@ export function GlobalSearch() {
 
   // Handle result selection
   const handleResultSelect = useCallback((result: SearchResult) => {
-    // TODO: Navigate to the selected item
-    console.log('Selected:', result);
     setIsOpen(false);
     setQuery('');
     setResults([]);

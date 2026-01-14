@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NotificationsDropdown } from './NotificationsDropdown';
@@ -38,13 +39,13 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
       <div className="container flex h-14 items-center gap-4 px-4 sm:px-6">
         {/* Logo - Left side */}
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href="/"
             className="flex items-center gap-2 font-bold text-lg"
             aria-label="LDIP Home"
           >
             <span className="text-primary">LDIP</span>
-          </a>
+          </Link>
         </div>
 
         {/* Global Search - Center (flex-1 to take available space) */}

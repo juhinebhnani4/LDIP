@@ -4,6 +4,8 @@ Tests name similarity algorithms, component extraction, and alias matching.
 Story: 2c-2 Alias Resolution
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.services.mig.entity_resolver import (
@@ -15,6 +17,9 @@ from app.services.mig.entity_resolver import (
     LOW_SIMILARITY_THRESHOLD,
 )
 from app.models.entity import EntityNode, EntityType
+
+# Fixed timestamp for test data
+TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=timezone.utc)
 
 
 # =============================================================================
@@ -40,6 +45,8 @@ def sample_entities() -> list[EntityNode]:
             metadata={},
             mention_count=5,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         ),
         EntityNode(
             id="entity-2",
@@ -49,6 +56,8 @@ def sample_entities() -> list[EntityNode]:
             metadata={},
             mention_count=3,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         ),
         EntityNode(
             id="entity-3",
@@ -58,6 +67,8 @@ def sample_entities() -> list[EntityNode]:
             metadata={},
             mention_count=2,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         ),
         EntityNode(
             id="entity-4",
@@ -67,6 +78,8 @@ def sample_entities() -> list[EntityNode]:
             metadata={},
             mention_count=10,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         ),
     ]
 
@@ -295,6 +308,8 @@ class TestFindPotentialAliases:
             metadata={},
             mention_count=1,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
         entity2 = EntityNode(
             id="test-2",
@@ -304,6 +319,8 @@ class TestFindPotentialAliases:
             metadata={},
             mention_count=1,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
 
         candidates = resolver.find_potential_aliases(entity1, [entity1, entity2])

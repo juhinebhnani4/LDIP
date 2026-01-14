@@ -8,7 +8,7 @@ and assets mentioned in legal documents.
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # =============================================================================
@@ -78,6 +78,24 @@ class EntityNode(EntityNodeBase):
     aliases: list[str] = Field(default_factory=list, description="Known aliases")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def coerce_metadata_none(cls, v: dict | None) -> dict:
+        """Convert None to empty dict for metadata from DB."""
+        return v if v is not None else {}
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def coerce_aliases_none(cls, v: list | None) -> list:
+        """Convert None to empty list for aliases from DB."""
+        return v if v is not None else []
+
+    @field_validator("mention_count", mode="before")
+    @classmethod
+    def coerce_mention_count_none(cls, v: int | None) -> int:
+        """Convert None to 0 for mention_count from DB."""
+        return v if v is not None else 0
 
 
 class EntityNodeWithRelations(EntityNode):

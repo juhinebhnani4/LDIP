@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import structlog
-from rapidfuzz.distance import JaroWinkler
+from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 
 from app.core.config import get_settings
 from app.models.entity import EntityEdgeCreate, EntityNode, EntityType, RelationshipType
@@ -201,7 +201,8 @@ class EntityResolver:
 
     def __init__(self) -> None:
         """Initialize entity resolver."""
-        self._jaro = JaroWinkler()
+        # JaroWinkler is a module, use its functions directly
+        self._jaro = JaroWinklerModule
 
     # =========================================================================
     # Public Methods
@@ -279,6 +280,18 @@ class EntityResolver:
         parts = name.split()
         if not parts:
             return components
+
+        # Expand combined initials like "N.D." into ["N.", "D."]
+        expanded_parts = []
+        for part in parts:
+            if self._is_combined_initials(part):
+                # Split "N.D." into ["N.", "D."]
+                for initial in part.split("."):
+                    if initial:
+                        expanded_parts.append(initial + ".")
+            else:
+                expanded_parts.append(part)
+        parts = expanded_parts
 
         # Extract title if present
         first_part_lower = parts[0].lower().rstrip(".")
@@ -997,7 +1010,11 @@ class EntityResolver:
         if comp1_has_initials == comp2_has_initials:
             if comp1.initials.lower() == comp2.initials.lower():
                 return 1.0
-            return 0.5 if comp1.initials and comp2.initials else 0.0
+            # Neither has initials style names - this metric not applicable
+            if not comp1_has_initials:
+                return 0.0
+            # Both have initials but they don't match
+            return 0.0
 
         # One has initials, other has full names
         initials_comp = comp1 if comp1_has_initials else comp2
@@ -1060,13 +1077,26 @@ class EntityResolver:
         return self._jaro.normalized_similarity(name1, name2)
 
     def _is_initial(self, name_part: str) -> bool:
-        """Check if a name part is an initial (e.g., "N.", "N", "N.D.")."""
+        """Check if a name part is a single initial (e.g., "N.", "N")."""
         if not name_part:
             return False
 
-        # Remove periods and check if it's 1-2 characters
+        # Remove periods and check if it's exactly 1 character
         stripped = name_part.replace(".", "")
-        return len(stripped) <= 2 and stripped.isalpha()
+        return len(stripped) == 1 and stripped.isalpha()
+
+    def _is_combined_initials(self, name_part: str) -> bool:
+        """Check if a name part is combined initials (e.g., "N.D.", "A.B.C.")."""
+        if not name_part:
+            return False
+
+        # Must contain at least one period
+        if "." not in name_part:
+            return False
+
+        # Split by period and check each part is a single letter
+        parts = [p for p in name_part.split(".") if p]
+        return len(parts) >= 2 and all(len(p) == 1 and p.isalpha() for p in parts)
 
     def _has_initials(self, comp: NameComponents) -> bool:
         """Check if name components contain initials."""

@@ -198,7 +198,10 @@ class TestPartialProgressTracker:
             }
         }
 
-        with patch("asyncio.new_event_loop") as mock_loop:
+        with (
+            patch("asyncio.new_event_loop") as mock_loop,
+            patch("asyncio.set_event_loop"),
+        ):
             mock_event_loop = MagicMock()
             mock_event_loop.run_until_complete.return_value = mock_job
             mock_loop.return_value = mock_event_loop
@@ -262,7 +265,10 @@ class TestPartialProgressTracker:
         progress = StageProgress(stage_name="embedding")
         progress.mark_processed("chunk-1")
 
-        with patch("asyncio.new_event_loop") as mock_loop:
+        with (
+            patch("asyncio.new_event_loop") as mock_loop,
+            patch("asyncio.set_event_loop"),
+        ):
             mock_event_loop = MagicMock()
             mock_event_loop.run_until_complete.return_value = mock_job
             mock_loop.return_value = mock_event_loop

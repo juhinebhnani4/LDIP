@@ -9,6 +9,8 @@ Tests the alias management endpoints:
 Story: 2c-2 Alias Resolution
 """
 
+from datetime import datetime, timezone
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +18,9 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.entity import EntityNode, EntityType
+
+# Fixed timestamp for test data
+TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=timezone.utc)
 
 
 # =============================================================================
@@ -40,6 +45,8 @@ def mock_entity() -> EntityNode:
         metadata={},
         mention_count=5,
         aliases=["N.D. Jobalia", "Mr. Jobalia"],
+        created_at=TEST_TIMESTAMP,
+        updated_at=TEST_TIMESTAMP,
     )
 
 
@@ -151,6 +158,8 @@ class TestAddEntityAlias:
             metadata={},
             mention_count=mock_entity.mention_count,
             aliases=mock_entity.aliases + ["Nirav J."],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
         mock_service.add_alias_to_entity.return_value = updated_entity
         mock_mig_service.return_value = mock_service
@@ -229,6 +238,8 @@ class TestRemoveEntityAlias:
             metadata={},
             mention_count=mock_entity.mention_count,
             aliases=["Mr. Jobalia"],  # N.D. Jobalia removed
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
         mock_service.remove_alias_from_entity.return_value = updated_entity
         mock_mig_service.return_value = mock_service
@@ -305,6 +316,8 @@ class TestMergeEntities:
             metadata={},
             mention_count=3,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
 
         mock_service = AsyncMock()
@@ -382,6 +395,8 @@ class TestMergeEntities:
             metadata={},
             mention_count=10,
             aliases=[],
+            created_at=TEST_TIMESTAMP,
+            updated_at=TEST_TIMESTAMP,
         )
 
         mock_service = AsyncMock()

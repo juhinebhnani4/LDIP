@@ -184,8 +184,9 @@ class TestSerialization:
         data = json.loads(serialized)
 
         # Check that dates are serialized as ISO format with marker
+        # Uses __timeline_cache_date__ marker to avoid collision with user data
         event_data = data["events"][0]
-        assert "__date__" in str(event_data["event_date"])
+        assert "__timeline_cache_date__" in str(event_data["event_date"])
 
     def test_serialize_enum_objects(self, sample_timeline):
         """Test that enum objects are properly serialized."""

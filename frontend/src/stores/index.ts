@@ -39,6 +39,30 @@ export {
   selectNavigationInfo,
 } from './splitViewStore';
 
+// Verification store for finding verification queue (Story 8-5)
+export {
+  useVerificationStore,
+  selectQueue,
+  selectStats,
+  selectFilters,
+  selectSelectedIds,
+  selectIsLoading as selectVerificationIsLoading,
+  selectIsLoadingStats,
+  selectError as selectVerificationError,
+  selectMatterId as selectVerificationMatterId,
+  selectSelectedCount,
+  selectHasSelection,
+  selectAllSelected,
+  selectFilteredQueue,
+  selectCompletionPercent,
+  selectFindingTypes,
+  getConfidenceTier,
+  getConfidenceColorClass,
+  getConfidenceLabel,
+  formatFindingType,
+  getFindingTypeIcon,
+} from './verificationStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

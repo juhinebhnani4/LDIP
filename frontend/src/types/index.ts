@@ -164,3 +164,24 @@ export type {
 } from './pdf';
 
 export { HIGHLIGHT_COLORS, PDF_KEYBOARD_SHORTCUTS } from './pdf';
+
+// Verification types (Story 8-5: Verification Queue UI)
+export type {
+  ApproveVerificationRequest,
+  BulkVerificationRequest,
+  BulkVerificationResponse as FindingBulkVerificationResponse,
+  ConfidenceTier,
+  FindingVerification,
+  FlagVerificationRequest,
+  RejectVerificationRequest,
+  VerificationFilters,
+  VerificationListResponse as FindingVerificationListResponse,
+  VerificationQueueItem,
+  VerificationQueueResponse,
+  VerificationResponse as FindingVerificationResponse,
+  VerificationStats,
+  VerificationStatsResponse,
+  VerificationView,
+} from './verification';
+
+export { VerificationDecision, VerificationRequirement } from './verification';

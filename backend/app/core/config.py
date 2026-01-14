@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     safety_llm_timeout: float = 10.0  # Hard timeout for safety LLM calls (seconds)
     safety_llm_enabled: bool = True  # Feature flag to enable/disable LLM safety check
 
+    # Language Policing Configuration (Story 8-3: Output Sanitization)
+    language_policing_enabled: bool = True  # Master switch for language policing
+    policing_llm_enabled: bool = True  # Feature flag to enable/disable LLM polish
+    policing_llm_timeout: float = 10.0  # Hard timeout for policing LLM calls (seconds)
+
     # OCR Validation Thresholds
     ocr_validation_gemini_threshold: float = 0.85  # Below this -> Gemini validation
     ocr_validation_human_threshold: float = 0.50   # Below this -> Human review

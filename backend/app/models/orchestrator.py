@@ -410,6 +410,12 @@ class OrchestratorResult(BaseModel):
         description="Suggested safe alternative query",
     )
 
+    # Story 8-3: Language policing metadata (Task 7.4)
+    policing_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metadata from language policing (replacements_count, quotes_preserved, etc.)",
+    )
+
 
 class OrchestratorResponse(BaseModel):
     """API response wrapper for orchestrator execution.

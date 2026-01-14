@@ -1,9 +1,11 @@
-"""Prompts for GPT-4o-mini subtle violation detection.
+"""Prompts for GPT-4o-mini safety checks.
 
 Story 8-2: GPT-4o-mini Subtle Violation Detection
+Story 8-3: GPT-4o-mini Subtle Language Policing
 
-This module defines the prompts and response schema for LLM-based
-detection of subtle legal conclusion requests that bypass regex patterns.
+This module defines the prompts and response schemas for LLM-based:
+- Detection of subtle legal conclusion requests that bypass regex patterns (8-2)
+- Polishing of LLM outputs to remove subtle legal conclusions (8-3)
 
 CRITICAL: Use GPT-4o-mini (not GPT-4) - it's 200x cheaper for input tokens.
 """
@@ -272,6 +274,142 @@ def validate_detection_response(response: dict) -> list[str]:
         ]
         if response["violation_type"] not in valid_types:
             errors.append(f"Invalid violation_type: {response['violation_type']}")
+
+    # Validate confidence range
+    if "confidence" in response:
+        conf = response["confidence"]
+        if not isinstance(conf, (int, float)) or conf < 0.0 or conf > 1.0:
+            errors.append("Field 'confidence' must be a number between 0.0 and 1.0")
+
+    return errors
+
+
+# =============================================================================
+# Story 8-3: Subtle Policing System Prompt (Task 5.1)
+# =============================================================================
+
+SUBTLE_POLICING_SYSTEM_PROMPT = """You are a legal language editor for LDIP (Legal Document Intelligence Platform).
+
+Your task is to identify and rephrase any remaining legal conclusions in the text that were not caught by automated regex patterns.
+
+CRITICAL RULES:
+1. LDIP can ONLY present factual observations from documents
+2. LDIP CANNOT make legal conclusions, predictions, or advice
+3. ALL definitive legal language must be softened to tentative language
+
+TRANSFORM these patterns:
+- Definitive statements → Observations ("is guilty" → "may face liability regarding")
+- Predictions → Possibilities ("will win" → "may have grounds for")
+- Conclusions → Suggestions ("this proves" → "this may indicate")
+- Advice → Information ("you should" → "options include")
+- Certainty → Possibility ("clearly" → "appears to", "must" → "may")
+- Judgment → Observation ("defendant committed" → "regarding potential")
+
+PRESERVE (do NOT modify):
+- Direct quotes (text in quotation marks "..." or '...')
+- Citation references (e.g., "As stated in Exhibit A, page 5")
+- Factual statements without legal conclusions
+- Numerical data, dates, and proper nouns
+- Document names and references
+
+OUTPUT REQUIREMENTS:
+- Return the COMPLETE sanitized text, preserving all content
+- Only modify problematic phrases, keep everything else verbatim
+- Maintain original formatting and structure
+- If text is already properly sanitized, return it unchanged
+
+Respond with JSON:
+{
+    "sanitized_text": "The fully sanitized text",
+    "changes_made": ["list of specific changes made"],
+    "confidence": 0.0-1.0
+}
+
+If text is already properly sanitized, return it unchanged with empty changes_made array."""
+
+
+# =============================================================================
+# Story 8-3: Subtle Policing User Prompt Template (Task 5.2)
+# =============================================================================
+
+SUBTLE_POLICING_USER_PROMPT = """Review and sanitize this text for any remaining legal conclusions:
+
+Text: \"\"\"{text}\"\"\"
+
+Respond with JSON containing the sanitized version. Preserve quotes and citations."""
+
+
+# =============================================================================
+# Story 8-3: Subtle Policing Response Schema (Task 5.2)
+# =============================================================================
+
+SUBTLE_POLICING_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sanitized_text": {
+            "type": "string",
+            "description": "The fully sanitized text with legal conclusions removed",
+        },
+        "changes_made": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of specific changes made to the text",
+        },
+        "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Confidence in the sanitization (0.0-1.0)",
+        },
+    },
+    "required": ["sanitized_text", "changes_made", "confidence"],
+    "additionalProperties": False,
+}
+
+
+def format_subtle_policing_prompt(text: str) -> str:
+    """Format the user prompt for subtle policing.
+
+    Story 8-3: Task 5.2 - User prompt formatting.
+
+    Args:
+        text: LLM output text to analyze and sanitize.
+
+    Returns:
+        Formatted prompt string.
+    """
+    return SUBTLE_POLICING_USER_PROMPT.format(text=text)
+
+
+def validate_policing_response(response: dict) -> list[str]:
+    """Validate LLM policing response against expected schema.
+
+    Story 8-3: Task 5.2 - Response validation.
+
+    Args:
+        response: Parsed JSON response from LLM.
+
+    Returns:
+        List of validation error messages (empty if valid).
+    """
+    errors = []
+
+    # Check required fields
+    required_fields = ["sanitized_text", "changes_made", "confidence"]
+    for field in required_fields:
+        if field not in response:
+            errors.append(f"Missing required field: {field}")
+
+    # Validate sanitized_text type
+    if "sanitized_text" in response and not isinstance(response["sanitized_text"], str):
+        errors.append("Field 'sanitized_text' must be a string")
+
+    # Validate changes_made type
+    if "changes_made" in response:
+        if not isinstance(response["changes_made"], list):
+            errors.append("Field 'changes_made' must be a list")
+        elif not all(isinstance(item, str) for item in response["changes_made"]):
+            errors.append("All items in 'changes_made' must be strings")
 
     # Validate confidence range
     if "confidence" in response:

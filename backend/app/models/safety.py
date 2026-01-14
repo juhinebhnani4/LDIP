@@ -1,12 +1,13 @@
-"""Safety models for query guardrails.
+"""Safety models for query guardrails and language policing.
 
 Story 8-1: Regex Pattern Detection Guardrails
 Story 8-2: GPT-4o-mini Subtle Violation Detection
+Story 8-3: Language Policing Output Sanitization
 
-These models define the structure of guardrail check results
-and violation types. Part of the Safety Layer (Epic 8).
+These models define the structure of guardrail check results,
+violation types, and language policing results. Part of the Safety Layer (Epic 8).
 
-Query Guardrails (this module) block dangerous queries before LLM processing:
+Query Guardrails block dangerous queries before LLM processing:
 - Legal advice requests (regex - Story 8-1)
 - Outcome predictions (regex - Story 8-1)
 - Liability conclusions (regex - Story 8-1)
@@ -14,6 +15,11 @@ Query Guardrails (this module) block dangerous queries before LLM processing:
 - Implicit conclusion requests (LLM - Story 8-2)
 - Indirect outcome seeking (LLM - Story 8-2)
 - Hypothetical legal advice (LLM - Story 8-2)
+
+Language Policing sanitizes LLM outputs before user display:
+- Regex replacements for legal conclusions (Story 8-3)
+- LLM polishing for subtle conclusions (Story 8-3)
+- Quote preservation for direct document quotes (Story 8-3)
 """
 
 from typing import Literal
@@ -248,4 +254,143 @@ class SafetyCheckResult(BaseModel):
     llm_check_failed: bool = Field(
         default=False,
         description="True if LLM check failed (query allowed anyway - fail open)",
+    )
+
+
+# =============================================================================
+# Story 8-3: Language Policing Models (AC #1-6)
+# =============================================================================
+
+
+class ReplacementRecord(BaseModel):
+    """Record of a single regex replacement during language policing.
+
+    Story 8-3: Task 1.2 - Track each replacement for audit trail.
+
+    Each replacement made during the sanitization process is recorded
+    with its original text, replacement text, position, and the rule
+    that triggered it.
+
+    Example:
+        >>> record = ReplacementRecord(
+        ...     original_phrase="violated Section 138",
+        ...     replacement_phrase="affected by Section 138",
+        ...     position_start=25,
+        ...     position_end=46,
+        ...     rule_id="conclusion_violated_section",
+        ... )
+    """
+
+    original_phrase: str = Field(
+        description="The original text that was replaced",
+    )
+    replacement_phrase: str = Field(
+        description="The replacement text that was inserted",
+    )
+    position_start: int = Field(
+        ge=0,
+        description="Start position of the replacement in the original text",
+    )
+    position_end: int = Field(
+        ge=0,
+        description="End position of the replacement in the original text",
+    )
+    rule_id: str = Field(
+        description="Identifier of the pattern rule that triggered this replacement",
+    )
+
+
+class QuotePreservation(BaseModel):
+    """Record of a preserved quote that was protected from sanitization.
+
+    Story 8-3: Task 1.3, AC #6 - Track preserved direct quotes.
+
+    Direct quotes from source documents must be preserved verbatim
+    during language policing. This model records what was preserved
+    and its source attribution.
+
+    Example:
+        >>> preservation = QuotePreservation(
+        ...     quoted_text='"The defendant violated the agreement"',
+        ...     source_document="Exhibit A",
+        ...     page_number=5,
+        ...     start_pos=100,
+        ...     end_pos=145,
+        ... )
+    """
+
+    quoted_text: str = Field(
+        description="The preserved quoted text including quotation marks",
+    )
+    source_document: str | None = Field(
+        default=None,
+        description="Document name if citation reference was detected",
+    )
+    page_number: int | None = Field(
+        default=None,
+        ge=1,
+        description="Page number if citation reference was detected",
+    )
+    start_pos: int = Field(
+        ge=0,
+        description="Start position of the quote in the text",
+    )
+    end_pos: int = Field(
+        ge=0,
+        description="End position of the quote in the text",
+    )
+
+
+class LanguagePolicingResult(BaseModel):
+    """Result of language policing on LLM output.
+
+    Story 8-3: Task 1.1, AC #1-6 - Complete policing result.
+
+    This is the final result returned by the language policing pipeline.
+    It combines regex-based replacements (Phase 1) and optional LLM-based
+    polishing (Phase 2) into a single sanitized output.
+
+    Pipeline:
+    1. Quote detection and protection (AC #6)
+    2. Regex replacements for obvious conclusions (AC #1-4)
+    3. LLM polish for subtle conclusions (AC #5)
+
+    Example:
+        >>> result = LanguagePolicingResult(
+        ...     original_text="The evidence proves defendant violated Section 138.",
+        ...     sanitized_text="The evidence suggests defendant affected by Section 138.",
+        ...     replacements_made=[...],
+        ...     quotes_preserved=[],
+        ...     llm_policing_applied=False,
+        ...     sanitization_time_ms=2.5,
+        ... )
+    """
+
+    original_text: str = Field(
+        description="The original unsanitized text",
+    )
+    sanitized_text: str = Field(
+        description="The sanitized text with legal conclusions removed/replaced",
+    )
+    replacements_made: list[ReplacementRecord] = Field(
+        default_factory=list,
+        description="List of all replacements made during sanitization",
+    )
+    quotes_preserved: list[QuotePreservation] = Field(
+        default_factory=list,
+        description="List of direct quotes that were protected from sanitization",
+    )
+    llm_policing_applied: bool = Field(
+        default=False,
+        description="True if LLM-based subtle policing was applied",
+    )
+    sanitization_time_ms: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Total time for sanitization in milliseconds",
+    )
+    llm_cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Cost of LLM policing call in USD (if applied)",
     )

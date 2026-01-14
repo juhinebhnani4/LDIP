@@ -1,13 +1,16 @@
 """Result Aggregator for combining engine outputs.
 
 Story 6-2: Engine Execution Ordering (AC: #4)
+Story 8-3: Language Policing Integration (AC: #7)
 
 Aggregates results from multiple engines into a unified response:
 - Merges and deduplicates source references
 - Calculates overall confidence (weighted average)
 - Formats unified human-readable response
+- Applies language policing to sanitize output (Story 8-3)
 
 CRITICAL: Sources must include engine attribution for traceability.
+CRITICAL: All unified_response text must pass through language policing (Story 8-3).
 """
 
 from functools import lru_cache
@@ -15,11 +18,16 @@ from typing import Any
 
 import structlog
 
+from app.core.config import get_settings
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
     OrchestratorResult,
     SourceReference,
+)
+from app.services.safety.language_police import (
+    LanguagePolice,
+    get_language_police,
 )
 
 logger = structlog.get_logger(__name__)
@@ -48,16 +56,18 @@ class ResultAggregator:
     """Aggregates results from multiple engines into unified response.
 
     Story 6-2: Combines engine outputs for coherent user experience.
+    Story 8-3: Applies language policing to sanitize output.
 
     Pipeline:
     1. Separate successful and failed results
     2. Merge and deduplicate source references
     3. Calculate weighted confidence score
     4. Format unified human-readable response
+    5. Apply language policing to sanitize output (Story 8-3)
 
     Example:
         >>> aggregator = get_result_aggregator()
-        >>> orchestrator_result = aggregator.aggregate_results(
+        >>> orchestrator_result = await aggregator.aggregate_results_async(
         ...     matter_id="matter-123",
         ...     query="What are the citations?",
         ...     results=[citation_result, timeline_result],
@@ -65,9 +75,24 @@ class ResultAggregator:
         ... )
     """
 
-    def __init__(self) -> None:
-        """Initialize result aggregator."""
-        logger.info("result_aggregator_initialized")
+    def __init__(
+        self,
+        language_police: LanguagePolice | None = None,
+    ) -> None:
+        """Initialize result aggregator.
+
+        Story 8-3: Task 7.2 - Initialize with language police.
+
+        Args:
+            language_police: Optional language police service (for testing).
+        """
+        self._language_police = language_police
+        self._policing_enabled = get_settings().language_policing_enabled
+
+        logger.info(
+            "result_aggregator_initialized",
+            language_policing_enabled=self._policing_enabled,
+        )
 
     def aggregate_results(
         self,
@@ -76,9 +101,134 @@ class ResultAggregator:
         results: list[EngineExecutionResult],
         wall_clock_time_ms: int,
     ) -> OrchestratorResult:
-        """Combine engine results into coherent response.
+        """Combine engine results into coherent response (sync, no policing).
 
-        Task 4.2: Main aggregation method.
+        Task 4.2: Main aggregation method (backward compatible).
+
+        NOTE: This synchronous method does NOT apply language policing.
+        Use aggregate_results_async() for full policing support.
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original user query.
+            results: Results from all engine executions.
+            wall_clock_time_ms: Actual wall clock time.
+
+        Returns:
+            OrchestratorResult with unified response (unpoliced).
+        """
+        return self._aggregate_results_internal(
+            matter_id=matter_id,
+            query=query,
+            results=results,
+            wall_clock_time_ms=wall_clock_time_ms,
+        )
+
+    async def aggregate_results_async(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+    ) -> OrchestratorResult:
+        """Combine engine results with language policing (async).
+
+        Story 8-3: Task 7.3 - Async aggregation with policing.
+
+        This is the recommended method that applies language policing
+        to sanitize the unified response before returning.
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original user query.
+            results: Results from all engine executions.
+            wall_clock_time_ms: Actual wall clock time.
+
+        Returns:
+            OrchestratorResult with sanitized unified response.
+        """
+        # First, do standard aggregation
+        orchestrator_result = self._aggregate_results_internal(
+            matter_id=matter_id,
+            query=query,
+            results=results,
+            wall_clock_time_ms=wall_clock_time_ms,
+        )
+
+        # Apply language policing if enabled
+        if self._policing_enabled and orchestrator_result.unified_response:
+            orchestrator_result = await self._apply_language_policing(orchestrator_result)
+
+        return orchestrator_result
+
+    async def _apply_language_policing(
+        self, result: OrchestratorResult
+    ) -> OrchestratorResult:
+        """Apply language policing to the unified response.
+
+        Story 8-3: Task 7.3 - Sanitize output text.
+
+        Args:
+            result: OrchestratorResult with unpoliced unified_response.
+
+        Returns:
+            OrchestratorResult with sanitized unified_response and metadata.
+        """
+        try:
+            # Get or create language police
+            if self._language_police is None:
+                self._language_police = get_language_police()
+
+            # Apply policing to unified response
+            policing_result = await self._language_police.police_output(
+                result.unified_response
+            )
+
+            # Update result with sanitized text and metadata
+            result.unified_response = policing_result.sanitized_text
+            result.policing_metadata = {
+                "policing_applied": True,
+                "replacements_count": len(policing_result.replacements_made),
+                "quotes_preserved_count": len(policing_result.quotes_preserved),
+                "llm_policing_applied": policing_result.llm_policing_applied,
+                "sanitization_time_ms": round(policing_result.sanitization_time_ms, 2),
+                "llm_cost_usd": round(policing_result.llm_cost_usd, 6),
+            }
+
+            logger.info(
+                "language_policing_applied",
+                matter_id=result.matter_id,
+                replacements_count=len(policing_result.replacements_made),
+                quotes_preserved=len(policing_result.quotes_preserved),
+                llm_applied=policing_result.llm_policing_applied,
+                time_ms=round(policing_result.sanitization_time_ms, 2),
+            )
+
+        except Exception as e:
+            # Language policing errors should NOT block output - log and continue
+            logger.error(
+                "language_policing_error",
+                matter_id=result.matter_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            result.policing_metadata = {
+                "policing_applied": False,
+                "error": str(e),
+            }
+
+        return result
+
+    def _aggregate_results_internal(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+    ) -> OrchestratorResult:
+        """Internal aggregation logic (shared by sync and async).
+
+        Task 4.2: Core aggregation logic.
 
         Args:
             matter_id: Matter UUID.

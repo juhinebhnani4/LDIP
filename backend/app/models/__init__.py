@@ -121,6 +121,10 @@ from app.models.safety import (
     GuardrailCheck,
     GuardrailPattern,
     ViolationType,
+    # Story 8-3: Language Policing models
+    LanguagePolicingResult,
+    QuotePreservation,
+    ReplacementRecord,
 )
 
 __all__ = [
@@ -238,4 +242,8 @@ __all__ = [
     "GuardrailCheck",
     "GuardrailPattern",
     "ViolationType",
+    # Language Policing models (Story 8-3)
+    "LanguagePolicingResult",
+    "QuotePreservation",
+    "ReplacementRecord",
 ]

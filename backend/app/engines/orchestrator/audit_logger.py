@@ -28,6 +28,39 @@ from app.models.orchestrator import (
 
 logger = structlog.get_logger(__name__)
 
+# =============================================================================
+# Constants
+# =============================================================================
+
+# Maximum characters for response summary in audit records.
+# Chosen to balance forensic completeness with storage efficiency.
+# 500 chars is typically enough for 2-3 sentences summarizing the response.
+RESPONSE_SUMMARY_MAX_CHARS = 500
+
+# Maximum number of RAG search results to include in audit findings.
+# Limits storage while capturing the most relevant results.
+RAG_FINDINGS_LIMIT = 5
+
+# Maximum number of source references to extract from a finding's sources list.
+# Prevents audit records from becoming too large for multi-source findings.
+SOURCE_REFS_LIMIT = 3
+
+
+def _is_valid_uuid(value: str) -> bool:
+    """Check if a string is a valid UUID format.
+
+    Args:
+        value: String to validate.
+
+    Returns:
+        True if valid UUID, False otherwise.
+    """
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
 
 class QueryAuditLogger:
     """Creates comprehensive audit records for queries.
@@ -57,14 +90,23 @@ class QueryAuditLogger:
         """Create complete audit record for a query (AC: #1-3).
 
         Args:
-            matter_id: Matter UUID.
-            user_id: User who asked the query.
+            matter_id: Matter UUID (validated format).
+            user_id: User UUID who asked the query (validated format).
             result: OrchestratorResult from query processing.
             intent_result: Optional IntentAnalysisResult for cost tracking.
 
         Returns:
             QueryAuditEntry ready for persistence.
+
+        Raises:
+            ValueError: If matter_id or user_id are not valid UUID format.
         """
+        # Validate UUID formats for forensic integrity
+        if not _is_valid_uuid(matter_id):
+            raise ValueError(f"Invalid matter_id format: {matter_id}")
+        if not _is_valid_uuid(user_id):
+            raise ValueError(f"Invalid user_id format: {user_id}")
+
         query_id = str(uuid.uuid4())
         asked_at = datetime.now(timezone.utc).isoformat()
 
@@ -214,8 +256,8 @@ class QueryAuditLogger:
                     )
 
             case EngineType.RAG:
-                # RAG engine outputs search results - limit to top 5
-                for i, rag_result in enumerate(data.get("results", [])[:5]):
+                # RAG engine outputs search results - limit to most relevant
+                for rag_result in data.get("results", [])[:RAG_FINDINGS_LIMIT]:
                     findings.append(
                         FindingAuditEntry(
                             finding_id=str(uuid.uuid4()),
@@ -260,7 +302,7 @@ class QueryAuditLogger:
                 )
             )
         elif "sources" in data and isinstance(data["sources"], list):
-            for source in data["sources"][:3]:  # Limit to 3 sources
+            for source in data["sources"][:SOURCE_REFS_LIMIT]:
                 if isinstance(source, dict) and "document_id" in source:
                     refs.append(
                         SourceReference(
@@ -344,12 +386,12 @@ class QueryAuditLogger:
             result: OrchestratorResult.
 
         Returns:
-            Concise summary string (max 500 chars).
+            Concise summary string (max RESPONSE_SUMMARY_MAX_CHARS chars).
         """
-        # Use unified_response but truncate
+        # Use unified_response but truncate to configured limit
         summary = result.unified_response
-        if len(summary) > 500:
-            summary = summary[:497] + "..."
+        if len(summary) > RESPONSE_SUMMARY_MAX_CHARS:
+            summary = summary[: RESPONSE_SUMMARY_MAX_CHARS - 3] + "..."
         return summary
 
 

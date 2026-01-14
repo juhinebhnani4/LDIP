@@ -40,11 +40,18 @@ def audit_logger():
     return QueryAuditLogger()
 
 
+# Valid UUIDs for testing
+TEST_MATTER_ID = "12345678-1234-1234-1234-123456789abc"
+TEST_USER_ID = "87654321-4321-4321-4321-cba987654321"
+TEST_MATTER_ID_2 = "22222222-2222-2222-2222-222222222222"
+TEST_USER_ID_2 = "33333333-3333-3333-3333-333333333333"
+
+
 @pytest.fixture
 def mock_intent_result():
     """Create mock intent analysis result with LLM cost."""
     return IntentAnalysisResult(
-        matter_id="matter-123",
+        matter_id=TEST_MATTER_ID,
         query="What citations are in this case?",
         classification=IntentClassification(
             intent=QueryIntent.CITATION,
@@ -66,7 +73,7 @@ def mock_intent_result():
 def mock_intent_result_fast_path():
     """Create mock intent result using fast path (no LLM cost)."""
     return IntentAnalysisResult(
-        matter_id="matter-123",
+        matter_id=TEST_MATTER_ID,
         query="section 138",
         classification=IntentClassification(
             intent=QueryIntent.CITATION,
@@ -225,7 +232,7 @@ def mock_failed_engine_result():
 def mock_orchestrator_result(mock_citation_engine_result, mock_timeline_engine_result):
     """Create mock orchestrator result with multiple engines."""
     return OrchestratorResult(
-        matter_id="matter-123",
+        matter_id=TEST_MATTER_ID,
         query="What citations and timeline events are in this case?",
         successful_engines=[EngineType.CITATION, EngineType.TIMELINE],
         failed_engines=[],
@@ -246,7 +253,7 @@ def mock_orchestrator_result_with_failures(
 ):
     """Create mock orchestrator result with mixed success/failure."""
     return OrchestratorResult(
-        matter_id="matter-456",
+        matter_id=TEST_MATTER_ID_2,
         query="Search and analyze",
         successful_engines=[EngineType.CITATION],
         failed_engines=[EngineType.RAG],
@@ -272,15 +279,15 @@ class TestLogQueryCreatesCompleteEntry:
     ):
         """Audit entry should contain all required fields (AC: #1)."""
         entry = audit_logger.log_query(
-            matter_id="matter-123",
-            user_id="user-456",
+            matter_id=TEST_MATTER_ID,
+            user_id=TEST_USER_ID,
             result=mock_orchestrator_result,
             intent_result=mock_intent_result,
         )
 
         # Core identification
         assert entry.query_id  # UUID generated
-        assert entry.matter_id == "matter-123"
+        assert entry.matter_id == TEST_MATTER_ID
 
         # Query details
         assert entry.query_text == mock_orchestrator_result.query
@@ -288,7 +295,7 @@ class TestLogQueryCreatesCompleteEntry:
         assert entry.intent_confidence == 0.95
 
         # User and timing
-        assert entry.asked_by == "user-456"
+        assert entry.asked_by == TEST_USER_ID
         assert entry.asked_at  # ISO8601 timestamp
 
         # Execution details
@@ -308,8 +315,8 @@ class TestLogQueryCreatesCompleteEntry:
     ):
         """Should work without intent result (uses defaults)."""
         entry = audit_logger.log_query(
-            matter_id="matter-123",
-            user_id="user-456",
+            matter_id=TEST_MATTER_ID,
+            user_id=TEST_USER_ID,
             result=mock_orchestrator_result,
             intent_result=None,
         )
@@ -323,8 +330,8 @@ class TestLogQueryCreatesCompleteEntry:
     ):
         """Should handle mixed success/failure correctly."""
         entry = audit_logger.log_query(
-            matter_id="matter-456",
-            user_id="user-789",
+            matter_id=TEST_MATTER_ID_2,
+            user_id=TEST_USER_ID_2,
             result=mock_orchestrator_result_with_failures,
             intent_result=mock_intent_result,
         )
@@ -338,19 +345,43 @@ class TestLogQueryCreatesCompleteEntry:
     ):
         """Each call should generate unique query_id."""
         entry1 = audit_logger.log_query(
-            matter_id="matter-123",
-            user_id="user-456",
+            matter_id=TEST_MATTER_ID,
+            user_id=TEST_USER_ID,
             result=mock_orchestrator_result,
             intent_result=mock_intent_result,
         )
         entry2 = audit_logger.log_query(
-            matter_id="matter-123",
-            user_id="user-456",
+            matter_id=TEST_MATTER_ID,
+            user_id=TEST_USER_ID,
             result=mock_orchestrator_result,
             intent_result=mock_intent_result,
         )
 
         assert entry1.query_id != entry2.query_id
+
+    def test_raises_on_invalid_matter_id(
+        self, audit_logger, mock_orchestrator_result, mock_intent_result
+    ):
+        """Should raise ValueError for invalid matter_id format."""
+        with pytest.raises(ValueError, match="Invalid matter_id format"):
+            audit_logger.log_query(
+                matter_id="invalid-not-uuid",
+                user_id=TEST_USER_ID,
+                result=mock_orchestrator_result,
+                intent_result=mock_intent_result,
+            )
+
+    def test_raises_on_invalid_user_id(
+        self, audit_logger, mock_orchestrator_result, mock_intent_result
+    ):
+        """Should raise ValueError for invalid user_id format."""
+        with pytest.raises(ValueError, match="Invalid user_id format"):
+            audit_logger.log_query(
+                matter_id=TEST_MATTER_ID,
+                user_id="invalid-user-id",
+                result=mock_orchestrator_result,
+                intent_result=mock_intent_result,
+            )
 
 
 # =============================================================================
@@ -580,6 +611,114 @@ class TestLLMCostCollection:
 
         # Use pytest.approx for floating point comparison
         assert total == pytest.approx(0.026)
+
+
+# =============================================================================
+# Unit Tests: Source Reference Extraction (AC: #2)
+# =============================================================================
+
+
+class TestSourceReferenceExtraction:
+    """Tests for _extract_source_refs method."""
+
+    def test_extract_source_ref_from_document_id(self, audit_logger):
+        """Should extract source reference when document_id present."""
+        data = {
+            "document_id": "doc-123",
+            "document_name": "complaint.pdf",
+            "chunk_id": "chunk-456",
+            "page_number": 5,
+            "text": "Section 138 of the NI Act provides for...",
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.CITATION)
+
+        assert len(refs) == 1
+        assert refs[0].document_id == "doc-123"
+        assert refs[0].document_name == "complaint.pdf"
+        assert refs[0].chunk_id == "chunk-456"
+        assert refs[0].page_number == 5
+        assert refs[0].text_preview == "Section 138 of the NI Act provides for..."
+        assert refs[0].engine == EngineType.CITATION
+
+    def test_extract_source_ref_truncates_long_text(self, audit_logger):
+        """Should truncate text preview to 200 chars."""
+        data = {
+            "document_id": "doc-123",
+            "text": "A" * 300,  # 300 chars
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.RAG)
+
+        assert len(refs) == 1
+        assert len(refs[0].text_preview) == 200
+
+    def test_extract_source_refs_from_sources_list(self, audit_logger):
+        """Should extract from nested sources array."""
+        data = {
+            "sources": [
+                {"document_id": "doc-001", "document_name": "file1.pdf"},
+                {"document_id": "doc-002", "page_number": 10},
+                {"document_id": "doc-003"},
+            ]
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.CONTRADICTION)
+
+        assert len(refs) == 3
+        assert refs[0].document_id == "doc-001"
+        assert refs[0].document_name == "file1.pdf"
+        assert refs[1].document_id == "doc-002"
+        assert refs[1].page_number == 10
+        assert refs[2].document_id == "doc-003"
+
+    def test_extract_source_refs_limits_to_three(self, audit_logger):
+        """Should limit sources list to 3 entries."""
+        data = {
+            "sources": [
+                {"document_id": f"doc-{i}"} for i in range(10)
+            ]
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.TIMELINE)
+
+        assert len(refs) == 3
+
+    def test_extract_source_refs_empty_when_no_document_id(self, audit_logger):
+        """Should return empty list when no document_id present."""
+        data = {"confidence": 0.95, "text": "some text"}
+
+        refs = audit_logger._extract_source_refs(data, EngineType.CITATION)
+
+        assert refs == []
+
+    def test_extract_source_refs_skips_invalid_sources(self, audit_logger):
+        """Should skip sources without document_id (only valid ones counted toward limit)."""
+        data = {
+            "sources": [
+                {"document_id": "doc-001"},
+                {"document_id": "doc-002"},
+                {"text": "no doc id"},  # Invalid - no document_id, will be skipped
+            ]
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.RAG)
+
+        assert len(refs) == 2
+        assert refs[0].document_id == "doc-001"
+        assert refs[1].document_id == "doc-002"
+
+    def test_extract_source_refs_handles_none_text(self, audit_logger):
+        """Should handle None text gracefully."""
+        data = {
+            "document_id": "doc-123",
+            "text": None,
+        }
+
+        refs = audit_logger._extract_source_refs(data, EngineType.CITATION)
+
+        assert len(refs) == 1
+        assert refs[0].text_preview is None
 
 
 # =============================================================================

@@ -63,6 +63,9 @@ from app.engines.orchestrator.orchestrator import (
 
 # Story 6-3: Audit Trail Logging
 from app.engines.orchestrator.audit_logger import (
+    RAG_FINDINGS_LIMIT,
+    RESPONSE_SUMMARY_MAX_CHARS,
+    SOURCE_REFS_LIMIT,
     QueryAuditLogger,
     get_query_audit_logger,
 )
@@ -113,6 +116,9 @@ __all__ = [
     "QueryOrchestrator",
     "get_query_orchestrator",
     # Story 6-3: Audit Trail Logging
+    "RAG_FINDINGS_LIMIT",
+    "RESPONSE_SUMMARY_MAX_CHARS",
+    "SOURCE_REFS_LIMIT",
     "QueryAuditLogger",
     "get_query_audit_logger",
     "QueryHistoryStore",

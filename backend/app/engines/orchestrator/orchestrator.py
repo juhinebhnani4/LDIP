@@ -174,7 +174,7 @@ class QueryOrchestrator:
         # Step 4: Audit logging (non-blocking, fire-and-forget)
         # Story 6-3: AC #5 - audit failures should not fail the query
         if user_id:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._log_query_audit(
                     matter_id=matter_id,
                     user_id=user_id,
@@ -182,8 +182,25 @@ class QueryOrchestrator:
                     intent_result=intent_result,
                 )
             )
+            # Add callback to handle any exceptions that slip through
+            task.add_done_callback(self._handle_audit_task_exception)
 
         return result
+
+    def _handle_audit_task_exception(self, task: asyncio.Task) -> None:
+        """Handle exceptions from background audit task.
+
+        Prevents 'Task exception was never retrieved' warnings.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error(
+                "audit_task_exception",
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     async def _log_query_audit(
         self,

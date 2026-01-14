@@ -10,6 +10,7 @@ it cannot be modified or deleted (except via database admin).
 """
 
 import asyncio
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -228,12 +229,13 @@ class QueryHistoryStore:
             return None
 
 
-# Singleton instance
+# Thread-safe singleton implementation
 _query_history_store: QueryHistoryStore | None = None
+_query_history_store_lock = threading.Lock()
 
 
 def get_query_history_store(db_client: Any = None) -> QueryHistoryStore:
-    """Get or create QueryHistoryStore instance.
+    """Get or create QueryHistoryStore instance (thread-safe).
 
     Args:
         db_client: Optional Supabase client.
@@ -243,10 +245,18 @@ def get_query_history_store(db_client: Any = None) -> QueryHistoryStore:
     """
     global _query_history_store
 
-    if _query_history_store is None:
-        _query_history_store = QueryHistoryStore(db_client)
-    elif db_client is not None and _query_history_store._db is None:
-        _query_history_store._db = db_client
+    # Fast path - no lock needed if already initialized
+    if _query_history_store is not None and (
+        db_client is None or _query_history_store._db is not None
+    ):
+        return _query_history_store
+
+    # Slow path - need lock for initialization
+    with _query_history_store_lock:
+        if _query_history_store is None:
+            _query_history_store = QueryHistoryStore(db_client)
+        elif db_client is not None and _query_history_store._db is None:
+            _query_history_store._db = db_client
 
     return _query_history_store
 
@@ -257,4 +267,5 @@ def reset_query_history_store() -> None:
     This allows tests to get a fresh instance with mocked dependencies.
     """
     global _query_history_store
-    _query_history_store = None
+    with _query_history_store_lock:
+        _query_history_store = None

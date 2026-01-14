@@ -164,9 +164,11 @@ class QueryOrchestrator:
                 )
                 task.add_done_callback(self._handle_audit_task_exception)
 
+            # M4 Fix: Explicitly set success=False for blocked queries
             return OrchestratorResult(
                 matter_id=matter_id,
                 query=query,
+                success=False,
                 blocked=True,
                 blocked_reason=safety_result.explanation,
                 suggested_rewrite=safety_result.suggested_rewrite,
@@ -236,6 +238,7 @@ class QueryOrchestrator:
     def _handle_audit_task_exception(self, task: asyncio.Task) -> None:
         """Handle exceptions from background audit task.
 
+        Story 6-3: Task 5.3 - L2 Fix: Added story reference.
         Prevents 'Task exception was never retrieved' warnings.
         """
         if task.cancelled():
@@ -299,6 +302,7 @@ class QueryOrchestrator:
         """Log blocked query to audit trail (non-blocking).
 
         Story 8-2: Task 6.5 - Audit logging for blocked queries.
+        H3 Fix: Now persists to database via history store.
         This method should never raise exceptions.
 
         Args:
@@ -308,18 +312,20 @@ class QueryOrchestrator:
             safety_result: Safety check result with blocking details.
         """
         try:
-            # Log blocked query details for forensic compliance
-            logger.info(
-                "blocked_query_audit",
+            # H3 Fix: Create audit entry and persist to database
+            audit_entry = self._audit_logger.log_blocked_query(
                 matter_id=matter_id,
                 user_id=user_id,
-                blocked_by=safety_result.blocked_by,
-                violation_type=safety_result.violation_type,
-                regex_check_ms=safety_result.regex_check_ms,
-                llm_check_ms=safety_result.llm_check_ms,
+                query=query,
+                safety_result=safety_result,
             )
-            # Note: Full audit logging to database would go here
-            # For now, we log to structured logging (Axiom in production)
+            await self._history_store.append_query(audit_entry)
+
+            logger.debug(
+                "blocked_query_audit_persisted",
+                query_id=audit_entry.query_id,
+                matter_id=matter_id,
+            )
         except Exception as e:
             # Log error but don't propagate - audit is non-critical
             logger.error(

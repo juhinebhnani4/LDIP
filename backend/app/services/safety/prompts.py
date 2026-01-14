@@ -84,12 +84,13 @@ SUBTLE_DETECTION_RESPONSE_SCHEMA = {
             "description": "True if query is safe, False if it seeks legal conclusions",
         },
         "violation_type": {
+            # L3 Fix: JSON Schema uses "null" string, not Python None
             "type": ["string", "null"],
             "enum": [
                 "implicit_conclusion_request",
                 "indirect_outcome_seeking",
                 "hypothetical_legal_advice",
-                None,
+                "null",  # JSON null as string for enum compatibility
             ],
             "description": "Type of violation detected (null if safe)",
         },

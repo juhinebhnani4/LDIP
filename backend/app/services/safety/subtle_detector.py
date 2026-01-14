@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
-from functools import lru_cache
 
 import structlog
 
@@ -42,8 +42,17 @@ MAX_RETRY_DELAY = 10.0
 
 # GPT-4o-mini pricing (as of Jan 2025)
 # https://openai.com/pricing
-INPUT_COST_PER_1K = 0.00015  # $0.00015 per 1K input tokens
-OUTPUT_COST_PER_1K = 0.0006  # $0.0006 per 1K output tokens
+# M3 Fix: These can be overridden via settings if pricing changes
+DEFAULT_INPUT_COST_PER_1K = 0.00015  # $0.00015 per 1K input tokens
+DEFAULT_OUTPUT_COST_PER_1K = 0.0006  # $0.0006 per 1K output tokens
+
+# H2 Fix: Characters to sanitize from queries to prevent prompt injection
+# These patterns could be used to break out of the JSON prompt context
+SANITIZE_PATTERNS = [
+    ('"""', '"'),  # Triple quotes could break prompt
+    ("'''", "'"),  # Triple single quotes
+    ("\n\n\n", "\n"),  # Excessive newlines
+]
 
 
 # =============================================================================
@@ -165,6 +174,35 @@ class SubtleViolationDetector:
 
         return self._client
 
+    def _sanitize_query(self, query: str) -> str:
+        """Sanitize user query to prevent prompt injection.
+
+        Story 8-2: H2 Fix - Input sanitization before LLM call.
+
+        Args:
+            query: Raw user query.
+
+        Returns:
+            Sanitized query safe for LLM prompt embedding.
+        """
+        sanitized = query
+
+        # Apply sanitization patterns
+        for pattern, replacement in SANITIZE_PATTERNS:
+            sanitized = sanitized.replace(pattern, replacement)
+
+        # Truncate excessively long queries (prevent token exhaustion attacks)
+        max_query_length = 2000
+        if len(sanitized) > max_query_length:
+            logger.warning(
+                "query_truncated_for_safety",
+                original_length=len(query),
+                truncated_to=max_query_length,
+            )
+            sanitized = sanitized[:max_query_length]
+
+        return sanitized
+
     async def detect_violation(self, query: str) -> SubtleViolationCheck:
         """Detect subtle legal conclusion requests using GPT-4o-mini.
 
@@ -181,14 +219,17 @@ class SubtleViolationDetector:
         """
         start_time = time.perf_counter()
 
+        # H2 Fix: Sanitize query before sending to LLM
+        sanitized_query = self._sanitize_query(query)
+
         logger.debug(
             "subtle_detection_start",
-            query_length=len(query),
+            query_length=len(sanitized_query),
         )
 
         try:
-            # Call GPT-4o-mini with retry
-            result, input_tokens, output_tokens = await self._call_llm_with_retry(query)
+            # Call GPT-4o-mini with retry (using sanitized query)
+            result, input_tokens, output_tokens = await self._call_llm_with_retry(sanitized_query)
 
             check_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -388,12 +429,29 @@ class SubtleViolationDetector:
             )
             # Continue with partial response for graceful degradation
 
+        # H1 Fix: Validate violation_type against allowed ViolationType Literal values
+        # If LLM returns an invalid type, coerce to None (safe behavior)
+        valid_violation_types = {
+            "implicit_conclusion_request",
+            "indirect_outcome_seeking",
+            "hypothetical_legal_advice",
+            None,
+        }
+        if parsed.get("violation_type") not in valid_violation_types:
+            logger.warning(
+                "llm_invalid_violation_type_coerced",
+                received=parsed.get("violation_type"),
+                coerced_to=None,
+            )
+            parsed["violation_type"] = None
+
         return parsed
 
     def _calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """Calculate cost of LLM call.
 
         Story 8-2: Task 3.5 - Cost tracking.
+        M3 Fix: Uses configurable pricing from settings with fallback to defaults.
 
         Args:
             input_tokens: Number of input tokens.
@@ -402,26 +460,59 @@ class SubtleViolationDetector:
         Returns:
             Cost in USD.
         """
-        input_cost = (input_tokens / 1000) * INPUT_COST_PER_1K
-        output_cost = (output_tokens / 1000) * OUTPUT_COST_PER_1K
+        # M3 Fix: Get pricing from settings if configured, else use defaults
+        # Use hasattr check to avoid MagicMock issues in tests
+        settings = get_settings()
+
+        if hasattr(settings, "safety_llm_input_cost_per_1k"):
+            input_cost_per_1k = settings.safety_llm_input_cost_per_1k
+            # Check if it's a real number (not a MagicMock)
+            if not isinstance(input_cost_per_1k, (int, float)):
+                input_cost_per_1k = DEFAULT_INPUT_COST_PER_1K
+        else:
+            input_cost_per_1k = DEFAULT_INPUT_COST_PER_1K
+
+        if hasattr(settings, "safety_llm_output_cost_per_1k"):
+            output_cost_per_1k = settings.safety_llm_output_cost_per_1k
+            # Check if it's a real number (not a MagicMock)
+            if not isinstance(output_cost_per_1k, (int, float)):
+                output_cost_per_1k = DEFAULT_OUTPUT_COST_PER_1K
+        else:
+            output_cost_per_1k = DEFAULT_OUTPUT_COST_PER_1K
+
+        input_cost = (input_tokens / 1000) * input_cost_per_1k
+        output_cost = (output_tokens / 1000) * output_cost_per_1k
         return input_cost + output_cost
 
 
 # =============================================================================
 # Story 8-2: Singleton Factory (Task 3.7)
+# M1 Fix: Using thread-safe double-check locking pattern (consistent with GuardrailService)
 # =============================================================================
 
+# Singleton instance (thread-safe)
+_subtle_detector: SubtleViolationDetector | None = None
+_detector_lock = threading.Lock()
 
-@lru_cache(maxsize=1)
+
 def get_subtle_violation_detector() -> SubtleViolationDetector:
     """Get singleton subtle violation detector instance.
 
-    Story 8-2: Task 3.7 - Factory function.
+    Story 8-2: Task 3.7 - Factory function with thread-safe initialization.
+    M1 Fix: Uses double-check locking pattern consistent with GuardrailService.
 
     Returns:
         SubtleViolationDetector singleton instance.
     """
-    return SubtleViolationDetector()
+    global _subtle_detector  # noqa: PLW0603
+
+    if _subtle_detector is None:
+        with _detector_lock:
+            # Double-check locking pattern
+            if _subtle_detector is None:
+                _subtle_detector = SubtleViolationDetector()
+
+    return _subtle_detector
 
 
 def reset_subtle_violation_detector() -> None:
@@ -430,7 +521,11 @@ def reset_subtle_violation_detector() -> None:
     Story 8-2: Reset function for test isolation.
 
     Note:
-        This clears the LRU cache, creating a fresh instance on next call.
+        This creates a fresh instance on next get_subtle_violation_detector() call.
     """
-    get_subtle_violation_detector.cache_clear()
+    global _subtle_detector  # noqa: PLW0603
+
+    with _detector_lock:
+        _subtle_detector = None
+
     logger.debug("subtle_violation_detector_reset")

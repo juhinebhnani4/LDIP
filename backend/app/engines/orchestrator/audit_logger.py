@@ -25,6 +25,7 @@ from app.models.orchestrator import (
     QueryIntent,
     SourceReference,
 )
+from app.models.safety import SafetyCheckResult
 
 logger = structlog.get_logger(__name__)
 
@@ -156,6 +157,96 @@ class QueryAuditLogger:
             engines=len(entry.engines_invoked),
             findings=entry.findings_count,
             cost_usd=entry.total_cost_usd,
+        )
+
+        return entry
+
+    def log_blocked_query(
+        self,
+        matter_id: str,
+        user_id: str,
+        query: str,
+        safety_result: SafetyCheckResult,
+    ) -> QueryAuditEntry:
+        """Create audit record for a blocked query (H3 Fix).
+
+        Story 8-2: Blocked queries must be persisted for forensic compliance.
+
+        Args:
+            matter_id: Matter UUID.
+            user_id: User UUID who asked the query.
+            query: The blocked query text.
+            safety_result: Safety check result with blocking details.
+
+        Returns:
+            QueryAuditEntry ready for persistence.
+
+        Raises:
+            ValueError: If matter_id or user_id are not valid UUID format.
+        """
+        # Validate UUID formats for forensic integrity
+        if not _is_valid_uuid(matter_id):
+            raise ValueError(f"Invalid matter_id format: {matter_id}")
+        if not _is_valid_uuid(user_id):
+            raise ValueError(f"Invalid user_id format: {user_id}")
+
+        query_id = str(uuid.uuid4())
+        asked_at = datetime.now(timezone.utc).isoformat()
+
+        # Calculate wall clock time from safety check
+        wall_clock_time_ms = int(
+            safety_result.regex_check_ms + safety_result.llm_check_ms
+        )
+
+        # Track LLM cost if LLM was used
+        llm_costs: list[LLMCostEntry] = []
+        if safety_result.llm_check_ms > 0 and safety_result.llm_cost_usd > 0:
+            llm_costs.append(
+                LLMCostEntry(
+                    model_name="gpt-4o-mini",
+                    purpose="safety_check",
+                    input_tokens=0,  # Token counts not available in SafetyCheckResult
+                    output_tokens=0,
+                    cost_usd=safety_result.llm_cost_usd,
+                )
+            )
+
+        # Create blocked query summary
+        blocked_reason = safety_result.explanation or "Query blocked by safety checks"
+        response_summary = (
+            f"[BLOCKED by {safety_result.blocked_by}] "
+            f"Violation: {safety_result.violation_type or 'unknown'}. "
+            f"{blocked_reason[:200]}"
+        )
+
+        entry = QueryAuditEntry(
+            query_id=query_id,
+            matter_id=matter_id,
+            query_text=query,
+            query_intent=QueryIntent.RAG_SEARCH,  # Blocked before intent analysis
+            intent_confidence=0.0,
+            asked_by=user_id,
+            asked_at=asked_at,
+            engines_invoked=[],  # No engines invoked for blocked queries
+            successful_engines=[],
+            failed_engines=[],
+            execution_time_ms=wall_clock_time_ms,
+            wall_clock_time_ms=wall_clock_time_ms,
+            findings_count=0,
+            response_summary=response_summary[:RESPONSE_SUMMARY_MAX_CHARS],
+            overall_confidence=0.0,
+            llm_costs=llm_costs,
+            total_cost_usd=safety_result.llm_cost_usd,
+            findings=[],
+        )
+
+        logger.info(
+            "blocked_query_audit_created",
+            query_id=query_id,
+            matter_id=matter_id,
+            user_id=user_id,
+            blocked_by=safety_result.blocked_by,
+            violation_type=safety_result.violation_type,
         )
 
         return entry

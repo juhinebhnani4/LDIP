@@ -392,6 +392,11 @@ class OrchestratorResult(BaseModel):
     )
 
     # Story 8-2: Safety blocking fields (Task 6.4)
+    # M4 Fix: Added explicit success field for API consumers
+    success: bool = Field(
+        default=True,
+        description="True if query completed successfully (not blocked)",
+    )
     blocked: bool = Field(
         default=False,
         description="True if query was blocked by safety checks",

@@ -463,3 +463,226 @@ class TestSingleton:
         detector2 = get_subtle_violation_detector()
 
         assert detector1 is not detector2
+
+
+# =============================================================================
+# M2 Fix: Retry Logic Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestRetryLogic:
+    """Test retry logic with exponential backoff.
+
+    M2 Fix: Comprehensive retry logic test coverage.
+    """
+
+    async def test_retry_on_rate_limit(self, detector, mock_openai_allowed) -> None:
+        """Should retry on 429 rate limit errors."""
+        call_count = 0
+
+        async def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise Exception("Error 429: Rate limit exceeded")
+            return mock_openai_allowed
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = mock_create
+
+            check = await detector.detect_violation("Test query")
+
+            assert check.is_safe is True
+            assert call_count == 3  # Retried twice before success
+
+    async def test_retry_on_server_error(self, detector, mock_openai_allowed) -> None:
+        """Should retry on 500/502/503/504 server errors."""
+        call_count = 0
+
+        async def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise Exception("Error 503: Service unavailable")
+            return mock_openai_allowed
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = mock_create
+
+            check = await detector.detect_violation("Test query")
+
+            assert check.is_safe is True
+            assert call_count == 2
+
+    async def test_max_retries_exceeded(self, detector, mock_settings) -> None:
+        """Should raise after MAX_RETRIES attempts."""
+        call_count = 0
+
+        async def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise Exception("Error 429: Rate limit exceeded")
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = mock_create
+
+            with pytest.raises(SubtleDetectorError) as exc_info:
+                await detector.detect_violation("Test query")
+
+            assert call_count == 3  # MAX_RETRIES
+            assert "after 3 attempts" in str(exc_info.value)
+
+    async def test_no_retry_on_non_retryable_error(
+        self, detector, mock_settings
+    ) -> None:
+        """Should not retry on non-retryable errors (e.g., auth errors)."""
+        call_count = 0
+
+        async def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise Exception("Invalid API key")
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = mock_create
+
+            with pytest.raises(SubtleDetectorError):
+                await detector.detect_violation("Test query")
+
+            # Should fail fast without retrying
+            assert call_count == 1
+
+    async def test_retry_timeout_errors(self, detector, mock_openai_allowed) -> None:
+        """Should retry on timeout errors."""
+        call_count = 0
+
+        async def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise asyncio.TimeoutError()
+            return mock_openai_allowed
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = mock_create
+
+            check = await detector.detect_violation("Test query")
+
+            assert check.is_safe is True
+            assert call_count == 2
+
+
+# =============================================================================
+# H1 Fix: ViolationType Validation Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestViolationTypeValidation:
+    """Test ViolationType validation on LLM responses.
+
+    H1 Fix: Validates that invalid violation types are coerced to None.
+    """
+
+    async def test_invalid_violation_type_coerced_to_none(
+        self, detector, mock_settings
+    ) -> None:
+        """Invalid violation_type from LLM should be coerced to None."""
+        response = MagicMock()
+        response.choices = [MagicMock()]
+        response.choices[0].message.content = json.dumps({
+            "is_safe": False,
+            "violation_type": "unknown_invalid_type",  # Invalid type
+            "explanation": "Some explanation",
+            "suggested_rewrite": "Safe query here",
+            "confidence": 0.9,
+        })
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 100
+        response.usage.completion_tokens = 30
+
+        with patch.object(detector, "_client") as mock_client:
+            mock_client.chat.completions.create = AsyncMock(return_value=response)
+
+            check = await detector.detect_violation("Test query")
+
+            # Invalid type should be coerced to None
+            assert check.violation_type is None
+
+    async def test_valid_violation_types_preserved(
+        self, detector, mock_settings
+    ) -> None:
+        """Valid violation_type values should be preserved."""
+        valid_types = [
+            "implicit_conclusion_request",
+            "indirect_outcome_seeking",
+            "hypothetical_legal_advice",
+        ]
+
+        for violation_type in valid_types:
+            response = MagicMock()
+            response.choices = [MagicMock()]
+            response.choices[0].message.content = json.dumps({
+                "is_safe": False,
+                "violation_type": violation_type,
+                "explanation": "Test",
+                "suggested_rewrite": "Test",
+                "confidence": 0.9,
+            })
+            response.usage = MagicMock()
+            response.usage.prompt_tokens = 100
+            response.usage.completion_tokens = 30
+
+            with patch.object(detector, "_client") as mock_client:
+                mock_client.chat.completions.create = AsyncMock(return_value=response)
+
+                check = await detector.detect_violation("Test query")
+
+                assert check.violation_type == violation_type
+
+
+# =============================================================================
+# H2 Fix: Input Sanitization Tests
+# =============================================================================
+
+
+class TestInputSanitization:
+    """Test input sanitization for prompt injection prevention.
+
+    H2 Fix: Validates query sanitization before LLM call.
+    """
+
+    def test_sanitize_triple_quotes(self, mock_settings) -> None:
+        """Triple quotes should be replaced."""
+        detector = SubtleViolationDetector()
+        query = 'Test """injection""" query'
+        sanitized = detector._sanitize_query(query)
+
+        assert '"""' not in sanitized
+        assert '"injection"' in sanitized
+
+    def test_sanitize_triple_single_quotes(self, mock_settings) -> None:
+        """Triple single quotes should be replaced."""
+        detector = SubtleViolationDetector()
+        query = "Test '''injection''' query"
+        sanitized = detector._sanitize_query(query)
+
+        assert "'''" not in sanitized
+        assert "'injection'" in sanitized
+
+    def test_truncate_long_query(self, mock_settings) -> None:
+        """Excessively long queries should be truncated."""
+        detector = SubtleViolationDetector()
+        query = "A" * 3000  # Longer than 2000 char limit
+        sanitized = detector._sanitize_query(query)
+
+        assert len(sanitized) == 2000
+
+    def test_normal_query_unchanged(self, mock_settings) -> None:
+        """Normal queries should pass through unchanged."""
+        detector = SubtleViolationDetector()
+        query = "What does the document say about payment terms?"
+        sanitized = detector._sanitize_query(query)
+
+        assert sanitized == query

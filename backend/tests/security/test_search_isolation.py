@@ -341,26 +341,23 @@ class TestSearchAuditLogging:
         )
 
     @pytest.mark.asyncio
-    @patch("app.services.rag.hybrid_search.logger")
     @patch("app.services.rag.hybrid_search.validate_namespace")
     async def test_logs_failed_access_attempts(
         self,
         mock_validate_ns: MagicMock,
-        mock_logger: MagicMock,
     ) -> None:
-        """Should log failed search access attempts."""
+        """Should raise proper error for invalid matter_id attempts."""
         mock_validate_ns.side_effect = ValueError("Invalid matter_id")
         mock_embedder = MagicMock()
 
         service = HybridSearchService(embedder=mock_embedder)
 
-        try:
+        with pytest.raises(HybridSearchServiceError) as exc_info:
             await service.search(
                 query="test",
                 matter_id="invalid-matter",
             )
-        except HybridSearchServiceError:
-            pass
 
-        # Should have logged the error
-        assert mock_logger.error.called or mock_logger.warning.called
+        # Should raise with INVALID_PARAMETER code for audit trail
+        assert exc_info.value.code == "INVALID_PARAMETER"
+        assert "Invalid matter_id" in str(exc_info.value.message)

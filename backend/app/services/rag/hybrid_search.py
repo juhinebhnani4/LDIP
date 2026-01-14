@@ -243,7 +243,14 @@ class HybridSearchService:
             ... )
         """
         # CRITICAL: Validate matter_id first (Layer 2 enforcement)
-        validate_namespace(matter_id)
+        try:
+            validate_namespace(matter_id)
+        except ValueError as e:
+            raise HybridSearchServiceError(
+                message=str(e),
+                code="INVALID_PARAMETER",
+                is_retryable=False,
+            ) from e
 
         weights = weights or SearchWeights()
 

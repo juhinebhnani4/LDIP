@@ -2,8 +2,10 @@
 
 Epic 6: Engine Orchestrator
 Story 6-1: Query Intent Analysis
+Story 6-2: Engine Execution and Result Aggregation
 
-Models for classifying user queries and routing them to appropriate engines.
+Models for classifying user queries, routing them to appropriate engines,
+executing engines in parallel/sequential order, and aggregating results.
 
 CRITICAL: Uses GPT-3.5 for query normalization per LLM routing rules (ADR-002).
 Intent classification = simple task, cost-sensitive.
@@ -219,3 +221,176 @@ ENGINE_PRIORITY = [
     EngineType.CONTRADICTION,
     EngineType.RAG,
 ]
+
+
+# =============================================================================
+# Story 6-2: Engine Execution Models
+# =============================================================================
+
+
+class EngineExecutionRequest(BaseModel):
+    """Request for engine execution via orchestrator.
+
+    Story 6-2: Input model for engine execution.
+
+    Example:
+        >>> request = EngineExecutionRequest(
+        ...     matter_id="matter-123",
+        ...     query="What are the citations?",
+        ...     engines=[EngineType.CITATION],
+        ... )
+    """
+
+    matter_id: str = Field(min_length=1, description="Matter UUID")
+    query: str = Field(min_length=1, description="User's query")
+    engines: list[EngineType] = Field(description="Engines to execute")
+    context: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional context from conversation history",
+    )
+
+
+class EngineExecutionResult(BaseModel):
+    """Result from a single engine execution.
+
+    Story 6-2: Output from an individual engine call.
+
+    Example:
+        >>> result = EngineExecutionResult(
+        ...     engine=EngineType.CITATION,
+        ...     success=True,
+        ...     data={"citations": [{"act": "NI Act", "section": "138"}]},
+        ...     execution_time_ms=150,
+        ... )
+    """
+
+    engine: EngineType = Field(description="Engine that produced this result")
+    success: bool = Field(description="Whether execution succeeded")
+    data: dict[str, Any] | None = Field(
+        default=None,
+        description="Engine-specific result data",
+    )
+    error: str | None = Field(
+        default=None,
+        description="Error message if execution failed",
+    )
+    execution_time_ms: int = Field(
+        default=0,
+        description="Time taken to execute in milliseconds",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score from engine (if applicable)",
+    )
+
+
+class ExecutionPlan(BaseModel):
+    """Plan for executing engines.
+
+    Story 6-2: Determines parallel vs sequential execution groups.
+
+    Groups are executed sequentially (one group after another),
+    but engines within each group run in parallel.
+
+    Example:
+        >>> plan = ExecutionPlan(
+        ...     parallel_groups=[[EngineType.CITATION, EngineType.TIMELINE]],
+        ...     total_engines=2,
+        ...     estimated_parallelism=2.0,
+        ... )
+    """
+
+    parallel_groups: list[list[EngineType]] = Field(
+        description="Groups of engines that can run in parallel. "
+        "Groups are executed sequentially, engines within groups in parallel.",
+    )
+    total_engines: int = Field(description="Total number of engines to execute")
+    estimated_parallelism: float = Field(
+        description="Parallelism factor (1.0 = all sequential, higher = more parallel)",
+    )
+
+
+class SourceReference(BaseModel):
+    """Reference to a source document or chunk.
+
+    Story 6-2: Unified source reference from any engine.
+
+    Example:
+        >>> source = SourceReference(
+        ...     document_id="doc-123",
+        ...     document_name="complaint.pdf",
+        ...     page_number=5,
+        ...     text_preview="Section 138 of the NI Act...",
+        ... )
+    """
+
+    document_id: str = Field(description="Source document UUID")
+    document_name: str | None = Field(default=None, description="Document filename")
+    chunk_id: str | None = Field(default=None, description="Specific chunk UUID")
+    page_number: int | None = Field(default=None, description="Page number if applicable")
+    text_preview: str | None = Field(default=None, description="Preview of source text")
+    confidence: float | None = Field(default=None, description="Source relevance score")
+    engine: EngineType | None = Field(default=None, description="Engine that found this source")
+
+
+class OrchestratorResult(BaseModel):
+    """Aggregated result from orchestrator execution.
+
+    Story 6-2: Combined output from all engine executions.
+
+    Example:
+        >>> result = OrchestratorResult(
+        ...     matter_id="matter-123",
+        ...     query="What are the citations?",
+        ...     successful_engines=[EngineType.CITATION],
+        ...     unified_response="Found 3 citations...",
+        ...     sources=[...],
+        ...     confidence=0.9,
+        ...     engine_results=[...],
+        ...     total_execution_time_ms=250,
+        ... )
+    """
+
+    matter_id: str = Field(description="Matter UUID")
+    query: str = Field(description="Original query")
+    successful_engines: list[EngineType] = Field(
+        description="Engines that executed successfully",
+    )
+    failed_engines: list[EngineType] = Field(
+        default_factory=list,
+        description="Engines that failed to execute",
+    )
+    unified_response: str = Field(
+        description="Combined human-readable response from all engines",
+    )
+    sources: list[SourceReference] = Field(
+        default_factory=list,
+        description="Deduplicated source references from all engines",
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Overall confidence (weighted average of engine confidences)",
+    )
+    engine_results: list[EngineExecutionResult] = Field(
+        description="Individual results from each engine",
+    )
+    total_execution_time_ms: int = Field(
+        description="Total time including all parallel executions",
+    )
+    wall_clock_time_ms: int = Field(
+        default=0,
+        description="Actual wall clock time (accounts for parallelism)",
+    )
+
+
+class OrchestratorResponse(BaseModel):
+    """API response wrapper for orchestrator execution.
+
+    Follows project-context.md API response format:
+    - Success: { "data": {...} }
+    """
+
+    data: OrchestratorResult = Field(description="Orchestration result")

@@ -321,10 +321,14 @@ OUTPUT REQUIREMENTS:
 Respond with JSON:
 {
     "sanitized_text": "The fully sanitized text",
-    "changes_made": ["list of specific changes made"],
+    "changes_made": [
+        {"original": "exact phrase removed", "replacement": "exact replacement used"},
+        ...
+    ],
     "confidence": 0.0-1.0
 }
 
+IMPORTANT: Each change must include the exact "original" phrase and its "replacement".
 If text is already properly sanitized, return it unchanged with empty changes_made array."""
 
 
@@ -352,8 +356,21 @@ SUBTLE_POLICING_RESPONSE_SCHEMA = {
         },
         "changes_made": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "List of specific changes made to the text",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original": {
+                        "type": "string",
+                        "description": "The exact original phrase that was replaced",
+                    },
+                    "replacement": {
+                        "type": "string",
+                        "description": "The exact replacement phrase used",
+                    },
+                },
+                "required": ["original", "replacement"],
+            },
+            "description": "List of specific changes with original and replacement phrases",
         },
         "confidence": {
             "type": "number",
@@ -404,12 +421,19 @@ def validate_policing_response(response: dict) -> list[str]:
     if "sanitized_text" in response and not isinstance(response["sanitized_text"], str):
         errors.append("Field 'sanitized_text' must be a string")
 
-    # Validate changes_made type
+    # Validate changes_made type (H2 fix: now expects list of {original, replacement})
     if "changes_made" in response:
         if not isinstance(response["changes_made"], list):
             errors.append("Field 'changes_made' must be a list")
-        elif not all(isinstance(item, str) for item in response["changes_made"]):
-            errors.append("All items in 'changes_made' must be strings")
+        else:
+            for i, item in enumerate(response["changes_made"]):
+                # Support both old string format (backward compat) and new structured format
+                if isinstance(item, str):
+                    continue  # Allow string for backward compatibility
+                if not isinstance(item, dict):
+                    errors.append(f"Item {i} in 'changes_made' must be an object or string")
+                elif "original" not in item or "replacement" not in item:
+                    errors.append(f"Item {i} in 'changes_made' must have 'original' and 'replacement'")
 
     # Validate confidence range
     if "confidence" in response:

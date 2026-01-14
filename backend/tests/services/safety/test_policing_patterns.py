@@ -447,6 +447,31 @@ class TestReplacementMetadata:
         assert result.sanitization_time_ms >= 0
         assert result.llm_policing_applied is False  # Regex only
 
+    def test_regex_policing_under_5ms(
+        self, policing_service: LanguagePolicingService
+    ) -> None:
+        """L4 fix: Regex policing should complete in < 5ms per story requirements.
+
+        Story 8-3: Performance target < 5ms for regex policing (excluding LLM).
+        """
+        # Run multiple times to warm up and get stable measurement
+        for _ in range(3):
+            result = policing_service.sanitize_text(
+                "The evidence proves that defendant violated Section 138. "
+                "The court will rule against him and he must pay damages."
+            )
+
+        # Final measurement
+        result = policing_service.sanitize_text(
+            "The evidence proves that defendant violated Section 138. "
+            "The court will rule against him and he must pay damages."
+        )
+
+        assert result.sanitization_time_ms < 5.0, (
+            f"Regex policing took {result.sanitization_time_ms:.2f}ms, "
+            f"expected < 5ms per Story 8-3 requirements"
+        )
+
 
 class TestEmptyAndEdgeCases:
     """Test edge cases and boundary conditions."""

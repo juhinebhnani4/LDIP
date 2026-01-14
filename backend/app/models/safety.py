@@ -316,6 +316,7 @@ class QuotePreservation(BaseModel):
         ...     page_number=5,
         ...     start_pos=100,
         ...     end_pos=145,
+        ...     attribution_note="Direct quote from [Exhibit A, p. 5]",
         ... )
     """
 
@@ -333,11 +334,15 @@ class QuotePreservation(BaseModel):
     )
     start_pos: int = Field(
         ge=0,
-        description="Start position of the quote in the text",
+        description="Start position of the quote in the ORIGINAL text",
     )
     end_pos: int = Field(
         ge=0,
-        description="End position of the quote in the text",
+        description="End position of the quote in the ORIGINAL text",
+    )
+    attribution_note: str = Field(
+        default="Direct quote preserved verbatim",
+        description="AC #6: Attribution note like 'Direct quote from [document name, page X]'",
     )
 
 
@@ -393,4 +398,13 @@ class LanguagePolicingResult(BaseModel):
         default=0.0,
         ge=0.0,
         description="Cost of LLM policing call in USD (if applied)",
+    )
+    text_truncated: bool = Field(
+        default=False,
+        description="M1 fix: True if text was truncated before LLM policing (>8000 chars)",
+    )
+    original_length: int = Field(
+        default=0,
+        ge=0,
+        description="Original text length (useful when text_truncated=True)",
     )

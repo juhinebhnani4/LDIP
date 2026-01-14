@@ -115,6 +115,7 @@ class LanguagePolicingService:
         sanitized_text, replacements = self._apply_replacements(text, protected_regions)
 
         # Step 3: Convert protected regions to QuotePreservation models
+        # AC #6: Include attribution note for each preserved quote
         quotes_preserved = [
             QuotePreservation(
                 quoted_text=region.text,
@@ -122,6 +123,7 @@ class LanguagePolicingService:
                 page_number=region.page,
                 start_pos=region.start,
                 end_pos=region.end,
+                attribution_note=self._quote_detector.format_quote_attribution(region),
             )
             for region in protected_regions
         ]

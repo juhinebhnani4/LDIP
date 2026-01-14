@@ -221,6 +221,36 @@ class TestQuotePreservationMetadata:
         assert citations[0].source_document == "Contract Agreement"
         assert citations[0].page_number == 12
 
+    def test_attribution_note_for_citation(
+        self, policing_service: LanguagePolicingService
+    ) -> None:
+        """H1 fix: AC #6 - Citations should have attribution note with document and page.
+
+        Story 8-3: AC #6 - "a note indicates 'Direct quote from [document name, page X]'"
+        """
+        text = "Per [Contract Agreement, page 12], the terms were violated."
+        result = policing_service.sanitize_text(text)
+
+        citations = [q for q in result.quotes_preserved if q.source_document]
+        assert len(citations) == 1
+
+        # AC #6: Verify attribution note format
+        assert citations[0].attribution_note == "Direct quote from [Contract Agreement, p. 12]"
+
+    def test_attribution_note_for_plain_quote(
+        self, policing_service: LanguagePolicingService
+    ) -> None:
+        """H1 fix: AC #6 - Plain quotes should have default attribution note.
+
+        Story 8-3: AC #6 - Quotes without source should still indicate preservation.
+        """
+        text = 'The witness said "defendant violated the agreement" in court.'
+        result = policing_service.sanitize_text(text)
+
+        assert len(result.quotes_preserved) == 1
+        # Plain quote has default attribution
+        assert result.quotes_preserved[0].attribution_note == "Direct quote preserved verbatim"
+
 
 class TestEdgeCases:
     """Test edge cases for quote preservation."""

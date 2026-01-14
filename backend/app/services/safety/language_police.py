@@ -16,7 +16,6 @@ import asyncio
 import json
 import threading
 import time
-from typing import TYPE_CHECKING
 
 import structlog
 
@@ -35,9 +34,6 @@ from app.services.safety.prompts import (
     format_subtle_policing_prompt,
     validate_policing_response,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -237,17 +233,30 @@ class LanguagePolice:
             # Combine regex and LLM changes
             all_replacements = list(regex_result.replacements_made)
 
-            # Add LLM changes as replacement records
+            # Add LLM changes as replacement records (H2 fix: handle structured format)
             for change in llm_result.get("changes_made", []):
-                all_replacements.append(
-                    ReplacementRecord(
-                        original_phrase=change,
-                        replacement_phrase="[LLM polished]",
-                        position_start=0,
-                        position_end=0,
-                        rule_id="llm_subtle_polish",
+                if isinstance(change, dict):
+                    # New structured format: {original, replacement}
+                    all_replacements.append(
+                        ReplacementRecord(
+                            original_phrase=change.get("original", ""),
+                            replacement_phrase=change.get("replacement", ""),
+                            position_start=0,  # Position unknown for LLM changes
+                            position_end=0,
+                            rule_id="llm_subtle_polish",
+                        )
                     )
-                )
+                elif isinstance(change, str):
+                    # Legacy string format (backward compatibility)
+                    all_replacements.append(
+                        ReplacementRecord(
+                            original_phrase=change,
+                            replacement_phrase="[LLM polished]",
+                            position_start=0,
+                            position_end=0,
+                            rule_id="llm_subtle_polish",
+                        )
+                    )
 
             logger.info(
                 "language_policing_complete",
@@ -265,6 +274,8 @@ class LanguagePolice:
                 llm_policing_applied=True,
                 sanitization_time_ms=total_time_ms,
                 llm_cost_usd=llm_result.get("cost_usd", 0.0),
+                text_truncated=llm_result.get("text_truncated", False),
+                original_length=llm_result.get("original_length", len(text)),
             )
 
         except Exception as e:
@@ -291,15 +302,16 @@ class LanguagePolice:
         """Apply GPT-4o-mini polishing to text.
 
         Story 8-3: Task 5.3-5.5 - LLM polishing.
+        M1 fix: Track truncation in result.
 
         Args:
             text: Text after regex sanitization.
 
         Returns:
-            Dict with sanitized_text, changes_made, confidence, cost_usd.
+            Dict with sanitized_text, changes_made, confidence, cost_usd, text_truncated.
         """
-        # Sanitize text to prevent prompt injection
-        sanitized_input = self._sanitize_input(text)
+        # Sanitize text to prevent prompt injection (M1: track truncation)
+        sanitized_input, was_truncated = self._sanitize_input(text)
 
         # Call LLM with retry
         result, input_tokens, output_tokens = await self._call_llm_with_retry(
@@ -309,21 +321,25 @@ class LanguagePolice:
         # Calculate cost
         cost_usd = self._calculate_cost(input_tokens, output_tokens)
         result["cost_usd"] = cost_usd
+        result["text_truncated"] = was_truncated
+        result["original_length"] = len(text)
 
         return result
 
-    def _sanitize_input(self, text: str) -> str:
+    def _sanitize_input(self, text: str) -> tuple[str, bool]:
         """Sanitize input text to prevent prompt injection.
 
         Story 8-3: Task 5.3 - Input sanitization.
+        M1 fix: Return truncation flag for audit.
 
         Args:
             text: Raw text to sanitize.
 
         Returns:
-            Sanitized text safe for LLM prompt.
+            Tuple of (sanitized_text, was_truncated).
         """
         sanitized = text
+        was_truncated = False
 
         for pattern, replacement in SANITIZE_PATTERNS:
             sanitized = sanitized.replace(pattern, replacement)
@@ -337,8 +353,9 @@ class LanguagePolice:
                 truncated_to=max_length,
             )
             sanitized = sanitized[:max_length]
+            was_truncated = True
 
-        return sanitized
+        return sanitized, was_truncated
 
     async def _call_llm_with_retry(
         self, text: str

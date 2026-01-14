@@ -1,7 +1,7 @@
 """Result Aggregator for combining engine outputs.
 
 Story 6-2: Engine Execution Ordering (AC: #4)
-Story 8-3: Language Policing Integration (AC: #7)
+Story 8-3: Language Policing Integration (Task 7: Integrate with Engine Outputs)
 
 Aggregates results from multiple engines into a unified response:
 - Merges and deduplicates source references

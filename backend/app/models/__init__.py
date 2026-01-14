@@ -121,6 +121,9 @@ from app.models.safety import (
     GuardrailCheck,
     GuardrailPattern,
     ViolationType,
+    # Story 8-2: Subtle Violation Detection models
+    SafetyCheckResult,
+    SubtleViolationCheck,
     # Story 8-3: Language Policing models
     LanguagePolicingResult,
     QuotePreservation,
@@ -242,6 +245,9 @@ __all__ = [
     "GuardrailCheck",
     "GuardrailPattern",
     "ViolationType",
+    # Safety models (Story 8-2)
+    "SafetyCheckResult",
+    "SubtleViolationCheck",
     # Language Policing models (Story 8-3)
     "LanguagePolicingResult",
     "QuotePreservation",

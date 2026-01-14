@@ -292,7 +292,7 @@ def _build_policing_patterns() -> list[CompiledPolicingPattern]:
     return patterns
 
 
-# Pre-compile patterns at module load (Story 8-3: AC #6 - < 5ms policing time)
+# Pre-compile patterns at module load (Story 8-3: Performance target < 5ms for regex policing)
 COMPILED_POLICING_PATTERNS: list[CompiledPolicingPattern] = _build_policing_patterns()
 
 

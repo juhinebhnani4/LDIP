@@ -913,6 +913,81 @@ class TestErrorHandling:
 
 
 # =============================================================================
+# Story 7-4: Error Path Tests (Code Review Issue #4)
+# =============================================================================
+
+
+class TestKeyFindingsErrorHandling:
+    """Tests for error handling in key findings methods (Code Review Issue #4)."""
+
+    @pytest.mark.asyncio
+    async def test_add_key_finding_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+
+        with pytest.raises(RuntimeError, match="Failed to add key finding"):
+            await matter_repo.add_key_finding(MATTER_ID, sample_key_finding)
+
+    @pytest.mark.asyncio
+    async def test_delete_key_finding_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should raise RuntimeError on database failure during delete."""
+        # First get succeeds to find the finding
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
+        }
+        # But upsert fails
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB write failed")
+
+        with pytest.raises(RuntimeError, match="Failed to delete key finding"):
+            await matter_repo.delete_key_finding(MATTER_ID, "finding-123")
+
+
+class TestResearchNotesErrorHandling:
+    """Tests for error handling in research notes methods (Code Review Issue #4)."""
+
+    @pytest.mark.asyncio
+    async def test_add_research_note_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+
+        with pytest.raises(RuntimeError, match="Failed to add research note"):
+            await matter_repo.add_research_note(MATTER_ID, sample_research_note)
+
+    @pytest.mark.asyncio
+    async def test_delete_research_note_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should raise RuntimeError on database failure during delete."""
+        # First get succeeds to find the note
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+        # But upsert fails
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB write failed")
+
+        with pytest.raises(RuntimeError, match="Failed to delete research note"):
+            await matter_repo.delete_research_note(MATTER_ID, "note-123")
+
+
+# =============================================================================
 # Story 7-4: Key Findings Tests (Task 3)
 # =============================================================================
 

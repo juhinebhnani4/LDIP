@@ -563,6 +563,7 @@ class MatterMemoryService:
         Returns:
             Created KeyFinding.
         """
+        now = datetime.now(UTC).isoformat()
         finding = KeyFinding(
             finding_id=str(uuid.uuid4()),
             finding_type=finding_type,
@@ -570,8 +571,9 @@ class MatterMemoryService:
             evidence=evidence or [],
             notes=notes,
             confidence=confidence,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=now,
             created_by=created_by,
+            updated_at=now,  # Code Review Issue #5: Set on creation for consistency
             source_engine=source_engine,
             source_query_id=source_query_id,
         )
@@ -677,7 +679,7 @@ class MatterMemoryService:
         Returns:
             True if updated, False if not found.
         """
-        updates: dict = {}
+        updates: dict[str, Any] = {}  # Code Review Issue #6: Explicit type annotation
         if description is not None:
             updates["description"] = description
         if notes is not None:
@@ -771,12 +773,14 @@ class MatterMemoryService:
         Returns:
             Created ResearchNote.
         """
+        now = datetime.now(UTC).isoformat()
         note = ResearchNote(
             note_id=str(uuid.uuid4()),
             title=title,
             content=content,
             created_by=created_by,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=now,
+            updated_at=now,  # Code Review Issue #5: Set on creation for consistency
             tags=tags or [],
             linked_findings=linked_findings or [],
         )
@@ -845,7 +849,7 @@ class MatterMemoryService:
         Returns:
             True if updated, False if not found.
         """
-        updates: dict = {}
+        updates: dict[str, Any] = {}  # Code Review Issue #6: Explicit type annotation
         if title is not None:
             updates["title"] = title
         if content is not None:

@@ -23,6 +23,14 @@ from pydantic import BaseModel, Field, field_validator
 # =============================================================================
 
 # Finding types aligned with engine outputs (Story 7-4: Task 1.4)
+#
+# Design Note (Code Review Issue #2):
+#   Using Literal instead of Enum is intentional for:
+#   1. Performance: No enum overhead in JSONB serialization
+#   2. Simplicity: Direct string comparison in DB queries
+#   3. Pydantic v2: Native Literal support with automatic validation
+#   Runtime validation occurs via Pydantic - invalid types raise ValidationError
+#   with message: "Input should be 'citation_verified', 'citation_mismatch', ..."
 FindingType = Literal[
     "citation_verified",  # Citation Engine: verified citation
     "citation_mismatch",  # Citation Engine: misquoted/wrong section

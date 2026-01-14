@@ -47,6 +47,11 @@ ENTITY_GRAPH_TYPE = "entity_graph"
 KEY_FINDINGS_TYPE = "key_findings"  # Story 7-4: Task 3.1
 RESEARCH_NOTES_TYPE = "research_notes"  # Story 7-4: Task 4.1
 
+# JSONB array keys within each memory type document (Code Review Issue #7)
+KEY_FINDINGS_KEY = "findings"  # Key for findings array in KEY_FINDINGS_TYPE
+RESEARCH_NOTES_KEY = "notes"  # Key for notes array in RESEARCH_NOTES_TYPE
+QUERY_HISTORY_KEY = "entries"  # Key for entries array in QUERY_HISTORY_TYPE
+
 # Default query limits
 DEFAULT_ARCHIVE_QUERY_LIMIT = 10
 DEFAULT_QUERY_HISTORY_LIMIT = 100
@@ -374,7 +379,7 @@ class MatterMemoryRepository:
                 {
                     "p_matter_id": matter_id,
                     "p_memory_type": QUERY_HISTORY_TYPE,
-                    "p_key": "entries",
+                    "p_key": QUERY_HISTORY_KEY,
                     "p_item": entry.model_dump(mode="json"),
                 },
             ).execute()
@@ -855,7 +860,7 @@ class MatterMemoryRepository:
                 {
                     "p_matter_id": matter_id,
                     "p_memory_type": KEY_FINDINGS_TYPE,
-                    "p_key": "findings",
+                    "p_key": KEY_FINDINGS_KEY,
                     "p_item": finding.model_dump(mode="json"),
                 },
             ).execute()
@@ -886,6 +891,15 @@ class MatterMemoryRepository:
         """Update a key finding by ID.
 
         Story 7-4: Task 3.4 - Uses read-modify-write pattern.
+
+        Warning: Race Condition Risk (Code Review Issue #1)
+            This method is NOT atomic. Two concurrent updates could overwrite
+            each other. Acceptable for current usage patterns (low concurrency).
+
+            TODO: If verification volume becomes high (>10 updates/minute per matter),
+            implement atomic DB function: `update_key_finding_item(p_matter_id,
+            p_finding_id, p_updates jsonb)` that uses jsonb_set() for atomic update.
+
         Note: For high-volume, consider DB function.
 
         Args:
@@ -1110,7 +1124,7 @@ class MatterMemoryRepository:
                 {
                     "p_matter_id": matter_id,
                     "p_memory_type": RESEARCH_NOTES_TYPE,
-                    "p_key": "notes",
+                    "p_key": RESEARCH_NOTES_KEY,
                     "p_item": note.model_dump(mode="json"),
                 },
             ).execute()
@@ -1141,6 +1155,10 @@ class MatterMemoryRepository:
         """Update a research note by ID.
 
         Story 7-4: Task 4.4 - Update note content/title/tags.
+
+        Warning: Race Condition Risk (Code Review Issue #1)
+            This method is NOT atomic. See update_key_finding() for details.
+            Acceptable for current usage patterns (low concurrency).
 
         Args:
             matter_id: Matter UUID.

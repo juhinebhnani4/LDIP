@@ -30,14 +30,22 @@ def mock_supabase() -> MagicMock:
     """Create a mock Supabase client for testing."""
     mock = MagicMock()
 
-    # Setup default response chain
+    # Setup default response chain for insert
     mock.table.return_value.insert.return_value.execute.return_value.data = [
         {"id": "test-record-id"}
     ]
-    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
+
+    # Setup default response chain for get_latest (3 eq calls: matter_id, memory_type, user_id)
+    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
         []
     )
+
+    # Setup default response chain for get_archived_sessions (variable eq calls)
     mock.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
+        []
+    )
+    # With user_id filter
+    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
         []
     )
 
@@ -156,8 +164,8 @@ class TestGetLatestArchivedSession:
         sample_archived_session: ArchivedSession,
     ) -> None:
         """Should return latest archived session when found."""
-        # Setup mock to return archived session data
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+        # Setup mock to return archived session data (3 eq calls: matter_id, memory_type, user_id)
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
             {"data": sample_archived_session.model_dump(mode="json")}
         ]
 
@@ -175,7 +183,7 @@ class TestGetLatestArchivedSession:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return None when no archived session exists."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
             []
         )
 
@@ -184,25 +192,23 @@ class TestGetLatestArchivedSession:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_latest_archived_session_filters_by_user(
+    async def test_get_latest_archived_session_queries_with_user_filter(
         self,
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
         sample_archived_session: ArchivedSession,
     ) -> None:
-        """Should filter by user_id to return correct session."""
-        # Return session for different user
-        other_session = sample_archived_session.model_copy()
-        other_session.user_id = USER_ID_2
-
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
-            {"data": other_session.model_dump(mode="json")}
+        """Should filter by user_id in SQL query (defense-in-depth)."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+            {"data": sample_archived_session.model_dump(mode="json")}
         ]
 
-        # Request for original user - should not find
-        result = await matter_repo.get_latest_archived_session(MATTER_ID, USER_ID)
+        await matter_repo.get_latest_archived_session(MATTER_ID, USER_ID)
 
-        assert result is None
+        # Verify all 3 eq calls were made (matter_id, memory_type, user_id filter)
+        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        # First eq call should be matter_id
+        assert eq_calls[0][0] == ("matter_id", MATTER_ID)
 
 
 class TestGetArchivedSessions:
@@ -216,7 +222,8 @@ class TestGetArchivedSessions:
         sample_archived_session: ArchivedSession,
     ) -> None:
         """Should return list with pagination."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = [
+        # With user_id filter, there are 3 eq calls: matter_id, memory_type, user_id
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = [
             {"data": sample_archived_session.model_dump(mode="json")}
         ]
 
@@ -237,6 +244,7 @@ class TestGetArchivedSessions:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return empty list when no sessions."""
+        # Without user_id filter, there are 2 eq calls: matter_id, memory_type
         mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
             []
         )

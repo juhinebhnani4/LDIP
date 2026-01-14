@@ -9,18 +9,24 @@ Full Matter Memory implementation comes in Story 7-3.
 Table: matter_memory with memory_type='archived_session'
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from pydantic import ValidationError
 
-from app.models.memory import ArchivedSession, SessionEntityMention, SessionMessage
+from app.models.memory import ArchivedSession
 from app.services.supabase.client import get_supabase_client
+
+if TYPE_CHECKING:
+    from app.models.memory import SessionEntityMention, SessionMessage
 
 logger = structlog.get_logger(__name__)
 
 # Memory type for archived sessions
 ARCHIVED_SESSION_TYPE = "archived_session"
+
+# Default query limit for archived session retrieval
+DEFAULT_ARCHIVE_QUERY_LIMIT = 10
 
 
 class MatterMemoryRepository:
@@ -30,6 +36,10 @@ class MatterMemoryRepository:
 
     Uses Supabase PostgreSQL with JSONB storage for flexible data.
     RLS policies ensure matter isolation.
+
+    Note: Methods are marked async for interface consistency with other services,
+    though Supabase Python client operations are synchronous. This allows for
+    future migration to async client without breaking callers.
     """
 
     def __init__(self, supabase_client: Any = None) -> None:
@@ -123,14 +133,16 @@ class MatterMemoryRepository:
         self._ensure_client()
 
         try:
-            # Query for archived sessions, filter by user_id in JSONB data
+            # Query for archived sessions with user_id filter in JSONB
+            # Using data->>user_id filter for defense-in-depth (in addition to RLS)
             result = (
                 self._supabase.table("matter_memory")
                 .select("data")
                 .eq("matter_id", matter_id)
                 .eq("memory_type", ARCHIVED_SESSION_TYPE)
+                .eq("data->>user_id", user_id)  # Filter by user_id in JSONB
                 .order("created_at", desc=True)
-                .limit(10)  # Get recent ones to filter by user
+                .limit(1)  # Only need the latest one
                 .execute()
             )
         except Exception as e:
@@ -145,28 +157,24 @@ class MatterMemoryRepository:
         if not result.data:
             return None
 
-        # Filter by user_id (need to check JSONB data)
-        for record in result.data:
-            data = record.get("data", {})
-            if data.get("user_id") == user_id:
-                try:
-                    return ArchivedSession.model_validate(data)
-                except ValidationError as e:
-                    logger.warning(
-                        "archived_session_validation_failed",
-                        matter_id=matter_id,
-                        user_id=user_id,
-                        error=str(e),
-                    )
-                    continue
-
-        return None
+        # Parse the first (and only) result
+        data = result.data[0].get("data", {})
+        try:
+            return ArchivedSession.model_validate(data)
+        except ValidationError as e:
+            logger.warning(
+                "archived_session_validation_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            return None
 
     async def get_archived_sessions(
         self,
         matter_id: str,
         user_id: str | None = None,
-        limit: int = 10,
+        limit: int = DEFAULT_ARCHIVE_QUERY_LIMIT,
         offset: int = 0,
     ) -> list[ArchivedSession]:
         """Get archived sessions for a matter with pagination.
@@ -175,7 +183,7 @@ class MatterMemoryRepository:
 
         Args:
             matter_id: Matter UUID.
-            user_id: Optional user UUID to filter by.
+            user_id: Optional user UUID to filter by (defense-in-depth).
             limit: Maximum records to return.
             offset: Records to skip.
 
@@ -190,8 +198,14 @@ class MatterMemoryRepository:
                 .select("data")
                 .eq("matter_id", matter_id)
                 .eq("memory_type", ARCHIVED_SESSION_TYPE)
-                .order("created_at", desc=True)
-                .range(offset, offset + limit - 1)
+            )
+
+            # Filter by user_id in JSONB if provided (defense-in-depth)
+            if user_id:
+                query = query.eq("data->>user_id", user_id)
+
+            query = query.order("created_at", desc=True).range(
+                offset, offset + limit - 1
             )
 
             result = query.execute()
@@ -199,6 +213,7 @@ class MatterMemoryRepository:
             logger.error(
                 "get_archived_sessions_failed",
                 matter_id=matter_id,
+                user_id=user_id,
                 error=str(e),
             )
             raise RuntimeError(f"Failed to get archived sessions: {e}") from e
@@ -207,11 +222,6 @@ class MatterMemoryRepository:
 
         for record in result.data or []:
             data = record.get("data", {})
-
-            # Filter by user_id if provided
-            if user_id and data.get("user_id") != user_id:
-                continue
-
             try:
                 sessions.append(ArchivedSession.model_validate(data))
             except ValidationError as e:

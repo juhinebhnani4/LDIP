@@ -4,6 +4,7 @@ Story 7-1: Added SessionMemoryService and Redis client.
 Story 7-2: Added MatterMemoryRepository for archived sessions.
 """
 
+from app.models.memory import ArchivedSession
 from app.services.memory.matter import (
     ARCHIVED_SESSION_TYPE,
     MatterMemoryRepository,
@@ -63,6 +64,7 @@ __all__ = [
     "reset_session_memory_service",
     # Matter memory repository (Story 7-2)
     "ARCHIVED_SESSION_TYPE",
+    "ArchivedSession",
     "MatterMemoryRepository",
     "get_matter_memory_repository",
     "reset_matter_memory_repository",

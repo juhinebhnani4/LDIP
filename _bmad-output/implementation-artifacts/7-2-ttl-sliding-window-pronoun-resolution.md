@@ -603,3 +603,22 @@ None - all tests pass.
 - `backend/app/services/memory/__init__.py` - Updated exports
 - `backend/tests/services/memory/test_session.py` - Added Story 7-2 tests
 
+### Manual Steps Required
+
+Before deploying this story:
+
+- [ ] **Run Database Migration:**
+  ```bash
+  supabase db push
+  # Or for production:
+  supabase migration up --target 20260114000008_add_archived_session_memory_type
+  ```
+
+- [ ] **Environment Variables:** No new environment variables required (uses existing Redis and Supabase credentials)
+
+- [ ] **Manual Testing Checklist:**
+  - [ ] Create a session, let it expire (7 days), verify archival to matter_memory table
+  - [ ] Return to matter after session expired, verify context restoration
+  - [ ] Manually end session, verify archival before deletion
+  - [ ] Verify matter isolation: User A cannot access User B's archived sessions
+

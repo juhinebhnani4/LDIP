@@ -1069,6 +1069,7 @@ class TestMaxLifetimeTTL:
             max_ttl_reached=False,
         )
         mock_redis.get.return_value = existing_context.model_dump_json()
+        mock_redis.ttl.return_value = 86400  # 1 day remaining
 
         # Get session with TTL extension
         context = await session_service.get_session(
@@ -1080,6 +1081,48 @@ class TestMaxLifetimeTTL:
 
         assert context is not None
         assert context.max_ttl_reached is True
+
+    @pytest.mark.asyncio
+    async def test_ttl_not_extended_when_max_first_detected(
+        self, session_service: SessionMemoryService, mock_redis: AsyncMock
+    ) -> None:
+        """TTL should NOT be extended to 7 days when max lifetime first detected."""
+        from datetime import timedelta
+
+        # Create session with created_at 30 days ago (just hit max)
+        old_created_at = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).isoformat()
+
+        existing_context = SessionContext(
+            session_id="old-session",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at=old_created_at,
+            last_activity=old_created_at,
+            ttl_extended_count=10,
+            max_ttl_reached=False,  # Not yet marked
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+        mock_redis.ttl.return_value = 172800  # 2 days remaining
+
+        # Get session with TTL extension
+        context = await session_service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            extend_ttl=True,
+            restore_from_archive=False,
+        )
+
+        assert context is not None
+        assert context.max_ttl_reached is True
+
+        # Verify setex was called with REMAINING TTL (172800), not SESSION_TTL (7 days)
+        setex_calls = mock_redis.setex.call_args_list
+        # The last setex call should use remaining TTL, not extend to 7 days
+        last_setex_call = setex_calls[-1]
+        ttl_used = last_setex_call[0][1]
+        assert ttl_used == 172800, f"Expected remaining TTL 172800, got {ttl_used}"
 
     @pytest.mark.asyncio
     async def test_ttl_extension_works_within_max_lifetime(

@@ -253,7 +253,10 @@ class SessionMemoryService:
         # Story 7-2: Auto-extend TTL on access (with max lifetime check)
         if extend_ttl and not context.max_ttl_reached:
             # Check if max lifetime reached before extending
-            if self._check_max_lifetime(context):
+            max_lifetime_just_reached = self._check_max_lifetime(context)
+
+            if max_lifetime_just_reached:
+                # Max lifetime reached - mark it but DON'T extend TTL
                 context.max_ttl_reached = True
                 logger.info(
                     "session_max_lifetime_reached",
@@ -261,36 +264,53 @@ class SessionMemoryService:
                     matter_id=matter_id,
                     ttl_extended_count=context.ttl_extended_count,
                 )
-                # Don't extend TTL, but update the context to mark max_ttl_reached
+                # Update context in Redis WITHOUT extending TTL (use current TTL)
+                # Note: We still save the updated max_ttl_reached flag
+                try:
+                    # Get remaining TTL and use that instead of extending
+                    remaining_ttl = await self._redis.ttl(key)
+                    if remaining_ttl and remaining_ttl > 0:
+                        await self._redis.setex(
+                            key,
+                            remaining_ttl,  # Keep existing TTL, don't extend
+                            context.model_dump_json(),
+                        )
+                except Exception as e:
+                    logger.error(
+                        "redis_save_max_ttl_flag_failed",
+                        session_id=context.session_id,
+                        matter_id=matter_id,
+                        error=str(e),
+                    )
+                    # Non-fatal: flag will be set again on next access
             else:
+                # Normal TTL extension
                 context.ttl_extended_count += 1
+                context.last_activity = datetime.now(timezone.utc).isoformat()
 
-            context.last_activity = datetime.now(timezone.utc).isoformat()
-
-            # Update total_lifetime_days
-            created_at = datetime.fromisoformat(
-                context.created_at.replace("Z", "+00:00")
-            )
-            now = datetime.now(timezone.utc)
-            context.total_lifetime_days = (now - created_at).days
-
-            # Update stored context with extended TTL
-            try:
-                await self._redis.setex(
-                    key,
-                    SESSION_TTL,
-                    context.model_dump_json(),
+                # Update total_lifetime_days
+                created_at = datetime.fromisoformat(
+                    context.created_at.replace("Z", "+00:00")
                 )
-            except Exception as e:
-                logger.error(
-                    "redis_extend_ttl_failed",
-                    session_id=context.session_id,
-                    matter_id=matter_id,
-                    error=str(e),
-                )
-                raise RuntimeError(f"Failed to extend session TTL: {e}") from e
+                now = datetime.now(timezone.utc)
+                context.total_lifetime_days = (now - created_at).days
 
-            if not context.max_ttl_reached:
+                # Update stored context with extended TTL
+                try:
+                    await self._redis.setex(
+                        key,
+                        SESSION_TTL,
+                        context.model_dump_json(),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "redis_extend_ttl_failed",
+                        session_id=context.session_id,
+                        matter_id=matter_id,
+                        error=str(e),
+                    )
+                    raise RuntimeError(f"Failed to extend session TTL: {e}") from e
+
                 logger.debug(
                     "session_ttl_extended",
                     session_id=context.session_id,

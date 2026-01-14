@@ -8,6 +8,7 @@ Final stage of the Contradiction Engine pipeline. Scores contradictions by sever
 CRITICAL: This is 100% rule-based - NO LLM calls. Cost: $0 for all operations.
 """
 
+import html
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -39,7 +40,7 @@ HIGH_CONFIDENCE_THRESHOLD = 0.8
 LOW_CONFIDENCE_THRESHOLD = 0.6
 
 # Default confidence when missing (MEDIUM range)
-DEFAULT_CONFIDENCE = 0.7
+DEFAULT_CONFIDENCE: float = 0.7
 
 # Maximum excerpt length for evidence links
 MAX_EXCERPT_LENGTH = 200
@@ -300,17 +301,23 @@ class ContradictionScorer:
         return SeverityLevel.MEDIUM
 
     def _truncate_excerpt(self, content: str) -> str:
-        """Truncate content to maximum excerpt length.
+        """Truncate and sanitize content for safe display.
 
         Args:
             content: Full statement content.
 
         Returns:
-            Truncated content with ellipsis if needed.
+            HTML-escaped and truncated content with ellipsis if needed.
+
+        Note:
+            HTML escaping prevents XSS if excerpts are rendered in frontend.
+            Escaping is applied BEFORE truncation to ensure proper length.
         """
-        if len(content) <= MAX_EXCERPT_LENGTH:
-            return content
-        return content[: MAX_EXCERPT_LENGTH - 3] + "..."
+        # HTML-escape first to prevent XSS
+        sanitized = html.escape(content)
+        if len(sanitized) <= MAX_EXCERPT_LENGTH:
+            return sanitized
+        return sanitized[: MAX_EXCERPT_LENGTH - 3] + "..."
 
     def _create_evidence_link(
         self,
@@ -422,7 +429,7 @@ class ContradictionScorer:
             value_b=value_b,
         )
 
-    async def score_contradiction(
+    def score_contradiction(
         self,
         classified: ClassifiedContradiction,
         comparison: StatementPairComparison,
@@ -432,6 +439,10 @@ class ContradictionScorer:
         """Score a single classified contradiction.
 
         Story 5-4: Main scoring entry point.
+
+        Note: This is a synchronous method (no I/O operations).
+        The batch method score_all() remains async for consistency with
+        the pipeline API and future DB persistence.
 
         Args:
             classified: ClassifiedContradiction from classifier (Story 5-3).
@@ -444,8 +455,12 @@ class ContradictionScorer:
         """
         start_time = time.time()
 
-        # Get confidence from comparison (default if missing)
-        confidence = comparison.confidence if comparison.confidence else DEFAULT_CONFIDENCE
+        # Get confidence from comparison (default only if None, not for 0.0)
+        confidence = (
+            comparison.confidence
+            if comparison.confidence is not None
+            else DEFAULT_CONFIDENCE
+        )
 
         # Determine severity
         severity = self.determine_severity(
@@ -538,10 +553,15 @@ class ContradictionScorer:
         metrics = ScoringMetrics()
 
         # Build comparison lookup by statement pair
+        # KEY FORMAT: "{statement_a_id}_{statement_b_id}" - must match ClassifiedContradiction.comparison_id
         comparison_map: dict[str, StatementPairComparison] = {}
         for comp in comparisons:
             key = f"{comp.statement_a_id}_{comp.statement_b_id}"
             comparison_map[key] = comp
+            # Also add reverse key for robustness (in case order varies)
+            reverse_key = f"{comp.statement_b_id}_{comp.statement_a_id}"
+            if reverse_key not in comparison_map:
+                comparison_map[reverse_key] = comp
 
         document_names = document_names or {}
         scored_contradictions: list[ScoredContradiction] = []
@@ -562,8 +582,8 @@ class ContradictionScorer:
             doc_a_name = document_names.get(comparison.document_a_id)
             doc_b_name = document_names.get(comparison.document_b_id)
 
-            # Score the contradiction
-            result = await self.score_contradiction(
+            # Score the contradiction (sync call - no I/O)
+            result = self.score_contradiction(
                 classified=classified,
                 comparison=comparison,
                 document_a_name=doc_a_name,

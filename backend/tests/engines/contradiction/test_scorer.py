@@ -378,15 +378,14 @@ class TestSeverityDetermination:
 class TestScoreContradiction:
     """Tests for scoring individual contradictions."""
 
-    @pytest.mark.asyncio
-    async def test_score_high_severity_date_mismatch(
+    def test_score_high_severity_date_mismatch(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should score HIGH severity for date mismatch with high confidence (AC #2)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -397,15 +396,14 @@ class TestScoreContradiction:
         assert "HIGH SEVERITY" in result.scored_contradiction.explanation
         assert "date" in result.scored_contradiction.explanation.lower()
 
-    @pytest.mark.asyncio
-    async def test_score_high_severity_amount_mismatch(
+    def test_score_high_severity_amount_mismatch(
         self,
         scorer: ContradictionScorer,
         amount_mismatch_classified: ClassifiedContradiction,
         amount_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should score HIGH severity for amount mismatch with high confidence (AC #2)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=amount_mismatch_classified,
             comparison=amount_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -416,15 +414,14 @@ class TestScoreContradiction:
         assert "HIGH SEVERITY" in result.scored_contradiction.explanation
         assert "amount" in result.scored_contradiction.explanation.lower()
 
-    @pytest.mark.asyncio
-    async def test_score_medium_severity_semantic(
+    def test_score_medium_severity_semantic(
         self,
         scorer: ContradictionScorer,
         semantic_classified: ClassifiedContradiction,
         semantic_comparison: StatementPairComparison,
     ) -> None:
         """Should score MEDIUM severity for semantic contradiction (AC #3)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=semantic_classified,
             comparison=semantic_comparison,
             document_a_name="Interview Notes.pdf",
@@ -434,15 +431,14 @@ class TestScoreContradiction:
         assert result.scored_contradiction.severity == SeverityLevel.MEDIUM
         assert "MEDIUM SEVERITY" in result.scored_contradiction.explanation
 
-    @pytest.mark.asyncio
-    async def test_score_low_severity_low_confidence(
+    def test_score_low_severity_low_confidence(
         self,
         scorer: ContradictionScorer,
         low_confidence_classified: ClassifiedContradiction,
         low_confidence_comparison: StatementPairComparison,
     ) -> None:
         """Should score LOW severity for low confidence contradictions (AC #4)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=low_confidence_classified,
             comparison=low_confidence_comparison,
             document_a_name="Draft Notes.pdf",
@@ -462,15 +458,14 @@ class TestScoreContradiction:
 class TestExplanationGeneration:
     """Tests for explanation generation with document sources (AC #5)."""
 
-    @pytest.mark.asyncio
-    async def test_explanation_includes_document_sources(
+    def test_explanation_includes_document_sources(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include document sources in explanation (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -481,15 +476,14 @@ class TestExplanationGeneration:
         assert "Loan Agreement.pdf" in explanation
         assert "Bank Statement.pdf" in explanation
 
-    @pytest.mark.asyncio
-    async def test_explanation_includes_page_numbers(
+    def test_explanation_includes_page_numbers(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include page numbers in explanation (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -500,15 +494,14 @@ class TestExplanationGeneration:
         assert "page 5" in explanation
         assert "page 12" in explanation
 
-    @pytest.mark.asyncio
-    async def test_explanation_handles_missing_page_numbers(
+    def test_explanation_handles_missing_page_numbers(
         self,
         scorer: ContradictionScorer,
         semantic_classified: ClassifiedContradiction,
         semantic_comparison: StatementPairComparison,
     ) -> None:
         """Should handle missing page numbers gracefully (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=semantic_classified,
             comparison=semantic_comparison,
             document_a_name="Document A.pdf",
@@ -519,15 +512,14 @@ class TestExplanationGeneration:
         assert "page N/A" in explanation  # Missing page_a
         assert "page 15" in explanation   # Has page_b
 
-    @pytest.mark.asyncio
-    async def test_explanation_includes_statement_excerpts(
+    def test_explanation_includes_statement_excerpts(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include statement excerpts in explanation (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Doc A",
@@ -538,15 +530,14 @@ class TestExplanationGeneration:
         assert "disbursed on 15/01/2024" in explanation
         assert "disbursed on 15/06/2024" in explanation
 
-    @pytest.mark.asyncio
-    async def test_explanation_includes_extracted_values(
+    def test_explanation_includes_extracted_values(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include extracted values in explanation for date/amount (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Doc A",
@@ -566,15 +557,14 @@ class TestExplanationGeneration:
 class TestEvidenceLinks:
     """Tests for evidence links creation (AC #5)."""
 
-    @pytest.mark.asyncio
-    async def test_evidence_links_created(
+    def test_evidence_links_created(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should create evidence links for both statements (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -584,15 +574,14 @@ class TestEvidenceLinks:
         evidence_links = result.scored_contradiction.evidence_links
         assert len(evidence_links) == 2
 
-    @pytest.mark.asyncio
-    async def test_evidence_links_contain_document_info(
+    def test_evidence_links_contain_document_info(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include document info in evidence links (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name="Loan Agreement.pdf",
@@ -614,15 +603,14 @@ class TestEvidenceLinks:
         assert link_b.page_number == 12
         assert link_b.statement_id == "stmt-b"
 
-    @pytest.mark.asyncio
-    async def test_evidence_links_contain_excerpts(
+    def test_evidence_links_contain_excerpts(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should include excerpts in evidence links (AC #5)."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
         )
@@ -633,15 +621,14 @@ class TestEvidenceLinks:
         assert "disbursed on 15/01/2024" in link_a.excerpt
         assert "disbursed on 15/06/2024" in link_b.excerpt
 
-    @pytest.mark.asyncio
-    async def test_evidence_links_handle_missing_document_names(
+    def test_evidence_links_handle_missing_document_names(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should use placeholder for missing document names."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
             document_a_name=None,  # Missing
@@ -831,8 +818,7 @@ class TestBatchScoring:
 class TestMatterIsolation:
     """Security tests for matter isolation."""
 
-    @pytest.mark.asyncio
-    async def test_scoring_does_not_leak_cross_matter_data(
+    def test_scoring_does_not_leak_cross_matter_data(
         self,
         scorer: ContradictionScorer,
     ) -> None:
@@ -871,7 +857,7 @@ class TestMatterIsolation:
             page_b=2,
         )
 
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=matter_a_classified,
             comparison=matter_a_comparison,
             document_a_name="Matter A Document",
@@ -917,8 +903,7 @@ class TestScorerFactory:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    @pytest.mark.asyncio
-    async def test_truncate_long_excerpt(
+    def test_truncate_long_excerpt(
         self,
         scorer: ContradictionScorer,
     ) -> None:
@@ -946,7 +931,7 @@ class TestEdgeCases:
             document_b_id="d2",
         )
 
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=classified,
             comparison=comparison,
         )
@@ -955,8 +940,7 @@ class TestEdgeCases:
         assert len(result.scored_contradiction.evidence_links[0].excerpt) <= 200
         assert result.scored_contradiction.evidence_links[0].excerpt.endswith("...")
 
-    @pytest.mark.asyncio
-    async def test_handle_very_low_confidence(
+    def test_handle_very_low_confidence(
         self,
         scorer: ContradictionScorer,
     ) -> None:
@@ -983,7 +967,7 @@ class TestEdgeCases:
             document_b_id="d2",
         )
 
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=classified,
             comparison=comparison,
         )
@@ -991,8 +975,7 @@ class TestEdgeCases:
         # Should score LOW for very low confidence
         assert result.scored_contradiction.severity == SeverityLevel.LOW
 
-    @pytest.mark.asyncio
-    async def test_handle_perfect_confidence(
+    def test_handle_perfect_confidence(
         self,
         scorer: ContradictionScorer,
     ) -> None:
@@ -1026,7 +1009,7 @@ class TestEdgeCases:
             document_b_id="d2",
         )
 
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=classified,
             comparison=comparison,
         )
@@ -1035,17 +1018,178 @@ class TestEdgeCases:
         assert result.scored_contradiction.severity == SeverityLevel.HIGH
         assert result.scored_contradiction.confidence == 1.0
 
-    @pytest.mark.asyncio
-    async def test_processing_time_tracked(
+    def test_processing_time_tracked(
         self,
         scorer: ContradictionScorer,
         date_mismatch_classified: ClassifiedContradiction,
         date_mismatch_comparison: StatementPairComparison,
     ) -> None:
         """Should track processing time."""
-        result = await scorer.score_contradiction(
+        result = scorer.score_contradiction(
             classified=date_mismatch_classified,
             comparison=date_mismatch_comparison,
         )
 
         assert result.processing_time_ms >= 0
+
+    def test_html_escaped_in_excerpts(
+        self,
+        scorer: ContradictionScorer,
+    ) -> None:
+        """Should HTML-escape content to prevent XSS in excerpts.
+
+        Regression test for MEDIUM #5: Excerpts must be sanitized.
+        """
+        malicious_content = '<script>alert("XSS")</script>Some content'
+        classified = ClassifiedContradiction(
+            comparison_id="a_b",
+            statement_a_id="a",
+            statement_b_id="b",
+            contradiction_type=ContradictionType.SEMANTIC_CONTRADICTION,
+            extracted_values=None,
+            explanation="Test",
+            classification_method="rule_based",
+        )
+        comparison = StatementPairComparison(
+            statement_a_id="a",
+            statement_b_id="b",
+            statement_a_content=malicious_content,
+            statement_b_content="Normal content",
+            result=ComparisonResult.CONTRADICTION,
+            reasoning="Test",
+            confidence=0.8,
+            evidence=ContradictionEvidence(type=EvidenceType.SEMANTIC_CONFLICT),
+            document_a_id="d1",
+            document_b_id="d2",
+        )
+
+        result = scorer.score_contradiction(
+            classified=classified,
+            comparison=comparison,
+        )
+
+        # Script tag should be HTML-escaped
+        excerpt = result.scored_contradiction.evidence_links[0].excerpt
+        assert "<script>" not in excerpt
+        assert "&lt;script&gt;" in excerpt
+
+    def test_zero_confidence_treated_as_low(
+        self,
+        scorer: ContradictionScorer,
+    ) -> None:
+        """Should correctly handle 0.0 confidence (not treat as missing).
+
+        Regression test for HIGH #2: 0.0 is a valid confidence value
+        and should result in LOW severity, not be replaced with DEFAULT_CONFIDENCE.
+        """
+        classified = ClassifiedContradiction(
+            comparison_id="a_b",
+            statement_a_id="a",
+            statement_b_id="b",
+            contradiction_type=ContradictionType.DATE_MISMATCH,
+            extracted_values=None,
+            explanation="Zero confidence test",
+            classification_method="rule_based",
+        )
+        comparison = StatementPairComparison(
+            statement_a_id="a",
+            statement_b_id="b",
+            statement_a_content="Date was 01/01/2024",
+            statement_b_content="Date was 01/02/2024",
+            result=ComparisonResult.CONTRADICTION,
+            reasoning="Test",
+            confidence=0.0,  # Explicitly 0.0 - should NOT be treated as missing
+            evidence=ContradictionEvidence(type=EvidenceType.DATE_MISMATCH),
+            document_a_id="d1",
+            document_b_id="d2",
+        )
+
+        result = scorer.score_contradiction(
+            classified=classified,
+            comparison=comparison,
+        )
+
+        # 0.0 confidence is below 0.6 threshold = LOW severity
+        assert result.scored_contradiction.severity == SeverityLevel.LOW
+        assert result.scored_contradiction.confidence == 0.0
+
+
+# =============================================================================
+# Integration Tests (Pipeline)
+# =============================================================================
+
+
+class TestClassifierIntegration:
+    """Integration tests verifying scorer works with classifier output format.
+
+    These tests verify the scorer correctly processes the exact output format
+    produced by ContradictionClassifier (Story 5-3).
+    """
+
+    @pytest.mark.asyncio
+    async def test_scorer_with_classifier_output_format(
+        self,
+        scorer: ContradictionScorer,
+    ) -> None:
+        """Should correctly process ClassificationResult from classifier.
+
+        Simulates the exact output format from ContradictionClassifier.classify_all()
+        to ensure pipeline integration works correctly.
+        """
+        # This mimics exact output from classifier
+        classification_result = ClassificationResult(
+            classified_contradiction=ClassifiedContradiction(
+                comparison_id="chunk-uuid-1_chunk-uuid-2",
+                statement_a_id="chunk-uuid-1",
+                statement_b_id="chunk-uuid-2",
+                contradiction_type=ContradictionType.DATE_MISMATCH,
+                extracted_values=ExtractedValues(
+                    value_a=ExtractedValue(original="15/01/2024", normalized="2024-01-15"),
+                    value_b=ExtractedValue(original="15/06/2024", normalized="2024-06-15"),
+                ),
+                explanation="Date conflict: 15/01/2024 vs 15/06/2024",
+                classification_method="rule_based",
+            ),
+            llm_cost_usd=0.0,
+            processing_time_ms=5,
+        )
+
+        # Comparison that would come from comparator
+        comparison = StatementPairComparison(
+            statement_a_id="chunk-uuid-1",
+            statement_b_id="chunk-uuid-2",
+            statement_a_content="The agreement was signed on 15/01/2024.",
+            statement_b_content="The agreement was signed on 15/06/2024.",
+            result=ComparisonResult.CONTRADICTION,
+            reasoning="Clear date mismatch",
+            confidence=0.95,
+            evidence=ContradictionEvidence(
+                type=EvidenceType.DATE_MISMATCH,
+                value_a="15/01/2024",
+                value_b="15/06/2024",
+            ),
+            document_a_id="doc-uuid-1",
+            document_b_id="doc-uuid-2",
+            page_a=3,
+            page_b=7,
+        )
+
+        # Use batch scoring as pipeline would
+        result = await scorer.score_all(
+            classifications=[classification_result],
+            comparisons=[comparison],
+            document_names={
+                "doc-uuid-1": "Contract.pdf",
+                "doc-uuid-2": "Amendment.pdf",
+            },
+        )
+
+        # Verify pipeline integration
+        assert result.total_scored == 1
+        assert result.high_count == 1
+        scored = result.scored_contradictions[0]
+        assert scored.severity == SeverityLevel.HIGH
+        assert scored.contradiction_type == ContradictionType.DATE_MISMATCH
+        assert "Contract.pdf" in scored.explanation
+        assert "Amendment.pdf" in scored.explanation
+        assert len(scored.evidence_links) == 2

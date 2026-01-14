@@ -122,7 +122,7 @@ development_status:
 
   # Epic 7: Three-Layer Memory System
   epic-7: in-progress  # First story created 2026-01-14
-  7-1-session-memory-redis: review  # Implementation complete 2026-01-14 (65 tests)
+  7-1-session-memory-redis: done  # Code review passed 2026-01-14 (65 tests, 7 issues fixed)
   7-2-ttl-sliding-window-pronoun-resolution: backlog
   7-3-matter-memory-postgresql-jsonb: backlog
   7-4-key-findings-research-notes: backlog

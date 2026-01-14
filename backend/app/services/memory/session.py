@@ -24,6 +24,7 @@ from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import (
     SESSION_TTL,
     session_key,
+    validate_key_access,
 )
 
 logger = structlog.get_logger(__name__)
@@ -73,6 +74,9 @@ class SessionMemoryService:
 
         Returns:
             Newly created SessionContext.
+
+        Raises:
+            RuntimeError: If Redis operation fails.
         """
         await self._ensure_client()
 
@@ -93,11 +97,21 @@ class SessionMemoryService:
 
         # Store in Redis with 7-day TTL
         key = session_key(matter_id, user_id, "context")
-        await self._redis.setex(
-            key,
-            SESSION_TTL,
-            context.model_dump_json(),
-        )
+        try:
+            await self._redis.setex(
+                key,
+                SESSION_TTL,
+                context.model_dump_json(),
+            )
+        except Exception as e:
+            logger.error(
+                "redis_create_session_failed",
+                session_id=session_id,
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to create session in Redis: {e}") from e
 
         logger.info(
             "session_created",
@@ -126,13 +140,34 @@ class SessionMemoryService:
 
         Returns:
             SessionContext if found, None otherwise.
+
+        Raises:
+            RuntimeError: If Redis operation fails.
         """
         await self._ensure_client()
 
         key = session_key(matter_id, user_id, "context")
 
+        # Defense-in-depth: validate key belongs to requested matter
+        if not validate_key_access(key, matter_id):
+            logger.error(
+                "session_key_validation_failed",
+                key=key,
+                matter_id=matter_id,
+            )
+            raise ValueError("Session key does not match requested matter")
+
         # Get session data
-        data = await self._redis.get(key)
+        try:
+            data = await self._redis.get(key)
+        except Exception as e:
+            logger.error(
+                "redis_get_session_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to get session from Redis: {e}") from e
 
         if data is None:
             if auto_create:
@@ -149,16 +184,24 @@ class SessionMemoryService:
 
         # Auto-extend TTL on access (sliding expiration)
         if extend_ttl:
-            await self._redis.expire(key, SESSION_TTL)
             context.ttl_extended_count += 1
             context.last_activity = datetime.now(timezone.utc).isoformat()
 
-            # Update stored context
-            await self._redis.setex(
-                key,
-                SESSION_TTL,
-                context.model_dump_json(),
-            )
+            # Update stored context with extended TTL
+            try:
+                await self._redis.setex(
+                    key,
+                    SESSION_TTL,
+                    context.model_dump_json(),
+                )
+            except Exception as e:
+                logger.error(
+                    "redis_extend_ttl_failed",
+                    session_id=context.session_id,
+                    matter_id=matter_id,
+                    error=str(e),
+                )
+                raise RuntimeError(f"Failed to extend session TTL: {e}") from e
 
             logger.debug(
                 "session_ttl_extended",
@@ -188,19 +231,24 @@ class SessionMemoryService:
 
         Returns:
             Updated SessionContext.
+
+        Raises:
+            RuntimeError: If Redis operation fails.
         """
         await self._ensure_client()
 
-        # Get or create session
-        context = await self.get_session(matter_id, user_id, auto_create=True)
-        if context is None:
-            context = await self.create_session(matter_id, user_id)
+        # Get or create session (extend_ttl=False to avoid duplicate timestamp update)
+        context = await self.get_session(
+            matter_id, user_id, auto_create=True, extend_ttl=False
+        )
+        # Note: auto_create=True guarantees non-None return
 
-        # Create message
+        # Create message with current timestamp
+        now = datetime.now(timezone.utc).isoformat()
         message = SessionMessage(
             role=role,
             content=content,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=now,
             entity_refs=entity_refs or [],
         )
 
@@ -211,17 +259,26 @@ class SessionMemoryService:
         context = self._apply_sliding_window(context)
 
         # Update activity and query count
-        context.last_activity = datetime.now(timezone.utc).isoformat()
+        context.last_activity = now
         if role == "user":
             context.query_count += 1
 
         # Save to Redis
         key = session_key(matter_id, user_id, "context")
-        await self._redis.setex(
-            key,
-            SESSION_TTL,
-            context.model_dump_json(),
-        )
+        try:
+            await self._redis.setex(
+                key,
+                SESSION_TTL,
+                context.model_dump_json(),
+            )
+        except Exception as e:
+            logger.error(
+                "redis_add_message_failed",
+                session_id=context.session_id,
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to add message to session: {e}") from e
 
         logger.debug(
             "message_added_to_session",
@@ -284,12 +341,17 @@ class SessionMemoryService:
 
         Returns:
             Updated SessionContext.
+
+        Raises:
+            RuntimeError: If Redis operation fails.
         """
         await self._ensure_client()
 
-        context = await self.get_session(matter_id, user_id, auto_create=True)
-        if context is None:
-            context = await self.create_session(matter_id, user_id)
+        # Get or create session (extend_ttl=False, we'll update last_activity here)
+        context = await self.get_session(
+            matter_id, user_id, auto_create=True, extend_ttl=False
+        )
+        # Note: auto_create=True guarantees non-None return
 
         now = datetime.now(timezone.utc).isoformat()
 
@@ -318,13 +380,25 @@ class SessionMemoryService:
                     last_mentioned=now,
                 )
 
+        # Update last activity
+        context.last_activity = now
+
         # Save to Redis
         key = session_key(matter_id, user_id, "context")
-        await self._redis.setex(
-            key,
-            SESSION_TTL,
-            context.model_dump_json(),
-        )
+        try:
+            await self._redis.setex(
+                key,
+                SESSION_TTL,
+                context.model_dump_json(),
+            )
+        except Exception as e:
+            logger.error(
+                "redis_update_entities_failed",
+                session_id=context.session_id,
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to update entities in session: {e}") from e
 
         logger.debug(
             "entities_updated",
@@ -419,6 +493,9 @@ class SessionMemoryService:
         Returns:
             True if session was deleted, False if not found.
 
+        Raises:
+            RuntimeError: If Redis operation fails.
+
         Note:
             Before clearing, session should be archived to
             Matter Memory (Story 7-3 handles archival).
@@ -426,7 +503,16 @@ class SessionMemoryService:
         await self._ensure_client()
 
         key = session_key(matter_id, user_id, "context")
-        result = await self._redis.delete(key)
+        try:
+            result = await self._redis.delete(key)
+        except Exception as e:
+            logger.error(
+                "redis_end_session_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to end session in Redis: {e}") from e
 
         logger.info(
             "session_ended",
@@ -464,7 +550,11 @@ def get_session_memory_service(redis_client: Any = None) -> SessionMemoryService
 
 
 def reset_session_memory_service() -> None:
-    """Reset singleton (for testing)."""
+    """Reset singleton (for testing).
+
+    Note: This creates a fresh instance on next get_session_memory_service() call,
+    which resets _initialized flag implicitly.
+    """
     global _session_memory_service
     _session_memory_service = None
     logger.debug("session_memory_service_reset")

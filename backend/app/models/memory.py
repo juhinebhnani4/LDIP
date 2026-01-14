@@ -10,6 +10,8 @@ Layer 2: Matter Memory (Story 7-3) - Persistent findings and entity graph
 Layer 3: Query Cache (Story 7-5) - LLM response caching
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -20,7 +22,7 @@ class SessionMessage(BaseModel):
     Messages are stored in a sliding window (max 20).
     """
 
-    role: str = Field(description="Message role: 'user' or 'assistant'")
+    role: Literal["user", "assistant"] = Field(description="Message role")
     content: str = Field(description="Message content text")
     timestamp: str = Field(description="ISO8601 timestamp when sent")
     entity_refs: list[str] = Field(
@@ -74,6 +76,7 @@ class SessionContext(BaseModel):
     # Conversation context
     messages: list[SessionMessage] = Field(
         default_factory=list,
+        max_length=20,
         description="Recent messages (max 20, sliding window)",
     )
 

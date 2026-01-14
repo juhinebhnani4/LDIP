@@ -193,7 +193,8 @@ class TestTTLExtension:
 
         assert context is not None
         assert context.ttl_extended_count == 1
-        mock_redis.expire.assert_called_once()
+        # setex is used to update context with new TTL (more efficient than separate expire)
+        assert mock_redis.setex.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_ttl_not_extended_when_disabled(
@@ -440,14 +441,15 @@ class TestSlidingWindow:
     async def test_sliding_window_preserves_recent_messages(
         self, session_service: SessionMemoryService, mock_redis: AsyncMock
     ) -> None:
-        """Sliding window should preserve most recent messages."""
+        """Sliding window should preserve most recent messages when adding many."""
+        # Start with max 20 messages (model enforces max_length=20)
         messages = [
             SessionMessage(
                 role="user",
                 content=f"Message {i}",
                 timestamp=f"2026-01-14T10:{i:02d}:00Z",
             )
-            for i in range(25)
+            for i in range(20)
         ]
         existing_context = SessionContext(
             session_id="existing-session",
@@ -459,18 +461,37 @@ class TestSlidingWindow:
         )
         mock_redis.get.return_value = existing_context.model_dump_json()
 
+        # Add 5 more messages (would be 25 total, but sliding window keeps 20)
         context = await session_service.add_message(
-            matter_id=MATTER_ID,
-            user_id=USER_ID,
-            role="user",
-            content="Message 25",
+            MATTER_ID, USER_ID, "user", "Message 20"
+        )
+        # Update mock to return the new context for subsequent calls
+        mock_redis.get.return_value = context.model_dump_json()
+
+        context = await session_service.add_message(
+            MATTER_ID, USER_ID, "user", "Message 21"
+        )
+        mock_redis.get.return_value = context.model_dump_json()
+
+        context = await session_service.add_message(
+            MATTER_ID, USER_ID, "user", "Message 22"
+        )
+        mock_redis.get.return_value = context.model_dump_json()
+
+        context = await session_service.add_message(
+            MATTER_ID, USER_ID, "user", "Message 23"
+        )
+        mock_redis.get.return_value = context.model_dump_json()
+
+        context = await session_service.add_message(
+            MATTER_ID, USER_ID, "user", "Message 24"
         )
 
-        # 25 + 1 = 26, should slide to 20
+        # Should have 20 messages (oldest 5 removed)
         assert len(context.messages) == 20
-        # Messages 0-5 should be removed, 6-25 retained
-        assert context.messages[0].content == "Message 6"
-        assert context.messages[-1].content == "Message 25"
+        # Messages 0-4 should be removed, 5-24 retained
+        assert context.messages[0].content == "Message 5"
+        assert context.messages[-1].content == "Message 24"
 
 
 class TestEntityTracking:

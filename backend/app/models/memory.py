@@ -4,13 +4,14 @@ Story 7-1: Session Memory Redis Storage
 Story 7-2: Session TTL and Context Restoration
 Story 7-3: Matter Memory PostgreSQL JSONB Storage
 Story 7-4: Key Findings and Research Notes
+Story 7-5: Query Cache Redis Storage
 
 These models define the structure of session data stored in Redis
 for conversation context persistence. Part of the Three-Layer Memory System.
 
 Layer 1: Session Memory (this module) - Conversation context during user session
 Layer 2: Matter Memory (Story 7-3, 7-4) - Persistent findings, entity graph, key findings, research notes
-Layer 3: Query Cache (Story 7-5) - LLM response caching
+Layer 3: Query Cache (Story 7-5) - LLM response caching with 1-hour TTL
 """
 
 from typing import Literal
@@ -513,3 +514,63 @@ class ResearchNotes(BaseModel):
     def validate_notes(cls, v: list | None) -> list:
         """Ensure notes is always a list."""
         return v or []
+
+
+# =============================================================================
+# Story 7-5: Query Cache Models (Task 1)
+# =============================================================================
+
+
+class CachedQueryResult(BaseModel):
+    """Cached query result stored in Redis.
+
+    Story 7-5: AC #1 - Results cached at cache:query:{matter_id}:{query_hash}
+    AC #2 - Cached results returned in ~10ms
+    AC #3 - 1-hour TTL with automatic expiration
+
+    Part of Layer 3 (Query Cache) in the Three-Layer Memory System.
+    """
+
+    # Query identification
+    query_hash: str = Field(description="SHA256 hash of normalized query (64 hex chars)")
+    matter_id: str = Field(description="Matter UUID for isolation")
+    original_query: str = Field(description="Original user query before normalization")
+    normalized_query: str = Field(description="Normalized query used for hashing")
+
+    # Timing
+    cached_at: str = Field(description="ISO8601 timestamp when result was cached")
+    expires_at: str = Field(description="ISO8601 timestamp when cache entry expires")
+
+    # Response data
+    result_summary: str = Field(
+        default="",
+        description="Brief summary of the query result",
+    )
+    engine_used: str | None = Field(
+        default=None,
+        description="Engine that processed the query",
+    )
+    findings_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of findings in the result",
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0,
+        le=100,
+        description="Overall confidence score 0-100",
+    )
+
+    # Full response payload
+    response_data: dict = Field(
+        default_factory=dict,
+        description="Complete response payload for cache hit",
+    )
+
+    # Metadata
+    cache_version: int = Field(
+        default=1,
+        ge=1,
+        description="Cache schema version for migration support",
+    )

@@ -4,11 +4,13 @@ Story 7-1: Added SessionMemoryService and Redis client.
 Story 7-2: Added MatterMemoryRepository for archived sessions.
 Story 7-3: Added MatterMemoryService for full matter memory.
 Story 7-4: Added Key Findings and Research Notes support.
+Story 7-5: Added Query Cache for LLM response caching.
 """
 
 from app.models.memory import (
     ArchivedSession,
     CachedEntity,
+    CachedQueryResult,
     EntityGraphCache,
     EntityRelationship,
     FindingEvidence,
@@ -69,6 +71,23 @@ from app.services.memory.session import (
     reset_session_memory_service,
 )
 
+# Story 7-5: Query Cache
+from app.services.memory.query_cache import (
+    QueryCacheRepository,
+    get_query_cache_repository,
+    reset_query_cache_repository,
+)
+from app.services.memory.query_cache_service import (
+    QueryCacheService,
+    get_query_cache_service,
+    reset_query_cache_service,
+)
+from app.services.memory.query_normalizer import (
+    QueryNormalizer,
+    get_query_normalizer,
+    reset_query_normalizer,
+)
+
 __all__ = [
     # Redis key utilities
     "SESSION_TTL",
@@ -127,4 +146,15 @@ __all__ = [
     "KeyFindings",
     "ResearchNote",
     "ResearchNotes",
+    # Query Cache (Story 7-5)
+    "CachedQueryResult",
+    "QueryNormalizer",
+    "get_query_normalizer",
+    "reset_query_normalizer",
+    "QueryCacheRepository",
+    "get_query_cache_repository",
+    "reset_query_cache_repository",
+    "QueryCacheService",
+    "get_query_cache_service",
+    "reset_query_cache_service",
 ]

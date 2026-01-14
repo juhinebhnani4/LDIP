@@ -132,7 +132,7 @@ development_status:
   # Epic 8: Safety Layer (Guardrails, Policing, Verification)
   epic-8: in-progress  # First story created 2026-01-14
   8-1-regex-pattern-detection: done  # Code review passed 2026-01-14 (57 tests, 8 issues fixed)
-  8-2-gpt4o-mini-violation-detection: backlog
+  8-2-gpt4o-mini-violation-detection: review  # 33 tests passing, ready for code review 2026-01-14
   8-3-language-policing: backlog
   8-4-finding-verifications-table: backlog
   8-5-verification-queue-ui: backlog

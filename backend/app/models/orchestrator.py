@@ -339,6 +339,7 @@ class OrchestratorResult(BaseModel):
     """Aggregated result from orchestrator execution.
 
     Story 6-2: Combined output from all engine executions.
+    Story 8-2: Added safety blocking fields.
 
     Example:
         >>> result = OrchestratorResult(
@@ -356,6 +357,7 @@ class OrchestratorResult(BaseModel):
     matter_id: str = Field(description="Matter UUID")
     query: str = Field(description="Original query")
     successful_engines: list[EngineType] = Field(
+        default_factory=list,
         description="Engines that executed successfully",
     )
     failed_engines: list[EngineType] = Field(
@@ -363,6 +365,7 @@ class OrchestratorResult(BaseModel):
         description="Engines that failed to execute",
     )
     unified_response: str = Field(
+        default="",
         description="Combined human-readable response from all engines",
     )
     sources: list[SourceReference] = Field(
@@ -370,19 +373,36 @@ class OrchestratorResult(BaseModel):
         description="Deduplicated source references from all engines",
     )
     confidence: float = Field(
+        default=0.0,
         ge=0.0,
         le=1.0,
         description="Overall confidence (weighted average of engine confidences)",
     )
     engine_results: list[EngineExecutionResult] = Field(
+        default_factory=list,
         description="Individual results from each engine",
     )
     total_execution_time_ms: int = Field(
+        default=0,
         description="Total time including all parallel executions",
     )
     wall_clock_time_ms: int = Field(
         default=0,
         description="Actual wall clock time (accounts for parallelism)",
+    )
+
+    # Story 8-2: Safety blocking fields (Task 6.4)
+    blocked: bool = Field(
+        default=False,
+        description="True if query was blocked by safety checks",
+    )
+    blocked_reason: str = Field(
+        default="",
+        description="Explanation for why query was blocked",
+    )
+    suggested_rewrite: str = Field(
+        default="",
+        description="Suggested safe alternative query",
     )
 
 

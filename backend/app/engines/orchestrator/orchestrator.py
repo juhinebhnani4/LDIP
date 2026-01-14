@@ -2,8 +2,10 @@
 
 Story 6-2: Engine Execution Ordering (AC: #1)
 Story 6-3: Audit Trail Logging (AC: #1-4)
+Story 8-2: Safety Guard Integration (AC: #4)
 
 Integrates all orchestration components:
+- SafetyGuard (Story 8-2) → check query safety before processing
 - IntentAnalyzer (Story 6-1) → classify query intent
 - ExecutionPlanner → determine parallel/sequential execution
 - EngineExecutor → execute engines in parallel
@@ -14,6 +16,7 @@ This is the main entry point for query processing.
 
 CRITICAL: Matter isolation must be maintained through entire pipeline.
 CRITICAL: Audit logging must be non-blocking (Story 6-3 AC: #5).
+CRITICAL: Safety check runs BEFORE intent analysis (Story 8-2).
 """
 
 import asyncio
@@ -33,6 +36,8 @@ from app.models.orchestrator import (
     IntentAnalysisResult,
     OrchestratorResult,
 )
+from app.models.safety import SafetyCheckResult
+from app.services.safety import SafetyGuard, get_safety_guard
 
 logger = structlog.get_logger(__name__)
 
@@ -47,8 +52,10 @@ class QueryOrchestrator:
 
     Story 6-2: Full pipeline from query to unified response.
     Story 6-3: Audit trail logging for forensic compliance.
+    Story 8-2: Safety guard integration.
 
     Pipeline:
+    0. SafetyGuard → check query safety (Story 8-2)
     1. IntentAnalyzer → classify query, determine required engines
     2. ExecutionPlanner → create execution plan (parallel groups)
     3. EngineExecutor → execute engines with parallel optimization
@@ -68,6 +75,7 @@ class QueryOrchestrator:
 
     def __init__(
         self,
+        safety_guard: SafetyGuard | None = None,
         intent_analyzer: IntentAnalyzer | None = None,
         planner: ExecutionPlanner | None = None,
         executor: EngineExecutor | None = None,
@@ -79,8 +87,10 @@ class QueryOrchestrator:
 
         Task 6.3: Wire up all components.
         Story 6-3: Add audit logging components.
+        Story 8-2: Add safety guard (Task 6.2).
 
         Args:
+            safety_guard: Optional custom safety guard (Story 8-2).
             intent_analyzer: Optional custom intent analyzer.
             planner: Optional custom execution planner.
             executor: Optional custom engine executor.
@@ -88,6 +98,7 @@ class QueryOrchestrator:
             audit_logger: Optional custom audit logger (Story 6-3).
             history_store: Optional custom history store (Story 6-3).
         """
+        self._safety_guard = safety_guard or get_safety_guard()
         self._intent_analyzer = intent_analyzer or get_intent_analyzer()
         self._planner = planner or get_execution_planner()
         self._executor = executor or get_engine_executor()
@@ -108,6 +119,7 @@ class QueryOrchestrator:
 
         Task 6.2: Full pipeline: intent → plan → execute → aggregate.
         Story 6-3: Add audit logging (non-blocking).
+        Story 8-2: Add safety check BEFORE intent analysis (Task 6.3).
 
         Args:
             matter_id: Matter UUID for isolation.
@@ -126,6 +138,40 @@ class QueryOrchestrator:
             query_length=len(query),
             user_id=user_id,
         )
+
+        # Step 0: Safety check (Story 8-1 regex + Story 8-2 LLM)
+        safety_result = await self._safety_guard.check_query(query)
+        if not safety_result.is_safe:
+            wall_clock_time_ms = int((time.time() - start_time) * 1000)
+
+            logger.info(
+                "query_blocked_by_safety",
+                matter_id=matter_id,
+                blocked_by=safety_result.blocked_by,
+                violation_type=safety_result.violation_type,
+                wall_clock_time_ms=wall_clock_time_ms,
+            )
+
+            # Log to audit trail (non-blocking) - Story 8-2 Task 6.5
+            if user_id:
+                task = asyncio.create_task(
+                    self._log_blocked_query_audit(
+                        matter_id=matter_id,
+                        user_id=user_id,
+                        query=query,
+                        safety_result=safety_result,
+                    )
+                )
+                task.add_done_callback(self._handle_audit_task_exception)
+
+            return OrchestratorResult(
+                matter_id=matter_id,
+                query=query,
+                blocked=True,
+                blocked_reason=safety_result.explanation,
+                suggested_rewrite=safety_result.suggested_rewrite,
+                wall_clock_time_ms=wall_clock_time_ms,
+            )
 
         # Step 1: Analyze intent and determine required engines
         intent_result = await self._intent_analyzer.analyze_intent(
@@ -243,6 +289,46 @@ class QueryOrchestrator:
                 error=str(e),
             )
 
+    async def _log_blocked_query_audit(
+        self,
+        matter_id: str,
+        user_id: str,
+        query: str,
+        safety_result: SafetyCheckResult,
+    ) -> None:
+        """Log blocked query to audit trail (non-blocking).
+
+        Story 8-2: Task 6.5 - Audit logging for blocked queries.
+        This method should never raise exceptions.
+
+        Args:
+            matter_id: Matter UUID.
+            user_id: User who asked the query.
+            query: The blocked query.
+            safety_result: Safety check result with blocking details.
+        """
+        try:
+            # Log blocked query details for forensic compliance
+            logger.info(
+                "blocked_query_audit",
+                matter_id=matter_id,
+                user_id=user_id,
+                blocked_by=safety_result.blocked_by,
+                violation_type=safety_result.violation_type,
+                regex_check_ms=safety_result.regex_check_ms,
+                llm_check_ms=safety_result.llm_check_ms,
+            )
+            # Note: Full audit logging to database would go here
+            # For now, we log to structured logging (Axiom in production)
+        except Exception as e:
+            # Log error but don't propagate - audit is non-critical
+            logger.error(
+                "blocked_query_audit_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+
     async def analyze_intent(
         self,
         matter_id: str,
@@ -263,6 +349,11 @@ class QueryOrchestrator:
             matter_id=matter_id,
             query=query,
         )
+
+    @property
+    def safety_guard(self) -> SafetyGuard:
+        """Get the safety guard instance (Story 8-2)."""
+        return self._safety_guard
 
     @property
     def intent_analyzer(self) -> IntentAnalyzer:

@@ -1,6 +1,7 @@
 """Tests for Session Memory Service.
 
 Story 7-1: Session Memory Redis Storage
+Story 7-2: Session TTL and Context Restoration
 Tasks 6.3-6.8: Comprehensive tests for SessionMemoryService
 """
 
@@ -9,7 +10,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.models.memory import SessionContext, SessionEntityMention, SessionMessage
+from app.models.memory import (
+    ArchivedSession,
+    SessionContext,
+    SessionEntityMention,
+    SessionMessage,
+)
 from app.services.memory.redis_keys import SESSION_TTL
 from app.services.memory.session import (
     MAX_SESSION_MESSAGES,
@@ -1027,7 +1033,434 @@ class TestIntegrationScenarios:
         assert mention is not None
         assert mention.entity_name == "John Smith"
 
-        # 6. End session
-        result = await session_service.end_session(MATTER_ID, USER_ID)
+        # 6. End session (without archival to avoid Supabase mock)
+        result = await session_service.end_session(MATTER_ID, USER_ID, archive=False)
         assert result is True
         assert len(stored_data) == 0
+
+
+# =============================================================================
+# Story 7-2: TTL Extension with Max Lifetime
+# =============================================================================
+
+
+class TestMaxLifetimeTTL:
+    """Tests for max lifetime TTL check (Story 7-2)."""
+
+    @pytest.mark.asyncio
+    async def test_ttl_extension_respects_max_lifetime(
+        self, session_service: SessionMemoryService, mock_redis: AsyncMock
+    ) -> None:
+        """TTL should stop extending after 30 days (Story 7-2 AC #2)."""
+        from datetime import timedelta
+
+        # Create session with created_at 30 days ago
+        old_created_at = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).isoformat()
+
+        existing_context = SessionContext(
+            session_id="old-session",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at=old_created_at,
+            last_activity=old_created_at,
+            ttl_extended_count=10,
+            max_ttl_reached=False,
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+
+        # Get session with TTL extension
+        context = await session_service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            extend_ttl=True,
+            restore_from_archive=False,
+        )
+
+        assert context is not None
+        assert context.max_ttl_reached is True
+
+    @pytest.mark.asyncio
+    async def test_ttl_extension_works_within_max_lifetime(
+        self, session_service: SessionMemoryService, mock_redis: AsyncMock
+    ) -> None:
+        """TTL should extend when within 30 days."""
+        from datetime import timedelta
+
+        # Create session with created_at 7 days ago
+        recent_created_at = (
+            datetime.now(timezone.utc) - timedelta(days=7)
+        ).isoformat()
+
+        existing_context = SessionContext(
+            session_id="recent-session",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at=recent_created_at,
+            last_activity=recent_created_at,
+            ttl_extended_count=2,
+            max_ttl_reached=False,
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+
+        context = await session_service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            extend_ttl=True,
+            restore_from_archive=False,
+        )
+
+        assert context is not None
+        assert context.max_ttl_reached is False
+        assert context.ttl_extended_count == 3  # Incremented
+
+    @pytest.mark.asyncio
+    async def test_ttl_not_extended_when_max_reached(
+        self, session_service: SessionMemoryService, mock_redis: AsyncMock
+    ) -> None:
+        """TTL count should not increment when max_ttl_reached is True."""
+        existing_context = SessionContext(
+            session_id="maxed-session",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at="2026-01-01T10:00:00Z",
+            last_activity="2026-01-14T10:00:00Z",
+            ttl_extended_count=50,
+            max_ttl_reached=True,
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+
+        context = await session_service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            extend_ttl=True,
+            restore_from_archive=False,
+        )
+
+        assert context is not None
+        # TTL count should not increment when max already reached
+        assert context.ttl_extended_count == 50
+
+    @pytest.mark.asyncio
+    async def test_total_lifetime_days_calculated(
+        self, session_service: SessionMemoryService, mock_redis: AsyncMock
+    ) -> None:
+        """total_lifetime_days should be calculated from created_at."""
+        from datetime import timedelta
+
+        # Session created 10 days ago
+        created_at = (
+            datetime.now(timezone.utc) - timedelta(days=10)
+        ).isoformat()
+
+        existing_context = SessionContext(
+            session_id="aged-session",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at=created_at,
+            last_activity=created_at,
+            total_lifetime_days=0,
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+
+        context = await session_service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            extend_ttl=True,
+            restore_from_archive=False,
+        )
+
+        assert context is not None
+        assert context.total_lifetime_days == 10
+
+
+# =============================================================================
+# Story 7-2: Session Archival
+# =============================================================================
+
+
+class TestSessionArchival:
+    """Tests for session archival (Story 7-2 AC #1, #3)."""
+
+    @pytest.fixture
+    def mock_matter_memory(self) -> AsyncMock:
+        """Create a mock MatterMemoryRepository."""
+        mock = AsyncMock()
+        mock.save_archived_session.return_value = "archive-record-id"
+        mock.get_latest_archived_session.return_value = None
+        return mock
+
+    @pytest.mark.asyncio
+    async def test_archive_session_creates_archive(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory: AsyncMock,
+    ) -> None:
+        """archive_session should create ArchivedSession object."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory)
+
+        # Setup existing session
+        existing_context = SessionContext(
+            session_id="session-to-archive",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at="2026-01-14T10:00:00Z",
+            last_activity="2026-01-14T17:00:00Z",
+            query_count=5,
+            ttl_extended_count=2,
+            messages=[
+                SessionMessage(
+                    role="user",
+                    content="Test message",
+                    timestamp="2026-01-14T17:00:00Z",
+                )
+            ],
+            entities_mentioned={
+                "e1": SessionEntityMention(
+                    entity_id="e1",
+                    entity_name="John Smith",
+                    entity_type="person",
+                    mention_count=3,
+                    last_mentioned="2026-01-14T17:00:00Z",
+                )
+            },
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+
+        archive = await service.archive_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            reason="manual_end",
+        )
+
+        assert archive is not None
+        assert archive.session_id == "session-to-archive"
+        assert archive.archival_reason == "manual_end"
+        assert len(archive.entities_mentioned) == 1
+        assert len(archive.last_messages) == 1
+        mock_matter_memory.save_archived_session.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_archive_session_no_session(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory: AsyncMock,
+    ) -> None:
+        """archive_session should return None if no session exists."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory)
+        mock_redis.get.return_value = None
+
+        archive = await service.archive_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            reason="expired",
+        )
+
+        assert archive is None
+        mock_matter_memory.save_archived_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_end_session_archives_before_delete(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory: AsyncMock,
+    ) -> None:
+        """end_session should archive before deleting (AC #3)."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory)
+
+        # Setup existing session
+        existing_context = SessionContext(
+            session_id="session-to-end",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at="2026-01-14T10:00:00Z",
+            last_activity="2026-01-14T17:00:00Z",
+        )
+        mock_redis.get.return_value = existing_context.model_dump_json()
+        mock_redis.delete.return_value = 1
+
+        deleted = await service.end_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            archive=True,
+        )
+
+        assert deleted is True
+        mock_matter_memory.save_archived_session.assert_called_once()
+        mock_redis.delete.assert_called_once()
+
+
+# =============================================================================
+# Story 7-2: Context Restoration
+# =============================================================================
+
+
+class TestContextRestoration:
+    """Tests for context restoration (Story 7-2 AC #4)."""
+
+    @pytest.fixture
+    def mock_matter_memory_with_archive(self) -> AsyncMock:
+        """Create a mock MatterMemoryRepository with archived session."""
+        from app.models.memory import ArchivedSession
+
+        mock = AsyncMock()
+        mock.save_archived_session.return_value = "archive-record-id"
+
+        archived = ArchivedSession(
+            session_id="old-session-123",
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            created_at="2026-01-07T10:00:00Z",
+            archived_at="2026-01-14T10:00:00Z",
+            last_activity="2026-01-14T09:00:00Z",
+            entities_mentioned={
+                "e1": SessionEntityMention(
+                    entity_id="e1",
+                    entity_name="John Smith",
+                    entity_type="person",
+                    mention_count=5,
+                    last_mentioned="2026-01-14T09:00:00Z",
+                )
+            },
+            last_messages=[
+                SessionMessage(
+                    role="user",
+                    content="What about John?",
+                    timestamp="2026-01-14T08:55:00Z",
+                    entity_refs=["e1"],
+                ),
+                SessionMessage(
+                    role="assistant",
+                    content="John Smith is the plaintiff...",
+                    timestamp="2026-01-14T09:00:00Z",
+                    entity_refs=["e1"],
+                ),
+            ],
+            total_query_count=10,
+            total_messages=20,
+            ttl_extended_count=5,
+            archival_reason="expired",
+        )
+        mock.get_latest_archived_session.return_value = archived
+
+        return mock
+
+    @pytest.mark.asyncio
+    async def test_restore_context_from_archive(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory_with_archive: AsyncMock,
+    ) -> None:
+        """restore_context should create new session with archived context."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory_with_archive)
+
+        # No session in Redis
+        mock_redis.get.return_value = None
+
+        context = await service.restore_context(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            restore_messages=True,
+            message_limit=5,
+        )
+
+        assert context is not None
+        # New session ID created
+        assert context.session_id != "old-session-123"
+        # Entities restored
+        assert "e1" in context.entities_mentioned
+        assert context.entities_mentioned["e1"].entity_name == "John Smith"
+        # Messages restored
+        assert len(context.messages) == 2
+
+    @pytest.mark.asyncio
+    async def test_restore_context_no_archive(
+        self,
+        mock_redis: AsyncMock,
+    ) -> None:
+        """restore_context should return None when no archive exists."""
+        mock_matter_memory = AsyncMock()
+        mock_matter_memory.get_latest_archived_session.return_value = None
+
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory)
+
+        context = await service.restore_context(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+        )
+
+        assert context is None
+
+    @pytest.mark.asyncio
+    async def test_restore_context_respects_message_limit(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory_with_archive: AsyncMock,
+    ) -> None:
+        """restore_context should limit restored messages."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory_with_archive)
+
+        mock_redis.get.return_value = None
+
+        context = await service.restore_context(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            restore_messages=True,
+            message_limit=1,
+        )
+
+        assert context is not None
+        # Only 1 message restored
+        assert len(context.messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_session_restores_from_archive_on_miss(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory_with_archive: AsyncMock,
+    ) -> None:
+        """get_session should restore from archive when session not found."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory_with_archive)
+
+        # Session doesn't exist in Redis
+        mock_redis.get.return_value = None
+
+        context = await service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            auto_create=False,
+            restore_from_archive=True,
+        )
+
+        assert context is not None
+        assert "e1" in context.entities_mentioned
+
+    @pytest.mark.asyncio
+    async def test_get_session_skips_archive_when_disabled(
+        self,
+        mock_redis: AsyncMock,
+        mock_matter_memory_with_archive: AsyncMock,
+    ) -> None:
+        """get_session should not restore when restore_from_archive=False."""
+        reset_session_memory_service()
+        service = SessionMemoryService(mock_redis, mock_matter_memory_with_archive)
+
+        mock_redis.get.return_value = None
+
+        context = await service.get_session(
+            matter_id=MATTER_ID,
+            user_id=USER_ID,
+            auto_create=False,
+            restore_from_archive=False,
+        )
+
+        assert context is None
+        mock_matter_memory_with_archive.get_latest_archived_session.assert_not_called()

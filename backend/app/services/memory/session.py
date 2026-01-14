@@ -1,11 +1,14 @@
 """Session Memory Service for conversation context.
 
 Story 7-1: Session Memory Redis Storage
+Story 7-2: Session TTL and Context Restoration
 
 Manages user session context in Redis with:
-- 7-day TTL with auto-extension on access
+- 7-day TTL with auto-extension on access (max 30 days)
 - Sliding window message history (max 20)
 - Entity tracking for pronoun resolution
+- Session archival to Matter Memory on expiry/end
+- Context restoration from archived sessions
 
 CRITICAL: All session data is scoped by matter_id + user_id
 for Layer 3 isolation (Redis key prefix).
@@ -13,19 +16,31 @@ for Layer 3 isolation (Redis key prefix).
 Key format: session:{matter_id}:{user_id}:context
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
-from app.models.memory import SessionContext, SessionEntityMention, SessionMessage
+from app.models.memory import (
+    ArchivedSession,
+    MAX_ARCHIVED_MESSAGES,
+    SessionContext,
+    SessionEntityMention,
+    SessionMessage,
+)
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import (
+    MAX_SESSION_LIFETIME,
     SESSION_TTL,
     session_key,
     validate_key_access,
 )
+
+if TYPE_CHECKING:
+    from app.services.memory.matter import MatterMemoryRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -39,20 +54,30 @@ class SessionMemoryService:
     Story 7-1: Provides conversation context persistence
     for follow-up questions without repeating context.
 
+    Story 7-2: Adds session archival/restoration and TTL max limit.
+
     Features:
     - Session creation with 7-day TTL (AC #1)
     - Message history with sliding window (AC #2, #3)
     - Entity tracking for pronoun resolution (AC #4)
-    - Auto-extend TTL on session access
+    - Auto-extend TTL on session access (max 30 days - Story 7-2)
+    - Session archival to Matter Memory on expiry/end (Story 7-2)
+    - Context restoration from archived sessions (Story 7-2)
     """
 
-    def __init__(self, redis_client: Any = None) -> None:
+    def __init__(
+        self,
+        redis_client: Any = None,
+        matter_memory: MatterMemoryRepository | None = None,
+    ) -> None:
         """Initialize session memory service.
 
         Args:
             redis_client: Optional Redis client (injected for testing).
+            matter_memory: Optional MatterMemoryRepository (injected for testing).
         """
         self._redis = redis_client
+        self._matter_memory = matter_memory
         self._initialized = False
 
     async def _ensure_client(self) -> None:
@@ -60,6 +85,37 @@ class SessionMemoryService:
         if self._redis is None:
             self._redis = await get_redis_client()
         self._initialized = True
+
+    async def _ensure_matter_memory(self) -> MatterMemoryRepository:
+        """Ensure MatterMemoryRepository is initialized.
+
+        Story 7-2: Lazy initialization of matter memory repository.
+
+        Returns:
+            MatterMemoryRepository instance.
+        """
+        if self._matter_memory is None:
+            from app.services.memory.matter import get_matter_memory_repository
+
+            self._matter_memory = get_matter_memory_repository()
+        return self._matter_memory
+
+    def _check_max_lifetime(self, context: SessionContext) -> bool:
+        """Check if session has reached max lifetime (30 days).
+
+        Story 7-2: Task 2.3 - Helper method to check cumulative lifetime.
+
+        Args:
+            context: Session context to check.
+
+        Returns:
+            True if max lifetime reached, False otherwise.
+        """
+        created_at = datetime.fromisoformat(context.created_at.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        lifetime_seconds = (now - created_at).total_seconds()
+
+        return lifetime_seconds >= MAX_SESSION_LIFETIME
 
     async def create_session(
         self,
@@ -129,14 +185,19 @@ class SessionMemoryService:
         user_id: str,
         auto_create: bool = True,
         extend_ttl: bool = True,
+        restore_from_archive: bool = True,
     ) -> SessionContext | None:
         """Retrieve session context from Redis.
+
+        Story 7-1: Basic session retrieval.
+        Story 7-2: Added max lifetime check and archive restoration.
 
         Args:
             matter_id: Matter UUID.
             user_id: User UUID.
             auto_create: Create new session if not found.
             extend_ttl: Auto-extend TTL on access (sliding expiration).
+            restore_from_archive: Try to restore from archive if session not found.
 
         Returns:
             SessionContext if found, None otherwise.
@@ -170,6 +231,13 @@ class SessionMemoryService:
             raise RuntimeError(f"Failed to get session from Redis: {e}") from e
 
         if data is None:
+            # Session expired or doesn't exist
+            if restore_from_archive:
+                # Story 7-2: Try to restore from archived session
+                restored = await self.restore_context(matter_id, user_id)
+                if restored:
+                    return restored
+
             if auto_create:
                 logger.info(
                     "session_not_found_creating",
@@ -182,10 +250,29 @@ class SessionMemoryService:
         # Parse session context
         context = SessionContext.model_validate_json(data)
 
-        # Auto-extend TTL on access (sliding expiration)
-        if extend_ttl:
-            context.ttl_extended_count += 1
+        # Story 7-2: Auto-extend TTL on access (with max lifetime check)
+        if extend_ttl and not context.max_ttl_reached:
+            # Check if max lifetime reached before extending
+            if self._check_max_lifetime(context):
+                context.max_ttl_reached = True
+                logger.info(
+                    "session_max_lifetime_reached",
+                    session_id=context.session_id,
+                    matter_id=matter_id,
+                    ttl_extended_count=context.ttl_extended_count,
+                )
+                # Don't extend TTL, but update the context to mark max_ttl_reached
+            else:
+                context.ttl_extended_count += 1
+
             context.last_activity = datetime.now(timezone.utc).isoformat()
+
+            # Update total_lifetime_days
+            created_at = datetime.fromisoformat(
+                context.created_at.replace("Z", "+00:00")
+            )
+            now = datetime.now(timezone.utc)
+            context.total_lifetime_days = (now - created_at).days
 
             # Update stored context with extended TTL
             try:
@@ -203,12 +290,13 @@ class SessionMemoryService:
                 )
                 raise RuntimeError(f"Failed to extend session TTL: {e}") from e
 
-            logger.debug(
-                "session_ttl_extended",
-                session_id=context.session_id,
-                matter_id=matter_id,
-                extend_count=context.ttl_extended_count,
-            )
+            if not context.max_ttl_reached:
+                logger.debug(
+                    "session_ttl_extended",
+                    session_id=context.session_id,
+                    matter_id=matter_id,
+                    extend_count=context.ttl_extended_count,
+                )
 
         return context
 
@@ -479,28 +567,197 @@ class SessionMemoryService:
         # Return most recently mentioned (recency-weighted resolution)
         return max(candidates, key=lambda m: m.last_mentioned)
 
-    async def end_session(
+    async def archive_session(
         self,
         matter_id: str,
         user_id: str,
-    ) -> bool:
-        """End and clear a session from Redis.
+        reason: Literal["expired", "manual_end", "logout"],
+    ) -> ArchivedSession | None:
+        """Archive session to Matter Memory before deletion.
+
+        Story 7-2: Task 3 - Session archival service.
+        AC #1: Archive on expiry, AC #3: Archive on manual end.
 
         Args:
             matter_id: Matter UUID.
             user_id: User UUID.
+            reason: Why session is being archived.
+
+        Returns:
+            ArchivedSession if archived, None if no session to archive.
+
+        Raises:
+            RuntimeError: If archival fails.
+        """
+        await self._ensure_client()
+
+        # Get session without extending TTL or restoring from archive
+        context = await self.get_session(
+            matter_id,
+            user_id,
+            auto_create=False,
+            extend_ttl=False,
+            restore_from_archive=False,
+        )
+
+        if context is None:
+            logger.info(
+                "archive_session_no_session_found",
+                matter_id=matter_id,
+                user_id=user_id,
+            )
+            return None
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Create archived session with last N messages
+        last_messages = context.messages[-MAX_ARCHIVED_MESSAGES:]
+
+        archive = ArchivedSession(
+            session_id=context.session_id,
+            matter_id=context.matter_id,
+            user_id=context.user_id,
+            created_at=context.created_at,
+            archived_at=now,
+            last_activity=context.last_activity,
+            entities_mentioned=context.entities_mentioned,
+            last_messages=last_messages,
+            total_query_count=context.query_count,
+            total_messages=len(context.messages),
+            ttl_extended_count=context.ttl_extended_count,
+            archival_reason=reason,
+        )
+
+        # Store in Matter Memory
+        try:
+            matter_memory = await self._ensure_matter_memory()
+            await matter_memory.save_archived_session(archive)
+        except Exception as e:
+            logger.error(
+                "archive_session_save_failed",
+                session_id=context.session_id,
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to archive session: {e}") from e
+
+        logger.info(
+            "session_archived",
+            session_id=context.session_id,
+            matter_id=matter_id,
+            user_id=user_id,
+            reason=reason,
+            entities_archived=len(archive.entities_mentioned),
+            messages_archived=len(archive.last_messages),
+        )
+
+        return archive
+
+    async def restore_context(
+        self,
+        matter_id: str,
+        user_id: str,
+        restore_messages: bool = True,
+        message_limit: int = 5,
+    ) -> SessionContext | None:
+        """Restore context from most recent archived session.
+
+        Story 7-2: Task 4 - Context restoration.
+        AC #4: Restore context when returning to matter.
+
+        Args:
+            matter_id: Matter UUID.
+            user_id: User UUID.
+            restore_messages: Whether to restore last messages.
+            message_limit: How many messages to restore (max 10).
+
+        Returns:
+            New SessionContext with restored context, or None if no archive.
+        """
+        try:
+            matter_memory = await self._ensure_matter_memory()
+            archive = await matter_memory.get_latest_archived_session(
+                matter_id, user_id
+            )
+        except Exception as e:
+            logger.error(
+                "restore_context_query_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
+            return None
+
+        if archive is None:
+            logger.info(
+                "no_archived_session_found",
+                matter_id=matter_id,
+                user_id=user_id,
+            )
+            return None
+
+        # Create new session
+        context = await self.create_session(matter_id, user_id)
+
+        # Restore entities (critical for pronoun resolution)
+        context.entities_mentioned = archive.entities_mentioned
+
+        # Optionally restore last messages
+        if restore_messages and archive.last_messages:
+            # Limit to requested number (max 10)
+            limit = min(message_limit, MAX_ARCHIVED_MESSAGES)
+            restored = archive.last_messages[-limit:]
+            context.messages = restored
+
+        logger.info(
+            "context_restored_from_archive",
+            session_id=context.session_id,
+            original_session_id=archive.session_id,
+            entities_restored=len(context.entities_mentioned),
+            messages_restored=len(context.messages),
+        )
+
+        # Save updated context
+        key = session_key(matter_id, user_id, "context")
+        try:
+            await self._redis.setex(key, SESSION_TTL, context.model_dump_json())
+        except Exception as e:
+            logger.error(
+                "restore_context_save_failed",
+                session_id=context.session_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to save restored context: {e}") from e
+
+        return context
+
+    async def end_session(
+        self,
+        matter_id: str,
+        user_id: str,
+        archive: bool = True,
+    ) -> bool:
+        """End and clear a session from Redis.
+
+        Story 7-2: Updated to archive before deletion.
+
+        Args:
+            matter_id: Matter UUID.
+            user_id: User UUID.
+            archive: Whether to archive session before deletion.
 
         Returns:
             True if session was deleted, False if not found.
 
         Raises:
             RuntimeError: If Redis operation fails.
-
-        Note:
-            Before clearing, session should be archived to
-            Matter Memory (Story 7-3 handles archival).
         """
         await self._ensure_client()
+
+        # Story 7-2: Archive before deletion
+        if archive:
+            await self.archive_session(matter_id, user_id, reason="manual_end")
 
         key = session_key(matter_id, user_id, "context")
         try:
@@ -528,13 +785,17 @@ class SessionMemoryService:
 _session_memory_service: SessionMemoryService | None = None
 
 
-def get_session_memory_service(redis_client: Any = None) -> SessionMemoryService:
+def get_session_memory_service(
+    redis_client: Any = None,
+    matter_memory: MatterMemoryRepository | None = None,
+) -> SessionMemoryService:
     """Get or create SessionMemoryService instance.
 
     Factory function following project pattern.
 
     Args:
         redis_client: Optional Redis client for injection.
+        matter_memory: Optional MatterMemoryRepository for injection.
 
     Returns:
         SessionMemoryService instance.
@@ -542,9 +803,12 @@ def get_session_memory_service(redis_client: Any = None) -> SessionMemoryService
     global _session_memory_service
 
     if _session_memory_service is None:
-        _session_memory_service = SessionMemoryService(redis_client)
-    elif redis_client is not None and _session_memory_service._redis is None:
-        _session_memory_service._redis = redis_client
+        _session_memory_service = SessionMemoryService(redis_client, matter_memory)
+    else:
+        if redis_client is not None and _session_memory_service._redis is None:
+            _session_memory_service._redis = redis_client
+        if matter_memory is not None and _session_memory_service._matter_memory is None:
+            _session_memory_service._matter_memory = matter_memory
 
     return _session_memory_service
 

@@ -26,6 +26,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 SESSION_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
+MAX_SESSION_LIFETIME = 30 * 24 * 60 * 60  # 30 days absolute maximum (Story 7-2)
 CACHE_TTL = 60 * 60  # 1 hour in seconds
 MATTER_MEMORY_TTL = None  # No expiration for matter memory
 EMBEDDING_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds

@@ -97,6 +97,18 @@ from app.models.orchestrator import (
     IntentAnalysisResult,
     IntentClassification,
     QueryIntent,
+    # Story 6-2: Execution models
+    EngineExecutionRequest,
+    EngineExecutionResult,
+    ExecutionPlan,
+    OrchestratorResponse,
+    OrchestratorResult,
+    SourceReference,
+    # Story 6-3: Audit Trail models
+    FindingAuditEntry,
+    LLMCostEntry,
+    QueryAuditEntry,
+    QueryAuditRecord,
 )
 
 __all__ = [
@@ -194,4 +206,16 @@ __all__ = [
     "IntentAnalysisResult",
     "IntentClassification",
     "QueryIntent",
+    # Orchestrator models (Story 6-2)
+    "EngineExecutionRequest",
+    "EngineExecutionResult",
+    "ExecutionPlan",
+    "OrchestratorResponse",
+    "OrchestratorResult",
+    "SourceReference",
+    # Orchestrator models (Story 6-3)
+    "FindingAuditEntry",
+    "LLMCostEntry",
+    "QueryAuditEntry",
+    "QueryAuditRecord",
 ]

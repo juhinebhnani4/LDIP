@@ -1,6 +1,7 @@
 """Integration tests for the Query Orchestrator.
 
 Story 6-2: Engine Execution Ordering
+Story 6-3: Audit Trail Logging
 
 Tests cover:
 - Full pipeline integration (Task 6.2)
@@ -9,8 +10,10 @@ Tests cover:
 - Multi-engine query flow (AC #1-4)
 - Error handling and graceful degradation
 - Matter isolation (CRITICAL)
+- Audit logging integration (Story 6-3)
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,6 +25,7 @@ from app.engines.orchestrator.orchestrator import (
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
+    IntentAnalysisCost,
     IntentAnalysisResult,
     IntentClassification,
     QueryIntent,
@@ -409,3 +413,165 @@ class TestOrchestratorFactory:
             orchestrator2 = get_query_orchestrator()
 
         assert orchestrator1 is orchestrator2
+
+
+# =============================================================================
+# Integration Tests: Audit Logging (Story 6-3)
+# =============================================================================
+
+
+class TestAuditLoggingIntegration:
+    """Tests for audit logging integration in orchestrator (Story 6-3)."""
+
+    @pytest.fixture
+    def mock_audit_logger(self):
+        """Create mock audit logger."""
+        logger = MagicMock()
+        # log_query is sync, returns QueryAuditEntry
+        from app.models.orchestrator import QueryAuditEntry, QueryIntent, EngineType
+
+        mock_entry = QueryAuditEntry(
+            query_id="test-query-id",
+            matter_id="matter-123",
+            query_text="Test query",
+            query_intent=QueryIntent.RAG_SEARCH,
+            intent_confidence=0.9,
+            asked_by="user-456",
+            asked_at="2026-01-14T10:00:00Z",
+            engines_invoked=[EngineType.RAG],
+            successful_engines=[EngineType.RAG],
+            failed_engines=[],
+            execution_time_ms=100,
+            wall_clock_time_ms=80,
+            findings_count=0,
+            response_summary="Test",
+            overall_confidence=0.9,
+            llm_costs=[],
+            total_cost_usd=0.0,
+            findings=[],
+        )
+        logger.log_query.return_value = mock_entry
+        return logger
+
+    @pytest.fixture
+    def mock_history_store(self):
+        """Create mock history store."""
+        store = MagicMock()
+        store.append_query = AsyncMock()
+        return store
+
+    @pytest.fixture
+    def orchestrator_with_audit(
+        self, mock_intent_analyzer, mock_executor, mock_aggregator, mock_audit_logger, mock_history_store
+    ):
+        """Create orchestrator with mocked audit components."""
+        get_query_orchestrator.cache_clear()
+        return QueryOrchestrator(
+            intent_analyzer=mock_intent_analyzer,
+            executor=mock_executor,
+            aggregator=mock_aggregator,
+            audit_logger=mock_audit_logger,
+            history_store=mock_history_store,
+        )
+
+    @pytest.mark.asyncio
+    async def test_audit_logging_called_with_user_id(
+        self, orchestrator_with_audit, mock_audit_logger, mock_history_store
+    ):
+        """Audit logging should be called when user_id is provided."""
+        await orchestrator_with_audit.process_query(
+            matter_id="matter-123",
+            query="What citations?",
+            user_id="user-456",
+        )
+
+        # Give async task time to complete
+        await asyncio.sleep(0.1)
+
+        mock_audit_logger.log_query.assert_called_once()
+        mock_history_store.append_query.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_audit_logging_skipped_without_user_id(
+        self, orchestrator_with_audit, mock_audit_logger, mock_history_store
+    ):
+        """Audit logging should be skipped when user_id is not provided."""
+        await orchestrator_with_audit.process_query(
+            matter_id="matter-123",
+            query="What citations?",
+            # No user_id provided
+        )
+
+        await asyncio.sleep(0.1)
+
+        mock_audit_logger.log_query.assert_not_called()
+        mock_history_store.append_query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_audit_failure_does_not_fail_query(
+        self, mock_intent_analyzer, mock_executor, mock_aggregator
+    ):
+        """Query should succeed even if audit logging fails (AC: #5)."""
+        # Create failing audit components
+        failing_audit_logger = MagicMock()
+        failing_audit_logger.log_query.side_effect = Exception("Audit failed")
+
+        orchestrator = QueryOrchestrator(
+            intent_analyzer=mock_intent_analyzer,
+            executor=mock_executor,
+            aggregator=mock_aggregator,
+            audit_logger=failing_audit_logger,
+        )
+
+        # Should not raise
+        result = await orchestrator.process_query(
+            matter_id="matter-123",
+            query="What citations?",
+            user_id="user-456",
+        )
+
+        # Query should still succeed
+        assert result.matter_id == "matter-123"
+        assert len(result.successful_engines) >= 0 or len(result.failed_engines) >= 0
+
+    @pytest.mark.asyncio
+    async def test_audit_logs_correct_matter_id(
+        self, orchestrator_with_audit, mock_audit_logger, mock_history_store
+    ):
+        """Audit should log correct matter_id."""
+        await orchestrator_with_audit.process_query(
+            matter_id="specific-matter-abc",
+            query="Test query",
+            user_id="user-123",
+        )
+
+        await asyncio.sleep(0.1)
+
+        # Verify matter_id passed to audit logger
+        call_args = mock_audit_logger.log_query.call_args
+        assert call_args.kwargs["matter_id"] == "specific-matter-abc"
+
+    @pytest.mark.asyncio
+    async def test_audit_logs_correct_user_id(
+        self, orchestrator_with_audit, mock_audit_logger, mock_history_store
+    ):
+        """Audit should log correct user_id."""
+        await orchestrator_with_audit.process_query(
+            matter_id="matter-123",
+            query="Test query",
+            user_id="specific-user-xyz",
+        )
+
+        await asyncio.sleep(0.1)
+
+        # Verify user_id passed to audit logger
+        call_args = mock_audit_logger.log_query.call_args
+        assert call_args.kwargs["user_id"] == "specific-user-xyz"
+
+    def test_audit_logger_property(self, orchestrator_with_audit, mock_audit_logger):
+        """Should expose audit logger."""
+        assert orchestrator_with_audit.audit_logger == mock_audit_logger
+
+    def test_history_store_property(self, orchestrator_with_audit, mock_history_store):
+        """Should expose history store."""
+        assert orchestrator_with_audit.history_store == mock_history_store

@@ -394,3 +394,116 @@ class OrchestratorResponse(BaseModel):
     """
 
     data: OrchestratorResult = Field(description="Orchestration result")
+
+
+# =============================================================================
+# Story 6-3: Query Audit Trail Models
+# =============================================================================
+
+
+class LLMCostEntry(BaseModel):
+    """Cost tracking for a single LLM call.
+
+    Story 6-3: Track costs per LLM invocation for audit.
+    """
+
+    model_name: str = Field(description="LLM model used (gpt-3.5-turbo, gpt-4, etc.)")
+    purpose: str = Field(
+        description="Purpose of the call (intent_analysis, contradiction_detection, etc.)"
+    )
+    input_tokens: int = Field(default=0, ge=0, description="Input tokens consumed")
+    output_tokens: int = Field(default=0, ge=0, description="Output tokens generated")
+    cost_usd: float = Field(default=0.0, ge=0.0, description="Cost in USD")
+
+
+class FindingAuditEntry(BaseModel):
+    """Audit entry for a single finding from an engine.
+
+    Story 6-3: Track individual findings with provenance.
+    """
+
+    finding_id: str = Field(description="Unique finding identifier")
+    engine: EngineType = Field(description="Engine that produced the finding")
+    finding_type: str = Field(
+        description="Type of finding (citation, event, contradiction, etc.)"
+    )
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score")
+    summary: str = Field(description="Brief description of the finding")
+    source_references: list[SourceReference] = Field(
+        default_factory=list,
+        description="Source documents supporting this finding",
+    )
+
+
+class QueryAuditEntry(BaseModel):
+    """Complete audit entry for a single query.
+
+    Story 6-3: Main audit record for forensic compliance (AC: #1-3).
+    """
+
+    # Core identification
+    query_id: str = Field(description="Unique query identifier (UUID)")
+    matter_id: str = Field(description="Matter UUID for isolation")
+
+    # Query details
+    query_text: str = Field(description="Original user query")
+    query_intent: QueryIntent = Field(description="Classified intent")
+    intent_confidence: float = Field(
+        ge=0.0, le=1.0, description="Intent classification confidence"
+    )
+
+    # User and timing
+    asked_by: str = Field(description="User ID who asked the query")
+    asked_at: str = Field(description="ISO8601 timestamp of query")
+
+    # Execution details
+    engines_invoked: list[EngineType] = Field(
+        description="Engines that were executed"
+    )
+    successful_engines: list[EngineType] = Field(
+        description="Engines that succeeded"
+    )
+    failed_engines: list[EngineType] = Field(
+        default_factory=list, description="Engines that failed"
+    )
+    execution_time_ms: int = Field(
+        ge=0, description="Total execution time in milliseconds"
+    )
+    wall_clock_time_ms: int = Field(
+        ge=0, description="Actual wall clock time (parallelism)"
+    )
+
+    # Results summary
+    findings_count: int = Field(ge=0, description="Number of findings produced")
+    response_summary: str = Field(description="Concise summary of the response")
+    overall_confidence: float = Field(
+        ge=0.0, le=1.0, description="Overall response confidence"
+    )
+
+    # Cost tracking (AC: #3)
+    llm_costs: list[LLMCostEntry] = Field(
+        default_factory=list,
+        description="LLM costs for this query",
+    )
+    total_cost_usd: float = Field(
+        default=0.0, ge=0.0, description="Total cost in USD"
+    )
+
+    # Findings detail (AC: #2)
+    findings: list[FindingAuditEntry] = Field(
+        default_factory=list,
+        description="Detailed findings (for forensic record)",
+    )
+
+
+class QueryAuditRecord(BaseModel):
+    """Database record wrapper for query audit.
+
+    Story 6-3: Format stored in matter_query_history table (AC: #4).
+    """
+
+    id: str = Field(description="Record UUID")
+    matter_id: str = Field(description="Matter UUID")
+    query_id: str = Field(description="Query UUID")
+    audit_data: QueryAuditEntry = Field(description="Complete audit entry")
+    created_at: str = Field(description="ISO8601 timestamp")

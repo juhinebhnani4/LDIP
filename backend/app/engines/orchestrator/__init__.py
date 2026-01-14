@@ -61,6 +61,17 @@ from app.engines.orchestrator.orchestrator import (
     get_query_orchestrator,
 )
 
+# Story 6-3: Audit Trail Logging
+from app.engines.orchestrator.audit_logger import (
+    QueryAuditLogger,
+    get_query_audit_logger,
+)
+from app.engines.orchestrator.query_history import (
+    QueryHistoryStore,
+    get_query_history_store,
+    reset_query_history_store,
+)
+
 __all__ = [
     # Story 6-1: Intent Analysis
     "IntentAnalyzer",
@@ -101,4 +112,10 @@ __all__ = [
     # Story 6-2: Query Orchestrator
     "QueryOrchestrator",
     "get_query_orchestrator",
+    # Story 6-3: Audit Trail Logging
+    "QueryAuditLogger",
+    "get_query_audit_logger",
+    "QueryHistoryStore",
+    "get_query_history_store",
+    "reset_query_history_store",
 ]

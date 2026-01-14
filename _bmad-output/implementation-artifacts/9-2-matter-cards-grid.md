@@ -1,6 +1,6 @@
 # Story 9.2: Implement Matter Cards Grid
 
-Status: review
+Status: done
 
 ## Story
 
@@ -367,6 +367,7 @@ None
 **New Files:**
 - frontend/src/components/features/dashboard/MatterCard.tsx
 - frontend/src/components/features/dashboard/MatterCard.test.tsx
+- frontend/src/components/features/dashboard/MatterCardErrorBoundary.tsx (review fix)
 - frontend/src/components/features/dashboard/MatterCardsGrid.tsx
 - frontend/src/components/features/dashboard/MatterCardsGrid.test.tsx
 - frontend/src/components/features/dashboard/ViewToggle.tsx
@@ -375,16 +376,58 @@ None
 - frontend/src/components/features/dashboard/MatterFilters.test.tsx
 - frontend/src/stores/matterStore.ts
 - frontend/src/stores/matterStore.test.ts
+- frontend/src/stores/__mocks__/matterData.ts (review fix)
 - frontend/src/components/ui/toggle-group.tsx
 - frontend/src/app/(dashboard)/DashboardContent.tsx
 
 **Modified Files:**
 - frontend/src/types/matter.ts (added processing types, sort/filter options)
-- frontend/src/components/features/dashboard/index.ts (added new exports)
+- frontend/src/components/features/dashboard/index.ts (added new exports, MatterCardErrorBoundary)
 - frontend/src/app/(dashboard)/page.tsx (updated layout with 70/30 split)
 - frontend/package.json (added @radix-ui/react-toggle-group)
+
+## Senior Developer Review (AI)
+
+### Review Date: 2026-01-15
+
+### Findings Fixed
+
+**HIGH Priority (4 issues):**
+1. **act() warning in MatterFilters test** - Fixed by wrapping store.setState in act() wrapper
+2. **Zustand selector memoization** - Added useShallow from zustand/react/shallow to prevent unnecessary re-renders
+3. **Client-side filtering clarity** - Added JSDoc comments to setSortBy/setFilterBy explaining client-side operation
+4. **Mock data architecture** - Extracted to separate file with deterministic IDs
+
+**MEDIUM Priority (4 issues):**
+5. **Mock data extraction** - Created `frontend/src/stores/__mocks__/matterData.ts` with TODO for removal
+6. **Deterministic IDs** - Mock matters now use stable IDs (e.g., `mock_matter_shah_v_mehta`) preventing React key changes
+7. **Error boundary** - Created `MatterCardErrorBoundary` class component to isolate card failures
+8. **Accessibility** - Added `role="feed"` and `aria-label` to grid container
+
+**LOW Priority (1 issue):**
+9. **Time constants** - Extracted magic numbers to named constants (MS_PER_MINUTE, MINUTES_PER_HOUR, etc.)
+
+### Files Changed in Review
+
+**New Files:**
+- frontend/src/components/features/dashboard/MatterCardErrorBoundary.tsx
+- frontend/src/stores/__mocks__/matterData.ts
+
+**Modified Files:**
+- frontend/src/components/features/dashboard/MatterCard.tsx (time constants)
+- frontend/src/components/features/dashboard/MatterCardsGrid.tsx (useShallow, error boundary, role=feed)
+- frontend/src/components/features/dashboard/MatterFilters.test.tsx (act() wrapper)
+- frontend/src/components/features/dashboard/index.ts (export MatterCardErrorBoundary)
+- frontend/src/stores/matterStore.ts (extracted mock data, added JSDoc comments)
+
+### Test Results
+
+- All 496 tests pass
+- No act() warnings
+- TypeScript compilation clean
 
 ## Change Log
 
 - 2026-01-15: Story 9-2 implemented - Matter cards grid with view toggle, sort/filter, and responsive layout
+- 2026-01-15: Code review fixes - Error boundary, useShallow memoization, mock data extraction, accessibility improvements
 

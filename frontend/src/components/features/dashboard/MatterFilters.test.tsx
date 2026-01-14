@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MatterFilters } from './MatterFilters';
 import { useMatterStore } from '@/stores/matterStore';
@@ -118,11 +118,13 @@ describe('MatterFilters', () => {
     expect(container.firstChild).toHaveClass('custom-class');
   });
 
-  it('reflects store changes in UI', () => {
+  it('reflects store changes in UI', async () => {
     const { rerender } = render(<MatterFilters />);
 
-    // Change store directly
-    useMatterStore.setState({ sortBy: 'most_pages', filterBy: 'ready' });
+    // Change store directly - wrap in act to handle state updates
+    await act(async () => {
+      useMatterStore.setState({ sortBy: 'most_pages', filterBy: 'ready' });
+    });
 
     rerender(<MatterFilters />);
 

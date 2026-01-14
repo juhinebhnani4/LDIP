@@ -12,6 +12,7 @@ export { GlobalSearch } from './GlobalSearch';
 
 // Story 9-2: Matter Cards Grid
 export { MatterCard } from './MatterCard';
+export { MatterCardErrorBoundary } from './MatterCardErrorBoundary';
 export { MatterCardsGrid } from './MatterCardsGrid';
 export { ViewToggle } from './ViewToggle';
 export { MatterFilters } from './MatterFilters';

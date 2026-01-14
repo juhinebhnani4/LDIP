@@ -49,6 +49,12 @@ interface MatterCardProps {
   className?: string;
 }
 
+// Time constants for readability
+const MS_PER_MINUTE = 60000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const SECONDS_PER_MINUTE = 60;
+
 /** Format relative time for last opened */
 function formatRelativeTime(isoDate: string | undefined): string {
   if (!isoDate) return 'Never opened';
@@ -56,13 +62,13 @@ function formatRelativeTime(isoDate: string | undefined): string {
   const date = new Date(isoDate);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+  const diffMins = Math.floor(diffMs / MS_PER_MINUTE);
+  const diffHours = Math.floor(diffMins / MINUTES_PER_HOUR);
+  const diffDays = Math.floor(diffHours / HOURS_PER_DAY);
 
   if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffMins < MINUTES_PER_HOUR) return `${diffMins}m ago`;
+  if (diffHours < HOURS_PER_DAY) return `${diffHours}h ago`;
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
@@ -71,10 +77,10 @@ function formatRelativeTime(isoDate: string | undefined): string {
 /** Format estimated time remaining */
 function formatTimeRemaining(seconds: number | undefined): string {
   if (!seconds) return '';
-  const mins = Math.ceil(seconds / 60);
-  if (mins < 60) return `Est. ${mins} min left`;
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
+  const mins = Math.ceil(seconds / SECONDS_PER_MINUTE);
+  if (mins < MINUTES_PER_HOUR) return `Est. ${mins} min left`;
+  const hours = Math.floor(mins / MINUTES_PER_HOUR);
+  const remainingMins = mins % MINUTES_PER_HOUR;
   return `Est. ${hours}h ${remainingMins}m left`;
 }
 

@@ -3,9 +3,11 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, FolderOpen } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MatterCard } from './MatterCard';
+import { MatterCardErrorBoundary } from './MatterCardErrorBoundary';
 import { useMatterStore, selectSortedMatters, initializeViewMode } from '@/stores/matterStore';
 import { cn } from '@/lib/utils';
 
@@ -111,7 +113,8 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   const isLoading = useMatterStore((state) => state.isLoading);
   const error = useMatterStore((state) => state.error);
   const viewMode = useMatterStore((state) => state.viewMode);
-  const sortedMatters = useMatterStore(selectSortedMatters);
+  // useShallow prevents re-renders when array contents are equal
+  const sortedMatters = useMatterStore(useShallow(selectSortedMatters));
 
   // Initialize view mode from localStorage and fetch matters on mount
   useEffect(() => {
@@ -159,10 +162,17 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
 
   // Normal state with matters
   return (
-    <div className={gridClasses}>
+    <div
+      className={gridClasses}
+      role="feed"
+      aria-label="Matter cards"
+      aria-busy={isLoading}
+    >
       <NewMatterCard />
       {sortedMatters.map((matter) => (
-        <MatterCard key={matter.id} matter={matter} />
+        <MatterCardErrorBoundary key={matter.id} matterId={matter.id}>
+          <MatterCard matter={matter} />
+        </MatterCardErrorBoundary>
       ))}
     </div>
   );

@@ -268,7 +268,7 @@ export async function bulkUpdateVerifications(
   };
 
   // Convert camelCase to snake_case for API
-  const response = await api.post<FindingBulkVerificationResponse>(
+  const response = await api.post<{ data: FindingBulkVerificationResponse }>(
     `/api/matters/${matterId}/verifications/bulk`,
     {
       verification_ids: request.verificationIds,
@@ -276,7 +276,7 @@ export async function bulkUpdateVerifications(
       notes: request.notes,
     }
   );
-  return response;
+  return response.data;
 }
 
 // =============================================================================

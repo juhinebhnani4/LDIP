@@ -275,7 +275,14 @@ export function VerificationQueue({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[120px]">
-                      <div className="relative w-20 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="relative w-20 h-2 bg-muted rounded-full overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={Math.round(item.confidence)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Confidence: ${item.confidence.toFixed(0)}%`}
+                      >
                         <div
                           className={`absolute left-0 top-0 h-full ${colorClass} transition-all`}
                           style={{ width: `${item.confidence}%` }}

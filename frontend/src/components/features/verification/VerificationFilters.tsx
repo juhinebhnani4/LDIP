@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { X } from 'lucide-react';
 import type { VerificationFilters as FiltersType, ConfidenceTier, VerificationView } from '@/types';
+import { VerificationDecision } from '@/types';
 import { formatFindingType } from '@/stores/verificationStore';
 
 interface VerificationFiltersProps {
@@ -63,7 +64,8 @@ export function VerificationFilters({
   const anyActive =
     hasActiveFilters ||
     filters.findingType !== null ||
-    filters.confidenceTier !== null;
+    filters.confidenceTier !== null ||
+    filters.status !== null;
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -122,7 +124,51 @@ export function VerificationFilters({
         </SelectContent>
       </Select>
 
-      {/* View Mode Selector */}
+      {/* Verification Status Filter (AC #5) */}
+      <Select
+        value={filters.status ?? 'all'}
+        onValueChange={(value) =>
+          onFiltersChange({
+            status: value === 'all' ? null : (value as VerificationDecision),
+          })
+        }
+      >
+        <SelectTrigger className="w-[150px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Status</SelectItem>
+          <SelectItem value={VerificationDecision.PENDING}>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-400" />
+              Pending
+            </span>
+          </SelectItem>
+          <SelectItem value={VerificationDecision.APPROVED}>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              Approved
+            </span>
+          </SelectItem>
+          <SelectItem value={VerificationDecision.REJECTED}>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Rejected
+            </span>
+          </SelectItem>
+          <SelectItem value={VerificationDecision.FLAGGED}>
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-500" />
+              Flagged
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* View Mode Selector
+          TODO: "By Type" and "History" views not yet implemented.
+          Currently all views render the same queue table.
+          Future enhancement: group by finding type, show verification history. */}
       <Select
         value={filters.view}
         onValueChange={(value) =>
@@ -134,8 +180,12 @@ export function VerificationFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="queue">Queue View</SelectItem>
-          <SelectItem value="by-type">By Type</SelectItem>
-          <SelectItem value="history">History</SelectItem>
+          <SelectItem value="by-type" disabled>
+            By Type (coming soon)
+          </SelectItem>
+          <SelectItem value="history" disabled>
+            History (coming soon)
+          </SelectItem>
         </SelectContent>
       </Select>
 

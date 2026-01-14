@@ -84,6 +84,12 @@ interface VerificationActions {
   /** Remove multiple items from queue (after bulk action) */
   removeMultipleFromQueue: (ids: string[]) => void;
 
+  /** Add item back to queue (for rollback on API failure) */
+  addToQueue: (item: VerificationQueueItem) => void;
+
+  /** Add multiple items back to queue (for rollback on API failure) */
+  addMultipleToQueue: (items: VerificationQueueItem[]) => void;
+
   /** Set loading state */
   setLoading: (isLoading: boolean) => void;
 
@@ -187,6 +193,23 @@ export const useVerificationStore = create<VerificationStore>()((set, get) => ({
         queue: state.queue.filter((item) => !idSet.has(item.id)),
         selectedIds: state.selectedIds.filter((i) => !idSet.has(i)),
       };
+    }),
+
+  addToQueue: (item) =>
+    set((state) => {
+      // Avoid duplicates
+      if (state.queue.some((i) => i.id === item.id)) {
+        return state;
+      }
+      // Insert at beginning (most recently added)
+      return { queue: [item, ...state.queue] };
+    }),
+
+  addMultipleToQueue: (items) =>
+    set((state) => {
+      const existingIds = new Set(state.queue.map((i) => i.id));
+      const newItems = items.filter((item) => !existingIds.has(item.id));
+      return { queue: [...newItems, ...state.queue] };
     }),
 
   setLoading: (isLoading) => set({ isLoading }),

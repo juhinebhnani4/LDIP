@@ -76,11 +76,14 @@ export function useVerificationActions(
   const [currentAction, setCurrentAction] = useState<string | null>(null);
   const [processingIds, setProcessingIds] = useState<string[]>([]);
 
-  // Store actions
+  // Store state and actions
+  const queue = useVerificationStore((state) => state.queue);
   const removeFromQueue = useVerificationStore((state) => state.removeFromQueue);
   const removeMultipleFromQueue = useVerificationStore(
     (state) => state.removeMultipleFromQueue
   );
+  const addToQueue = useVerificationStore((state) => state.addToQueue);
+  const addMultipleToQueue = useVerificationStore((state) => state.addMultipleToQueue);
   const updateQueueItem = useVerificationStore((state) => state.updateQueueItem);
   const clearSelection = useVerificationStore((state) => state.clearSelection);
 
@@ -93,6 +96,9 @@ export function useVerificationActions(
       setCurrentAction('approve');
       setProcessingIds([id]);
 
+      // Capture item before removal for potential rollback
+      const itemToRestore = queue.find((item) => item.id === id);
+
       try {
         // Optimistic update - remove from queue immediately
         removeFromQueue(id);
@@ -102,7 +108,10 @@ export function useVerificationActions(
 
         onSuccess?.('approve', id);
       } catch (err) {
-        // On error, we could restore the item, but for simplicity just show error
+        // Rollback: restore item to queue on API failure
+        if (itemToRestore) {
+          addToQueue(itemToRestore);
+        }
         const message = err instanceof Error ? err.message : 'Failed to approve';
         onError?.('approve', id, message);
       } finally {
@@ -111,7 +120,7 @@ export function useVerificationActions(
         setProcessingIds([]);
       }
     },
-    [matterId, removeFromQueue, onSuccess, onError]
+    [matterId, queue, removeFromQueue, addToQueue, onSuccess, onError]
   );
 
   /**
@@ -123,6 +132,9 @@ export function useVerificationActions(
       setCurrentAction('reject');
       setProcessingIds([id]);
 
+      // Capture item before removal for potential rollback
+      const itemToRestore = queue.find((item) => item.id === id);
+
       try {
         // Optimistic update
         removeFromQueue(id);
@@ -132,6 +144,10 @@ export function useVerificationActions(
 
         onSuccess?.('reject', id);
       } catch (err) {
+        // Rollback: restore item to queue on API failure
+        if (itemToRestore) {
+          addToQueue(itemToRestore);
+        }
         const message = err instanceof Error ? err.message : 'Failed to reject';
         onError?.('reject', id, message);
       } finally {
@@ -140,7 +156,7 @@ export function useVerificationActions(
         setProcessingIds([]);
       }
     },
-    [matterId, removeFromQueue, onSuccess, onError]
+    [matterId, queue, removeFromQueue, addToQueue, onSuccess, onError]
   );
 
   /**
@@ -186,6 +202,10 @@ export function useVerificationActions(
       setCurrentAction('bulk-approve');
       setProcessingIds(ids);
 
+      // Capture items before removal for potential rollback
+      const idSet = new Set(ids);
+      const itemsToRestore = queue.filter((item) => idSet.has(item.id));
+
       try {
         // Optimistic update
         removeMultipleFromQueue(ids);
@@ -201,6 +221,10 @@ export function useVerificationActions(
 
         onSuccess?.('bulk-approve', ids.join(','));
       } catch (err) {
+        // Rollback: restore items to queue on API failure
+        if (itemsToRestore.length > 0) {
+          addMultipleToQueue(itemsToRestore);
+        }
         const message = err instanceof Error ? err.message : 'Failed to bulk approve';
         onError?.('bulk-approve', ids.join(','), message);
       } finally {
@@ -209,7 +233,7 @@ export function useVerificationActions(
         setProcessingIds([]);
       }
     },
-    [matterId, removeMultipleFromQueue, clearSelection, onSuccess, onError]
+    [matterId, queue, removeMultipleFromQueue, addMultipleToQueue, clearSelection, onSuccess, onError]
   );
 
   /**
@@ -222,6 +246,10 @@ export function useVerificationActions(
       setIsActioning(true);
       setCurrentAction('bulk-reject');
       setProcessingIds(ids);
+
+      // Capture items before removal for potential rollback
+      const idSet = new Set(ids);
+      const itemsToRestore = queue.filter((item) => idSet.has(item.id));
 
       try {
         // Optimistic update
@@ -238,6 +266,10 @@ export function useVerificationActions(
 
         onSuccess?.('bulk-reject', ids.join(','));
       } catch (err) {
+        // Rollback: restore items to queue on API failure
+        if (itemsToRestore.length > 0) {
+          addMultipleToQueue(itemsToRestore);
+        }
         const message = err instanceof Error ? err.message : 'Failed to bulk reject';
         onError?.('bulk-reject', ids.join(','), message);
       } finally {
@@ -246,7 +278,7 @@ export function useVerificationActions(
         setProcessingIds([]);
       }
     },
-    [matterId, removeMultipleFromQueue, clearSelection, onSuccess, onError]
+    [matterId, queue, removeMultipleFromQueue, addMultipleToQueue, clearSelection, onSuccess, onError]
   );
 
   /**

@@ -8,10 +8,17 @@
  * Story 8-5: Implement Verification Queue UI (Task 9.1)
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { verificationsApi } from '@/lib/api/verifications';
 import type { VerificationQueueItem, VerificationFilters } from '@/types';
+
+/**
+ * Default polling interval for verification queue refresh.
+ * Set to 30 seconds to balance freshness with server load.
+ * Can be overridden via options.pollInterval.
+ */
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
 
 interface UseVerificationQueueOptions {
   /** Matter ID to fetch queue for */
@@ -20,7 +27,7 @@ interface UseVerificationQueueOptions {
   limit?: number;
   /** Enable auto-polling (default true) */
   enablePolling?: boolean;
-  /** Polling interval in ms (default 30000) */
+  /** Polling interval in ms (default 30000 = 30 seconds) */
   pollInterval?: number;
 }
 
@@ -72,7 +79,7 @@ export function useVerificationQueue(
     matterId,
     limit = 50,
     enablePolling = true,
-    pollInterval = 30000,
+    pollInterval = DEFAULT_POLL_INTERVAL_MS,
   } = options;
 
   // Store selectors
@@ -131,18 +138,37 @@ export function useVerificationQueue(
     return Array.from(types).sort();
   }, [queue])();
 
+  // Track mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
+  // Reset mounted state on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Fetch queue from API
   const fetchQueue = useCallback(async () => {
     try {
       setLoading(true);
       const data = await verificationsApi.getPendingQueue(matterId, limit);
-      setQueue(data);
-      setError(null);
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setQueue(data);
+        setError(null);
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load verification queue';
-      setError(message);
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        const message = err instanceof Error ? err.message : 'Failed to load verification queue';
+        setError(message);
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [matterId, limit, setLoading, setQueue, setError]);
 

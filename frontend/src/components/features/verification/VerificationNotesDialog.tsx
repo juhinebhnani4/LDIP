@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 
@@ -108,16 +108,18 @@ export function VerificationNotesDialog({
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="notes">Notes (required)</Label>
-              <Input
+              <Textarea
                 id="notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
                 placeholder={placeholder}
                 required
                 minLength={1}
                 maxLength={2000}
                 disabled={isLoading}
                 autoFocus
+                rows={4}
+                className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
                 {notes.length}/2000 characters

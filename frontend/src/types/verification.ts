@@ -68,6 +68,12 @@ export interface VerificationQueueItem {
   sourceDocument: string | null;
   /** Source engine (citation, timeline, contradiction) */
   engine: string;
+  /** User UUID who verified (AC #2 - recorded on approval) */
+  verifiedBy?: string | null;
+  /** When verified (AC #2 - recorded on approval) */
+  verifiedAt?: string | null;
+  /** Attorney notes for decision */
+  notes?: string | null;
 }
 
 // =============================================================================

@@ -123,7 +123,7 @@ class TestVerificationWorkflowIntegration:
             "finding_summary": "Section 138 citation mismatch detected",
             "confidence_before": 65.0,
         }]
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = blocking_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = blocking_result
 
         eligibility = await export_service.check_export_eligibility(
             "matter-1", mock_supabase
@@ -166,7 +166,7 @@ class TestVerificationWorkflowIntegration:
         # Step 4: Check export eligibility again (should be allowed)
         no_blocking_result = MagicMock()
         no_blocking_result.data = []  # No more blocking findings
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = no_blocking_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = no_blocking_result
 
         eligibility_after = await export_service.check_export_eligibility(
             "matter-1", mock_supabase

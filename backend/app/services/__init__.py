@@ -13,9 +13,11 @@ from app.services.verification import (
     ExportEligibilityService,
     VerificationService,
     VerificationServiceError,
+    VerificationNotFoundError,
     get_export_eligibility_service,
     get_verification_service,
     reset_verification_service,
+    reset_export_eligibility_service,
 )
 
 __all__ = [
@@ -31,7 +33,9 @@ __all__ = [
     "ExportEligibilityService",
     "VerificationService",
     "VerificationServiceError",
+    "VerificationNotFoundError",
     "get_export_eligibility_service",
     "get_verification_service",
     "reset_verification_service",
+    "reset_export_eligibility_service",
 ]

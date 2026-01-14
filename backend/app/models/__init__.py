@@ -131,6 +131,7 @@ from app.models.safety import (
 )
 from app.models.verification import (
     # Story 8-4: Verification models
+    ApproveVerificationRequest,
     BulkVerificationRequest,
     BulkVerificationResponse,
     ExportBlockingFinding,
@@ -138,6 +139,8 @@ from app.models.verification import (
     FindingVerification,
     FindingVerificationCreate,
     FindingVerificationUpdate,
+    FlagVerificationRequest,
+    RejectVerificationRequest,
     VerificationDecision,
     VerificationListResponse,
     VerificationQueueItem,
@@ -271,6 +274,7 @@ __all__ = [
     "QuotePreservation",
     "ReplacementRecord",
     # Verification models (Story 8-4)
+    "ApproveVerificationRequest",
     "BulkVerificationRequest",
     "BulkVerificationResponse",
     "ExportBlockingFinding",
@@ -278,6 +282,8 @@ __all__ = [
     "FindingVerification",
     "FindingVerificationCreate",
     "FindingVerificationUpdate",
+    "FlagVerificationRequest",
+    "RejectVerificationRequest",
     "VerificationDecision",
     "VerificationListResponse",
     "VerificationQueueItem",

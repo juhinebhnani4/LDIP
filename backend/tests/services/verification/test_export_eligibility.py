@@ -56,7 +56,7 @@ class TestExportEligibilityCheck:
         mock_result = MagicMock()
         mock_result.data = []  # No blocking findings
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = mock_result
 
         result = await export_service.check_export_eligibility(
             matter_id="test-matter-id",
@@ -91,7 +91,7 @@ class TestExportEligibilityCheck:
             },
         ]
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = mock_result
 
         result = await export_service.check_export_eligibility(
             matter_id="test-matter-id",
@@ -119,7 +119,7 @@ class TestExportEligibilityCheck:
             },
         ]
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = mock_result
 
         result = await export_service.check_export_eligibility(
             matter_id="test-matter-id",
@@ -142,7 +142,7 @@ class TestFailSafeBehavior:
         self, export_service, mock_supabase
     ) -> None:
         """Export should be blocked on database errors (fail-safe)."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.side_effect = Exception(
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.side_effect = Exception(
             "Database connection failed"
         )
 
@@ -175,7 +175,7 @@ class TestGetBlockingFindings:
             },
         ]
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lt.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = mock_result
 
         findings = await export_service.get_blocking_findings(
             matter_id="test-matter-id",

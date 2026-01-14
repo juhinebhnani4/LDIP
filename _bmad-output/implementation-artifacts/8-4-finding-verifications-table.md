@@ -1080,13 +1080,14 @@ N/A - Implementation completed successfully with 34/34 tests passing.
 ### Completion Notes List
 
 1. All 11 tasks completed successfully
-2. 34 tests passing (unit + integration)
+2. 52 tests passing after code review fixes (unit + integration + API)
 3. Database migration created with complete RLS policies
-4. Verification service implements ADR-004 tiered thresholds (>90% optional, 70-90% suggested, <70% required)
-5. Export eligibility service blocks export for unverified findings below 70% confidence
+4. Verification service implements ADR-004 tiered thresholds (>90% optional, 70-90% suggested, <=70% required)
+5. Export eligibility service blocks export for unverified findings at or below 70% confidence
 6. API endpoints follow existing patterns with matter_id path parameter
 7. Integration with ResultAggregator adds verification_metadata to orchestrator results
 8. Pydantic models include field validation (max_length for summaries, ge/le for confidence)
+9. Code review fixes applied (see Code Review Fixes section below)
 
 ### File List
 
@@ -1109,4 +1110,59 @@ N/A - Implementation completed successfully with 34/34 tests passing.
 - `backend/app/engines/orchestrator/aggregator.py` - Added verification metadata calculation
 - `backend/app/services/__init__.py` - Added verification service exports
 - `backend/app/main.py` - Registered verifications router
+
+**ADDED BY CODE REVIEW:**
+- `backend/tests/api/routes/test_verifications.py` - Comprehensive API tests (18 new tests)
+
+### Code Review Fixes
+
+**Date:** 2026-01-14
+**Reviewer:** Claude Opus 4.5 (Adversarial Code Review)
+**Result:** 2081 tests passing (up from 2063)
+
+#### HIGH Severity Fixes
+
+1. **Threshold Boundary Bug at 70%** - Fixed `.lt()` to `.lte()` in export_eligibility.py
+   - Issue: Export eligibility used `< 70` while verification_service used `<= 70`
+   - Fix: Changed to `.lte("confidence_before", 70)` for consistent boundary handling
+   - Files: `export_eligibility.py`, `test_export_eligibility.py`, `test_verification_integration.py`
+
+2. **Missing API Tests** - Added comprehensive API route tests
+   - Issue: No tests existed for verification API endpoints
+   - Fix: Created `test_verifications.py` with 18 test cases covering auth and functionality
+   - File: `backend/tests/api/routes/test_verifications.py`
+
+3. **Missing VerificationNotFoundError Export** - Added error class to exports
+   - Issue: `VerificationNotFoundError` was not exported from services module
+   - Fix: Added to `__all__` in both `verification/__init__.py` and `services/__init__.py`
+   - Files: `services/verification/__init__.py`, `services/__init__.py`
+
+#### MEDIUM Severity Fixes
+
+4. **Aggregator Clarification** - Added documentation note
+   - Issue: Dev Notes showed record creation that wasn't implemented
+   - Fix: Added clarifying comment that aggregator calculates metadata, not creates records
+   - File: `aggregator.py` (docstring update)
+
+5. **Bulk Update N+1 Query** - Documented limitation
+   - Issue: Bulk update uses individual queries per ID
+   - Fix: Added docstring note about limitation and performance acceptability for max 100 items
+   - File: `verification_service.py` (docstring update)
+
+6. **Missing reset_export_eligibility_service Export** - Added to exports
+   - Issue: Reset function wasn't exported for testing
+   - Fix: Added to `__all__` in both module `__init__.py` files
+   - Files: `services/verification/__init__.py`, `services/__init__.py`
+
+#### LOW Severity Fixes
+
+7. **API Parameter Types** - Changed Query params to Body params
+   - Issue: Approve/Reject/Flag endpoints used Query params for notes (non-REST convention)
+   - Fix: Created request body models and updated endpoints to use Body parameters
+   - Files: `verification.py` (added ApproveVerificationRequest, RejectVerificationRequest, FlagVerificationRequest), `verifications.py` (updated endpoints), `models/__init__.py` (exports)
+
+8. **Engine Extraction Logic** - Added explicit mapping
+   - Issue: String splitting was fragile for multi-word finding types
+   - Fix: Added `_extract_engine_from_finding_type()` method with explicit mapping and fallback
+   - File: `verification_service.py`
 

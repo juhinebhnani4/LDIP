@@ -90,12 +90,14 @@ class ExportEligibilityService:
         start_time = time.perf_counter()
 
         try:
-            # Query for pending verifications below threshold
+            # Query for pending verifications at or below threshold
+            # Story 8-4: Uses <= to match verification_service.get_verification_requirement()
+            # which returns REQUIRED for confidence <= 70%
             result = supabase.table("finding_verifications").select(
                 "id, finding_id, finding_type, finding_summary, confidence_before"
             ).eq("matter_id", matter_id).eq(
                 "decision", VerificationDecision.PENDING.value
-            ).lt(
+            ).lte(
                 "confidence_before", self._export_block_threshold
             ).execute()
 

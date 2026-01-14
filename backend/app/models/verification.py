@@ -286,6 +286,58 @@ class VerificationResponse(BaseModel):
     data: FindingVerification = Field(..., description="Verification record")
 
 
+# =============================================================================
+# Story 8-4: Action Request Models (Code Review Fix)
+# =============================================================================
+
+
+class ApproveVerificationRequest(BaseModel):
+    """Request body for approving a verification.
+
+    Story 8-4: Code Review Fix - Use request body instead of query params.
+    """
+
+    notes: str | None = Field(
+        None,
+        max_length=2000,
+        description="Optional approval notes",
+    )
+    confidence_after: float | None = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Optional adjusted confidence score",
+    )
+
+
+class RejectVerificationRequest(BaseModel):
+    """Request body for rejecting a verification.
+
+    Story 8-4: Code Review Fix - Use request body instead of query params.
+    """
+
+    notes: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Required rejection notes",
+    )
+
+
+class FlagVerificationRequest(BaseModel):
+    """Request body for flagging a verification.
+
+    Story 8-4: Code Review Fix - Use request body instead of query params.
+    """
+
+    notes: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Required flagging notes",
+    )
+
+
 class BulkVerificationRequest(BaseModel):
     """Request for bulk verification operations.
 

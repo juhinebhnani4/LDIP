@@ -553,6 +553,11 @@ class VerificationService:
 
         Story 8-4: Task 4.8 - Bulk approve/reject for Story 8-5 queue UI.
 
+        NOTE: Current implementation uses individual updates per ID due to
+        Supabase Python client limitations with bulk WHERE IN updates.
+        Performance is acceptable for max 100 items per request.
+        Consider PostgreSQL function for high-volume scenarios.
+
         Args:
             verification_ids: List of verification UUIDs.
             decision: Decision to apply to all.
@@ -651,6 +656,37 @@ class VerificationService:
             ),
         )
 
+    def _extract_engine_from_finding_type(self, finding_type: str) -> str:
+        """Extract engine name from finding type.
+
+        Story 8-4: Code Review Fix - Use explicit mapping for robustness.
+
+        Args:
+            finding_type: Finding type string (e.g., "citation_mismatch").
+
+        Returns:
+            Engine name string.
+        """
+        # Explicit mapping for known finding types
+        engine_mapping = {
+            "citation_mismatch": "citation",
+            "citation_verification_failed": "citation",
+            "timeline_gap": "timeline",
+            "timeline_anomaly": "timeline",
+            "contradiction_detected": "contradiction",
+            "contradiction_statement": "contradiction",
+            "rag_low_confidence": "rag",
+            "entity_mismatch": "entity",
+            "entity_unresolved": "entity",
+        }
+
+        # Return mapped engine or extract from prefix as fallback
+        if finding_type in engine_mapping:
+            return engine_mapping[finding_type]
+
+        # Fallback: use first word before underscore
+        return finding_type.split("_")[0] if "_" in finding_type else finding_type
+
     def _to_queue_item(self, record: dict) -> VerificationQueueItem:
         """Convert database record to queue item for UI.
 
@@ -663,9 +699,7 @@ class VerificationService:
             VerificationQueueItem for queue UI.
         """
         finding_type = record["finding_type"]
-
-        # Extract engine from finding type (e.g., citation_mismatch -> citation)
-        engine = finding_type.split("_")[0] if "_" in finding_type else finding_type
+        engine = self._extract_engine_from_finding_type(finding_type)
 
         return VerificationQueueItem(
             id=record["id"],

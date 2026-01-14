@@ -27,11 +27,14 @@ from app.api.deps import (
     require_matter_role,
 )
 from app.models.verification import (
+    ApproveVerificationRequest,
     BulkVerificationRequest,
     BulkVerificationResponse,
     ExportEligibilityResult,
     FindingVerification,
     FindingVerificationUpdate,
+    FlagVerificationRequest,
+    RejectVerificationRequest,
     VerificationDecision,
     VerificationListResponse,
     VerificationQueueItem,
@@ -454,10 +457,7 @@ async def get_verification(
 async def approve_verification(
     matter_id: str = Path(..., description="Matter UUID"),
     verification_id: str = Path(..., description="Verification UUID"),
-    notes: str | None = Query(None, description="Optional approval notes"),
-    confidence_after: float | None = Query(
-        None, ge=0, le=100, description="Optional adjusted confidence"
-    ),
+    request: ApproveVerificationRequest = Body(default=ApproveVerificationRequest()),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
     ),
@@ -471,8 +471,7 @@ async def approve_verification(
     Args:
         matter_id: Matter UUID.
         verification_id: Verification UUID.
-        notes: Optional notes for approval.
-        confidence_after: Optional adjusted confidence score.
+        request: Optional approval request with notes and confidence adjustment.
         membership: Validated matter membership (editor/owner required).
         db: Supabase client.
         service: Verification service.
@@ -492,8 +491,8 @@ async def approve_verification(
             verification_id=verification_id,
             update_data=FindingVerificationUpdate(
                 decision=VerificationDecision.APPROVED,
-                notes=notes,
-                confidence_after=confidence_after,
+                notes=request.notes,
+                confidence_after=request.confidence_after,
             ),
             verified_by=membership.user_id,
             supabase=db,
@@ -540,7 +539,7 @@ async def approve_verification(
 async def reject_verification(
     matter_id: str = Path(..., description="Matter UUID"),
     verification_id: str = Path(..., description="Verification UUID"),
-    notes: str = Query(..., min_length=1, description="Required rejection notes"),
+    request: RejectVerificationRequest = Body(...),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
     ),
@@ -556,7 +555,7 @@ async def reject_verification(
     Args:
         matter_id: Matter UUID.
         verification_id: Verification UUID.
-        notes: Required notes explaining rejection reason.
+        request: Rejection request with required notes.
         membership: Validated matter membership (editor/owner required).
         db: Supabase client.
         service: Verification service.
@@ -576,7 +575,7 @@ async def reject_verification(
             verification_id=verification_id,
             update_data=FindingVerificationUpdate(
                 decision=VerificationDecision.REJECTED,
-                notes=notes,
+                notes=request.notes,
             ),
             verified_by=membership.user_id,
             supabase=db,
@@ -622,7 +621,7 @@ async def reject_verification(
 async def flag_verification(
     matter_id: str = Path(..., description="Matter UUID"),
     verification_id: str = Path(..., description="Verification UUID"),
-    notes: str = Query(..., min_length=1, description="Required flagging notes"),
+    request: FlagVerificationRequest = Body(...),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
     ),
@@ -639,7 +638,7 @@ async def flag_verification(
     Args:
         matter_id: Matter UUID.
         verification_id: Verification UUID.
-        notes: Required notes explaining why flagged.
+        request: Flag request with required notes.
         membership: Validated matter membership (editor/owner required).
         db: Supabase client.
         service: Verification service.
@@ -659,7 +658,7 @@ async def flag_verification(
             verification_id=verification_id,
             update_data=FindingVerificationUpdate(
                 decision=VerificationDecision.FLAGGED,
-                notes=notes,
+                notes=request.notes,
             ),
             verified_by=membership.user_id,
             supabase=db,

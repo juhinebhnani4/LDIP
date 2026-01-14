@@ -18,21 +18,25 @@ Exports:
 from app.services.verification.verification_service import (
     VerificationService,
     VerificationServiceError,
+    VerificationNotFoundError,
     get_verification_service,
     reset_verification_service,
 )
 from app.services.verification.export_eligibility import (
     ExportEligibilityService,
     get_export_eligibility_service,
+    reset_export_eligibility_service,
 )
 
 __all__ = [
     # Verification Service
     "VerificationService",
     "VerificationServiceError",
+    "VerificationNotFoundError",
     "get_verification_service",
     "reset_verification_service",
     # Export Eligibility
     "ExportEligibilityService",
     "get_export_eligibility_service",
+    "reset_export_eligibility_service",
 ]

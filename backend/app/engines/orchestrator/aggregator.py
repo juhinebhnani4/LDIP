@@ -571,6 +571,11 @@ class ResultAggregator:
 
         Story 8-4: Task 6.3 - Include verification_requirement in response metadata.
 
+        NOTE: This method calculates verification metadata for the response.
+        Actual verification record creation happens when findings are persisted
+        to the database (calling VerificationService.create_verification_record).
+        The aggregator provides metadata so the UI can show verification badges.
+
         Counts how many findings from engine results would require
         different levels of verification based on ADR-004 thresholds:
         - > 90%: optional

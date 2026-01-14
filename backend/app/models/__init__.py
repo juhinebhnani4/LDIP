@@ -129,6 +129,24 @@ from app.models.safety import (
     QuotePreservation,
     ReplacementRecord,
 )
+from app.models.verification import (
+    # Story 8-4: Verification models
+    BulkVerificationRequest,
+    BulkVerificationResponse,
+    ExportBlockingFinding,
+    ExportEligibilityResult,
+    FindingVerification,
+    FindingVerificationCreate,
+    FindingVerificationUpdate,
+    VerificationDecision,
+    VerificationListResponse,
+    VerificationQueueItem,
+    VerificationQueueResponse,
+    VerificationRequirement,
+    VerificationResponse,
+    VerificationStats,
+    VerificationStatsResponse,
+)
 
 __all__ = [
     # Auth models
@@ -252,4 +270,20 @@ __all__ = [
     "LanguagePolicingResult",
     "QuotePreservation",
     "ReplacementRecord",
+    # Verification models (Story 8-4)
+    "BulkVerificationRequest",
+    "BulkVerificationResponse",
+    "ExportBlockingFinding",
+    "ExportEligibilityResult",
+    "FindingVerification",
+    "FindingVerificationCreate",
+    "FindingVerificationUpdate",
+    "VerificationDecision",
+    "VerificationListResponse",
+    "VerificationQueueItem",
+    "VerificationQueueResponse",
+    "VerificationRequirement",
+    "VerificationResponse",
+    "VerificationStats",
+    "VerificationStatsResponse",
 ]

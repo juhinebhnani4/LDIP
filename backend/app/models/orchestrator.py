@@ -416,6 +416,12 @@ class OrchestratorResult(BaseModel):
         description="Metadata from language policing (replacements_count, quotes_preserved, etc.)",
     )
 
+    # Story 8-4: Verification metadata (Task 6.3)
+    verification_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metadata for finding verification requirements (findings_count, required_verifications, etc.)",
+    )
+
 
 class OrchestratorResponse(BaseModel):
     """API response wrapper for orchestrator execution.

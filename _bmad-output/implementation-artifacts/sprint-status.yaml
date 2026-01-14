@@ -134,7 +134,7 @@ development_status:
   8-1-regex-pattern-detection: done  # Code review passed 2026-01-14 (57 tests, 8 issues fixed)
   8-2-gpt4o-mini-violation-detection: done  # Code review passed 2026-01-14 (33 tests)
   8-3-language-policing: dev-complete  # 80 tests passing 2026-01-14 - ready for code review
-  8-4-finding-verifications-table: backlog
+  8-4-finding-verifications-table: dev-complete  # 34 tests passing 2026-01-14 - ready for code review
   8-5-verification-queue-ui: backlog
   epic-8-retrospective: optional
 

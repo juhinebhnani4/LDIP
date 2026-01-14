@@ -2,12 +2,14 @@
 
 Story 6-2: Engine Execution Ordering (AC: #4)
 Story 8-3: Language Policing Integration (Task 7: Integrate with Engine Outputs)
+Story 8-4: Verification Metadata Tracking (Task 6: Integrate with Engine Outputs)
 
 Aggregates results from multiple engines into a unified response:
 - Merges and deduplicates source references
 - Calculates overall confidence (weighted average)
 - Formats unified human-readable response
 - Applies language policing to sanitize output (Story 8-3)
+- Tracks verification requirements based on confidence (Story 8-4)
 
 CRITICAL: Sources must include engine attribution for traceability.
 CRITICAL: All unified_response text must pass through language policing (Story 8-3).
@@ -29,6 +31,7 @@ from app.services.safety.language_police import (
     LanguagePolice,
     get_language_police,
 )
+from app.services.verification import get_verification_service
 
 logger = structlog.get_logger(__name__)
 
@@ -267,6 +270,9 @@ class ResultAggregator:
         # Calculate total execution time (sum of all engines)
         total_execution_time_ms = sum(r.execution_time_ms for r in results)
 
+        # Story 8-4: Calculate verification metadata
+        verification_metadata = self._calculate_verification_metadata(successful)
+
         logger.info(
             "aggregate_results_complete",
             matter_id=matter_id,
@@ -274,6 +280,7 @@ class ResultAggregator:
             failed_engines=[r.engine.value for r in failed],
             total_sources=len(all_sources),
             confidence=overall_confidence,
+            verification_metadata=verification_metadata,
         )
 
         return OrchestratorResult(
@@ -287,6 +294,7 @@ class ResultAggregator:
             engine_results=results,
             total_execution_time_ms=total_execution_time_ms,
             wall_clock_time_ms=wall_clock_time_ms,
+            verification_metadata=verification_metadata,
         )
 
     def _merge_sources(
@@ -554,6 +562,108 @@ class ResultAggregator:
             )
 
         return ""
+
+    def _calculate_verification_metadata(
+        self,
+        results: list[EngineExecutionResult],
+    ) -> dict:
+        """Calculate verification metadata based on result confidences.
+
+        Story 8-4: Task 6.3 - Include verification_requirement in response metadata.
+
+        Counts how many findings from engine results would require
+        different levels of verification based on ADR-004 thresholds:
+        - > 90%: optional
+        - 70-90%: suggested
+        - < 70%: required
+
+        Args:
+            results: Successful engine results.
+
+        Returns:
+            Dict with verification metadata (counts by tier, export_blocking_count).
+        """
+        verification_service = get_verification_service()
+
+        findings_count = 0
+        required_count = 0
+        suggested_count = 0
+        optional_count = 0
+
+        for result in results:
+            if not result.data:
+                continue
+
+            # Extract findings/results from engine-specific data structures
+            confidence_values = self._extract_confidence_values(result)
+
+            for confidence in confidence_values:
+                findings_count += 1
+                # Convert 0-1 confidence to 0-100 scale if needed
+                confidence_pct = confidence * 100 if confidence <= 1.0 else confidence
+
+                requirement = verification_service.get_verification_requirement(
+                    confidence_pct
+                )
+
+                if requirement.value == "required":
+                    required_count += 1
+                elif requirement.value == "suggested":
+                    suggested_count += 1
+                else:
+                    optional_count += 1
+
+        return {
+            "findings_count": findings_count,
+            "required_verifications": required_count,
+            "suggested_verifications": suggested_count,
+            "optional_verifications": optional_count,
+            "export_blocking_count": required_count,  # Only required blocks export
+        }
+
+    def _extract_confidence_values(
+        self,
+        result: EngineExecutionResult,
+    ) -> list[float]:
+        """Extract confidence values from engine result data.
+
+        Story 8-4: Task 6.3 - Helper to extract confidences from various engine formats.
+
+        Args:
+            result: Engine execution result.
+
+        Returns:
+            List of confidence values (0.0-1.0 scale).
+        """
+        confidences: list[float] = []
+        data = result.data or {}
+
+        if result.engine == EngineType.CITATION:
+            # Citation engine: citations have individual confidence
+            for act in data.get("acts", []):
+                for citation in act.get("citations", []):
+                    conf = citation.get("confidence", result.confidence or 0.8)
+                    confidences.append(conf)
+
+        elif result.engine == EngineType.TIMELINE:
+            # Timeline engine: events have confidence
+            for event in data.get("events", []):
+                conf = event.get("confidence", result.confidence or 0.8)
+                confidences.append(conf)
+
+        elif result.engine == EngineType.CONTRADICTION:
+            # Contradiction engine: comparisons have confidence
+            for comparison in data.get("comparisons", []):
+                if comparison.get("result") == "contradiction":
+                    conf = comparison.get("confidence", result.confidence or 0.8)
+                    confidences.append(conf)
+
+        elif result.engine == EngineType.RAG:
+            # RAG results typically don't create "findings" per se
+            # They provide context for other engines
+            pass
+
+        return confidences
 
 
 # =============================================================================

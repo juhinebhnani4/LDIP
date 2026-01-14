@@ -90,6 +90,15 @@ class Settings(BaseSettings):
     verification_min_similarity: float = 70.0       # Minimum similarity for VERIFIED status
     verification_section_search_top_k: int = 5      # Max section candidates to retrieve
 
+    # Finding Verification Thresholds (Story 8-4: ADR-004 Tiered Verification)
+    # Controls when attorney verification is optional, suggested, or required
+    # > verification_threshold_optional: verification is optional (informational only)
+    # > verification_threshold_suggested: verification is suggested (warning shown on export)
+    # <= verification_threshold_suggested: verification is required (export blocked)
+    verification_threshold_optional: float = 90.0   # > 90% confidence = optional verification
+    verification_threshold_suggested: float = 70.0  # > 70% confidence = suggested verification
+    verification_export_block_below: float = 70.0   # < 70% unverified = blocks export
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

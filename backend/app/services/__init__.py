@@ -9,8 +9,17 @@ from app.services.matter_service import (
     MemberAlreadyExistsError,
     UserNotFoundError,
 )
+from app.services.verification import (
+    ExportEligibilityService,
+    VerificationService,
+    VerificationServiceError,
+    get_export_eligibility_service,
+    get_verification_service,
+    reset_verification_service,
+)
 
 __all__ = [
+    # Matter service
     "MatterService",
     "MatterServiceError",
     "MatterNotFoundError",
@@ -18,4 +27,11 @@ __all__ = [
     "MemberAlreadyExistsError",
     "CannotRemoveOwnerError",
     "UserNotFoundError",
+    # Verification service (Story 8-4)
+    "ExportEligibilityService",
+    "VerificationService",
+    "VerificationServiceError",
+    "get_export_eligibility_service",
+    "get_verification_service",
+    "reset_verification_service",
 ]

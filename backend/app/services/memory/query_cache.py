@@ -12,7 +12,7 @@ CRITICAL: All cache data is scoped by matter_id for Layer 3 isolation.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import threading
 from typing import Any
 
 import structlog
@@ -27,6 +27,9 @@ from app.services.memory.redis_keys import (
 )
 
 logger = structlog.get_logger(__name__)
+
+# Log truncation constant for consistent hash display in logs
+LOG_HASH_DISPLAY_LENGTH = 16
 
 
 class QueryCacheRepository:
@@ -96,7 +99,7 @@ class QueryCacheRepository:
             logger.error(
                 "redis_get_cached_result_failed",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",  # Truncate for logging
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",  # Truncate for logging
                 error=str(e),
             )
             raise RuntimeError(f"Failed to get cached result from Redis: {e}") from e
@@ -105,7 +108,7 @@ class QueryCacheRepository:
             logger.debug(
                 "cache_miss",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
             )
             return None
 
@@ -114,7 +117,7 @@ class QueryCacheRepository:
             logger.debug(
                 "cache_hit",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
                 cached_at=result.cached_at,
             )
             return result
@@ -122,7 +125,7 @@ class QueryCacheRepository:
             logger.error(
                 "cache_parse_failed",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
                 error=str(e),
             )
             # Corrupt cache entry - delete it
@@ -159,7 +162,7 @@ class QueryCacheRepository:
             logger.error(
                 "redis_set_cached_result_failed",
                 matter_id=result.matter_id,
-                query_hash=result.query_hash[:16] + "...",
+                query_hash=result.query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
                 error=str(e),
             )
             raise RuntimeError(f"Failed to store cached result in Redis: {e}") from e
@@ -167,7 +170,7 @@ class QueryCacheRepository:
         logger.info(
             "result_cached",
             matter_id=result.matter_id,
-            query_hash=result.query_hash[:16] + "...",
+            query_hash=result.query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
             ttl_seconds=CACHE_TTL,
             engine_used=result.engine_used,
         )
@@ -201,7 +204,7 @@ class QueryCacheRepository:
             logger.error(
                 "redis_delete_cached_result_failed",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
                 error=str(e),
             )
             raise RuntimeError(f"Failed to delete cached result from Redis: {e}") from e
@@ -209,7 +212,7 @@ class QueryCacheRepository:
         logger.info(
             "cache_entry_deleted",
             matter_id=matter_id,
-            query_hash=query_hash[:16] + "...",
+            query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
             deleted=deleted > 0,
         )
 
@@ -314,6 +317,7 @@ class QueryCacheRepository:
 # =============================================================================
 
 _query_cache_repository: QueryCacheRepository | None = None
+_repository_lock = threading.Lock()
 
 
 def get_query_cache_repository(
@@ -322,6 +326,7 @@ def get_query_cache_repository(
     """Get or create QueryCacheRepository instance.
 
     Factory function following project pattern.
+    Thread-safe singleton implementation.
 
     Args:
         redis_client: Optional Redis client for injection.
@@ -331,10 +336,11 @@ def get_query_cache_repository(
     """
     global _query_cache_repository
 
-    if _query_cache_repository is None:
-        _query_cache_repository = QueryCacheRepository(redis_client)
-    elif redis_client is not None and _query_cache_repository._redis is None:
-        _query_cache_repository._redis = redis_client
+    with _repository_lock:
+        if _query_cache_repository is None:
+            _query_cache_repository = QueryCacheRepository(redis_client)
+        elif redis_client is not None and _query_cache_repository._redis is None:
+            _query_cache_repository._redis = redis_client
 
     return _query_cache_repository
 
@@ -342,5 +348,6 @@ def get_query_cache_repository(
 def reset_query_cache_repository() -> None:
     """Reset singleton (for testing)."""
     global _query_cache_repository
-    _query_cache_repository = None
+    with _repository_lock:
+        _query_cache_repository = None
     logger.debug("query_cache_repository_reset")

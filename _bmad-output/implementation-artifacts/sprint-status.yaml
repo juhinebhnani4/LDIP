@@ -126,7 +126,7 @@ development_status:
   7-2-ttl-sliding-window-pronoun-resolution: done  # Code review passed 2026-01-14 (72 tests, 10 issues fixed)
   7-3-matter-memory-postgresql-jsonb: done  # Code review passed 2026-01-14 (101 tests, 9 issues fixed)
   7-4-key-findings-research-notes: done  # Implemented 2026-01-14 (100 tests, 35 new)
-  7-5-query-cache-redis: review  # Implementation complete 2026-01-14 (78 new tests)
+  7-5-query-cache-redis: done  # Code review passed 2026-01-14 (81 tests, 9 issues fixed)
   epic-7-retrospective: optional
 
   # Epic 8: Safety Layer (Guardrails, Policing, Verification)

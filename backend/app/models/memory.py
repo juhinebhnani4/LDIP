@@ -14,7 +14,7 @@ Layer 2: Matter Memory (Story 7-3, 7-4) - Persistent findings, entity graph, key
 Layer 3: Query Cache (Story 7-5) - LLM response caching with 1-hour TTL
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -563,7 +563,7 @@ class CachedQueryResult(BaseModel):
     )
 
     # Full response payload
-    response_data: dict = Field(
+    response_data: dict[str, Any] = Field(
         default_factory=dict,
         description="Complete response payload for cache hit",
     )

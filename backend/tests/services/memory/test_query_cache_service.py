@@ -1,7 +1,7 @@
 """Tests for Query Cache Service.
 
 Story 7-5: Query Cache Redis Storage
-Task 5.3: Unit tests for QueryCacheService
+Tasks 4.2-4.5 / 5.3: Unit tests for QueryCacheService high-level methods.
 """
 
 from datetime import datetime, timedelta, timezone

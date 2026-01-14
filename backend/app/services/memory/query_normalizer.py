@@ -15,6 +15,7 @@ Normalization steps:
 
 import hashlib
 import re
+import threading
 
 import structlog
 
@@ -35,9 +36,10 @@ class QueryNormalizer:
     """
 
     # Characters to keep during normalization (alphanumeric + semantic punctuation)
-    # Keeps: letters, numbers, whitespace, ? . , ' " -
-    # Strips: @ # $ % ^ & * ( ) = + [ ] { } | \ ; : < > / ~
-    _ALLOWED_CHARS_PATTERN = re.compile(r"[^\w\s\?\.\,\'\"\-]")
+    # Keeps: letters, numbers, whitespace, ? . , ' " - ( ) /
+    # Legal domain: preserves () for section refs like "Section 13(2)" and / for "13(2)/14(1)"
+    # Strips: @ # $ % ^ & * = + [ ] { } | \ ; : < > ~
+    _ALLOWED_CHARS_PATTERN = re.compile(r"[^\w\s\?\.\,\'\"\-\(\)\/]")
 
     def normalize(self, query: str) -> str:
         """Normalize query for consistent hashing.
@@ -129,21 +131,26 @@ class QueryNormalizer:
 
 # Singleton instance for convenience
 _query_normalizer: QueryNormalizer | None = None
+_normalizer_lock = threading.Lock()
 
 
 def get_query_normalizer() -> QueryNormalizer:
     """Get singleton QueryNormalizer instance.
 
+    Thread-safe singleton implementation.
+
     Returns:
         QueryNormalizer instance.
     """
     global _query_normalizer
-    if _query_normalizer is None:
-        _query_normalizer = QueryNormalizer()
+    with _normalizer_lock:
+        if _query_normalizer is None:
+            _query_normalizer = QueryNormalizer()
     return _query_normalizer
 
 
 def reset_query_normalizer() -> None:
     """Reset singleton (for testing)."""
     global _query_normalizer
-    _query_normalizer = None
+    with _normalizer_lock:
+        _query_normalizer = None

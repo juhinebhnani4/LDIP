@@ -12,6 +12,7 @@ This service is the primary interface for query caching.
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -29,6 +30,9 @@ from app.services.memory.query_normalizer import (
 from app.services.memory.redis_keys import CACHE_TTL
 
 logger = structlog.get_logger(__name__)
+
+# Log truncation constant for consistent hash display in logs
+LOG_HASH_DISPLAY_LENGTH = 16
 
 
 class QueryCacheService:
@@ -104,7 +108,7 @@ class QueryCacheService:
             logger.info(
                 "query_cache_hit",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
                 original_query=query[:50] + "..." if len(query) > 50 else query,
                 cached_at=result.cached_at,
             )
@@ -112,7 +116,7 @@ class QueryCacheService:
             logger.debug(
                 "query_cache_miss",
                 matter_id=matter_id,
-                query_hash=query_hash[:16] + "...",
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
             )
 
         return result
@@ -178,7 +182,7 @@ class QueryCacheService:
         logger.info(
             "query_result_cached",
             matter_id=matter_id,
-            query_hash=query_hash[:16] + "...",
+            query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",
             engine_used=engine_used,
             ttl_seconds=CACHE_TTL,
         )
@@ -247,6 +251,8 @@ class QueryCacheService:
     ) -> bool:
         """Delete a specific cached query result.
 
+        Story 7-5: Targeted cache deletion for manual invalidation.
+
         Args:
             matter_id: Matter UUID.
             query: Original user query.
@@ -267,6 +273,7 @@ class QueryCacheService:
 # =============================================================================
 
 _query_cache_service: QueryCacheService | None = None
+_service_lock = threading.Lock()
 
 
 def get_query_cache_service(
@@ -276,6 +283,7 @@ def get_query_cache_service(
     """Get or create QueryCacheService instance.
 
     Factory function following project pattern.
+    Thread-safe singleton implementation.
 
     Args:
         cache_repository: Optional repository for injection.
@@ -286,13 +294,14 @@ def get_query_cache_service(
     """
     global _query_cache_service
 
-    if _query_cache_service is None:
-        _query_cache_service = QueryCacheService(cache_repository, query_normalizer)
-    else:
-        if cache_repository is not None and _query_cache_service._repository is None:
-            _query_cache_service._repository = cache_repository
-        if query_normalizer is not None and _query_cache_service._normalizer is None:
-            _query_cache_service._normalizer = query_normalizer
+    with _service_lock:
+        if _query_cache_service is None:
+            _query_cache_service = QueryCacheService(cache_repository, query_normalizer)
+        else:
+            if cache_repository is not None and _query_cache_service._repository is None:
+                _query_cache_service._repository = cache_repository
+            if query_normalizer is not None and _query_cache_service._normalizer is None:
+                _query_cache_service._normalizer = query_normalizer
 
     return _query_cache_service
 
@@ -300,5 +309,6 @@ def get_query_cache_service(
 def reset_query_cache_service() -> None:
     """Reset singleton (for testing)."""
     global _query_cache_service
-    _query_cache_service = None
+    with _service_lock:
+        _query_cache_service = None
     logger.debug("query_cache_service_reset")

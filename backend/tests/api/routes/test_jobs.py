@@ -11,7 +11,7 @@ import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.job import (
     JobStatus,
@@ -119,8 +119,6 @@ class TestGetJobEndpoint:
     @pytest.mark.anyio
     async def test_returns_job_details_on_success(self) -> None:
         """Should return job details when authorized."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(job_id=job_id, matter_id=matter_id)
@@ -132,57 +130,59 @@ class TestGetJobEndpoint:
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
         mock_tracker.get_stage_history = AsyncMock(return_value=mock_stages)
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.get(
-                    f"/api/jobs/{job_id}",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.get(
+                        f"/api/jobs/{job_id}",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["job"]["id"] == job_id
-        assert data["job"]["status"] == "PROCESSING"
-        assert len(data["stages"]) == 1
+                assert response.status_code == 200
+                data = response.json()
+                assert data["job"]["id"] == job_id
+                assert data["job"]["status"] == "PROCESSING"
+                assert len(data["stages"]) == 1
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.anyio
     async def test_returns_404_when_job_not_found(self) -> None:
         """Should return 404 when job doesn't exist."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
 
         mock_tracker = AsyncMock()
         mock_tracker.get_job = AsyncMock(side_effect=JobNotFoundError("Job not found"))
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.get(
-                    f"/api/jobs/{job_id}",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.get(
+                        f"/api/jobs/{job_id}",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 404
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "JOB_NOT_FOUND"
+                assert response.status_code == 404
+                data = response.json()
+                assert data["detail"]["error"]["code"] == "JOB_NOT_FOUND"
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestRetryJobEndpoint:
@@ -191,8 +191,6 @@ class TestRetryJobEndpoint:
     @pytest.mark.anyio
     async def test_retries_failed_job_successfully(self) -> None:
         """Should retry a failed job and return success."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -204,13 +202,16 @@ class TestRetryJobEndpoint:
         mock_tracker.reset_retry_count = AsyncMock()
         mock_tracker.update_job_status = AsyncMock()
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
-                "app.api.routes.jobs.get_job_tracking_service",
-                return_value=mock_tracker,
-            ),
-            patch("app.api.routes.jobs.process_document") as mock_process:
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with (
+                patch(
+                    "app.api.routes.jobs.get_job_tracking_service",
+                    return_value=mock_tracker,
+                ),
+                patch("app.api.routes.jobs.process_document") as mock_process,
+            ):
                 mock_process.delay = MagicMock()
 
                 transport = ASGITransport(app=app)
@@ -222,16 +223,16 @@ class TestRetryJobEndpoint:
                         headers={"Authorization": f"Bearer {create_test_token()}"},
                     )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["new_status"] == "QUEUED"
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert data["new_status"] == "QUEUED"
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.anyio
     async def test_rejects_retry_for_non_failed_job(self) -> None:
         """Should reject retry for a job that isn't failed."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -241,25 +242,27 @@ class TestRetryJobEndpoint:
         mock_tracker = AsyncMock()
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/retry",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/retry",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 400
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert response.status_code == 400
+                data = response.json()
+                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestSkipJobEndpoint:
@@ -268,8 +271,6 @@ class TestSkipJobEndpoint:
     @pytest.mark.anyio
     async def test_skips_failed_job_successfully(self) -> None:
         """Should skip a failed job and return success."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -280,32 +281,32 @@ class TestSkipJobEndpoint:
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
         mock_tracker.update_job_status = AsyncMock()
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/skip",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/skip",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["new_status"] == "SKIPPED"
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert data["new_status"] == "SKIPPED"
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.anyio
     async def test_rejects_skip_for_non_failed_job(self) -> None:
         """Should reject skip for a job that isn't failed."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -315,25 +316,27 @@ class TestSkipJobEndpoint:
         mock_tracker = AsyncMock()
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/skip",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/skip",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 400
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert response.status_code == 400
+                data = response.json()
+                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestCancelJobEndpoint:
@@ -342,8 +345,6 @@ class TestCancelJobEndpoint:
     @pytest.mark.anyio
     async def test_cancels_queued_job_successfully(self) -> None:
         """Should cancel a queued job and return success."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -354,32 +355,32 @@ class TestCancelJobEndpoint:
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
         mock_tracker.update_job_status = AsyncMock()
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/cancel",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/cancel",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["new_status"] == "CANCELLED"
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert data["new_status"] == "CANCELLED"
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.anyio
     async def test_cancels_processing_job_successfully(self) -> None:
         """Should cancel a processing job and return success."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -390,32 +391,32 @@ class TestCancelJobEndpoint:
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
         mock_tracker.update_job_status = AsyncMock()
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/cancel",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/cancel",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["new_status"] == "CANCELLED"
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert data["new_status"] == "CANCELLED"
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.anyio
     async def test_rejects_cancel_for_completed_job(self) -> None:
         """Should reject cancel for a completed job."""
-        from app.core.config import get_settings
-
         job_id = str(uuid4())
         matter_id = str(uuid4())
         mock_job = create_mock_job(
@@ -425,25 +426,27 @@ class TestCancelJobEndpoint:
         mock_tracker = AsyncMock()
         mock_tracker.get_job = AsyncMock(return_value=mock_job)
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    f"/api/jobs/{job_id}/cancel",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        f"/api/jobs/{job_id}/cancel",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 400
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert response.status_code == 400
+                data = response.json()
+                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestListMatterJobsEndpoint:
@@ -452,7 +455,7 @@ class TestListMatterJobsEndpoint:
     @pytest.mark.anyio
     async def test_lists_jobs_for_matter(self) -> None:
         """Should list all jobs for a matter."""
-        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
 
         matter_id = str(uuid4())
         mock_jobs = [
@@ -466,30 +469,29 @@ class TestListMatterJobsEndpoint:
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role_in_matter = AsyncMock(return_value="attorney")
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-            patch(
-                "app.api.deps.get_matter_service",
-                return_value=mock_matter_service,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.get(
-                    f"/api/jobs/matters/{matter_id}",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.get(
+                        f"/api/jobs/matters/{matter_id}",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total"] == 2
-        assert len(data["jobs"]) == 2
+                assert response.status_code == 200
+                data = response.json()
+                assert data["total"] == 2
+                assert len(data["jobs"]) == 2
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestGetMatterJobStatsEndpoint:
@@ -498,7 +500,7 @@ class TestGetMatterJobStatsEndpoint:
     @pytest.mark.anyio
     async def test_returns_stats_for_matter(self) -> None:
         """Should return job statistics for a matter."""
-        from app.core.config import get_settings
+        from app.api.deps import get_matter_service
 
         matter_id = str(uuid4())
         mock_stats = {
@@ -517,29 +519,28 @@ class TestGetMatterJobStatsEndpoint:
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role_in_matter = AsyncMock(return_value="attorney")
 
-        with (
-            patch.object(get_settings, "__call__", return_value=get_test_settings()),
-            patch(
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            with patch(
                 "app.api.routes.jobs.get_job_tracking_service",
                 return_value=mock_tracker,
-            ),
-            patch(
-                "app.api.deps.get_matter_service",
-                return_value=mock_matter_service,
-            ),
-        ):
-            transport = ASGITransport(app=app)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as client:
-                response = await client.get(
-                    f"/api/jobs/matters/{matter_id}/stats",
-                    headers={"Authorization": f"Bearer {create_test_token()}"},
-                )
+            ):
+                transport = ASGITransport(app=app)
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    response = await client.get(
+                        f"/api/jobs/matters/{matter_id}/stats",
+                        headers={"Authorization": f"Bearer {create_test_token()}"},
+                    )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["queued"] == 2
-        assert data["processing"] == 1
-        assert data["completed"] == 10
-        assert data["failed"] == 1
+                assert response.status_code == 200
+                data = response.json()
+                assert data["queued"] == 2
+                assert data["processing"] == 1
+                assert data["completed"] == 10
+                assert data["failed"] == 1
+        finally:
+            app.dependency_overrides.clear()

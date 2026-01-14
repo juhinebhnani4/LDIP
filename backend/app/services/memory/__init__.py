@@ -3,6 +3,7 @@
 Story 7-1: Added SessionMemoryService and Redis client.
 Story 7-2: Added MatterMemoryRepository for archived sessions.
 Story 7-3: Added MatterMemoryService for full matter memory.
+Story 7-4: Added Key Findings and Research Notes support.
 """
 
 from app.models.memory import (
@@ -10,15 +11,23 @@ from app.models.memory import (
     CachedEntity,
     EntityGraphCache,
     EntityRelationship,
+    FindingEvidence,
+    FindingType,
+    KeyFinding,
+    KeyFindings,
     QueryHistory,
     QueryHistoryEntry,
+    ResearchNote,
+    ResearchNotes,
     TimelineCache,
     TimelineCacheEntry,
 )
 from app.services.memory.matter import (
     ARCHIVED_SESSION_TYPE,
     ENTITY_GRAPH_TYPE,
+    KEY_FINDINGS_TYPE,
     QUERY_HISTORY_TYPE,
+    RESEARCH_NOTES_TYPE,
     TIMELINE_CACHE_TYPE,
     MatterMemoryRepository,
     get_matter_memory_repository,
@@ -81,17 +90,19 @@ __all__ = [
     "SessionMemoryService",
     "get_session_memory_service",
     "reset_session_memory_service",
-    # Matter memory repository (Story 7-2, 7-3)
+    # Matter memory repository (Story 7-2, 7-3, 7-4)
     "ARCHIVED_SESSION_TYPE",
     "QUERY_HISTORY_TYPE",
     "TIMELINE_CACHE_TYPE",
     "ENTITY_GRAPH_TYPE",
+    "KEY_FINDINGS_TYPE",
+    "RESEARCH_NOTES_TYPE",
     "ArchivedSession",
     "MatterMemoryRepository",
     "get_matter_memory_repository",
     "reset_matter_memory_repository",
     "is_cache_stale",
-    # Matter memory service (Story 7-3)
+    # Matter memory service (Story 7-3, 7-4)
     "MatterMemoryService",
     "get_matter_memory_service",
     "reset_matter_memory_service",
@@ -103,4 +114,11 @@ __all__ = [
     "CachedEntity",
     "EntityRelationship",
     "EntityGraphCache",
+    # Key Findings and Research Notes models (Story 7-4)
+    "FindingType",
+    "FindingEvidence",
+    "KeyFinding",
+    "KeyFindings",
+    "ResearchNote",
+    "ResearchNotes",
 ]

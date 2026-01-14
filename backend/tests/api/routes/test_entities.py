@@ -215,7 +215,10 @@ class TestListEntitiesEndpoint:
                     headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
                 )
 
-            assert response.status_code == 403
+            # Returns 404 to hide matter existence (security best practice)
+            assert response.status_code == 404
+            data = response.json()
+            assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -309,7 +312,7 @@ class TestGetEntityEndpoint:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["error"]["code"] == "ENTITY_NOT_FOUND"
+            assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 

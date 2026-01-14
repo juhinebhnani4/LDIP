@@ -132,9 +132,10 @@ class TestSearchPipelineIntegration:
         )
 
         # Verify weights were passed to RPC
-        call_args = mock_supabase_client.rpc.call_args[1]
-        assert call_args["full_text_weight"] == 1.5
-        assert call_args["semantic_weight"] == 0.5
+        # rpc() is called as rpc(func_name, params_dict), so params are in call_args[0][1]
+        rpc_params = mock_supabase_client.rpc.call_args[0][1]
+        assert rpc_params["full_text_weight"] == 1.5
+        assert rpc_params["semantic_weight"] == 0.5
 
         # Verify weights in response
         assert result.weights.bm25 == 1.5
@@ -392,7 +393,7 @@ class TestRerankPipelineIntegration:
         return embedder
 
     @pytest.mark.asyncio
-    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.reranker.get_cohere_rerank_service")
     @patch("app.services.rag.hybrid_search.get_supabase_client")
     @patch("app.services.rag.hybrid_search.validate_search_results")
     @patch("app.services.rag.hybrid_search.validate_namespace")
@@ -445,7 +446,7 @@ class TestRerankPipelineIntegration:
         assert result.results[1].relevance_score == 0.87
 
     @pytest.mark.asyncio
-    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.reranker.get_cohere_rerank_service")
     @patch("app.services.rag.hybrid_search.get_supabase_client")
     @patch("app.services.rag.hybrid_search.validate_search_results")
     @patch("app.services.rag.hybrid_search.validate_namespace")
@@ -524,7 +525,7 @@ class TestRerankPipelineIntegration:
         assert "No hybrid search results" in result.fallback_reason
 
     @pytest.mark.asyncio
-    @patch("app.services.rag.hybrid_search.get_cohere_rerank_service")
+    @patch("app.services.rag.reranker.get_cohere_rerank_service")
     @patch("app.services.rag.hybrid_search.get_supabase_client")
     @patch("app.services.rag.hybrid_search.validate_search_results")
     @patch("app.services.rag.hybrid_search.validate_namespace")

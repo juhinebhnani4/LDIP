@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix\\(chunking\\): address code review issues for Story 2b-5\n\n- Fix failing test_end_to_end_with_mock_db by using AsyncMock\n- Mark all 13 story tasks as complete\n- Populate Dev Agent Record with file list and completion notes\n- Document async pattern and status update design decisions\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix\\(citation\\): address code review issues for Story 3-4\n\nFixes from adversarial code review:\n\nHIGH:\n- H1: Add bboxPageNumber prop to PdfViewerPanel for proper page-based\n  bbox filtering \\(only show highlights on correct page\\)\n- H2: Populate missing VerificationResult fields \\(section_text,\n  target_page, target_bbox_ids, diff_details\\) in backend endpoint\n\nMEDIUM:\n- M1: Add zoom keyboard shortcuts \\(+/=/- keys\\) to useSplitView hook\n- M3: Add pagination to CitationsList \\(20 items per page with controls\\)\n- M4: Create PdfErrorBoundary component and wrap all PDF viewers\n\nLOW:\n- L1: Fix test count documentation \\(18 tests, not 39\\)\n- L2: Use MismatchExplanation component in SplitViewCitationPanel\n- L3: Use unpkg CDN with version lock for PDF.js worker\n\nAlso fixes pre-existing test failure in DocumentList.test.tsx where\n''Processing'' text appears in both table header and status label.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(cd:*)",
+      "Bash(python -m ruff check:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

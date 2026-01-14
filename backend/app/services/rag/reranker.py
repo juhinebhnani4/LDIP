@@ -20,6 +20,7 @@ from typing import Sequence
 
 import cohere
 import structlog
+from cohere.core.api_error import ApiError as CohereApiError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -180,7 +181,7 @@ class CohereRerankService:
             Cohere rerank response.
 
         Raises:
-            cohere.CohereError: On API errors.
+            CohereApiError: On API errors.
         """
         return self.client.rerank(
             model=RERANK_MODEL,
@@ -304,7 +305,7 @@ class CohereRerankService:
                 is_retryable=True,
             ) from e
 
-        except cohere.CohereError as e:
+        except CohereApiError as e:
             logger.warning(
                 "cohere_rerank_failed",
                 error=str(e),

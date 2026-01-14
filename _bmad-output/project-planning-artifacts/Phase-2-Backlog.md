@@ -241,6 +241,134 @@ As a litigator, I want to export the map for reports.
 
 ---
 
+## RAG Quality Improvements
+
+### Table Extraction Enhancement (Docling Integration)
+
+**Original Scope:**
+- Integrate Docling TableFormer for structured table extraction
+- Detect tables in documents, route to Docling for processing
+- Convert tables to Markdown for RAG indexing
+- Maintain Google Document AI for non-table content (OCR, Indic scripts)
+
+**Why Deferred (Brainstorming Session, 2026-01-13):**
+- Current OCR pipeline (Google Document AI) functional for MVP
+- Table extraction is enhancement, not blocker
+- Requires testing with real legal tables to validate approach
+- Docling's TableFormer achieves 97.9% table cell accuracy but needs integration work
+
+**Implementation Approach (Option B: Table-Specific Stage):**
+```
+Document Page
+      ↓
+[Google Document AI OCR]
+      ↓
+[Table Detection: Has tables?]
+      ↓
+   NO → Continue existing flow
+   YES → [Docling TableFormer] → Markdown Table
+      ↓
+Merge into unified output
+```
+
+**Rationale:**
+- Surgical precision - route ONLY tables to Docling
+- Keep existing Google pipeline for text OCR (especially Indic scripts)
+- Minimal new infrastructure
+- Fits LDIP's "no agentic complexity" philosophy
+
+**Dependency/Trigger:**
+- Lawyers report table data not being searchable/retrievable correctly
+- OR accuracy metrics show table retrieval is poor
+- OR specific legal documents with critical tables need processing
+
+**Estimated Effort:** 1-2 weeks development
+
+**Stories (Ready for Estimation):**
+
+```markdown
+Story TE-1: Implement table detection heuristic
+As a system, I need to detect when a document page contains tables so I can route them appropriately.
+
+Story TE-2: Integrate Docling TableFormer
+As a system, I need to process detected tables through Docling to extract structured data.
+
+Story TE-3: Convert tables to Markdown
+As a system, I need to output tables as Markdown for RAG indexing and retrieval.
+
+Story TE-4: Merge table output with existing pipeline
+As a system, I need to combine Docling table output with Google OCR text output seamlessly.
+```
+
+---
+
+### RAG Evaluation Framework
+
+**Original Scope:**
+- Extract golden dataset QA pairs from deep research documents
+- Build lawyer verification workflow for RAG answers
+- Integrate RAGAS/DeepEval for automated quality metrics
+- Continuous measurement of RAG improvements
+
+**Why Deferred (Brainstorming Session, 2026-01-13):**
+- MVP focus is on feature completion
+- Evaluation framework is infrastructure for improvement, not user-facing
+- Requires stable RAG pipeline to measure against
+- No lawyer available for verification during initial development
+
+**Implementation Approach (Judge-as-you-go with Lawyer Verification):**
+```
+Deep Research Questions (Parts 1-8)
+      ↓
+Run through RAG pipeline
+      ↓
+Lawyer reviews: Correct / Wrong / Partial / Hallucinated
+      ↓
+Store verified answers as golden dataset
+      ↓
+RAGAS/DeepEval metrics (when 30+ pairs verified)
+```
+
+**Question Sources:**
+- ~55-80 example questions already exist in deep research documents
+- Engine-specific questions (timeline, consistency, citation, etc.)
+- User workflow questions from UX analysis
+- Stress test scenarios for adversarial testing
+
+**Rationale:**
+- Real questions from actual case > LLM-generated questions
+- Lawyer verification creates ground truth iteratively
+- No upfront effort to create synthetic dataset
+- Builds golden dataset as natural byproduct of QA
+
+**Dependency/Trigger:**
+- MVP RAG pipeline stable and deployed
+- Lawyer available for verification sessions (30-60 min)
+- Need to validate RAG changes before shipping
+
+**Estimated Effort:** 2-3 weeks development
+
+**Stories (Ready for Estimation):**
+
+```markdown
+Story EF-1: Extract QA pairs from deep research docs
+As a system, I need a golden dataset of questions extracted from Parts 1-8 research documents.
+
+Story EF-2: Implement lawyer verification UI
+As a lawyer, I want a simple interface to mark RAG answers as correct/wrong/partial/hallucinated.
+
+Story EF-3: Create golden_dataset table
+As a system, I need to store verified QA pairs with metadata (question, answer, verification status, verifier, timestamp).
+
+Story EF-4: Integrate RAGAS metrics
+As a developer, I want automated RAG quality metrics (Context Recall, Faithfulness) when golden dataset reaches 30+ pairs.
+
+Story EF-5: Create evaluation dashboard
+As a developer, I want to see RAG quality metrics over time to track improvement.
+```
+
+---
+
 ## Relationship to MVP
 
 | Phase 2 Feature | MVP Alternative | User Impact |
@@ -250,6 +378,8 @@ As a litigator, I want to export the map for reports.
 | Contradictions Tab | Verification Tab filter | Same data, different location |
 | Cross-Reference Map | Inline links | Basic navigation works |
 | Timeline Gap UI | Chronological view | Users see timeline, no auto-gaps |
+| Table Extraction (Docling) | Google Document AI only | Tables may not be fully searchable |
+| RAG Evaluation Framework | Manual testing | No automated quality metrics |
 
 ---
 
@@ -258,6 +388,7 @@ As a litigator, I want to export the map for reports.
 | Date | Change | By |
 |------|--------|-----|
 | 2026-01-03 | Document created with all Phase 2 deferrals | John (PM) |
+| 2026-01-13 | Added RAG Quality Improvements section (Table Extraction + Evaluation Framework) from brainstorming session | Juhi |
 
 ---
 

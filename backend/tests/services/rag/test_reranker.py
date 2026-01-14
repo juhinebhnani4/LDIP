@@ -210,14 +210,14 @@ class TestCohereRerankServiceRerank:
     @pytest.mark.asyncio
     async def test_rerank_handles_cohere_error(self) -> None:
         """Test rerank raises CohereRerankServiceError on API error."""
-        import cohere
+        from cohere.core.api_error import ApiError as CohereApiError
 
         with patch("app.services.rag.reranker.get_settings") as mock_settings:
             mock_settings.return_value.cohere_api_key = "test-key"
 
             service = CohereRerankService()
             mock_client = MagicMock()
-            mock_client.rerank.side_effect = cohere.CohereError("API error")
+            mock_client.rerank.side_effect = CohereApiError(status_code=500, body="API error")
             service._client = mock_client
 
             with pytest.raises(CohereRerankServiceError) as exc_info:

@@ -2,17 +2,20 @@
 
 Story 7-2: Session TTL and Context Restoration
 Story 7-3: Matter Memory PostgreSQL JSONB Storage
+Story 7-4: Key Findings and Research Notes
 
 Manages matter-level memory storage in PostgreSQL matter_memory table:
 - Archived sessions (Story 7-2)
 - Query history (Story 7-3)
 - Timeline cache (Story 7-3)
 - Entity graph cache (Story 7-3)
+- Key findings (Story 7-4)
+- Research notes (Story 7-4)
 
 Table: matter_memory with memory_type discriminator
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -21,8 +24,12 @@ from pydantic import ValidationError
 from app.models.memory import (
     ArchivedSession,
     EntityGraphCache,
+    KeyFinding,
+    KeyFindings,
     QueryHistory,
     QueryHistoryEntry,
+    ResearchNote,
+    ResearchNotes,
     TimelineCache,
 )
 from app.services.supabase.client import get_supabase_client
@@ -37,6 +44,8 @@ ARCHIVED_SESSION_TYPE = "archived_session"
 QUERY_HISTORY_TYPE = "query_history"
 TIMELINE_CACHE_TYPE = "timeline_cache"
 ENTITY_GRAPH_TYPE = "entity_graph"
+KEY_FINDINGS_TYPE = "key_findings"  # Story 7-4: Task 3.1
+RESEARCH_NOTES_TYPE = "research_notes"  # Story 7-4: Task 4.1
 
 # Default query limits
 DEFAULT_ARCHIVE_QUERY_LIMIT = 10
@@ -384,7 +393,8 @@ class MatterMemoryRepository:
             query_id=entry.query_id,
         )
 
-        return result.data
+        # RPC returns UUID string from DB function
+        return str(result.data) if result.data else ""
 
     # =========================================================================
     # Story 7-3: Timeline Cache Methods
@@ -483,7 +493,8 @@ class MatterMemoryRepository:
             event_count=cache.event_count,
         )
 
-        return result.data
+        # RPC returns UUID string from DB function
+        return str(result.data) if result.data else ""
 
     async def invalidate_timeline_cache(
         self,
@@ -625,7 +636,8 @@ class MatterMemoryRepository:
             relationship_count=cache.relationship_count,
         )
 
-        return result.data
+        # RPC returns UUID string from DB function
+        return str(result.data) if result.data else ""
 
     async def invalidate_entity_graph_cache(
         self,
@@ -761,7 +773,549 @@ class MatterMemoryRepository:
             memory_type=memory_type,
         )
 
-        return result.data
+        # RPC returns UUID string from DB function
+        return str(result.data) if result.data else ""
+
+    # =========================================================================
+    # Story 7-4: Key Findings Methods (Task 3)
+    # =========================================================================
+
+    async def get_key_findings(
+        self,
+        matter_id: str,
+    ) -> KeyFindings:
+        """Get all key findings for a matter.
+
+        Story 7-4: Task 3.2 - AC #1 - Retrieve verified findings.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            KeyFindings container with findings list.
+        """
+        self._ensure_client()
+
+        try:
+            result = (
+                self._supabase.table("matter_memory")
+                .select("data")
+                .eq("matter_id", matter_id)
+                .eq("memory_type", KEY_FINDINGS_TYPE)
+                .maybe_single()
+                .execute()
+            )
+        except Exception as e:
+            logger.error(
+                "get_key_findings_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to get key findings: {e}") from e
+
+        if not result.data:
+            return KeyFindings(findings=[])
+
+        data = result.data.get("data", {})
+
+        try:
+            return KeyFindings.model_validate(data)
+        except ValidationError as e:
+            logger.warning(
+                "key_findings_validation_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return KeyFindings(findings=[])
+
+    async def add_key_finding(
+        self,
+        matter_id: str,
+        finding: KeyFinding,
+    ) -> str:
+        """Add a key finding (append-only).
+
+        Story 7-4: Task 3.3 - AC #1 - Uses DB function for atomic append.
+
+        Args:
+            matter_id: Matter UUID.
+            finding: KeyFinding to add.
+
+        Returns:
+            Record UUID.
+
+        Raises:
+            RuntimeError: If database operation fails.
+        """
+        self._ensure_client()
+
+        try:
+            result = self._supabase.rpc(
+                "append_to_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": KEY_FINDINGS_TYPE,
+                    "p_key": "findings",
+                    "p_item": finding.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "add_key_finding_failed",
+                matter_id=matter_id,
+                finding_id=finding.finding_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to add key finding: {e}") from e
+
+        logger.info(
+            "key_finding_added",
+            matter_id=matter_id,
+            finding_id=finding.finding_id,
+            finding_type=finding.finding_type,
+        )
+
+        return str(result.data) if result.data else ""
+
+    async def update_key_finding(
+        self,
+        matter_id: str,
+        finding_id: str,
+        updates: dict[str, Any],
+    ) -> bool:
+        """Update a key finding by ID.
+
+        Story 7-4: Task 3.4 - Uses read-modify-write pattern.
+        Note: For high-volume, consider DB function.
+
+        Args:
+            matter_id: Matter UUID.
+            finding_id: Finding to update.
+            updates: Fields to update (verified_by, verified_at, notes, etc.).
+
+        Returns:
+            True if updated, False if not found.
+        """
+        self._ensure_client()
+
+        # Get current findings
+        current = await self.get_key_findings(matter_id)
+
+        # Find and update the target finding
+        updated = False
+        for i, finding in enumerate(current.findings):
+            if finding.finding_id == finding_id:
+                finding_dict = finding.model_dump()
+                finding_dict.update(updates)
+                finding_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+                current.findings[i] = KeyFinding.model_validate(finding_dict)
+                updated = True
+                break
+
+        if not updated:
+            logger.warning(
+                "key_finding_not_found_for_update",
+                matter_id=matter_id,
+                finding_id=finding_id,
+            )
+            return False
+
+        # Save back
+        try:
+            self._supabase.rpc(
+                "upsert_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": KEY_FINDINGS_TYPE,
+                    "p_data": current.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "update_key_finding_failed",
+                matter_id=matter_id,
+                finding_id=finding_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to update key finding: {e}") from e
+
+        logger.info(
+            "key_finding_updated",
+            matter_id=matter_id,
+            finding_id=finding_id,
+        )
+
+        return True
+
+    async def delete_key_finding(
+        self,
+        matter_id: str,
+        finding_id: str,
+    ) -> bool:
+        """Delete a key finding by ID (soft delete by removal).
+
+        Story 7-4: Task 3.5 - Remove finding from list.
+
+        Args:
+            matter_id: Matter UUID.
+            finding_id: Finding to delete.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        self._ensure_client()
+
+        # Get current findings
+        current = await self.get_key_findings(matter_id)
+
+        # Find and remove the target finding
+        original_count = len(current.findings)
+        current.findings = [f for f in current.findings if f.finding_id != finding_id]
+
+        if len(current.findings) == original_count:
+            logger.warning(
+                "key_finding_not_found_for_delete",
+                matter_id=matter_id,
+                finding_id=finding_id,
+            )
+            return False
+
+        # Save back
+        try:
+            self._supabase.rpc(
+                "upsert_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": KEY_FINDINGS_TYPE,
+                    "p_data": current.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "delete_key_finding_failed",
+                matter_id=matter_id,
+                finding_id=finding_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to delete key finding: {e}") from e
+
+        logger.info(
+            "key_finding_deleted",
+            matter_id=matter_id,
+            finding_id=finding_id,
+        )
+
+        return True
+
+    async def get_key_finding_by_id(
+        self,
+        matter_id: str,
+        finding_id: str,
+    ) -> KeyFinding | None:
+        """Get a single key finding by ID.
+
+        Story 7-4: Task 3.6 - Retrieve single finding.
+
+        Args:
+            matter_id: Matter UUID.
+            finding_id: Finding UUID.
+
+        Returns:
+            KeyFinding if found, None otherwise.
+        """
+        findings = await self.get_key_findings(matter_id)
+
+        for finding in findings.findings:
+            if finding.finding_id == finding_id:
+                return finding
+
+        return None
+
+    # =========================================================================
+    # Story 7-4: Research Notes Methods (Task 4)
+    # =========================================================================
+
+    async def get_research_notes(
+        self,
+        matter_id: str,
+    ) -> ResearchNotes:
+        """Get all research notes for a matter.
+
+        Story 7-4: Task 4.2 - AC #2 - Retrieve all notes.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            ResearchNotes container with notes list.
+        """
+        self._ensure_client()
+
+        try:
+            result = (
+                self._supabase.table("matter_memory")
+                .select("data")
+                .eq("matter_id", matter_id)
+                .eq("memory_type", RESEARCH_NOTES_TYPE)
+                .maybe_single()
+                .execute()
+            )
+        except Exception as e:
+            logger.error(
+                "get_research_notes_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to get research notes: {e}") from e
+
+        if not result.data:
+            return ResearchNotes(notes=[])
+
+        data = result.data.get("data", {})
+
+        try:
+            return ResearchNotes.model_validate(data)
+        except ValidationError as e:
+            logger.warning(
+                "research_notes_validation_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return ResearchNotes(notes=[])
+
+    async def add_research_note(
+        self,
+        matter_id: str,
+        note: ResearchNote,
+    ) -> str:
+        """Add a research note.
+
+        Story 7-4: Task 4.3 - AC #2 - Create new note.
+
+        Args:
+            matter_id: Matter UUID.
+            note: ResearchNote to add.
+
+        Returns:
+            Record UUID.
+
+        Raises:
+            RuntimeError: If database operation fails.
+        """
+        self._ensure_client()
+
+        try:
+            result = self._supabase.rpc(
+                "append_to_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": RESEARCH_NOTES_TYPE,
+                    "p_key": "notes",
+                    "p_item": note.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "add_research_note_failed",
+                matter_id=matter_id,
+                note_id=note.note_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to add research note: {e}") from e
+
+        logger.info(
+            "research_note_added",
+            matter_id=matter_id,
+            note_id=note.note_id,
+            title=note.title,
+        )
+
+        return str(result.data) if result.data else ""
+
+    async def update_research_note(
+        self,
+        matter_id: str,
+        note_id: str,
+        updates: dict[str, Any],
+    ) -> bool:
+        """Update a research note by ID.
+
+        Story 7-4: Task 4.4 - Update note content/title/tags.
+
+        Args:
+            matter_id: Matter UUID.
+            note_id: Note to update.
+            updates: Fields to update (title, content, tags, linked_findings).
+
+        Returns:
+            True if updated, False if not found.
+        """
+        self._ensure_client()
+
+        # Get current notes
+        current = await self.get_research_notes(matter_id)
+
+        # Find and update the target note
+        updated = False
+        for i, note in enumerate(current.notes):
+            if note.note_id == note_id:
+                note_dict = note.model_dump()
+                note_dict.update(updates)
+                note_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+                current.notes[i] = ResearchNote.model_validate(note_dict)
+                updated = True
+                break
+
+        if not updated:
+            logger.warning(
+                "research_note_not_found_for_update",
+                matter_id=matter_id,
+                note_id=note_id,
+            )
+            return False
+
+        # Save back
+        try:
+            self._supabase.rpc(
+                "upsert_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": RESEARCH_NOTES_TYPE,
+                    "p_data": current.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "update_research_note_failed",
+                matter_id=matter_id,
+                note_id=note_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to update research note: {e}") from e
+
+        logger.info(
+            "research_note_updated",
+            matter_id=matter_id,
+            note_id=note_id,
+        )
+
+        return True
+
+    async def delete_research_note(
+        self,
+        matter_id: str,
+        note_id: str,
+    ) -> bool:
+        """Delete a research note by ID.
+
+        Story 7-4: Task 4.5 - Remove note from list.
+
+        Args:
+            matter_id: Matter UUID.
+            note_id: Note to delete.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        self._ensure_client()
+
+        # Get current notes
+        current = await self.get_research_notes(matter_id)
+
+        # Find and remove the target note
+        original_count = len(current.notes)
+        current.notes = [n for n in current.notes if n.note_id != note_id]
+
+        if len(current.notes) == original_count:
+            logger.warning(
+                "research_note_not_found_for_delete",
+                matter_id=matter_id,
+                note_id=note_id,
+            )
+            return False
+
+        # Save back
+        try:
+            self._supabase.rpc(
+                "upsert_matter_memory",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": RESEARCH_NOTES_TYPE,
+                    "p_data": current.model_dump(mode="json"),
+                },
+            ).execute()
+        except Exception as e:
+            logger.error(
+                "delete_research_note_failed",
+                matter_id=matter_id,
+                note_id=note_id,
+                error=str(e),
+            )
+            raise RuntimeError(f"Failed to delete research note: {e}") from e
+
+        logger.info(
+            "research_note_deleted",
+            matter_id=matter_id,
+            note_id=note_id,
+        )
+
+        return True
+
+    async def get_research_note_by_id(
+        self,
+        matter_id: str,
+        note_id: str,
+    ) -> ResearchNote | None:
+        """Get a single research note by ID.
+
+        Story 7-4: Task 4.6 - Retrieve single note.
+
+        Args:
+            matter_id: Matter UUID.
+            note_id: Note UUID.
+
+        Returns:
+            ResearchNote if found, None otherwise.
+        """
+        notes = await self.get_research_notes(matter_id)
+
+        for note in notes.notes:
+            if note.note_id == note_id:
+                return note
+
+        return None
+
+    async def search_research_notes(
+        self,
+        matter_id: str,
+        tag: str | None = None,
+        title_contains: str | None = None,
+    ) -> list[ResearchNote]:
+        """Search research notes by tag or title.
+
+        Story 7-4: Task 4.7 - Optional search functionality.
+
+        Args:
+            matter_id: Matter UUID.
+            tag: Tag to filter by.
+            title_contains: Substring to search in title.
+
+        Returns:
+            List of matching ResearchNote objects.
+        """
+        notes = await self.get_research_notes(matter_id)
+
+        results = []
+        for note in notes.notes:
+            # Filter by tag
+            if tag and tag not in note.tags:
+                continue
+            # Filter by title
+            if title_contains and title_contains.lower() not in note.title.lower():
+                continue
+            results.append(note)
+
+        return results
 
 
 # Singleton instance

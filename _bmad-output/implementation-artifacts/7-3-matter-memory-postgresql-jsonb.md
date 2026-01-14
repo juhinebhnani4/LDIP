@@ -830,14 +830,32 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - Used existing DB functions (`upsert_matter_memory`, `append_to_matter_memory`) per architecture
 - `mark_query_verified` uses read-modify-write pattern (documented limitation - consider DB function for high-volume use)
 
+### Code Review Fixes Applied
+
+Per adversarial code review on 2026-01-14:
+- Added comprehensive docstring for `mark_query_verified` documenting read-modify-write limitation
+- Added missing test `test_cache_stale_rebuilds` for entity graph cache rebuild path
+- Added integration point documentation for cache invalidation hook
+- Added singleton warning consistency in service factory
+- Added error path tests for database failure scenarios
+
+### Pre-existing Technical Debt (Not Story 7-3)
+
+The test suite shows 244 deprecation warnings for `datetime.utcnow()` in:
+- `app/services/job_tracking/tracker.py`
+- `app/services/job_tracking/partial_progress.py`
+- `app/services/job_tracking/time_estimator.py`
+
+Story 7-3 correctly uses `datetime.now(UTC)`. These warnings are pre-existing and should be addressed in a separate cleanup task.
+
 ### File List
 
 | File | Action | Description |
 |------|--------|-------------|
 | `backend/app/models/memory.py` | Modified | Added QueryHistoryEntry, QueryHistory, TimelineCacheEntry, TimelineCache, CachedEntity, EntityRelationship, EntityGraphCache models |
 | `backend/app/services/memory/__init__.py` | Modified | Exported new models, service, and repository methods |
-| `backend/app/services/memory/matter.py` | Modified | Extended MatterMemoryRepository with query history, timeline cache, entity graph methods, and is_cache_stale utility |
-| `backend/app/services/memory/matter_service.py` | Created | New MatterMemoryService facade with log_query, get_or_build_timeline, get_or_build_entity_graph, invalidate_matter_caches |
-| `backend/tests/models/test_memory_models.py` | Modified | Added 45 tests for Story 7-3 models |
-| `backend/tests/services/memory/test_matter.py` | Modified | Added 24 tests for repository methods |
-| `backend/tests/services/memory/test_matter_service.py` | Created | Added 32 tests for service facade methods |
+| `backend/app/services/memory/matter.py` | Modified | Extended MatterMemoryRepository with query history, timeline cache, entity graph methods, is_cache_stale utility, and explicit return type casts |
+| `backend/app/services/memory/matter_service.py` | Created | New MatterMemoryService facade with log_query, get_or_build_timeline, get_or_build_entity_graph, invalidate_matter_caches, and integration point documentation |
+| `backend/tests/models/test_memory_models.py` | Modified | Added 44 tests for Story 7-3 models |
+| `backend/tests/services/memory/test_matter.py` | Modified | Added 30 tests for repository methods (including 6 error path tests from code review) |
+| `backend/tests/services/memory/test_matter_service.py` | Created | Added 33 tests for service facade methods (including entity graph stale rebuild test from code review) |

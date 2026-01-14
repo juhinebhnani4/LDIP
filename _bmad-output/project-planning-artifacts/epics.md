@@ -383,6 +383,13 @@ NFR33: Deleted matters: 30 days soft-delete, then hard delete
 - 6.2: Implement engine execution ordering (parallel vs sequential) and result aggregation
 - 6.3: Implement audit trail logging (input, engines invoked, outputs, confidence, cost)
 
+**Implementation Notes (from brainstorming session 2026-01-13):**
+- Story 6.1 uses LLM Classification approach for semantic routing (confirmed in Part 4.11, Part 7.12.2)
+- Classification outputs: `question_type` + `required_engine`
+- Classification types: timeline, citation, consistency, process_chain, pattern, entity_authenticity
+- Fallback: Run multiple engines if classification confidence is low
+- Fits "no agentic complexity" philosophy - single LLM call, deterministic output
+
 **FRs Covered:** FR4
 **NFRs Addressed:** NFR1, NFR24
 

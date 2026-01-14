@@ -62,13 +62,55 @@ def mock_supabase_client():
     """Create a mock Supabase client."""
     client = MagicMock()
 
-    # Mock table operations
-    table_mock = MagicMock()
-    table_mock.insert.return_value.execute.return_value.data = [{"id": str(uuid4())}]
-    table_mock.select.return_value.eq.return_value.execute.return_value.data = []
-    table_mock.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+    # Track what data was inserted so we can return it
+    inserted_data = []
 
-    client.table.return_value = table_mock
+    def create_table_mock(table_name: str):
+        table_mock = MagicMock()
+
+        def mock_insert(data):
+            result = MagicMock()
+            # Store what was inserted for verification
+            if isinstance(data, list):
+                inserted_data.extend(data)
+                # Add id and timestamps to each record for proper return
+                return_data = [
+                    {**d, "id": str(uuid4()), "created_at": datetime.utcnow().isoformat(), "updated_at": datetime.utcnow().isoformat()}
+                    if isinstance(d, dict) else {"id": str(uuid4())}
+                    for d in data
+                ]
+                result.execute.return_value.data = return_data
+            else:
+                inserted_data.append(data)
+                # Return the data as a list with ID and timestamps added
+                return_data = {
+                    **data,
+                    "id": str(uuid4()),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                } if isinstance(data, dict) else {"id": str(uuid4())}
+                result.execute.return_value.data = [return_data]
+            return result
+
+        def mock_select(*args):
+            query_mock = MagicMock()
+            query_mock._filters = {}
+
+            def mock_eq(field, value):
+                query_mock._filters[field] = value
+                return query_mock
+
+            query_mock.eq = mock_eq
+            query_mock.execute.return_value.data = []
+            return query_mock
+
+        table_mock.insert.side_effect = mock_insert
+        table_mock.select.side_effect = mock_select
+        return table_mock
+
+    # Use side_effect to create a new table_mock for each call while still being a MagicMock
+    client.table.side_effect = create_table_mock
+    client._inserted_data = inserted_data
     client.rpc.return_value.execute.return_value.data = str(uuid4())
 
     return client
@@ -175,12 +217,11 @@ class TestMatterIsolation:
                 extraction_result=result,
             )
 
-            # Verify matter_id is in the insert call
-            insert_call = mock_supabase_client.table.return_value.insert.call_args
-            if insert_call:
-                records = insert_call[0][0]  # First positional arg
-                for record in records:
-                    assert record.get("matter_id") == matter_id
+            # Verify matter_id is in all inserted records
+            citation_records = [r for r in mock_supabase_client._inserted_data if "act_name" in r]
+            assert len(citation_records) > 0, "Expected citation records to be inserted"
+            for record in citation_records:
+                assert record.get("matter_id") == matter_id
 
 
 class TestActResolutionTracking:
@@ -258,33 +299,34 @@ class TestCeleryTaskIntegration:
     """Tests for Celery task integration."""
 
     def test_extract_citations_task_handles_missing_document(self) -> None:
-        """Test that task handles missing document gracefully."""
+        """Test that task handles missing document gracefully.
+
+        The task returns early with NO_DOCUMENT_ID error before it needs
+        self.request, so we can call run() directly without mocking request.
+        """
         from app.workers.tasks.document_tasks import extract_citations
 
-        # Mock the task self object
-        mock_self = MagicMock()
-        mock_self.request.retries = 0
-
-        # Call with no document_id
-        result = extract_citations(mock_self, prev_result=None, document_id=None)
+        # Call run() directly - it will return early before needing self.request
+        result = extract_citations.run(prev_result=None, document_id=None)
 
         assert result["status"] == "citation_extraction_failed"
         assert result["error_code"] == "NO_DOCUMENT_ID"
 
     def test_extract_citations_task_respects_previous_status(self) -> None:
-        """Test that task skips if previous task failed."""
+        """Test that task skips if previous task failed.
+
+        The task returns early with skipped status before it needs
+        self.request, so we can call run() directly without mocking request.
+        """
         from app.workers.tasks.document_tasks import extract_citations
 
-        mock_self = MagicMock()
-        mock_self.request.retries = 0
-
-        # Previous task failed
+        # Previous task failed (not in valid_statuses list)
         prev_result = {
             "status": "processing_failed",
             "document_id": str(uuid4()),
         }
 
-        result = extract_citations(mock_self, prev_result=prev_result)
+        result = extract_citations.run(prev_result=prev_result)
 
         assert result["status"] == "citation_extraction_skipped"
         assert "Previous task status" in result.get("reason", "")

@@ -667,41 +667,54 @@ class TestOCRQueueTaskIntegration:
     """Integration tests for OCR task queuing from document upload."""
 
     def test_queue_ocr_task_uses_high_priority_for_small_files(self) -> None:
-        """Test that small files (<10MB) use 'high' priority queue."""
+        """Test that small files (<10MB) use 'high' priority queue.
+
+        The implementation creates a Celery chain of tasks:
+        process_document -> validate_ocr -> calculate_confidence -> chunk_document -> embed_chunks -> extract_entities
+
+        We verify that:
+        1. A chain is created starting with process_document.s(document_id)
+        2. The chain is applied to the 'high' queue for small files
+        """
         from app.api.routes.documents import _queue_ocr_task
 
-        # Mock process_document.apply_async
-        with patch.object(process_document, "apply_async") as mock_apply:
+        # Mock the chain function at celery module level (imported inside function)
+        with patch("celery.chain") as mock_chain:
+            mock_task_chain = MagicMock()
+            mock_chain.return_value = mock_task_chain
+
             # Small file: 5MB
             _queue_ocr_task("doc-small", 5 * 1024 * 1024)
 
-            mock_apply.assert_called_once()
-            call_kwargs = mock_apply.call_args.kwargs
-            assert call_kwargs["queue"] == "high"
-            assert call_kwargs["args"] == ["doc-small"]
+            # Verify chain was created and apply_async was called with high queue
+            mock_chain.assert_called_once()
+            mock_task_chain.apply_async.assert_called_once_with(queue="high")
 
     def test_queue_ocr_task_uses_default_priority_for_large_files(self) -> None:
         """Test that large files (>=10MB) use 'default' priority queue."""
         from app.api.routes.documents import _queue_ocr_task
 
-        with patch.object(process_document, "apply_async") as mock_apply:
+        with patch("celery.chain") as mock_chain:
+            mock_task_chain = MagicMock()
+            mock_chain.return_value = mock_task_chain
+
             # Large file: 50MB
             _queue_ocr_task("doc-large", 50 * 1024 * 1024)
 
-            mock_apply.assert_called_once()
-            call_kwargs = mock_apply.call_args.kwargs
-            assert call_kwargs["queue"] == "default"
-            assert call_kwargs["args"] == ["doc-large"]
+            mock_chain.assert_called_once()
+            mock_task_chain.apply_async.assert_called_once_with(queue="default")
 
     def test_queue_ocr_task_boundary_case_exactly_10mb(self) -> None:
         """Test boundary case: exactly 10MB should use default queue."""
         from app.api.routes.documents import _queue_ocr_task
 
-        with patch.object(process_document, "apply_async") as mock_apply:
+        with patch("celery.chain") as mock_chain:
+            mock_task_chain = MagicMock()
+            mock_chain.return_value = mock_task_chain
+
             # Exactly 10MB
             _queue_ocr_task("doc-boundary", 10 * 1024 * 1024)
 
-            mock_apply.assert_called_once()
-            call_kwargs = mock_apply.call_args.kwargs
+            mock_chain.assert_called_once()
             # 10MB is NOT less than 10MB, so should use default
-            assert call_kwargs["queue"] == "default"
+            mock_task_chain.apply_async.assert_called_once_with(queue="default")

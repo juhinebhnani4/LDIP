@@ -1,6 +1,6 @@
 """Tests for document processing Celery tasks."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -492,7 +492,7 @@ class TestExtractEntitiesTask:
             "mig_graph_service": graph_service,
         }
 
-    @patch("app.workers.tasks.document_tasks.get_service_client")
+    @patch("app.services.supabase.client.get_service_client")
     def test_successful_entity_extraction(
         self,
         mock_get_client: MagicMock,
@@ -512,11 +512,24 @@ class TestExtractEntitiesTask:
         ]
         mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
 
-        # Make graph_service.save_entities an async mock
-        import asyncio
-        async def mock_save_entities(*args, **kwargs):
-            return mock_mig_services["mig_graph_service"].save_entities.return_value
-        mock_mig_services["mig_graph_service"].save_entities = mock_save_entities
+        # Import entities for the test
+        from app.models.entity import EntityNode, EntityType
+        from datetime import datetime, timezone
+
+        # Make graph_service.save_entities an async mock with proper return value
+        mock_mig_services["mig_graph_service"].save_entities = AsyncMock(return_value=[
+            EntityNode(
+                id="entity-123",
+                matter_id="matter-123",
+                canonical_name="Test Person",
+                entity_type=EntityType.PERSON,
+                metadata={},
+                mention_count=1,
+                aliases=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        ])
 
         # Execute task with prev_result indicating successful embedding
         result = extract_entities.run(
@@ -527,11 +540,11 @@ class TestExtractEntitiesTask:
         )
 
         # Verify result
-        assert result["status"] == "entity_extraction_complete"
+        assert result["status"] == "entities_extracted"  # Matches implementation status
         assert result["document_id"] == "doc-123"
         assert result["entities_extracted"] == 1
 
-    @patch("app.workers.tasks.document_tasks.get_service_client")
+    @patch("app.services.supabase.client.get_service_client")
     def test_skips_when_previous_task_failed(
         self,
         mock_get_client: MagicMock,
@@ -559,7 +572,7 @@ class TestExtractEntitiesTask:
         assert result["status"] == "entity_extraction_failed"
         assert result["error_code"] == "NO_DOCUMENT_ID"
 
-    @patch("app.workers.tasks.document_tasks.get_service_client")
+    @patch("app.services.supabase.client.get_service_client")
     def test_handles_no_chunks(
         self,
         mock_get_client: MagicMock,

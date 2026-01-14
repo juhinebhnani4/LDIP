@@ -3,18 +3,34 @@
 Story 7-1: Session Memory Redis Storage
 Story 7-2: Session TTL and Context Restoration
 Story 7-3: Matter Memory PostgreSQL JSONB Storage
+Story 7-4: Key Findings and Research Notes
 
 These models define the structure of session data stored in Redis
 for conversation context persistence. Part of the Three-Layer Memory System.
 
 Layer 1: Session Memory (this module) - Conversation context during user session
-Layer 2: Matter Memory (Story 7-3) - Persistent findings and entity graph
+Layer 2: Matter Memory (Story 7-3, 7-4) - Persistent findings, entity graph, key findings, research notes
 Layer 3: Query Cache (Story 7-5) - LLM response caching
 """
 
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+# =============================================================================
+# Story 7-4: Finding Type Enum
+# =============================================================================
+
+# Finding types aligned with engine outputs (Story 7-4: Task 1.4)
+FindingType = Literal[
+    "citation_verified",  # Citation Engine: verified citation
+    "citation_mismatch",  # Citation Engine: misquoted/wrong section
+    "contradiction",  # Contradiction Engine: statement conflict
+    "timeline_anomaly",  # Timeline Engine: date gap/sequence issue
+    "entity_link",  # MIG: entity relationship finding
+    "custom",  # User-defined finding
+]
 
 
 # =============================================================================
@@ -345,4 +361,147 @@ class EntityGraphCache(BaseModel):
     @classmethod
     def validate_relationships(cls, v: list | None) -> list:
         """Ensure relationships is always a list."""
+        return v or []
+
+
+# =============================================================================
+# Story 7-4: Key Findings Models (Task 1)
+# =============================================================================
+
+
+class FindingEvidence(BaseModel):
+    """Evidence supporting a finding.
+
+    Story 7-4: Task 1.1 - Links finding to source documents.
+    """
+
+    document_id: str = Field(description="Source document UUID")
+    page: int = Field(ge=1, description="Page number (1-indexed)")
+    bbox_ids: list[str] = Field(
+        default_factory=list,
+        description="Bounding box IDs for highlighting",
+    )
+    text_excerpt: str = Field(
+        default="",
+        description="Quoted text excerpt from document",
+    )
+    confidence: float = Field(
+        default=100.0,
+        ge=0,
+        le=100,
+        description="Confidence in this evidence 0-100",
+    )
+
+
+class KeyFinding(BaseModel):
+    """Attorney-verified finding stored in Matter Memory.
+
+    Story 7-4: Task 1.2 - AC #1 - Persistent finding with evidence linkage.
+    Part of the verification workflow (ADR-004).
+    """
+
+    finding_id: str = Field(description="Unique finding UUID")
+    finding_type: FindingType = Field(description="Type of finding")
+    description: str = Field(description="Finding description")
+
+    # Evidence linkage
+    evidence: list[FindingEvidence] = Field(
+        default_factory=list,
+        description="Supporting evidence from documents",
+    )
+
+    # Verification status (ADR-004: Tiered verification)
+    verified_by: str | None = Field(default=None, description="Verifier user UUID")
+    verified_at: str | None = Field(default=None, description="Verification timestamp")
+
+    # Metadata
+    notes: str = Field(default="", description="Attorney notes on this finding")
+    confidence: float = Field(
+        default=0.0,
+        ge=0,
+        le=100,
+        description="Overall finding confidence 0-100",
+    )
+
+    # Timestamps
+    created_at: str = Field(description="ISO8601 creation timestamp")
+    created_by: str = Field(description="Creator user UUID")
+    updated_at: str | None = Field(default=None, description="Last update timestamp")
+
+    # Source engine (for traceability)
+    source_engine: str | None = Field(
+        default=None,
+        description="Engine that generated this finding (if automated)",
+    )
+    source_query_id: str | None = Field(
+        default=None,
+        description="Query that generated this finding (links to query_history)",
+    )
+
+
+class KeyFindings(BaseModel):
+    """Container for matter key findings.
+
+    Story 7-4: Task 1.3 - Stored as JSONB in matter_memory with memory_type='key_findings'.
+    Uses append-only semantics.
+    """
+
+    findings: list[KeyFinding] = Field(
+        default_factory=list,
+        description="Key findings (append-only, newest last)",
+    )
+
+    @field_validator("findings", mode="before")
+    @classmethod
+    def validate_findings(cls, v: list | None) -> list:
+        """Ensure findings is always a list."""
+        return v or []
+
+
+# =============================================================================
+# Story 7-4: Research Notes Models (Task 2)
+# =============================================================================
+
+
+class ResearchNote(BaseModel):
+    """Attorney research note stored in Matter Memory.
+
+    Story 7-4: Task 2.1 - AC #2 - Personal notes with markdown support.
+    """
+
+    note_id: str = Field(description="Unique note UUID")
+    created_by: str = Field(description="Creator user UUID")
+    created_at: str = Field(description="ISO8601 creation timestamp")
+    updated_at: str | None = Field(default=None, description="Last update timestamp")
+
+    # Note content
+    title: str = Field(description="Note title")
+    content: str = Field(default="", description="Note content (markdown supported)")
+
+    # Organization
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Tags for categorization",
+    )
+    linked_findings: list[str] = Field(
+        default_factory=list,
+        description="Finding IDs this note references",
+    )
+
+
+class ResearchNotes(BaseModel):
+    """Container for matter research notes.
+
+    Story 7-4: Task 2.2 - Stored as JSONB in matter_memory with memory_type='research_notes'.
+    """
+
+    notes: list[ResearchNote] = Field(
+        default_factory=list,
+        description="Research notes",
+    )
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def validate_notes(cls, v: list | None) -> list:
+        """Ensure notes is always a list."""
         return v or []

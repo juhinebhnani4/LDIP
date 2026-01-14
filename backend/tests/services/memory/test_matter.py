@@ -2,8 +2,10 @@
 
 Story 7-2: Session TTL and Context Restoration
 Story 7-3: Matter Memory PostgreSQL JSONB Storage
+Story 7-4: Key Findings and Research Notes
 Tasks 7.2, 7.6: Test session archival and matter isolation.
 Tasks 5.2-5.7: Test query history, timeline cache, entity graph, and staleness.
+Tasks 3.x, 4.x: Test key findings and research notes CRUD.
 """
 
 from datetime import datetime, timezone
@@ -16,8 +18,13 @@ from app.models.memory import (
     CachedEntity,
     EntityGraphCache,
     EntityRelationship,
+    FindingEvidence,
+    KeyFinding,
+    KeyFindings,
     QueryHistory,
     QueryHistoryEntry,
+    ResearchNote,
+    ResearchNotes,
     SessionEntityMention,
     SessionMessage,
     TimelineCache,
@@ -26,7 +33,9 @@ from app.models.memory import (
 from app.services.memory.matter import (
     ARCHIVED_SESSION_TYPE,
     ENTITY_GRAPH_TYPE,
+    KEY_FINDINGS_TYPE,
     QUERY_HISTORY_TYPE,
+    RESEARCH_NOTES_TYPE,
     TIMELINE_CACHE_TYPE,
     MatterMemoryRepository,
     get_matter_memory_repository,
@@ -794,3 +803,535 @@ class TestGenericMemoryMethods:
         call_args = mock_supabase.rpc.call_args
         assert call_args[0][0] == "upsert_matter_memory"
         assert call_args[0][1]["p_memory_type"] == "custom_type"
+
+
+# =============================================================================
+# Story 7-3: Error Path Tests (Issue 8 fix - Code Review)
+# =============================================================================
+
+
+class TestErrorHandling:
+    """Tests for error handling in repository methods (Issue 8 fix)."""
+
+    @pytest.mark.asyncio
+    async def test_append_query_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        entry = QueryHistoryEntry(
+            query_id="query-123",
+            query_text="Test query",
+            asked_by=USER_ID,
+            asked_at="2026-01-14T10:00:00Z",
+        )
+
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+
+        with pytest.raises(RuntimeError, match="Failed to append query"):
+            await matter_repo.append_query(MATTER_ID, entry)
+
+    @pytest.mark.asyncio
+    async def test_set_timeline_cache_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        cache = TimelineCache(
+            cached_at="2026-01-14T10:00:00Z",
+            events=[],
+            event_count=0,
+        )
+
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB timeout")
+
+        with pytest.raises(RuntimeError, match="Failed to set timeline cache"):
+            await matter_repo.set_timeline_cache(MATTER_ID, cache)
+
+    @pytest.mark.asyncio
+    async def test_get_query_history_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = Exception(
+            "DB unavailable"
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to get query history"):
+            await matter_repo.get_query_history(MATTER_ID)
+
+    @pytest.mark.asyncio
+    async def test_invalidate_timeline_cache_database_error(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should raise RuntimeError on database failure."""
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.side_effect = Exception(
+            "DB error"
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to invalidate timeline cache"):
+            await matter_repo.invalidate_timeline_cache(MATTER_ID)
+
+    @pytest.mark.asyncio
+    async def test_get_timeline_cache_invalid_jsonb(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return None on invalid JSONB data (validation error)."""
+        # Return malformed data that won't validate
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"cached_at": 12345}  # Should be string, not int
+        }
+
+        result = await matter_repo.get_timeline_cache(MATTER_ID)
+
+        # Should return None gracefully, not raise
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_entity_graph_cache_invalid_jsonb(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return None on invalid JSONB data."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"entities": "not-a-dict"}  # Should be dict
+        }
+
+        result = await matter_repo.get_entity_graph_cache(MATTER_ID)
+
+        # Should return None gracefully
+        assert result is None
+
+
+# =============================================================================
+# Story 7-4: Key Findings Tests (Task 3)
+# =============================================================================
+
+
+@pytest.fixture
+def sample_key_finding() -> KeyFinding:
+    """Create a sample key finding for testing."""
+    return KeyFinding(
+        finding_id="finding-123",
+        finding_type="citation_verified",
+        description="Citation to Smith v. Jones (2022) verified",
+        evidence=[
+            FindingEvidence(
+                document_id="doc-456",
+                page=12,
+                bbox_ids=["bbox-1", "bbox-2"],
+                text_excerpt="As stated in Smith v. Jones...",
+                confidence=95.0,
+            )
+        ],
+        notes="Important precedent",
+        confidence=90.0,
+        created_at="2026-01-14T10:00:00Z",
+        created_by=USER_ID,
+        source_engine="citation_engine",
+        source_query_id="query-789",
+    )
+
+
+class TestKeyFindingsMethods:
+    """Tests for key findings repository methods (Story 7-4: Task 3)."""
+
+    @pytest.mark.asyncio
+    async def test_get_key_findings_empty(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return empty findings when none exist."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
+            None
+        )
+
+        findings = await matter_repo.get_key_findings(MATTER_ID)
+
+        assert findings.findings == []
+
+    @pytest.mark.asyncio
+    async def test_get_key_findings_with_entries(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should return key findings entries."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
+        }
+
+        findings = await matter_repo.get_key_findings(MATTER_ID)
+
+        assert len(findings.findings) == 1
+        assert findings.findings[0].finding_id == "finding-123"
+        assert findings.findings[0].finding_type == "citation_verified"
+
+    @pytest.mark.asyncio
+    async def test_add_key_finding_uses_db_function(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should use append_to_matter_memory DB function."""
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        await matter_repo.add_key_finding(MATTER_ID, sample_key_finding)
+
+        mock_supabase.rpc.assert_called_once()
+        call_args = mock_supabase.rpc.call_args
+        assert call_args[0][0] == "append_to_matter_memory"
+        assert call_args[0][1]["p_matter_id"] == MATTER_ID
+        assert call_args[0][1]["p_memory_type"] == KEY_FINDINGS_TYPE
+        assert call_args[0][1]["p_key"] == "findings"
+
+    @pytest.mark.asyncio
+    async def test_get_key_finding_by_id_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should return finding when found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
+        }
+
+        finding = await matter_repo.get_key_finding_by_id(MATTER_ID, "finding-123")
+
+        assert finding is not None
+        assert finding.finding_id == "finding-123"
+
+    @pytest.mark.asyncio
+    async def test_get_key_finding_by_id_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return None when finding not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": []}
+        }
+
+        finding = await matter_repo.get_key_finding_by_id(MATTER_ID, "nonexistent")
+
+        assert finding is None
+
+    @pytest.mark.asyncio
+    async def test_update_key_finding_success(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should update finding and set updated_at."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
+        }
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        result = await matter_repo.update_key_finding(
+            MATTER_ID,
+            "finding-123",
+            {"notes": "Updated notes"},
+        )
+
+        assert result is True
+        mock_supabase.rpc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_key_finding_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return False when finding not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": []}
+        }
+
+        result = await matter_repo.update_key_finding(
+            MATTER_ID,
+            "nonexistent",
+            {"notes": "Updated notes"},
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_delete_key_finding_success(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_key_finding: KeyFinding,
+    ) -> None:
+        """Should delete finding from list."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
+        }
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        result = await matter_repo.delete_key_finding(MATTER_ID, "finding-123")
+
+        assert result is True
+        mock_supabase.rpc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_key_finding_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return False when finding not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"findings": []}
+        }
+
+        result = await matter_repo.delete_key_finding(MATTER_ID, "nonexistent")
+
+        assert result is False
+
+
+# =============================================================================
+# Story 7-4: Research Notes Tests (Task 4)
+# =============================================================================
+
+
+@pytest.fixture
+def sample_research_note() -> ResearchNote:
+    """Create a sample research note for testing."""
+    return ResearchNote(
+        note_id="note-123",
+        title="Key case analysis",
+        content="## Summary\n\nThis case establishes important precedent...",
+        created_by=USER_ID,
+        created_at="2026-01-14T10:00:00Z",
+        tags=["precedent", "contract-law"],
+        linked_findings=["finding-456"],
+    )
+
+
+class TestResearchNotesMethods:
+    """Tests for research notes repository methods (Story 7-4: Task 4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_research_notes_empty(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return empty notes when none exist."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
+            None
+        )
+
+        notes = await matter_repo.get_research_notes(MATTER_ID)
+
+        assert notes.notes == []
+
+    @pytest.mark.asyncio
+    async def test_get_research_notes_with_entries(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should return research notes entries."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+
+        notes = await matter_repo.get_research_notes(MATTER_ID)
+
+        assert len(notes.notes) == 1
+        assert notes.notes[0].note_id == "note-123"
+        assert notes.notes[0].title == "Key case analysis"
+
+    @pytest.mark.asyncio
+    async def test_add_research_note_uses_db_function(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should use append_to_matter_memory DB function."""
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        await matter_repo.add_research_note(MATTER_ID, sample_research_note)
+
+        mock_supabase.rpc.assert_called_once()
+        call_args = mock_supabase.rpc.call_args
+        assert call_args[0][0] == "append_to_matter_memory"
+        assert call_args[0][1]["p_matter_id"] == MATTER_ID
+        assert call_args[0][1]["p_memory_type"] == RESEARCH_NOTES_TYPE
+        assert call_args[0][1]["p_key"] == "notes"
+
+    @pytest.mark.asyncio
+    async def test_get_research_note_by_id_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should return note when found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+
+        note = await matter_repo.get_research_note_by_id(MATTER_ID, "note-123")
+
+        assert note is not None
+        assert note.note_id == "note-123"
+
+    @pytest.mark.asyncio
+    async def test_get_research_note_by_id_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return None when note not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": []}
+        }
+
+        note = await matter_repo.get_research_note_by_id(MATTER_ID, "nonexistent")
+
+        assert note is None
+
+    @pytest.mark.asyncio
+    async def test_update_research_note_success(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should update note and set updated_at."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        result = await matter_repo.update_research_note(
+            MATTER_ID,
+            "note-123",
+            {"title": "Updated title"},
+        )
+
+        assert result is True
+        mock_supabase.rpc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_research_note_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return False when note not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": []}
+        }
+
+        result = await matter_repo.update_research_note(
+            MATTER_ID,
+            "nonexistent",
+            {"title": "Updated title"},
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_delete_research_note_success(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should delete note from list."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+        mock_supabase.rpc.return_value.execute.return_value.data = "record-id"
+
+        result = await matter_repo.delete_research_note(MATTER_ID, "note-123")
+
+        assert result is True
+        mock_supabase.rpc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_research_note_not_found(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+    ) -> None:
+        """Should return False when note not found."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": []}
+        }
+
+        result = await matter_repo.delete_research_note(MATTER_ID, "nonexistent")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_search_research_notes_by_tag(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should filter notes by tag."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+
+        results = await matter_repo.search_research_notes(MATTER_ID, tag="precedent")
+
+        assert len(results) == 1
+        assert results[0].note_id == "note-123"
+
+    @pytest.mark.asyncio
+    async def test_search_research_notes_by_title(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should filter notes by title substring."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+
+        results = await matter_repo.search_research_notes(
+            MATTER_ID, title_contains="case"
+        )
+
+        assert len(results) == 1
+        assert results[0].note_id == "note-123"
+
+    @pytest.mark.asyncio
+    async def test_search_research_notes_no_match(
+        self,
+        matter_repo: MatterMemoryRepository,
+        mock_supabase: MagicMock,
+        sample_research_note: ResearchNote,
+    ) -> None:
+        """Should return empty list when no match."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "data": {"notes": [sample_research_note.model_dump(mode="json")]}
+        }
+
+        results = await matter_repo.search_research_notes(MATTER_ID, tag="nonexistent")
+
+        assert len(results) == 0

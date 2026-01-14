@@ -1,7 +1,9 @@
 """Tests for Matter Memory Service.
 
 Story 7-3: Matter Memory PostgreSQL JSONB Storage
+Story 7-4: Key Findings and Research Notes
 Task 5.3: Unit tests for MatterMemoryService facade methods.
+Task 5.4: Unit tests for Key Findings and Research Notes service methods.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,8 +14,13 @@ from app.models.memory import (
     CachedEntity,
     EntityGraphCache,
     EntityRelationship,
+    FindingEvidence,
+    KeyFinding,
+    KeyFindings,
     QueryHistory,
     QueryHistoryEntry,
+    ResearchNote,
+    ResearchNotes,
     TimelineCache,
     TimelineCacheEntry,
 )
@@ -44,6 +51,20 @@ def mock_repository() -> MagicMock:
     mock.set_entity_graph_cache = AsyncMock(return_value="record-id")
     mock.invalidate_entity_graph_cache = AsyncMock(return_value=True)
     mock.set_memory = AsyncMock(return_value="record-id")
+
+    # Story 7-4: Key Findings and Research Notes mocks
+    mock.get_key_findings = AsyncMock(return_value=KeyFindings(findings=[]))
+    mock.add_key_finding = AsyncMock(return_value="record-id")
+    mock.update_key_finding = AsyncMock(return_value=True)
+    mock.delete_key_finding = AsyncMock(return_value=True)
+    mock.get_key_finding_by_id = AsyncMock(return_value=None)
+
+    mock.get_research_notes = AsyncMock(return_value=ResearchNotes(notes=[]))
+    mock.add_research_note = AsyncMock(return_value="record-id")
+    mock.update_research_note = AsyncMock(return_value=True)
+    mock.delete_research_note = AsyncMock(return_value=True)
+    mock.get_research_note_by_id = AsyncMock(return_value=None)
+    mock.search_research_notes = AsyncMock(return_value=[])
 
     return mock
 
@@ -345,6 +366,58 @@ class TestGetOrBuildEntityGraph:
 
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_cache_stale_rebuilds(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should rebuild when entity graph cache is stale (Issue 3 fix)."""
+        # Stale cache - created before document upload
+        stale_cache = EntityGraphCache(
+            cached_at="2026-01-14T10:00:00Z",
+            entities={},
+            relationships=[],
+            entity_count=0,
+            relationship_count=0,
+            version=1,
+        )
+        mock_repository.get_entity_graph_cache.return_value = stale_cache
+
+        # Builder function
+        async def builder(
+            matter_id: str,
+        ) -> tuple[dict[str, CachedEntity], list[EntityRelationship]]:
+            entities = {
+                "e1": CachedEntity(
+                    entity_id="e1",
+                    canonical_name="John Smith",
+                    entity_type="PERSON",
+                )
+            }
+            relationships = [
+                EntityRelationship(
+                    source_id="e1",
+                    target_id="e2",
+                    relationship_type="KNOWS",
+                )
+            ]
+            return entities, relationships
+
+        # Doc uploaded after cache = stale
+        result = await service.get_or_build_entity_graph(
+            matter_id=MATTER_ID,
+            last_document_upload="2026-01-14T12:00:00Z",
+            builder_fn=builder,
+        )
+
+        assert result is not None
+        assert result.entity_count == 1
+        assert result.relationship_count == 1
+        assert result.version == 2  # Incremented from stale cache
+        assert "e1" in result.entities
+        mock_repository.set_entity_graph_cache.assert_called_once()
+
 
 class TestSetEntityGraphCache:
     """Tests for set_entity_graph_cache method."""
@@ -491,3 +564,360 @@ class TestServiceFactory:
 
             service = get_matter_memory_service()
             assert service is not None
+
+
+# =============================================================================
+# Story 7-4: Key Findings Service Tests
+# =============================================================================
+
+
+class TestCreateKeyFinding:
+    """Tests for create_key_finding method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_create_key_finding_basic(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should create key finding with required fields."""
+        finding = await service.create_key_finding(
+            matter_id=MATTER_ID,
+            finding_type="citation_verified",
+            description="Citation to Smith v. Jones verified",
+            created_by=USER_ID,
+        )
+
+        assert finding.finding_type == "citation_verified"
+        assert finding.description == "Citation to Smith v. Jones verified"
+        assert finding.created_by == USER_ID
+        assert finding.finding_id  # Should have generated UUID
+        mock_repository.add_key_finding.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_key_finding_with_evidence(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should create key finding with evidence."""
+        evidence = [
+            FindingEvidence(
+                document_id="doc-123",
+                page=5,
+                text_excerpt="Relevant quote",
+            )
+        ]
+
+        finding = await service.create_key_finding(
+            matter_id=MATTER_ID,
+            finding_type="contradiction",
+            description="Contradiction found",
+            created_by=USER_ID,
+            evidence=evidence,
+            confidence=85.0,
+        )
+
+        assert len(finding.evidence) == 1
+        assert finding.confidence == 85.0
+
+
+class TestGetKeyFindings:
+    """Tests for get_key_findings method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_key_findings_delegates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should delegate to repository."""
+        await service.get_key_findings(MATTER_ID)
+
+        mock_repository.get_key_findings.assert_called_once_with(MATTER_ID)
+
+
+class TestVerifyKeyFinding:
+    """Tests for verify_key_finding method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_verify_key_finding_success(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should verify finding."""
+        result = await service.verify_key_finding(
+            matter_id=MATTER_ID,
+            finding_id="finding-123",
+            verified_by="attorney-456",
+        )
+
+        assert result is True
+        mock_repository.update_key_finding.assert_called_once()
+        call_args = mock_repository.update_key_finding.call_args
+        updates = call_args[0][2]
+        assert updates["verified_by"] == "attorney-456"
+        assert "verified_at" in updates
+
+
+class TestUpdateKeyFinding:
+    """Tests for update_key_finding method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_update_key_finding_with_updates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should update finding with provided fields."""
+        result = await service.update_key_finding(
+            matter_id=MATTER_ID,
+            finding_id="finding-123",
+            notes="Updated notes",
+            confidence=95.0,
+        )
+
+        assert result is True
+        mock_repository.update_key_finding.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_key_finding_no_updates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should return False when no updates provided."""
+        result = await service.update_key_finding(
+            matter_id=MATTER_ID,
+            finding_id="finding-123",
+        )
+
+        assert result is False
+        mock_repository.update_key_finding.assert_not_called()
+
+
+class TestGetVerifiedFindings:
+    """Tests for get_verified_findings method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_verified_findings_filters(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should filter to only verified findings."""
+        mock_repository.get_key_findings.return_value = KeyFindings(
+            findings=[
+                KeyFinding(
+                    finding_id="f1",
+                    finding_type="citation_verified",
+                    description="Verified",
+                    created_at="2026-01-14T10:00:00Z",
+                    created_by=USER_ID,
+                    verified_by="attorney-123",
+                    verified_at="2026-01-14T11:00:00Z",
+                ),
+                KeyFinding(
+                    finding_id="f2",
+                    finding_type="contradiction",
+                    description="Unverified",
+                    created_at="2026-01-14T10:00:00Z",
+                    created_by=USER_ID,
+                ),
+            ]
+        )
+
+        verified = await service.get_verified_findings(MATTER_ID)
+
+        assert len(verified) == 1
+        assert verified[0].finding_id == "f1"
+
+
+class TestGetFindingsByType:
+    """Tests for get_findings_by_type method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_findings_by_type_filters(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should filter findings by type."""
+        mock_repository.get_key_findings.return_value = KeyFindings(
+            findings=[
+                KeyFinding(
+                    finding_id="f1",
+                    finding_type="citation_verified",
+                    description="Citation 1",
+                    created_at="2026-01-14T10:00:00Z",
+                    created_by=USER_ID,
+                ),
+                KeyFinding(
+                    finding_id="f2",
+                    finding_type="contradiction",
+                    description="Contradiction",
+                    created_at="2026-01-14T10:00:00Z",
+                    created_by=USER_ID,
+                ),
+            ]
+        )
+
+        citations = await service.get_findings_by_type(MATTER_ID, "citation_verified")
+
+        assert len(citations) == 1
+        assert citations[0].finding_type == "citation_verified"
+
+
+# =============================================================================
+# Story 7-4: Research Notes Service Tests
+# =============================================================================
+
+
+class TestCreateResearchNote:
+    """Tests for create_research_note method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_create_research_note_basic(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should create research note with required fields."""
+        note = await service.create_research_note(
+            matter_id=MATTER_ID,
+            title="Case Analysis",
+            created_by=USER_ID,
+        )
+
+        assert note.title == "Case Analysis"
+        assert note.created_by == USER_ID
+        assert note.note_id  # Should have generated UUID
+        mock_repository.add_research_note.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_research_note_with_content(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should create research note with full content."""
+        note = await service.create_research_note(
+            matter_id=MATTER_ID,
+            title="Case Analysis",
+            created_by=USER_ID,
+            content="## Summary\n\nImportant findings...",
+            tags=["precedent", "key-case"],
+            linked_findings=["finding-123"],
+        )
+
+        assert note.content == "## Summary\n\nImportant findings..."
+        assert note.tags == ["precedent", "key-case"]
+        assert note.linked_findings == ["finding-123"]
+
+
+class TestGetResearchNotes:
+    """Tests for get_research_notes method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_research_notes_delegates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should delegate to repository."""
+        await service.get_research_notes(MATTER_ID)
+
+        mock_repository.get_research_notes.assert_called_once_with(MATTER_ID)
+
+
+class TestUpdateResearchNote:
+    """Tests for update_research_note method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_update_research_note_with_updates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should update note with provided fields."""
+        result = await service.update_research_note(
+            matter_id=MATTER_ID,
+            note_id="note-123",
+            title="Updated Title",
+            content="Updated content",
+        )
+
+        assert result is True
+        mock_repository.update_research_note.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_research_note_no_updates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should return False when no updates provided."""
+        result = await service.update_research_note(
+            matter_id=MATTER_ID,
+            note_id="note-123",
+        )
+
+        assert result is False
+        mock_repository.update_research_note.assert_not_called()
+
+
+class TestSearchResearchNotes:
+    """Tests for search_research_notes method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_search_research_notes_delegates(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should delegate to repository with filters."""
+        await service.search_research_notes(
+            matter_id=MATTER_ID,
+            tag="precedent",
+            title_contains="case",
+        )
+
+        mock_repository.search_research_notes.assert_called_once_with(
+            MATTER_ID, tag="precedent", title_contains="case"
+        )
+
+
+class TestGetNotesForFinding:
+    """Tests for get_notes_for_finding method (Story 7-4)."""
+
+    @pytest.mark.asyncio
+    async def test_get_notes_for_finding_filters(
+        self,
+        service: MatterMemoryService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should filter notes linked to specific finding."""
+        mock_repository.get_research_notes.return_value = ResearchNotes(
+            notes=[
+                ResearchNote(
+                    note_id="n1",
+                    title="Note 1",
+                    created_by=USER_ID,
+                    created_at="2026-01-14T10:00:00Z",
+                    linked_findings=["finding-123", "finding-456"],
+                ),
+                ResearchNote(
+                    note_id="n2",
+                    title="Note 2",
+                    created_by=USER_ID,
+                    created_at="2026-01-14T10:00:00Z",
+                    linked_findings=["finding-789"],
+                ),
+            ]
+        )
+
+        notes = await service.get_notes_for_finding(MATTER_ID, "finding-123")
+
+        assert len(notes) == 1
+        assert notes[0].note_id == "n1"

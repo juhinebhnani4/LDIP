@@ -101,17 +101,28 @@ class TestJobLifecycleIntegration:
                 # Update
                 def mock_update(data):
                     result = MagicMock()
+                    result._filters = {}
 
                     def mock_eq(field, value):
-                        if field == "id" and value in jobs_storage:
-                            jobs_storage[value].update(data)
-                            jobs_storage[value]["updated_at"] = datetime.utcnow().isoformat()
-                            result.execute.return_value = MagicMock(data=[jobs_storage[value]])
-                        else:
-                            result.execute.return_value = MagicMock(data=[])
+                        result._filters[field] = value
                         return result
 
+                    def mock_execute():
+                        # Find matching job based on accumulated filters
+                        job_id = result._filters.get("id")
+                        matter_id = result._filters.get("matter_id")
+
+                        if job_id and job_id in jobs_storage:
+                            job = jobs_storage[job_id]
+                            # Verify matter_id if provided
+                            if matter_id is None or job.get("matter_id") == matter_id:
+                                jobs_storage[job_id].update(data)
+                                jobs_storage[job_id]["updated_at"] = datetime.utcnow().isoformat()
+                                return MagicMock(data=[jobs_storage[job_id]])
+                        return MagicMock(data=[])
+
                     result.eq = mock_eq
+                    result.execute = mock_execute
                     return result
 
                 table.insert = mock_insert
@@ -382,10 +393,13 @@ class TestPartialProgressIntegration:
             mock_tracker.get_job = AsyncMock(return_value=mock_job_with_metadata)
             mock_get.return_value = mock_tracker
 
-            with patch("asyncio.new_event_loop") as mock_loop:
+            with (
+                patch("asyncio.new_event_loop") as mock_new_loop,
+                patch("asyncio.set_event_loop") as mock_set_loop,
+            ):
                 mock_event_loop = MagicMock()
                 mock_event_loop.run_until_complete.return_value = mock_job_with_metadata
-                mock_loop.return_value = mock_event_loop
+                mock_new_loop.return_value = mock_event_loop
 
                 # Create tracker and load progress
                 tracker = PartialProgressTracker(
@@ -533,6 +547,9 @@ class TestMatterIsolationIntegration:
                 def mock_limit(n):
                     return query
 
+                def mock_range(start, end):
+                    return query
+
                 def mock_execute():
                     result = MagicMock()
                     if query._matter_id:
@@ -544,6 +561,7 @@ class TestMatterIsolationIntegration:
                 query.eq = mock_eq
                 query.order = mock_order
                 query.limit = mock_limit
+                query.range = mock_range
                 query.execute = mock_execute
                 return query
 

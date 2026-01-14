@@ -604,23 +604,30 @@ class TestBatchClassification:
         classifier = EventClassifier()
 
         call_count = 0
+        # Track which event_ids we've processed to return correct count per batch
+        processed_events = []
 
         async def mock_generate(*args, **kwargs):
-            nonlocal call_count
+            nonlocal call_count, processed_events
             call_count += 1
+            # Determine batch size from the call - first batch is 20, second is 5
+            batch_start = len(processed_events)
+            batch_size = 20 if batch_start == 0 else 5
+
             # Return results for the batch
             mock_response = MagicMock()
             mock_response.text = json.dumps([
                 {
-                    "event_id": f"event-{i}",
+                    "event_id": f"event-{batch_start + i}",
                     "event_type": "filing",
                     "classification_confidence": 0.90,
                     "secondary_types": [],
                     "keywords_matched": [],
                     "classification_reasoning": "Filing",
                 }
-                for i in range(20)  # MAX_BATCH_SIZE
+                for i in range(batch_size)
             ])
+            processed_events.extend([f"event-{batch_start + i}" for i in range(batch_size)])
             return mock_response
 
         mock_model = MagicMock()
@@ -735,9 +742,9 @@ class TestErrorPaths:
 
         result = classifier._parse_single_response(response_text, "event-1")
 
-        # Should handle gracefully with defaults
+        # Should handle gracefully with defaults (1.0 to trust LLM's event_type)
         assert result.event_type == EventType.FILING
-        assert result.classification_confidence == 0.0 or result.classification_confidence is None
+        assert result.classification_confidence == 1.0  # Default when not provided
 
     def test_missing_required_fields(self) -> None:
         """Should handle missing required fields."""

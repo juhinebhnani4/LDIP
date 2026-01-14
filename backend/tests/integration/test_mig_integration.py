@@ -201,17 +201,19 @@ class TestMIGPipelineIntegration:
             )
             mock_parse.return_value = expected_result
 
-            with patch.object(extractor, "model") as mock_model:
-                mock_response = MagicMock()
-                mock_response.text = "{}"
-                mock_model.generate_content.return_value = mock_response
+            # Mock the _model attribute directly since model is a property
+            mock_model = MagicMock()
+            mock_response = MagicMock()
+            mock_response.text = "{}"
+            mock_model.generate_content.return_value = mock_response
+            extractor._model = mock_model
 
-                result = extractor.extract_entities_sync(
-                    text=sample_legal_text,
-                    document_id="doc-123",
-                    matter_id="matter-456",
-                    chunk_id="chunk-456",
-                )
+            result = extractor.extract_entities_sync(
+                text=sample_legal_text,
+                document_id="doc-123",
+                matter_id="matter-456",
+                chunk_id="chunk-456",
+            )
 
         # Verify extraction produced valid result
         assert result.source_document_id == "doc-123"

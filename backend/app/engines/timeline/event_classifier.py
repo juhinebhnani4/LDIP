@@ -697,23 +697,28 @@ class EventClassifier:
         except ValueError:
             event_type = EventType.UNCLASSIFIED
 
-        # Parse confidence
-        confidence = float(data.get("classification_confidence", 0.5))
+        # Parse confidence - handle None explicitly
+        # Default to 1.0 to trust the LLM's event_type when confidence not provided
+        raw_confidence = data.get("classification_confidence")
+        confidence = float(raw_confidence) if raw_confidence is not None else 1.0
 
         # If confidence below threshold, force unclassified
         if confidence < CONFIDENCE_THRESHOLD and event_type != EventType.UNCLASSIFIED:
             event_type = EventType.UNCLASSIFIED
 
-        # Parse secondary types
+        # Parse secondary types - handle None values
         secondary_types = []
-        for st in data.get("secondary_types", []):
-            if isinstance(st, dict):
-                try:
-                    st_type = EventType(st.get("type", "").lower())
-                    st_conf = float(st.get("confidence", 0.5))
-                    secondary_types.append(SecondaryTypeScore(type=st_type, confidence=st_conf))
-                except (ValueError, TypeError):
-                    continue
+        raw_secondary = data.get("secondary_types")
+        if raw_secondary and isinstance(raw_secondary, list):
+            for st in raw_secondary:
+                if isinstance(st, dict):
+                    try:
+                        st_type = EventType(st.get("type", "").lower())
+                        st_raw_conf = st.get("confidence")
+                        st_conf = float(st_raw_conf) if st_raw_conf is not None else 0.5
+                        secondary_types.append(SecondaryTypeScore(type=st_type, confidence=st_conf))
+                    except (ValueError, TypeError):
+                        continue
 
         # Parse keywords
         keywords = data.get("keywords_matched", [])

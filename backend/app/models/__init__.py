@@ -110,6 +110,12 @@ from app.models.orchestrator import (
     QueryAuditEntry,
     QueryAuditRecord,
 )
+from app.models.memory import (
+    # Story 7-1: Session Memory models
+    SessionContext,
+    SessionEntityMention,
+    SessionMessage,
+)
 
 __all__ = [
     # Auth models
@@ -218,4 +224,8 @@ __all__ = [
     "LLMCostEntry",
     "QueryAuditEntry",
     "QueryAuditRecord",
+    # Memory models (Story 7-1)
+    "SessionContext",
+    "SessionEntityMention",
+    "SessionMessage",
 ]

@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
 
+    # GPT-3.5 Configuration (Story 6-1: Query Intent Classification)
+    openai_intent_model: str = "gpt-3.5-turbo"  # Cost-sensitive classification
+
     # OCR Validation Thresholds
     ocr_validation_gemini_threshold: float = 0.85  # Below this -> Gemini validation
     ocr_validation_human_threshold: float = 0.50   # Below this -> Human review

@@ -114,8 +114,8 @@ development_status:
   # (confirmed approach from brainstorming session 2026-01-13)
   # Classification outputs: question_type + required_engine
   # Fallback: run multiple engines if classification uncertain
-  epic-6: backlog
-  6-1-query-intent-analysis: backlog  # Semantic routing - LLM classification approach
+  epic-6: in-progress  # First story created 2026-01-14
+  6-1-query-intent-analysis: done  # Code review complete 2026-01-14 (41 tests)
   6-2-engine-execution-ordering: backlog
   6-3-audit-trail-logging: backlog
   epic-6-retrospective: optional

@@ -85,6 +85,19 @@ from app.models.citation import (
     UserAction,
     VerificationStatus,
 )
+from app.models.orchestrator import (
+    ENGINE_PRIORITY,
+    LOW_CONFIDENCE_THRESHOLD,
+    EngineType,
+    IntentAnalysisCost,
+    IntentAnalysisErrorDetail,
+    IntentAnalysisErrorResponse,
+    IntentAnalysisRequest,
+    IntentAnalysisResponse,
+    IntentAnalysisResult,
+    IntentClassification,
+    QueryIntent,
+)
 
 __all__ = [
     # Auth models
@@ -169,4 +182,16 @@ __all__ = [
     "ExtractedCitation",
     "UserAction",
     "VerificationStatus",
+    # Orchestrator models (Story 6-1)
+    "ENGINE_PRIORITY",
+    "LOW_CONFIDENCE_THRESHOLD",
+    "EngineType",
+    "IntentAnalysisCost",
+    "IntentAnalysisErrorDetail",
+    "IntentAnalysisErrorResponse",
+    "IntentAnalysisRequest",
+    "IntentAnalysisResponse",
+    "IntentAnalysisResult",
+    "IntentClassification",
+    "QueryIntent",
 ]

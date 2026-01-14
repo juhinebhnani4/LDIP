@@ -21,12 +21,10 @@ from app.services.safety.patterns import (
 )
 
 __all__ = [
-    # Service
+    "COMPILED_PATTERNS",
+    "CompiledPattern",
     "GuardrailService",
     "get_guardrail_service",
-    "reset_guardrail_service",
-    # Patterns
-    "CompiledPattern",
-    "COMPILED_PATTERNS",
     "get_patterns",
+    "reset_guardrail_service",
 ]

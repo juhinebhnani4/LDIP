@@ -12,7 +12,7 @@ USER QUERY → [GUARDRAIL CHECK] → ORCHESTRATOR → ENGINES → [LANGUAGE POLI
 
 Key Requirements:
 - AC #1-3: Pattern matching for dangerous queries
-- AC #4: Return GuardrailCheck with is_safe, violation_type, explanation, suggested_rewrite
+- AC #4: Return GuardrailCheck with is_safe, violation_type, explanation, rewrite
 - Performance: Check must complete in < 5ms (regex only, no LLM)
 
 Thread Safety:
@@ -47,8 +47,6 @@ class GuardrailService:
             return check.explanation, check.suggested_rewrite
     """
 
-    _lock = threading.Lock()
-
     def __init__(self) -> None:
         """Initialize guardrail service with pre-compiled patterns.
 
@@ -80,6 +78,7 @@ class GuardrailService:
             GuardrailCheck with result and metadata.
             - is_safe=True: Query can proceed to LLM
             - is_safe=False: Query blocked with explanation and suggested rewrite
+
         """
         start_time = time.perf_counter()
 
@@ -125,6 +124,7 @@ class GuardrailService:
 
         Returns:
             Number of patterns in the registry.
+
         """
         return len(self._patterns)
 
@@ -145,8 +145,9 @@ def get_guardrail_service() -> GuardrailService:
 
     Returns:
         GuardrailService singleton instance.
+
     """
-    global _guardrail_service
+    global _guardrail_service  # noqa: PLW0603
 
     if _guardrail_service is None:
         with _service_lock:
@@ -164,8 +165,9 @@ def reset_guardrail_service() -> None:
 
     Note:
         This creates a fresh instance on next get_guardrail_service() call.
+
     """
-    global _guardrail_service
+    global _guardrail_service  # noqa: PLW0603
 
     with _service_lock:
         _guardrail_service = None

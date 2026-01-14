@@ -14,7 +14,7 @@ Query Guardrails (this module) block dangerous queries before LLM processing:
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field  # noqa: I001
 
 
 # =============================================================================
@@ -52,7 +52,7 @@ class GuardrailCheck(BaseModel):
     """
 
     is_safe: bool = Field(
-        description="True if query passes guardrail check and can proceed to LLM"
+        description="True if query passes guardrail check and can proceed to LLM",
     )
     violation_type: ViolationType | None = Field(
         default=None,
@@ -92,17 +92,17 @@ class GuardrailPattern(BaseModel):
     """
 
     pattern_id: str = Field(
-        description="Unique identifier for this pattern (e.g., 'legal_advice_should_i')"
+        description="Unique identifier for this pattern (e.g., 'legal_advice_should_i')",
     )
     pattern: str = Field(
-        description="Regex pattern string (will be compiled at registration)"
+        description="Regex pattern string (will be compiled at registration)",
     )
     violation_type: ViolationType = Field(
-        description="Type of violation this pattern detects"
+        description="Type of violation this pattern detects",
     )
     explanation_template: str = Field(
-        description="Template for user-facing explanation when pattern matches"
+        description="Template for user-facing explanation when pattern matches",
     )
     rewrite_template: str = Field(
-        description="Template for suggested safe alternative query"
+        description="Template for suggested safe alternative query",
     )

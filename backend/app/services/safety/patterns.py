@@ -21,10 +21,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from app.models.safety import ViolationType
-
 if TYPE_CHECKING:
     from re import Pattern
+
+    from app.models.safety import ViolationType
 
 
 # =============================================================================
@@ -41,7 +41,7 @@ class CompiledPattern:
 
     pattern_id: str
     regex: Pattern[str]
-    violation_type: ViolationType
+    violation_type: str  # ViolationType literal
     explanation_template: str
     rewrite_template: str
 
@@ -55,6 +55,7 @@ class CompiledPattern:
 
         Returns:
             Explanation string for the user.
+
         """
         return self.explanation_template
 
@@ -68,6 +69,7 @@ class CompiledPattern:
 
         Returns:
             Suggested safe alternative query.
+
         """
         return self.rewrite_template
 
@@ -76,21 +78,21 @@ class CompiledPattern:
 # Story 8-1: Explanation Templates (Task 2.7)
 # =============================================================================
 
-EXPLANATION_TEMPLATES: dict[ViolationType, str] = {
+EXPLANATION_TEMPLATES: dict[str, str] = {
     "legal_advice_request": (
         "This query appears to request legal advice about what action to take. "
-        "LDIP analyzes documents and extracts facts - it cannot provide legal recommendations. "
-        "Try asking about the facts or documents instead."
+        "LDIP analyzes documents and extracts facts - it cannot provide "
+        "legal recommendations. Try asking about the facts or documents instead."
     ),
     "outcome_prediction": (
-        "This query asks for a prediction about how a court will rule or your chances of success. "
-        "LDIP cannot predict judicial outcomes. "
+        "This query asks for a prediction about how a court will rule or your "
+        "chances of success. LDIP cannot predict judicial outcomes. "
         "Try asking about relevant precedents or document contents instead."
     ),
     "liability_conclusion": (
         "This query asks for a conclusion about liability or guilt. "
-        "LDIP identifies factual observations - only attorneys can draw legal conclusions. "
-        "Try asking what the documents say about the relevant events."
+        "LDIP identifies factual observations - only attorneys can draw "
+        "legal conclusions. Try asking what the documents say about the events."
     ),
     "procedural_recommendation": (
         "This query asks what procedural step to take next. "
@@ -99,11 +101,11 @@ EXPLANATION_TEMPLATES: dict[ViolationType, str] = {
     ),
 }
 
-REWRITE_TEMPLATES: dict[ViolationType, str] = {
+REWRITE_TEMPLATES: dict[str, str] = {
     "legal_advice_request": "What do the documents say about [topic]?",
     "outcome_prediction": "What precedents or rulings are cited in the documents?",
     "liability_conclusion": "What evidence is mentioned regarding [party]'s actions?",
-    "procedural_recommendation": "What procedural requirements are mentioned in the documents?",
+    "procedural_recommendation": "What procedural requirements are mentioned?",
 }
 
 
@@ -192,11 +194,12 @@ def _build_patterns() -> list[CompiledPattern]:
 
     Returns:
         List of CompiledPattern objects ready for matching.
+
     """
     patterns: list[CompiledPattern] = []
 
     # Build pattern definitions with their violation types
-    pattern_definitions: list[tuple[list[tuple[str, str]], ViolationType]] = [
+    pattern_definitions: list[tuple[list[tuple[str, str]], str]] = [
         (LEGAL_ADVICE_PATTERNS, "legal_advice_request"),
         (OUTCOME_PREDICTION_PATTERNS, "outcome_prediction"),
         (CHANCES_PATTERNS, "outcome_prediction"),  # Chances = outcome prediction
@@ -229,5 +232,6 @@ def get_patterns() -> list[CompiledPattern]:
 
     Returns:
         List of all compiled patterns for guardrail checking.
+
     """
     return COMPILED_PATTERNS

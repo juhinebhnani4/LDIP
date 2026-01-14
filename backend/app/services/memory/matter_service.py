@@ -11,8 +11,8 @@ Provides high-level orchestration for matter memory operations:
 This service sits above MatterMemoryRepository and adds business logic.
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
 
 import structlog
 
@@ -201,7 +201,7 @@ class MatterMemoryService:
         matter_id: str,
         last_document_upload: str | None = None,
         *,
-        builder_fn: Any | None = None,
+        builder_fn: Callable[[str], Awaitable[list[TimelineCacheEntry]]] | None = None,
     ) -> TimelineCache | None:
         """Get timeline cache, building if stale or missing.
 
@@ -313,7 +313,10 @@ class MatterMemoryService:
         matter_id: str,
         last_document_upload: str | None = None,
         *,
-        builder_fn: Any | None = None,
+        builder_fn: Callable[
+            [str], Awaitable[tuple[dict[str, CachedEntity], list[EntityRelationship]]]
+        ]
+        | None = None,
     ) -> EntityGraphCache | None:
         """Get entity graph cache, building if stale or missing.
 

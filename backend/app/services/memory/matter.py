@@ -13,7 +13,7 @@ Table: matter_memory with memory_type discriminator
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import structlog
 from pydantic import ValidationError
@@ -26,9 +26,6 @@ from app.models.memory import (
     TimelineCache,
 )
 from app.services.supabase.client import get_supabase_client
-
-if TYPE_CHECKING:
-    from app.models.memory import SessionEntityMention, SessionMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -779,17 +776,25 @@ def get_matter_memory_repository(
     Factory function following project pattern.
 
     Args:
-        supabase_client: Optional Supabase client for injection.
+        supabase_client: Optional Supabase client for injection (only used on first call).
 
     Returns:
         MatterMemoryRepository instance.
+
+    Note:
+        Client injection only works on first call. To inject a different client,
+        call reset_matter_memory_repository() first. This prevents inconsistent
+        state from late injection after the singleton is already in use.
     """
     global _matter_memory_repository
 
     if _matter_memory_repository is None:
         _matter_memory_repository = MatterMemoryRepository(supabase_client)
-    elif supabase_client is not None and _matter_memory_repository._supabase is None:
-        _matter_memory_repository._supabase = supabase_client
+    elif supabase_client is not None:
+        logger.warning(
+            "matter_memory_repository_client_injection_ignored",
+            reason="singleton already created - call reset_matter_memory_repository() first",
+        )
 
     return _matter_memory_repository
 

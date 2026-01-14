@@ -93,7 +93,7 @@ class TestCreateMatter:
         mock_user_id: str,
         mock_matter_data: dict,
     ) -> None:
-        """Test that create_matter inserts into the matters table."""
+        """Test that create_matter inserts into matters and matter_attorneys tables."""
         mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
             data=[mock_matter_data]
         )
@@ -101,8 +101,11 @@ class TestCreateMatter:
         data = MatterCreate(title="New Matter")
         matter_service.create_matter(mock_user_id, data)
 
-        mock_db.table.assert_called_with("matters")
-        mock_db.table.return_value.insert.assert_called_once()
+        # create_matter inserts into "matters" first, then "matter_attorneys" for owner
+        mock_db.table.assert_any_call("matters")
+        mock_db.table.assert_any_call("matter_attorneys")
+        # Insert called twice: once for matters, once for matter_attorneys
+        assert mock_db.table.return_value.insert.call_count == 2
 
 
 class TestGetUserRole:

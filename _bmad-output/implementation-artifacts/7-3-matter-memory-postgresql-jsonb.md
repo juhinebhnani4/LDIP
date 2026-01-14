@@ -1,6 +1,6 @@
 # Story 7.3: Implement Matter Memory PostgreSQL JSONB Storage
 
-Status: review
+Status: done
 
 ## Story
 
@@ -816,10 +816,28 @@ This story depends on:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+- No debug logs required - all tests pass
+
 ### Completion Notes List
 
+- Extended existing `MatterMemoryRepository` from Story 7-2 with query history, timeline cache, and entity graph methods
+- Created new `MatterMemoryService` facade for high-level orchestration
+- Added field validators for None coercion from database (handles JSONB null values)
+- Used existing DB functions (`upsert_matter_memory`, `append_to_matter_memory`) per architecture
+- `mark_query_verified` uses read-modify-write pattern (documented limitation - consider DB function for high-volume use)
+
 ### File List
+
+| File | Action | Description |
+|------|--------|-------------|
+| `backend/app/models/memory.py` | Modified | Added QueryHistoryEntry, QueryHistory, TimelineCacheEntry, TimelineCache, CachedEntity, EntityRelationship, EntityGraphCache models |
+| `backend/app/services/memory/__init__.py` | Modified | Exported new models, service, and repository methods |
+| `backend/app/services/memory/matter.py` | Modified | Extended MatterMemoryRepository with query history, timeline cache, entity graph methods, and is_cache_stale utility |
+| `backend/app/services/memory/matter_service.py` | Created | New MatterMemoryService facade with log_query, get_or_build_timeline, get_or_build_entity_graph, invalidate_matter_caches |
+| `backend/tests/models/test_memory_models.py` | Modified | Added 45 tests for Story 7-3 models |
+| `backend/tests/services/memory/test_matter.py` | Modified | Added 24 tests for repository methods |
+| `backend/tests/services/memory/test_matter_service.py` | Created | Added 32 tests for service facade methods |

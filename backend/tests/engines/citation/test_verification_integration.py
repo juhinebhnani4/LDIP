@@ -142,8 +142,9 @@ class TestVerificationFlow:
         # Mock act indexer
         mock_indexer = MagicMock()
         mock_indexer.index_act_document = AsyncMock()
+        # Use **kwargs to handle keyword argument calls from verifier
         mock_indexer.get_section_chunks = AsyncMock(
-            side_effect=lambda doc_id, section: (
+            side_effect=lambda act_document_id=None, section=None: (
                 [mock_act_chunks[0]] if section == "138"
                 else [mock_act_chunks[1]] if section == "139"
                 else []

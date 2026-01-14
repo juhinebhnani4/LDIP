@@ -57,6 +57,19 @@
   <step n="3" goal="Execute adversarial review">
     <critical>VALIDATE EVERY CLAIM - Check git reality vs story claims</critical>
 
+    <!-- MANDATORY: Run Full Test Suite FIRST -->
+    <critical>🧪 FULL TEST SUITE IS MANDATORY - Not just story tests!</critical>
+    <action>Run `pytest tests/ -v --tb=short` to execute ALL tests in the project</action>
+    <action>Record total test count, pass count, fail count, skip count</action>
+    <check if="any tests fail">
+      <action>Mark as CRITICAL finding: "Full test suite has {{fail_count}} failing tests"</action>
+      <action>List each failing test with error message</action>
+    </check>
+    <check if="skip count increased from baseline">
+      <action>Mark as MEDIUM finding: "Skipped tests increased - investigate why"</action>
+    </check>
+    <action>Verify story-specific tests pass (should be subset of full suite)</action>
+
     <!-- Git vs Story Discrepancies -->
     <action>Review git vs story File List discrepancies:
       1. **Files changed but not in story File List** → MEDIUM finding (incomplete documentation)

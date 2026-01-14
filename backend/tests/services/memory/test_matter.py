@@ -7,7 +7,7 @@ Tasks 5.2-5.7: Test query history, timeline cache, entity graph, and staleness.
 """
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 

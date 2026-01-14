@@ -124,7 +124,7 @@ development_status:
   epic-7: in-progress  # First story created 2026-01-14
   7-1-session-memory-redis: done  # Code review passed 2026-01-14 (65 tests, 7 issues fixed)
   7-2-ttl-sliding-window-pronoun-resolution: done  # Code review passed 2026-01-14 (72 tests, 10 issues fixed)
-  7-3-matter-memory-postgresql-jsonb: review  # Implementation complete 2026-01-14 (101 tests)
+  7-3-matter-memory-postgresql-jsonb: done  # Code review passed 2026-01-14 (101 tests, 9 issues fixed)
   7-4-key-findings-research-notes: backlog
   7-5-query-cache-redis: backlog
   epic-7-retrospective: optional

@@ -269,9 +269,10 @@ class TestHybridSearchServiceSearch:
 
         # Check RPC was called with custom weights
         mock_client.rpc.assert_called_once()
-        call_args = mock_client.rpc.call_args[1]
-        assert call_args["full_text_weight"] == 1.5
-        assert call_args["semantic_weight"] == 0.5
+        # RPC is called as rpc("function_name", {params_dict})
+        rpc_params = mock_client.rpc.call_args[0][1]  # Second positional arg
+        assert rpc_params["full_text_weight"] == 1.5
+        assert rpc_params["semantic_weight"] == 0.5
 
 
 class TestHybridSearchServiceBM25Search:
@@ -657,7 +658,7 @@ class TestHybridSearchServiceSearchWithRerank:
             MagicMock(index=1, relevance_score=0.65),
         ]
 
-        with patch("app.services.rag.hybrid_search.get_cohere_rerank_service") as mock_rerank_svc:
+        with patch("app.services.rag.reranker.get_cohere_rerank_service") as mock_rerank_svc:
             mock_reranker = MagicMock()
             mock_reranker.rerank = AsyncMock(return_value=MagicMock(
                 results=[
@@ -735,7 +736,7 @@ class TestHybridSearchServiceSearchWithRerank:
         mock_validate_results.return_value = mock_rpc_response.data
 
         # Mock reranker to raise error
-        with patch("app.services.rag.hybrid_search.get_cohere_rerank_service") as mock_rerank_svc:
+        with patch("app.services.rag.reranker.get_cohere_rerank_service") as mock_rerank_svc:
             mock_reranker = MagicMock()
             mock_reranker.rerank = AsyncMock(side_effect=CohereRerankServiceError(
                 message="Cohere API timeout",

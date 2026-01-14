@@ -130,3 +130,64 @@ export function isOwner(role: MatterRole | null): boolean {
 export function hasAccess(role: MatterRole | null): boolean {
   return role !== null;
 }
+
+// ============================================================================
+// Story 9-2: Matter Cards Grid Types
+// ============================================================================
+
+/** Processing status types for matters (frontend display) */
+export type MatterProcessingStatus = 'processing' | 'ready' | 'needs_attention';
+
+/** Sort options for matter list */
+export type MatterSortOption = 'recent' | 'alphabetical' | 'most_pages' | 'least_verified' | 'date_created';
+
+/** Filter options for matter list */
+export type MatterFilterOption = 'all' | 'processing' | 'ready' | 'needs_attention' | 'archived';
+
+/** View mode for matter cards display */
+export type MatterViewMode = 'grid' | 'list';
+
+/**
+ * Extended matter data for card display.
+ * Extends base Matter with processing and dashboard-specific fields.
+ * Note: Some fields are mocked on frontend until backend provides them.
+ */
+export interface MatterCardData extends Matter {
+  /** Total pages across all documents in this matter */
+  pageCount: number;
+  /** Number of documents uploaded to this matter */
+  documentCount: number;
+  /** Percentage of findings that have been verified (0-100) */
+  verificationPercent: number;
+  /** Count of items flagged as needing attention */
+  issueCount: number;
+  /** Current processing status for display */
+  processingStatus: MatterProcessingStatus;
+  /** Processing progress percentage (0-100), only when status is 'processing' */
+  processingProgress?: number;
+  /** Estimated seconds remaining for processing, only when status is 'processing' */
+  estimatedTimeRemaining?: number;
+  /** ISO timestamp of when user last opened this matter */
+  lastOpened?: string;
+}
+
+/** Constants for sort options */
+export const SORT_OPTIONS: { value: MatterSortOption; label: string }[] = [
+  { value: 'recent', label: 'Recent' },
+  { value: 'alphabetical', label: 'Alphabetical' },
+  { value: 'most_pages', label: 'Most pages' },
+  { value: 'least_verified', label: 'Least verified' },
+  { value: 'date_created', label: 'Date created' },
+] as const;
+
+/** Constants for filter options */
+export const FILTER_OPTIONS: { value: MatterFilterOption; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'needs_attention', label: 'Needs attention' },
+  { value: 'archived', label: 'Archived' },
+] as const;
+
+/** LocalStorage key for view preference */
+export const VIEW_PREFERENCE_KEY = 'dashboard_view_preference' as const;

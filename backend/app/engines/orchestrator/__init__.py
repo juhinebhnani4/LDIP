@@ -45,6 +45,9 @@ from app.engines.orchestrator.aggregator import (
 )
 from app.engines.orchestrator.adapters import (
     ADAPTER_REGISTRY,
+    RAG_RERANK_TOP_N,
+    RAG_SEARCH_LIMIT,
+    TIMELINE_DEFAULT_PAGE_SIZE,
     CitationEngineAdapter,
     ContradictionEngineAdapter,
     EngineAdapter,
@@ -85,6 +88,9 @@ __all__ = [
     "get_result_aggregator",
     # Story 6-2: Engine Adapters
     "ADAPTER_REGISTRY",
+    "RAG_RERANK_TOP_N",
+    "RAG_SEARCH_LIMIT",
+    "TIMELINE_DEFAULT_PAGE_SIZE",
     "CitationEngineAdapter",
     "ContradictionEngineAdapter",
     "EngineAdapter",

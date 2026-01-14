@@ -18,10 +18,21 @@ import structlog
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
-    SourceReference,
 )
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+# RAG search configuration
+RAG_SEARCH_LIMIT = 20  # Number of candidates to retrieve before reranking
+RAG_RERANK_TOP_N = 5  # Number of results to return after reranking
+
+# Timeline builder configuration
+TIMELINE_DEFAULT_PAGE_SIZE = 50  # Default number of timeline events per page
 
 
 # =============================================================================
@@ -281,7 +292,7 @@ class TimelineEngineAdapter(EngineAdapter):
                 matter_id=matter_id,
                 include_entities=True,
                 page=1,
-                per_page=50,  # Return first 50 events
+                per_page=TIMELINE_DEFAULT_PAGE_SIZE,
             )
 
             # Convert timeline to dict format
@@ -408,9 +419,9 @@ class ContradictionEngineAdapter(EngineAdapter):
             if entity_id:
                 # Entity-specific contradiction analysis
                 query_engine = self._get_query_engine()
-                statements = await query_engine.get_entity_statements(
-                    matter_id=matter_id,
+                statements = await query_engine.get_statements_for_entity(
                     entity_id=entity_id,
+                    matter_id=matter_id,
                 )
 
                 contradiction_data = {
@@ -522,8 +533,8 @@ class RAGEngineAdapter(EngineAdapter):
             results = await search.search_with_rerank(
                 matter_id=matter_id,
                 query=query,
-                limit=20,
-                top_n=5,  # Return top 5 reranked results
+                limit=RAG_SEARCH_LIMIT,
+                top_n=RAG_RERANK_TOP_N,
             )
 
             # Convert search results to dict format

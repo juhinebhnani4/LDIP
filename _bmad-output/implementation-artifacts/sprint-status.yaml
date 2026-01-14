@@ -130,8 +130,8 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Safety Layer (Guardrails, Policing, Verification)
-  epic-8: backlog
-  8-1-regex-pattern-detection: backlog
+  epic-8: in-progress  # First story created 2026-01-14
+  8-1-regex-pattern-detection: review  # Implementation complete 2026-01-14 (57 tests)
   8-2-gpt4o-mini-violation-detection: backlog
   8-3-language-policing: backlog
   8-4-finding-verifications-table: backlog

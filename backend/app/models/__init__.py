@@ -116,6 +116,12 @@ from app.models.memory import (
     SessionEntityMention,
     SessionMessage,
 )
+from app.models.safety import (
+    # Story 8-1: Safety Layer models
+    GuardrailCheck,
+    GuardrailPattern,
+    ViolationType,
+)
 
 __all__ = [
     # Auth models
@@ -228,4 +234,8 @@ __all__ = [
     "SessionContext",
     "SessionEntityMention",
     "SessionMessage",
+    # Safety models (Story 8-1)
+    "GuardrailCheck",
+    "GuardrailPattern",
+    "ViolationType",
 ]

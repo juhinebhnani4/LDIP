@@ -1,6 +1,6 @@
 # Story 7.2: Implement Session TTL and Context Restoration
 
-Status: dev-complete
+Status: done
 
 ## Story
 

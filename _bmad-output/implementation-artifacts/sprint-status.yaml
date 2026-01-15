@@ -144,7 +144,7 @@ development_status:
   9-2-matter-cards-grid: done  # 74 tests passing 2026-01-15 - Matter cards grid, view toggle, sort/filter - Code review passed
   9-3-activity-feed-quick-stats: done  # 86 tests passing 2026-01-15 - Activity feed, quick stats panel - Code review passed (7 issues fixed)
   9-4-upload-stage-1-2: done  # Complete 2026-01-15 - 138 tests, all passing
-  9-5-upload-stage-3-4: backlog
+  9-5-upload-stage-3-4: review  # 869 tests passing 2026-01-15 - Upload progress & live discoveries UI
   9-6-upload-stage-5-completion: backlog
   epic-9-retrospective: optional
 

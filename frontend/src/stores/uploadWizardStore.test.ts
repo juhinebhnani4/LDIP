@@ -6,8 +6,16 @@ import {
   selectActsByStatus,
   selectIsMatterNameValid,
   selectCanStartUpload,
+  selectUploadComplete,
+  selectDiscoveriesByType,
+  selectCurrentStageName,
+  selectCurrentStageNumber,
+  selectCompletedUploadsCount,
+  selectFailedUploadsCount,
+  selectHasFailedUploads,
+  selectUploadProgressArray,
 } from './uploadWizardStore';
-import type { DetectedAct } from '@/types/upload';
+import type { DetectedAct, UploadProgress, LiveDiscovery } from '@/types/upload';
 
 // Helper to create mock files
 function createMockFile(name: string, size: number = 1024): File {
@@ -344,6 +352,372 @@ describe('uploadWizardStore', () => {
       useUploadWizardStore.getState().setLoading(true);
 
       expect(selectCanStartUpload(useUploadWizardStore.getState())).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // Processing State Tests (Story 9-5)
+  // ==========================================================================
+
+  describe('processing state', () => {
+    describe('initial processing state', () => {
+      it('starts with empty upload progress', () => {
+        expect(useUploadWizardStore.getState().uploadProgress.size).toBe(0);
+      });
+
+      it('starts with null processing stage', () => {
+        expect(useUploadWizardStore.getState().processingStage).toBeNull();
+      });
+
+      it('starts with 0% overall progress', () => {
+        expect(useUploadWizardStore.getState().overallProgressPct).toBe(0);
+      });
+
+      it('starts with empty live discoveries', () => {
+        expect(useUploadWizardStore.getState().liveDiscoveries).toEqual([]);
+      });
+
+      it('starts with null matter ID', () => {
+        expect(useUploadWizardStore.getState().matterId).toBeNull();
+      });
+
+      it('starts with empty failed uploads', () => {
+        expect(useUploadWizardStore.getState().failedUploads.size).toBe(0);
+      });
+    });
+
+    describe('setUploadProgress', () => {
+      it('sets upload progress for a file', () => {
+        const progress: UploadProgress = {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 50,
+          status: 'uploading',
+        };
+
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', progress);
+
+        const stored = useUploadWizardStore.getState().uploadProgress.get('test.pdf');
+        expect(stored).toEqual(progress);
+      });
+
+      it('updates existing progress', () => {
+        const initial: UploadProgress = {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 25,
+          status: 'uploading',
+        };
+        const updated: UploadProgress = {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 75,
+          status: 'uploading',
+        };
+
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', initial);
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', updated);
+
+        const stored = useUploadWizardStore.getState().uploadProgress.get('test.pdf');
+        expect(stored?.progressPct).toBe(75);
+      });
+    });
+
+    describe('setProcessingStage', () => {
+      it('sets the processing stage', () => {
+        useUploadWizardStore.getState().setProcessingStage('OCR');
+        expect(useUploadWizardStore.getState().processingStage).toBe('OCR');
+      });
+
+      it('can set stage to null', () => {
+        useUploadWizardStore.getState().setProcessingStage('OCR');
+        useUploadWizardStore.getState().setProcessingStage(null);
+        expect(useUploadWizardStore.getState().processingStage).toBeNull();
+      });
+    });
+
+    describe('addLiveDiscovery', () => {
+      it('adds discovery to array', () => {
+        const discovery: LiveDiscovery = {
+          id: '1',
+          type: 'entity',
+          count: 5,
+          details: [{ name: 'Test', role: 'Role' }],
+          timestamp: new Date(),
+        };
+
+        useUploadWizardStore.getState().addLiveDiscovery(discovery);
+
+        expect(useUploadWizardStore.getState().liveDiscoveries).toHaveLength(1);
+        expect(useUploadWizardStore.getState().liveDiscoveries[0]).toEqual(discovery);
+      });
+
+      it('appends multiple discoveries', () => {
+        const discovery1: LiveDiscovery = {
+          id: '1',
+          type: 'entity',
+          count: 5,
+          details: [],
+          timestamp: new Date(),
+        };
+        const discovery2: LiveDiscovery = {
+          id: '2',
+          type: 'date',
+          count: 10,
+          details: { earliest: new Date(), latest: new Date(), count: 10 },
+          timestamp: new Date(),
+        };
+
+        useUploadWizardStore.getState().addLiveDiscovery(discovery1);
+        useUploadWizardStore.getState().addLiveDiscovery(discovery2);
+
+        expect(useUploadWizardStore.getState().liveDiscoveries).toHaveLength(2);
+      });
+    });
+
+    describe('setMatterId', () => {
+      it('sets matter ID', () => {
+        useUploadWizardStore.getState().setMatterId('matter-123');
+        expect(useUploadWizardStore.getState().matterId).toBe('matter-123');
+      });
+
+      it('can clear matter ID', () => {
+        useUploadWizardStore.getState().setMatterId('matter-123');
+        useUploadWizardStore.getState().setMatterId(null);
+        expect(useUploadWizardStore.getState().matterId).toBeNull();
+      });
+    });
+
+    describe('setOverallProgress', () => {
+      it('sets overall progress percentage', () => {
+        useUploadWizardStore.getState().setOverallProgress(67);
+        expect(useUploadWizardStore.getState().overallProgressPct).toBe(67);
+      });
+    });
+
+    describe('setUploadFailed', () => {
+      it('marks file as failed', () => {
+        useUploadWizardStore.getState().setUploadFailed('test.pdf', 'Network error');
+
+        expect(useUploadWizardStore.getState().failedUploads.get('test.pdf')).toBe('Network error');
+      });
+
+      it('updates upload progress status to error', () => {
+        const progress: UploadProgress = {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 50,
+          status: 'uploading',
+        };
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', progress);
+        useUploadWizardStore.getState().setUploadFailed('test.pdf', 'Failed');
+
+        const stored = useUploadWizardStore.getState().uploadProgress.get('test.pdf');
+        expect(stored?.status).toBe('error');
+        expect(stored?.errorMessage).toBe('Failed');
+      });
+    });
+
+    describe('clearProcessingState', () => {
+      it('clears all processing state', () => {
+        // Set up some processing state
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+        useUploadWizardStore.getState().setProcessingStage('OCR');
+        useUploadWizardStore.getState().setOverallProgress(50);
+        useUploadWizardStore.getState().addLiveDiscovery({
+          id: '1',
+          type: 'entity',
+          count: 1,
+          details: [],
+          timestamp: new Date(),
+        });
+        useUploadWizardStore.getState().setMatterId('matter-123');
+        useUploadWizardStore.getState().setUploadFailed('bad.pdf', 'Error');
+
+        // Clear
+        useUploadWizardStore.getState().clearProcessingState();
+
+        // Verify all cleared
+        const state = useUploadWizardStore.getState();
+        expect(state.uploadProgress.size).toBe(0);
+        expect(state.processingStage).toBeNull();
+        expect(state.overallProgressPct).toBe(0);
+        expect(state.liveDiscoveries).toEqual([]);
+        expect(state.matterId).toBeNull();
+        expect(state.failedUploads.size).toBe(0);
+      });
+    });
+  });
+
+  describe('processing selectors', () => {
+    describe('selectUploadComplete', () => {
+      it('returns false when no files', () => {
+        expect(selectUploadComplete(useUploadWizardStore.getState())).toBe(false);
+      });
+
+      it('returns false when upload incomplete', () => {
+        const file = createMockFile('test.pdf');
+        useUploadWizardStore.getState().addFiles([file]);
+        useUploadWizardStore.getState().setUploadProgress('test.pdf', {
+          fileName: 'test.pdf',
+          fileSize: 1024,
+          progressPct: 50,
+          status: 'uploading',
+        });
+
+        expect(selectUploadComplete(useUploadWizardStore.getState())).toBe(false);
+      });
+
+      it('returns true when all uploads complete', () => {
+        const file1 = createMockFile('test1.pdf');
+        const file2 = createMockFile('test2.pdf');
+        useUploadWizardStore.getState().addFiles([file1, file2]);
+        useUploadWizardStore.getState().setUploadProgress('test1.pdf', {
+          fileName: 'test1.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+        useUploadWizardStore.getState().setUploadProgress('test2.pdf', {
+          fileName: 'test2.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+
+        expect(selectUploadComplete(useUploadWizardStore.getState())).toBe(true);
+      });
+    });
+
+    describe('selectDiscoveriesByType', () => {
+      it('filters discoveries by type', () => {
+        useUploadWizardStore.getState().addLiveDiscovery({
+          id: '1',
+          type: 'entity',
+          count: 5,
+          details: [],
+          timestamp: new Date(),
+        });
+        useUploadWizardStore.getState().addLiveDiscovery({
+          id: '2',
+          type: 'date',
+          count: 10,
+          details: { earliest: new Date(), latest: new Date(), count: 10 },
+          timestamp: new Date(),
+        });
+        useUploadWizardStore.getState().addLiveDiscovery({
+          id: '3',
+          type: 'entity',
+          count: 3,
+          details: [],
+          timestamp: new Date(),
+        });
+
+        const entities = selectDiscoveriesByType(useUploadWizardStore.getState(), 'entity');
+        expect(entities).toHaveLength(2);
+        expect(entities.every((d) => d.type === 'entity')).toBe(true);
+      });
+    });
+
+    describe('selectCurrentStageName', () => {
+      it('returns empty string when no stage', () => {
+        expect(selectCurrentStageName(useUploadWizardStore.getState())).toBe('');
+      });
+
+      it('returns human-readable stage name', () => {
+        useUploadWizardStore.getState().setProcessingStage('ENTITY_EXTRACTION');
+        expect(selectCurrentStageName(useUploadWizardStore.getState())).toBe(
+          'Extracting entities & relationships'
+        );
+      });
+    });
+
+    describe('selectCurrentStageNumber', () => {
+      it('returns 0 when no stage', () => {
+        expect(selectCurrentStageNumber(useUploadWizardStore.getState())).toBe(0);
+      });
+
+      it('returns correct stage number', () => {
+        useUploadWizardStore.getState().setProcessingStage('UPLOADING');
+        expect(selectCurrentStageNumber(useUploadWizardStore.getState())).toBe(1);
+
+        useUploadWizardStore.getState().setProcessingStage('OCR');
+        expect(selectCurrentStageNumber(useUploadWizardStore.getState())).toBe(2);
+
+        useUploadWizardStore.getState().setProcessingStage('INDEXING');
+        expect(selectCurrentStageNumber(useUploadWizardStore.getState())).toBe(5);
+      });
+    });
+
+    describe('selectCompletedUploadsCount', () => {
+      it('returns count of completed uploads', () => {
+        useUploadWizardStore.getState().setUploadProgress('file1.pdf', {
+          fileName: 'file1.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+        useUploadWizardStore.getState().setUploadProgress('file2.pdf', {
+          fileName: 'file2.pdf',
+          fileSize: 1024,
+          progressPct: 50,
+          status: 'uploading',
+        });
+        useUploadWizardStore.getState().setUploadProgress('file3.pdf', {
+          fileName: 'file3.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+
+        expect(selectCompletedUploadsCount(useUploadWizardStore.getState())).toBe(2);
+      });
+    });
+
+    describe('selectFailedUploadsCount', () => {
+      it('returns count of failed uploads', () => {
+        useUploadWizardStore.getState().setUploadFailed('bad1.pdf', 'Error');
+        useUploadWizardStore.getState().setUploadFailed('bad2.pdf', 'Error');
+
+        expect(selectFailedUploadsCount(useUploadWizardStore.getState())).toBe(2);
+      });
+    });
+
+    describe('selectHasFailedUploads', () => {
+      it('returns false when no failures', () => {
+        expect(selectHasFailedUploads(useUploadWizardStore.getState())).toBe(false);
+      });
+
+      it('returns true when there are failures', () => {
+        useUploadWizardStore.getState().setUploadFailed('bad.pdf', 'Error');
+        expect(selectHasFailedUploads(useUploadWizardStore.getState())).toBe(true);
+      });
+    });
+
+    describe('selectUploadProgressArray', () => {
+      it('converts Map to array', () => {
+        useUploadWizardStore.getState().setUploadProgress('file1.pdf', {
+          fileName: 'file1.pdf',
+          fileSize: 1024,
+          progressPct: 100,
+          status: 'complete',
+        });
+        useUploadWizardStore.getState().setUploadProgress('file2.pdf', {
+          fileName: 'file2.pdf',
+          fileSize: 2048,
+          progressPct: 50,
+          status: 'uploading',
+        });
+
+        const array = selectUploadProgressArray(useUploadWizardStore.getState());
+        expect(Array.isArray(array)).toBe(true);
+        expect(array).toHaveLength(2);
+      });
     });
   });
 });

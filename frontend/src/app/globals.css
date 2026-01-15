@@ -123,3 +123,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom animations for upload/processing UI (Story 9-5) */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 300ms ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

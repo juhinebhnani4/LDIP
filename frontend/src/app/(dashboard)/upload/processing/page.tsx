@@ -1,40 +1,109 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useUploadWizardStore } from '@/stores/uploadWizardStore';
-
 /**
- * Upload Processing Page (Placeholder)
+ * Upload Processing Page
  *
- * This page will be fully implemented in Story 9-5 (Upload Stage 3-4).
- * For now, it shows a placeholder indicating upload is in progress.
+ * Story 9-5: Implement Upload Flow Stages 3-4
+ *
+ * Shows upload progress (Stage 3) and processing progress with live discoveries (Stage 4).
+ * Uses mock progress simulation for MVP until backend is ready.
  */
+
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+import { useUploadWizardStore } from '@/stores/uploadWizardStore';
+import { ProcessingScreen } from '@/components/features/upload';
+import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
 
 export default function ProcessingPage() {
   const router = useRouter();
-  const matterName = useUploadWizardStore((state) => state.matterName);
-  const fileCount = useUploadWizardStore((state) => state.files.length);
+  const files = useUploadWizardStore((state) => state.files);
   const reset = useUploadWizardStore((state) => state.reset);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const clearProcessingState = useUploadWizardStore(
+    (state) => state.clearProcessingState
+  );
+  const setUploadProgress = useUploadWizardStore(
+    (state) => state.setUploadProgress
+  );
+  const setProcessingStage = useUploadWizardStore(
+    (state) => state.setProcessingStage
+  );
+  const setOverallProgress = useUploadWizardStore(
+    (state) => state.setOverallProgress
+  );
+  const addLiveDiscovery = useUploadWizardStore(
+    (state) => state.addLiveDiscovery
+  );
+  const setMatterId = useUploadWizardStore((state) => state.setMatterId);
 
-  // If no files in store, redirect back to upload page
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [simulationStarted, setSimulationStarted] = useState(false);
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  // Redirect if no files
   useEffect(() => {
-    if (fileCount === 0 && !isRedirecting) {
-      // Use queueMicrotask to avoid synchronous setState in effect body
+    if (files.length === 0 && !isRedirecting) {
       queueMicrotask(() => {
         setIsRedirecting(true);
         reset();
         router.replace('/upload');
       });
     }
-  }, [fileCount, reset, router, isRedirecting]);
+  }, [files.length, reset, router, isRedirecting]);
+
+  // Start simulation when component mounts (with files)
+  useEffect(() => {
+    if (files.length > 0 && !simulationStarted && !isRedirecting) {
+      setSimulationStarted(true);
+
+      // Clear any previous processing state
+      clearProcessingState();
+
+      // Generate mock matter ID
+      const mockMatterId = `matter-${Date.now()}`;
+      setMatterId(mockMatterId);
+
+      // Start the simulation
+      const cleanup = simulateUploadAndProcessing(files, {
+        onUploadProgress: setUploadProgress,
+        onProcessingStage: setProcessingStage,
+        onOverallProgress: setOverallProgress,
+        onDiscovery: addLiveDiscovery,
+        onComplete: () => {
+          // Simulation complete - processing finished
+        },
+      });
+
+      cleanupRef.current = cleanup;
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
+  }, [
+    files,
+    simulationStarted,
+    isRedirecting,
+    clearProcessingState,
+    setMatterId,
+    setUploadProgress,
+    setProcessingStage,
+    setOverallProgress,
+    addLiveDiscovery,
+  ]);
+
+  // Handle continue in background
+  const handleContinueInBackground = useCallback(() => {
+    // In a real implementation, this would register the matter for background processing
+    // For MVP, we just navigate away (simulation continues until page unmount)
+  }, []);
 
   // Show loading state while redirecting
-  if (fileCount === 0 || isRedirecting) {
+  if (files.length === 0 || isRedirecting) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -46,50 +115,6 @@ export default function ProcessingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header with back navigation */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-            Back to Dashboard
-          </Link>
-        </div>
-      </header>
-
-      {/* Main content - Placeholder */}
-      <main className="container mx-auto px-4 py-16 max-w-md text-center">
-        <div className="flex flex-col items-center gap-6">
-          <Loader2 className="size-12 text-primary animate-spin" />
-
-          <div>
-            <h1 className="text-xl font-semibold mb-2">Processing Your Files</h1>
-            <p className="text-muted-foreground">
-              Uploading {fileCount} {fileCount === 1 ? 'file' : 'files'} to{' '}
-              <strong>{matterName}</strong>
-            </p>
-          </div>
-
-          <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
-            <p>
-              <strong>Coming Soon:</strong> This page will show detailed upload progress,
-              OCR processing status, and timeline analysis.
-            </p>
-            <p className="mt-2">
-              (Story 9-5 & 9-6 implementation)
-            </p>
-          </div>
-
-          <Button variant="outline" asChild className="mt-4">
-            <Link href="/" onClick={() => reset()}>
-              Return to Dashboard
-            </Link>
-          </Button>
-        </div>
-      </main>
-    </div>
+    <ProcessingScreen onContinueInBackground={handleContinueInBackground} />
   );
 }

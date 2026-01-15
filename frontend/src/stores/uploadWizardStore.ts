@@ -17,6 +17,14 @@ import type {
   UploadWizardStore,
   UploadWizardStage,
   DetectedAct,
+  ProcessingStage,
+  LiveDiscovery,
+  UploadProgress,
+  LiveDiscoveryType,
+} from '@/types/upload';
+import {
+  PROCESSING_STAGE_LABELS,
+  PROCESSING_STAGE_NUMBERS,
 } from '@/types/upload';
 
 /** Initial state for the wizard */
@@ -26,7 +34,14 @@ const initialState = {
   matterName: '',
   detectedActs: [] as DetectedAct[],
   isLoading: false,
-  error: null,
+  error: null as string | null,
+  // Processing state (Story 9-5)
+  uploadProgress: new Map<string, UploadProgress>(),
+  processingStage: null as ProcessingStage | null,
+  overallProgressPct: 0,
+  liveDiscoveries: [] as LiveDiscovery[],
+  matterId: null as string | null,
+  failedUploads: new Map<string, string>(),
 };
 
 /**
@@ -111,7 +126,68 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
   },
 
   reset: () => {
-    set(initialState);
+    set({
+      ...initialState,
+      // Create new Map instances to avoid reference issues
+      uploadProgress: new Map<string, UploadProgress>(),
+      failedUploads: new Map<string, string>(),
+    });
+  },
+
+  // Processing actions (Story 9-5)
+  setUploadProgress: (fileName: string, progress: UploadProgress) => {
+    const currentProgress = get().uploadProgress;
+    const newProgress = new Map(currentProgress);
+    newProgress.set(fileName, progress);
+    set({ uploadProgress: newProgress });
+  },
+
+  setProcessingStage: (stage: ProcessingStage | null) => {
+    set({ processingStage: stage });
+  },
+
+  addLiveDiscovery: (discovery: LiveDiscovery) => {
+    const currentDiscoveries = get().liveDiscoveries;
+    set({ liveDiscoveries: [...currentDiscoveries, discovery] });
+  },
+
+  setMatterId: (matterId: string | null) => {
+    set({ matterId });
+  },
+
+  setOverallProgress: (progressPct: number) => {
+    set({ overallProgressPct: progressPct });
+  },
+
+  setUploadFailed: (fileName: string, errorMessage: string) => {
+    const currentFailed = get().failedUploads;
+    const newFailed = new Map(currentFailed);
+    newFailed.set(fileName, errorMessage);
+
+    // Also update the upload progress to show error
+    const currentProgress = get().uploadProgress;
+    const newProgress = new Map(currentProgress);
+    const existing = newProgress.get(fileName);
+    if (existing) {
+      newProgress.set(fileName, {
+        ...existing,
+        status: 'error',
+        errorMessage,
+      });
+    }
+
+    set({ failedUploads: newFailed, uploadProgress: newProgress });
+  },
+
+  clearProcessingState: () => {
+    set({
+      uploadProgress: new Map<string, UploadProgress>(),
+      processingStage: null,
+      overallProgressPct: 0,
+      liveDiscoveries: [],
+      matterId: null,
+      failedUploads: new Map<string, string>(),
+    });
   },
 }));
 
@@ -156,4 +232,83 @@ export function selectCanStartUpload(state: UploadWizardStore): boolean {
     selectIsMatterNameValid(state) &&
     !state.isLoading
   );
+}
+
+// =============================================================================
+// Processing Selectors (Story 9-5)
+// =============================================================================
+
+/**
+ * Check if all files have been uploaded
+ */
+export function selectUploadComplete(state: UploadWizardStore): boolean {
+  if (state.files.length === 0) return false;
+
+  for (const file of state.files) {
+    const progress = state.uploadProgress.get(file.name);
+    if (!progress || progress.status !== 'complete') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Get discoveries filtered by type
+ */
+export function selectDiscoveriesByType(
+  state: UploadWizardStore,
+  type: LiveDiscoveryType
+): LiveDiscovery[] {
+  return state.liveDiscoveries.filter((d) => d.type === type);
+}
+
+/**
+ * Get human-readable current stage name
+ */
+export function selectCurrentStageName(state: UploadWizardStore): string {
+  if (!state.processingStage) return '';
+  return PROCESSING_STAGE_LABELS[state.processingStage] ?? '';
+}
+
+/**
+ * Get current stage number (1-5)
+ */
+export function selectCurrentStageNumber(state: UploadWizardStore): number {
+  if (!state.processingStage) return 0;
+  return PROCESSING_STAGE_NUMBERS[state.processingStage] ?? 0;
+}
+
+/**
+ * Get count of completed file uploads
+ */
+export function selectCompletedUploadsCount(state: UploadWizardStore): number {
+  let count = 0;
+  state.uploadProgress.forEach((progress) => {
+    if (progress.status === 'complete') count++;
+  });
+  return count;
+}
+
+/**
+ * Get count of failed file uploads
+ */
+export function selectFailedUploadsCount(state: UploadWizardStore): number {
+  return state.failedUploads.size;
+}
+
+/**
+ * Check if any uploads have failed
+ */
+export function selectHasFailedUploads(state: UploadWizardStore): boolean {
+  return state.failedUploads.size > 0;
+}
+
+/**
+ * Get upload progress as array (for rendering file list)
+ */
+export function selectUploadProgressArray(
+  state: UploadWizardStore
+): UploadProgress[] {
+  return Array.from(state.uploadProgress.values());
 }

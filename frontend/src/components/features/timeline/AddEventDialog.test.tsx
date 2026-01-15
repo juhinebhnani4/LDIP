@@ -107,8 +107,11 @@ describe('AddEventDialog', () => {
       const user = userEvent.setup();
       render(<AddEventDialog {...defaultProps} />);
 
+      // Use paste instead of type for long strings to avoid timeout
       const longTitle = 'a'.repeat(201);
-      await user.type(screen.getByPlaceholderText(/brief description/i), longTitle);
+      const titleInput = screen.getByPlaceholderText(/brief description/i);
+      await user.click(titleInput);
+      await user.paste(longTitle);
       await user.click(screen.getByRole('button', { name: /add event/i }));
 
       await waitFor(() => {

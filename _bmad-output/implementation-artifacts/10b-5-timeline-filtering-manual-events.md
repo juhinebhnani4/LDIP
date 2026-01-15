@@ -921,10 +921,56 @@ try {
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- All acceptance criteria implemented and verified
+- Backend endpoints for manual event CRUD added
+- Frontend filtering and dialogs fully functional
+- Code review fixes applied 2026-01-15
+
 ### File List
+
+**Backend Changes:**
+- `backend/app/api/routes/timeline.py` - Added POST /events, DELETE /events/{id}, PATCH /events/{id} endpoints
+- `backend/app/models/timeline.py` - Added ManualEventCreateRequest, ManualEventUpdateRequest, ManualEventDeleteResponse models
+- `backend/app/services/timeline_service.py` - Added create_manual_event, update_event, delete_manual_event methods
+
+**Frontend Components (New):**
+- `frontend/src/components/features/timeline/TimelineFilterBar.tsx` - Filter controls component
+- `frontend/src/components/features/timeline/TimelineFilterBar.test.tsx` - Filter bar tests
+- `frontend/src/components/features/timeline/AddEventDialog.tsx` - Manual event creation dialog
+- `frontend/src/components/features/timeline/AddEventDialog.test.tsx` - Add dialog tests
+- `frontend/src/components/features/timeline/EditEventDialog.tsx` - Event editing dialog
+- `frontend/src/components/features/timeline/EditEventDialog.test.tsx` - Edit dialog tests
+- `frontend/src/components/features/timeline/DeleteEventConfirmation.tsx` - Delete confirmation dialog
+- `frontend/src/components/features/timeline/DeleteEventConfirmation.test.tsx` - Delete confirmation tests
+
+**Frontend Components (Updated):**
+- `frontend/src/components/features/timeline/TimelineContent.tsx` - Added filter state, dialog integration
+- `frontend/src/components/features/timeline/TimelineContent.test.tsx` - Updated tests
+- `frontend/src/components/features/timeline/TimelineHeader.tsx` - Added filter toggle, add event button
+- `frontend/src/components/features/timeline/TimelineEventCard.tsx` - Added manual badge, context menu
+- `frontend/src/components/features/timeline/TimelineList.tsx` - Added edit/delete callbacks
+- `frontend/src/components/features/timeline/index.ts` - Added new exports
+
+**Frontend Types & Hooks:**
+- `frontend/src/types/timeline.ts` - Added TimelineFilterState, ManualEventCreateRequest, etc.
+- `frontend/src/types/index.ts` - Added new type exports
+- `frontend/src/hooks/useTimeline.ts` - Added filter support, CRUD operations
+
+**Frontend API:**
+- `frontend/src/lib/api/client.ts` - Added timelineEventApi with create/update/delete
+- `frontend/src/lib/api/types.ts` - Added API response types
+
+**UI Components (New via shadcn):**
+- `frontend/src/components/ui/form.tsx` - Form components
+- `frontend/src/components/ui/calendar.tsx` - Calendar date picker
+- `frontend/src/components/ui/alert-dialog.tsx` - Alert dialog for confirmations
+
+**Configuration:**
+- `frontend/package.json` - Added date-fns, react-day-picker dependencies
+- `frontend/tailwind.config.ts` - Calendar styling

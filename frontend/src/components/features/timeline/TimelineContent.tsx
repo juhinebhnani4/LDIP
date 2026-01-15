@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineStats } from '@/hooks/useTimelineStats';
@@ -13,6 +13,8 @@ import { AddEventDialog } from './AddEventDialog';
 import { EditEventDialog } from './EditEventDialog';
 import { DeleteEventConfirmation } from './DeleteEventConfirmation';
 import { timelineEventApi } from '@/lib/api/client';
+import { fetchDocuments } from '@/lib/api/documents';
+import useSWR from 'swr';
 import type {
   TimelineViewMode,
   TimelineEvent,
@@ -21,6 +23,11 @@ import type {
   ManualEventUpdateRequest,
 } from '@/types/timeline';
 import { DEFAULT_TIMELINE_FILTERS, countActiveFilters } from '@/types/timeline';
+
+/**
+ * Debounce delay for filter changes (ms)
+ */
+const FILTER_DEBOUNCE_MS = 300;
 
 /**
  * Timeline Content Component
@@ -55,8 +62,27 @@ export function TimelineContent({ className }: TimelineContentProps) {
   // Selected event state (for horizontal/multitrack views)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  // Filter state
+  // Filter state - immediate state for UI responsiveness
   const [filters, setFilters] = useState<TimelineFilterState>(DEFAULT_TIMELINE_FILTERS);
+  // Debounced filter state - used for actual data fetching
+  const [debouncedFilters, setDebouncedFilters] = useState<TimelineFilterState>(DEFAULT_TIMELINE_FILTERS);
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce filter changes
+  useEffect(() => {
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
+    filterTimeoutRef.current = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, FILTER_DEBOUNCE_MS);
+
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+      }
+    };
+  }, [filters]);
 
   // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -76,7 +102,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
     updateEvent,
     deleteEvent,
     mutate: refreshTimeline,
-  } = useTimeline(matterId, { filters });
+  } = useTimeline(matterId, { filters: debouncedFilters });
 
   // Fetch timeline stats
   const {
@@ -85,6 +111,17 @@ export function TimelineContent({ className }: TimelineContentProps) {
     isError: statsError,
     mutate: refreshStats,
   } = useTimelineStats(matterId);
+
+  // Fetch documents for source selection in AddEventDialog
+  const { data: documentsData } = useSWR(
+    matterId ? `documents-${matterId}` : null,
+    () => fetchDocuments(matterId, { perPage: 100 }),
+    { revalidateOnFocus: false }
+  );
+  const documents = documentsData?.data?.map((doc) => ({
+    id: doc.id,
+    name: doc.originalFilename,
+  })) ?? [];
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: TimelineViewMode) => {
@@ -266,7 +303,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
         onOpenChange={setAddDialogOpen}
         onSubmit={handleAddEventSubmit}
         entities={uniqueEntities}
-        documents={[]} // TODO: Pass actual documents when available
+        documents={documents}
       />
 
       {/* Edit Event Dialog */}

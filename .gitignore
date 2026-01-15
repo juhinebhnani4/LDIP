@@ -60,3 +60,7 @@ credentials.json
 
 # Sample files (large PDFs)
 docs/sample_files/
+
+# Claude Code temporary directories
+tmpclaude-*/
+**/tmpclaude-*/

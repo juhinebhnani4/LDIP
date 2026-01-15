@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { TimelineContent, TimelineContentSkeleton } from './TimelineContent';
@@ -7,6 +7,21 @@ import { TimelineContent, TimelineContentSkeleton } from './TimelineContent';
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useParams: () => ({ matterId: 'test-matter-id' }),
+}));
+
+// Mock SWR globally to prevent async act warnings
+vi.mock('swr', () => ({
+  default: vi.fn(() => ({
+    data: null,
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  })),
+}));
+
+// Mock fetchDocuments to prevent actual API calls
+vi.mock('@/lib/api/documents', () => ({
+  fetchDocuments: vi.fn().mockResolvedValue({ data: [] }),
 }));
 
 // Mock the hooks

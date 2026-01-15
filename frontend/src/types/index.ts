@@ -185,3 +185,19 @@ export type {
 } from './verification';
 
 export { VerificationDecision, VerificationRequirement } from './verification';
+
+// Summary types (Story 10B.1: Summary Tab Content)
+export type {
+  AttentionItem,
+  AttentionItemType,
+  CurrentStatus,
+  KeyIssue,
+  KeyIssueVerificationStatus,
+  MatterStats,
+  MatterSummary,
+  MatterSummaryResponse,
+  PartyInfo,
+  PartyRole,
+  SubjectMatter,
+  SubjectMatterSource,
+} from './summary';

@@ -18,3 +18,6 @@ export { useActDiscovery } from './useActDiscovery';
 export { useVerificationQueue } from './useVerificationQueue';
 export { useVerificationStats } from './useVerificationStats';
 export { useVerificationActions } from './useVerificationActions';
+
+// Summary hooks (Story 10B.1)
+export { useMatterSummary } from './useMatterSummary';

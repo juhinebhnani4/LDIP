@@ -207,13 +207,17 @@ export type {
   SummaryVerificationDecision,
 } from './summary';
 
-// Timeline types (Story 10B.3: Timeline Tab Vertical List View, Story 10B.4: Alternative Views)
+// Timeline types (Story 10B.3: Timeline Tab Vertical List View, Story 10B.4: Alternative Views, Story 10B.5: Filtering & Manual Events)
 export type {
   DatePrecision,
   EventCluster,
+  ManualEventCreateRequest,
+  ManualEventResponse,
+  ManualEventUpdateRequest,
   TimelineEntityReference,
   TimelineEvent,
   TimelineEventType,
+  TimelineFilterState,
   TimelineGap,
   TimelinePaginationMeta,
   TimelineResponse,
@@ -225,4 +229,10 @@ export type {
   UseTimelineOptions,
   YearLabel,
   ZoomLevel as TimelineZoomLevel,
+} from './timeline';
+
+export {
+  countActiveFilters,
+  DEFAULT_TIMELINE_FILTERS,
+  hasActiveFilters,
 } from './timeline';

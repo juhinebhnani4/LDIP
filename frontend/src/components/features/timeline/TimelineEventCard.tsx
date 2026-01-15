@@ -8,15 +8,27 @@ import {
   AlertTriangle,
   ExternalLink,
   User,
+  Pencil,
+  Trash2,
+  UserCircle,
+  MoreVertical,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   EVENT_TYPE_ICONS,
@@ -36,13 +48,19 @@ import type { TimelineEvent } from '@/types/timeline';
  * - Source document link
  * - Verification status
  * - Contradiction flag
+ * - Edit/Delete actions (for manual events)
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #2)
+ * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #6, #7, #8)
  */
 
 interface TimelineEventCardProps {
   /** Event data */
   event: TimelineEvent;
+  /** Callback when edit is clicked */
+  onEdit?: (event: TimelineEvent) => void;
+  /** Callback when delete is clicked (only for manual events) */
+  onDelete?: (event: TimelineEvent) => void;
   /** Optional className */
   className?: string;
 }
@@ -75,6 +93,8 @@ function formatEventDate(
 
 export function TimelineEventCard({
   event,
+  onEdit,
+  onDelete,
   className,
 }: TimelineEventCardProps) {
   const params = useParams<{ matterId: string }>();
@@ -86,6 +106,7 @@ export function TimelineEventCard({
   const typeColor = EVENT_TYPE_COLORS[event.eventType] ?? EVENT_TYPE_COLORS.unclassified;
 
   const formattedDate = formatEventDate(event.eventDate, event.eventDatePrecision);
+  const isManual = event.isManual === true;
 
   return (
     <Card
@@ -93,6 +114,43 @@ export function TimelineEventCard({
       data-testid={`timeline-event-${event.id}`}
     >
       <CardContent className="pt-4">
+        {/* Actions dropdown */}
+        {(onEdit || (onDelete && isManual)) && (
+          <div className="absolute top-2 right-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  aria-label="Event actions"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(event)}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    {isManual ? 'Edit event' : 'Edit classification'}
+                  </DropdownMenuItem>
+                )}
+                {onDelete && isManual && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onDelete(event)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete event
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
         {/* Date */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
           <span className="font-medium">{formattedDate}</span>
@@ -143,6 +201,23 @@ export function TimelineEventCard({
               <TooltipContent>
                 {event.contradictionDetails ??
                   'This event has conflicting information'}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {isManual && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="text-blue-600 border-blue-500 cursor-help dark:text-blue-400 dark:border-blue-600"
+                >
+                  <UserCircle className="h-3 w-3 mr-1" aria-hidden="true" />
+                  Manually added
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                This event was manually added by {event.createdBy ?? 'a user'}
               </TooltipContent>
             </Tooltip>
           )}

@@ -8,19 +8,36 @@ import { TimelineHeader } from './TimelineHeader';
 import { TimelineList } from './TimelineList';
 import { TimelineHorizontal } from './TimelineHorizontal';
 import { TimelineMultiTrack } from './TimelineMultiTrack';
-import type { TimelineViewMode, TimelineEvent } from '@/types/timeline';
+import { TimelineFilterBar } from './TimelineFilterBar';
+import { AddEventDialog } from './AddEventDialog';
+import { EditEventDialog } from './EditEventDialog';
+import { DeleteEventConfirmation } from './DeleteEventConfirmation';
+import { timelineEventApi } from '@/lib/api/client';
+import type {
+  TimelineViewMode,
+  TimelineEvent,
+  TimelineFilterState,
+  ManualEventCreateRequest,
+  ManualEventUpdateRequest,
+} from '@/types/timeline';
+import { DEFAULT_TIMELINE_FILTERS, countActiveFilters } from '@/types/timeline';
 
 /**
  * Timeline Content Component
  *
  * Main component for the Timeline tab that composes:
  * - TimelineHeader with stats and view mode toggle
+ * - TimelineFilterBar with event type, actor, date range, verification filters
  * - TimelineList (vertical list view)
  * - TimelineHorizontal (horizontal axis view)
  * - TimelineMultiTrack (parallel actor tracks view)
+ * - AddEventDialog for manual event creation
+ * - EditEventDialog for event editing
+ * - DeleteEventConfirmation for manual event deletion
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #1, #2, #3)
  * Story 10B.4: Timeline Tab Alternative Views (AC #1, #2, #3)
+ * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #1-#8)
  */
 
 interface TimelineContentProps {
@@ -38,18 +55,35 @@ export function TimelineContent({ className }: TimelineContentProps) {
   // Selected event state (for horizontal/multitrack views)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  // Fetch timeline data
+  // Filter state
+  const [filters, setFilters] = useState<TimelineFilterState>(DEFAULT_TIMELINE_FILTERS);
+
+  // Dialog states
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState<TimelineEvent | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<TimelineEvent | null>(null);
+
+  // Fetch timeline data with filters
   const {
     events,
+    filteredEvents,
+    uniqueEntities,
     isLoading: eventsLoading,
     isError: eventsError,
-  } = useTimeline(matterId);
+    addEvent,
+    updateEvent,
+    deleteEvent,
+    mutate: refreshTimeline,
+  } = useTimeline(matterId, { filters });
 
   // Fetch timeline stats
   const {
     stats,
     isLoading: statsLoading,
     isError: statsError,
+    mutate: refreshStats,
   } = useTimelineStats(matterId);
 
   // Handle view mode change
@@ -74,13 +108,90 @@ export function TimelineContent({ className }: TimelineContentProps) {
     []
   );
 
+  // Handle add event button click
+  const handleAddEventClick = useCallback(() => {
+    setAddDialogOpen(true);
+  }, []);
+
+  // Handle add event submission
+  const handleAddEventSubmit = useCallback(
+    async (request: ManualEventCreateRequest) => {
+      // Call API to create event
+      const response = await timelineEventApi.create(matterId, request);
+
+      // Optimistically add the event to the local state
+      addEvent({
+        ...response,
+        id: response.id || crypto.randomUUID(),
+        eventDateText: request.eventDate,
+        confidence: 1.0,
+        entities: [],
+        isAmbiguous: false,
+        isManual: true,
+      });
+
+      // Refresh data from server
+      await Promise.all([refreshTimeline(), refreshStats()]);
+    },
+    [matterId, addEvent, refreshTimeline, refreshStats]
+  );
+
+  // Handle edit event click
+  const handleEditEvent = useCallback((event: TimelineEvent) => {
+    setEventToEdit(event);
+    setEditDialogOpen(true);
+  }, []);
+
+  // Handle edit event submission
+  const handleEditEventSubmit = useCallback(
+    async (eventId: string, updates: ManualEventUpdateRequest) => {
+      // Call API to update event
+      await timelineEventApi.update(matterId, eventId, updates);
+
+      // Optimistically update the event in local state
+      updateEvent(eventId, {
+        eventDate: updates.eventDate,
+        eventType: updates.eventType,
+        description: updates.description,
+      });
+
+      // Refresh data from server
+      await Promise.all([refreshTimeline(), refreshStats()]);
+    },
+    [matterId, updateEvent, refreshTimeline, refreshStats]
+  );
+
+  // Handle delete event click
+  const handleDeleteEvent = useCallback((event: TimelineEvent) => {
+    setEventToDelete(event);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  // Handle delete event confirmation
+  const handleDeleteEventConfirm = useCallback(
+    async (eventId: string) => {
+      // Call API to delete event
+      await timelineEventApi.delete(matterId, eventId);
+
+      // Optimistically remove the event from local state
+      deleteEvent(eventId);
+
+      // Refresh data from server
+      await Promise.all([refreshTimeline(), refreshStats()]);
+    },
+    [matterId, deleteEvent, refreshTimeline, refreshStats]
+  );
+
   // Render the appropriate view based on mode
   const renderTimelineView = () => {
+    // Use filtered events for display
+    const displayEvents = filteredEvents;
+
     switch (viewMode) {
       case 'horizontal':
         return (
           <TimelineHorizontal
-            events={events}
+            events={displayEvents}
             onEventSelect={handleEventSelect}
             selectedEventId={selectedEventId}
             onViewInList={handleViewInList}
@@ -90,7 +201,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
       case 'multitrack':
         return (
           <TimelineMultiTrack
-            events={events}
+            events={displayEvents}
             onEventSelect={handleEventSelect}
             selectedEventId={selectedEventId}
             onViewInList={handleViewInList}
@@ -101,14 +212,19 @@ export function TimelineContent({ className }: TimelineContentProps) {
       default:
         return (
           <TimelineList
-            events={events}
+            events={displayEvents}
             isLoading={eventsLoading}
             isError={eventsError || statsError}
+            onEditEvent={handleEditEvent}
+            onDeleteEvent={handleDeleteEvent}
             className="mt-4"
           />
         );
     }
   };
+
+  // Calculate active filter count for display
+  const activeFilterCount = countActiveFilters(filters);
 
   return (
     <div
@@ -117,16 +233,58 @@ export function TimelineContent({ className }: TimelineContentProps) {
       aria-labelledby="tab-timeline"
       id="panel-timeline"
     >
-      {/* Header with stats and view mode toggle */}
+      {/* Header with stats, view mode toggle, and add event button */}
       <TimelineHeader
         stats={stats}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
+        onAddEvent={handleAddEventClick}
         isLoading={statsLoading}
       />
 
+      {/* Filter bar */}
+      <TimelineFilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        entities={uniqueEntities}
+        className="mt-4"
+      />
+
+      {/* Filter results message */}
+      {activeFilterCount > 0 && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Showing {filteredEvents.length} of {events.length} events
+        </p>
+      )}
+
       {/* Timeline view based on mode */}
       {renderTimelineView()}
+
+      {/* Add Event Dialog */}
+      <AddEventDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onSubmit={handleAddEventSubmit}
+        entities={uniqueEntities}
+        documents={[]} // TODO: Pass actual documents when available
+      />
+
+      {/* Edit Event Dialog */}
+      <EditEventDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        event={eventToEdit}
+        onSubmit={handleEditEventSubmit}
+        entities={uniqueEntities}
+      />
+
+      {/* Delete Event Confirmation */}
+      <DeleteEventConfirmation
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        event={eventToDelete}
+        onConfirm={handleDeleteEventConfirm}
+      />
     </div>
   );
 }

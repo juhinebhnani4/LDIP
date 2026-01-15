@@ -161,7 +161,7 @@ development_status:
   10b-2-summary-inline-verification: done  # Code review passed 2026-01-15 - 51 new tests, lint fixed
   10b-3-timeline-vertical-list: done
   10b-4-timeline-horizontal-multitrack: done  # 168 timeline tests passing - Horizontal + Multi-Track views implemented
-  10b-5-timeline-filtering-manual-events: backlog
+  10b-5-timeline-filtering-manual-events: done  # Completed 2026-01-15 - Timeline filtering + manual event CRUD, 243 frontend tests + 61 backend tests passing
   epic-10b-retrospective: optional
 
   # Epic 10C: Entities & Citations Tabs

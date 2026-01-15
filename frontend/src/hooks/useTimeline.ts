@@ -5,13 +5,16 @@
  * Uses mock data for MVP - actual API integration exists.
  *
  * Story 10B.3: Timeline Tab Vertical List View
+ * Story 10B.5: Timeline Filtering and Manual Event Addition
  */
 
+import { useMemo, useCallback } from 'react';
 import useSWR from 'swr';
 import type {
   TimelineEvent,
   TimelineResponse,
   UseTimelineOptions,
+  TimelineFilterState,
 } from '@/types/timeline';
 
 /** Mock data for MVP - demonstrates UI functionality */
@@ -172,6 +175,31 @@ const MOCK_EVENTS: TimelineEvent[] = [
     isAmbiguous: false,
     isVerified: true,
   },
+  // Manual event example for Story 10B.5
+  {
+    id: 'evt-8',
+    eventDate: '2017-09-20',
+    eventDatePrecision: 'day',
+    eventDateText: '20th September 2017',
+    eventType: 'filing',
+    description:
+      'Supplementary RTI application filed to include additional contract details.',
+    documentId: null,
+    sourcePage: null,
+    confidence: 1.0,
+    entities: [
+      {
+        entityId: 'ent-1',
+        canonicalName: 'Nirav D. Jobalia',
+        entityType: 'PERSON',
+        role: 'petitioner',
+      },
+    ],
+    isAmbiguous: false,
+    isVerified: false,
+    isManual: true,
+    createdBy: 'user-123',
+  },
 ];
 
 /**
@@ -201,7 +229,60 @@ function transformEvent(event: Record<string, unknown>): TimelineEvent {
     crossReferences: event.cross_references as string[] | undefined,
     hasContradiction: event.has_contradiction as boolean | undefined,
     contradictionDetails: event.contradiction_details as string | undefined,
+    isManual: event.is_manual as boolean | undefined,
+    createdBy: event.created_by as string | undefined,
   };
+}
+
+/**
+ * Apply filters to events (client-side filtering for MVP)
+ * Server-side filtering will be added in production
+ */
+function applyFilters(
+  events: TimelineEvent[],
+  filters: TimelineFilterState
+): TimelineEvent[] {
+  return events.filter((event) => {
+    // Filter by event types
+    if (filters.eventTypes.length > 0 && !filters.eventTypes.includes(event.eventType)) {
+      return false;
+    }
+
+    // Filter by entity IDs
+    if (filters.entityIds.length > 0) {
+      const eventEntityIds = event.entities.map((e) => e.entityId);
+      const hasMatchingEntity = filters.entityIds.some((id) => eventEntityIds.includes(id));
+      if (!hasMatchingEntity) {
+        return false;
+      }
+    }
+
+    // Filter by date range
+    if (filters.dateRange.start) {
+      const eventDate = new Date(event.eventDate);
+      const startDate = new Date(filters.dateRange.start);
+      if (eventDate < startDate) {
+        return false;
+      }
+    }
+    if (filters.dateRange.end) {
+      const eventDate = new Date(event.eventDate);
+      const endDate = new Date(filters.dateRange.end);
+      if (eventDate > endDate) {
+        return false;
+      }
+    }
+
+    // Filter by verification status
+    if (filters.verificationStatus === 'verified' && !event.isVerified) {
+      return false;
+    }
+    if (filters.verificationStatus === 'unverified' && event.isVerified) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 /**
@@ -263,6 +344,14 @@ async function realFetcher(url: string): Promise<TimelineResponse> {
 const fetcher = mockFetcher;
 
 /**
+ * Extended options for useTimeline hook with filtering
+ */
+export interface UseTimelineOptionsWithFilters extends UseTimelineOptions {
+  /** Filter state for client-side filtering */
+  filters?: TimelineFilterState;
+}
+
+/**
  * Hook for fetching timeline data with entity information
  *
  * @param matterId - The matter ID to fetch timeline for
@@ -271,16 +360,16 @@ const fetcher = mockFetcher;
  *
  * @example
  * ```tsx
- * const { events, meta, isLoading, isError, mutate } = useTimeline(matterId);
+ * const { events, filteredEvents, meta, isLoading, isError, mutate } = useTimeline(matterId, { filters });
  *
  * if (isLoading) return <TimelineSkeleton />;
  * if (isError) return <TimelineError />;
  *
- * return <TimelineList events={events} />;
+ * return <TimelineList events={filteredEvents} />;
  * ```
  */
-export function useTimeline(matterId: string, options: UseTimelineOptions = {}) {
-  const { eventType, entityId, page = 1, perPage = 50 } = options;
+export function useTimeline(matterId: string, options: UseTimelineOptionsWithFilters = {}) {
+  const { eventType, entityId, page = 1, perPage = 50, filters } = options;
 
   // Build URL with query params
   const params = new URLSearchParams();
@@ -299,11 +388,103 @@ export function useTimeline(matterId: string, options: UseTimelineOptions = {}) 
     }
   );
 
+  // All events from the API
+  const events = data?.data ?? [];
+
+  // Apply filters if provided (client-side filtering for MVP)
+  const filteredEvents = useMemo(() => {
+    if (!filters) return events;
+    return applyFilters(events, filters);
+  }, [events, filters]);
+
+  // Get unique entities from all events for filter options
+  const uniqueEntities = useMemo(() => {
+    const entityMap = new Map<string, { id: string; name: string }>();
+    events.forEach((event) => {
+      event.entities.forEach((entity) => {
+        if (!entityMap.has(entity.entityId)) {
+          entityMap.set(entity.entityId, {
+            id: entity.entityId,
+            name: entity.canonicalName,
+          });
+        }
+      });
+    });
+    return Array.from(entityMap.values());
+  }, [events]);
+
+  // Helper to add a manual event optimistically
+  const addEvent = useCallback(
+    (newEvent: TimelineEvent) => {
+      mutate(
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            data: [...current.data, newEvent].sort(
+              (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+            ),
+            meta: {
+              ...current.meta,
+              total: current.meta.total + 1,
+            },
+          };
+        },
+        { revalidate: false }
+      );
+    },
+    [mutate]
+  );
+
+  // Helper to update an event optimistically
+  const updateEvent = useCallback(
+    (eventId: string, updates: Partial<TimelineEvent>) => {
+      mutate(
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            data: current.data.map((event) =>
+              event.id === eventId ? { ...event, ...updates } : event
+            ),
+          };
+        },
+        { revalidate: false }
+      );
+    },
+    [mutate]
+  );
+
+  // Helper to delete an event optimistically
+  const deleteEvent = useCallback(
+    (eventId: string) => {
+      mutate(
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            data: current.data.filter((event) => event.id !== eventId),
+            meta: {
+              ...current.meta,
+              total: current.meta.total - 1,
+            },
+          };
+        },
+        { revalidate: false }
+      );
+    },
+    [mutate]
+  );
+
   return {
-    /** The timeline events */
-    events: data?.data ?? [],
+    /** All timeline events (unfiltered) */
+    events,
+    /** Filtered timeline events based on current filters */
+    filteredEvents,
     /** Pagination metadata */
     meta: data?.meta,
+    /** Unique entities from events (for filter options) */
+    uniqueEntities,
     /** Whether the data is currently loading */
     isLoading,
     /** Whether an error occurred */
@@ -312,5 +493,11 @@ export function useTimeline(matterId: string, options: UseTimelineOptions = {}) 
     error,
     /** Function to manually revalidate */
     mutate,
+    /** Add an event optimistically */
+    addEvent,
+    /** Update an event optimistically */
+    updateEvent,
+    /** Delete an event optimistically */
+    deleteEvent,
   };
 }

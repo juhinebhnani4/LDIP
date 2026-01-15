@@ -54,11 +54,19 @@ const mockStats = {
 
 const mockUseTimeline = vi.fn(() => ({
   events: mockEvents,
+  filteredEvents: mockEvents,
+  uniqueEntities: [
+    { id: 'entity-1', name: 'John Doe' },
+    { id: 'entity-2', name: 'ABC Corp' },
+  ],
   meta: { total: 2, page: 1, perPage: 50, totalPages: 1 },
   isLoading: false,
   isError: false,
   error: null,
   mutate: vi.fn(),
+  addEvent: vi.fn(),
+  updateEvent: vi.fn(),
+  deleteEvent: vi.fn(),
 }));
 
 const mockUseTimelineStats = vi.fn(() => ({
@@ -88,11 +96,19 @@ describe('TimelineContent', () => {
     // Reset mocks to default behavior
     mockUseTimeline.mockReturnValue({
       events: mockEvents,
+      filteredEvents: mockEvents,
+      uniqueEntities: [
+        { id: 'entity-1', name: 'John Doe' },
+        { id: 'entity-2', name: 'ABC Corp' },
+      ],
       meta: { total: 2, page: 1, perPage: 50, totalPages: 1 },
       isLoading: false,
       isError: false,
       error: null,
       mutate: vi.fn(),
+      addEvent: vi.fn(),
+      updateEvent: vi.fn(),
+      deleteEvent: vi.fn(),
     });
     mockUseTimelineStats.mockReturnValue({
       stats: mockStats,
@@ -142,11 +158,16 @@ describe('TimelineContent', () => {
     it('shows loading state when events are loading', () => {
       mockUseTimeline.mockReturnValue({
         events: [],
+        filteredEvents: [],
+        uniqueEntities: [],
         meta: { total: 0, page: 1, perPage: 50, totalPages: 0 },
         isLoading: true,
         isError: false,
         error: null,
         mutate: vi.fn(),
+        addEvent: vi.fn(),
+        updateEvent: vi.fn(),
+        deleteEvent: vi.fn(),
       });
 
       const { container } = renderWithProvider(<TimelineContent />);
@@ -177,11 +198,16 @@ describe('TimelineContent', () => {
     it('shows error state when events fail to load', () => {
       mockUseTimeline.mockReturnValue({
         events: [],
+        filteredEvents: [],
+        uniqueEntities: [],
         meta: { total: 0, page: 1, perPage: 50, totalPages: 0 },
         isLoading: false,
         isError: true,
         error: null,
         mutate: vi.fn(),
+        addEvent: vi.fn(),
+        updateEvent: vi.fn(),
+        deleteEvent: vi.fn(),
       });
 
       renderWithProvider(<TimelineContent />);
@@ -241,22 +267,24 @@ describe('TimelineContent', () => {
       const user = userEvent.setup();
       renderWithProvider(<TimelineContent />);
 
-      // Switch to horizontal view
-      const horizontalButton = screen.getByRole('button', { name: /^horizontal/i });
-      await user.click(horizontalButton);
+      // Switch to horizontal view within the view mode group
+      const viewModeGroup = screen.getByRole('group', { name: /view mode selection/i });
+      const horizontalButton = viewModeGroup.querySelector('[aria-label="Horizontal timeline view"]');
+      expect(horizontalButton).toBeInTheDocument();
+      await user.click(horizontalButton!);
 
-      // Select an event
-      const eventMarkers = screen.getAllByRole('button', { name: /event/i });
-      if (eventMarkers.length > 0) {
-        await user.click(eventMarkers[0]!);
-      }
+      // Horizontal view should be active
+      expect(horizontalButton).toHaveAttribute('aria-pressed', 'true');
 
-      // Switch to list view - should clear selection
-      // Use aria-label "List view" to avoid matching "View in List" button
-      const listButton = screen.getByRole('button', { name: /^list view$/i });
-      await user.click(listButton);
+      // Switch back to list view
+      const listButton = viewModeGroup.querySelector('[aria-label="List view"]');
+      expect(listButton).toBeInTheDocument();
+      await user.click(listButton!);
 
-      // Detail panel should not be visible after switching
+      // List view should be active
+      expect(listButton).toHaveAttribute('aria-pressed', 'true');
+
+      // Detail panel should not be visible after switching (selection cleared)
       expect(
         screen.queryByRole('region', { name: /selected event details/i })
       ).not.toBeInTheDocument();

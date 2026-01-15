@@ -436,6 +436,7 @@ class TimelineEventWithEntities(BaseModel):
     )
     is_ambiguous: bool = Field(default=False, description="Whether date is ambiguous")
     is_verified: bool = Field(default=False, description="Whether manually verified")
+    is_manual: bool = Field(default=False, description="Whether manually created")
 
 
 class TimelineWithEntitiesResponse(BaseModel):
@@ -516,9 +517,120 @@ class EntitiesInTimelineResponse(BaseModel):
     meta: PaginationMeta
 
 
+# =============================================================================
+# Manual Event API Models (Story 10B.5)
+# =============================================================================
+
+
+class ManualEventCreateRequest(BaseModel):
+    """Request body for creating a manual timeline event.
+
+    POST /api/matters/{matter_id}/timeline/events
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+    """
+
+    event_date: date = Field(..., description="Event date")
+    event_type: EventType = Field(..., description="Event type")
+    title: str = Field(
+        ..., min_length=5, max_length=200, description="Event title (used as description)"
+    )
+    description: str = Field(default="", max_length=2000, description="Additional description")
+    entity_ids: list[str] = Field(
+        default_factory=list, description="Entity UUIDs to link"
+    )
+    source_document_id: str | None = Field(
+        None, description="Optional source document reference"
+    )
+    source_page: int | None = Field(None, ge=1, description="Optional source page number")
+
+
+class ManualEventUpdateRequest(BaseModel):
+    """Request body for updating a timeline event.
+
+    PATCH /api/matters/{matter_id}/timeline/events/{event_id}
+
+    For manual events: all fields can be edited.
+    For auto-extracted events: only event_type can be edited (classification correction).
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+    """
+
+    event_date: date | None = Field(None, description="New event date")
+    event_type: EventType | None = Field(None, description="New event type")
+    title: str | None = Field(
+        None, min_length=5, max_length=200, description="New title"
+    )
+    description: str | None = Field(None, max_length=2000, description="New description")
+    entity_ids: list[str] | None = Field(None, description="New entity links")
+
+
+class ManualEventResponse(BaseModel):
+    """Response for manual event operations.
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+    """
+
+    id: str = Field(..., description="Event UUID")
+    event_date: date = Field(..., description="Event date")
+    event_date_precision: str = Field(..., description="Date precision")
+    event_date_text: str | None = Field(None, description="Original date text")
+    event_type: str = Field(..., description="Event type")
+    description: str = Field(..., description="Event description")
+    document_id: str | None = Field(None, description="Source document UUID")
+    source_page: int | None = Field(None, description="Source page number")
+    confidence: float = Field(..., description="Confidence score")
+    entities: list[EntityReference] = Field(
+        default_factory=list, description="Linked entities"
+    )
+    is_ambiguous: bool = Field(default=False, description="Whether date is ambiguous")
+    is_verified: bool = Field(default=False, description="Whether manually verified")
+    is_manual: bool = Field(..., description="Whether manually created")
+    created_by: str | None = Field(None, description="Creator user ID")
+    created_at: datetime | None = Field(None, description="Creation timestamp")
+
+
+class ManualEventCreateResponse(BaseModel):
+    """API response for manual event creation.
+
+    POST /api/matters/{matter_id}/timeline/events
+    """
+
+    data: ManualEventResponse
+
+
+class ManualEventUpdateResponse(BaseModel):
+    """API response for manual event update.
+
+    PATCH /api/matters/{matter_id}/timeline/events/{event_id}
+    """
+
+    data: ManualEventResponse
+
+
+class ManualEventDeleteResponse(BaseModel):
+    """API response for manual event deletion.
+
+    DELETE /api/matters/{matter_id}/timeline/events/{event_id}
+    """
+
+    message: str = Field(default="Event deleted successfully")
+
+
+class EventVerificationRequest(BaseModel):
+    """Request body for setting event verification status.
+
+    PATCH /api/matters/{matter_id}/timeline/events/{event_id}/verify
+    """
+
+    is_verified: bool = Field(..., description="Whether event is verified")
+
+
 # Forward reference resolution
 DateExtractionJobResponse.model_rebuild()
 ClassifiedEventsListResponse.model_rebuild()
 UnclassifiedEventsResponse.model_rebuild()
 TimelineWithEntitiesResponse.model_rebuild()
 EntitiesInTimelineResponse.model_rebuild()
+ManualEventCreateResponse.model_rebuild()
+ManualEventUpdateResponse.model_rebuild()

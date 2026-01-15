@@ -1,7 +1,7 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { List, LayoutTemplate, Users } from 'lucide-react';
+import { List, LayoutTemplate, Users, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -14,11 +14,12 @@ import type { TimelineStats, TimelineViewMode } from '@/types/timeline';
 /**
  * Timeline Header Component
  *
- * Displays event count, date range, and view mode toggle.
+ * Displays event count, date range, view mode toggle, and add event button.
  * Supports List, Horizontal, and Multi-Track views.
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #1)
  * Story 10B.4: Timeline Tab Alternative Views (AC #1)
+ * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #5)
  */
 
 interface TimelineHeaderProps {
@@ -28,6 +29,8 @@ interface TimelineHeaderProps {
   viewMode: TimelineViewMode;
   /** Callback when view mode changes */
   onViewModeChange: (mode: TimelineViewMode) => void;
+  /** Callback when Add Event button is clicked */
+  onAddEvent?: () => void;
   /** Whether stats are loading */
   isLoading?: boolean;
   /** Optional className for styling */
@@ -62,6 +65,7 @@ export function TimelineHeader({
   stats,
   viewMode,
   onViewModeChange,
+  onAddEvent,
   isLoading,
   className,
 }: TimelineHeaderProps) {
@@ -89,12 +93,33 @@ export function TimelineHeader({
         <p className="text-sm text-muted-foreground">{dateRange}</p>
       </div>
 
-      {/* Right side: View mode toggle */}
-      <div
-        className="flex items-center gap-1 border rounded-lg p-1"
-        role="group"
-        aria-label="View mode selection"
-      >
+      {/* Right side: Add Event button and View mode toggle */}
+      <div className="flex items-center gap-3">
+        {/* Add Event button */}
+        {onAddEvent && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={onAddEvent}
+                aria-label="Add event"
+              >
+                <Plus className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                <span className="text-xs">Add Event</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add a manual event to the timeline</TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* View mode toggle */}
+        <div
+          className="flex items-center gap-1 border rounded-lg p-1"
+          role="group"
+          aria-label="View mode selection"
+        >
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -143,6 +168,7 @@ export function TimelineHeader({
           </TooltipTrigger>
           <TooltipContent>Parallel timelines by actor</TooltipContent>
         </Tooltip>
+        </div>
       </div>
     </div>
   );

@@ -16,8 +16,10 @@ import type { TimelineEvent } from '@/types/timeline';
  * - Year separators
  * - Connector lines between events
  * - Empty, loading, and error states
+ * - Edit/delete actions for manual events
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #1, #3)
+ * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #6, #7, #8)
  */
 
 interface TimelineListProps {
@@ -29,6 +31,10 @@ interface TimelineListProps {
   isError?: boolean;
   /** Error message to display */
   errorMessage?: string;
+  /** Callback when edit is clicked on an event */
+  onEditEvent?: (event: TimelineEvent) => void;
+  /** Callback when delete is clicked on a manual event */
+  onDeleteEvent?: (event: TimelineEvent) => void;
   /** Optional className */
   className?: string;
 }
@@ -139,6 +145,8 @@ export function TimelineList({
   isLoading,
   isError,
   errorMessage,
+  onEditEvent,
+  onDeleteEvent,
   className,
 }: TimelineListProps) {
   // Group events by year
@@ -207,7 +215,11 @@ export function TimelineList({
                   )}
 
                   {/* Event card */}
-                  <TimelineEventCard event={event} />
+                  <TimelineEventCard
+                    event={event}
+                    onEdit={onEditEvent}
+                    onDelete={onDeleteEvent}
+                  />
                 </div>
               );
             })}

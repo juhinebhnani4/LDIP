@@ -16,10 +16,14 @@ import structlog
 from app.models.timeline import (
     ClassifiedEvent,
     ClassifiedEventsListResponse,
+    EntityReference,
     EventClassificationListItem,
     EventClassificationResult,
     EventType,
     ExtractedDate,
+    ManualEventCreateRequest,
+    ManualEventResponse,
+    ManualEventUpdateRequest,
     PaginationMeta,
     RawDateListItem,
     RawDatesListResponse,
@@ -1715,6 +1719,369 @@ class TimelineService:
                 error=str(e),
             )
             return 0
+
+    # =========================================================================
+    # Manual Event CRUD Methods (Story 10B.5)
+    # =========================================================================
+
+    async def create_manual_event(
+        self,
+        matter_id: str,
+        user_id: str,
+        request: ManualEventCreateRequest,
+    ) -> ManualEventResponse:
+        """Create a manual timeline event.
+
+        Args:
+            matter_id: Matter UUID.
+            user_id: Creator user UUID.
+            request: Manual event creation request.
+
+        Returns:
+            ManualEventResponse with created event.
+
+        Raises:
+            TimelineServiceError: If creation fails.
+        """
+        # Combine title and description for the description field
+        description = request.title
+        if request.description:
+            description = f"{request.title}\n\n{request.description}"
+
+        event_record = {
+            "matter_id": matter_id,
+            "document_id": request.source_document_id,
+            "event_date": request.event_date.isoformat(),
+            "event_date_precision": "day",  # Manual events always have day precision
+            "event_date_text": None,  # No original text for manual events
+            "event_type": request.event_type.value,
+            "description": description[:5000],
+            "entities_involved": request.entity_ids if request.entity_ids else [],
+            "source_page": request.source_page,
+            "source_bbox_ids": [],
+            "confidence": 1.0,  # Manual events have 100% confidence
+            "is_manual": True,
+            "created_by": user_id,
+        }
+
+        def _insert():
+            return (
+                self.client.table("events")
+                .insert(event_record)
+                .select()
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_insert)
+
+            if response.data:
+                row = response.data[0]
+                logger.info(
+                    "manual_event_created",
+                    matter_id=matter_id,
+                    event_id=row["id"],
+                    user_id=user_id,
+                )
+                return self._db_row_to_manual_event_response(row)
+
+            raise TimelineServiceError("Failed to create manual event - no data returned")
+
+        except TimelineServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "manual_event_creation_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            raise TimelineServiceError(f"Failed to create manual event: {e}")
+
+    async def update_manual_event(
+        self,
+        event_id: str,
+        matter_id: str,
+        request: ManualEventUpdateRequest,
+    ) -> ManualEventResponse | None:
+        """Update a timeline event.
+
+        For manual events: all provided fields are updated.
+        For auto-extracted events: only event_type is updated (classification correction).
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID.
+            request: Update request with fields to change.
+
+        Returns:
+            ManualEventResponse with updated event, or None if not found.
+
+        Raises:
+            TimelineServiceError: If update fails.
+        """
+        # First, get the existing event to check if it's manual
+        existing = await self.get_event_by_id(event_id, matter_id)
+        if not existing:
+            return None
+
+        # Build update dict based on whether event is manual
+        update_data: dict = {}
+
+        if existing.is_manual:
+            # Manual event: allow updating all fields
+            if request.event_date is not None:
+                update_data["event_date"] = request.event_date.isoformat()
+            if request.event_type is not None:
+                update_data["event_type"] = request.event_type.value
+            if request.title is not None:
+                description = request.title
+                if request.description is not None:
+                    description = f"{request.title}\n\n{request.description}"
+                elif existing.description:
+                    # Keep existing description if only title is updated
+                    parts = existing.description.split("\n\n", 1)
+                    if len(parts) > 1:
+                        description = f"{request.title}\n\n{parts[1]}"
+                update_data["description"] = description[:5000]
+            elif request.description is not None:
+                # Only description updated, keep title
+                parts = existing.description.split("\n\n", 1)
+                title = parts[0] if parts else ""
+                update_data["description"] = f"{title}\n\n{request.description}"[:5000]
+            if request.entity_ids is not None:
+                update_data["entities_involved"] = request.entity_ids
+        else:
+            # Auto-extracted event: only allow event_type update (classification correction)
+            if request.event_type is not None:
+                update_data["event_type"] = request.event_type.value
+                update_data["is_manual"] = True  # Mark as manually classified
+                update_data["confidence"] = 1.0  # Human verified
+
+        if not update_data:
+            # Nothing to update, return existing
+            return self._db_row_to_manual_event_response_from_raw_event(existing)
+
+        def _update():
+            return (
+                self.client.table("events")
+                .update(update_data)
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .select()
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+
+            if response.data:
+                row = response.data[0]
+                logger.info(
+                    "manual_event_updated",
+                    event_id=event_id,
+                    matter_id=matter_id,
+                    updated_fields=list(update_data.keys()),
+                )
+                return self._db_row_to_manual_event_response(row)
+
+            return None
+
+        except Exception as e:
+            logger.error(
+                "manual_event_update_failed",
+                event_id=event_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to update manual event: {e}")
+
+    async def delete_manual_event(
+        self,
+        event_id: str,
+        matter_id: str,
+    ) -> bool:
+        """Delete a manual timeline event.
+
+        Only manual events can be deleted. Auto-extracted events
+        cannot be deleted.
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID.
+
+        Returns:
+            True if deleted, False if event not found or not manual.
+
+        Raises:
+            TimelineServiceError: If deletion fails or event is not manual.
+        """
+        # First check if event exists and is manual
+        existing = await self.get_event_by_id(event_id, matter_id)
+        if not existing:
+            return False
+
+        if not existing.is_manual:
+            raise TimelineServiceError(
+                "Cannot delete auto-extracted events. Only manual events can be deleted.",
+                code="CANNOT_DELETE_AUTO_EVENT",
+            )
+
+        def _delete():
+            return (
+                self.client.table("events")
+                .delete()
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .eq("is_manual", True)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_delete)
+
+            deleted = bool(response.data)
+            if deleted:
+                logger.info(
+                    "manual_event_deleted",
+                    event_id=event_id,
+                    matter_id=matter_id,
+                )
+            return deleted
+
+        except Exception as e:
+            logger.error(
+                "manual_event_delete_failed",
+                event_id=event_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to delete manual event: {e}")
+
+    async def set_event_verification(
+        self,
+        event_id: str,
+        matter_id: str,
+        is_verified: bool,
+    ) -> ManualEventResponse | None:
+        """Set the verification status of an event.
+
+        Args:
+            event_id: Event UUID.
+            matter_id: Matter UUID.
+            is_verified: Whether event is verified.
+
+        Returns:
+            ManualEventResponse with updated event, or None if not found.
+        """
+        def _update():
+            return (
+                self.client.table("events")
+                .update({"is_manual": is_verified})  # is_manual serves as verified flag
+                .eq("id", event_id)
+                .eq("matter_id", matter_id)
+                .select()
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+
+            if response.data:
+                row = response.data[0]
+                logger.info(
+                    "event_verification_updated",
+                    event_id=event_id,
+                    is_verified=is_verified,
+                )
+                return self._db_row_to_manual_event_response(row)
+
+            return None
+
+        except Exception as e:
+            logger.error(
+                "event_verification_update_failed",
+                event_id=event_id,
+                error=str(e),
+            )
+            raise TimelineServiceError(f"Failed to update event verification: {e}")
+
+    def _db_row_to_manual_event_response(self, row: dict) -> ManualEventResponse:
+        """Convert database row to ManualEventResponse."""
+        from datetime import date, datetime
+
+        event_date = row.get("event_date")
+        if isinstance(event_date, str):
+            event_date = date.fromisoformat(event_date)
+
+        created_at = row.get("created_at")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+
+        # Extract clean description
+        description = row.get("description", "")
+        _, _, clean_description = self._parse_ambiguity_from_description(description)
+
+        # Build entity references (we don't have full entity data here, just IDs)
+        entities = []
+        entity_ids = row.get("entities_involved") or []
+        for entity_id in entity_ids:
+            entities.append(
+                EntityReference(
+                    entity_id=entity_id,
+                    canonical_name="",  # Would need join to get actual name
+                    entity_type="",  # Would need join to get actual type
+                    role=None,
+                )
+            )
+
+        return ManualEventResponse(
+            id=row["id"],
+            event_date=event_date,
+            event_date_precision=row.get("event_date_precision", "day"),
+            event_date_text=row.get("event_date_text"),
+            event_type=row.get("event_type", "unclassified"),
+            description=clean_description,
+            document_id=row.get("document_id"),
+            source_page=row.get("source_page"),
+            confidence=row.get("confidence", 1.0),
+            entities=entities,
+            is_ambiguous=False,  # Manual events are not ambiguous
+            is_verified=row.get("is_manual", False),  # is_manual serves as verified
+            is_manual=row.get("is_manual", False),
+            created_by=row.get("created_by"),
+            created_at=created_at,
+        )
+
+    def _db_row_to_manual_event_response_from_raw_event(
+        self, event: RawEvent
+    ) -> ManualEventResponse:
+        """Convert RawEvent to ManualEventResponse."""
+        entities = []
+        for entity_id in event.entities_involved:
+            entities.append(
+                EntityReference(
+                    entity_id=entity_id,
+                    canonical_name="",
+                    entity_type="",
+                    role=None,
+                )
+            )
+
+        return ManualEventResponse(
+            id=event.id,
+            event_date=event.event_date,
+            event_date_precision=event.event_date_precision,
+            event_date_text=event.event_date_text,
+            event_type=event.event_type,
+            description=event.description,
+            document_id=event.document_id,
+            source_page=event.source_page,
+            confidence=event.confidence,
+            entities=entities,
+            is_ambiguous=event.is_ambiguous,
+            is_verified=event.is_manual,
+            is_manual=event.is_manual,
+            created_by=event.created_by,
+            created_at=event.created_at,
+        )
 
 
 # =============================================================================

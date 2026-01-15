@@ -36,8 +36,14 @@ from app.models.timeline import (
     EntityLinkingJobResponse,
     EntityReference,
     EventType,
+    EventVerificationRequest,
     ManualClassificationRequest,
     ManualClassificationResponse,
+    ManualEventCreateRequest,
+    ManualEventCreateResponse,
+    ManualEventDeleteResponse,
+    ManualEventUpdateRequest,
+    ManualEventUpdateResponse,
     PaginationMeta,
     RawDateDetailResponse,
     RawDatesListResponse,
@@ -1022,6 +1028,7 @@ async def get_timeline_with_entities(
                         ],
                         is_ambiguous=e.is_ambiguous,
                         is_verified=e.is_verified,
+                        is_manual=e.is_verified,  # is_verified maps to is_manual in cache
                     )
                     for e in cached.events
                 ]
@@ -1091,6 +1098,7 @@ async def get_timeline_with_entities(
                 ],
                 is_ambiguous=e.is_ambiguous,
                 is_verified=e.is_verified,
+                is_manual=e.is_verified,  # is_verified maps to is_manual in builder
             )
             for e in timeline.events
         ]
@@ -1493,6 +1501,387 @@ async def get_entity_timeline(
                 "error": {
                     "code": "ENTITY_TIMELINE_ERROR",
                     "message": f"Failed to get entity timeline: {e}",
+                    "details": {},
+                }
+            },
+        )
+
+
+# =============================================================================
+# Manual Event CRUD Endpoints (Story 10B.5)
+# =============================================================================
+
+
+@router.post(
+    "/events",
+    response_model=ManualEventCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"description": "Manual event created"},
+        400: {"model": TimelineErrorResponse, "description": "Invalid request"},
+        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": TimelineErrorResponse, "description": "Matter not found"},
+    },
+)
+async def create_manual_event(
+    matter_id: str = Path(..., description="Matter UUID"),
+    request: ManualEventCreateRequest = ...,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    timeline_service: TimelineService = Depends(_get_timeline_service),
+    cache_service: TimelineCacheService = Depends(_get_cache_service),
+) -> ManualEventCreateResponse:
+    """Create a manual timeline event.
+
+    Attorneys can add events that aren't captured in the documents.
+    Manual events are marked with is_manual=True and have 100% confidence.
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+
+    Args:
+        matter_id: Matter UUID.
+        request: Manual event creation request.
+        membership: Validated matter membership (owner/editor required).
+        timeline_service: Timeline service.
+        cache_service: Timeline cache service.
+
+    Returns:
+        ManualEventCreateResponse with created event.
+    """
+    logger.info(
+        "manual_event_creation_requested",
+        matter_id=matter_id,
+        user_id=membership.user_id,
+        event_type=request.event_type.value,
+    )
+
+    try:
+        event = await timeline_service.create_manual_event(
+            matter_id=matter_id,
+            user_id=membership.user_id,
+            request=request,
+        )
+
+        # Invalidate timeline cache
+        await cache_service.invalidate_timeline(matter_id)
+
+        logger.info(
+            "manual_event_created",
+            matter_id=matter_id,
+            event_id=event.id,
+        )
+
+        return ManualEventCreateResponse(data=event)
+
+    except TimelineServiceError as e:
+        logger.error(
+            "manual_event_creation_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.patch(
+    "/events/{event_id}",
+    response_model=ManualEventUpdateResponse,
+    responses={
+        200: {"description": "Event updated"},
+        400: {"model": TimelineErrorResponse, "description": "Invalid request"},
+        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": TimelineErrorResponse, "description": "Event not found"},
+    },
+)
+async def update_timeline_event(
+    matter_id: str = Path(..., description="Matter UUID"),
+    event_id: str = Path(..., description="Event UUID"),
+    request: ManualEventUpdateRequest = ...,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    timeline_service: TimelineService = Depends(_get_timeline_service),
+    cache_service: TimelineCacheService = Depends(_get_cache_service),
+) -> ManualEventUpdateResponse:
+    """Update a timeline event.
+
+    For manual events: all fields can be edited.
+    For auto-extracted events: only event_type can be edited (classification correction).
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+
+    Args:
+        matter_id: Matter UUID.
+        event_id: Event UUID to update.
+        request: Update request with fields to change.
+        membership: Validated matter membership (owner/editor required).
+        timeline_service: Timeline service.
+        cache_service: Timeline cache service.
+
+    Returns:
+        ManualEventUpdateResponse with updated event.
+    """
+    logger.info(
+        "timeline_event_update_requested",
+        matter_id=matter_id,
+        event_id=event_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        event = await timeline_service.update_manual_event(
+            event_id=event_id,
+            matter_id=matter_id,
+            request=request,
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "EVENT_NOT_FOUND",
+                        "message": f"Event {event_id} not found in matter",
+                        "details": {"event_id": event_id},
+                    }
+                },
+            )
+
+        # Invalidate timeline cache
+        await cache_service.invalidate_timeline(matter_id)
+
+        logger.info(
+            "timeline_event_updated",
+            matter_id=matter_id,
+            event_id=event_id,
+        )
+
+        return ManualEventUpdateResponse(data=event)
+
+    except HTTPException:
+        raise
+    except TimelineServiceError as e:
+        logger.error(
+            "timeline_event_update_failed",
+            matter_id=matter_id,
+            event_id=event_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.delete(
+    "/events/{event_id}",
+    response_model=ManualEventDeleteResponse,
+    responses={
+        200: {"description": "Event deleted"},
+        400: {"model": TimelineErrorResponse, "description": "Cannot delete auto-extracted event"},
+        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": TimelineErrorResponse, "description": "Event not found"},
+    },
+)
+async def delete_manual_event(
+    matter_id: str = Path(..., description="Matter UUID"),
+    event_id: str = Path(..., description="Event UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER])
+    ),
+    timeline_service: TimelineService = Depends(_get_timeline_service),
+    cache_service: TimelineCacheService = Depends(_get_cache_service),
+) -> ManualEventDeleteResponse:
+    """Delete a manual timeline event.
+
+    Only manual events can be deleted. Auto-extracted events cannot be deleted.
+    Only matter owners can delete events.
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+
+    Args:
+        matter_id: Matter UUID.
+        event_id: Event UUID to delete.
+        membership: Validated matter membership (owner required).
+        timeline_service: Timeline service.
+        cache_service: Timeline cache service.
+
+    Returns:
+        ManualEventDeleteResponse confirming deletion.
+    """
+    logger.info(
+        "manual_event_deletion_requested",
+        matter_id=matter_id,
+        event_id=event_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        deleted = await timeline_service.delete_manual_event(
+            event_id=event_id,
+            matter_id=matter_id,
+        )
+
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "EVENT_NOT_FOUND",
+                        "message": f"Event {event_id} not found in matter",
+                        "details": {"event_id": event_id},
+                    }
+                },
+            )
+
+        # Invalidate timeline cache
+        await cache_service.invalidate_timeline(matter_id)
+
+        logger.info(
+            "manual_event_deleted",
+            matter_id=matter_id,
+            event_id=event_id,
+        )
+
+        return ManualEventDeleteResponse(message="Event deleted successfully")
+
+    except HTTPException:
+        raise
+    except TimelineServiceError as e:
+        if e.code == "CANNOT_DELETE_AUTO_EVENT":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": {
+                        "code": e.code,
+                        "message": e.message,
+                        "details": {"event_id": event_id},
+                    }
+                },
+            )
+        logger.error(
+            "manual_event_deletion_failed",
+            matter_id=matter_id,
+            event_id=event_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        )
+
+
+@router.patch(
+    "/events/{event_id}/verify",
+    response_model=ManualEventUpdateResponse,
+    responses={
+        200: {"description": "Event verification updated"},
+        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": TimelineErrorResponse, "description": "Event not found"},
+    },
+)
+async def verify_timeline_event(
+    matter_id: str = Path(..., description="Matter UUID"),
+    event_id: str = Path(..., description="Event UUID"),
+    request: EventVerificationRequest = ...,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    timeline_service: TimelineService = Depends(_get_timeline_service),
+    cache_service: TimelineCacheService = Depends(_get_cache_service),
+) -> ManualEventUpdateResponse:
+    """Verify or unverify a timeline event.
+
+    Marks an event as human-verified (or removes verification).
+
+    Story 10B.5: Timeline Filtering and Manual Event Addition
+
+    Args:
+        matter_id: Matter UUID.
+        event_id: Event UUID to verify.
+        request: Verification request.
+        membership: Validated matter membership (owner/editor required).
+        timeline_service: Timeline service.
+        cache_service: Timeline cache service.
+
+    Returns:
+        ManualEventUpdateResponse with updated event.
+    """
+    logger.info(
+        "event_verification_requested",
+        matter_id=matter_id,
+        event_id=event_id,
+        is_verified=request.is_verified,
+        user_id=membership.user_id,
+    )
+
+    try:
+        event = await timeline_service.set_event_verification(
+            event_id=event_id,
+            matter_id=matter_id,
+            is_verified=request.is_verified,
+        )
+
+        if not event:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "EVENT_NOT_FOUND",
+                        "message": f"Event {event_id} not found in matter",
+                        "details": {"event_id": event_id},
+                    }
+                },
+            )
+
+        # Invalidate timeline cache
+        await cache_service.invalidate_timeline(matter_id)
+
+        logger.info(
+            "event_verification_updated",
+            matter_id=matter_id,
+            event_id=event_id,
+            is_verified=request.is_verified,
+        )
+
+        return ManualEventUpdateResponse(data=event)
+
+    except HTTPException:
+        raise
+    except TimelineServiceError as e:
+        logger.error(
+            "event_verification_failed",
+            matter_id=matter_id,
+            event_id=event_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
                     "details": {},
                 }
             },

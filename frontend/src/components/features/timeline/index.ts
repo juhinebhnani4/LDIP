@@ -5,6 +5,7 @@
  *
  * Story 10B.3: Timeline Tab Vertical List View
  * Story 10B.4: Timeline Tab Alternative Views
+ * Story 10B.5: Timeline Filtering and Manual Event Addition
  */
 
 // Main content component
@@ -38,6 +39,18 @@ export { TimelineEventDetail } from './TimelineEventDetail';
 
 // Zoom slider component (Story 10B.4)
 export { TimelineZoomSlider } from './TimelineZoomSlider';
+
+// Filter bar component (Story 10B.5)
+export { TimelineFilterBar } from './TimelineFilterBar';
+
+// Add event dialog component (Story 10B.5)
+export { AddEventDialog } from './AddEventDialog';
+
+// Edit event dialog component (Story 10B.5)
+export { EditEventDialog } from './EditEventDialog';
+
+// Delete event confirmation component (Story 10B.5)
+export { DeleteEventConfirmation } from './DeleteEventConfirmation';
 
 // Timeline utilities (Story 10B.4)
 export {

@@ -190,6 +190,139 @@ export const aliasSearchApi = {
     ),
 }
 
+// =============================================================================
+// Timeline Manual Event API (Story 10B.5)
+// =============================================================================
+
+import type {
+  TimelineEvent,
+  ManualEventCreateRequest,
+  ManualEventUpdateRequest,
+  ManualEventResponse,
+} from '@/types/timeline'
+
+/**
+ * Convert camelCase request to snake_case for API
+ */
+function toSnakeCaseManualEvent(request: ManualEventCreateRequest): Record<string, unknown> {
+  return {
+    event_date: request.eventDate,
+    event_type: request.eventType,
+    title: request.title,
+    description: request.description,
+    entity_ids: request.entityIds,
+    source_document_id: request.sourceDocumentId ?? null,
+    source_page: request.sourcePage ?? null,
+  }
+}
+
+/**
+ * Convert camelCase update request to snake_case for API
+ */
+function toSnakeCaseManualEventUpdate(
+  request: ManualEventUpdateRequest
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  if (request.eventDate !== undefined) result.event_date = request.eventDate
+  if (request.eventType !== undefined) result.event_type = request.eventType
+  if (request.title !== undefined) result.title = request.title
+  if (request.description !== undefined) result.description = request.description
+  if (request.entityIds !== undefined) result.entity_ids = request.entityIds
+  return result
+}
+
+/**
+ * Convert snake_case response to camelCase
+ */
+function fromSnakeCaseManualEvent(response: Record<string, unknown>): ManualEventResponse {
+  return {
+    id: response.id as string,
+    eventDate: response.event_date as string,
+    eventDatePrecision: response.event_date_precision as TimelineEvent['eventDatePrecision'],
+    eventDateText: (response.event_date_text as string | null) ?? null,
+    eventType: response.event_type as TimelineEvent['eventType'],
+    description: response.description as string,
+    documentId: (response.document_id as string | null) ?? null,
+    sourcePage: (response.source_page as number | null) ?? null,
+    confidence: response.confidence as number,
+    entities: Array.isArray(response.entities)
+      ? response.entities.map((e: Record<string, unknown>) => ({
+          entityId: e.entity_id as string,
+          canonicalName: e.canonical_name as string,
+          entityType: e.entity_type as string,
+          role: (e.role as string | null) ?? null,
+        }))
+      : [],
+    isAmbiguous: (response.is_ambiguous as boolean) ?? false,
+    isVerified: (response.is_verified as boolean) ?? false,
+    isManual: true,
+    createdBy: response.created_by as string,
+    createdAt: response.created_at as string,
+  }
+}
+
+/**
+ * Timeline manual event management API methods.
+ * Story 10B.5: Timeline Filtering and Manual Event Addition
+ */
+export const timelineEventApi = {
+  /**
+   * Create a new manual timeline event.
+   */
+  create: async (
+    matterId: string,
+    request: ManualEventCreateRequest
+  ): Promise<ManualEventResponse> => {
+    const response = await api.post<Record<string, unknown>>(
+      `/api/v1/matters/${matterId}/timeline/events`,
+      toSnakeCaseManualEvent(request)
+    )
+    return fromSnakeCaseManualEvent(response)
+  },
+
+  /**
+   * Update a timeline event.
+   * For manual events: all fields can be edited.
+   * For auto-extracted events: only eventType can be edited (classification correction).
+   */
+  update: async (
+    matterId: string,
+    eventId: string,
+    request: ManualEventUpdateRequest
+  ): Promise<ManualEventResponse> => {
+    const response = await api.patch<Record<string, unknown>>(
+      `/api/v1/matters/${matterId}/timeline/events/${eventId}`,
+      toSnakeCaseManualEventUpdate(request)
+    )
+    return fromSnakeCaseManualEvent(response)
+  },
+
+  /**
+   * Delete a manual timeline event.
+   * Only manual events can be deleted.
+   */
+  delete: async (matterId: string, eventId: string): Promise<void> => {
+    await api.delete<void>(`/api/v1/matters/${matterId}/timeline/events/${eventId}`)
+  },
+
+  /**
+   * Verify or unverify a timeline event.
+   */
+  setVerified: async (
+    matterId: string,
+    eventId: string,
+    isVerified: boolean
+  ): Promise<ManualEventResponse> => {
+    const response = await api.patch<Record<string, unknown>>(
+      `/api/v1/matters/${matterId}/timeline/events/${eventId}/verify`,
+      { is_verified: isVerified }
+    )
+    return fromSnakeCaseManualEvent(response)
+  },
+}
+
+
+
 
 
 

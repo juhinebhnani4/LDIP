@@ -65,6 +65,10 @@ export interface TimelineEvent {
   isAmbiguous: boolean;
   /** Whether manually verified */
   isVerified: boolean;
+  /** Whether manually added (vs auto-extracted) */
+  isManual?: boolean;
+  /** User who created the event (for manual events) */
+  createdBy?: string;
   /** Cross-references (future: document references) */
   crossReferences?: string[];
   /** Contradiction flag */
@@ -212,4 +216,112 @@ export interface UseTimelineOptions {
   entityId?: string;
   page?: number;
   perPage?: number;
+}
+
+// ============================================================================
+// Filtering Types (Story 10B.5)
+// ============================================================================
+
+/**
+ * Filter state for timeline view
+ */
+export interface TimelineFilterState {
+  /** Selected event types (empty = all) */
+  eventTypes: TimelineEventType[];
+  /** Selected entity IDs (empty = all) */
+  entityIds: string[];
+  /** Date range filter */
+  dateRange: {
+    start: string | null;
+    end: string | null;
+  };
+  /** Verification status filter */
+  verificationStatus: 'all' | 'verified' | 'unverified';
+}
+
+/**
+ * Default filter state (no filters applied)
+ */
+export const DEFAULT_TIMELINE_FILTERS: TimelineFilterState = {
+  eventTypes: [],
+  entityIds: [],
+  dateRange: { start: null, end: null },
+  verificationStatus: 'all',
+};
+
+/**
+ * Check if any filters are active
+ */
+export function hasActiveFilters(filters: TimelineFilterState): boolean {
+  return (
+    filters.eventTypes.length > 0 ||
+    filters.entityIds.length > 0 ||
+    filters.dateRange.start !== null ||
+    filters.dateRange.end !== null ||
+    filters.verificationStatus !== 'all'
+  );
+}
+
+/**
+ * Count active filters
+ */
+export function countActiveFilters(filters: TimelineFilterState): number {
+  let count = 0;
+  if (filters.eventTypes.length > 0) count++;
+  if (filters.entityIds.length > 0) count++;
+  if (filters.dateRange.start !== null || filters.dateRange.end !== null) count++;
+  if (filters.verificationStatus !== 'all') count++;
+  return count;
+}
+
+// ============================================================================
+// Manual Event Types (Story 10B.5)
+// ============================================================================
+
+/**
+ * Manual event creation request
+ */
+export interface ManualEventCreateRequest {
+  /** Event date (ISO format YYYY-MM-DD) */
+  eventDate: string;
+  /** Event type */
+  eventType: TimelineEventType;
+  /** Event title/short description */
+  title: string;
+  /** Full description */
+  description: string;
+  /** Linked entity IDs */
+  entityIds: string[];
+  /** Source document ID (optional) */
+  sourceDocumentId?: string | null;
+  /** Source page number (optional) */
+  sourcePage?: number | null;
+}
+
+/**
+ * Manual event update request
+ */
+export interface ManualEventUpdateRequest {
+  /** Event date (ISO format) - only editable for manual events */
+  eventDate?: string;
+  /** Event type - can update for all events (classification correction) */
+  eventType?: TimelineEventType;
+  /** Event title - only editable for manual events */
+  title?: string;
+  /** Full description - only editable for manual events */
+  description?: string;
+  /** Linked entity IDs - only editable for manual events */
+  entityIds?: string[];
+}
+
+/**
+ * Manual event API response (extends TimelineEvent)
+ */
+export interface ManualEventResponse extends TimelineEvent {
+  /** Always true for manual events */
+  isManual: true;
+  /** User who created the event */
+  createdBy: string;
+  /** Creation timestamp */
+  createdAt: string;
 }

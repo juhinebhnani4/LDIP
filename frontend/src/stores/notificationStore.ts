@@ -241,3 +241,28 @@ export const selectNotificationsByMatter =
 /** Selector for getting high priority unread notifications */
 export const selectHighPriorityUnread = (state: NotificationStore): Notification[] =>
   state.notifications.filter((n) => !n.isRead && n.priority === 'high');
+
+// =============================================================================
+// Helper Functions (Story 9-6)
+// =============================================================================
+
+/**
+ * Add a processing complete notification
+ * Convenience function for adding matter completion notifications
+ *
+ * @param matterName - The name of the matter that completed processing
+ * @param matterId - The ID of the completed matter
+ */
+export function addProcessingCompleteNotification(
+  matterName: string,
+  matterId: string
+): void {
+  useNotificationStore.getState().addNotification({
+    type: 'success',
+    title: 'Processing Complete',
+    message: `Matter "${matterName}" is ready for analysis.`,
+    matterId,
+    matterTitle: matterName,
+    priority: 'medium',
+  });
+}

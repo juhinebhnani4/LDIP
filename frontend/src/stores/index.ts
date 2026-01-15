@@ -63,6 +63,44 @@ export {
   getFindingTypeIcon,
 } from './verificationStore';
 
+// Upload wizard store for multi-stage upload flow (Story 9-4, 9-5, 9-6)
+export {
+  useUploadWizardStore,
+  selectTotalFileSize,
+  selectFileCount,
+  selectActsByStatus,
+  selectIsMatterNameValid,
+  selectCanStartUpload,
+  selectUploadComplete,
+  selectDiscoveriesByType,
+  selectCurrentStageName,
+  selectCurrentStageNumber,
+  selectCompletedUploadsCount,
+  selectFailedUploadsCount,
+  selectHasFailedUploads,
+  selectUploadProgressArray,
+  selectIsProcessingComplete,
+} from './uploadWizardStore';
+
+// Background processing store for async matter processing (Story 9-6)
+export {
+  useBackgroundProcessingStore,
+  selectProcessingMatters,
+  selectCompletedMatters,
+  selectBackgroundMatterCount,
+  selectIsMatterInBackground,
+  type BackgroundMatter,
+} from './backgroundProcessingStore';
+
+// Notification store for in-app notifications (Story 9-1, 9-6)
+export {
+  useNotificationStore,
+  selectUnreadNotifications,
+  selectNotificationsByMatter,
+  selectHighPriorityUnread,
+  addProcessingCompleteNotification,
+} from './notificationStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

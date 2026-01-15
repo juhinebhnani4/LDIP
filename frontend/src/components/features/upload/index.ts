@@ -16,3 +16,6 @@ export { UploadProgressView } from './UploadProgressView';
 export { ProcessingProgressView } from './ProcessingProgressView';
 export { LiveDiscoveriesPanel } from './LiveDiscoveriesPanel';
 export { ProcessingScreen } from './ProcessingScreen';
+
+// Stage 5 Components (Story 9-6)
+export { CompletionScreen } from './CompletionScreen';

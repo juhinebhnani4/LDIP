@@ -9,6 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MatterCard } from './MatterCard';
 import { MatterCardErrorBoundary } from './MatterCardErrorBoundary';
 import { useMatterStore, selectSortedMatters, initializeViewMode } from '@/stores/matterStore';
+import {
+  useBackgroundProcessingStore,
+  selectCompletedMatters,
+} from '@/stores/backgroundProcessingStore';
 import { cn } from '@/lib/utils';
 
 /**
@@ -17,11 +21,14 @@ import { cn } from '@/lib/utils';
  * Displays matters as a responsive grid of cards.
  * Includes "New Matter" card as first item.
  * Handles loading, empty, and error states.
+ * Subscribes to background processing for live status updates.
  *
  * Grid layout:
  * - Desktop: 3 columns
  * - Tablet: 2 columns
  * - Mobile: 1 column
+ *
+ * Story 9-6: Added background processing subscription for live matter status updates
  */
 
 interface MatterCardsGridProps {
@@ -116,11 +123,37 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   // useShallow prevents re-renders when array contents are equal
   const sortedMatters = useMatterStore(useShallow(selectSortedMatters));
 
+  // Subscribe to background processing for live updates (Story 9-6)
+  const completedBackgroundMatters = useBackgroundProcessingStore(
+    useShallow(selectCompletedMatters)
+  );
+  const removeBackgroundMatter = useBackgroundProcessingStore(
+    (state) => state.removeBackgroundMatter
+  );
+
   // Initialize view mode from localStorage and fetch matters on mount
   useEffect(() => {
     initializeViewMode();
     useMatterStore.getState().fetchMatters();
   }, []);
+
+  // Refetch matters when background processing completes (Story 9-6)
+  useEffect(() => {
+    if (completedBackgroundMatters.length > 0) {
+      // Refetch matters to get updated status
+      useMatterStore.getState().fetchMatters();
+
+      // Clean up completed matters from background store after a delay
+      // This allows the notification to be seen before cleanup
+      const timeoutId = setTimeout(() => {
+        completedBackgroundMatters.forEach((matter) => {
+          removeBackgroundMatter(matter.matterId);
+        });
+      }, 5000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [completedBackgroundMatters, removeBackgroundMatter]);
 
   const gridClasses = cn(
     'grid gap-4',

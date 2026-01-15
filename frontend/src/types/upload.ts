@@ -207,6 +207,10 @@ export interface UploadWizardState {
   matterId: string | null;
   /** Failed file uploads */
   failedUploads: Map<string, string>;
+
+  // Completion state (Story 9-6)
+  /** Whether processing has completed (Stage 5) */
+  isProcessingComplete: boolean;
 }
 
 /**
@@ -248,6 +252,10 @@ export interface UploadWizardActions {
   setUploadFailed: (fileName: string, errorMessage: string) => void;
   /** Clear all processing state (for reset) */
   clearProcessingState: () => void;
+
+  // Completion actions (Story 9-6)
+  /** Set processing complete state */
+  setProcessingComplete: (complete: boolean) => void;
 }
 
 /** Combined store type */

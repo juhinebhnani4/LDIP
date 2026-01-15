@@ -14,6 +14,7 @@ import {
   selectFailedUploadsCount,
   selectHasFailedUploads,
   selectUploadProgressArray,
+  selectIsProcessingComplete,
 } from './uploadWizardStore';
 import type { DetectedAct, UploadProgress, LiveDiscovery } from '@/types/upload';
 
@@ -717,6 +718,68 @@ describe('uploadWizardStore', () => {
         const array = selectUploadProgressArray(useUploadWizardStore.getState());
         expect(Array.isArray(array)).toBe(true);
         expect(array).toHaveLength(2);
+      });
+    });
+  });
+
+  // ==========================================================================
+  // Completion State Tests (Story 9-6)
+  // ==========================================================================
+
+  describe('completion state', () => {
+    describe('initial completion state', () => {
+      it('starts with isProcessingComplete false', () => {
+        expect(useUploadWizardStore.getState().isProcessingComplete).toBe(false);
+      });
+    });
+
+    describe('setProcessingComplete', () => {
+      it('sets processing complete to true', () => {
+        useUploadWizardStore.getState().setProcessingComplete(true);
+        expect(useUploadWizardStore.getState().isProcessingComplete).toBe(true);
+      });
+
+      it('sets processing complete to false', () => {
+        useUploadWizardStore.getState().setProcessingComplete(true);
+        useUploadWizardStore.getState().setProcessingComplete(false);
+        expect(useUploadWizardStore.getState().isProcessingComplete).toBe(false);
+      });
+    });
+
+    describe('clearProcessingState resets completion', () => {
+      it('resets isProcessingComplete to false', () => {
+        useUploadWizardStore.getState().setProcessingComplete(true);
+        useUploadWizardStore.getState().clearProcessingState();
+        expect(useUploadWizardStore.getState().isProcessingComplete).toBe(false);
+      });
+    });
+
+    describe('selectIsProcessingComplete', () => {
+      it('returns false when not at INDEXING stage', () => {
+        useUploadWizardStore.getState().setProcessingStage('OCR');
+        useUploadWizardStore.getState().setOverallProgress(100);
+
+        expect(selectIsProcessingComplete(useUploadWizardStore.getState())).toBe(false);
+      });
+
+      it('returns false when at INDEXING but progress < 100', () => {
+        useUploadWizardStore.getState().setProcessingStage('INDEXING');
+        useUploadWizardStore.getState().setOverallProgress(90);
+
+        expect(selectIsProcessingComplete(useUploadWizardStore.getState())).toBe(false);
+      });
+
+      it('returns true when at INDEXING stage with 100% progress', () => {
+        useUploadWizardStore.getState().setProcessingStage('INDEXING');
+        useUploadWizardStore.getState().setOverallProgress(100);
+
+        expect(selectIsProcessingComplete(useUploadWizardStore.getState())).toBe(true);
+      });
+
+      it('returns false when stage is null', () => {
+        useUploadWizardStore.getState().setOverallProgress(100);
+
+        expect(selectIsProcessingComplete(useUploadWizardStore.getState())).toBe(false);
       });
     });
   });

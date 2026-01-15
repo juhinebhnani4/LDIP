@@ -42,6 +42,8 @@ const initialState = {
   liveDiscoveries: [] as LiveDiscovery[],
   matterId: null as string | null,
   failedUploads: new Map<string, string>(),
+  // Completion state (Story 9-6)
+  isProcessingComplete: false,
 };
 
 /**
@@ -187,7 +189,13 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
       liveDiscoveries: [],
       matterId: null,
       failedUploads: new Map<string, string>(),
+      isProcessingComplete: false,
     });
+  },
+
+  // Completion actions (Story 9-6)
+  setProcessingComplete: (complete: boolean) => {
+    set({ isProcessingComplete: complete });
   },
 }));
 
@@ -311,4 +319,16 @@ export function selectUploadProgressArray(
   state: UploadWizardStore
 ): UploadProgress[] {
   return Array.from(state.uploadProgress.values());
+}
+
+// =============================================================================
+// Completion Selectors (Story 9-6)
+// =============================================================================
+
+/**
+ * Check if processing is complete (INDEXING stage at 100%)
+ * Used to trigger Stage 5 completion screen
+ */
+export function selectIsProcessingComplete(state: UploadWizardStore): boolean {
+  return state.processingStage === 'INDEXING' && state.overallProgressPct >= 100;
 }

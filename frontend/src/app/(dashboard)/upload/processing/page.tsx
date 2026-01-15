@@ -4,20 +4,27 @@
  * Upload Processing Page
  *
  * Story 9-5: Implement Upload Flow Stages 3-4
+ * Story 9-6: Add Stage 5 completion handling and redirect
  *
- * Shows upload progress (Stage 3) and processing progress with live discoveries (Stage 4).
+ * Shows upload progress (Stage 3), processing progress with live discoveries (Stage 4),
+ * and completion screen with auto-redirect (Stage 5).
  * Uses mock progress simulation for MVP until backend is ready.
  */
 
-import { useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { useUploadWizardStore } from '@/stores/uploadWizardStore';
-import { ProcessingScreen } from '@/components/features/upload';
+import { useUploadWizardStore, selectIsProcessingComplete } from '@/stores/uploadWizardStore';
+import { useBackgroundProcessingStore } from '@/stores/backgroundProcessingStore';
+import { ProcessingScreen, CompletionScreen } from '@/components/features/upload';
 import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
+import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
 
 export default function ProcessingPage() {
   const router = useRouter();
+  const [showCompletion, setShowCompletion] = useState(false);
+
+  // Use selector pattern for store access
   const files = useUploadWizardStore((state) => state.files);
   const reset = useUploadWizardStore((state) => state.reset);
   const clearProcessingState = useUploadWizardStore(
@@ -36,10 +43,30 @@ export default function ProcessingPage() {
     (state) => state.addLiveDiscovery
   );
   const setMatterId = useUploadWizardStore((state) => state.setMatterId);
+  const setProcessingComplete = useUploadWizardStore(
+    (state) => state.setProcessingComplete
+  );
+  const matterName = useUploadWizardStore((state) => state.matterName);
+  const matterId = useUploadWizardStore((state) => state.matterId);
+
+  // Background processing store
+  const addBackgroundMatter = useBackgroundProcessingStore(
+    (state) => state.addBackgroundMatter
+  );
+  const markComplete = useBackgroundProcessingStore((state) => state.markComplete);
+
+  // Use derived selector for completion check
+  const processingStage = useUploadWizardStore((state) => state.processingStage);
+  const overallProgressPct = useUploadWizardStore((state) => state.overallProgressPct);
+  const isProcessingComplete = selectIsProcessingComplete({
+    processingStage,
+    overallProgressPct,
+  } as Parameters<typeof selectIsProcessingComplete>[0]);
 
   // Use ref to track simulation state (avoids re-running effect)
   const simulationStartedRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const isBackgroundedRef = useRef(false);
 
   // Redirect if no files - use layoutEffect to redirect before paint
   useLayoutEffect(() => {
@@ -91,11 +118,46 @@ export default function ProcessingPage() {
     addLiveDiscovery,
   ]);
 
-  // Handle continue in background
-  const handleContinueInBackground = useCallback(() => {
-    // In a real implementation, this would register the matter for background processing
-    // For MVP, we just navigate away (simulation continues until page unmount)
-  }, []);
+  // Detect processing completion and show completion screen (Story 9-6)
+  // Use setTimeout to schedule state updates, avoiding synchronous setState in effect
+  useEffect(() => {
+    if (isProcessingComplete && !showCompletion) {
+      const timer = setTimeout(() => {
+        setShowCompletion(true);
+        setProcessingComplete(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isProcessingComplete, showCompletion, setProcessingComplete]);
+
+  // Handle continue in background (Story 9-6)
+  const handleContinueInBackground = useCallback(async () => {
+    if (!matterId) return;
+
+    // Mark as backgrounded
+    isBackgroundedRef.current = true;
+
+    // Register matter in background processing store
+    addBackgroundMatter({
+      matterId,
+      matterName: matterName || 'New Matter',
+      progressPct: overallProgressPct,
+      status: 'processing',
+      startedAt: new Date(),
+    });
+
+    // Request notification permission if not already granted
+    await requestNotificationPermission();
+
+    // Simulate completion after a delay (mock background processing)
+    // In a real implementation, this would be handled by the backend
+    const remainingProgress = 100 - overallProgressPct;
+    const estimatedTimeMs = Math.max(remainingProgress * 100, 3000); // At least 3 seconds
+
+    setTimeout(() => {
+      markComplete(matterId);
+    }, estimatedTimeMs);
+  }, [matterId, matterName, overallProgressPct, addBackgroundMatter, markComplete]);
 
   // Show loading state while redirecting (files.length === 0)
   if (files.length === 0) {
@@ -107,6 +169,11 @@ export default function ProcessingPage() {
         </div>
       </div>
     );
+  }
+
+  // Show completion screen when processing is done (Stage 5)
+  if (showCompletion) {
+    return <CompletionScreen />;
   }
 
   return (

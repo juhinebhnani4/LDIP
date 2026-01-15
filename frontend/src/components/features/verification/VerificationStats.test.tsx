@@ -51,10 +51,17 @@ describe('VerificationStats', () => {
     expect(screen.getByText('55% Complete')).toBeInTheDocument();
   });
 
-  it('displays verified count', () => {
+  it('displays total findings count', () => {
     render(<VerificationStats stats={mockStats} />);
 
-    expect(screen.getByText('45 verified')).toBeInTheDocument();
+    expect(screen.getByText('100 total')).toBeInTheDocument();
+  });
+
+  it('displays verified count (approved + rejected)', () => {
+    render(<VerificationStats stats={mockStats} />);
+
+    // 45 approved + 10 rejected = 55 verified
+    expect(screen.getByText('55 verified')).toBeInTheDocument();
   });
 
   it('displays pending count', () => {
@@ -162,5 +169,81 @@ describe('VerificationStats', () => {
     render(<VerificationStats stats={emptyStats} />);
 
     expect(screen.getByText('0% Complete')).toBeInTheDocument();
+  });
+});
+
+// Story 10D.2 Task 5: Clickable tier badge tests
+describe('VerificationStats Tier Badge Clicks (Task 5)', () => {
+  it('calls onTierClick with "required" when Required badge is clicked', async () => {
+    const user = userEvent.setup();
+    const onTierClick = vi.fn();
+
+    render(
+      <VerificationStats stats={mockStats} onTierClick={onTierClick} />
+    );
+
+    await user.click(screen.getByText('Required: 10 pending'));
+
+    expect(onTierClick).toHaveBeenCalledWith('required');
+  });
+
+  it('calls onTierClick with "suggested" when Suggested badge is clicked', async () => {
+    const user = userEvent.setup();
+    const onTierClick = vi.fn();
+
+    render(
+      <VerificationStats stats={mockStats} onTierClick={onTierClick} />
+    );
+
+    await user.click(screen.getByText('Suggested: 20 pending'));
+
+    expect(onTierClick).toHaveBeenCalledWith('suggested');
+  });
+
+  it('calls onTierClick with "optional" when Optional badge is clicked', async () => {
+    const user = userEvent.setup();
+    const onTierClick = vi.fn();
+
+    render(
+      <VerificationStats stats={mockStats} onTierClick={onTierClick} />
+    );
+
+    await user.click(screen.getByText('Optional: 10 pending'));
+
+    expect(onTierClick).toHaveBeenCalledWith('optional');
+  });
+
+  it('makes tier badges accessible with role=button when onTierClick provided', () => {
+    const onTierClick = vi.fn();
+
+    render(
+      <VerificationStats stats={mockStats} onTierClick={onTierClick} />
+    );
+
+    const requiredBadge = screen.getByText('Required: 10 pending');
+    expect(requiredBadge).toHaveAttribute('role', 'button');
+    expect(requiredBadge).toHaveAttribute('tabIndex', '0');
+  });
+
+  it('does not have role=button when onTierClick is not provided', () => {
+    render(<VerificationStats stats={mockStats} />);
+
+    const requiredBadge = screen.getByText('Required: 10 pending');
+    expect(requiredBadge).not.toHaveAttribute('role', 'button');
+  });
+
+  it('supports keyboard navigation (Enter key) on tier badges', async () => {
+    const user = userEvent.setup();
+    const onTierClick = vi.fn();
+
+    render(
+      <VerificationStats stats={mockStats} onTierClick={onTierClick} />
+    );
+
+    const requiredBadge = screen.getByText('Required: 10 pending');
+    requiredBadge.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onTierClick).toHaveBeenCalledWith('required');
   });
 });

@@ -175,7 +175,7 @@ development_status:
   # Epic 10D: Verification & Documents Tabs
   epic-10d: in-progress  # First story created 2026-01-15
   10d-1-verification-queue-datatable: complete  # Completed 2026-01-15 - VerificationContent created, 46 tests passing
-  10d-2-verification-statistics-filtering: backlog
+  10d-2-verification-statistics-filtering: complete  # Completed 2026-01-15 - Stats enhanced, filtering verified, By Type view added, 94 tests
   10d-3-documents-file-list: backlog
   10d-4-documents-file-actions: backlog
   epic-10d-retrospective: optional

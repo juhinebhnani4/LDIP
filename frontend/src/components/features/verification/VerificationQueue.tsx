@@ -30,7 +30,7 @@ import {
 } from '@/stores/verificationStore';
 
 type SortDirection = 'asc' | 'desc' | null;
-type SortColumn = 'findingType' | 'confidence' | 'sourceDocument' | null;
+type SortColumn = 'findingType' | 'findingSummary' | 'confidence' | 'sourceDocument' | null;
 
 /**
  * Sort icon component - displays appropriate arrow based on sort state.
@@ -144,6 +144,9 @@ export function VerificationQueue({
         case 'findingType':
           comparison = a.findingType.localeCompare(b.findingType);
           break;
+        case 'findingSummary':
+          comparison = a.findingSummary.localeCompare(b.findingSummary);
+          break;
         case 'sourceDocument':
           comparison = (a.sourceDocument ?? '').localeCompare(b.sourceDocument ?? '');
           break;
@@ -221,7 +224,17 @@ export function VerificationQueue({
                 <SortIcon column="findingType" sortColumn={sortColumn} sortDirection={sortDirection} />
               </Button>
             </TableHead>
-            <TableHead>Description</TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-3 h-8"
+                onClick={() => handleSort('findingSummary')}
+              >
+                Description
+                <SortIcon column="findingSummary" sortColumn={sortColumn} sortDirection={sortDirection} />
+              </Button>
+            </TableHead>
             <TableHead>
               <Button
                 variant="ghost"

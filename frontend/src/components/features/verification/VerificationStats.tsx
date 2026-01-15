@@ -22,6 +22,8 @@ interface VerificationStatsProps {
   isLoading?: boolean;
   /** Callback when "Start Review Session" is clicked */
   onStartSession?: () => void;
+  /** Callback when a tier badge is clicked to filter by that tier */
+  onTierClick?: (tier: 'required' | 'suggested' | 'optional') => void;
 }
 
 /**
@@ -46,6 +48,7 @@ export function VerificationStats({
   stats,
   isLoading = false,
   onStartSession,
+  onTierClick,
 }: VerificationStatsProps) {
   // Loading skeleton
   if (isLoading || !stats) {
@@ -99,8 +102,12 @@ export function VerificationStats({
 
       {/* Statistics summary */}
       <div className="flex items-center gap-4 text-sm">
+        <span className="text-muted-foreground">
+          {stats.totalVerifications} total
+        </span>
+        <span className="text-muted-foreground">|</span>
         <span className="text-green-600 dark:text-green-400">
-          {stats.approvedCount} verified
+          {completedCount} verified
         </span>
         <span className="text-muted-foreground">|</span>
         <span className="text-yellow-600 dark:text-yellow-400">
@@ -128,20 +135,44 @@ export function VerificationStats({
         )}
       </div>
 
-      {/* Category breakdown by verification tier */}
+      {/* Category breakdown by verification tier - clickable to filter */}
       <div className="flex flex-wrap gap-2">
         {stats.requiredPending > 0 && (
-          <Badge variant="destructive" className="font-normal">
+          <Badge
+            variant="destructive"
+            className={`font-normal ${onTierClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+            onClick={onTierClick ? () => onTierClick('required') : undefined}
+            role={onTierClick ? 'button' : undefined}
+            tabIndex={onTierClick ? 0 : undefined}
+            onKeyDown={onTierClick ? (e) => e.key === 'Enter' && onTierClick('required') : undefined}
+            aria-label={onTierClick ? `Filter by required tier (${stats.requiredPending} pending)` : undefined}
+          >
             Required: {stats.requiredPending} pending
           </Badge>
         )}
         {stats.suggestedPending > 0 && (
-          <Badge variant="outline" className="font-normal text-yellow-600 border-yellow-500">
+          <Badge
+            variant="outline"
+            className={`font-normal text-yellow-600 border-yellow-500 ${onTierClick ? 'cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-950' : ''}`}
+            onClick={onTierClick ? () => onTierClick('suggested') : undefined}
+            role={onTierClick ? 'button' : undefined}
+            tabIndex={onTierClick ? 0 : undefined}
+            onKeyDown={onTierClick ? (e) => e.key === 'Enter' && onTierClick('suggested') : undefined}
+            aria-label={onTierClick ? `Filter by suggested tier (${stats.suggestedPending} pending)` : undefined}
+          >
             Suggested: {stats.suggestedPending} pending
           </Badge>
         )}
         {stats.optionalPending > 0 && (
-          <Badge variant="outline" className="font-normal text-green-600 border-green-500">
+          <Badge
+            variant="outline"
+            className={`font-normal text-green-600 border-green-500 ${onTierClick ? 'cursor-pointer hover:bg-green-50 dark:hover:bg-green-950' : ''}`}
+            onClick={onTierClick ? () => onTierClick('optional') : undefined}
+            role={onTierClick ? 'button' : undefined}
+            tabIndex={onTierClick ? 0 : undefined}
+            onKeyDown={onTierClick ? (e) => e.key === 'Enter' && onTierClick('optional') : undefined}
+            aria-label={onTierClick ? `Filter by optional tier (${stats.optionalPending} pending)` : undefined}
+          >
             Optional: {stats.optionalPending} pending
           </Badge>
         )}

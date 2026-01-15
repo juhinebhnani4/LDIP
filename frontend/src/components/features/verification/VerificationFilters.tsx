@@ -166,9 +166,8 @@ export function VerificationFilters({
       </Select>
 
       {/* View Mode Selector
-          TODO: "By Type" and "History" views not yet implemented.
-          Currently all views render the same queue table.
-          Future enhancement: group by finding type, show verification history. */}
+          Story 10D.2 Task 4: Enable "By Type" grouped view.
+          History view still to be implemented. */}
       <Select
         value={filters.view}
         onValueChange={(value) =>
@@ -180,9 +179,7 @@ export function VerificationFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="queue">Queue View</SelectItem>
-          <SelectItem value="by-type" disabled>
-            By Type (coming soon)
-          </SelectItem>
+          <SelectItem value="by-type">By Type</SelectItem>
           <SelectItem value="history" disabled>
             History (coming soon)
           </SelectItem>

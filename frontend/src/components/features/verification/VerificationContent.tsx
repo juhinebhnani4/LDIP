@@ -12,12 +12,14 @@
  */
 
 import { useState, useCallback } from 'react';
+import type { ConfidenceTier } from '@/types';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VerificationStats } from './VerificationStats';
 import { VerificationQueue } from './VerificationQueue';
+import { VerificationGroupedView } from './VerificationGroupedView';
 import { VerificationActions } from './VerificationActions';
 import { VerificationFilters } from './VerificationFilters';
 import { VerificationNotesDialog } from './VerificationNotesDialog';
@@ -233,6 +235,21 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
     [isBulkAction, notesAction, pendingActionId, selectedIds, bulkReject, bulkFlag, reject, flag]
   );
 
+  // Handle tier badge click - apply confidence tier filter
+  // Story 10D.2 Task 5.5: Clickable stat cards apply corresponding filter
+  const handleTierClick = useCallback(
+    (tier: 'required' | 'suggested' | 'optional') => {
+      // Map tier names to confidence tier filter values
+      const tierToConfidence: Record<string, ConfidenceTier> = {
+        required: 'low',      // < 70% confidence
+        suggested: 'medium',  // 70-90% confidence
+        optional: 'high',     // > 90% confidence
+      };
+      setFilters({ confidenceTier: tierToConfidence[tier] });
+    },
+    [setFilters]
+  );
+
   // Show loading state
   if (queueLoading && !filteredQueue.length) {
     return <VerificationSkeleton />;
@@ -245,8 +262,13 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
 
   return (
     <div className="space-y-6">
-      {/* Statistics Header */}
-      <VerificationStats stats={stats} isLoading={statsLoading} onStartSession={onStartSession} />
+      {/* Statistics Header with clickable tier badges */}
+      <VerificationStats
+        stats={stats}
+        isLoading={statsLoading}
+        onStartSession={onStartSession}
+        onTierClick={handleTierClick}
+      />
 
       {/* Filter Controls */}
       <VerificationFilters
@@ -275,18 +297,32 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
         </div>
       )}
 
-      {/* Queue DataTable */}
-      <VerificationQueue
-        data={filteredQueue}
-        isLoading={queueLoading}
-        onApprove={handleApprove}
-        onReject={handleRejectClick}
-        onFlag={handleFlagClick}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleSelected}
-        onSelectAll={selectAll}
-        processingIds={processingIds}
-      />
+      {/* Queue View - conditionally render based on view mode */}
+      {filters.view === 'by-type' ? (
+        <VerificationGroupedView
+          data={filteredQueue}
+          isLoading={queueLoading}
+          onApprove={handleApprove}
+          onReject={handleRejectClick}
+          onFlag={handleFlagClick}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelected}
+          onSelectAll={selectAll}
+          processingIds={processingIds}
+        />
+      ) : (
+        <VerificationQueue
+          data={filteredQueue}
+          isLoading={queueLoading}
+          onApprove={handleApprove}
+          onReject={handleRejectClick}
+          onFlag={handleFlagClick}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelected}
+          onSelectAll={selectAll}
+          processingIds={processingIds}
+        />
+      )}
 
       {/* Notes Dialog for Reject/Flag */}
       <VerificationNotesDialog

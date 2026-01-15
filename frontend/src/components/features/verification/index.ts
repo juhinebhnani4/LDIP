@@ -12,6 +12,7 @@ export { VerificationPage } from './VerificationPage';
 export { VerificationContent } from './VerificationContent';
 export { VerificationStats } from './VerificationStats';
 export { VerificationQueue } from './VerificationQueue';
+export { VerificationGroupedView } from './VerificationGroupedView';
 export { VerificationActions } from './VerificationActions';
 export { VerificationFilters } from './VerificationFilters';
 export { VerificationNotesDialog } from './VerificationNotesDialog';

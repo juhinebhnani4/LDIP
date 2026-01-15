@@ -11,8 +11,7 @@
 
 import { useState, type FC } from 'react';
 import { ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { DiffDetail, VerificationResult } from '@/types/citation';
+import type { VerificationResult } from '@/types/citation';
 
 export interface MismatchExplanationProps {
   /** Verification result containing diff details */

@@ -22,7 +22,6 @@ import {
   selectFailedJobCount,
 } from '@/stores/processingStore';
 import type { JobStatus, ProcessingJob } from '@/types/job';
-import { getJobStatusLabel } from '@/types/job';
 
 interface ProcessingQueueProps {
   /** Matter ID to show jobs for */

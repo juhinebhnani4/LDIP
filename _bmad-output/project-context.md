@@ -416,6 +416,9 @@ Before submitting any code, verify:
 - [ ] No hardcoded secrets or API keys
 - [ ] Error handling uses typed exceptions
 - [ ] Naming conventions match the layer (snake_case/camelCase/PascalCase)
+- [ ] **MANDATORY: Lint passes with zero warnings** - run `npm run lint` (frontend) or `ruff check` (backend) before marking story complete
+- [ ] **MANDATORY: No unused imports or variables** - remove speculative imports that aren't used
+- [ ] **MANDATORY: All destructured hook values are actually consumed** in the component
 
 ---
 

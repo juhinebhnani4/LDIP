@@ -12,7 +12,6 @@ import type {
   EntityMentionsOptions,
   EntityMentionsResponse,
   EntityResponse,
-  EntityWithRelations,
 } from '@/types';
 
 /**

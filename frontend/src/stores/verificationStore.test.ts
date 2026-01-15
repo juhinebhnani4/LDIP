@@ -15,7 +15,7 @@ import {
   getFindingTypeIcon,
 } from './verificationStore';
 import { VerificationDecision, VerificationRequirement } from '@/types';
-import type { VerificationQueueItem, VerificationStats } from '@/types';
+import type { VerificationQueueItem } from '@/types';
 
 describe('verificationStore', () => {
   // Reset store before each test

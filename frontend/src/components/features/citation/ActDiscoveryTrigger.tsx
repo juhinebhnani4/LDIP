@@ -126,7 +126,10 @@ export function ActDiscoveryTrigger({
       .subscribe();
 
     // Also check immediately in case extraction already completed
-    checkForMissingActs();
+    // Use queueMicrotask to avoid synchronous setState in effect body
+    queueMicrotask(() => {
+      checkForMissingActs();
+    });
 
     return () => {
       channel.unsubscribe();

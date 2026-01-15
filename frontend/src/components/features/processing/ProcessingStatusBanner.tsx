@@ -10,7 +10,7 @@ import {
   selectFailedJobCount,
 } from '@/stores/processingStore';
 import type { ProcessingJob } from '@/types/job';
-import { getJobStatusLabel, STAGE_LABELS } from '@/types/job';
+import { STAGE_LABELS } from '@/types/job';
 
 interface ProcessingStatusBannerProps {
   /** Optional callback when banner is dismissed */

@@ -40,9 +40,6 @@ interface JobProgressCardProps {
 export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps) {
   const isProcessing = job.status === 'PROCESSING';
   const isQueued = job.status === 'QUEUED';
-  const currentStageIndex = job.current_stage
-    ? PIPELINE_STAGES.indexOf(job.current_stage as (typeof PIPELINE_STAGES)[number])
-    : -1;
 
   const estimatedTimeRemaining = job.estimated_completion
     ? formatTimeRemaining(job.estimated_completion)

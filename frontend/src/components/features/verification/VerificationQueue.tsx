@@ -32,6 +32,28 @@ import {
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'findingType' | 'confidence' | 'sourceDocument' | null;
 
+/**
+ * Sort icon component - displays appropriate arrow based on sort state.
+ * Defined outside VerificationQueue to avoid recreating during render.
+ */
+function SortIcon({
+  column,
+  sortColumn,
+  sortDirection,
+}: {
+  column: SortColumn;
+  sortColumn: SortColumn;
+  sortDirection: SortDirection;
+}) {
+  if (sortColumn !== column) {
+    return <ArrowUpDown className="ml-2 h-4 w-4" />;
+  }
+  if (sortDirection === 'asc') {
+    return <ArrowUp className="ml-2 h-4 w-4" />;
+  }
+  return <ArrowDown className="ml-2 h-4 w-4" />;
+}
+
 interface VerificationQueueProps {
   /** Queue items to display */
   data: VerificationQueueItem[];
@@ -104,17 +126,6 @@ export function VerificationQueue({
       setSortColumn(column);
       setSortDirection('asc');
     }
-  };
-
-  // Sort icon component
-  const SortIcon = ({ column }: { column: SortColumn }) => {
-    if (sortColumn !== column) {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />;
-    }
-    if (sortDirection === 'asc') {
-      return <ArrowUp className="ml-2 h-4 w-4" />;
-    }
-    return <ArrowDown className="ml-2 h-4 w-4" />;
   };
 
   // Sorted data
@@ -207,7 +218,7 @@ export function VerificationQueue({
                 onClick={() => handleSort('findingType')}
               >
                 Type
-                <SortIcon column="findingType" />
+                <SortIcon column="findingType" sortColumn={sortColumn} sortDirection={sortDirection} />
               </Button>
             </TableHead>
             <TableHead>Description</TableHead>
@@ -219,7 +230,7 @@ export function VerificationQueue({
                 onClick={() => handleSort('confidence')}
               >
                 Confidence
-                <SortIcon column="confidence" />
+                <SortIcon column="confidence" sortColumn={sortColumn} sortDirection={sortDirection} />
               </Button>
             </TableHead>
             <TableHead>
@@ -230,7 +241,7 @@ export function VerificationQueue({
                 onClick={() => handleSort('sourceDocument')}
               >
                 Source
-                <SortIcon column="sourceDocument" />
+                <SortIcon column="sourceDocument" sortColumn={sortColumn} sortDirection={sortDirection} />
               </Button>
             </TableHead>
             <TableHead>Actions</TableHead>

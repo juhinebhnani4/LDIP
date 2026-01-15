@@ -9,7 +9,6 @@ import type {
   DocumentStatus,
   DocumentType,
   PaginationMeta,
-  SortOrder,
 } from '@/types/document';
 import {
   bulkUpdateDocuments,

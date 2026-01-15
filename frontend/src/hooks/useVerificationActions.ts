@@ -12,7 +12,6 @@ import { useCallback, useState } from 'react';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { verificationsApi } from '@/lib/api/verifications';
 import { VerificationDecision } from '@/types';
-import type { VerificationQueueItem } from '@/types';
 
 interface UseVerificationActionsOptions {
   /** Matter ID for API calls */

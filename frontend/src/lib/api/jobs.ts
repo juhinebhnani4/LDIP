@@ -18,7 +18,6 @@ import type {
   JobSkipResponse,
   JobStatus,
   JobType,
-  ProcessingJob,
 } from '@/types/job'
 
 // =============================================================================

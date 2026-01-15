@@ -63,7 +63,6 @@ export function VerificationPage({ matterId }: VerificationPageProps) {
   const {
     stats,
     isLoading: statsLoading,
-    completionPercent,
     refresh: refreshStats,
   } = useVerificationStats({ matterId });
 

@@ -10,7 +10,7 @@ vi.mock('@/lib/api/documents', () => ({
   requestManualReview: vi.fn(),
 }));
 
-import { fetchOCRQuality, requestManualReview } from '@/lib/api/documents';
+import { fetchOCRQuality } from '@/lib/api/documents';
 
 // Mock sonner toast
 vi.mock('sonner', () => ({

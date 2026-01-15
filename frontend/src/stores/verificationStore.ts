@@ -19,9 +19,7 @@ import type {
   VerificationStats,
   VerificationFilters,
   ConfidenceTier,
-  VerificationView,
 } from '@/types';
-import { VerificationDecision } from '@/types';
 
 // =============================================================================
 // Store Types

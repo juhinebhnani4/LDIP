@@ -15,7 +15,6 @@ import type {
   DocumentSort,
   DocumentType,
   DocumentUpdateRequest,
-  ManualReviewRequest,
   ManualReviewResponse,
   OCRConfidenceResult,
   OCRQualityResponse,

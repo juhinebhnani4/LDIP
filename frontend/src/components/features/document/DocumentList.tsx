@@ -328,7 +328,8 @@ export function DocumentList({
   const handleViewDocument = async (doc: DocumentListItem) => {
     try {
       const document = await fetchDocument(doc.id);
-      // Open the signed URL in a new tab
+      // Note: fetchDocument returns a Document where storagePath contains the signed URL
+      // (the backend populates storage_path with the signed URL for viewing - see documents.py:953-977)
       window.open(document.storagePath, '_blank');
     } catch {
       toast.error('Failed to open document');

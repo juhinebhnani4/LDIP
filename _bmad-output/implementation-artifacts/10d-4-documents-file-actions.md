@@ -1,6 +1,6 @@
 # Story 10D.4: Implement Documents Tab File Actions
 
-Status: ready-for-review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -615,4 +615,39 @@ feat(documents): implement documents tab file actions (Story 10D.4)
 ### Completion Notes List
 
 ### File List
+
+#### Frontend - New Components
+- `frontend/src/components/features/document/DocumentActionMenu.tsx` - Dropdown action menu component
+- `frontend/src/components/features/document/RenameDocumentDialog.tsx` - Rename document dialog
+- `frontend/src/components/features/document/DeleteDocumentDialog.tsx` - Delete confirmation dialog
+
+#### Frontend - Modified Files
+- `frontend/src/components/features/document/DocumentList.tsx` - Integrated action menu, added handlers
+- `frontend/src/components/features/document/index.ts` - Added exports for new components
+- `frontend/src/lib/api/documents.ts` - Added deleteDocument, renameDocument functions
+- `frontend/src/types/document.ts` - Added filename to DocumentUpdateRequest
+
+#### Frontend - Test Files
+- `frontend/src/components/features/document/__tests__/DocumentActionMenu.test.tsx` - 14 tests
+- `frontend/src/components/features/document/__tests__/RenameDocumentDialog.test.tsx` - 21 tests
+- `frontend/src/components/features/document/__tests__/DeleteDocumentDialog.test.tsx` - 10 tests
+- `frontend/src/components/features/document/DocumentList.test.tsx` - Updated tests
+
+#### Backend - Modified Files
+- `backend/app/api/routes/documents.py` - Added DELETE endpoint, updated exception handling
+- `backend/app/models/document.py` - Added filename field to DocumentUpdateRequest
+- `backend/app/services/document_service.py` - Added soft_delete_document, filename update support
+
+#### Backend - Test Files
+- `backend/tests/services/test_document_service.py` - Tests for delete and rename
+
+#### Database Migrations
+- `supabase/migrations/20260115000002_add_documents_soft_delete.sql` - Added deleted_at column
+
+### Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-01-15 | Initial implementation of document file actions | Dev Agent |
+| 2026-01-15 | Code review fixes: removed unused import, added clarifying comments, fixed test act() warnings, removed unused variable, improved exception chaining, added null pageCount test | Code Review |
 

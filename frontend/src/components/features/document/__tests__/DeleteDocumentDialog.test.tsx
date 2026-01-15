@@ -111,7 +111,11 @@ describe('DeleteDocumentDialog', () => {
     expect(screen.getByRole('button', { name: /deleting/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /deleting/i })).toBeDisabled();
 
+    // Resolve the promise and wait for state update to complete
     resolveDelete!();
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalled();
+    });
   });
 
   it('disables buttons during deletion', async () => {
@@ -129,7 +133,11 @@ describe('DeleteDocumentDialog', () => {
     expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /deleting/i })).toBeDisabled();
 
+    // Resolve the promise and wait for state update to complete
     resolveDelete!();
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalled();
+    });
   });
 
   it('resets deleting state after error', async () => {

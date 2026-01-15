@@ -26,6 +26,12 @@ const mockActDocument: DocumentListItem = {
   isReferenceMaterial: true,
 };
 
+const mockDocumentWithNullPageCount: DocumentListItem = {
+  ...mockDocument,
+  id: 'doc-null-pages',
+  pageCount: null,
+};
+
 describe('DocumentActionMenu', () => {
   const defaultProps = {
     document: mockDocument,
@@ -165,5 +171,20 @@ describe('DocumentActionMenu', () => {
 
     const trigger = screen.getByRole('button', { name: /actions for/i });
     expect(trigger).toBeDisabled();
+  });
+
+  it('handles document with null pageCount', async () => {
+    const user = userEvent.setup();
+    render(<DocumentActionMenu {...defaultProps} document={mockDocumentWithNullPageCount} />);
+
+    const trigger = screen.getByRole('button', {
+      name: `Actions for ${mockDocumentWithNullPageCount.filename}`,
+    });
+    await user.click(trigger);
+
+    // Menu should still render all options correctly
+    expect(screen.getByRole('menuitem', { name: /view/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /rename/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /set as act/i })).toBeInTheDocument();
   });
 });

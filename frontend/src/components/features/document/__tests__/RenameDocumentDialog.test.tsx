@@ -201,7 +201,11 @@ describe('RenameDocumentDialog', () => {
     expect(screen.getByRole('button', { name: /renaming/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /renaming/i })).toBeDisabled();
 
+    // Resolve the promise and wait for state update to complete
     resolveRename!();
+    await waitFor(() => {
+      expect(onRename).toHaveBeenCalled();
+    });
   });
 
   it('resets form when dialog opens with new document', async () => {

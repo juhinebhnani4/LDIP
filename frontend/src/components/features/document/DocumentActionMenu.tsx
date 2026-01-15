@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { DocumentListItem, DocumentType } from '@/types/document';
+import type { DocumentListItem } from '@/types/document';
 import type { MatterRole } from '@/types/matter';
 
 export interface DocumentActionMenuProps {

@@ -468,7 +468,6 @@ async def _extract_and_upload_zip(
     documents: list[UploadedDocument] = []
     uploaded_paths: list[str] = []  # Track storage paths for rollback
     created_doc_ids: list[str] = []  # Track document IDs for rollback
-    rollback_errors: list[dict] = []  # Track rollback failures for reporting
 
     try:
         with zipfile.ZipFile(io.BytesIO(zip_content)) as zf:
@@ -543,7 +542,7 @@ async def _extract_and_upload_zip(
 
             return documents
 
-    except zipfile.BadZipFile:
+    except zipfile.BadZipFile as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -553,7 +552,7 @@ async def _extract_and_upload_zip(
                     "details": {},
                 }
             },
-        )
+        ) from err
     except HTTPException:
         # Re-raise HTTP exceptions without modification
         raise
@@ -627,7 +626,7 @@ async def _extract_and_upload_zip(
                     "details": error_details,
                 }
             },
-        )
+        ) from e
 
 
 @router.post(

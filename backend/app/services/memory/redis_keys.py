@@ -381,3 +381,49 @@ def embedding_cache_key(text_hash: str) -> str:
         raise ValueError("text_hash must be a valid hex hash (32-64 characters)")
 
     return f"embedding:{text_hash}"
+
+
+# =============================================================================
+# Summary Cache Key Functions (Story 14.1)
+# =============================================================================
+
+SUMMARY_CACHE_TTL = 60 * 60  # 1 hour in seconds
+
+
+def summary_cache_key(matter_id: str) -> str:
+    """Generate a Redis key for cached matter summary.
+
+    Story 14.1: AC #4 - Summary cached in Redis with 1-hour TTL.
+    Cache key format: summary:{matter_id}
+
+    Args:
+        matter_id: The matter UUID.
+
+    Returns:
+        Redis key in format: summary:{matter_id}
+
+    Raises:
+        ValueError: If matter_id is invalid.
+
+    Example:
+        >>> key = summary_cache_key("abc-123-def-456")
+        >>> key
+        'summary:abc-123-def-456'
+    """
+    _validate_uuid(matter_id, "matter_id")
+    return f"summary:{matter_id}"
+
+
+def summary_cache_pattern() -> str:
+    """Generate a Redis SCAN pattern for all summary cache keys.
+
+    Use for bulk invalidation if needed.
+
+    Returns:
+        Redis pattern for SCAN command.
+
+    Example:
+        >>> summary_cache_pattern()
+        'summary:*'
+    """
+    return "summary:*"

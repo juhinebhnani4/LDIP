@@ -217,7 +217,7 @@ development_status:
   epic-14-mvp-gaps: in-progress  # First story (14-1) created 2026-01-16
 
   # CRITICAL GAPS (Blocking MVP)
-  14-1-summary-api-endpoint: in-progress  # GET /api/matters/{id}/summary - Executive summary generation (GPT-4)
+  14-1-summary-api-endpoint: done         # Completed 2026-01-16 - 34 tests passing, all ACs met
   14-2-contradictions-list-api: backlog     # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
   14-3-upload-stage-3-4: backlog            # Story 9.5 - 0% complete, Processing progress + Live discoveries UI
 

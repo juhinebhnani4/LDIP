@@ -42,6 +42,8 @@ const initialState = {
   liveDiscoveries: [] as LiveDiscovery[],
   matterId: null as string | null,
   failedUploads: new Map<string, string>(),
+  // Story 14-3: Track uploaded document IDs for wiring to real APIs
+  uploadedDocumentIds: [] as string[],
   // Completion state (Story 9-6)
   isProcessingComplete: false,
 };
@@ -189,8 +191,15 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
       liveDiscoveries: [],
       matterId: null,
       failedUploads: new Map<string, string>(),
+      uploadedDocumentIds: [],
       isProcessingComplete: false,
     });
+  },
+
+  // Story 14-3: Track uploaded document IDs
+  addUploadedDocumentId: (documentId: string) => {
+    const currentIds = get().uploadedDocumentIds;
+    set({ uploadedDocumentIds: [...currentIds, documentId] });
   },
 
   // Completion actions (Story 9-6)

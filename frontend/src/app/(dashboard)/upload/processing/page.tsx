@@ -5,10 +5,14 @@
  *
  * Story 9-5: Implement Upload Flow Stages 3-4
  * Story 9-6: Add Stage 5 completion handling and redirect
+ * Story 14-3: Wire to real backend APIs (with mock fallback)
  *
  * Shows upload progress (Stage 3), processing progress with live discoveries (Stage 4),
  * and completion screen with auto-redirect (Stage 5).
- * Uses mock progress simulation for MVP until backend is ready.
+ *
+ * Feature flag: NEXT_PUBLIC_USE_MOCK_PROCESSING
+ * - true (default in dev): Use mock simulation
+ * - false (production): Use real backend APIs
  */
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
@@ -18,11 +22,21 @@ import { useUploadWizardStore, selectIsProcessingComplete } from '@/stores/uploa
 import { useBackgroundProcessingStore } from '@/stores/backgroundProcessingStore';
 import { ProcessingScreen, CompletionScreen } from '@/components/features/upload';
 import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
+import { createMatterAndUpload } from '@/lib/api/upload-orchestration';
+import { useProcessingStatus } from '@/hooks/useProcessingStatus';
 import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
+
+/**
+ * Feature flag to toggle between mock and real processing.
+ * Default to mock (true) for development safety.
+ * Set NEXT_PUBLIC_USE_MOCK_PROCESSING=false for production.
+ */
+const USE_MOCK_PROCESSING = process.env.NEXT_PUBLIC_USE_MOCK_PROCESSING !== 'false';
 
 export default function ProcessingPage() {
   const router = useRouter();
   const [showCompletion, setShowCompletion] = useState(false);
+  const [uploadPhaseComplete, setUploadPhaseComplete] = useState(false);
 
   // Use selector pattern for store access
   const files = useUploadWizardStore((state) => state.files);
@@ -46,6 +60,9 @@ export default function ProcessingPage() {
   const setProcessingComplete = useUploadWizardStore(
     (state) => state.setProcessingComplete
   );
+  const addUploadedDocumentId = useUploadWizardStore(
+    (state) => state.addUploadedDocumentId
+  );
   const matterName = useUploadWizardStore((state) => state.matterName);
   const matterId = useUploadWizardStore((state) => state.matterId);
 
@@ -58,19 +75,53 @@ export default function ProcessingPage() {
   // Use derived selector for completion check
   const processingStage = useUploadWizardStore((state) => state.processingStage);
   const overallProgressPct = useUploadWizardStore((state) => state.overallProgressPct);
-  const isProcessingComplete = selectIsProcessingComplete({
-    processingStage,
-    overallProgressPct,
-  } as Parameters<typeof selectIsProcessingComplete>[0]);
 
-  // Use ref to track simulation state (avoids re-running effect)
-  const simulationStartedRef = useRef(false);
+  // Use ref to track simulation/upload state (avoids re-running effect)
+  const processingStartedRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
   const isBackgroundedRef = useRef(false);
 
+  // Real API: Poll processing status when we have a matter ID and upload is complete
+  const {
+    overallProgress: realProgress,
+    currentStage: realStage,
+    isComplete: realIsComplete,
+    hasFailed: realHasFailed,
+    error: processingError,
+  } = useProcessingStatus(
+    // Only poll if NOT using mock and upload phase is complete
+    !USE_MOCK_PROCESSING && uploadPhaseComplete ? matterId : null,
+    {
+      pollingInterval: 1000,
+      enabled: !USE_MOCK_PROCESSING && uploadPhaseComplete && !!matterId,
+      stopOnComplete: true,
+    }
+  );
+
+  // Sync real API progress to store when using real APIs
+  useEffect(() => {
+    if (!USE_MOCK_PROCESSING && uploadPhaseComplete && matterId) {
+      setProcessingStage(realStage);
+      setOverallProgress(realProgress);
+    }
+  }, [
+    realStage,
+    realProgress,
+    uploadPhaseComplete,
+    matterId,
+    setProcessingStage,
+    setOverallProgress,
+  ]);
+
+  // Compute completion state
+  const isProcessingComplete = USE_MOCK_PROCESSING
+    ? selectIsProcessingComplete({
+        processingStage,
+        overallProgressPct,
+      } as Parameters<typeof selectIsProcessingComplete>[0])
+    : realIsComplete;
+
   // Redirect if no files - use useLayoutEffect to redirect before paint
-  // This prevents a flash of content before redirect. Safe in client component ('use client').
-  // Note: useLayoutEffect warnings in SSR are not an issue here because this is a client component.
   useLayoutEffect(() => {
     if (files.length === 0) {
       reset();
@@ -78,30 +129,78 @@ export default function ProcessingPage() {
     }
   }, [files.length, reset, router]);
 
-  // Start simulation when component mounts (with files)
+  // Start processing when component mounts (with files)
   useEffect(() => {
-    if (files.length > 0 && !simulationStartedRef.current) {
-      simulationStartedRef.current = true;
+    if (files.length > 0 && !processingStartedRef.current) {
+      processingStartedRef.current = true;
 
       // Clear any previous processing state
       clearProcessingState();
 
-      // Generate mock matter ID
-      const mockMatterId = `matter-${Date.now()}`;
-      setMatterId(mockMatterId);
+      if (USE_MOCK_PROCESSING) {
+        // MOCK MODE: Use simulation
+        const mockMatterId = `matter-${Date.now()}`;
+        setMatterId(mockMatterId);
 
-      // Start the simulation
-      const cleanup = simulateUploadAndProcessing(files, {
-        onUploadProgress: setUploadProgress,
-        onProcessingStage: setProcessingStage,
-        onOverallProgress: setOverallProgress,
-        onDiscovery: addLiveDiscovery,
-        onComplete: () => {
-          // Simulation complete - processing finished
-        },
-      });
+        const cleanup = simulateUploadAndProcessing(files, {
+          onUploadProgress: setUploadProgress,
+          onProcessingStage: setProcessingStage,
+          onOverallProgress: setOverallProgress,
+          onDiscovery: addLiveDiscovery,
+          onComplete: () => {
+            // Simulation complete
+          },
+        });
 
-      cleanupRef.current = cleanup;
+        cleanupRef.current = cleanup;
+      } else {
+        // REAL MODE: Create matter and upload files
+        setProcessingStage('UPLOADING');
+        setOverallProgress(0);
+
+        const abortController = new AbortController();
+        cleanupRef.current = () => abortController.abort();
+
+        void (async () => {
+          try {
+            const result = await createMatterAndUpload(
+              matterName || 'New Matter',
+              files,
+              {
+                onMatterCreated: (id) => {
+                  setMatterId(id);
+                },
+                onUploadProgress: (fileName, progress) => {
+                  setUploadProgress(fileName, progress);
+                },
+                onFileUploaded: (_fileName, documentId) => {
+                  addUploadedDocumentId(documentId);
+                },
+                onFileError: (fileName, error) => {
+                  // Log error but continue with other files
+                  console.error(`Upload failed for ${fileName}: ${error}`);
+                },
+                onAllUploadsComplete: (successCount, _failedCount) => {
+                  if (successCount > 0) {
+                    // Transition to processing phase - polling will take over
+                    setUploadPhaseComplete(true);
+                    setProcessingStage('OCR');
+                  }
+                },
+              },
+              abortController.signal
+            );
+
+            // Mark upload phase complete if we have uploads
+            if (result.uploadedDocuments.size > 0) {
+              setUploadPhaseComplete(true);
+            }
+          } catch (err) {
+            console.error('Upload orchestration failed:', err);
+            // Could show error state here
+          }
+        })();
+      }
     }
 
     // Cleanup on unmount
@@ -112,16 +211,17 @@ export default function ProcessingPage() {
     };
   }, [
     files,
+    matterName,
     clearProcessingState,
     setMatterId,
     setUploadProgress,
     setProcessingStage,
     setOverallProgress,
     addLiveDiscovery,
+    addUploadedDocumentId,
   ]);
 
-  // Detect processing completion and show completion screen (Story 9-6)
-  // Use setTimeout to schedule state updates, avoiding synchronous setState in effect
+  // Detect processing completion and show completion screen
   useEffect(() => {
     if (isProcessingComplete && !showCompletion) {
       const timer = setTimeout(() => {
@@ -132,7 +232,7 @@ export default function ProcessingPage() {
     }
   }, [isProcessingComplete, showCompletion, setProcessingComplete]);
 
-  // Handle continue in background (Story 9-6)
+  // Handle continue in background
   const handleContinueInBackground = useCallback(async () => {
     if (!matterId) return;
 
@@ -151,14 +251,17 @@ export default function ProcessingPage() {
     // Request notification permission if not already granted
     await requestNotificationPermission();
 
-    // Simulate completion after a delay (mock background processing)
-    // In a real implementation, this would be handled by the backend
-    const remainingProgress = 100 - overallProgressPct;
-    const estimatedTimeMs = Math.max(remainingProgress * 100, 3000); // At least 3 seconds
+    if (USE_MOCK_PROCESSING) {
+      // Mock: Simulate completion after a delay
+      const remainingProgress = 100 - overallProgressPct;
+      const estimatedTimeMs = Math.max(remainingProgress * 100, 3000);
 
-    setTimeout(() => {
-      markComplete(matterId);
-    }, estimatedTimeMs);
+      setTimeout(() => {
+        markComplete(matterId);
+      }, estimatedTimeMs);
+    }
+    // Real mode: Background polling will continue via backgroundProcessingStore
+    // (Future enhancement: could add background polling for real matters)
   }, [matterId, matterName, overallProgressPct, addBackgroundMatter, markComplete]);
 
   // Show loading state while redirecting (files.length === 0)

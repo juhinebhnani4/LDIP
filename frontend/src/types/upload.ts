@@ -207,6 +207,8 @@ export interface UploadWizardState {
   matterId: string | null;
   /** Failed file uploads */
   failedUploads: Map<string, string>;
+  /** Uploaded document IDs (Story 14-3) */
+  uploadedDocumentIds: string[];
 
   // Completion state (Story 9-6)
   /** Whether processing has completed (Stage 5) */
@@ -252,6 +254,8 @@ export interface UploadWizardActions {
   setUploadFailed: (fileName: string, errorMessage: string) => void;
   /** Clear all processing state (for reset) */
   clearProcessingState: () => void;
+  /** Add an uploaded document ID (Story 14-3) */
+  addUploadedDocumentId: (documentId: string) => void;
 
   // Completion actions (Story 9-6)
   /** Set processing complete state */

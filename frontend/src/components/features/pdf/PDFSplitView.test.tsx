@@ -189,7 +189,7 @@ describe('PDFSplitView', () => {
       // Click expand button
       fireEvent.click(screen.getByRole('button', { name: /open document in full screen/i }));
 
-      expect(toast.info).toHaveBeenCalledWith('Full screen view coming soon');
+      expect(toast.info).toHaveBeenCalledWith('Full screen mode will be available in Story 11.6');
     });
 
     it('workspace content remains interactive (AC: #1)', () => {

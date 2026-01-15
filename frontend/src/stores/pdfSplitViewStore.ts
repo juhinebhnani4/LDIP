@@ -44,6 +44,9 @@ interface PdfSplitViewState {
   /** Current page being viewed */
   currentPage: number;
 
+  /** Total number of pages in the document */
+  totalPages: number;
+
   /** Current zoom scale */
   scale: number;
 
@@ -67,6 +70,9 @@ interface PdfSplitViewActions {
 
   /** Set the current page */
   setCurrentPage: (page: number) => void;
+
+  /** Set the total number of pages */
+  setTotalPages: (totalPages: number) => void;
 
   /** Set the zoom scale */
   setScale: (scale: number) => void;
@@ -94,6 +100,7 @@ const initialState: PdfSplitViewState = {
   documentId: null,
   initialPage: 1,
   currentPage: 1,
+  totalPages: 0,
   scale: 1.0,
   boundingBoxes: [],
   chunkId: null,
@@ -122,7 +129,12 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
       documentId: source.documentId,
       initialPage: page,
       currentPage: page,
+      totalPages: 0, // Will be set when PDF loads
       chunkId: source.chunkId ?? null,
+      // NOTE: Bounding boxes are stored but not currently populated from API.
+      // The infrastructure exists to support source text highlighting (AC: #4),
+      // but bbox data retrieval from chunk API is deferred to post-MVP.
+      // When bbox data becomes available, call setBoundingBoxes() after opening.
       boundingBoxes: [],
       scale: 1.0,
     });
@@ -137,6 +149,7 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
       documentId: null,
       initialPage: 1,
       currentPage: 1,
+      totalPages: 0,
       boundingBoxes: [],
       chunkId: null,
       scale: 1.0,
@@ -145,6 +158,10 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
 
   setCurrentPage: (page: number) => {
     set({ currentPage: page });
+  },
+
+  setTotalPages: (totalPages: number) => {
+    set({ totalPages });
   },
 
   setScale: (scale: number) => {
@@ -181,6 +198,10 @@ export const selectPdfDocumentName = (state: PdfSplitViewStore) =>
 /** Select current page */
 export const selectPdfCurrentPage = (state: PdfSplitViewStore) =>
   state.currentPage;
+
+/** Select total pages */
+export const selectPdfTotalPages = (state: PdfSplitViewStore) =>
+  state.totalPages;
 
 /** Select initial page */
 export const selectPdfInitialPage = (state: PdfSplitViewStore) =>

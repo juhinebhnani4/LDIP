@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { WorkspaceContentArea } from './WorkspaceContentArea';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
+import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
+import type { SourceReference } from '@/types/chat';
 
 // Mock ResizablePanelGroup and related components
 vi.mock('@/components/ui/resizable', () => ({
@@ -51,17 +54,46 @@ vi.mock('@/components/ui/resizable', () => ({
   ),
 }));
 
-// Mock Q&A Panel components - no longer take matterId prop
+// Capture onSourceClick callback from QAPanel
+let capturedOnSourceClick: ((source: SourceReference) => void) | undefined;
+
+// Mock Q&A Panel components - capture onSourceClick for testing
 vi.mock('@/components/features/chat/QAPanel', () => ({
-  QAPanel: () => <div data-testid="qa-panel">QA Panel</div>,
+  QAPanel: ({ onSourceClick }: { onSourceClick?: (source: SourceReference) => void }) => {
+    capturedOnSourceClick = onSourceClick;
+    return <div data-testid="qa-panel">QA Panel</div>;
+  },
 }));
 
 vi.mock('@/components/features/chat/FloatingQAPanel', () => ({
-  FloatingQAPanel: () => <div data-testid="floating-qa-panel">Floating QA</div>,
+  FloatingQAPanel: ({ onSourceClick }: { onSourceClick?: (source: SourceReference) => void }) => {
+    capturedOnSourceClick = onSourceClick;
+    return <div data-testid="floating-qa-panel">Floating QA</div>;
+  },
 }));
 
 vi.mock('@/components/features/chat/QAPanelExpandButton', () => ({
   QAPanelExpandButton: () => <button data-testid="qa-expand-button">Expand</button>,
+}));
+
+// Mock PDFSplitView component
+vi.mock('@/components/features/pdf/PDFSplitView', () => ({
+  PDFSplitView: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="pdf-split-view">{children}</div>
+  ),
+}));
+
+// Mock toast
+const mockToastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    error: (msg: string) => mockToastError(msg),
+  },
+}));
+
+// Mock useUser hook
+vi.mock('@/hooks', () => ({
+  useUser: () => ({ user: { id: 'test-user-123' } }),
 }));
 
 describe('WorkspaceContentArea', () => {
@@ -73,7 +105,12 @@ describe('WorkspaceContentArea', () => {
     // Reset store state
     act(() => {
       useQAPanelStore.getState().reset();
+      usePdfSplitViewStore.getState().reset();
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('Right sidebar layout (AC #1, #2)', () => {
@@ -424,6 +461,131 @@ describe('WorkspaceContentArea', () => {
 
       const contentWrapper = container.querySelector('.h-full');
       expect(contentWrapper).toBeInTheDocument();
+    });
+  });
+
+  describe('handleSourceClick (Story 11.5)', () => {
+    const mockSource: SourceReference = {
+      documentId: 'doc-123',
+      documentName: 'Test Document.pdf',
+      page: 5,
+      chunkId: 'chunk-456',
+      confidence: 85,
+    };
+
+    beforeEach(() => {
+      capturedOnSourceClick = undefined;
+      act(() => {
+        useQAPanelStore.getState().setPosition('right');
+      });
+    });
+
+    it('opens PDF split view on successful fetch', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          data: { storage_path: 'https://example.com/doc.pdf' },
+        }),
+      });
+      global.fetch = mockFetch;
+
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      // Trigger onSourceClick callback
+      await act(async () => {
+        capturedOnSourceClick?.(mockSource);
+      });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith('/api/documents/doc-123');
+      });
+
+      // Verify PDF split view store was updated
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isOpen).toBe(true);
+      expect(state.documentUrl).toBe('https://example.com/doc.pdf');
+      expect(state.documentName).toBe('Test Document.pdf');
+    });
+
+    it('shows error toast when fetch fails with non-200 status', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+      });
+      global.fetch = mockFetch;
+
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      await act(async () => {
+        capturedOnSourceClick?.(mockSource);
+      });
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Unable to open document. Please try again.');
+      });
+
+      // Verify PDF split view store was NOT updated
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isOpen).toBe(false);
+    });
+
+    it('shows error toast when network error occurs', async () => {
+      const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      global.fetch = mockFetch;
+
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      await act(async () => {
+        capturedOnSourceClick?.(mockSource);
+      });
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Unable to open document. Please try again.');
+      });
+
+      // Verify PDF split view store was NOT updated
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isOpen).toBe(false);
+    });
+
+    it('shows error toast when storage_path is missing from response', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          data: { id: 'doc-123' }, // missing storage_path
+        }),
+      });
+      global.fetch = mockFetch;
+
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      await act(async () => {
+        capturedOnSourceClick?.(mockSource);
+      });
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Unable to open document. Please try again.');
+      });
+
+      // Verify PDF split view store was NOT updated
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isOpen).toBe(false);
     });
   });
 });

@@ -136,6 +136,7 @@ export {
   selectPdfDocumentUrl,
   selectPdfDocumentName,
   selectPdfCurrentPage,
+  selectPdfTotalPages,
   selectPdfInitialPage,
   selectPdfScale,
   selectPdfBoundingBoxes,

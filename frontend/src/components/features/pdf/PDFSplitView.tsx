@@ -26,6 +26,7 @@ import {
   selectPdfDocumentUrl,
   selectPdfDocumentName,
   selectPdfCurrentPage,
+  selectPdfTotalPages,
   selectPdfScale,
 } from '@/stores/pdfSplitViewStore';
 
@@ -44,10 +45,12 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
   const documentUrl = usePdfSplitViewStore(selectPdfDocumentUrl);
   const documentName = usePdfSplitViewStore(selectPdfDocumentName);
   const currentPage = usePdfSplitViewStore(selectPdfCurrentPage);
+  const totalPages = usePdfSplitViewStore(selectPdfTotalPages);
   const scale = usePdfSplitViewStore(selectPdfScale);
 
   // Actions
   const setCurrentPage = usePdfSplitViewStore((state) => state.setCurrentPage);
+  const setTotalPages = usePdfSplitViewStore((state) => state.setTotalPages);
   const setScale = usePdfSplitViewStore((state) => state.setScale);
   const closePdfSplitView = usePdfSplitViewStore(
     (state) => state.closePdfSplitView
@@ -56,8 +59,16 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
   // Handle expand to full modal (Story 11.6 - placeholder)
   const handleExpand = useCallback(() => {
     // Story 11.6 will implement full modal view
-    toast.info('Full screen view coming soon');
+    toast.info('Full screen mode will be available in Story 11.6');
   }, []);
+
+  // Handle total pages update from PDF viewer
+  const handleTotalPagesChange = useCallback(
+    (pages: number) => {
+      setTotalPages(pages);
+    },
+    [setTotalPages]
+  );
 
   // Keyboard handler for Escape key
   useEffect(() => {
@@ -108,6 +119,8 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
         <div className="flex h-full flex-col border-l">
           <PDFSplitViewHeader
             documentName={documentName ?? 'Document'}
+            currentPage={currentPage}
+            totalPages={totalPages > 0 ? totalPages : undefined}
             onClose={closePdfSplitView}
             onExpand={handleExpand}
           />
@@ -118,6 +131,7 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
               scale={scale}
               onPageChange={setCurrentPage}
               onScaleChange={setScale}
+              onTotalPagesChange={handleTotalPagesChange}
               panelTitle={documentName ?? 'Document'}
             />
           </PdfErrorBoundary>

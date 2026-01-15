@@ -68,6 +68,8 @@ export interface PdfViewerPanelProps {
   onPageChange?: (page: number) => void;
   /** Callback when scale changes */
   onScaleChange?: (scale: number) => void;
+  /** Callback when total pages is determined (after PDF loads) */
+  onTotalPagesChange?: (totalPages: number) => void;
   /** Panel title for accessibility */
   panelTitle?: string;
   /** Optional className */
@@ -93,6 +95,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
   scale: controlledScale,
   onPageChange,
   onScaleChange,
+  onTotalPagesChange,
   panelTitle,
   className,
 }) => {
@@ -169,6 +172,8 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
 
         setPdfDoc(doc as unknown as PDFDocumentProxy);
         setNumPages(doc.numPages);
+        // Notify parent of total pages for header display
+        onTotalPagesChange?.(doc.numPages);
         setIsLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -182,7 +187,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [documentUrl]);
+  }, [documentUrl, onTotalPagesChange]);
 
   // Render current page
   useEffect(() => {

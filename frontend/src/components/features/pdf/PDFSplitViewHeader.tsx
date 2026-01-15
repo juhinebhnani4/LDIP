@@ -15,6 +15,10 @@ import { Button } from '@/components/ui/button';
 export interface PDFSplitViewHeaderProps {
   /** Document filename to display */
   documentName: string;
+  /** Current page number being viewed */
+  currentPage?: number;
+  /** Total number of pages in the document */
+  totalPages?: number;
   /** Callback when close button is clicked */
   onClose: () => void;
   /** Callback when expand button is clicked */
@@ -27,24 +31,42 @@ export interface PDFSplitViewHeaderProps {
  */
 export function PDFSplitViewHeader({
   documentName,
+  currentPage,
+  totalPages,
   onClose,
   onExpand,
 }: PDFSplitViewHeaderProps) {
+  // Format page info display
+  const pageInfo =
+    currentPage !== undefined && totalPages !== undefined
+      ? `${currentPage} / ${totalPages}`
+      : null;
+
   return (
     <div
       className="flex items-center justify-between border-b bg-muted/50 px-3 py-2"
       role="banner"
       aria-label="PDF viewer header"
     >
-      <span
-        className="truncate text-sm font-medium"
-        title={documentName}
-        aria-label={`Document: ${documentName}`}
-      >
-        {documentName}
-      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span
+          className="truncate text-sm font-medium"
+          title={documentName}
+          aria-label={`Document: ${documentName}`}
+        >
+          {documentName}
+        </span>
+        {pageInfo && (
+          <span
+            className="shrink-0 text-xs text-muted-foreground"
+            aria-label={`Page ${currentPage} of ${totalPages}`}
+          >
+            {pageInfo}
+          </span>
+        )}
+      </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <Button
           variant="ghost"
           size="icon"

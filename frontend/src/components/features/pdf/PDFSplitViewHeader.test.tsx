@@ -99,4 +99,53 @@ describe('PDFSplitViewHeader', () => {
     const nameElement = screen.getByLabelText(/document: test document\.pdf/i);
     expect(nameElement).toBeInTheDocument();
   });
+
+  describe('page information display (AC: #2)', () => {
+    it('displays page number and total pages when both are provided', () => {
+      render(
+        <PDFSplitViewHeader
+          {...defaultProps}
+          currentPage={5}
+          totalPages={20}
+        />
+      );
+
+      expect(screen.getByText('5 / 20')).toBeInTheDocument();
+    });
+
+    it('does not display page info when currentPage is undefined', () => {
+      render(
+        <PDFSplitViewHeader
+          {...defaultProps}
+          totalPages={20}
+        />
+      );
+
+      expect(screen.queryByText(/\/ 20/)).not.toBeInTheDocument();
+    });
+
+    it('does not display page info when totalPages is undefined', () => {
+      render(
+        <PDFSplitViewHeader
+          {...defaultProps}
+          currentPage={5}
+        />
+      );
+
+      expect(screen.queryByText(/5 \//)).not.toBeInTheDocument();
+    });
+
+    it('has correct aria-label for page info', () => {
+      render(
+        <PDFSplitViewHeader
+          {...defaultProps}
+          currentPage={3}
+          totalPages={10}
+        />
+      );
+
+      const pageInfo = screen.getByLabelText('Page 3 of 10');
+      expect(pageInfo).toBeInTheDocument();
+    });
+  });
 });

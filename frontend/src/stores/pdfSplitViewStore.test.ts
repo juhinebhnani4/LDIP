@@ -11,6 +11,7 @@ import {
   selectPdfSplitViewIsOpen,
   selectPdfDocumentUrl,
   selectPdfCurrentPage,
+  selectPdfTotalPages,
 } from './pdfSplitViewStore';
 import type { SourceReference } from '@/types/chat';
 
@@ -40,6 +41,7 @@ describe('pdfSplitViewStore', () => {
       const state = usePdfSplitViewStore.getState();
       expect(state.initialPage).toBe(1);
       expect(state.currentPage).toBe(1);
+      expect(state.totalPages).toBe(0);
       expect(state.scale).toBe(1.0);
     });
 
@@ -343,6 +345,17 @@ describe('pdfSplitViewStore', () => {
     });
   });
 
+  describe('setTotalPages', () => {
+    test('updates totalPages value', () => {
+      act(() => {
+        usePdfSplitViewStore.getState().setTotalPages(25);
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.totalPages).toBe(25);
+    });
+  });
+
   describe('setScale', () => {
     test('updates scale value', () => {
       act(() => {
@@ -466,6 +479,16 @@ describe('pdfSplitViewStore', () => {
       });
 
       expect(selectPdfCurrentPage(usePdfSplitViewStore.getState())).toBe(7);
+    });
+
+    test('selectPdfTotalPages returns totalPages state', () => {
+      expect(selectPdfTotalPages(usePdfSplitViewStore.getState())).toBe(0);
+
+      act(() => {
+        usePdfSplitViewStore.getState().setTotalPages(15);
+      });
+
+      expect(selectPdfTotalPages(usePdfSplitViewStore.getState())).toBe(15);
     });
   });
 });

@@ -80,7 +80,7 @@ export function WorkspaceContentArea({
 
         // Open PDF split view with document
         openPdfSplitView(source, matterId, documentUrl);
-      } catch (error) {
+      } catch {
         toast.error('Unable to open document. Please try again.');
       }
     },

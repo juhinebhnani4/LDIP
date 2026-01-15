@@ -111,6 +111,24 @@ export {
   type TabProcessingStatus,
 } from './workspaceStore';
 
+// Q&A Panel store for panel position and sizing (Story 10A.3)
+export {
+  useQAPanelStore,
+  selectIsPanelVisible,
+  selectCurrentDimensions,
+  QA_PANEL_POSITIONS,
+  DEFAULT_PANEL_POSITION,
+  DEFAULT_RIGHT_WIDTH,
+  DEFAULT_BOTTOM_HEIGHT,
+  MIN_PANEL_SIZE,
+  MAX_PANEL_SIZE,
+  DEFAULT_FLOAT_WIDTH,
+  DEFAULT_FLOAT_HEIGHT,
+  MIN_FLOAT_WIDTH,
+  MIN_FLOAT_HEIGHT,
+  type QAPanelPosition,
+} from './qaPanelStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

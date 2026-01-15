@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
-import { MatterWorkspaceWrapper, WorkspaceHeader, WorkspaceTabBar } from '@/components/features/matter';
+import {
+  MatterWorkspaceWrapper,
+  WorkspaceHeader,
+  WorkspaceTabBar,
+  WorkspaceContentArea,
+} from '@/components/features/matter';
 
 interface MatterLayoutProps {
   children: ReactNode;
@@ -12,6 +17,7 @@ interface MatterLayoutProps {
  * Provides the consistent shell for all matter pages with:
  * - WorkspaceHeader (Story 10A.1): Sticky header with back nav, matter name, actions
  * - WorkspaceTabBar (Story 10A.2): Tab navigation for Summary, Timeline, etc.
+ * - WorkspaceContentArea (Story 10A.3): Resizable content + Q&A panel layout
  * - MatterWorkspaceWrapper: Processing status provider
  *
  * Layout:
@@ -23,26 +29,28 @@ interface MatterLayoutProps {
  * │  Summary | Timeline | Entities | Citations | Contradictions | Verification | Docs │
  * ├─────────────────────────────────────────────────────────────────────────────────┤
  * │                                                                                  │
- * │  CONTENT AREA (scrollable)                                                       │
- * │  [children - tab content]                                                        │
- * │                                                                                  │
+ * │  CONTENT AREA (scrollable)              │  Q&A PANEL                            │
+ * │  [children - tab content]               │  [QAPanel or FloatingQAPanel]         │
+ * │                                         │                                        │
  * └─────────────────────────────────────────────────────────────────────────────────┘
  */
 export default async function MatterLayout({ children, params }: MatterLayoutProps) {
   const { matterId } = await params;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       {/* Workspace header - Story 10A.1 */}
       <WorkspaceHeader matterId={matterId} />
 
       {/* Tab bar navigation - Story 10A.2 */}
       <WorkspaceTabBar matterId={matterId} />
 
-      {/* Main content area */}
-      <main data-matter-id={matterId} className="flex-1">
+      {/* Main content area with Q&A panel - Story 10A.3 */}
+      <main data-matter-id={matterId} className="flex flex-1">
         <MatterWorkspaceWrapper matterId={matterId}>
-          {children}
+          <WorkspaceContentArea matterId={matterId}>
+            {children}
+          </WorkspaceContentArea>
         </MatterWorkspaceWrapper>
       </main>
     </div>

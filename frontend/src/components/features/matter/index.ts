@@ -15,3 +15,6 @@ export { ShareDialog } from './ShareDialog';
 // Story 10A.2: Tab Bar Navigation components
 export { WorkspaceTabBar, TAB_CONFIG, DEFAULT_TAB, TAB_LABELS, TAB_EPIC_INFO } from './WorkspaceTabBar';
 export type { TabId } from './WorkspaceTabBar';
+
+// Story 10A.3: Content Area and Q&A Panel Integration
+export { WorkspaceContentArea } from './WorkspaceContentArea';

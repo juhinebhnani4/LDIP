@@ -59,6 +59,8 @@ export interface ActivityIconConfig {
   icon: 'CheckCircle2' | 'Info' | 'Clock' | 'AlertTriangle' | 'XCircle';
   /** Tailwind CSS color class for the icon */
   colorClass: string;
+  /** Tailwind CSS background color class for icon container */
+  bgColorClass: string;
   /** Label for accessibility */
   label: string;
 }
@@ -71,31 +73,37 @@ export const ACTIVITY_ICONS: Record<ActivityType, ActivityIconConfig> = {
   processing_complete: {
     icon: 'CheckCircle2',
     colorClass: 'text-green-500',
+    bgColorClass: 'bg-green-100 dark:bg-green-500/20',
     label: 'Success',
   },
   verification_needed: {
     icon: 'AlertTriangle',
     colorClass: 'text-orange-500',
+    bgColorClass: 'bg-orange-100 dark:bg-orange-500/20',
     label: 'Attention needed',
   },
   processing_started: {
     icon: 'Clock',
     colorClass: 'text-yellow-500',
+    bgColorClass: 'bg-yellow-100 dark:bg-yellow-500/20',
     label: 'In progress',
   },
   matter_opened: {
     icon: 'Info',
     colorClass: 'text-blue-500',
+    bgColorClass: 'bg-blue-100 dark:bg-blue-500/20',
     label: 'Information',
   },
   contradictions_found: {
     icon: 'AlertTriangle',
     colorClass: 'text-orange-500',
+    bgColorClass: 'bg-orange-100 dark:bg-orange-500/20',
     label: 'Attention needed',
   },
   processing_failed: {
     icon: 'XCircle',
     colorClass: 'text-red-500',
+    bgColorClass: 'bg-red-100 dark:bg-red-500/20',
     label: 'Error',
   },
 } as const;

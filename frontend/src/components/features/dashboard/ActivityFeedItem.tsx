@@ -78,8 +78,7 @@ export function ActivityFeedItem({
         <div
           className={cn(
             'mt-0.5 flex-shrink-0 rounded-full p-1',
-            iconConfig.colorClass.replace('text-', 'bg-').replace('-500', '-100'),
-            'dark:bg-opacity-20'
+            iconConfig.bgColorClass
           )}
           aria-hidden="true"
         >
@@ -109,11 +108,13 @@ export function ActivityFeedItem({
           </div>
         </div>
 
-        {/* Unread indicator */}
+        {/* Unread indicator with tooltip for sighted users */}
         {!activity.isRead && (
           <div
             className="size-2 rounded-full bg-blue-500 flex-shrink-0 mt-2"
-            aria-label="Unread"
+            role="status"
+            aria-label="New activity"
+            title="New"
           />
         )}
       </Link>

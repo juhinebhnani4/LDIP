@@ -21,3 +21,4 @@ export { MatterFilters } from './MatterFilters';
 export { ActivityFeed, ActivityFeedSkeleton } from './ActivityFeed';
 export { ActivityFeedItem, ActivityFeedItemSkeleton } from './ActivityFeedItem';
 export { QuickStats, QuickStatsSkeleton } from './QuickStats';
+export { SidebarErrorBoundary } from './SidebarErrorBoundary';

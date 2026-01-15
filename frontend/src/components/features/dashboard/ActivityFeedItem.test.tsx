@@ -45,14 +45,14 @@ describe('ActivityFeedItem', () => {
       const activity = createMockActivity({ isRead: false });
       render(<ActivityFeedItem activity={activity} />);
 
-      expect(screen.getByLabelText('Unread')).toBeInTheDocument();
+      expect(screen.getByLabelText('New activity')).toBeInTheDocument();
     });
 
     it('does not render unread indicator for read activities', () => {
       const activity = createMockActivity({ isRead: true });
       render(<ActivityFeedItem activity={activity} />);
 
-      expect(screen.queryByLabelText('Unread')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('New activity')).not.toBeInTheDocument();
     });
 
     it('links to matter workspace', () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Folder, FileCheck, Timer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,6 +75,9 @@ function StatItemSkeleton() {
   );
 }
 
+/** Polling interval for real-time stats updates (30 seconds) */
+const STATS_POLLING_INTERVAL = 30000;
+
 export function QuickStats({ className }: QuickStatsProps) {
   // Use selector pattern (MANDATORY from project-context.md)
   const stats = useActivityStore((state) => state.stats);
@@ -82,9 +85,27 @@ export function QuickStats({ className }: QuickStatsProps) {
   const error = useActivityStore((state) => state.error);
   const fetchStats = useActivityStore((state) => state.fetchStats);
 
-  // Fetch stats on mount
+  // Track if component is mounted to avoid state updates after unmount
+  const isMountedRef = useRef(true);
+
+  // Fetch stats on mount and set up polling for real-time updates
   useEffect(() => {
+    isMountedRef.current = true;
+
+    // Initial fetch
     fetchStats();
+
+    // Set up polling interval for real-time updates (AC #3)
+    const intervalId = setInterval(() => {
+      if (isMountedRef.current) {
+        fetchStats(true); // Force refresh to bypass cache
+      }
+    }, STATS_POLLING_INTERVAL);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(intervalId);
+    };
   }, [fetchStats]);
 
   return (

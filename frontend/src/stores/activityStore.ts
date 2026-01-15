@@ -266,9 +266,9 @@ export const selectRecentActivities = (state: ActivityStore): Activity[] =>
 export const selectUnreadActivities = (state: ActivityStore): Activity[] =>
   state.activities.filter((a) => !a.isRead);
 
-/** Selector for getting unread count */
+/** Selector for getting unread count (uses selectUnreadActivities for consistency) */
 export const selectUnreadCount = (state: ActivityStore): number =>
-  state.activities.filter((a) => !a.isRead).length;
+  selectUnreadActivities(state).length;
 
 /** Selector for getting activities by matter */
 export const selectActivitiesByMatter =

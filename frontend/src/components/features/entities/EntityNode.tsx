@@ -110,7 +110,8 @@ export const EntityNode = memo(function EntityNode({ data, id }: EntityNodeProps
               'bg-background shadow-md cursor-pointer',
               data.isSelected && 'ring-4 ring-primary ring-offset-2',
               data.isConnected && 'ring-2 ring-primary/50',
-              data.isDimmed && 'opacity-30'
+              data.isDimmed && 'opacity-30',
+              data.isSelectedForMerge && 'ring-4 ring-amber-500 ring-offset-2 border-amber-500'
             )}
             style={{ width: size, height: size }}
             role="button"

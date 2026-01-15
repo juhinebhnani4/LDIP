@@ -53,6 +53,12 @@ export interface EntitiesGraphProps {
   selectedNodeId: string | null;
   onNodeSelect: (nodeId: string | null) => void;
   focusNodeId?: string | null;
+  /** Multi-selection mode for entity merge */
+  isMultiSelectMode?: boolean;
+  /** Set of entity IDs selected for merge (max 2) */
+  selectedForMerge?: Set<string>;
+  /** Callback when entity is toggled for merge selection */
+  onToggleMergeSelection?: (entityId: string) => void;
   className?: string;
 }
 
@@ -61,6 +67,9 @@ function EntitiesGraphInner({
   selectedNodeId,
   onNodeSelect,
   focusNodeId,
+  isMultiSelectMode = false,
+  selectedForMerge = new Set(),
+  onToggleMergeSelection,
   className,
 }: EntitiesGraphProps) {
   const [showAllNodes, setShowAllNodes] = useState(false);
@@ -131,14 +140,34 @@ function EntitiesGraphInner({
   }, [focusNodeId, fitView]);
 
   const highlightedNodes = useMemo(() => {
-    return updateNodeStates(nodes, selectedNodeId, edges);
-  }, [nodes, edges, selectedNodeId]);
+    const nodesWithState = updateNodeStates(nodes, selectedNodeId, edges);
+
+    // Add merge selection state to nodes
+    if (isMultiSelectMode && selectedForMerge.size > 0) {
+      return nodesWithState.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          isSelectedForMerge: selectedForMerge.has(node.id),
+        },
+      })) as EntityGraphNode[];
+    }
+
+    return nodesWithState;
+  }, [nodes, edges, selectedNodeId, isMultiSelectMode, selectedForMerge]);
 
   const handleNodeClick: OnNodeClick<EntityGraphNode> = useCallback(
-    (_event, node) => {
+    (_event: React.MouseEvent, node: EntityGraphNode) => {
+      // In multi-select mode, click toggles merge selection
+      if (isMultiSelectMode && onToggleMergeSelection) {
+        onToggleMergeSelection(node.id);
+        return;
+      }
+
+      // Normal mode: toggle detail panel selection
       onNodeSelect(node.id === selectedNodeId ? null : node.id);
     },
-    [selectedNodeId, onNodeSelect]
+    [isMultiSelectMode, onToggleMergeSelection, selectedNodeId, onNodeSelect]
   );
 
   const handlePaneClick = useCallback(() => {

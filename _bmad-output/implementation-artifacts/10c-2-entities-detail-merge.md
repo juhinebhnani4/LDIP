@@ -425,16 +425,13 @@ Following the established commit message format:
 feat(entities): implement detail panel and merge dialog (Story 10C.2)
 ```
 
-### Zustand Store Pattern (MANDATORY from project-context.md)
+### State Management Pattern (SWR Hooks)
 
-```typescript
-// CORRECT - Selector pattern
-const selectedForMerge = useEntitiesStore((state) => state.selectedForMerge);
-const setSelectedForMerge = useEntitiesStore((state) => state.setSelectedForMerge);
-
-// WRONG - Full store subscription
-const { selectedForMerge, setSelectedForMerge } = useEntitiesStore();
-```
+This story uses SWR hooks for server state management, consistent with project architecture:
+- `useEntities()` - Entity list with SWR caching
+- `useEntityMerge()` - Merge mutation with cache invalidation
+- `useEntityAlias()` - Alias management mutation
+- Local component state for UI concerns (multi-selection, dialog open state)
 
 ### UI Component Dependencies
 
@@ -564,6 +561,34 @@ None - implementation completed without issues
 **New Shared Utility Created:**
 - `frontend/src/lib/utils/entityConstants.ts` - Shared `entityTypeConfig` and `ENTITY_VIEW_HEIGHT` constants
 
+### Additional Fixes (2026-01-15) - Addressing Unaddressed Issues
+
+**Issue #5 (MEDIUM) - Zustand pattern in Dev Notes:**
+- ✅ Updated Dev Notes section to correctly reference SWR hooks instead of Zustand patterns
+
+**Issue #7 (MEDIUM) - Missing test files:**
+- ✅ Created `EntityMergeDialog.test.tsx` with comprehensive tests for merge dialog
+- ✅ Created `EntitiesListView.test.tsx` with tests for list view, sorting, and multi-selection
+- ✅ Created `EntitiesGridView.test.tsx` with tests for grid view and multi-selection
+
+**Issue #10 (LOW) - Graph view multi-selection:**
+- ✅ Added `isMultiSelectMode`, `selectedForMerge`, `onToggleMergeSelection` props to `EntitiesGraph`
+- ✅ Clicking nodes in multi-select mode toggles merge selection (amber ring indicator)
+- ✅ Updated `EntityNodeData` type with `isSelectedForMerge` property
+- ✅ Updated `EntityNode` component with amber ring styling for merge selection
+- ✅ Updated `EntitiesContent` to pass multi-selection props to graph
+
+**Files Updated:**
+- `EntitiesGraph.tsx` - Added multi-selection props and node click handling
+- `EntityNode.tsx` - Added amber ring styling for merge selection state
+- `EntitiesContent.tsx` - Pass multi-selection props to graph component
+- `frontend/src/types/entity.ts` - Added `isSelectedForMerge` to `EntityNodeData`
+
+**New Test Files Created:**
+- `frontend/src/components/features/entities/EntityMergeDialog.test.tsx`
+- `frontend/src/components/features/entities/EntitiesListView.test.tsx`
+- `frontend/src/components/features/entities/EntitiesGridView.test.tsx`
+
 ### File List
 
 **New Files:**
@@ -571,15 +596,21 @@ None - implementation completed without issues
 - `frontend/src/components/features/entities/EntitiesListView.tsx`
 - `frontend/src/components/features/entities/EntitiesGridView.tsx`
 - `frontend/src/lib/utils/entityConstants.ts` - Shared entity constants (added in code review)
+- `frontend/src/components/features/entities/EntityMergeDialog.test.tsx` - Test file (added in additional fixes)
+- `frontend/src/components/features/entities/EntitiesListView.test.tsx` - Test file (added in additional fixes)
+- `frontend/src/components/features/entities/EntitiesGridView.test.tsx` - Test file (added in additional fixes)
 
 **Modified Files:**
 - `frontend/src/components/features/entities/EntitiesDetailPanel.tsx` - Enhanced with paginated mentions, document links, alias management, error handling
 - `frontend/src/components/features/entities/EntitiesDetailPanel.test.tsx` - Added tests for new features
 - `frontend/src/components/features/entities/EntitiesHeader.tsx` - Added multi-select mode and merge button
-- `frontend/src/components/features/entities/EntitiesContent.tsx` - Integrated all views and merge flow, refactored imports
+- `frontend/src/components/features/entities/EntitiesContent.tsx` - Integrated all views and merge flow, refactored imports, added graph multi-selection props
+- `frontend/src/components/features/entities/EntitiesGraph.tsx` - Added multi-selection support for merge
+- `frontend/src/components/features/entities/EntityNode.tsx` - Added merge selection visual styling
 - `frontend/src/components/features/entities/index.ts` - Updated barrel exports
 - `frontend/src/lib/api/entities.ts` - Added merge and alias API functions
 - `frontend/src/hooks/useEntities.ts` - Added merge and alias mutation hooks
+- `frontend/src/types/entity.ts` - Added isSelectedForMerge to EntityNodeData
 
 ## Change Log
 
@@ -588,3 +619,4 @@ None - implementation completed without issues
 | 2026-01-15 | Story created with comprehensive developer context | Claude Opus 4.5 |
 | 2026-01-15 | Story implementation completed - all tasks done | Claude Opus 4.5 |
 | 2026-01-15 | Code review fixes: 4 HIGH, 2 LOW issues fixed; created shared entityConstants.ts | Claude Opus 4.5 |
+| 2026-01-15 | Additional fixes: Added missing test files, fixed Dev Notes, implemented graph multi-selection | Claude Opus 4.5 |

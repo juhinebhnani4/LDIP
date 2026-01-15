@@ -321,6 +321,9 @@ export function EntitiesContent({
               selectedNodeId={selectedEntityId}
               onNodeSelect={handleEntitySelect}
               focusNodeId={focusNodeId}
+              isMultiSelectMode={isMultiSelectMode}
+              selectedForMerge={selectedForMerge}
+              onToggleMergeSelection={handleToggleMergeSelection}
               className={ENTITY_VIEW_HEIGHT}
             />
           ) : viewMode === 'list' ? (

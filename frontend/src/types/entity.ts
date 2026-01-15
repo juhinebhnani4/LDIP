@@ -222,6 +222,8 @@ export interface EntityNodeData {
   isSelected?: boolean;
   isConnected?: boolean;
   isDimmed?: boolean;
+  /** Whether this node is selected for merge operation */
+  isSelectedForMerge?: boolean;
 }
 
 /**

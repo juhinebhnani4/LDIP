@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Users, X, Loader2, Crown, UserCheck, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { MatterRole } from '@/types/matter';
 
@@ -62,8 +63,8 @@ const ROLE_CONFIG = {
   },
 } as const;
 
-/** Mock collaborators for MVP */
-const MOCK_COLLABORATORS: Collaborator[] = [
+/** Mock collaborators for MVP - loaded on dialog open to simulate API fetch */
+const getMockCollaborators = (): Collaborator[] => [
   {
     id: '1',
     email: 'john.smith@lawfirm.com',
@@ -101,19 +102,49 @@ interface ShareDialogProps {
  * - Owner badge and remove functionality
  *
  * Story 10A.1: Workspace Shell Header - AC #4
+ *
+ * @param matterId - Matter ID for API calls (used when fetching/inviting collaborators)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function ShareDialog({ matterId }: ShareDialogProps) {
-  // matterId will be used when API endpoints are implemented
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<CollaboratorRole>('editor');
   const [isInviting, setIsInviting] = useState(false);
-  const [collaborators, setCollaborators] = useState<Collaborator[]>(MOCK_COLLABORATORS);
+  const [isLoadingCollaborators, setIsLoadingCollaborators] = useState(false);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
 
   // For MVP, assume current user is the owner
   const currentUserIsOwner = true;
+
+  // Fetch collaborators when dialog opens
+  useEffect(() => {
+    if (isOpen && collaborators.length === 0) {
+      const fetchCollaborators = async () => {
+        setIsLoadingCollaborators(true);
+        try {
+          // TODO: Replace with actual API call when backend is ready
+          // GET /api/matters/${matterId}/members
+          void matterId; // Will be used in API call
+
+          // Simulate network delay
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          setCollaborators(getMockCollaborators());
+        } catch (error) {
+          console.error('[ShareDialog] Failed to fetch collaborators:', {
+            matterId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          toast.error('Failed to load collaborators');
+        } finally {
+          setIsLoadingCollaborators(false);
+        }
+      };
+
+      fetchCollaborators();
+    }
+  }, [isOpen, matterId, collaborators.length]);
 
   const validateEmail = useCallback((emailToValidate: string): boolean => {
     if (!emailToValidate.trim()) {
@@ -138,11 +169,13 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
     }
 
     setIsInviting(true);
+    const emailToInvite = email.trim();
 
     try {
       // TODO: Replace with actual API call when backend is ready
-      // POST /api/matters/{matter_id}/members
+      // POST /api/matters/${matterId}/members
       // Body: { email: string, role: string }
+      void matterId; // Will be used in API call
 
       // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -150,21 +183,27 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
       // Mock: Add new collaborator to list
       const newCollaborator: Collaborator = {
         id: `temp-${Date.now()}`,
-        email: email.trim(),
-        name: email.split('@')[0], // Use email prefix as name for mock
+        email: emailToInvite,
+        name: emailToInvite.split('@')[0], // Use email prefix as name for mock
         role: role,
       };
 
       setCollaborators((prev) => [...prev, newCollaborator]);
       setEmail('');
       setRole('editor');
-      toast.success(`Invitation sent to ${email}`);
-    } catch {
+      toast.success(`Invitation sent to ${emailToInvite}`);
+    } catch (error) {
+      console.error('[ShareDialog] Failed to invite collaborator:', {
+        matterId,
+        email: emailToInvite,
+        role,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       toast.error('Failed to send invite. Please check the email and try again.');
     } finally {
       setIsInviting(false);
     }
-  }, [email, role, validateEmail]);
+  }, [email, role, validateEmail, matterId]);
 
   const handleRemoveCollaborator = useCallback(async (collaboratorId: string) => {
     const collaboratorToRemove = collaborators.find((c) => c.id === collaboratorId);
@@ -177,17 +216,35 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
 
     try {
       // TODO: Replace with actual API call when backend is ready
-      // DELETE /api/matters/{matter_id}/members/{member_id}
+      // DELETE /api/matters/${matterId}/members/${collaboratorId}
+      void matterId; // Will be used in API call
 
       // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
       toast.success(`Removed ${collaboratorToRemove.name} from this matter`);
-    } catch {
+    } catch (error) {
+      console.error('[ShareDialog] Failed to remove collaborator:', {
+        matterId,
+        collaboratorId,
+        collaboratorName: collaboratorToRemove.name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       toast.error('Failed to remove collaborator. Please try again.');
     }
-  }, [collaborators]);
+  }, [collaborators, matterId]);
+
+  // Keyboard shortcut handler for Cmd/Ctrl+Enter to submit
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && email.trim() && !isInviting) {
+        e.preventDefault();
+        handleInvite();
+      }
+    },
+    [email, isInviting, handleInvite]
+  );
 
   const getInitials = (name: string): string => {
     return name
@@ -212,11 +269,14 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
           <p>Share</p>
         </TooltipContent>
       </Tooltip>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>Share Matter</DialogTitle>
           <DialogDescription>
             Invite attorneys to collaborate on this matter. They will receive an email invitation.
+            <span className="block text-xs mt-1 text-muted-foreground">
+              Tip: Press {navigator?.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to send invite
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -283,46 +343,68 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
         <div className="space-y-3">
           <Label>Current Collaborators</Label>
           <div className="space-y-2 max-h-[200px] overflow-y-auto">
-            {collaborators.map((collaborator) => {
-              const roleConfig = ROLE_CONFIG[collaborator.role];
-              const RoleIcon = roleConfig.icon;
+            {isLoadingCollaborators ? (
+              // Loading skeleton for collaborators
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between p-2">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="flex flex-col gap-1">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
+              </>
+            ) : collaborators.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No collaborators yet. Invite someone to get started.
+              </p>
+            ) : (
+              collaborators.map((collaborator) => {
+                const roleConfig = ROLE_CONFIG[collaborator.role];
+                const RoleIcon = roleConfig.icon;
 
-              return (
-                <div
-                  key={collaborator.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {getInitials(collaborator.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{collaborator.name}</span>
-                      <span className="text-xs text-muted-foreground">{collaborator.email}</span>
+                return (
+                  <div
+                    key={collaborator.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {getInitials(collaborator.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{collaborator.name}</span>
+                        <span className="text-xs text-muted-foreground">{collaborator.email}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={roleConfig.badgeVariant} className="flex items-center gap-1">
+                        <RoleIcon className={`h-3 w-3 ${roleConfig.color}`} />
+                        <span>{roleConfig.label}</span>
+                      </Badge>
+                      {currentUserIsOwner && collaborator.role !== 'owner' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleRemoveCollaborator(collaborator.id)}
+                          aria-label={`Remove ${collaborator.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={roleConfig.badgeVariant} className="flex items-center gap-1">
-                      <RoleIcon className={`h-3 w-3 ${roleConfig.color}`} />
-                      <span>{roleConfig.label}</span>
-                    </Badge>
-                    {currentUserIsOwner && collaborator.role !== 'owner' && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleRemoveCollaborator(collaborator.id)}
-                        aria-label={`Remove ${collaborator.name}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </DialogContent>

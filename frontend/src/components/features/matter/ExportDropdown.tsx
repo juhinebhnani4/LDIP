@@ -48,11 +48,14 @@ interface ExportDropdownProps {
  * Currently shows placeholder toast for Epic 12 (Export Builder).
  *
  * Story 10A.1: Workspace Shell Header - AC #3
+ *
+ * @param matterId - Matter ID for export context (used in Epic 12 for export navigation)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function ExportDropdown({ matterId }: ExportDropdownProps) {
   const handleExport = (format: ExportFormat) => {
-    // Future: navigate to `/matters/${matterId}/export?format=${format}`
+    // TODO(Epic-12): Navigate to `/matters/${matterId}/export?format=${format}`
+    // For now, matterId is stored for future use when Export Builder is implemented
+    void matterId; // Acknowledge parameter until Epic 12 implementation
     toast.info(`Export Builder coming in Epic 12 (${format.toUpperCase()} format selected)`);
   };
 

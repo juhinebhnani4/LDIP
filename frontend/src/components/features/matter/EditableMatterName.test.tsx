@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditableMatterName } from './EditableMatterName';
 import { toast } from 'sonner';
 
-// Mock sonner toast
+// Mock sonner toast with proper vitest types
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -13,15 +13,19 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Type cast for mocked toast
-const mockToast = toast as unknown as {
-  success: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
-  info: ReturnType<typeof vi.fn>;
+// Properly typed mock toast using vitest's Mock type
+const mockToast = toast as {
+  success: Mock;
+  error: Mock;
+  info: Mock;
 };
 
-// Mock matterStore data
-const mockMatterData = {
+// Mock store functions - defined at module level so they can be reset in beforeEach
+const mockUpdateMatterName = vi.fn();
+const mockFetchMatter = vi.fn();
+
+// Create a function to get fresh mock data (reset in beforeEach)
+const createMockMatterData = () => ({
   matters: [
     {
       id: 'test-matter-123',
@@ -40,12 +44,13 @@ const mockMatterData = {
     },
   ],
   currentMatter: null,
-  updateMatterName: vi.fn(),
-  fetchMatter: vi.fn(),
-};
+  updateMatterName: mockUpdateMatterName,
+  fetchMatter: mockFetchMatter,
+});
 
 vi.mock('@/stores/matterStore', () => ({
-  useMatterStore: (selector: (state: typeof mockMatterData) => unknown) => selector(mockMatterData),
+  useMatterStore: (selector: (state: ReturnType<typeof createMockMatterData>) => unknown) =>
+    selector(createMockMatterData()),
 }));
 
 describe('EditableMatterName', () => {
@@ -53,8 +58,14 @@ describe('EditableMatterName', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMatterData.updateMatterName.mockResolvedValue(undefined);
-    mockMatterData.fetchMatter.mockResolvedValue(undefined);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockUpdateMatterName.mockResolvedValue(undefined);
+    mockFetchMatter.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it('displays matter name in view mode', () => {
@@ -72,13 +83,13 @@ describe('EditableMatterName', () => {
   it('fetches matter when not found in store', () => {
     render(<EditableMatterName matterId="unknown-matter" />);
 
-    expect(mockMatterData.fetchMatter).toHaveBeenCalledWith('unknown-matter');
+    expect(mockFetchMatter).toHaveBeenCalledWith('unknown-matter');
   });
 
   it('does not fetch matter when already in store', () => {
     render(<EditableMatterName matterId={mockMatterId} />);
 
-    expect(mockMatterData.fetchMatter).not.toHaveBeenCalled();
+    expect(mockFetchMatter).not.toHaveBeenCalled();
   });
 
   it('shows edit icon on hover', async () => {
@@ -133,7 +144,7 @@ describe('EditableMatterName', () => {
     await user.type(input, 'New Matter Name{Enter}');
 
     await waitFor(() => {
-      expect(mockMatterData.updateMatterName).toHaveBeenCalledWith(mockMatterId, 'New Matter Name');
+      expect(mockUpdateMatterName).toHaveBeenCalledWith(mockMatterId, 'New Matter Name');
     });
   });
 
@@ -154,13 +165,13 @@ describe('EditableMatterName', () => {
     await waitFor(() => {
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
-    expect(mockMatterData.updateMatterName).not.toHaveBeenCalled();
+    expect(mockUpdateMatterName).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { level: 1, name: /test matter/i })).toBeInTheDocument();
   });
 
   it('shows loading state while saving', async () => {
     // Make updateMatterName take some time
-    mockMatterData.updateMatterName.mockImplementation(
+    mockUpdateMatterName.mockImplementation(
       () => new Promise((resolve) => setTimeout(resolve, 500))
     );
 
@@ -181,7 +192,7 @@ describe('EditableMatterName', () => {
   });
 
   it('handles save error gracefully', async () => {
-    mockMatterData.updateMatterName.mockRejectedValue(new Error('Save failed'));
+    mockUpdateMatterName.mockRejectedValue(new Error('Save failed'));
 
     const user = userEvent.setup();
     render(<EditableMatterName matterId={mockMatterId} />);
@@ -218,11 +229,11 @@ describe('EditableMatterName', () => {
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith('Matter name cannot be empty');
     });
-    expect(mockMatterData.updateMatterName).not.toHaveBeenCalled();
+    expect(mockUpdateMatterName).not.toHaveBeenCalled();
   });
 
   it('input has max length attribute to prevent exceeding limit', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<EditableMatterName matterId={mockMatterId} />);
 
     // Enter edit mode
@@ -240,21 +251,30 @@ describe('EditableMatterName', () => {
 
     // Value should be truncated to 100 characters
     expect(input).toHaveValue('a'.repeat(100));
+
+    // Cancel edit mode to prevent blur from triggering save
+    await user.keyboard('{Escape}');
+
+    // Run any pending timers to ensure clean state for next test
+    await vi.runAllTimersAsync();
   });
 
   it('does not save when name unchanged', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<EditableMatterName matterId={mockMatterId} />);
 
     // Enter edit mode
     const nameContainer = screen.getByRole('button', { name: /edit matter name/i });
     await user.click(nameContainer);
 
-    // Press Enter without changing
+    // Press Enter without changing - this should NOT call update because name is same
     await user.keyboard('{Enter}');
 
-    // Should not call update
-    expect(mockMatterData.updateMatterName).not.toHaveBeenCalled();
+    // Run pending timers
+    await vi.runAllTimersAsync();
+
+    // Should not call update because name hasn't changed
+    expect(mockUpdateMatterName).not.toHaveBeenCalled();
   });
 
   it('shows save button in edit mode', async () => {
@@ -293,6 +313,6 @@ describe('EditableMatterName', () => {
     await waitFor(() => {
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
-    expect(mockMatterData.updateMatterName).not.toHaveBeenCalled();
+    expect(mockUpdateMatterName).not.toHaveBeenCalled();
   });
 });

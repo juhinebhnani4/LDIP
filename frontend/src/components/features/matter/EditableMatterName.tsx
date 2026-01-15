@@ -47,6 +47,19 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
   const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousNameRef = useRef<string>('');
+  const isMountedRef = useRef(true);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Get the current name from store or use a placeholder
   const matterName = matter?.title ?? 'Untitled Matter';
@@ -106,13 +119,26 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
       // Use store action for optimistic update and API call
       await updateMatterName(matterId, trimmedValue);
 
-      toast.success('Matter name updated');
-      previousNameRef.current = trimmedValue;
-      setEditState('viewing');
-    } catch {
-      toast.error('Failed to update matter name. Please try again.');
-      setEditValue(previousNameRef.current);
-      setEditState('viewing');
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        toast.success('Matter name updated');
+        previousNameRef.current = trimmedValue;
+        setEditState('viewing');
+      }
+    } catch (error) {
+      // Log error for debugging (structured logging pattern from project-context.md)
+      console.error('[EditableMatterName] Failed to update matter name:', {
+        matterId,
+        attemptedName: trimmedValue,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        toast.error('Failed to update matter name. Please try again.');
+        setEditValue(previousNameRef.current);
+        setEditState('viewing');
+      }
     }
   }, [editValue, matterId, updateMatterName]);
 
@@ -131,8 +157,9 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
 
   const handleBlur = useCallback(() => {
     // Small delay to allow button clicks to register
-    setTimeout(() => {
-      if (editState === 'editing') {
+    // Store timeout ref for cleanup on unmount
+    blurTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current && editState === 'editing') {
         saveName();
       }
     }, 100);
@@ -172,11 +199,12 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
   // Saving state
   if (editState === 'saving') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" role="status" aria-live="polite">
         <span className="text-lg font-semibold truncate max-w-[300px] sm:max-w-[400px] md:max-w-[500px]">
           {editValue}
         </span>
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Saving..." />
+        <span className="sr-only">Saving matter name...</span>
       </div>
     );
   }
@@ -190,14 +218,14 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        className="h-8 w-[200px] sm:w-[300px] md:w-[400px] text-lg font-semibold"
+        className="h-9 w-[200px] sm:w-[300px] md:w-[400px] text-lg font-semibold"
         maxLength={MAX_MATTER_NAME_LENGTH}
         aria-label="Matter name"
       />
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9 min-w-[36px]"
         onClick={saveName}
         aria-label="Save name"
       >
@@ -206,7 +234,7 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9 min-w-[36px]"
         onClick={cancelEditing}
         aria-label="Cancel editing"
       >

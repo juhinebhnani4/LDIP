@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ShareDialog } from './ShareDialog';
 import { toast } from 'sonner';
 
-// Mock sonner toast
+// Mock sonner toast with proper vitest types
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -13,11 +13,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Type cast for mocked toast
-const mockToast = toast as unknown as {
-  success: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
-  info: ReturnType<typeof vi.fn>;
+// Properly typed mock toast using vitest's Mock type
+const mockToast = toast as {
+  success: Mock;
+  error: Mock;
+  info: Mock;
 };
 
 // Mock Tooltip provider
@@ -26,6 +26,13 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="tooltip-content">{children}</div>
+  ),
+}));
+
+// Mock Skeleton component for loading states
+vi.mock('@/components/ui/skeleton', () => ({
+  Skeleton: ({ className }: { className: string }) => (
+    <div data-testid="skeleton" className={className} />
   ),
 }));
 
@@ -135,8 +142,10 @@ describe('ShareDialog', () => {
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
 
-    // Check for mock collaborators
-    expect(screen.getByText('John Smith')).toBeInTheDocument();
+    // Wait for collaborators to load (async fetch on dialog open)
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
     expect(screen.getByText('john.smith@lawfirm.com')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
@@ -149,9 +158,11 @@ describe('ShareDialog', () => {
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
 
-    // Look for Owner badge
-    const ownerBadges = screen.getAllByText('Owner');
-    expect(ownerBadges.length).toBeGreaterThan(0);
+    // Wait for collaborators to load, then look for Owner badge
+    await waitFor(() => {
+      const ownerBadges = screen.getAllByText('Owner');
+      expect(ownerBadges.length).toBeGreaterThan(0);
+    });
   });
 
   it('shows Editor and Viewer badges for respective roles', async () => {
@@ -160,6 +171,11 @@ describe('ShareDialog', () => {
 
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
 
     // Editor appears both in role selector and in collaborator badge
     // Viewer only appears in collaborator badge
@@ -176,6 +192,11 @@ describe('ShareDialog', () => {
 
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+    });
 
     // Find remove button for Jane Doe (editor)
     const removeButton = screen.getByRole('button', { name: /remove jane doe/i });
@@ -195,6 +216,11 @@ describe('ShareDialog', () => {
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
 
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+
     // Should not have remove button for John Smith (owner)
     expect(screen.queryByRole('button', { name: /remove john smith/i })).not.toBeInTheDocument();
   });
@@ -205,6 +231,11 @@ describe('ShareDialog', () => {
 
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
 
     // Enter existing collaborator email
     const emailInput = screen.getByLabelText(/email address/i);
@@ -301,8 +332,10 @@ describe('ShareDialog', () => {
     const shareButton = screen.getByRole('button', { name: /share matter/i });
     await user.click(shareButton);
 
-    // Initially Jane Doe should be visible
-    expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+    // Wait for collaborators to load, then verify Jane Doe is visible
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+    });
 
     // Remove Jane Doe
     const removeButton = screen.getByRole('button', { name: /remove jane doe/i });

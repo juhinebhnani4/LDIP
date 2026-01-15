@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from 'sonner';
 
-// Mock sonner toast
+// Mock sonner toast with proper vitest types
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -13,11 +13,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Type cast for mocked toast
-const mockToast = toast as unknown as {
-  success: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
-  info: ReturnType<typeof vi.fn>;
+// Properly typed mock toast using vitest's Mock type
+const mockToast = toast as {
+  success: Mock;
+  error: Mock;
+  info: Mock;
 };
 
 // Mock Tooltip provider

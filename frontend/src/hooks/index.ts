@@ -36,3 +36,6 @@ export {
   useActMutations,
   getActNamesFromSummary,
 } from './useCitations';
+
+// Bounding box hooks (Story 11.7)
+export { useBoundingBoxes } from './useBoundingBoxes';

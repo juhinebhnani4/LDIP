@@ -7,12 +7,15 @@
  * Uses canvas (NOT DOM elements) for performance per project-context.md.
  *
  * Story 3-4: Split-View Citation Highlighting (AC: #2)
+ * Story 11.7: Bounding Box Overlays with highlight types (AC: #1, #2)
  */
 
 import { useEffect, useRef, type FC } from 'react';
 import type { SplitViewBoundingBox, VerificationStatus } from '@/types/citation';
+import type { HighlightType } from '@/types/pdf';
 import {
   renderBboxHighlights,
+  renderBboxHighlightsByType,
   clearHighlights,
 } from '@/lib/pdf/highlightUtils';
 
@@ -25,10 +28,15 @@ export interface BboxOverlayProps {
   pageHeight: number;
   /** Current zoom scale */
   scale: number;
-  /** Verification status for color selection */
-  verificationStatus: VerificationStatus;
-  /** Whether this is the source (left) panel */
-  isSource: boolean;
+  /**
+   * Highlight type for semantic categorization (Story 11.7).
+   * When provided, takes precedence over verificationStatus/isSource.
+   */
+  highlightType?: HighlightType;
+  /** Verification status for color selection (legacy, used when highlightType not provided) */
+  verificationStatus?: VerificationStatus;
+  /** Whether this is the source (left) panel (legacy, used when highlightType not provided) */
+  isSource?: boolean;
   /** Optional className for the canvas */
   className?: string;
 }
@@ -38,17 +46,24 @@ export interface BboxOverlayProps {
  *
  * @example
  * ```tsx
- * <div className="relative">
- *   <PdfPage ... />
- *   <BboxOverlay
- *     boundingBoxes={[{ bboxId: '1', x: 0.1, y: 0.3, width: 0.4, height: 0.05, text: '...' }]}
- *     pageWidth={612}
- *     pageHeight={792}
- *     scale={1.5}
- *     verificationStatus="verified"
- *     isSource={false}
- *   />
- * </div>
+ * // Using highlightType (Story 11.7 - preferred)
+ * <BboxOverlay
+ *   boundingBoxes={bboxes}
+ *   pageWidth={612}
+ *   pageHeight={792}
+ *   scale={1.5}
+ *   highlightType="citation"
+ * />
+ *
+ * // Using legacy verificationStatus/isSource
+ * <BboxOverlay
+ *   boundingBoxes={bboxes}
+ *   pageWidth={612}
+ *   pageHeight={792}
+ *   scale={1.5}
+ *   verificationStatus="verified"
+ *   isSource={false}
+ * />
  * ```
  */
 export const BboxOverlay: FC<BboxOverlayProps> = ({
@@ -56,8 +71,9 @@ export const BboxOverlay: FC<BboxOverlayProps> = ({
   pageWidth,
   pageHeight,
   scale,
-  verificationStatus,
-  isSource,
+  highlightType,
+  verificationStatus = 'pending',
+  isSource = true,
   className,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,17 +105,29 @@ export const BboxOverlay: FC<BboxOverlayProps> = ({
 
     // Render new highlights
     if (boundingBoxes.length > 0) {
-      renderBboxHighlights(
-        ctx,
-        boundingBoxes,
-        pageWidth,
-        pageHeight,
-        scale,
-        verificationStatus,
-        isSource
-      );
+      // Story 11.7: Use highlightType if provided, otherwise fall back to legacy approach
+      if (highlightType) {
+        renderBboxHighlightsByType(
+          ctx,
+          boundingBoxes,
+          pageWidth,
+          pageHeight,
+          scale,
+          highlightType
+        );
+      } else {
+        renderBboxHighlights(
+          ctx,
+          boundingBoxes,
+          pageWidth,
+          pageHeight,
+          scale,
+          verificationStatus,
+          isSource
+        );
+      }
     }
-  }, [boundingBoxes, pageWidth, pageHeight, scale, verificationStatus, isSource]);
+  }, [boundingBoxes, pageWidth, pageHeight, scale, highlightType, verificationStatus, isSource]);
 
   return (
     <canvas

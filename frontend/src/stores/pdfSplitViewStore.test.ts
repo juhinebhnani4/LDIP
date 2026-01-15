@@ -14,6 +14,7 @@ import {
   selectPdfDocumentUrl,
   selectPdfCurrentPage,
   selectPdfTotalPages,
+  selectPdfBboxPageNumber,
 } from './pdfSplitViewStore';
 import type { SourceReference } from '@/types/chat';
 
@@ -55,6 +56,11 @@ describe('pdfSplitViewStore', () => {
     test('has empty bounding boxes array', () => {
       const state = usePdfSplitViewStore.getState();
       expect(state.boundingBoxes).toEqual([]);
+    });
+
+    test('has null bboxPageNumber (Story 11.7)', () => {
+      const state = usePdfSplitViewStore.getState();
+      expect(state.bboxPageNumber).toBeNull();
     });
   });
 
@@ -573,6 +579,148 @@ describe('pdfSplitViewStore', () => {
       const state = usePdfSplitViewStore.getState();
       expect(state.boundingBoxes).toEqual([]);
     });
+
+    test('sets bboxPageNumber when provided (Story 11.7)', () => {
+      const boxes = [{ x: 10, y: 20, width: 100, height: 50 }];
+
+      act(() => {
+        usePdfSplitViewStore.getState().setBoundingBoxes(boxes, 5);
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.bboxPageNumber).toBe(5);
+    });
+
+    test('sets bboxPageNumber to null when not provided (Story 11.7)', () => {
+      // First set with page number
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .setBoundingBoxes([{ x: 10, y: 20, width: 100, height: 50 }], 3);
+      });
+
+      // Then set without page number
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .setBoundingBoxes([{ x: 20, y: 30, width: 50, height: 25 }]);
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.bboxPageNumber).toBeNull();
+    });
+  });
+
+  describe('navigateToDocument (Story 11.7)', () => {
+    test('navigates to a different document', () => {
+      // First open split view with one document
+      act(() => {
+        usePdfSplitViewStore.getState().openPdfSplitView(
+          { documentId: 'doc-1', documentName: 'First.pdf', page: 1 },
+          'matter-1',
+          'https://example.com/first.pdf'
+        );
+      });
+
+      // Navigate to another document
+      act(() => {
+        usePdfSplitViewStore.getState().navigateToDocument(
+          'doc-2',
+          'https://example.com/second.pdf',
+          'Second.pdf',
+          10
+        );
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.documentId).toBe('doc-2');
+      expect(state.documentUrl).toBe('https://example.com/second.pdf');
+      expect(state.documentName).toBe('Second.pdf');
+      expect(state.currentPage).toBe(10);
+      expect(state.initialPage).toBe(10);
+    });
+
+    test('defaults to page 1 when page not provided', () => {
+      act(() => {
+        usePdfSplitViewStore.getState().navigateToDocument(
+          'doc-1',
+          'https://example.com/doc.pdf',
+          'Document.pdf'
+        );
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.currentPage).toBe(1);
+      expect(state.initialPage).toBe(1);
+    });
+
+    test('sets bounding boxes and page number when provided', () => {
+      const boxes = [{ x: 0.1, y: 0.2, width: 0.5, height: 0.1 }];
+
+      act(() => {
+        usePdfSplitViewStore.getState().navigateToDocument(
+          'doc-1',
+          'https://example.com/doc.pdf',
+          'Document.pdf',
+          5,
+          boxes,
+          5
+        );
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.boundingBoxes).toEqual(boxes);
+      expect(state.bboxPageNumber).toBe(5);
+    });
+
+    test('clears chunkId when navigating to new document', () => {
+      // First open with chunkId
+      act(() => {
+        usePdfSplitViewStore.getState().openPdfSplitView(
+          { documentId: 'doc-1', documentName: 'First.pdf', chunkId: 'chunk-123' },
+          'matter-1',
+          'https://example.com/first.pdf'
+        );
+      });
+
+      expect(usePdfSplitViewStore.getState().chunkId).toBe('chunk-123');
+
+      // Navigate to new document
+      act(() => {
+        usePdfSplitViewStore.getState().navigateToDocument(
+          'doc-2',
+          'https://example.com/second.pdf',
+          'Second.pdf'
+        );
+      });
+
+      expect(usePdfSplitViewStore.getState().chunkId).toBeNull();
+    });
+
+    test('resets totalPages when navigating (needs PDF reload)', () => {
+      // First open and set total pages
+      act(() => {
+        usePdfSplitViewStore.getState().openPdfSplitView(
+          { documentId: 'doc-1', documentName: 'First.pdf' },
+          'matter-1',
+          'https://example.com/first.pdf'
+        );
+        usePdfSplitViewStore.getState().setTotalPages(50);
+      });
+
+      expect(usePdfSplitViewStore.getState().totalPages).toBe(50);
+
+      // Navigate to new document
+      act(() => {
+        usePdfSplitViewStore.getState().navigateToDocument(
+          'doc-2',
+          'https://example.com/second.pdf',
+          'Second.pdf'
+        );
+      });
+
+      expect(usePdfSplitViewStore.getState().totalPages).toBe(0);
+    });
   });
 
   describe('reset', () => {
@@ -686,6 +834,18 @@ describe('pdfSplitViewStore', () => {
       });
 
       expect(selectIsFullScreenOpen(usePdfSplitViewStore.getState())).toBe(true);
+    });
+
+    test('selectPdfBboxPageNumber returns bboxPageNumber state (Story 11.7)', () => {
+      expect(selectPdfBboxPageNumber(usePdfSplitViewStore.getState())).toBeNull();
+
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .setBoundingBoxes([{ x: 10, y: 20, width: 100, height: 50 }], 7);
+      });
+
+      expect(selectPdfBboxPageNumber(usePdfSplitViewStore.getState())).toBe(7);
     });
   });
 });

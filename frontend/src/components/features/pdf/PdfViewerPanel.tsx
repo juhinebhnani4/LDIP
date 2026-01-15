@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BboxOverlay } from './BboxOverlay';
 import type { SplitViewBoundingBox, VerificationStatus } from '@/types/citation';
+import type { HighlightType } from '@/types/pdf';
 
 // PDF.js types - we'll use dynamic import for the actual library
 type PDFDocumentProxy = {
@@ -58,9 +59,14 @@ export interface PdfViewerPanelProps {
   boundingBoxes?: SplitViewBoundingBox[];
   /** Page number the bounding boxes belong to (for filtering) */
   bboxPageNumber?: number;
-  /** Verification status for highlight colors */
+  /**
+   * Highlight type for semantic categorization (Story 11.7).
+   * When provided, takes precedence over verificationStatus/isSource.
+   */
+  highlightType?: HighlightType;
+  /** Verification status for highlight colors (legacy, used when highlightType not provided) */
   verificationStatus?: VerificationStatus;
-  /** Whether this is the source (left) panel */
+  /** Whether this is the source (left) panel (legacy, used when highlightType not provided) */
   isSource?: boolean;
   /** Current page (controlled) */
   currentPage?: number;
@@ -91,6 +97,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
   initialPage = 1,
   boundingBoxes = [],
   bboxPageNumber,
+  highlightType,
   verificationStatus = 'pending',
   isSource = false,
   currentPage: controlledPage,
@@ -473,6 +480,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
               pageWidth={pageSize.width}
               pageHeight={pageSize.height}
               scale={scale}
+              highlightType={highlightType}
               verificationStatus={verificationStatus}
               isSource={isSource}
             />

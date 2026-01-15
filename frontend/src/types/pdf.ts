@@ -86,10 +86,30 @@ export const HIGHLIGHT_COLORS = {
     background: '#FED7AA',
     border: '#F97316',
   },
+  /** Entity mention highlight - Blue (Story 11.7) */
+  entity: {
+    background: '#BFDBFE',
+    border: '#3B82F6',
+  },
+  /** Contradiction highlight - Red (Story 11.7) */
+  contradiction: {
+    background: '#FECACA',
+    border: '#EF4444',
+  },
 } as const;
 
 /** Highlight status type derived from color keys */
 export type HighlightStatus = keyof typeof HIGHLIGHT_COLORS;
+
+/**
+ * Highlight type for semantic categorization (Story 11.7)
+ *
+ * Used by BboxOverlay to determine highlight colors based on purpose:
+ * - citation: Source citations in documents (yellow)
+ * - entity: Entity mentions in MIG (blue)
+ * - contradiction: Contradiction highlights (red)
+ */
+export type HighlightType = 'citation' | 'entity' | 'contradiction';
 
 // =============================================================================
 // PDF Document Types

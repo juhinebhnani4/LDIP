@@ -30,7 +30,10 @@ import {
   selectPdfCurrentPage,
   selectPdfTotalPages,
   selectPdfScale,
+  selectPdfBoundingBoxes,
+  selectPdfBboxPageNumber,
 } from '@/stores/pdfSplitViewStore';
+import type { SplitViewBoundingBox } from '@/types/citation';
 
 export interface PDFSplitViewProps {
   /** Workspace content to display on the left */
@@ -50,6 +53,9 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
   const currentPage = usePdfSplitViewStore(selectPdfCurrentPage);
   const totalPages = usePdfSplitViewStore(selectPdfTotalPages);
   const scale = usePdfSplitViewStore(selectPdfScale);
+  // Story 11.7: Bounding box state for source text highlighting
+  const boundingBoxes = usePdfSplitViewStore(selectPdfBoundingBoxes);
+  const bboxPageNumber = usePdfSplitViewStore(selectPdfBboxPageNumber);
 
   // Actions
   const setCurrentPage = usePdfSplitViewStore((state) => state.setCurrentPage);
@@ -156,6 +162,9 @@ export function PDFSplitView({ children }: PDFSplitViewProps) {
                 onScaleChange={setScale}
                 onTotalPagesChange={handleTotalPagesChange}
                 panelTitle={documentName ?? 'Document'}
+                boundingBoxes={boundingBoxes as SplitViewBoundingBox[]}
+                bboxPageNumber={bboxPageNumber ?? undefined}
+                highlightType="citation"
               />
             </PdfErrorBoundary>
           </div>

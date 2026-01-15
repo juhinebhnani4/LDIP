@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateBboxPosition,
   getBboxColor,
+  getHighlightTypeColor,
   isPointInRect,
   getBoundingRect,
 } from './highlightUtils';
@@ -112,6 +113,37 @@ describe('getBboxColor', () => {
   it('returns blue for act_unavailable target', () => {
     const colors = getBboxColor('act_unavailable', false);
     expect(colors).toEqual(HIGHLIGHT_COLORS.verified);
+  });
+});
+
+describe('getHighlightTypeColor (Story 11.7)', () => {
+  it('returns yellow for citation highlight type', () => {
+    const colors = getHighlightTypeColor('citation');
+    expect(colors).toEqual(HIGHLIGHT_COLORS.source);
+  });
+
+  it('returns blue for entity highlight type', () => {
+    const colors = getHighlightTypeColor('entity');
+    expect(colors).toEqual(HIGHLIGHT_COLORS.entity);
+  });
+
+  it('returns red for contradiction highlight type', () => {
+    const colors = getHighlightTypeColor('contradiction');
+    expect(colors).toEqual(HIGHLIGHT_COLORS.contradiction);
+  });
+});
+
+describe('HIGHLIGHT_COLORS (Story 11.7 additions)', () => {
+  it('has entity highlight color defined', () => {
+    expect(HIGHLIGHT_COLORS.entity).toBeDefined();
+    expect(HIGHLIGHT_COLORS.entity.background).toBe('#BFDBFE');
+    expect(HIGHLIGHT_COLORS.entity.border).toBe('#3B82F6');
+  });
+
+  it('has contradiction highlight color defined', () => {
+    expect(HIGHLIGHT_COLORS.contradiction).toBeDefined();
+    expect(HIGHLIGHT_COLORS.contradiction.background).toBe('#FECACA');
+    expect(HIGHLIGHT_COLORS.contradiction.border).toBe('#EF4444');
   });
 });
 

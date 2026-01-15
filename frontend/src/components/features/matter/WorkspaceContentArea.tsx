@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/resizable';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
-import { useUser } from '@/hooks';
+import { useUser, useBoundingBoxes } from '@/hooks';
 import { QAPanel } from '@/components/features/chat/QAPanel';
 import { FloatingQAPanel } from '@/components/features/chat/FloatingQAPanel';
 import { QAPanelExpandButton } from '@/components/features/chat/QAPanelExpandButton';
@@ -51,15 +51,22 @@ export function WorkspaceContentArea({
   const { user } = useUser();
   const userId = user?.id;
 
-  // PDF split view action
+  // PDF split view actions
   const openPdfSplitView = usePdfSplitViewStore(
     (state) => state.openPdfSplitView
   );
+  const setBoundingBoxes = usePdfSplitViewStore(
+    (state) => state.setBoundingBoxes
+  );
+
+  // Bounding box hook for fetching bbox data (Story 11.7)
+  const { fetchByChunkId } = useBoundingBoxes();
 
   /**
    * Handle source reference clicks from Q&A panel.
    * Fetches document signed URL and opens PDF split view.
    * Story 11.5: PDF Split View for source references (AC: #4)
+   * Story 11.7: Fetch bounding boxes for source text highlighting (AC: #1)
    */
   const handleSourceClick = useCallback(
     async (source: SourceReference) => {
@@ -80,11 +87,35 @@ export function WorkspaceContentArea({
 
         // Open PDF split view with document
         openPdfSplitView(source, matterId, documentUrl);
+
+        // Story 11.7: Fetch bounding boxes if chunkId is available
+        // Bounding box highlighting is optional - don't block or error if unavailable
+        if (source.chunkId) {
+          try {
+            const bboxes = await fetchByChunkId(source.chunkId);
+            if (bboxes.length > 0) {
+              // Get page number from the source reference, or use initial page
+              const pageNumber = source.page ?? 1;
+              setBoundingBoxes(
+                bboxes.map((bbox) => ({
+                  x: bbox.x,
+                  y: bbox.y,
+                  width: bbox.width,
+                  height: bbox.height,
+                })),
+                pageNumber
+              );
+            }
+          } catch {
+            // Bbox highlighting is optional - log but don't fail the operation
+            console.warn('Failed to fetch bounding boxes for source highlight');
+          }
+        }
       } catch {
         toast.error('Unable to open document. Please try again.');
       }
     },
-    [matterId, openPdfSplitView]
+    [matterId, openPdfSplitView, fetchByChunkId, setBoundingBoxes]
   );
 
   // Right sidebar layout

@@ -7,7 +7,7 @@
  * Story 3-4: Split-View Citation Highlighting
  */
 
-import type { BoundingBox, CanvasRect, HighlightColors } from '@/types/pdf';
+import type { BoundingBox, CanvasRect, HighlightColors, HighlightType } from '@/types/pdf';
 import type { VerificationStatus, DiffDetail, SplitViewBoundingBox } from '@/types/citation';
 import { HIGHLIGHT_COLORS } from '@/types/pdf';
 
@@ -103,6 +103,42 @@ export function getBboxColor(
   }
 }
 
+/**
+ * Get highlight colors based on highlight type (Story 11.7).
+ *
+ * Maps semantic highlight types to colors:
+ * - citation: Yellow (source citations)
+ * - entity: Blue (entity mentions in MIG)
+ * - contradiction: Red (contradiction highlights)
+ *
+ * @param highlightType - The type of highlight
+ * @returns Highlight colors for background and border
+ *
+ * @example
+ * ```ts
+ * const citationColor = getHighlightTypeColor('citation');
+ * // citationColor = { background: '#FDE047', border: '#CA8A04' }
+ *
+ * const entityColor = getHighlightTypeColor('entity');
+ * // entityColor = { background: '#BFDBFE', border: '#3B82F6' }
+ *
+ * const contradictionColor = getHighlightTypeColor('contradiction');
+ * // contradictionColor = { background: '#FECACA', border: '#EF4444' }
+ * ```
+ */
+export function getHighlightTypeColor(highlightType: HighlightType): HighlightColors {
+  switch (highlightType) {
+    case 'citation':
+      return HIGHLIGHT_COLORS.source;
+    case 'entity':
+      return HIGHLIGHT_COLORS.entity;
+    case 'contradiction':
+      return HIGHLIGHT_COLORS.contradiction;
+    default:
+      return HIGHLIGHT_COLORS.source;
+  }
+}
+
 // =============================================================================
 // Canvas Rendering
 // =============================================================================
@@ -171,6 +207,32 @@ export function renderBboxHighlights(
   isSource: boolean
 ): void {
   const colors = getBboxColor(status, isSource);
+
+  for (const bbox of bboxes) {
+    const rect = calculateBboxPosition(bbox, pageWidth, pageHeight, scale);
+    renderBboxHighlight(ctx, rect, colors);
+  }
+}
+
+/**
+ * Render multiple bounding boxes on a canvas using highlight type for colors (Story 11.7).
+ *
+ * @param ctx - Canvas 2D rendering context
+ * @param bboxes - Array of bounding boxes with normalized coordinates
+ * @param pageWidth - Page width in pixels
+ * @param pageHeight - Page height in pixels
+ * @param scale - Current zoom scale
+ * @param highlightType - Type of highlight for color selection
+ */
+export function renderBboxHighlightsByType(
+  ctx: CanvasRenderingContext2D,
+  bboxes: Array<BoundingBox | SplitViewBoundingBox>,
+  pageWidth: number,
+  pageHeight: number,
+  scale: number,
+  highlightType: HighlightType
+): void {
+  const colors = getHighlightTypeColor(highlightType);
 
   for (const bbox of bboxes) {
     const rect = calculateBboxPosition(bbox, pageWidth, pageHeight, scale);

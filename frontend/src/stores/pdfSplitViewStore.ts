@@ -57,6 +57,9 @@ interface PdfSplitViewState {
   /** Bounding boxes for highlighting (if available) */
   boundingBoxes: Array<{ x: number; y: number; width: number; height: number }>;
 
+  /** Page number the bounding boxes belong to (Story 11.7) */
+  bboxPageNumber: number | null;
+
   /** Chunk ID for potential bbox lookup */
   chunkId: string | null;
 }
@@ -89,7 +92,21 @@ interface PdfSplitViewActions {
 
   /** Set bounding boxes for highlighting */
   setBoundingBoxes: (
-    boxes: Array<{ x: number; y: number; width: number; height: number }>
+    boxes: Array<{ x: number; y: number; width: number; height: number }>,
+    pageNumber?: number | null
+  ) => void;
+
+  /**
+   * Navigate to a different document with optional page and bboxes (Story 11.7).
+   * Used for cross-reference navigation (AC: #3).
+   */
+  navigateToDocument: (
+    documentId: string,
+    documentUrl: string,
+    documentName: string,
+    page?: number,
+    boundingBoxes?: Array<{ x: number; y: number; width: number; height: number }>,
+    bboxPageNumber?: number | null
   ) => void;
 
   /** Reset all state */
@@ -114,6 +131,7 @@ const initialState: PdfSplitViewState = {
   totalPages: 0,
   scale: 1.0,
   boundingBoxes: [],
+  bboxPageNumber: null,
   chunkId: null,
 };
 
@@ -142,11 +160,10 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
       currentPage: page,
       totalPages: 0, // Will be set when PDF loads
       chunkId: source.chunkId ?? null,
-      // NOTE: Bounding boxes are stored but not currently populated from API.
-      // The infrastructure exists to support source text highlighting (AC: #4),
-      // but bbox data retrieval from chunk API is deferred to post-MVP.
-      // When bbox data becomes available, call setBoundingBoxes() after opening.
+      // NOTE: Bounding boxes are populated via setBoundingBoxes() after opening.
+      // Story 11.7 wires the bbox fetching in WorkspaceContentArea.handleSourceClick().
       boundingBoxes: [],
+      bboxPageNumber: null,
       scale: 1.0,
     });
   },
@@ -163,6 +180,7 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
       currentPage: 1,
       totalPages: 0,
       boundingBoxes: [],
+      bboxPageNumber: null,
       chunkId: null,
       scale: 1.0,
     });
@@ -193,9 +211,32 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
   },
 
   setBoundingBoxes: (
-    boxes: Array<{ x: number; y: number; width: number; height: number }>
+    boxes: Array<{ x: number; y: number; width: number; height: number }>,
+    pageNumber?: number | null
   ) => {
-    set({ boundingBoxes: boxes });
+    set({ boundingBoxes: boxes, bboxPageNumber: pageNumber ?? null });
+  },
+
+  navigateToDocument: (
+    documentId: string,
+    documentUrl: string,
+    documentName: string,
+    page?: number,
+    boundingBoxes?: Array<{ x: number; y: number; width: number; height: number }>,
+    bboxPageNumber?: number | null
+  ) => {
+    const targetPage = page ?? 1;
+    set({
+      documentId,
+      documentUrl,
+      documentName,
+      initialPage: targetPage,
+      currentPage: targetPage,
+      totalPages: 0, // Will be set when new PDF loads
+      boundingBoxes: boundingBoxes ?? [],
+      bboxPageNumber: bboxPageNumber ?? null,
+      chunkId: null, // Clear chunkId when navigating to different doc
+    });
   },
 
   reset: () => {
@@ -251,3 +292,7 @@ export const selectPdfDocumentId = (state: PdfSplitViewStore) =>
 
 /** Select chunk ID for bbox lookup */
 export const selectPdfChunkId = (state: PdfSplitViewStore) => state.chunkId;
+
+/** Select bounding box page number (Story 11.7) */
+export const selectPdfBboxPageNumber = (state: PdfSplitViewStore) =>
+  state.bboxPageNumber;

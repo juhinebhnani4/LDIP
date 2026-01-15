@@ -3,9 +3,11 @@
 /**
  * EntitiesHeader Component
  *
- * Header for the entities tab with statistics, view mode toggle, and filters.
+ * Header for the entities tab with statistics, view mode toggle, filters,
+ * and multi-selection merge functionality.
  *
  * @see Story 10C.1 - Entities Tab MIG Graph Visualization
+ * @see Story 10C.2 - Entities Tab Detail Panel and Merge Dialog
  */
 
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
@@ -21,6 +23,8 @@ import {
   Landmark,
   Package,
   Check,
+  GitMerge,
+  MousePointerClick,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -58,11 +62,16 @@ export interface EntitiesHeaderProps {
   stats: {
     total: number;
     byType: Record<EntityType, number>;
+    filteredTotal?: number;
   };
   viewMode: EntityViewMode;
   onViewModeChange: (mode: EntityViewMode) => void;
   filters: EntityFilterState;
   onFiltersChange: (filters: EntityFilterState) => void;
+  isMultiSelectMode?: boolean;
+  onMultiSelectModeChange?: (enabled: boolean) => void;
+  selectedForMergeCount?: number;
+  onMergeClick?: () => void;
   className?: string;
 }
 
@@ -72,6 +81,10 @@ export function EntitiesHeader({
   onViewModeChange,
   filters,
   onFiltersChange,
+  isMultiSelectMode = false,
+  onMultiSelectModeChange,
+  selectedForMergeCount = 0,
+  onMergeClick,
   className,
 }: EntitiesHeaderProps) {
   const [searchValue, setSearchValue] = useState(filters.searchQuery);
@@ -83,6 +96,8 @@ export function EntitiesHeader({
     if (filters.entityTypes.length > 0) count++;
     if (filters.searchQuery) count++;
     if (filters.minMentionCount > 0) count++;
+    if (filters.verificationStatus !== 'all') count++;
+    if (filters.roles.length > 0) count++;
     return count;
   }, [filters]);
 
@@ -134,13 +149,25 @@ export function EntitiesHeader({
     });
   }, [onFiltersChange]);
 
+  const handleMultiSelectToggle = useCallback(() => {
+    if (onMultiSelectModeChange) {
+      onMultiSelectModeChange(!isMultiSelectMode);
+    }
+  }, [isMultiSelectMode, onMultiSelectModeChange]);
+
+  const canMerge = selectedForMergeCount === 2;
+
   return (
     <div className={cn('flex flex-col gap-4', className)}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">Entities</h2>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{stats.total} total</span>
+            <span>
+              {stats.filteredTotal !== undefined && stats.filteredTotal !== stats.total
+                ? `${stats.filteredTotal} of ${stats.total}`
+                : `${stats.total} total`}
+            </span>
             <span className="text-muted-foreground/50">|</span>
             <span className="flex items-center gap-1">
               <User className="h-3.5 w-3.5" />
@@ -161,22 +188,59 @@ export function EntitiesHeader({
           </div>
         </div>
 
-        <ToggleGroup
-          type="single"
-          value={viewMode}
-          onValueChange={(value) => value && onViewModeChange(value as EntityViewMode)}
-          aria-label="View mode"
-        >
-          <ToggleGroupItem value="graph" aria-label="Graph view">
-            <Network className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view">
-            <List className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="grid" aria-label="Grid view">
-            <LayoutGrid className="h-4 w-4" />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex items-center gap-2">
+          {/* Multi-select merge controls */}
+          {onMultiSelectModeChange && (
+            <>
+              <Button
+                variant={isMultiSelectMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleMultiSelectToggle}
+                className="gap-2"
+                aria-label={isMultiSelectMode ? 'Exit merge selection mode' : 'Select entities for merge'}
+              >
+                <MousePointerClick className="h-4 w-4" />
+                {isMultiSelectMode ? 'Cancel Selection' : 'Select for Merge'}
+              </Button>
+
+              {isMultiSelectMode && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onMergeClick}
+                  disabled={!canMerge}
+                  className="gap-2"
+                  aria-label="Merge selected entities"
+                >
+                  <GitMerge className="h-4 w-4" />
+                  Merge
+                  {selectedForMergeCount > 0 && (
+                    <Badge variant="secondary" className="ml-1 px-1.5 py-0 bg-primary-foreground/20">
+                      {selectedForMergeCount}/2
+                    </Badge>
+                  )}
+                </Button>
+              )}
+            </>
+          )}
+
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) => value && onViewModeChange(value as EntityViewMode)}
+            aria-label="View mode"
+          >
+            <ToggleGroupItem value="graph" aria-label="Graph view">
+              <Network className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="list" aria-label="List view">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="grid" aria-label="Grid view">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">

@@ -151,3 +151,92 @@ export async function getAllEntityMentions(
 
   return allMentions;
 }
+
+// =============================================================================
+// Entity Merge & Alias Operations (Story 10C.2)
+// =============================================================================
+
+import type {
+  MergeEntitiesRequest,
+  MergeResultResponse,
+  AliasesListResponse,
+} from '@/types/entity';
+
+/**
+ * Merge two entities.
+ * Source entity is deleted; its aliases are added to target.
+ *
+ * @param matterId - Matter UUID
+ * @param request - Merge request with source/target entity IDs
+ * @returns Merge result with kept entity ID and added aliases
+ *
+ * @example
+ * ```ts
+ * const result = await mergeEntities('matter-123', {
+ *   sourceEntityId: 'entity-456',  // Will be deleted
+ *   targetEntityId: 'entity-789',  // Will be kept
+ *   reason: 'Same person with different name variations',
+ * });
+ * console.log(result.keptEntityId); // 'entity-789'
+ * console.log(result.aliasesAdded); // ['J. Doe']
+ * ```
+ */
+export async function mergeEntities(
+  matterId: string,
+  request: MergeEntitiesRequest
+): Promise<MergeResultResponse> {
+  return api.post<MergeResultResponse>(
+    `/api/matters/${matterId}/entities/merge`,
+    request
+  );
+}
+
+/**
+ * Add an alias to an entity.
+ *
+ * @param matterId - Matter UUID
+ * @param entityId - Entity UUID
+ * @param alias - Alias string to add
+ * @returns Updated aliases list
+ *
+ * @example
+ * ```ts
+ * const result = await addAlias('matter-123', 'entity-456', 'Johnny D');
+ * console.log(result.data); // ['J. Doe', 'Johnny', 'Johnny D']
+ * ```
+ */
+export async function addAlias(
+  matterId: string,
+  entityId: string,
+  alias: string
+): Promise<AliasesListResponse> {
+  return api.post<AliasesListResponse>(
+    `/api/matters/${matterId}/entities/${entityId}/aliases`,
+    { alias }
+  );
+}
+
+/**
+ * Remove an alias from an entity.
+ *
+ * @param matterId - Matter UUID
+ * @param entityId - Entity UUID
+ * @param alias - Alias string to remove
+ * @returns Updated aliases list
+ *
+ * @example
+ * ```ts
+ * const result = await removeAlias('matter-123', 'entity-456', 'Johnny');
+ * console.log(result.data); // ['J. Doe']
+ * ```
+ */
+export async function removeAlias(
+  matterId: string,
+  entityId: string,
+  alias: string
+): Promise<AliasesListResponse> {
+  return api.delete<AliasesListResponse>(
+    `/api/matters/${matterId}/entities/${entityId}/aliases`,
+    { data: { alias } }
+  );
+}

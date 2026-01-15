@@ -222,3 +222,145 @@ export function useEntityStats(entities: EntityListItem[]): {
     byType,
   };
 }
+
+// =============================================================================
+// Entity Mutation Hooks (Story 10C.2)
+// =============================================================================
+
+import { useCallback, useState } from 'react';
+import { useSWRConfig } from 'swr';
+import {
+  mergeEntities as mergeEntitiesApi,
+  addAlias as addAliasApi,
+  removeAlias as removeAliasApi,
+} from '@/lib/api/entities';
+import type {
+  MergeEntitiesRequest,
+  MergeResultResponse,
+  AliasesListResponse,
+} from '@/types/entity';
+
+export interface UseEntityMergeReturn {
+  merge: (request: MergeEntitiesRequest) => Promise<MergeResultResponse>;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+/**
+ * Hook for merging two entities.
+ * Invalidates entity caches after successful merge.
+ */
+export function useEntityMerge(matterId: string | null): UseEntityMergeReturn {
+  const { mutate } = useSWRConfig();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const merge = useCallback(
+    async (request: MergeEntitiesRequest): Promise<MergeResultResponse> => {
+      if (!matterId) {
+        throw new Error('Matter ID is required');
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await mergeEntitiesApi(matterId, request);
+
+        // Invalidate all entity-related caches for this matter
+        await mutate(
+          (key: unknown) =>
+            Array.isArray(key) &&
+            (key[0] === 'entities' || key[0] === 'entity' || key[0] === 'entityRelationships') &&
+            key[1] === matterId,
+          undefined,
+          { revalidate: true }
+        );
+
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to merge entities');
+        setError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [matterId, mutate]
+  );
+
+  return { merge, isLoading, error };
+}
+
+export interface UseEntityAliasReturn {
+  addAlias: (entityId: string, alias: string) => Promise<AliasesListResponse>;
+  removeAlias: (entityId: string, alias: string) => Promise<AliasesListResponse>;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+/**
+ * Hook for managing entity aliases.
+ * Invalidates entity caches after successful alias operations.
+ */
+export function useEntityAlias(matterId: string | null): UseEntityAliasReturn {
+  const { mutate } = useSWRConfig();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const addAlias = useCallback(
+    async (entityId: string, alias: string): Promise<AliasesListResponse> => {
+      if (!matterId) {
+        throw new Error('Matter ID is required');
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await addAliasApi(matterId, entityId, alias);
+
+        // Invalidate entity detail cache
+        await mutate(['entity', matterId, entityId]);
+
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to add alias');
+        setError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [matterId, mutate]
+  );
+
+  const removeAlias = useCallback(
+    async (entityId: string, alias: string): Promise<AliasesListResponse> => {
+      if (!matterId) {
+        throw new Error('Matter ID is required');
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await removeAliasApi(matterId, entityId, alias);
+
+        // Invalidate entity detail cache
+        await mutate(['entity', matterId, entityId]);
+
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to remove alias');
+        setError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [matterId, mutate]
+  );
+
+  return { addAlias, removeAlias, isLoading, error };
+}

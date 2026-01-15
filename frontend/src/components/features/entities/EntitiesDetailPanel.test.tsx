@@ -1,7 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { EntitiesDetailPanel } from './EntitiesDetailPanel';
 import type { EntityWithRelations } from '@/types/entity';
+
+// Mock the useEntityMentions hook
+vi.mock('@/hooks/useEntities', () => ({
+  useEntityMentions: vi.fn(() => ({
+    mentions: [],
+    total: 0,
+    isLoading: false,
+    error: null,
+  })),
+}));
 
 const createMockEntity = (
   overrides: Partial<EntityWithRelations> = {}
@@ -36,7 +47,7 @@ const createMockEntity = (
       documentId: 'doc-1',
       chunkId: null,
       pageNumber: 5,
-      bboxIds: [],
+      bboxIds: ['bbox-1'],
       mentionText: 'John Doe filed the petition on...',
       context: null,
       confidence: 0.95,
@@ -52,6 +63,7 @@ const createMockEntity = (
 describe('EntitiesDetailPanel', () => {
   const defaultProps = {
     entity: createMockEntity(),
+    matterId: 'matter-1',
     onClose: vi.fn(),
     onEntitySelect: vi.fn(),
     onFocusInGraph: vi.fn(),
@@ -94,15 +106,51 @@ describe('EntitiesDetailPanel', () => {
       expect(screen.getByText('ACME Corp')).toBeInTheDocument();
     });
 
-    it('renders recent mentions', () => {
+    it('renders mentions with document name and page', () => {
       render(<EntitiesDetailPanel {...defaultProps} />);
-      expect(screen.getByText(/recent mentions/i)).toBeInTheDocument();
       expect(screen.getByText(/john doe filed the petition/i)).toBeInTheDocument();
+      // Check document name and page are shown together
+      expect(screen.getByText(/Petition\.pdf/)).toBeInTheDocument();
     });
 
     it('renders focus in graph button', () => {
       render(<EntitiesDetailPanel {...defaultProps} />);
       expect(screen.getByRole('button', { name: /focus in graph/i })).toBeInTheDocument();
+    });
+
+    it('renders verification status badge', () => {
+      render(<EntitiesDetailPanel {...defaultProps} />);
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+    });
+
+    it('renders verified status when entity is verified', () => {
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          entity={createMockEntity({
+            metadata: {
+              ...createMockEntity().metadata,
+              verified: true,
+            },
+          })}
+        />
+      );
+      expect(screen.getByText('Verified')).toBeInTheDocument();
+    });
+
+    it('renders flagged status when entity is flagged', () => {
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          entity={createMockEntity({
+            metadata: {
+              ...createMockEntity().metadata,
+              flagged: true,
+            },
+          })}
+        />
+      );
+      expect(screen.getByText('Flagged')).toBeInTheDocument();
     });
   });
 
@@ -137,7 +185,7 @@ describe('EntitiesDetailPanel', () => {
           entity={createMockEntity({ aliases: [] })}
         />
       );
-      expect(screen.queryByText('Aliases')).not.toBeInTheDocument();
+      expect(screen.getByText('No aliases')).toBeInTheDocument();
     });
 
     it('shows no relationships message when empty', () => {
@@ -154,7 +202,7 @@ describe('EntitiesDetailPanel', () => {
       render(
         <EntitiesDetailPanel
           {...defaultProps}
-          entity={createMockEntity({ recentMentions: [] })}
+          entity={createMockEntity({ recentMentions: [], mentionCount: 0 })}
         />
       );
       expect(screen.getByText(/no mentions available/i)).toBeInTheDocument();
@@ -191,6 +239,165 @@ describe('EntitiesDetailPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: /focus in graph/i }));
 
       expect(onFocusInGraph).toHaveBeenCalled();
+    });
+  });
+
+  describe('PDF navigation', () => {
+    it('calls onViewInDocument when mention clicked', () => {
+      const onViewInDocument = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onViewInDocument={onViewInDocument}
+        />
+      );
+
+      fireEvent.click(screen.getByText(/john doe filed the petition/i));
+
+      expect(onViewInDocument).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        pageNumber: 5,
+        bboxIds: ['bbox-1'],
+        entityId: 'entity-1',
+      });
+    });
+
+    it('renders View button when onViewInDocument is provided', () => {
+      const onViewInDocument = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onViewInDocument={onViewInDocument}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /view petition\.pdf page 5/i })).toBeInTheDocument();
+    });
+
+    it('mentions are clickable when onViewInDocument is provided', () => {
+      const onViewInDocument = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onViewInDocument={onViewInDocument}
+        />
+      );
+
+      const mentionElement = screen.getByText(/john doe filed the petition/i).closest('div');
+      expect(mentionElement).toHaveAttribute('role', 'button');
+      expect(mentionElement).toHaveAttribute('tabIndex', '0');
+    });
+
+    it('mentions are not clickable when onViewInDocument is not provided', () => {
+      render(<EntitiesDetailPanel {...defaultProps} />);
+
+      const mentionElement = screen.getByText(/john doe filed the petition/i).closest('div');
+      expect(mentionElement).not.toHaveAttribute('role', 'button');
+    });
+  });
+
+  describe('alias management', () => {
+    it('shows Add button when onAddAlias is provided', () => {
+      const onAddAlias = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /add alias/i })).toBeInTheDocument();
+    });
+
+    it('does not show Add button when onAddAlias is not provided', () => {
+      render(<EntitiesDetailPanel {...defaultProps} />);
+
+      expect(screen.queryByRole('button', { name: /add alias/i })).not.toBeInTheDocument();
+    });
+
+    it('opens alias input when Add button clicked', async () => {
+      const user = userEvent.setup();
+      const onAddAlias = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add alias/i }));
+
+      expect(screen.getByRole('textbox', { name: /new alias/i })).toBeInTheDocument();
+    });
+
+    it('calls onAddAlias when alias is confirmed', async () => {
+      const user = userEvent.setup();
+      const onAddAlias = vi.fn().mockResolvedValue(undefined);
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add alias/i }));
+      await user.type(screen.getByRole('textbox', { name: /new alias/i }), 'New Alias');
+      await user.click(screen.getByRole('button', { name: /confirm add alias/i }));
+
+      await waitFor(() => {
+        expect(onAddAlias).toHaveBeenCalledWith('New Alias');
+      });
+    });
+
+    it('closes alias input on cancel', async () => {
+      const user = userEvent.setup();
+      const onAddAlias = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add alias/i }));
+      expect(screen.getByRole('textbox', { name: /new alias/i })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /cancel add alias/i }));
+      expect(screen.queryByRole('textbox', { name: /new alias/i })).not.toBeInTheDocument();
+    });
+
+    it('submits alias on Enter key', async () => {
+      const user = userEvent.setup();
+      const onAddAlias = vi.fn().mockResolvedValue(undefined);
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add alias/i }));
+      await user.type(screen.getByRole('textbox', { name: /new alias/i }), 'New Alias{enter}');
+
+      await waitFor(() => {
+        expect(onAddAlias).toHaveBeenCalledWith('New Alias');
+      });
+    });
+
+    it('cancels alias input on Escape key', async () => {
+      const user = userEvent.setup();
+      const onAddAlias = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onAddAlias={onAddAlias}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /add alias/i }));
+      await user.type(screen.getByRole('textbox', { name: /new alias/i }), 'New Alias{escape}');
+
+      expect(screen.queryByRole('textbox', { name: /new alias/i })).not.toBeInTheDocument();
     });
   });
 
@@ -254,6 +461,25 @@ describe('EntitiesDetailPanel', () => {
       expect(
         screen.getByRole('button', { name: /close panel/i })
       ).toBeInTheDocument();
+    });
+
+    it('mention cards are keyboard accessible when clickable', () => {
+      const onViewInDocument = vi.fn();
+      render(
+        <EntitiesDetailPanel
+          {...defaultProps}
+          onViewInDocument={onViewInDocument}
+        />
+      );
+
+      const mentionCard = screen.getByText(/john doe filed the petition/i).closest('div');
+      expect(mentionCard).toHaveAttribute('tabIndex', '0');
+
+      // Simulate keyboard activation
+      if (mentionCard) {
+        fireEvent.keyDown(mentionCard, { key: 'Enter' });
+        expect(onViewInDocument).toHaveBeenCalled();
+      }
     });
   });
 });

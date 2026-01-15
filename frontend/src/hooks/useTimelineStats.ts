@@ -2,76 +2,47 @@
  * Timeline Stats Hook
  *
  * SWR hook for fetching timeline statistics.
- * Uses mock data for MVP - actual API integration exists.
+ * Connected to real backend API at /api/matters/{matterId}/timeline/stats
  *
  * Story 10B.3: Timeline Tab Vertical List View
  */
 
 import useSWR from 'swr';
-import type { TimelineStats, TimelineStatsResponse } from '@/types/timeline';
-
-/** Mock stats for MVP */
-const MOCK_STATS: TimelineStats = {
-  totalEvents: 47,
-  eventsByType: {
-    filing: 12,
-    notice: 8,
-    hearing: 10,
-    order: 7,
-    transaction: 5,
-    document: 3,
-    deadline: 2,
-  },
-  entitiesInvolved: 24,
-  dateRangeStart: '2016-05-15',
-  dateRangeEnd: '2024-01-15',
-  eventsWithEntities: 38,
-  eventsWithoutEntities: 9,
-  verifiedEvents: 18,
-};
+import type { TimelineStatsResponse } from '@/types/timeline';
 
 /**
- * Mock fetcher for MVP - simulates API call
- * TODO(Story-10B.5): Replace with actual API call when ready
+ * Real fetcher - transforms snake_case API response to camelCase
+ * Uses the API client for proper auth handling
  */
-async function mockFetcher(): Promise<TimelineStatsResponse> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 400));
-
-  return {
-    data: MOCK_STATS,
-  };
-}
-
-/**
- * Real fetcher for production - transforms snake_case to camelCase
- * TODO(Story-10B.5): Enable this when backend API is verified and working
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function realFetcher(url: string): Promise<TimelineStatsResponse> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error('Failed to fetch timeline stats');
-  }
-  const json = await res.json();
+async function fetcher(url: string): Promise<TimelineStatsResponse> {
+  const { api } = await import('@/lib/api/client');
+  const response = await api.get<{
+    data: {
+      total_events: number;
+      events_by_type: Record<string, number>;
+      entities_involved: number;
+      date_range_start: string | null;
+      date_range_end: string | null;
+      events_with_entities: number;
+      events_without_entities: number;
+      verified_events: number;
+    };
+  }>(url);
 
   // Transform snake_case API response to camelCase
   return {
     data: {
-      totalEvents: json.data.total_events,
-      eventsByType: json.data.events_by_type,
-      entitiesInvolved: json.data.entities_involved,
-      dateRangeStart: json.data.date_range_start,
-      dateRangeEnd: json.data.date_range_end,
-      eventsWithEntities: json.data.events_with_entities,
-      eventsWithoutEntities: json.data.events_without_entities,
-      verifiedEvents: json.data.verified_events,
+      totalEvents: response.data.total_events,
+      eventsByType: response.data.events_by_type,
+      entitiesInvolved: response.data.entities_involved,
+      dateRangeStart: response.data.date_range_start,
+      dateRangeEnd: response.data.date_range_end,
+      eventsWithEntities: response.data.events_with_entities,
+      eventsWithoutEntities: response.data.events_without_entities,
+      verifiedEvents: response.data.verified_events,
     },
   };
 }
-
-// TODO(Story-10B.5): Switch to realFetcher when backend API is verified
-const fetcher = mockFetcher;
 
 /**
  * Hook for fetching timeline statistics

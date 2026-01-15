@@ -1,0 +1,85 @@
+'use client';
+
+import Link from 'next/link';
+import { ArrowLeft, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from 'sonner';
+import { EditableMatterName } from './EditableMatterName';
+import { ExportDropdown } from './ExportDropdown';
+import { ShareDialog } from './ShareDialog';
+
+/**
+ * Workspace Header Component
+ *
+ * Layout from UX-Decisions-Log.md:
+ * ┌─────────────────────────────────────────────────────────────────────────────────┐
+ * │  WORKSPACE HEADER                                                                │
+ * │  ┌─────────────────┐                                      ┌────┐ ┌────┐ ┌────┐  │
+ * │  │ ← Dashboard     │        [Matter Name]                 │ ⬇  │ │ 👥 │ │ ⚙  │  │
+ * │  │                 │                                      │Exp │ │Shr │ │Set │  │
+ * │  └─────────────────┘                                      └────┘ └────┘ └────┘  │
+ * └─────────────────────────────────────────────────────────────────────────────────┘
+ *
+ * Story 10A.1: Workspace Shell Header
+ */
+
+interface WorkspaceHeaderProps {
+  /** Matter ID for the current workspace */
+  matterId: string;
+}
+
+export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
+  const handleSettingsClick = () => {
+    toast.info('Settings coming soon');
+  };
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center gap-4 px-4 sm:px-6">
+        {/* Left: Back navigation */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Back to Dashboard"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-medium">Dashboard</span>
+          </Link>
+        </div>
+
+        {/* Center: Editable matter name */}
+        <div className="flex-1 flex justify-center px-4">
+          <EditableMatterName matterId={matterId} />
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1">
+          {/* Export dropdown */}
+          <ExportDropdown matterId={matterId} />
+
+          {/* Share dialog */}
+          <ShareDialog matterId={matterId} />
+
+          {/* Settings button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSettingsClick}
+                aria-label="Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Settings</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </header>
+  );
+}

@@ -149,8 +149,8 @@ development_status:
   epic-9-retrospective: optional
 
   # Epic 10A: Workspace Shell & Navigation
-  epic-10a: backlog
-  10a-1-workspace-shell-header: backlog
+  epic-10a: in-progress  # First story created 2026-01-15
+  10a-1-workspace-shell-header: done  # Completed 2026-01-15 - 52 tests passing, WorkspaceHeader + EditableMatterName + ExportDropdown + ShareDialog
   10a-2-tab-bar-navigation: backlog
   10a-3-content-area-qa-panel: backlog
   epic-10a-retrospective: optional

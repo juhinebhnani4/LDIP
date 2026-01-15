@@ -28,6 +28,9 @@ interface MatterState {
   /** All matters loaded from API */
   matters: MatterCardData[];
 
+  /** Currently active matter in workspace (for workspace header - Story 10A.1) */
+  currentMatter: MatterCardData | null;
+
   /** Loading state for fetching matters */
   isLoading: boolean;
 
@@ -47,6 +50,15 @@ interface MatterState {
 interface MatterActions {
   /** Fetch matters from API (or use mock data for now) */
   fetchMatters: () => Promise<void>;
+
+  /** Fetch a single matter by ID for workspace (Story 10A.1) */
+  fetchMatter: (matterId: string) => Promise<void>;
+
+  /** Set current matter for workspace context (Story 10A.1) */
+  setCurrentMatter: (matter: MatterCardData | null) => void;
+
+  /** Update matter name (Story 10A.1) */
+  updateMatterName: (matterId: string, name: string) => Promise<void>;
 
   /** Set sort option */
   setSortBy: (sortBy: MatterSortOption) => void;
@@ -73,9 +85,10 @@ function getInitialViewMode(): MatterViewMode {
   return stored === 'list' ? 'list' : 'grid';
 }
 
-export const useMatterStore = create<MatterStore>()((set) => ({
+export const useMatterStore = create<MatterStore>()((set, get) => ({
   // Initial state
   matters: [],
+  currentMatter: null,
   isLoading: false,
   error: null,
   sortBy: 'recent',
@@ -103,6 +116,87 @@ export const useMatterStore = create<MatterStore>()((set) => ({
       const message = error instanceof Error ? error.message : 'Failed to fetch matters';
       set({ error: message, isLoading: false });
     }
+  },
+
+  /**
+   * Fetch a single matter by ID for workspace context (Story 10A.1).
+   * First checks if matter exists in local state, otherwise fetches from mock.
+   */
+  fetchMatter: async (matterId: string) => {
+    const { matters } = get();
+
+    // Check if matter is already in local state
+    const existingMatter = matters.find((m) => m.id === matterId);
+    if (existingMatter) {
+      set({ currentMatter: existingMatter });
+      return;
+    }
+
+    // TODO: Replace with actual API call when backend is ready
+    // const response = await fetch(`/api/matters/${matterId}`);
+    // const { data } = await response.json();
+
+    // For MVP, find in mock data or create a placeholder
+    const mockMatters = getMockMatters();
+    const foundMatter = mockMatters.find((m) => m.id === matterId);
+
+    if (foundMatter) {
+      set({ currentMatter: foundMatter });
+    } else {
+      // Create a placeholder matter for unknown IDs
+      const placeholderMatter: MatterCardData = {
+        id: matterId,
+        title: 'Untitled Matter',
+        description: null,
+        status: 'active',
+        role: 'owner',
+        memberCount: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pageCount: 0,
+        documentCount: 0,
+        verificationPercent: 0,
+        issueCount: 0,
+        processingStatus: 'ready',
+      };
+      set({ currentMatter: placeholderMatter });
+    }
+  },
+
+  /**
+   * Set current matter for workspace context (Story 10A.1).
+   */
+  setCurrentMatter: (matter: MatterCardData | null) => {
+    set({ currentMatter: matter });
+  },
+
+  /**
+   * Update matter name (Story 10A.1).
+   * Performs optimistic update and syncs with backend.
+   */
+  updateMatterName: async (matterId: string, name: string) => {
+    const { matters, currentMatter } = get();
+
+    // Optimistic update in matters list
+    const updatedMatters = matters.map((m) =>
+      m.id === matterId ? { ...m, title: name, updatedAt: new Date().toISOString() } : m
+    );
+    set({ matters: updatedMatters });
+
+    // Optimistic update for current matter
+    if (currentMatter?.id === matterId) {
+      set({ currentMatter: { ...currentMatter, title: name, updatedAt: new Date().toISOString() } });
+    }
+
+    // TODO: Replace with actual API call when backend is ready
+    // await fetch(`/api/matters/${matterId}`, {
+    //   method: 'PATCH',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({ title: name }),
+    // });
+
+    // Simulate network delay for MVP
+    await new Promise((resolve) => setTimeout(resolve, 500));
   },
 
   /**

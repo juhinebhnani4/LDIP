@@ -14,8 +14,8 @@ from typing import Final
 
 import structlog
 
-from app.services.chunk_service import ChunkService, get_chunk_service
 from app.models.chunk import ChunkType, ChunkWithContent
+from app.services.chunk_service import ChunkService, get_chunk_service
 
 logger = structlog.get_logger(__name__)
 

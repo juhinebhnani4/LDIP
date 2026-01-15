@@ -7,7 +7,6 @@ Story 4-3: Events Table + MIG Integration
 """
 
 import json
-from dataclasses import asdict
 from datetime import date, datetime
 from functools import lru_cache
 from typing import Any

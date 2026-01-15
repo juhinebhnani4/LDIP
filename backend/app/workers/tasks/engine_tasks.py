@@ -19,24 +19,20 @@ import asyncio
 import structlog
 
 from app.engines.timeline import (
-    DateExtractor,
-    get_date_extractor,
-    EventClassifier,
-    get_event_classifier,
-    EventEntityLinker,
-    get_event_entity_linker,
-    TimelineAnomalyDetector,
     get_anomaly_detector,
+    get_date_extractor,
+    get_event_classifier,
+    get_event_entity_linker,
     get_timeline_builder,
 )
 from app.models.job import JobStatus, JobType
+from app.services.anomaly_service import get_anomaly_service
 from app.services.chunk_service import get_chunk_service
 from app.services.document_service import get_document_service
 from app.services.job_tracking import get_job_tracking_service
 from app.services.mig.graph import get_mig_graph_service
-from app.services.timeline_service import TimelineService, get_timeline_service
 from app.services.timeline_cache import get_timeline_cache_service
-from app.services.anomaly_service import get_anomaly_service
+from app.services.timeline_service import get_timeline_service
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -44,6 +40,7 @@ logger = structlog.get_logger(__name__)
 
 # Thread-local storage for reusing event loops within a task
 import threading
+
 _task_loop_storage = threading.local()
 
 

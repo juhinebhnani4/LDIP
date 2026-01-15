@@ -11,13 +11,13 @@ from app.services.matter_service import (
 )
 from app.services.verification import (
     ExportEligibilityService,
+    VerificationNotFoundError,
     VerificationService,
     VerificationServiceError,
-    VerificationNotFoundError,
     get_export_eligibility_service,
     get_verification_service,
-    reset_verification_service,
     reset_export_eligibility_service,
+    reset_verification_service,
 )
 
 __all__ = [

@@ -12,7 +12,6 @@ from supabase import Client
 
 from app.models.document import (
     Document,
-    DocumentCreate,
     DocumentListItem,
     DocumentStatus,
     DocumentType,

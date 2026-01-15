@@ -16,13 +16,13 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
-from app.models.timeline import (
-    DateExtractionResult,
-    ExtractedDate,
-)
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
+)
+from app.models.timeline import (
+    DateExtractionResult,
+    ExtractedDate,
 )
 
 logger = structlog.get_logger(__name__)

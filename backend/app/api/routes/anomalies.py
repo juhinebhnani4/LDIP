@@ -23,14 +23,14 @@ from app.models.anomaly import (
     AnomalyDetailResponse,
     AnomalyDetectionJobData,
     AnomalyDetectionJobResponse,
+    AnomalyErrorResponse,
     AnomalySummaryResponse,
     AnomalyUpdateResponse,
-    AnomalyErrorResponse,
 )
-from app.models.job import JobStatus, JobType
-from app.services.anomaly_service import get_anomaly_service, AnomalyService
-from app.services.job_tracking import get_job_tracking_service, JobTrackingService
-from app.services.timeline_service import get_timeline_service, TimelineService
+from app.models.job import JobType
+from app.services.anomaly_service import AnomalyService, get_anomaly_service
+from app.services.job_tracking import JobTrackingService, get_job_tracking_service
+from app.services.timeline_service import TimelineService, get_timeline_service
 from app.workers.tasks.engine_tasks import detect_timeline_anomalies
 
 router = APIRouter(prefix="/matters/{matter_id}/anomalies", tags=["anomalies"])

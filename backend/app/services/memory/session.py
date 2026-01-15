@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from app.models.memory import (
-    ArchivedSession,
     MAX_ARCHIVED_MESSAGES,
+    ArchivedSession,
     SessionContext,
     SessionEntityMention,
     SessionMessage,

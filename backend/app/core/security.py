@@ -1,11 +1,10 @@
 """Security utilities for Supabase JWT validation."""
 
 import jwt
-from jwt.exceptions import PyJWTError
-
 import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import PyJWTError
 
 from app.core.config import Settings, get_settings
 from app.models.auth import AuthenticatedUser

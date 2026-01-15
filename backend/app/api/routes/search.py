@@ -18,6 +18,12 @@ from app.api.deps import (
     MatterRole,
     require_matter_role,
 )
+from app.models.rerank import (
+    RerankedSearchMeta,
+    RerankedSearchResponse,
+    RerankedSearchResultItem,
+    RerankRequest,
+)
 from app.models.search import (
     AliasExpandedSearchMeta,
     AliasExpandedSearchRequest,
@@ -31,15 +37,8 @@ from app.models.search import (
     SingleModeSearchMeta,
     SingleModeSearchResponse,
 )
-from app.services.mig import MIGGraphService, get_mig_graph_service
-from app.models.rerank import (
-    RerankRequest,
-    RerankedSearchMeta,
-    RerankedSearchResponse,
-    RerankedSearchResultItem,
-)
+from app.services.mig import get_mig_graph_service
 from app.services.rag.hybrid_search import (
-    HybridSearchService,
     HybridSearchServiceError,
     SearchWeights,
     get_hybrid_search_service,
@@ -543,7 +542,6 @@ async def alias_expanded_search(
         # Expand aliases if enabled
         if request.expand_aliases:
             # Get all entities for this matter
-            import asyncio
             entities = await mig_service.get_entities(matter_id=membership.matter_id)
 
             if entities:

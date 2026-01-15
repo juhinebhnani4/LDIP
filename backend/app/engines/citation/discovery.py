@@ -7,9 +7,7 @@ Story 3-1: Act Citation Extraction (AC: #4)
 Story 3-3: Citation Verification (trigger_verification_on_upload)
 """
 
-from datetime import datetime
 from functools import lru_cache
-from typing import Final
 
 import structlog
 

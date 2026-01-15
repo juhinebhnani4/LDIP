@@ -12,11 +12,17 @@ Job Tracking Integration (Story 2c-3):
 """
 
 import asyncio
-from datetime import datetime
 
 import structlog
 from celery.exceptions import MaxRetriesExceededError
 
+from app.engines.citation import (
+    CitationExtractor,
+    CitationExtractorError,
+    CitationStorageService,
+    get_citation_extractor,
+    get_citation_storage_service,
+)
 from app.models.document import DocumentStatus
 from app.models.job import JobStatus, JobType
 from app.models.ocr_validation import CorrectionType, ValidationStatus
@@ -24,7 +30,11 @@ from app.services.bounding_box_service import (
     BoundingBoxService,
     get_bounding_box_service,
 )
-from app.services.chunk_service import ChunkService, ChunkServiceError, get_chunk_service
+from app.services.chunk_service import (
+    ChunkService,
+    ChunkServiceError,
+    get_chunk_service,
+)
 from app.services.chunking.bbox_linker import link_chunks_to_bboxes
 from app.services.chunking.parent_child_chunker import ParentChildChunker
 from app.services.document_service import (
@@ -34,11 +44,20 @@ from app.services.document_service import (
 )
 from app.services.job_tracking import (
     JobTrackingService,
-    PartialProgressTracker,
     create_progress_tracker,
     get_job_tracking_service,
 )
 from app.services.job_tracking.time_estimator import TimeEstimator, get_time_estimator
+from app.services.mig import (
+    EntityResolver,
+    MIGEntityExtractor,
+    MIGGraphService,
+    get_entity_resolver,
+    get_mig_extractor,
+    get_mig_graph_service,
+)
+from app.services.mig.entity_resolver import AliasResolutionError
+from app.services.mig.extractor import MIGExtractorError
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -65,29 +84,16 @@ from app.services.pubsub_service import (
     broadcast_job_progress,
     broadcast_job_status_change,
 )
-from app.services.mig import (
-    EntityResolver,
-    MIGEntityExtractor,
-    MIGGraphService,
-    get_entity_resolver,
-    get_mig_extractor,
-    get_mig_graph_service,
-)
-from app.engines.citation import (
-    CitationExtractor,
-    CitationExtractorError,
-    CitationStorageService,
-    get_citation_extractor,
-    get_citation_storage_service,
-)
-from app.services.mig.entity_resolver import AliasResolutionError
-from app.services.mig.extractor import MIGExtractorError
 from app.services.rag.embedder import (
     EmbeddingService,
     EmbeddingServiceError,
     get_embedding_service,
 )
-from app.services.storage_service import StorageError, StorageService, get_storage_service
+from app.services.storage_service import (
+    StorageError,
+    StorageService,
+    get_storage_service,
+)
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -2507,7 +2513,6 @@ def resolve_aliases(
         AliasResolutionError: If resolution fails (will trigger retry).
     """
     from app.services.supabase.client import get_service_client
-    from app.models.entity import EntityNode
 
     # Get document_id and job_id from prev_result or parameter
     doc_id = document_id

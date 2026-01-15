@@ -17,15 +17,15 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.engines.timeline.classification_prompts import (
+    EVENT_CLASSIFICATION_BATCH_PROMPT,
+    EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+    EVENT_CLASSIFICATION_USER_PROMPT,
+)
 from app.models.timeline import (
     EventClassificationResult,
     EventType,
     SecondaryTypeScore,
-)
-from app.engines.timeline.classification_prompts import (
-    EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-    EVENT_CLASSIFICATION_USER_PROMPT,
-    EVENT_CLASSIFICATION_BATCH_PROMPT,
 )
 
 logger = structlog.get_logger(__name__)

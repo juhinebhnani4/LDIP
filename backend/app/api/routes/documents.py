@@ -37,7 +37,6 @@ from app.api.deps import (
 )
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
-from app.services.matter_service import MatterService
 from app.models.document import (
     BulkDocumentUpdate,
     BulkUpdateResponse,
@@ -57,11 +56,7 @@ from app.services.document_service import (
     DocumentServiceError,
     get_document_service,
 )
-from app.services.storage_service import (
-    StorageError,
-    StorageService,
-    get_storage_service,
-)
+from app.services.matter_service import MatterService
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
     calculate_document_confidence,
@@ -70,6 +65,11 @@ from app.services.ocr.human_review_service import (
     HumanReviewService,
     HumanReviewServiceError,
     get_human_review_service,
+)
+from app.services.storage_service import (
+    StorageError,
+    StorageService,
+    get_storage_service,
 )
 from app.workers.tasks.document_tasks import (
     calculate_confidence,

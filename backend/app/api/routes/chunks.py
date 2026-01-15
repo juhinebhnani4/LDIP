@@ -7,7 +7,6 @@ All endpoints enforce matter isolation via Layer 4 validation.
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from pydantic import BaseModel, Field
 
 from app.api.deps import get_matter_service
 from app.core.security import get_current_user

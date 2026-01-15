@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from re import Pattern
 
-    from app.models.safety import ViolationType
 
 
 # =============================================================================

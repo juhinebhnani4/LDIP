@@ -6,7 +6,6 @@ and provides a clean interface for API routes.
 CRITICAL: Validates matter_id on every request (Layer 4 isolation).
 """
 
-import asyncio
 from functools import lru_cache
 from math import ceil
 
@@ -14,7 +13,6 @@ import structlog
 
 from app.engines.contradiction import StatementQueryEngine, get_statement_query_engine
 from app.models.contradiction import (
-    EntityStatements,
     EntityStatementsResponse,
     PaginationMeta,
 )

@@ -66,6 +66,22 @@ export const EVENT_TYPE_COLORS: Record<TimelineEventType, string> = {
 };
 
 /**
+ * Background color classes for timeline markers (used in horizontal/multitrack views)
+ * These are explicit classes to ensure Tailwind purging includes them
+ */
+export const EVENT_TYPE_MARKER_BG: Record<TimelineEventType, string> = {
+  filing: 'bg-blue-200 dark:bg-blue-800',
+  order: 'bg-purple-200 dark:bg-purple-800',
+  notice: 'bg-amber-200 dark:bg-amber-800',
+  hearing: 'bg-green-200 dark:bg-green-800',
+  transaction: 'bg-pink-200 dark:bg-pink-800',
+  document: 'bg-gray-200 dark:bg-gray-700',
+  deadline: 'bg-red-200 dark:bg-red-800',
+  unclassified: 'bg-slate-200 dark:bg-slate-700',
+  raw_date: 'bg-slate-200 dark:bg-slate-700',
+};
+
+/**
  * Get icon component for event type
  */
 export function getEventTypeIcon(eventType: TimelineEventType): LucideIcon {

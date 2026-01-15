@@ -10,7 +10,6 @@ Provides endpoints for:
 Part of Epic 5: Consistency & Contradiction Engine.
 """
 
-from math import ceil
 from typing import Annotated
 
 import structlog
@@ -25,21 +24,20 @@ from app.models.contradiction import (
     ContradictionErrorResponse,
     EntityComparisonsResponse,
     EntityStatementsResponse,
-    PaginationMeta,
 )
 from app.services.contradiction import (
-    StatementQueryService,
-    get_statement_query_service,
     StatementComparisonService,
+    StatementQueryService,
     get_statement_comparison_service,
-)
-from app.services.contradiction.statement_query import (
-    EntityNotFoundError,
-    StatementQueryError,
+    get_statement_query_service,
 )
 from app.services.contradiction.comparator import (
     ComparisonServiceError,
     TooManyStatementsError,
+)
+from app.services.contradiction.statement_query import (
+    EntityNotFoundError,
+    StatementQueryError,
 )
 
 router = APIRouter(

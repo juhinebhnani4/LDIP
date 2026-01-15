@@ -28,8 +28,6 @@ from app.engines.citation import (
 )
 from app.models.citation import (
     ActDiscoveryResponse,
-    ActDiscoverySummary,
-    ActResolution,
     ActResolutionStatus,
     BatchVerificationResponse,
     Citation,
@@ -39,22 +37,19 @@ from app.models.citation import (
     CitationSummaryItem,
     CitationSummaryResponse,
     PaginationMeta,
-    UserAction,
     VerificationResult,
-    VerificationResultResponse,
     VerificationStatus,
 )
+from app.services.bounding_box_service import get_bounding_box_service
+
+# Split-view specific imports
+from app.services.storage_service import get_storage_service
+from app.services.supabase.client import get_service_client
 from app.workers.tasks.verification_tasks import (
     trigger_verification_on_act_upload,
     verify_citations_for_act,
     verify_single_citation,
 )
-
-# Split-view specific imports
-from app.services.storage_service import get_storage_service
-from app.services.bounding_box_service import get_bounding_box_service
-from app.services.supabase.client import get_service_client
-
 
 # =============================================================================
 # Request/Response Models

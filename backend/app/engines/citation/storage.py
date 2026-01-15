@@ -27,9 +27,7 @@ from app.models.citation import (
     ActResolution,
     ActResolutionStatus,
     Citation,
-    CitationCreate,
     CitationExtractionResult,
-    ExtractedCitation,
     UserAction,
     VerificationStatus,
 )

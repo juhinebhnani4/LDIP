@@ -29,7 +29,7 @@ import {
 } from './timelineUtils';
 import {
   EVENT_TYPE_ICONS,
-  EVENT_TYPE_COLORS,
+  EVENT_TYPE_MARKER_BG,
 } from './eventTypeIcons';
 import type { TimelineEvent, ZoomLevel, EventCluster } from '@/types/timeline';
 
@@ -65,11 +65,7 @@ function TimelineMarker({
 
   const isCluster = cluster.events.length > 1;
   const Icon = EVENT_TYPE_ICONS[event.eventType] ?? EVENT_TYPE_ICONS.unclassified;
-  const colorClass = EVENT_TYPE_COLORS[event.eventType] ?? EVENT_TYPE_COLORS.unclassified;
-
-  // Extract background color from the color class
-  const bgMatch = colorClass.match(/bg-(\w+)-(\d+)/);
-  const bgColor = bgMatch ? `bg-${bgMatch[1]}-${bgMatch[2]}` : 'bg-gray-200';
+  const bgColor = EVENT_TYPE_MARKER_BG[event.eventType] ?? EVENT_TYPE_MARKER_BG.unclassified;
 
   return (
     <Tooltip>
@@ -88,7 +84,7 @@ function TimelineMarker({
           )}
           style={{ left: `${position}%` }}
           onClick={onClick}
-          aria-label={`Event: ${event.description.slice(0, 50)}${event.description.length > 50 ? '...' : ''}`}
+          aria-label={`Event: ${event.description.slice(0, 80)}${event.description.length > 80 ? '...' : ''}`}
           aria-pressed={isSelected}
         >
           <Icon className="h-3 w-3 text-foreground" aria-hidden="true" />

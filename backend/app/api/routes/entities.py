@@ -22,7 +22,6 @@ from app.models.entity import (
     EntitiesListResponse,
     EntityListItem,
     EntityMentionsResponse,
-    EntityNode,
     EntityNodeWithRelations,
     EntityResponse,
     EntityType,
@@ -34,7 +33,6 @@ from app.services.mig import (
     get_correction_learning_service,
     get_mig_graph_service,
 )
-
 
 # =============================================================================
 # Request/Response Models for Alias Management

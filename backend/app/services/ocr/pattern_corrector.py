@@ -10,7 +10,11 @@ from functools import lru_cache
 
 import structlog
 
-from app.models.ocr_validation import CorrectionType, LowConfidenceWord, ValidationResult
+from app.models.ocr_validation import (
+    CorrectionType,
+    LowConfidenceWord,
+    ValidationResult,
+)
 
 logger = structlog.get_logger(__name__)
 

@@ -357,8 +357,11 @@ describe('TimelineMultiTrack', () => {
       />
     );
 
-    // Tab to first marker
-    await user.tab();
+    // Focus an event marker directly and activate with keyboard
+    const markers = screen.getAllByRole('button', { name: /event/i });
+    expect(markers.length).toBeGreaterThan(0);
+
+    markers[0]!.focus();
     await user.keyboard('{Enter}');
 
     expect(handleSelect).toHaveBeenCalled();

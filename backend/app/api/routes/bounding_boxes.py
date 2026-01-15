@@ -8,12 +8,10 @@ and Layer 4 validation.
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
+from supabase import Client
 
 from app.api.deps import (
-    MatterMembership,
-    MatterRole,
     get_matter_service,
-    require_matter_role,
 )
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
@@ -29,7 +27,6 @@ from app.services.document_service import (
 )
 from app.services.matter_service import MatterService
 from app.services.supabase.client import get_service_client
-from supabase import Client
 
 router = APIRouter(prefix="/documents", tags=["bounding-boxes"])
 chunks_router = APIRouter(prefix="/chunks", tags=["bounding-boxes"])

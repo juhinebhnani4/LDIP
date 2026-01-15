@@ -21,7 +21,7 @@ import time
 import structlog
 
 from app.core.config import get_settings
-from app.models.safety import SubtleViolationCheck, ViolationType
+from app.models.safety import SubtleViolationCheck
 from app.services.safety.prompts import (
     SUBTLE_DETECTION_SYSTEM_PROMPT,
     format_subtle_detection_prompt,

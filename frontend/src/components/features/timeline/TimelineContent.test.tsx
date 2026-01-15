@@ -208,6 +208,67 @@ describe('TimelineContent', () => {
 
       expect(listButton).toHaveAttribute('aria-pressed', 'true');
     });
+
+    it('switches to horizontal view when horizontal button clicked', async () => {
+      const user = userEvent.setup();
+      renderWithProvider(<TimelineContent />);
+
+      const horizontalButton = screen.getByRole('button', { name: /horizontal/i });
+      await user.click(horizontalButton);
+
+      expect(horizontalButton).toHaveAttribute('aria-pressed', 'true');
+      // Horizontal view should render with graphics-document role
+      expect(
+        screen.getByRole('graphics-document', { name: /horizontal timeline/i })
+      ).toBeInTheDocument();
+    });
+
+    it('switches to multi-track view when multi-track button clicked', async () => {
+      const user = userEvent.setup();
+      renderWithProvider(<TimelineContent />);
+
+      const multiTrackButton = screen.getByRole('button', { name: /multi-track/i });
+      await user.click(multiTrackButton);
+
+      expect(multiTrackButton).toHaveAttribute('aria-pressed', 'true');
+      // Multi-track view should render with table role
+      expect(
+        screen.getByRole('table', { name: /multi-track timeline/i })
+      ).toBeInTheDocument();
+    });
+
+    it('clears selected event when switching view modes', async () => {
+      const user = userEvent.setup();
+      renderWithProvider(<TimelineContent />);
+
+      // Switch to horizontal view
+      const horizontalButton = screen.getByRole('button', { name: /^horizontal/i });
+      await user.click(horizontalButton);
+
+      // Select an event
+      const eventMarkers = screen.getAllByRole('button', { name: /event/i });
+      if (eventMarkers.length > 0) {
+        await user.click(eventMarkers[0]!);
+      }
+
+      // Switch to list view - should clear selection
+      // Use aria-label "List view" to avoid matching "View in List" button
+      const listButton = screen.getByRole('button', { name: /^list view$/i });
+      await user.click(listButton);
+
+      // Detail panel should not be visible after switching
+      expect(
+        screen.queryByRole('region', { name: /selected event details/i })
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders all three view mode buttons', () => {
+      renderWithProvider(<TimelineContent />);
+
+      expect(screen.getByRole('button', { name: /list/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /horizontal/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /multi-track/i })).toBeInTheDocument();
+    });
   });
 
   describe('styling', () => {

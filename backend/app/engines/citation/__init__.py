@@ -15,10 +15,20 @@ from app.engines.citation.abbreviations import (
     get_display_name,
     normalize_act_name,
 )
+from app.engines.citation.act_indexer import (
+    ActIndexer,
+    ActIndexerError,
+    ActNotIndexedError,
+    get_act_indexer,
+)
+from app.engines.citation.discovery import (
+    ActDiscoveryService,
+    get_act_discovery_service,
+)
 from app.engines.citation.extractor import (
+    CitationConfigurationError,
     CitationExtractor,
     CitationExtractorError,
-    CitationConfigurationError,
     get_citation_extractor,
 )
 from app.engines.citation.storage import (
@@ -26,21 +36,11 @@ from app.engines.citation.storage import (
     CitationStorageService,
     get_citation_storage_service,
 )
-from app.engines.citation.discovery import (
-    ActDiscoveryService,
-    get_act_discovery_service,
-)
-from app.engines.citation.act_indexer import (
-    ActIndexer,
-    ActIndexerError,
-    ActNotIndexedError,
-    get_act_indexer,
-)
 from app.engines.citation.verifier import (
-    CitationVerifier,
     CitationVerificationError,
-    SectionNotFoundError,
+    CitationVerifier,
     QuoteComparisonError,
+    SectionNotFoundError,
     VerificationConfigurationError,
     get_citation_verifier,
 )

@@ -12,7 +12,7 @@ from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import documentai_v1 as documentai
 
 from app.core.config import get_settings
-from app.models.ocr import OCRBoundingBox, OCRPage, OCRResult
+from app.models.ocr import OCRPage, OCRResult
 from app.services.ocr.bbox_extractor import extract_bounding_boxes
 
 logger = structlog.get_logger(__name__)

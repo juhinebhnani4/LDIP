@@ -22,8 +22,8 @@ import structlog
 from app.core.config import get_settings
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import RawEvent
-from app.services.mig.entity_resolver import get_entity_resolver, EntityResolver
-from app.services.mig.graph import get_mig_graph_service, MIGGraphService
+from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver
+from app.services.mig.graph import MIGGraphService, get_mig_graph_service
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +35,7 @@ logger = structlog.get_logger(__name__)
 # Confidence threshold for entity linking
 # Can be overridden via ENTITY_LINK_CONFIDENCE_THRESHOLD env var
 import os as _os
+
 LINK_CONFIDENCE_THRESHOLD = float(
     _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.7")
 )

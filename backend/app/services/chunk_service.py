@@ -17,7 +17,6 @@ from supabase import Client
 
 from app.models.chunk import (
     Chunk,
-    ChunkListItem,
     ChunkType,
     ChunkWithContent,
 )

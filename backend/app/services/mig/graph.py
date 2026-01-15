@@ -12,7 +12,6 @@ without blocking the event loop.
 """
 
 import asyncio
-import math
 from datetime import UTC, datetime
 from functools import lru_cache
 
@@ -25,7 +24,6 @@ from app.models.entity import (
     EntityMention,
     EntityMentionCreate,
     EntityNode,
-    EntityNodeCreate,
     EntityType,
     ExtractedEntity,
 )

@@ -27,11 +27,17 @@ from typing import Any
 import structlog
 
 from app.engines.orchestrator.aggregator import ResultAggregator, get_result_aggregator
-from app.engines.orchestrator.audit_logger import QueryAuditLogger, get_query_audit_logger
+from app.engines.orchestrator.audit_logger import (
+    QueryAuditLogger,
+    get_query_audit_logger,
+)
 from app.engines.orchestrator.executor import EngineExecutor, get_engine_executor
 from app.engines.orchestrator.intent_analyzer import IntentAnalyzer, get_intent_analyzer
 from app.engines.orchestrator.planner import ExecutionPlanner, get_execution_planner
-from app.engines.orchestrator.query_history import QueryHistoryStore, get_query_history_store
+from app.engines.orchestrator.query_history import (
+    QueryHistoryStore,
+    get_query_history_store,
+)
 from app.models.orchestrator import (
     IntentAnalysisResult,
     OrchestratorResult,

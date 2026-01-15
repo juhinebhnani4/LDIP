@@ -12,37 +12,6 @@ to the appropriate analysis engines (Citation, Timeline, Contradiction, RAG).
 """
 
 # Story 6-1: Intent Analysis
-from app.engines.orchestrator.intent_analyzer import (
-    IntentAnalyzer,
-    IntentAnalyzerError,
-    IntentParseError,
-    OpenAIConfigurationError,
-    get_intent_analyzer,
-)
-from app.engines.orchestrator.prompts import (
-    INTENT_CLASSIFICATION_RESPONSE_SCHEMA,
-    INTENT_CLASSIFICATION_SYSTEM_PROMPT,
-    INTENT_CLASSIFICATION_USER_PROMPT,
-    format_intent_prompt,
-    validate_intent_response,
-)
-
-# Story 6-2: Engine Execution and Aggregation
-from app.engines.orchestrator.planner import (
-    ENGINE_DEPENDENCIES,
-    ExecutionPlanner,
-    get_execution_planner,
-)
-from app.engines.orchestrator.executor import (
-    ENGINE_TIMEOUT_SECONDS,
-    EngineExecutor,
-    get_engine_executor,
-)
-from app.engines.orchestrator.aggregator import (
-    ENGINE_CONFIDENCE_WEIGHTS,
-    ResultAggregator,
-    get_result_aggregator,
-)
 from app.engines.orchestrator.adapters import (
     ADAPTER_REGISTRY,
     RAG_RERANK_TOP_N,
@@ -56,9 +25,10 @@ from app.engines.orchestrator.adapters import (
     get_adapter,
     get_cached_adapter,
 )
-from app.engines.orchestrator.orchestrator import (
-    QueryOrchestrator,
-    get_query_orchestrator,
+from app.engines.orchestrator.aggregator import (
+    ENGINE_CONFIDENCE_WEIGHTS,
+    ResultAggregator,
+    get_result_aggregator,
 )
 
 # Story 6-3: Audit Trail Logging
@@ -68,6 +38,36 @@ from app.engines.orchestrator.audit_logger import (
     SOURCE_REFS_LIMIT,
     QueryAuditLogger,
     get_query_audit_logger,
+)
+from app.engines.orchestrator.executor import (
+    ENGINE_TIMEOUT_SECONDS,
+    EngineExecutor,
+    get_engine_executor,
+)
+from app.engines.orchestrator.intent_analyzer import (
+    IntentAnalyzer,
+    IntentAnalyzerError,
+    IntentParseError,
+    OpenAIConfigurationError,
+    get_intent_analyzer,
+)
+from app.engines.orchestrator.orchestrator import (
+    QueryOrchestrator,
+    get_query_orchestrator,
+)
+
+# Story 6-2: Engine Execution and Aggregation
+from app.engines.orchestrator.planner import (
+    ENGINE_DEPENDENCIES,
+    ExecutionPlanner,
+    get_execution_planner,
+)
+from app.engines.orchestrator.prompts import (
+    INTENT_CLASSIFICATION_RESPONSE_SCHEMA,
+    INTENT_CLASSIFICATION_SYSTEM_PROMPT,
+    INTENT_CLASSIFICATION_USER_PROMPT,
+    format_intent_prompt,
+    validate_intent_response,
 )
 from app.engines.orchestrator.query_history import (
     QueryHistoryStore,

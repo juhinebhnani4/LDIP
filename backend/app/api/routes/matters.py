@@ -14,7 +14,6 @@ from app.api.deps import (
     require_matter_role,
 )
 from app.models.matter import (
-    Matter,
     MatterCreate,
     MatterInvite,
     MatterListMeta,
@@ -29,7 +28,6 @@ from app.models.matter import (
 )
 from app.services.matter_service import (
     CannotRemoveOwnerError,
-    InsufficientPermissionsError,
     MatterNotFoundError,
     MatterService,
     MatterServiceError,

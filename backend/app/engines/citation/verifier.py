@@ -19,7 +19,11 @@ from typing import Final
 import structlog
 
 from app.core.config import get_settings
-from app.engines.citation.act_indexer import ActIndexer, ActNotIndexedError, get_act_indexer
+from app.engines.citation.act_indexer import (
+    ActIndexer,
+    ActNotIndexedError,
+    get_act_indexer,
+)
 from app.engines.citation.verification_prompts import (
     SECTION_MATCHING_PROMPT,
     TEXT_COMPARISON_PROMPT,

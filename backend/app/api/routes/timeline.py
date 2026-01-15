@@ -12,16 +12,17 @@ Story 4-2: Event Classification
 Story 4-3: Events Table + MIG Integration
 """
 
+from math import ceil
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from math import ceil
 
 from app.api.deps import (
     MatterMembership,
     MatterRole,
     require_matter_role,
 )
-from app.engines.timeline import get_timeline_builder, TimelineBuilder
+from app.engines.timeline import TimelineBuilder, get_timeline_builder
 from app.models.job import JobStatus, JobType
 from app.models.timeline import (
     ClassificationJobData,
@@ -47,9 +48,9 @@ from app.models.timeline import (
     TimelineWithEntitiesResponse,
     UnclassifiedEventsResponse,
 )
-from app.services.job_tracking import get_job_tracking_service, JobTrackingService
-from app.services.mig.graph import get_mig_graph_service, MIGGraphService
-from app.services.timeline_cache import get_timeline_cache_service, TimelineCacheService
+from app.services.job_tracking import JobTrackingService, get_job_tracking_service
+from app.services.mig.graph import MIGGraphService, get_mig_graph_service
+from app.services.timeline_cache import TimelineCacheService, get_timeline_cache_service
 from app.services.timeline_service import (
     TimelineService,
     TimelineServiceError,

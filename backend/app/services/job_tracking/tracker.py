@@ -15,7 +15,6 @@ without blocking the event loop.
 import asyncio
 from datetime import UTC, datetime
 from functools import lru_cache
-from math import ceil
 
 import structlog
 
@@ -26,7 +25,6 @@ from app.models.job import (
     JobStatus,
     JobType,
     ProcessingJob,
-    ProcessingJobCreate,
     ProcessingJobUpdate,
     ProcessingJobWithHistory,
     StageStatus,

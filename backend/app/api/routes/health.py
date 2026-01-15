@@ -5,7 +5,7 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_db, get_current_user, AuthenticatedUser
+from app.api.deps import AuthenticatedUser, get_current_user, get_db
 from app.core.config import Settings, get_settings
 
 router = APIRouter(prefix="/health", tags=["health"])

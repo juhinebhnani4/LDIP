@@ -6,7 +6,7 @@ events to help attorneys identify potential issues.
 Story 4-4: Timeline Anomaly Detection
 """
 
-from datetime import date, timedelta
+from datetime import date
 
 import structlog
 from rapidfuzz import fuzz
@@ -23,7 +23,6 @@ from app.models.anomaly import (
     AnomalyType,
 )
 from app.models.timeline import EventType
-
 
 logger = structlog.get_logger(__name__)
 

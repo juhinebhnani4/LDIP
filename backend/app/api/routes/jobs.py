@@ -13,9 +13,6 @@ from pydantic import BaseModel, Field
 from app.api.deps import (
     MatterAccessContext,
     MatterRole,
-    get_db,
-    get_matter_service,
-    require_matter_role,
     validate_matter_access,
 )
 from app.core.security import get_current_user

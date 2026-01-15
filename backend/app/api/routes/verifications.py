@@ -18,7 +18,7 @@ Implements:
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Body
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 
 from app.api.deps import (
     MatterMembership,
@@ -31,24 +31,21 @@ from app.models.verification import (
     BulkVerificationRequest,
     BulkVerificationResponse,
     ExportEligibilityResult,
-    FindingVerification,
     FindingVerificationUpdate,
     FlagVerificationRequest,
     RejectVerificationRequest,
     VerificationDecision,
     VerificationListResponse,
-    VerificationQueueItem,
     VerificationQueueResponse,
     VerificationResponse,
-    VerificationStats,
     VerificationStatsResponse,
 )
 from app.services.verification import (
+    ExportEligibilityService,
     VerificationService,
     VerificationServiceError,
-    get_verification_service,
-    ExportEligibilityService,
     get_export_eligibility_service,
+    get_verification_service,
 )
 
 router = APIRouter(prefix="/matters/{matter_id}/verifications", tags=["verifications"])

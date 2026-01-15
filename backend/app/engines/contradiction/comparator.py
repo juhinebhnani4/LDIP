@@ -27,7 +27,6 @@ from app.engines.contradiction.prompts import (
 from app.models.contradiction import (
     ComparisonResult,
     ContradictionEvidence,
-    EntityComparisons,
     EntityStatements,
     EvidenceType,
     Statement,

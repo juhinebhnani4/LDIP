@@ -12,20 +12,19 @@ CRITICAL: Used in hybrid search for semantic similarity matching.
 
 import hashlib
 import json
-from functools import lru_cache
 from typing import Sequence
 
 import structlog
 from openai import AsyncOpenAI
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from app.core.config import get_settings
-from app.services.memory.redis_keys import embedding_cache_key, EMBEDDING_CACHE_TTL
+from app.services.memory.redis_keys import EMBEDDING_CACHE_TTL, embedding_cache_key
 
 logger = structlog.get_logger(__name__)
 
@@ -323,6 +322,7 @@ def get_embedding_service() -> EmbeddingService:
     redis_client = None
     try:
         import redis.asyncio as aioredis
+
         from app.core.config import get_settings
 
         settings = get_settings()

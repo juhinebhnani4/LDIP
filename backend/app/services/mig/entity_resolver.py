@@ -24,7 +24,6 @@ from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 from app.core.config import get_settings
 from app.models.entity import EntityEdgeCreate, EntityNode, EntityType, RelationshipType
 from app.services.mig.alias_prompts import (
-    ALIAS_BATCH_SYSTEM_PROMPT,
     ALIAS_BATCH_USER_PROMPT,
     ALIAS_CONTEXT_SYSTEM_PROMPT,
     ALIAS_CONTEXT_USER_PROMPT,

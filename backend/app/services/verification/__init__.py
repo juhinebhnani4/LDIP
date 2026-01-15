@@ -15,17 +15,17 @@ Exports:
     - get_export_eligibility_service: Factory for export service
 """
 
-from app.services.verification.verification_service import (
-    VerificationService,
-    VerificationServiceError,
-    VerificationNotFoundError,
-    get_verification_service,
-    reset_verification_service,
-)
 from app.services.verification.export_eligibility import (
     ExportEligibilityService,
     get_export_eligibility_service,
     reset_export_eligibility_service,
+)
+from app.services.verification.verification_service import (
+    VerificationNotFoundError,
+    VerificationService,
+    VerificationServiceError,
+    get_verification_service,
+    reset_verification_service,
 )
 
 __all__ = [

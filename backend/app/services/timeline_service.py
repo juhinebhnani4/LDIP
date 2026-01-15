@@ -24,7 +24,6 @@ from app.models.timeline import (
     RawDateListItem,
     RawDatesListResponse,
     RawEvent,
-    SecondaryTypeScore,
     UnclassifiedEventItem,
     UnclassifiedEventsResponse,
 )
@@ -1191,7 +1190,7 @@ class TimelineService:
 
     def _db_row_to_raw_event(self, row: dict) -> RawEvent:
         """Convert database row to RawEvent model."""
-        from datetime import datetime, date
+        from datetime import date, datetime
 
         event_date = row.get("event_date")
         if isinstance(event_date, str):
@@ -1321,7 +1320,7 @@ class TimelineService:
 
     def _db_row_to_classified_event(self, row: dict) -> ClassifiedEvent:
         """Convert database row to ClassifiedEvent model."""
-        from datetime import datetime, date
+        from datetime import date, datetime
 
         event_date = row.get("event_date")
         if isinstance(event_date, str):

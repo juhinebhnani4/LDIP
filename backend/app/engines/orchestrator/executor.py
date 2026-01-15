@@ -17,7 +17,7 @@ from typing import Any
 import structlog
 
 from app.engines.orchestrator.adapters import get_cached_adapter
-from app.engines.orchestrator.planner import ExecutionPlanner, get_execution_planner
+from app.engines.orchestrator.planner import get_execution_planner
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,

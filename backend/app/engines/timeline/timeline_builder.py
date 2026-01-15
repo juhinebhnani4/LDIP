@@ -7,21 +7,18 @@ and structured timeline output.
 Story 4-3: Events Table + MIG Integration
 """
 
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from math import ceil
-import time
 
 import structlog
 
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import (
     EventType,
-    PaginationMeta,
-    RawEvent,
 )
-from app.services.mig.graph import get_mig_graph_service, MIGGraphService
-from app.services.timeline_service import get_timeline_service, TimelineService
+from app.services.mig.graph import MIGGraphService, get_mig_graph_service
+from app.services.timeline_service import TimelineService, get_timeline_service
 
 logger = structlog.get_logger(__name__)
 

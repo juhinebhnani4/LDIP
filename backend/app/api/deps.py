@@ -25,8 +25,8 @@ from app.core.security import get_current_user, get_optional_user
 from app.models.auth import AuthenticatedUser
 from app.models.matter import MatterRole
 from app.services.audit_service import AuditService, get_audit_service
-from app.services.supabase.client import get_supabase_client
 from app.services.matter_service import MatterService
+from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)
 

@@ -20,7 +20,10 @@ from typing import Any
 
 import structlog
 
-from app.services.job_tracking.tracker import JobTrackingService, get_job_tracking_service
+from app.services.job_tracking.tracker import (
+    JobTrackingService,
+    get_job_tracking_service,
+)
 
 logger = structlog.get_logger(__name__)
 

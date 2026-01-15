@@ -11,11 +11,11 @@ from typing import Any
 import structlog
 from supabase import Client
 
-from app.services.supabase.client import get_service_client
 from app.services.bounding_box_service import (
     BoundingBoxService,
     get_bounding_box_service,
 )
+from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 

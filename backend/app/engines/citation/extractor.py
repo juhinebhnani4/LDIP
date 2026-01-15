@@ -22,7 +22,6 @@ import structlog
 from app.core.config import get_settings
 from app.engines.citation.abbreviations import (
     get_canonical_name,
-    get_display_name,
     normalize_act_name,
 )
 from app.engines.citation.prompts import (

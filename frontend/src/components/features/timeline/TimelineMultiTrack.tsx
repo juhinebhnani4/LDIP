@@ -9,7 +9,7 @@
  * Story 10B.4: Timeline Tab Alternative Views (AC #3)
  */
 
-import { useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Users, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -19,6 +19,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { TimelineEventDetail } from './TimelineEventDetail';
+import { TimelineZoomSlider } from './TimelineZoomSlider';
 import {
   calculateTimelineScale,
   calculateDatePosition,
@@ -26,7 +27,7 @@ import {
 } from './timelineUtils';
 import {
   EVENT_TYPE_ICONS,
-  EVENT_TYPE_COLORS,
+  EVENT_TYPE_MARKER_BG,
 } from './eventTypeIcons';
 import type { TimelineEvent, TimelineTrack, ZoomLevel } from '@/types/timeline';
 
@@ -45,6 +46,15 @@ interface TimelineMultiTrackProps {
 
 /**
  * Track row showing events for one actor
+ *
+ * Renders a single horizontal track in the multi-track timeline.
+ * Shows actor label on the left and event markers positioned by date.
+ *
+ * @param track - TimelineTrack containing actor info and their events
+ * @param minDate - Minimum date for calculating event positions
+ * @param maxDate - Maximum date for calculating event positions
+ * @param selectedEventId - Currently selected event ID (for highlighting)
+ * @param onEventSelect - Callback when an event marker is clicked
  */
 function TrackRow({
   track,
@@ -91,15 +101,9 @@ function TrackRow({
           const isSelected = event.id === selectedEventId;
           const Icon =
             EVENT_TYPE_ICONS[event.eventType] ?? EVENT_TYPE_ICONS.unclassified;
-          const colorClass =
-            EVENT_TYPE_COLORS[event.eventType] ??
-            EVENT_TYPE_COLORS.unclassified;
-
-          // Extract background color
-          const bgMatch = colorClass.match(/bg-(\w+)-(\d+)/);
-          const bgColor = bgMatch
-            ? `bg-${bgMatch[1]}-${bgMatch[2]}`
-            : 'bg-gray-200';
+          const bgColor =
+            EVENT_TYPE_MARKER_BG[event.eventType] ??
+            EVENT_TYPE_MARKER_BG.unclassified;
 
           return (
             <Tooltip key={event.id}>
@@ -117,7 +121,7 @@ function TrackRow({
                   )}
                   style={{ left: `${position}%` }}
                   onClick={() => onEventSelect?.(event)}
-                  aria-label={`Event: ${event.description.slice(0, 30)}...`}
+                  aria-label={`Event: ${event.description.slice(0, 80)}${event.description.length > 80 ? '...' : ''}`}
                   aria-pressed={isSelected}
                 >
                   <Icon className="h-2.5 w-2.5 text-foreground" aria-hidden="true" />
@@ -174,8 +178,8 @@ export function TimelineMultiTrack({
   onViewInList,
   className,
 }: TimelineMultiTrackProps) {
-  // Fixed zoom level for multi-track (could make configurable)
-  const zoomLevel: ZoomLevel = 'year';
+  // Configurable zoom level for multi-track view
+  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('year');
 
   // Group events by actor
   const tracks = useMemo(() => groupEventsByActor(events), [events]);
@@ -241,7 +245,7 @@ export function TimelineMultiTrack({
 
   return (
     <div className={cn('flex flex-col', className)}>
-      {/* Track count indicator */}
+      {/* Track count and zoom controls */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Users className="h-4 w-4" />
@@ -249,6 +253,7 @@ export function TimelineMultiTrack({
             {filteredTracks.length} actor{filteredTracks.length !== 1 ? 's' : ''}
           </span>
         </div>
+        <TimelineZoomSlider zoomLevel={zoomLevel} onZoomChange={setZoomLevel} />
       </div>
 
       {/* Multi-track container */}

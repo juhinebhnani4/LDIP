@@ -5,14 +5,14 @@ This module provides hierarchical document chunking for RAG pipelines:
 - Child chunks (400-700 tokens) for precise retrieval
 """
 
-from app.services.chunking.token_counter import count_tokens, get_encoder
-from app.services.chunking.text_splitter import RecursiveTextSplitter
+from app.services.chunking.bbox_linker import link_chunks_to_bboxes
 from app.services.chunking.parent_child_chunker import (
-    ParentChildChunker,
     ChunkData,
     ChunkingResult,
+    ParentChildChunker,
 )
-from app.services.chunking.bbox_linker import link_chunks_to_bboxes
+from app.services.chunking.text_splitter import RecursiveTextSplitter
+from app.services.chunking.token_counter import count_tokens, get_encoder
 
 __all__ = [
     "count_tokens",

@@ -44,6 +44,23 @@ from app.services.memory.matter_service import (
     get_matter_memory_service,
     reset_matter_memory_service,
 )
+
+# Story 7-5: Query Cache
+from app.services.memory.query_cache import (
+    QueryCacheRepository,
+    get_query_cache_repository,
+    reset_query_cache_repository,
+)
+from app.services.memory.query_cache_service import (
+    QueryCacheService,
+    get_query_cache_service,
+    reset_query_cache_service,
+)
+from app.services.memory.query_normalizer import (
+    QueryNormalizer,
+    get_query_normalizer,
+    reset_query_normalizer,
+)
 from app.services.memory.redis_client import (
     get_redis_client,
     reset_redis_client,
@@ -69,23 +86,6 @@ from app.services.memory.session import (
     SessionMemoryService,
     get_session_memory_service,
     reset_session_memory_service,
-)
-
-# Story 7-5: Query Cache
-from app.services.memory.query_cache import (
-    QueryCacheRepository,
-    get_query_cache_repository,
-    reset_query_cache_repository,
-)
-from app.services.memory.query_cache_service import (
-    QueryCacheService,
-    get_query_cache_service,
-    reset_query_cache_service,
-)
-from app.services.memory.query_normalizer import (
-    QueryNormalizer,
-    get_query_normalizer,
-    reset_query_normalizer,
 )
 
 __all__ = [

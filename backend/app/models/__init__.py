@@ -1,68 +1,6 @@
 """Pydantic models module."""
 
 from app.models.auth import AuthenticatedUser, JWTClaims
-from app.models.job import (
-    JobDetailResponse,
-    JobErrorDetail,
-    JobErrorResponse,
-    JobListItem,
-    JobQueueStats,
-    JobResponse,
-    JobsListResponse,
-    JobStageHistory,
-    JobStatsResponse,
-    JobStatus,
-    JobType,
-    ProcessingJob,
-    ProcessingJobCreate,
-    ProcessingJobUpdate,
-    ProcessingJobWithHistory,
-    StageStatus,
-)
-from app.models.entity import (
-    EntitiesListResponse,
-    EntityEdge,
-    EntityEdgeCreate,
-    EntityErrorDetail,
-    EntityErrorResponse,
-    EntityExtractionResult,
-    EntityListItem,
-    EntityMention,
-    EntityMentionCreate,
-    EntityMentionsResponse,
-    EntityNode,
-    EntityNodeCreate,
-    EntityNodeWithRelations,
-    EntityResponse,
-    EntityType,
-    ExtractedEntity,
-    ExtractedEntityMention,
-    ExtractedRelationship,
-    RelationshipType,
-)
-from app.models.matter import (
-    Matter,
-    MatterCreate,
-    MatterInvite,
-    MatterListMeta,
-    MatterListResponse,
-    MatterMember,
-    MatterMemberUpdate,
-    MatterResponse,
-    MatterRole,
-    MatterStatus,
-    MatterUpdate,
-    MatterWithMembers,
-    MatterWithMembersResponse,
-    MemberListResponse,
-    MemberResponse,
-)
-from app.models.rerank import (
-    RerankRequest,
-    RerankedSearchMeta,
-    RerankedSearchResponse,
-    RerankedSearchResultItem,
-)
 from app.models.citation import (
     ActDiscoveryResponse,
     ActDiscoverySummary,
@@ -85,30 +23,61 @@ from app.models.citation import (
     UserAction,
     VerificationStatus,
 )
-from app.models.orchestrator import (
-    ENGINE_PRIORITY,
-    LOW_CONFIDENCE_THRESHOLD,
-    EngineType,
-    IntentAnalysisCost,
-    IntentAnalysisErrorDetail,
-    IntentAnalysisErrorResponse,
-    IntentAnalysisRequest,
-    IntentAnalysisResponse,
-    IntentAnalysisResult,
-    IntentClassification,
-    QueryIntent,
-    # Story 6-2: Execution models
-    EngineExecutionRequest,
-    EngineExecutionResult,
-    ExecutionPlan,
-    OrchestratorResponse,
-    OrchestratorResult,
-    SourceReference,
-    # Story 6-3: Audit Trail models
-    FindingAuditEntry,
-    LLMCostEntry,
-    QueryAuditEntry,
-    QueryAuditRecord,
+from app.models.entity import (
+    EntitiesListResponse,
+    EntityEdge,
+    EntityEdgeCreate,
+    EntityErrorDetail,
+    EntityErrorResponse,
+    EntityExtractionResult,
+    EntityListItem,
+    EntityMention,
+    EntityMentionCreate,
+    EntityMentionsResponse,
+    EntityNode,
+    EntityNodeCreate,
+    EntityNodeWithRelations,
+    EntityResponse,
+    EntityType,
+    ExtractedEntity,
+    ExtractedEntityMention,
+    ExtractedRelationship,
+    RelationshipType,
+)
+from app.models.job import (
+    JobDetailResponse,
+    JobErrorDetail,
+    JobErrorResponse,
+    JobListItem,
+    JobQueueStats,
+    JobResponse,
+    JobsListResponse,
+    JobStageHistory,
+    JobStatsResponse,
+    JobStatus,
+    JobType,
+    ProcessingJob,
+    ProcessingJobCreate,
+    ProcessingJobUpdate,
+    ProcessingJobWithHistory,
+    StageStatus,
+)
+from app.models.matter import (
+    Matter,
+    MatterCreate,
+    MatterInvite,
+    MatterListMeta,
+    MatterListResponse,
+    MatterMember,
+    MatterMemberUpdate,
+    MatterResponse,
+    MatterRole,
+    MatterStatus,
+    MatterUpdate,
+    MatterWithMembers,
+    MatterWithMembersResponse,
+    MemberListResponse,
+    MemberResponse,
 )
 from app.models.memory import (
     # Story 7-1: Session Memory models
@@ -116,18 +85,49 @@ from app.models.memory import (
     SessionEntityMention,
     SessionMessage,
 )
+from app.models.orchestrator import (
+    ENGINE_PRIORITY,
+    LOW_CONFIDENCE_THRESHOLD,
+    # Story 6-2: Execution models
+    EngineExecutionRequest,
+    EngineExecutionResult,
+    EngineType,
+    ExecutionPlan,
+    # Story 6-3: Audit Trail models
+    FindingAuditEntry,
+    IntentAnalysisCost,
+    IntentAnalysisErrorDetail,
+    IntentAnalysisErrorResponse,
+    IntentAnalysisRequest,
+    IntentAnalysisResponse,
+    IntentAnalysisResult,
+    IntentClassification,
+    LLMCostEntry,
+    OrchestratorResponse,
+    OrchestratorResult,
+    QueryAuditEntry,
+    QueryAuditRecord,
+    QueryIntent,
+    SourceReference,
+)
+from app.models.rerank import (
+    RerankedSearchMeta,
+    RerankedSearchResponse,
+    RerankedSearchResultItem,
+    RerankRequest,
+)
 from app.models.safety import (
     # Story 8-1: Safety Layer models
     GuardrailCheck,
     GuardrailPattern,
-    ViolationType,
-    # Story 8-2: Subtle Violation Detection models
-    SafetyCheckResult,
-    SubtleViolationCheck,
     # Story 8-3: Language Policing models
     LanguagePolicingResult,
     QuotePreservation,
     ReplacementRecord,
+    # Story 8-2: Subtle Violation Detection models
+    SafetyCheckResult,
+    SubtleViolationCheck,
+    ViolationType,
 )
 from app.models.verification import (
     # Story 8-4: Verification models

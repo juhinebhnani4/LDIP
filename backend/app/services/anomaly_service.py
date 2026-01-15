@@ -13,8 +13,8 @@ from math import ceil
 import structlog
 
 from app.models.anomaly import (
-    Anomaly,
     AnomaliesListResponse,
+    Anomaly,
     AnomalyCreate,
     AnomalyListItem,
     AnomalySeverity,

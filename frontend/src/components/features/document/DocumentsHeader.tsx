@@ -80,7 +80,7 @@ export function DocumentsHeader({
         </div>
         <Button onClick={onAddFiles}>
           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-          ADD FILES
+          Add Files
         </Button>
       </div>
 
@@ -115,13 +115,12 @@ export function DocumentsHeader({
             <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" aria-hidden="true" />
             <div className="flex-1">
               <AlertDescription className="text-blue-700 dark:text-blue-300">
-                Processing NEW DOCUMENTS: {processingCount} {processingCount === 1 ? 'file' : 'files'},{' '}
-                {processingPercent}%
+                Processing NEW DOCUMENTS: {processingCount} {processingCount === 1 ? 'file' : 'files'} ({100 - processingPercent}% complete)
               </AlertDescription>
               <Progress
                 value={100 - processingPercent}
                 className="mt-2 h-1.5"
-                aria-label={`${100 - processingPercent}% complete`}
+                aria-label={`${100 - processingPercent}% of documents indexed`}
               />
             </div>
           </div>

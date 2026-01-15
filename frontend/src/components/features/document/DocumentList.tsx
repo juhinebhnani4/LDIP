@@ -42,6 +42,10 @@ import { toast } from 'sonner';
 
 interface DocumentListProps {
   matterId: string;
+  /** Optional pre-fetched documents - when provided, skips internal fetching */
+  documents?: DocumentListItem[];
+  /** Callback when documents are refreshed internally (only used when documents prop is not provided) */
+  onRefresh?: () => void;
   onDocumentClick?: (doc: DocumentListItem) => void;
 }
 
@@ -160,19 +164,34 @@ function DocumentListEmpty() {
 
 /**
  * Document list with sorting, filtering, and bulk operations
+ *
+ * Supports two modes:
+ * 1. Controlled mode: When `documents` prop is provided, uses that data (no internal fetching)
+ * 2. Uncontrolled mode: When `documents` prop is not provided, fetches data internally
  */
-export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
-  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
+export function DocumentList({ matterId, documents: externalDocuments, onRefresh, onDocumentClick }: DocumentListProps) {
+  // Internal state for uncontrolled mode
+  const [internalDocuments, setInternalDocuments] = useState<DocumentListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!externalDocuments);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [sort, setSort] = useState<DocumentSort>({ column: 'uploaded_at', order: 'desc' });
   const [page, setPage] = useState(1);
 
-  // Fetch documents when matterId, page, filters, or sort change
+  // Use external documents if provided, otherwise use internal state
+  const isControlled = externalDocuments !== undefined;
+  const documents = isControlled ? externalDocuments : internalDocuments;
+
+  // Fetch documents when matterId, page, filters, or sort change (only in uncontrolled mode)
   const loadDocuments = useCallback(async () => {
+    if (isControlled) {
+      // In controlled mode, call onRefresh callback instead of fetching internally
+      onRefresh?.();
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -183,7 +202,7 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
         filters,
         sort,
       });
-      setDocuments(response.data);
+      setInternalDocuments(response.data);
       setPagination(response.meta);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load documents';
@@ -192,11 +211,13 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [matterId, page, filters, sort]);
+  }, [matterId, page, filters, sort, isControlled, onRefresh]);
 
   useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+    if (!isControlled) {
+      loadDocuments();
+    }
+  }, [loadDocuments, isControlled]);
 
   // Sort handler - toggle between asc/desc or change column
   const handleSort = (column: DocumentSortColumn) => {
@@ -281,11 +302,12 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
     });
   };
 
-  if (isLoading && documents.length === 0) {
+  // Only show loading in uncontrolled mode
+  if (!isControlled && isLoading && documents.length === 0) {
     return <DocumentListSkeleton />;
   }
 
-  if (error && documents.length === 0) {
+  if (!isControlled && error && documents.length === 0) {
     return (
       <div className="text-center py-12 border rounded-lg bg-destructive/10">
         <p className="text-destructive">{error}</p>

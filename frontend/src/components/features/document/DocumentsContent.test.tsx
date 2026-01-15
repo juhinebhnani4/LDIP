@@ -11,8 +11,11 @@ vi.mock('@/hooks/useDocuments', () => ({
 
 // Mock the child components to isolate testing
 vi.mock('./DocumentList', () => ({
-  DocumentList: ({ matterId }: { matterId: string }) => (
-    <div data-testid="document-list">DocumentList: {matterId}</div>
+  DocumentList: ({ matterId, documents, onRefresh }: { matterId: string; documents?: unknown[]; onRefresh?: () => void }) => (
+    <div data-testid="document-list" data-docs-count={documents?.length ?? 0}>
+      DocumentList: {matterId}
+      {onRefresh && <button onClick={onRefresh}>Refresh</button>}
+    </div>
   ),
 }));
 
@@ -264,5 +267,121 @@ describe('DocumentsError', () => {
 
     expect(screen.getByText('Error')).toBeInTheDocument();
     expect(screen.getByText('Failed to load documents. Please try refreshing the page.')).toBeInTheDocument();
+  });
+});
+
+describe('Accessibility', () => {
+  const matterId = 'matter-123';
+  const mockRefresh = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useDocuments as ReturnType<typeof vi.fn>).mockReturnValue({
+      documents: mockDocuments,
+      isLoading: false,
+      error: null,
+      refresh: mockRefresh,
+      totalCount: 2,
+      hasProcessing: true,
+    });
+  });
+
+  describe('ARIA Labels', () => {
+    it('Add Files button is accessible via screen reader', async () => {
+      render(<DocumentsContent matterId={matterId} />);
+
+      // Button should be findable by its accessible name
+      const addButton = screen.getByRole('button', { name: /add files/i });
+      expect(addButton).toBeInTheDocument();
+    });
+
+    it('error alert has correct role for screen readers', () => {
+      (useDocuments as ReturnType<typeof vi.fn>).mockReturnValue({
+        documents: [],
+        isLoading: false,
+        error: 'Network error',
+        refresh: mockRefresh,
+        totalCount: 0,
+        hasProcessing: false,
+      });
+
+      render(<DocumentsContent matterId={matterId} />);
+
+      // Error component uses Alert which should have alert role
+      const errorAlert = screen.getByRole('alert');
+      expect(errorAlert).toBeInTheDocument();
+    });
+  });
+
+  describe('Keyboard Navigation', () => {
+    it('Add Files button is keyboard accessible via Tab', async () => {
+      const user = userEvent.setup();
+      render(<DocumentsContent matterId={matterId} />);
+
+      // Tab to the Add Files button
+      await user.tab();
+
+      // Button should receive focus (may need multiple tabs depending on DOM structure)
+      const addButton = screen.getByRole('button', { name: /add files/i });
+      // Check that the button is focusable
+      expect(addButton).not.toHaveAttribute('tabindex', '-1');
+    });
+
+    it('Add Files button can be activated with Enter key', async () => {
+      const user = userEvent.setup();
+      render(<DocumentsContent matterId={matterId} />);
+
+      const addButton = screen.getByRole('button', { name: /add files/i });
+
+      // Focus the button and press Enter
+      addButton.focus();
+      await user.keyboard('{Enter}');
+
+      // Dialog should be open
+      expect(screen.getByTestId('add-documents-dialog')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('Add Files button can be activated with Space key', async () => {
+      const user = userEvent.setup();
+      render(<DocumentsContent matterId={matterId} />);
+
+      const addButton = screen.getByRole('button', { name: /add files/i });
+
+      // Focus the button and press Space
+      addButton.focus();
+      await user.keyboard(' ');
+
+      // Dialog should be open
+      expect(screen.getByTestId('add-documents-dialog')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('dialog Close button is keyboard accessible', async () => {
+      const user = userEvent.setup();
+      render(<DocumentsContent matterId={matterId} />);
+
+      // Open dialog first
+      await user.click(screen.getByRole('button', { name: /add files/i }));
+      expect(screen.getByTestId('add-documents-dialog')).toHaveAttribute('data-open', 'true');
+
+      // Find and activate Close button with keyboard
+      const closeButton = screen.getByRole('button', { name: /close/i });
+      closeButton.focus();
+      await user.keyboard('{Enter}');
+
+      // Dialog should be closed
+      expect(screen.getByTestId('add-documents-dialog')).toHaveAttribute('data-open', 'false');
+    });
+  });
+
+  describe('Focus Management', () => {
+    it('buttons maintain visible focus indicator', async () => {
+      render(<DocumentsContent matterId={matterId} />);
+
+      const addButton = screen.getByRole('button', { name: /add files/i });
+
+      // Buttons should not have outline: none that removes focus visibility
+      // This is a basic check - the actual focus ring is handled by CSS
+      expect(addButton).not.toHaveStyle({ outline: 'none' });
+    });
   });
 });

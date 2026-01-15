@@ -117,7 +117,8 @@ describe('DocumentsHeader', () => {
         />
       );
 
-      expect(screen.getByText(/processing new documents: 1 file, 5%/i)).toBeInTheDocument();
+      // processingPercent=5 means 5% are processing, so 95% are complete
+      expect(screen.getByText(/processing new documents: 1 file \(95% complete\)/i)).toBeInTheDocument();
     });
 
     it('shows processing banner with plural form', () => {
@@ -129,7 +130,8 @@ describe('DocumentsHeader', () => {
         />
       );
 
-      expect(screen.getByText(/processing new documents: 5 files, 12%/i)).toBeInTheDocument();
+      // processingPercent=12 means 12% are processing, so 88% are complete
+      expect(screen.getByText(/processing new documents: 5 files \(88% complete\)/i)).toBeInTheDocument();
     });
 
     it('renders progress bar when processing', () => {
@@ -171,7 +173,8 @@ describe('DocumentsHeader', () => {
       );
 
       const progressBar = screen.getByRole('progressbar');
-      expect(progressBar).toHaveAttribute('aria-label', '75% complete');
+      // processingPercent=25 means 25% are processing, so 75% are indexed
+      expect(progressBar).toHaveAttribute('aria-label', '75% of documents indexed');
     });
   });
 });

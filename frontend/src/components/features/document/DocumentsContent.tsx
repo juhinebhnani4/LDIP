@@ -190,8 +190,13 @@ export function DocumentsContent({
           </div>
         )}
 
-        {/* Document List */}
-        <DocumentList matterId={matterId} onDocumentClick={onDocumentClick} />
+        {/* Document List - pass documents to avoid double fetching */}
+        <DocumentList
+          matterId={matterId}
+          documents={documents}
+          onRefresh={refresh}
+          onDocumentClick={onDocumentClick}
+        />
 
         {/* Add Documents Dialog */}
         <AddDocumentsDialog

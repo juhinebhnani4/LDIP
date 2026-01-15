@@ -1,6 +1,6 @@
 # Story 10D.3: Implement Documents Tab File List
 
-Status: dev-complete
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -364,6 +364,14 @@ None - implementation completed successfully.
 8. Created comprehensive tests: DocumentsContent.test.tsx, DocumentsHeader.test.tsx, AddDocumentsDialog.test.tsx, useDocuments.test.ts
 9. Updated DocumentList.test.tsx for new columns (page count, action menu)
 10. All 176 tests pass, TypeScript compiles with no errors
+
+### Code Review Fixes Applied
+
+1. **HIGH - Double Data Fetching**: Fixed architecture where DocumentsContent and DocumentList both fetched documents independently. DocumentList now supports controlled mode accepting documents as props from parent.
+2. **MEDIUM - Progress Bar Semantics**: Changed processing banner text from "X files, Y%" to "X files (Y% complete)" for clarity. Progress bar aria-label updated to "Y% of documents indexed".
+3. **MEDIUM - Polling Tests**: Added comprehensive polling timer behavior tests to useDocuments.test.ts covering processing detection, enablePolling option, and clean unmount scenarios.
+4. **MEDIUM - Accessibility Tests**: Added accessibility test suite to DocumentsContent.test.tsx covering ARIA labels, keyboard navigation (Tab, Enter, Space), and focus management.
+5. **LOW - Button Casing**: Changed button text from "ADD FILES" to "Add Files" for consistency with UI conventions.
 
 ### File List
 

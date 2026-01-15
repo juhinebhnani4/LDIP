@@ -120,22 +120,26 @@ export function VerificationGroupedView({
   }, [data]);
 
   // Track which sections are open (all open by default)
-  const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    return new Set(groupedData.map(([type]) => type));
-  });
+  // Use a Set that starts empty - we'll compute "all open" dynamically
+  const [closedSections, setClosedSections] = useState<Set<string>>(new Set());
 
-  // Toggle section open state
+  // Toggle section open state (tracks closed sections - all open by default)
   const toggleSection = (type: string) => {
-    setOpenSections((prev) => {
+    setClosedSections((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(type)) {
+        // Currently closed, open it
         next.delete(type);
       } else {
+        // Currently open, close it
         next.add(type);
       }
       return next;
     });
   };
+
+  // Check if a section is open (open = NOT in closedSections)
+  const isSectionOpen = (type: string) => !closedSections.has(type);
 
   // Handle "select all" for grouped view - only select visible items in open sections
   const handleGroupSelectAll = (ids: string[]) => {
@@ -167,7 +171,7 @@ export function VerificationGroupedView({
   return (
     <div className="space-y-3">
       {groupedData.map(([type, items]) => {
-        const isOpen = openSections.has(type);
+        const isOpen = isSectionOpen(type);
         const groupSelectedIds = selectedIds.filter((id) =>
           items.some((item) => item.id === id)
         );

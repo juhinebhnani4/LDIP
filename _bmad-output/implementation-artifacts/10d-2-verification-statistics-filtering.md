@@ -1,6 +1,6 @@
 # Story 10D.2: Implement Verification Tab Statistics and Filtering
 
-Status: complete
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -328,11 +328,35 @@ frontend/src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+None
+
 ### Completion Notes List
+
+1. All Acceptance Criteria verified as implemented from Story 8-5 foundation
+2. Enhanced VerificationStats with clickable tier badges (Task 5.5)
+3. Enabled "By Type" grouped view in VerificationFilters (Task 4)
+4. Created VerificationGroupedView component with collapsible sections
+5. Added Description column sorting to VerificationQueue (Task 3.6)
+6. Comprehensive test coverage: 111+ tests across verification components
+7. Code review fix: VerificationGroupedView now properly auto-opens new finding types
 
 ### File List
 
+| File | Action | Description |
+|------|--------|-------------|
+| `frontend/src/components/features/verification/VerificationStats.tsx` | Modified | Added onTierClick prop for clickable tier badges |
+| `frontend/src/components/features/verification/VerificationStats.test.tsx` | Modified | Added tests for tier badge clicks and keyboard navigation |
+| `frontend/src/components/features/verification/VerificationQueue.tsx` | Modified | Added Description column sorting (findingSummary) |
+| `frontend/src/components/features/verification/VerificationQueue.test.tsx` | Modified | Added sorting tests for all columns |
+| `frontend/src/components/features/verification/VerificationFilters.tsx` | Modified | Enabled "By Type" view option |
+| `frontend/src/components/features/verification/VerificationFilters.test.tsx` | Created | Comprehensive filter tests for AC #2 |
+| `frontend/src/components/features/verification/VerificationGroupedView.tsx` | Created | New component for grouped-by-type view |
+| `frontend/src/components/features/verification/VerificationGroupedView.test.tsx` | Created | Tests for grouped view functionality |
+| `frontend/src/components/features/verification/VerificationContent.tsx` | Modified | Wired up handleTierClick and grouped view switching |
+| `frontend/src/components/features/verification/VerificationContent.test.tsx` | Modified | Added tier badge click filter mapping tests |
+| `frontend/src/components/features/verification/index.ts` | Modified | Added VerificationGroupedView export |
+| `frontend/src/stores/verificationStore.test.ts` | Created | Tests for store selectors and helper functions |

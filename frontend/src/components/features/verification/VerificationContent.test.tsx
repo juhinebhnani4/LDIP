@@ -416,3 +416,109 @@ describe('VerificationContent', () => {
     expect(screen.queryByRole('button', { name: 'Start Review Session' })).not.toBeInTheDocument();
   });
 });
+
+// Story 10D.2 Task 5.5: Tier badge click filter mapping tests
+describe('VerificationContent Tier Badge Click Filter (Task 5.5)', () => {
+  const mockSetFilters = vi.fn();
+  const mockResetFilters = vi.fn();
+  const mockRefreshQueue = vi.fn();
+  const mockRefreshStats = vi.fn();
+  const mockApprove = vi.fn();
+  const mockReject = vi.fn();
+  const mockFlag = vi.fn();
+  const mockBulkApprove = vi.fn();
+  const mockBulkReject = vi.fn();
+  const mockBulkFlag = vi.fn();
+  const mockToggleSelected = vi.fn();
+  const mockSelectAll = vi.fn();
+  const mockClearSelection = vi.fn();
+
+  const mockStatsWithTiers: VerificationStats = {
+    totalVerifications: 100,
+    pendingCount: 40,
+    approvedCount: 50,
+    rejectedCount: 5,
+    flaggedCount: 5,
+    requiredPending: 10,
+    suggestedPending: 20,
+    optionalPending: 10,
+    exportBlocked: true,
+    blockingCount: 10,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    (useVerificationQueue as Mock).mockReturnValue({
+      filteredQueue: [],
+      filters: { findingType: null, confidenceTier: null, status: null, view: 'queue' },
+      isLoading: false,
+      error: null,
+      setFilters: mockSetFilters,
+      resetFilters: mockResetFilters,
+      findingTypes: [],
+      refresh: mockRefreshQueue,
+    });
+
+    (useVerificationStats as Mock).mockReturnValue({
+      stats: mockStatsWithTiers,
+      isLoading: false,
+      refresh: mockRefreshStats,
+    });
+
+    (useVerificationActions as Mock).mockReturnValue({
+      approve: mockApprove,
+      reject: mockReject,
+      flag: mockFlag,
+      bulkApprove: mockBulkApprove,
+      bulkReject: mockBulkReject,
+      bulkFlag: mockBulkFlag,
+      isActioning: false,
+      currentAction: null,
+      processingIds: [],
+    });
+
+    (useVerificationStore as unknown as Mock).mockImplementation((selector: (state: Record<string, unknown>) => unknown) => {
+      const state = {
+        selectedIds: [],
+        toggleSelected: mockToggleSelected,
+        selectAll: mockSelectAll,
+        clearSelection: mockClearSelection,
+      };
+      return selector(state);
+    });
+  });
+
+  it('sets confidenceTier to "low" when Required badge is clicked', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click on "Required: 10 pending" badge
+    await user.click(screen.getByText('Required: 10 pending'));
+
+    // Should set filter to low confidence (< 70% = required tier per ADR-004)
+    expect(mockSetFilters).toHaveBeenCalledWith({ confidenceTier: 'low' });
+  });
+
+  it('sets confidenceTier to "medium" when Suggested badge is clicked', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click on "Suggested: 20 pending" badge
+    await user.click(screen.getByText('Suggested: 20 pending'));
+
+    // Should set filter to medium confidence (70-90% = suggested tier per ADR-004)
+    expect(mockSetFilters).toHaveBeenCalledWith({ confidenceTier: 'medium' });
+  });
+
+  it('sets confidenceTier to "high" when Optional badge is clicked', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click on "Optional: 10 pending" badge
+    await user.click(screen.getByText('Optional: 10 pending'));
+
+    // Should set filter to high confidence (> 90% = optional tier per ADR-004)
+    expect(mockSetFilters).toHaveBeenCalledWith({ confidenceTier: 'high' });
+  });
+});

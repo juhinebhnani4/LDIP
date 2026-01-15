@@ -87,7 +87,7 @@ export function VerificationStats({
           <Progress
             value={completionPercent}
             className="w-64 h-2 mt-2"
-            aria-label={`${completionPercent}% complete`}
+            aria-label={`Verification progress: ${completionPercent}% complete (${completedCount} of ${stats.totalVerifications} verified)`}
           />
           <p className="text-sm text-muted-foreground mt-1">
             {completionPercent}% Complete

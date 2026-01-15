@@ -1,6 +1,6 @@
 # Story 14.2: Contradictions List API Endpoint
 
-Status: review
+Status: review-passed
 
 ## Story
 

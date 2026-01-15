@@ -12,9 +12,9 @@ Test Categories:
 - Error handling
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.contradiction import ContradictionType, SeverityLevel
 from app.services.contradiction_list_service import (
@@ -86,14 +86,14 @@ def mock_chunk_data():
             "content": "The loan amount was Rs. 5 lakhs.",
             "page_number": 5,
             "document_id": "doc-1",
-            "documents": {"id": "doc-1", "name": "Contract.pdf"},
+            "documents": {"id": "doc-1", "filename": "Contract.pdf"},
         },
         "chunk-2": {
             "id": "chunk-2",
             "content": "The loan amount was Rs. 8 lakhs.",
             "page_number": 12,
             "document_id": "doc-2",
-            "documents": {"id": "doc-2", "name": "Agreement.pdf"},
+            "documents": {"id": "doc-2", "filename": "Agreement.pdf"},
         },
     }
 

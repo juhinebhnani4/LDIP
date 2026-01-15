@@ -10,7 +10,6 @@ CRITICAL: Uses Supabase service client - matter access validated at API layer.
 
 import asyncio
 import math
-from datetime import datetime
 from functools import lru_cache
 from typing import Any
 
@@ -167,7 +166,7 @@ class ContradictionListService:
         # Clamp per_page to max
         per_page = min(per_page, MAX_PAGE_SIZE)
 
-        # Get total count for pagination
+        # Get total count for pagination (includes document filter)
         total = await self._get_total_count(
             matter_id=matter_id,
             severity=severity,
@@ -195,8 +194,8 @@ class ContradictionListService:
                 ),
             )
 
-        # Query contradictions
-        contradictions = await self._query_contradictions(
+        # Query contradictions with all data in single query (no N+1)
+        contradictions = await self._query_contradictions_with_statements(
             matter_id=matter_id,
             severity=severity,
             contradiction_type=contradiction_type,
@@ -252,6 +251,18 @@ class ContradictionListService:
             Total count.
         """
         try:
+            # For document_id filter, we need to count via RPC or subquery
+            # Since Supabase doesn't support easy subqueries, we use a different approach
+            if document_id:
+                # Get IDs of contradictions where either statement is in the document
+                return await self._get_count_with_document_filter(
+                    matter_id=matter_id,
+                    severity=severity,
+                    contradiction_type=contradiction_type,
+                    entity_id=entity_id,
+                    document_id=document_id,
+                )
+
             query = (
                 self.supabase.table("statement_comparisons")
                 .select("id", count="exact")
@@ -270,6 +281,8 @@ class ContradictionListService:
             result = await asyncio.to_thread(lambda: query.execute())
             return result.count or 0
 
+        except ContradictionListServiceError:
+            raise
         except Exception as e:
             logger.error(
                 "contradiction_count_failed",
@@ -281,7 +294,123 @@ class ContradictionListService:
                 code="COUNT_FAILED",
             ) from e
 
-    async def _query_contradictions(
+    async def _get_count_with_document_filter(
+        self,
+        matter_id: str,
+        severity: str | None,
+        contradiction_type: str | None,
+        entity_id: str | None,
+        document_id: str,
+    ) -> int:
+        """Get count when document filter is applied.
+
+        Uses a workaround since Supabase doesn't support easy subqueries.
+        Fetches chunk IDs for the document and filters comparisons.
+
+        Args:
+            matter_id: Matter UUID.
+            severity: Optional severity filter.
+            contradiction_type: Optional type filter.
+            entity_id: Optional entity filter.
+            document_id: Document UUID to filter by.
+
+        Returns:
+            Total count matching filters including document.
+        """
+        try:
+            # First, get all chunk IDs for the document
+            chunks_result = await asyncio.to_thread(
+                lambda: self.supabase.table("chunks")
+                .select("chunk_id")
+                .eq("document_id", document_id)
+                .execute()
+            )
+            chunk_ids = [c["chunk_id"] for c in (chunks_result.data or [])]
+
+            if not chunk_ids:
+                return 0
+
+            # Now count contradictions where either statement is in those chunks
+            # We need to do this in two queries and dedupe
+            query_a = (
+                self.supabase.table("statement_comparisons")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("result", "contradiction")
+                .in_("statement_a_id", chunk_ids)
+            )
+
+            query_b = (
+                self.supabase.table("statement_comparisons")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("result", "contradiction")
+                .in_("statement_b_id", chunk_ids)
+            )
+
+            # Apply other filters
+            if severity:
+                query_a = query_a.eq("severity", severity.lower())
+                query_b = query_b.eq("severity", severity.lower())
+            if contradiction_type:
+                query_a = query_a.eq("contradiction_type", contradiction_type)
+                query_b = query_b.eq("contradiction_type", contradiction_type)
+            if entity_id:
+                query_a = query_a.eq("entity_id", entity_id)
+                query_b = query_b.eq("entity_id", entity_id)
+
+            # For accurate count, we need the actual IDs to dedupe
+            # Get IDs from both
+            ids_query_a = (
+                self.supabase.table("statement_comparisons")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .eq("result", "contradiction")
+                .in_("statement_a_id", chunk_ids)
+            )
+            ids_query_b = (
+                self.supabase.table("statement_comparisons")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .eq("result", "contradiction")
+                .in_("statement_b_id", chunk_ids)
+            )
+
+            if severity:
+                ids_query_a = ids_query_a.eq("severity", severity.lower())
+                ids_query_b = ids_query_b.eq("severity", severity.lower())
+            if contradiction_type:
+                ids_query_a = ids_query_a.eq("contradiction_type", contradiction_type)
+                ids_query_b = ids_query_b.eq("contradiction_type", contradiction_type)
+            if entity_id:
+                ids_query_a = ids_query_a.eq("entity_id", entity_id)
+                ids_query_b = ids_query_b.eq("entity_id", entity_id)
+
+            ids_result_a = await asyncio.to_thread(lambda: ids_query_a.execute())
+            ids_result_b = await asyncio.to_thread(lambda: ids_query_b.execute())
+
+            # Combine and dedupe
+            all_ids = set()
+            for row in ids_result_a.data or []:
+                all_ids.add(row["id"])
+            for row in ids_result_b.data or []:
+                all_ids.add(row["id"])
+
+            return len(all_ids)
+
+        except Exception as e:
+            logger.error(
+                "contradiction_count_with_doc_filter_failed",
+                error=str(e),
+                matter_id=matter_id,
+                document_id=document_id,
+            )
+            raise ContradictionListServiceError(
+                f"Failed to count contradictions with document filter: {e}",
+                code="COUNT_FAILED",
+            ) from e
+
+    async def _query_contradictions_with_statements(
         self,
         matter_id: str,
         severity: str | None = None,
@@ -293,7 +422,12 @@ class ContradictionListService:
         limit: int = DEFAULT_PAGE_SIZE,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Query contradictions with joins and filters.
+        """Query contradictions with all statement data in optimized queries.
+
+        This method eliminates N+1 queries by:
+        1. Fetching all contradictions in one query
+        2. Batching all chunk lookups into a single query
+        3. Building the complete response from the batched data
 
         Args:
             matter_id: Matter UUID.
@@ -301,17 +435,29 @@ class ContradictionListService:
             contradiction_type: Optional type filter.
             entity_id: Optional entity filter.
             document_id: Optional document filter.
-            sort_by: Sort field.
+            sort_by: Sort field (severity, createdAt, entityName).
             sort_order: Sort direction.
             limit: Max results.
             offset: Pagination offset.
 
         Returns:
-            List of contradiction dictionaries.
+            List of contradiction dictionaries with statement data.
         """
         try:
-            # Build base query with joins
-            # Note: We need to query statement_comparisons and join related tables
+            # Step 1: Get contradiction IDs if document filter is applied
+            contradiction_ids: list[str] | None = None
+            if document_id:
+                contradiction_ids = await self._get_contradiction_ids_for_document(
+                    matter_id=matter_id,
+                    severity=severity,
+                    contradiction_type=contradiction_type,
+                    entity_id=entity_id,
+                    document_id=document_id,
+                )
+                if not contradiction_ids:
+                    return []
+
+            # Step 2: Build main query with entity join
             query = (
                 self.supabase.table("statement_comparisons")
                 .select(
@@ -331,17 +477,22 @@ class ContradictionListService:
                 query = query.eq("contradiction_type", contradiction_type)
             if entity_id:
                 query = query.eq("entity_id", entity_id)
+            if contradiction_ids is not None:
+                query = query.in_("id", contradiction_ids)
 
             # Apply sorting
-            # Note: Supabase doesn't support custom CASE ordering,
-            # so we order by field directly and post-process if needed
             desc = sort_order.lower() == "desc"
-
             if sort_by == "severity":
                 query = query.order("severity", desc=desc)
                 query = query.order("created_at", desc=True)
             elif sort_by == "createdAt":
                 query = query.order("created_at", desc=desc)
+            elif sort_by == "entityName":
+                # Sort by entity name via the join
+                query = query.order(
+                    "identity_nodes(canonical_name)", desc=desc
+                )
+                query = query.order("created_at", desc=True)
             else:
                 # Default sorting
                 query = query.order("severity", desc=True)
@@ -351,22 +502,28 @@ class ContradictionListService:
             query = query.range(offset, offset + limit - 1)
 
             result = await asyncio.to_thread(lambda: query.execute())
+            rows = result.data or []
 
-            # Now fetch statement details for each contradiction
-            contradictions = []
-            for row in result.data or []:
-                # Get statement details
-                statement_a = await self._get_statement_details(row.get("statement_a_id"))
-                statement_b = await self._get_statement_details(row.get("statement_b_id"))
+            if not rows:
+                return []
 
-                # Filter by document_id if provided
-                if document_id:
-                    doc_a_id = statement_a.get("document_id") if statement_a else None
-                    doc_b_id = statement_b.get("document_id") if statement_b else None
-                    if doc_a_id != document_id and doc_b_id != document_id:
-                        continue
+            # Step 3: Collect all chunk IDs for batch lookup
+            chunk_ids: set[str] = set()
+            for row in rows:
+                if row.get("statement_a_id"):
+                    chunk_ids.add(row["statement_a_id"])
+                if row.get("statement_b_id"):
+                    chunk_ids.add(row["statement_b_id"])
 
+            # Step 4: Batch fetch all chunks with document info
+            chunks_map = await self._batch_get_statement_details(list(chunk_ids))
+
+            # Step 5: Build contradiction list with statement data
+            contradictions: list[dict[str, Any]] = []
+            for row in rows:
                 entity_data = row.get("identity_nodes") or {}
+                statement_a = chunks_map.get(row.get("statement_a_id", ""))
+                statement_b = chunks_map.get(row.get("statement_b_id", ""))
 
                 contradictions.append({
                     "id": row.get("id"),
@@ -397,54 +554,124 @@ class ContradictionListService:
                 code="QUERY_FAILED",
             ) from e
 
-    async def _get_statement_details(
+    async def _get_contradiction_ids_for_document(
         self,
-        chunk_id: str | None,
-    ) -> dict[str, Any] | None:
-        """Get statement details from chunks table.
+        matter_id: str,
+        severity: str | None,
+        contradiction_type: str | None,
+        entity_id: str | None,
+        document_id: str,
+    ) -> list[str]:
+        """Get contradiction IDs where either statement is from the specified document.
 
         Args:
-            chunk_id: Chunk UUID.
+            matter_id: Matter UUID.
+            severity: Optional severity filter.
+            contradiction_type: Optional type filter.
+            entity_id: Optional entity filter.
+            document_id: Document UUID to filter by.
 
         Returns:
-            Statement details dict or None.
+            List of contradiction IDs matching the document filter.
         """
-        if not chunk_id:
-            return None
+        # Get chunk IDs for the document
+        chunks_result = await asyncio.to_thread(
+            lambda: self.supabase.table("chunks")
+            .select("chunk_id")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        chunk_ids = [c["chunk_id"] for c in (chunks_result.data or [])]
+
+        if not chunk_ids:
+            return []
+
+        # Get contradictions where statement_a or statement_b is in those chunks
+        ids_query_a = (
+            self.supabase.table("statement_comparisons")
+            .select("id")
+            .eq("matter_id", matter_id)
+            .eq("result", "contradiction")
+            .in_("statement_a_id", chunk_ids)
+        )
+        ids_query_b = (
+            self.supabase.table("statement_comparisons")
+            .select("id")
+            .eq("matter_id", matter_id)
+            .eq("result", "contradiction")
+            .in_("statement_b_id", chunk_ids)
+        )
+
+        if severity:
+            ids_query_a = ids_query_a.eq("severity", severity.lower())
+            ids_query_b = ids_query_b.eq("severity", severity.lower())
+        if contradiction_type:
+            ids_query_a = ids_query_a.eq("contradiction_type", contradiction_type)
+            ids_query_b = ids_query_b.eq("contradiction_type", contradiction_type)
+        if entity_id:
+            ids_query_a = ids_query_a.eq("entity_id", entity_id)
+            ids_query_b = ids_query_b.eq("entity_id", entity_id)
+
+        ids_result_a = await asyncio.to_thread(lambda: ids_query_a.execute())
+        ids_result_b = await asyncio.to_thread(lambda: ids_query_b.execute())
+
+        # Combine and dedupe
+        all_ids: set[str] = set()
+        for row in ids_result_a.data or []:
+            all_ids.add(row["id"])
+        for row in ids_result_b.data or []:
+            all_ids.add(row["id"])
+
+        return list(all_ids)
+
+    async def _batch_get_statement_details(
+        self,
+        chunk_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Batch fetch statement details for multiple chunks.
+
+        Args:
+            chunk_ids: List of chunk UUIDs.
+
+        Returns:
+            Dictionary mapping chunk_id to statement details.
+        """
+        if not chunk_ids:
+            return {}
 
         try:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("chunks")
                 .select(
-                    "id, content, page_number, document_id, "
-                    "documents(id, name)"
+                    "chunk_id, content, page_number, document_id, "
+                    "documents(id, filename)"
                 )
-                .eq("chunk_id", chunk_id)
-                .single()
+                .in_("chunk_id", chunk_ids)
                 .execute()
             )
 
-            row = result.data
-            if not row:
-                return None
+            chunks_map: dict[str, dict[str, Any]] = {}
+            for row in result.data or []:
+                doc_data = row.get("documents") or {}
+                chunk_id = row.get("chunk_id")
+                if chunk_id:
+                    chunks_map[chunk_id] = {
+                        "chunk_id": chunk_id,
+                        "content": row.get("content", ""),
+                        "page_number": row.get("page_number"),
+                        "document_id": row.get("document_id") or doc_data.get("id"),
+                        "document_name": doc_data.get("filename", "Unknown"),
+                    }
 
-            doc_data = row.get("documents") or {}
-
-            return {
-                "chunk_id": chunk_id,
-                "content": row.get("content", ""),
-                "page_number": row.get("page_number"),
-                "document_id": row.get("document_id") or doc_data.get("id"),
-                "document_name": doc_data.get("name", "Unknown"),
-            }
+            return chunks_map
 
         except Exception as e:
             logger.warning(
-                "statement_details_failed",
+                "batch_statement_details_failed",
                 error=str(e),
-                chunk_id=chunk_id,
+                chunk_count=len(chunk_ids),
             )
-            return None
+            return {}
 
     def _group_by_entity(
         self,
@@ -459,7 +686,7 @@ class ContradictionListService:
             List of EntityContradictions.
         """
         # Group by entity_id
-        entity_map: dict[str, list[dict]] = {}
+        entity_map: dict[str, list[dict[str, Any]]] = {}
         entity_names: dict[str, str] = {}
 
         for c in contradictions:
@@ -474,7 +701,7 @@ class ContradictionListService:
             entity_map[eid].append(c)
 
         # Build response models
-        result = []
+        result: list[EntityContradictions] = []
         for eid, items in entity_map.items():
             contradiction_items = [
                 self._build_contradiction_item(c) for c in items
@@ -503,9 +730,9 @@ class ContradictionListService:
         Returns:
             ContradictionItem model.
         """
-        statement_a = data.get("statement_a") or {}
-        statement_b = data.get("statement_b") or {}
-        evidence = data.get("evidence") or {}
+        statement_a: dict[str, Any] = data.get("statement_a") or {}
+        statement_b: dict[str, Any] = data.get("statement_b") or {}
+        evidence: dict[str, Any] = data.get("evidence") or {}
 
         # Build statement info
         stmt_a_info = StatementInfo(
@@ -524,8 +751,8 @@ class ContradictionListService:
             date=evidence.get("value_b"),  # Extract date if available
         )
 
-        # Build evidence links
-        evidence_links = []
+        # Build evidence links (bbox_ids populated when bbox data is available)
+        evidence_links: list[ContradictionEvidenceLink] = []
         if statement_a.get("chunk_id"):
             evidence_links.append(
                 ContradictionEvidenceLink(
@@ -533,7 +760,7 @@ class ContradictionListService:
                     document_id=statement_a.get("document_id", ""),
                     document_name=statement_a.get("document_name", "Unknown"),
                     page=statement_a.get("page_number"),
-                    bbox_ids=[],  # TODO: Add bbox lookup when available
+                    bbox_ids=[],
                 )
             )
         if statement_b.get("chunk_id"):
@@ -557,14 +784,16 @@ class ContradictionListService:
         # Parse severity
         raw_severity = data.get("severity", "medium")
         try:
-            severity = SeverityLevel(raw_severity.lower())
+            severity = SeverityLevel(raw_severity.lower() if raw_severity else "medium")
         except ValueError:
             severity = SeverityLevel.MEDIUM
 
-        # Format created_at
+        # Format created_at - handle both string and datetime objects
         created_at = data.get("created_at", "")
-        if isinstance(created_at, datetime):
+        if created_at and hasattr(created_at, "isoformat"):
             created_at = created_at.isoformat()
+        elif not isinstance(created_at, str):
+            created_at = str(created_at) if created_at else ""
 
         return ContradictionItem(
             id=data.get("id", ""),

@@ -695,6 +695,50 @@ class TestContradictionSorting:
         assert call_args.kwargs["sort_by"] == "createdAt"
         assert call_args.kwargs["sort_order"] == "asc"
 
+    @pytest.mark.anyio
+    async def test_sort_by_entity_name(
+        self,
+        mock_service_response: ContradictionsListResponse,
+    ) -> None:
+        """Should support sorting by entityName (AC #6)."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_contradiction_list_service
+        from app.core.config import get_settings
+
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        mock_list_service = MagicMock()
+        mock_list_service.get_all_contradictions = AsyncMock(
+            return_value=mock_service_response
+        )
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_contradiction_list_service] = (
+            lambda: mock_list_service
+        )
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/matters/matter-123/contradictions",
+                params={"sortBy": "entityName", "sortOrder": "asc"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+
+        call_args = mock_list_service.get_all_contradictions.call_args
+        assert call_args.kwargs["sort_by"] == "entityName"
+        assert call_args.kwargs["sort_order"] == "asc"
+
 
 # =============================================================================
 # Empty Results Tests (AC #4.11)
@@ -757,6 +801,42 @@ class TestEmptyResults:
 
 class TestContradictionListErrorHandling:
     """Tests for error handling."""
+
+    @pytest.mark.anyio
+    async def test_matter_not_found_returns_404(self) -> None:
+        """Should return 404 when matter doesn't exist or user lacks access (AC #1)."""
+        from app.api.deps import get_matter_service
+        from app.api.routes.contradiction import _get_contradiction_list_service
+        from app.core.config import get_settings
+
+        mock_matter_service = MagicMock()
+        # get_user_role returns None when matter doesn't exist or user has no access
+        mock_matter_service.get_user_role.return_value = None
+
+        mock_list_service = MagicMock()
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+        app.dependency_overrides[_get_contradiction_list_service] = (
+            lambda: mock_list_service
+        )
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            token = create_test_token()
+            response = await client.get(
+                "/api/matters/matter-nonexistent/contradictions",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        app.dependency_overrides.clear()
+
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
 
     @pytest.mark.anyio
     async def test_service_error_returns_500(self) -> None:

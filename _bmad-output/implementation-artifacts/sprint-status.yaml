@@ -194,8 +194,8 @@ development_status:
   epic-11-retrospective: optional
 
   # Epic 12: Export Builder
-  epic-12: backlog
-  12-1-export-modal-section-selection: backlog
+  epic-12: in-progress  # First story created 2026-01-16
+  12-1-export-modal-section-selection: in-progress  # Started 2026-01-16
   12-2-inline-editing-preview: backlog
   12-3-verification-check-format-generation: backlog
   12-4-partner-executive-summary: backlog
@@ -218,7 +218,7 @@ development_status:
 
   # CRITICAL GAPS (Blocking MVP)
   14-1-summary-api-endpoint: done         # Completed 2026-01-16 - 34 tests passing, all ACs met
-  14-2-contradictions-list-api: review  # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
+  14-2-contradictions-list-api: done  # Completed 2026-01-16 - 38 tests passing, code review fixes applied (N+1 fixed, document filter, entityName sort)
   14-3-upload-stage-3-4: backlog            # Story 9.5 - 0% complete, Processing progress + Live discoveries UI
 
   # HIGH PRIORITY GAPS (Affects UX)

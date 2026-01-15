@@ -40,8 +40,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { CitationListItem, VerificationStatus, PaginationMeta } from '@/types/citation';
 
 export interface CitationsListProps {
-  /** Matter ID to list citations for */
-  matterId: string;
   /** Citations to display */
   citations: CitationListItem[];
   /** Pagination metadata */
@@ -56,7 +54,7 @@ export interface CitationsListProps {
   onPageChange?: (page: number) => void;
   /** Callback when document name is clicked */
   onDocumentClick?: (documentId: string, page: number) => void;
-  /** Callback when view citation button is clicked (Story 10C.4 - split-view moved to parent) */
+  /** Callback when view citation button is clicked */
   onViewCitation?: (citationId: string) => void;
 }
 
@@ -133,7 +131,6 @@ const ITEMS_PER_PAGE = 20;
  * ```
  */
 export function CitationsList({
-  matterId: _matterId,  // Kept for API consistency; split-view logic moved to parent (Story 10C.4)
   citations,
   meta,
   isLoading = false,
@@ -419,7 +416,6 @@ export function CitationsList({
           </TableBody>
         </Table>
       </div>
-      {/* Split-view panels now rendered at CitationsContent level (Story 10C.4) */}
     </div>
   );
 }

@@ -14,21 +14,32 @@ import type { CitationListItem, CitationStats, CitationSummaryItem, ActDiscovery
 
 // Mock the hooks
 vi.mock('@/hooks/useCitations');
+
+// Create configurable mock for useSplitView
+const mockOpenSplitView = vi.fn();
+const mockCloseSplitView = vi.fn();
+const mockToggleFullScreen = vi.fn();
+const mockSetCitationIds = vi.fn();
+
+const defaultSplitViewMock = {
+  isOpen: false,
+  isFullScreen: false,
+  splitViewData: null as unknown,
+  isLoading: false,
+  error: null as string | null,
+  navigationInfo: { currentIndex: 0, totalCount: 0, canPrev: false, canNext: false },
+  openSplitView: mockOpenSplitView,
+  closeSplitView: mockCloseSplitView,
+  toggleFullScreen: mockToggleFullScreen,
+  navigateToPrev: vi.fn(),
+  navigateToNext: vi.fn(),
+  setCitationIds: mockSetCitationIds,
+};
+
+let splitViewMockOverrides: Partial<typeof defaultSplitViewMock> = {};
+
 vi.mock('@/hooks/useSplitView', () => ({
-  useSplitView: () => ({
-    isOpen: false,
-    isFullScreen: false,
-    splitViewData: null,
-    isLoading: false,
-    error: null,
-    navigationInfo: { currentIndex: 0, totalCount: 0, canPrev: false, canNext: false },
-    openSplitView: vi.fn(),
-    closeSplitView: vi.fn(),
-    toggleFullScreen: vi.fn(),
-    navigateToPrev: vi.fn(),
-    navigateToNext: vi.fn(),
-    setCitationIds: vi.fn(),
-  }),
+  useSplitView: () => ({ ...defaultSplitViewMock, ...splitViewMockOverrides }),
 }));
 
 // Mock toast
@@ -105,6 +116,7 @@ describe('CitationsContent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    splitViewMockOverrides = {}; // Reset split view mock to defaults
 
     vi.mocked(useCitationsModule.useCitationStats).mockReturnValue({
       stats: mockStats,
@@ -297,5 +309,83 @@ describe('CitationsContent', () => {
     render(<CitationsContent matterId="matter-123" />);
 
     expect(screen.queryByText(/CITATIONS? NEED ATTENTION/)).not.toBeInTheDocument();
+  });
+
+  // Split-view integration tests (Story 10C.4)
+  describe('split-view integration', () => {
+    const mockSplitViewData = {
+      citation: {
+        id: 'cit-1',
+        actName: 'Securities Act, 1992',
+        sectionNumber: '3',
+        subsection: '3',
+        clause: null,
+        verificationStatus: 'verified' as const,
+        rawCitationText: 'Section 3(3) of the Securities Act',
+      },
+      sourceDocument: {
+        documentId: 'doc-1',
+        documentUrl: '/api/documents/doc-1/file',
+        pageNumber: 45,
+        boundingBoxes: [{ x: 100, y: 200, width: 300, height: 50 }],
+      },
+      targetDocument: {
+        documentId: 'act-1',
+        documentUrl: '/api/documents/act-1/file',
+        pageNumber: 12,
+        boundingBoxes: [{ x: 50, y: 150, width: 400, height: 60 }],
+      },
+      verification: {
+        status: 'verified' as const,
+        similarityScore: 95.5,
+      },
+    };
+
+    it('renders split-view panel when isOpen is true and has data', () => {
+      splitViewMockOverrides = {
+        isOpen: true,
+        isFullScreen: false,
+        splitViewData: mockSplitViewData,
+      };
+
+      render(<CitationsContent matterId="matter-123" />);
+
+      // Should show split-view panel with source document header
+      expect(screen.getByText('Source Document')).toBeInTheDocument();
+    });
+
+    it('shows loading state in split-view when loading', () => {
+      // Note: SplitViewCitationPanel handles loading state internally with isLoading prop
+      // The panel needs some data structure even when loading
+      splitViewMockOverrides = {
+        isOpen: true,
+        isFullScreen: false,
+        splitViewData: mockSplitViewData, // Provide data, panel shows loading via isLoading prop
+        isLoading: true,
+      };
+
+      render(<CitationsContent matterId="matter-123" />);
+
+      // When isLoading is true, the SplitViewCitationPanel shows loading state
+      expect(screen.getByText('Loading citation view...')).toBeInTheDocument();
+    });
+
+    it('calls setCitationIds when citations are loaded', () => {
+      render(<CitationsContent matterId="matter-123" />);
+
+      expect(mockSetCitationIds).toHaveBeenCalledWith(['cit-1', 'cit-2']);
+    });
+
+    it('calls openSplitView when view button is clicked in list', async () => {
+      const user = userEvent.setup();
+      render(<CitationsContent matterId="matter-123" />);
+
+      // Click the first View button
+      const viewButtons = screen.getAllByTitle('View in split view');
+      expect(viewButtons.length).toBeGreaterThan(0);
+      await user.click(viewButtons[0]!);
+
+      expect(mockOpenSplitView).toHaveBeenCalled();
+    });
   });
 });

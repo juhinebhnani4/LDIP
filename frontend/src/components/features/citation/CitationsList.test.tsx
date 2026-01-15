@@ -64,7 +64,6 @@ const mockMeta: PaginationMeta = {
 
 describe('CitationsList', () => {
   const defaultProps = {
-    matterId: 'matter-123',
     citations: mockCitations,
     meta: mockMeta,
   };
@@ -320,7 +319,8 @@ describe('CitationsList', () => {
 
     // Click the first View button
     const viewButtons = screen.getAllByTitle('View in split view');
-    await user.click(viewButtons[0]);
+    expect(viewButtons.length).toBeGreaterThan(0);
+    await user.click(viewButtons[0]!);
 
     // Should call with the citation ID (order depends on default sorting by actName)
     expect(onViewCitation).toHaveBeenCalledWith(expect.any(String));
@@ -339,7 +339,8 @@ describe('CitationsList', () => {
 
     // Click the Fix button (only shows for mismatch/section_not_found)
     const fixButtons = screen.getAllByTitle('Fix issue');
-    await user.click(fixButtons[0]);
+    expect(fixButtons.length).toBeGreaterThan(0);
+    await user.click(fixButtons[0]!);
 
     expect(onViewCitation).toHaveBeenCalled();
   });

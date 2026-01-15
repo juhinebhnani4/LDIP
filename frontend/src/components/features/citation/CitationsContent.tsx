@@ -32,6 +32,7 @@ import {
   getActNamesFromSummary,
 } from '@/hooks/useCitations';
 import { useSplitView } from '@/hooks/useSplitView';
+import type { SplitViewData } from '@/types/citation';
 
 export interface CitationsContentProps {
   matterId: string;
@@ -226,7 +227,6 @@ export function CitationsContent({
       <div className="flex-1 min-w-0 overflow-auto">
         {viewMode === 'list' && (
           <CitationsList
-            matterId={matterId}
             citations={citations}
             meta={meta}
             isLoading={citationsLoading}
@@ -298,9 +298,9 @@ export function CitationsContent({
         onUploadMissingActs={handleUploadMissingActs}
       />
 
-      {/* Main content area - with split-view when open (Story 10C.4) */}
+      {/* Main content area - with split-view when open */}
       <div className="flex-1 min-h-0">
-        {isSplitViewOpen && !isFullScreen ? (
+        {isSplitViewOpen && !isFullScreen && (splitViewData || splitViewLoading || splitViewError) ? (
           // Split layout: citations content + split-view panels side by side
           <PanelGroup direction="horizontal" className="h-full">
             {/* Citations content panel (resizable) */}
@@ -316,7 +316,7 @@ export function CitationsContent({
             {/* Split-view panel */}
             <Panel defaultSize={65} minSize={40}>
               <SplitViewCitationPanel
-                data={splitViewData!}
+                data={splitViewData as SplitViewData}
                 isFullScreen={false}
                 isLoading={splitViewLoading}
                 error={splitViewError}
@@ -334,7 +334,7 @@ export function CitationsContent({
         )}
       </div>
 
-      {/* Full-screen modal (Story 10C.4) */}
+      {/* Full-screen modal */}
       <SplitViewModal
         isOpen={isSplitViewOpen && isFullScreen}
         data={splitViewData}

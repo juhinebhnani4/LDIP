@@ -407,16 +407,16 @@ No debug issues encountered.
 
 1. **Architecture Change**: Split-view state and rendering moved from CitationsList to CitationsContent level
 2. **New Layout**: When split-view is open, citations content and split-view panels are displayed side-by-side using react-resizable-panels
-3. **Tests**: 211 citation tests passing, added 2 new tests for onViewCitation callback
-4. **Backward Compatibility**: matterId prop kept in CitationsList interface for API consistency (prefixed with underscore)
+3. **Tests**: 41 citation tests passing (24 CitationsList + 17 CitationsContent), including 4 new split-view integration tests
+4. **Code Review Fixes**: Removed unused matterId prop from CitationsList, fixed TypeScript errors, added proper null handling
 
 ### File List
 
 **Files Modified:**
-- `frontend/src/components/features/citation/CitationsContent.tsx` - Added split-view integration at tab level
-- `frontend/src/components/features/citation/CitationsContent.test.tsx` - Updated useSplitView mock
-- `frontend/src/components/features/citation/CitationsList.tsx` - Removed split-view rendering, added onViewCitation prop
-- `frontend/src/components/features/citation/CitationsList.test.tsx` - Added tests for onViewCitation
+- `frontend/src/components/features/citation/CitationsContent.tsx` - Added split-view integration at tab level with proper null handling
+- `frontend/src/components/features/citation/CitationsContent.test.tsx` - Added split-view integration tests (4 new tests)
+- `frontend/src/components/features/citation/CitationsList.tsx` - Removed split-view rendering, removed unused matterId prop
+- `frontend/src/components/features/citation/CitationsList.test.tsx` - Added tests for onViewCitation, fixed TypeScript errors
 
 **Files Verified (No Changes Needed):**
 - `frontend/src/components/features/citation/SplitViewCitationPanel.tsx` - Complete
@@ -433,3 +433,4 @@ No debug issues encountered.
 |------|--------|--------|
 | 2026-01-15 | Story created with comprehensive developer context | Claude Opus 4.5 |
 | 2026-01-15 | Implementation complete - split-view integration at CitationsContent level, 211 tests passing | Claude Opus 4.5 |
+| 2026-01-15 | Code review fixes: removed unused matterId prop, fixed TypeScript errors, added proper null handling, added 4 split-view integration tests | Claude Opus 4.5 |

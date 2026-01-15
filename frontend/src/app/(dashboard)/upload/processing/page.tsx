@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUploadWizardStore } from '@/stores/uploadWizardStore';
@@ -14,26 +15,31 @@ import { useUploadWizardStore } from '@/stores/uploadWizardStore';
  */
 
 export default function ProcessingPage() {
+  const router = useRouter();
   const matterName = useUploadWizardStore((state) => state.matterName);
   const fileCount = useUploadWizardStore((state) => state.files.length);
   const reset = useUploadWizardStore((state) => state.reset);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  // If no files in store, redirect back
+  // If no files in store, redirect back to upload page
   useEffect(() => {
-    if (fileCount === 0) {
-      // Reset and let user start fresh
-      reset();
+    if (fileCount === 0 && !isRedirecting) {
+      // Use queueMicrotask to avoid synchronous setState in effect body
+      queueMicrotask(() => {
+        setIsRedirecting(true);
+        reset();
+        router.replace('/upload');
+      });
     }
-  }, [fileCount, reset]);
+  }, [fileCount, reset, router, isRedirecting]);
 
-  if (fileCount === 0) {
+  // Show loading state while redirecting
+  if (fileCount === 0 || isRedirecting) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">No files to process</p>
-          <Button asChild>
-            <Link href="/upload">Start New Upload</Link>
-          </Button>
+          <Loader2 className="size-8 text-muted-foreground animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Redirecting to upload...</p>
         </div>
       </div>
     );

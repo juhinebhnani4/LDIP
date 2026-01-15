@@ -17,6 +17,11 @@ import type { ValidationError, ValidationWarning } from '@/types/document';
  *
  * Drag-drop zone for file selection in Stage 1 of upload wizard.
  * Features animated icon on drag-over and validation error display.
+ *
+ * Note: ZIP file validation checks MIME type and extension only.
+ * ZIP content inspection (verifying PDFs inside) is not implemented
+ * in the MVP - the backend will handle ZIP extraction and content
+ * validation during upload processing.
  */
 
 interface FileDropZoneProps {
@@ -221,8 +226,9 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
 
           {/* File format info */}
           <div className="space-y-1 text-sm text-muted-foreground">
-            <p>Supported: PDF, ZIP (containing PDFs)</p>
+            <p>Supported: PDF, ZIP (containing PDFs)*</p>
             <p>Maximum: 500MB per file &bull; 100 files per matter</p>
+            <p className="text-xs mt-2">*ZIP contents validated during processing</p>
           </div>
         </CardContent>
       </Card>

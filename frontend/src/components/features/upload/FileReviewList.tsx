@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useMemo, useState } from 'react';
 import { File, X, Plus, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,13 @@ interface FileReviewListProps {
   onAddFiles: (files: File[]) => void;
   /** Optional className */
   className?: string;
+}
+
+/** Generate a stable unique ID for a file based on its properties and add time */
+function generateFileId(file: File, index: number, addedAt: number): string {
+  // Combine file properties with a timestamp-based seed for uniqueness
+  // This handles duplicate filenames with same size by using lastModified and index
+  return `file-${file.name}-${file.size}-${file.lastModified}-${addedAt}-${index}`;
 }
 
 /** Single file item display */
@@ -66,8 +73,16 @@ export function FileReviewList({
   className,
 }: FileReviewListProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Use a stable timestamp for file ID generation to handle re-renders
+  // Lazy initialization to avoid Date.now() call during render
+  const [addedAt] = useState(() => Date.now());
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
   const canAddMore = files.length < MAX_FILES_PER_UPLOAD;
+
+  // Generate stable file IDs that persist across re-renders
+  const fileIds = useMemo(() => {
+    return files.map((file, index) => generateFileId(file, index, addedAt));
+  }, [files, addedAt]);
 
   const handleAddMoreClick = () => {
     fileInputRef.current?.click();
@@ -122,13 +137,16 @@ export function FileReviewList({
           role="list"
           aria-label="Selected files"
         >
-          {files.map((file, index) => (
-            <FileItem
-              key={`${file.name}-${file.size}-${index}`}
-              file={file}
-              onRemove={() => onRemoveFile(index)}
-            />
-          ))}
+          {files.map((file, index) => {
+            const fileId = fileIds[index] ?? `fallback-${index}`;
+            return (
+              <FileItem
+                key={fileId}
+                file={file}
+                onRemove={() => onRemoveFile(index)}
+              />
+            );
+          })}
         </ul>
 
         {/* Add more files button */}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MatterNameInput } from './MatterNameInput';
 
@@ -54,6 +54,11 @@ describe('MatterNameInput', () => {
       const input = screen.getByRole('textbox');
       await user.type(input, 'New Matter');
 
+      // Flush pending timers
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+
       expect(input).toHaveValue('New Matter');
     });
 
@@ -66,11 +71,30 @@ describe('MatterNameInput', () => {
       await user.type(input, 'Test');
 
       // Fast-forward past debounce delay
-      vi.advanceTimersByTime(300);
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
 
       await waitFor(() => {
         expect(onChange).toHaveBeenCalled();
       });
+    });
+
+    it('calls onChange immediately on blur', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const onChange = vi.fn();
+      render(<MatterNameInput value="" onChange={onChange} />);
+
+      const input = screen.getByRole('textbox');
+      await user.type(input, 'Test');
+
+      // Blur without waiting for debounce
+      await act(async () => {
+        input.blur();
+      });
+
+      // Should call onChange immediately on blur without waiting for debounce
+      expect(onChange).toHaveBeenCalledWith('Test');
     });
 
     it('syncs value when prop changes', async () => {
@@ -93,7 +117,10 @@ describe('MatterNameInput', () => {
       const input = screen.getByRole('textbox');
       await user.clear(input);
 
-      vi.advanceTimersByTime(300);
+      // Blur to trigger validation
+      await act(async () => {
+        input.blur();
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/matter name is required/i)).toBeInTheDocument();
@@ -109,7 +136,10 @@ describe('MatterNameInput', () => {
       const longName = 'a'.repeat(101);
       await user.type(input, longName);
 
-      vi.advanceTimersByTime(300);
+      // Over-limit shows error immediately during typing
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
 
       await waitFor(() => {
         expect(screen.getByText(/must be 100 characters or less/i)).toBeInTheDocument();
@@ -124,18 +154,25 @@ describe('MatterNameInput', () => {
       const longName = 'a'.repeat(101);
       await user.type(input, longName);
 
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+
       expect(screen.getByText('101/100')).toBeInTheDocument();
     });
 
-    it('does not show error for valid name', async () => {
+    it('does not show error for valid name before blur', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<MatterNameInput value="" onChange={vi.fn()} />);
 
       const input = screen.getByRole('textbox');
       await user.type(input, 'Valid Name');
 
-      vi.advanceTimersByTime(300);
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
 
+      // No error should show before blur for valid input
       await waitFor(() => {
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       });
@@ -149,10 +186,29 @@ describe('MatterNameInput', () => {
       const maxName = 'a'.repeat(100);
       await user.type(input, maxName);
 
-      vi.advanceTimersByTime(300);
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
 
       await waitFor(() => {
         expect(screen.queryByText(/must be 100 characters or less/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('validates on blur even without prior typing', async () => {
+      const onChange = vi.fn();
+      render(<MatterNameInput value="" onChange={onChange} />);
+
+      const input = screen.getByRole('textbox');
+
+      // Just focus and blur without typing
+      await act(async () => {
+        input.focus();
+        input.blur();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/matter name is required/i)).toBeInTheDocument();
       });
     });
   });
@@ -172,7 +228,10 @@ describe('MatterNameInput', () => {
       const input = screen.getByRole('textbox');
       await user.clear(input);
 
-      vi.advanceTimersByTime(300);
+      // Blur to trigger validation
+      await act(async () => {
+        input.blur();
+      });
 
       await waitFor(() => {
         expect(input).toHaveAttribute('aria-invalid', 'true');
@@ -186,7 +245,9 @@ describe('MatterNameInput', () => {
       const input = screen.getByRole('textbox');
       await user.clear(input);
 
-      vi.advanceTimersByTime(300);
+      await act(async () => {
+        input.blur();
+      });
 
       await waitFor(() => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -207,7 +268,9 @@ describe('MatterNameInput', () => {
       const input = screen.getByRole('textbox');
       await user.clear(input);
 
-      vi.advanceTimersByTime(300);
+      await act(async () => {
+        input.blur();
+      });
 
       await waitFor(() => {
         expect(input).toHaveAttribute('aria-describedby', 'matter-name-error');

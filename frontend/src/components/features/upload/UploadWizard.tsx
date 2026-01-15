@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from './FileDropZone';
 import { FileReviewList } from './FileReviewList';
@@ -75,6 +75,7 @@ export function UploadWizard() {
   const files = useUploadWizardStore((state) => state.files);
   const matterName = useUploadWizardStore((state) => state.matterName);
   const isLoading = useUploadWizardStore((state) => state.isLoading);
+  const error = useUploadWizardStore((state) => state.error);
   const detectedActs = useUploadWizardStore((state) => state.detectedActs);
   const canStartUpload = useUploadWizardStore(selectCanStartUpload);
   const fileCount = useUploadWizardStore(selectFileCount);
@@ -86,6 +87,7 @@ export function UploadWizard() {
   const setDetectedActs = useUploadWizardStore((state) => state.setDetectedActs);
   const setStage = useUploadWizardStore((state) => state.setStage);
   const startUpload = useUploadWizardStore((state) => state.startUpload);
+  const setError = useUploadWizardStore((state) => state.setError);
   const reset = useUploadWizardStore((state) => state.reset);
 
   // Local state for act discovery modal
@@ -160,6 +162,10 @@ export function UploadWizard() {
     router.push('/');
   }, [reset, router]);
 
+  const handleDismissError = useCallback(() => {
+    setError(null);
+  }, [setError]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header with back navigation */}
@@ -178,6 +184,26 @@ export function UploadWizard() {
       {/* Main content */}
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         <h1 className="text-2xl font-bold text-center mb-8">Create New Matter</h1>
+
+        {/* Error Alert */}
+        {error && (
+          <div
+            role="alert"
+            className="mb-6 flex items-center gap-3 p-4 rounded-md bg-destructive/10 border border-destructive/20 text-destructive"
+          >
+            <AlertCircle className="size-5 flex-shrink-0" />
+            <span className="flex-1 text-sm">{error}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 text-destructive hover:text-destructive hover:bg-destructive/20"
+              onClick={handleDismissError}
+              aria-label="Dismiss error"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        )}
 
         {/* Stage 1: File Selection */}
         {currentStage === 'FILE_SELECTION' && (

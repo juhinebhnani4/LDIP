@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
-import { CheckCircle2, AlertCircle, Upload, Info } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { CheckCircle2, AlertCircle, Upload, Info, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -78,6 +78,7 @@ export function ActDiscoveryModal({
   onSkip,
 }: ActDiscoveryModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedActFiles, setUploadedActFiles] = useState<string[]>([]);
 
   const foundActs = detectedActs.filter((act) => act.status === 'found');
   const missingActs = detectedActs.filter((act) => act.status === 'missing');
@@ -100,6 +101,11 @@ export function ActDiscoveryModal({
 
     if (validFiles.length > 0) {
       onUploadMissingActs(validFiles);
+      // Track uploaded file names for feedback
+      setUploadedActFiles((prev) => [
+        ...prev,
+        ...validFiles.map((f) => f.name),
+      ]);
     }
 
     // Reset input
@@ -157,6 +163,26 @@ export function ActDiscoveryModal({
                   <ActItem key={act.id} act={act} />
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Uploaded Acts Feedback */}
+          {uploadedActFiles.length > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-green-50 border border-green-200 text-green-800">
+              <CheckCircle2 className="size-4 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium">
+                  {uploadedActFiles.length} Act {uploadedActFiles.length === 1 ? 'file' : 'files'} added
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {uploadedActFiles.map((name, i) => (
+                    <li key={i} className="flex items-center gap-1 text-green-700">
+                      <FileText className="size-3" />
+                      <span className="truncate">{name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -9,13 +9,13 @@ import { cn } from '@/lib/utils';
  * MatterNameInput Component
  *
  * Editable matter name input with auto-generation note and validation.
- * Maximum 100 characters.
+ * Maximum 100 characters. Validates on blur and after debounce during typing.
  */
 
 /** Maximum characters for matter name */
 const MAX_NAME_LENGTH = 100;
 
-/** Debounce delay for validation (ms) */
+/** Debounce delay for onChange callback (ms) */
 const DEBOUNCE_DELAY = 300;
 
 interface MatterNameInputProps {
@@ -37,14 +37,21 @@ export function MatterNameInput({
 }: MatterNameInputProps) {
   const [localValue, setLocalValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
+  const [hasBlurred, setHasBlurred] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestValueRef = useRef(value);
 
   // Sync local value when prop changes (e.g., auto-generation)
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
-  const validateName = (name: string): string | null => {
+  // Keep track of latest value for debounce callback (in effect to avoid render-time ref access)
+  useEffect(() => {
+    latestValueRef.current = localValue;
+  }, [localValue]);
+
+  const validateName = useCallback((name: string): string | null => {
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       return 'Matter name is required';
@@ -53,7 +60,7 @@ export function MatterNameInput({
       return `Matter name must be ${MAX_NAME_LENGTH} characters or less`;
     }
     return null;
-  };
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -64,15 +71,37 @@ export function MatterNameInput({
       clearTimeout(debounceRef.current);
     }
 
-    // Debounce the validation and onChange callback
+    // Debounce the onChange callback to avoid excessive parent updates
     debounceRef.current = setTimeout(() => {
-      const validationError = validateName(newValue);
-      setError(validationError);
+      // Use ref to get latest value at callback time
+      const currentValue = latestValueRef.current;
 
-      // Only call onChange if valid or empty (let parent handle required validation)
-      onChange(newValue);
+      // Only validate during typing if user has already blurred once
+      // or if the value is over the limit (immediate feedback for length)
+      if (hasBlurred || currentValue.length > MAX_NAME_LENGTH) {
+        const validationError = validateName(currentValue);
+        setError(validationError);
+      }
+
+      onChange(currentValue);
     }, DEBOUNCE_DELAY);
   };
+
+  const handleBlur = useCallback(() => {
+    setHasBlurred(true);
+
+    // Cancel pending debounce and validate immediately on blur
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    const validationError = validateName(localValue);
+    setError(validationError);
+
+    // Ensure parent gets the latest value
+    onChange(localValue);
+  }, [localValue, onChange, validateName]);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -95,6 +124,7 @@ export function MatterNameInput({
           type="text"
           value={localValue}
           onChange={handleChange}
+          onBlur={handleBlur}
           placeholder="Enter matter name"
           aria-invalid={!!error}
           aria-describedby={error ? 'matter-name-error' : 'matter-name-hint'}

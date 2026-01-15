@@ -7,7 +7,8 @@ import { ConversationHistory } from './ConversationHistory';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 import { ChatInput } from './ChatInput';
 import { StreamingMessage } from './StreamingMessage';
-import { useChatStore } from '@/stores/chatStore';
+import { SuggestedQuestions } from './SuggestedQuestions';
+import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData } from '@/hooks/useSSE';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
 
@@ -29,6 +30,7 @@ interface QAPanelProps {
  * Story 10A.3: Main Content Area and Q&A Panel Integration
  * Story 11.2: Implement Q&A Conversation History
  * Story 11.3: Streaming Response with Engine Trace
+ * Story 11.4: Suggested Questions and Message Input
  */
 export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
   // Zustand selectors for streaming state
@@ -44,6 +46,9 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
   const streamingContent = useChatStore((state) => state.streamingContent);
   const streamingTraces = useChatStore((state) => state.streamingTraces);
   const streamingMessageId = useChatStore((state) => state.streamingMessageId);
+
+  // Story 11.4: Empty state detection for suggested questions
+  const isEmpty = useChatStore(selectIsEmpty);
 
   // Convert EngineTraceData from hook to EngineTrace type
   const convertTrace = useCallback((data: EngineTraceData): EngineTrace => ({
@@ -143,25 +148,34 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
       <div className="flex flex-1 flex-col overflow-hidden">
         {canLoadHistory ? (
           <>
-            {/* Conversation history */}
-            <ConversationHistory
-              matterId={matterId!}
-              userId={userId!}
-              onSourceClick={onSourceClick}
-            />
+            {/* Story 11.4: Empty state with suggested questions */}
+            {isEmpty && !streamingMessageId ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-6">
+                <SuggestedQuestions onQuestionClick={handleSubmit} />
+              </div>
+            ) : (
+              <>
+                {/* Conversation history */}
+                <ConversationHistory
+                  matterId={matterId!}
+                  userId={userId!}
+                  onSourceClick={onSourceClick}
+                />
 
-            {/* Streaming message (shown during streaming) */}
-            {streamingMessageId && (
-              <StreamingMessage
-                content={streamingContent}
-                isTyping={isTyping}
-                isStreaming={isStreaming}
-                traces={streamingTraces}
-                totalTimeMs={streamingTotalTimeMs}
-              />
+                {/* Streaming message (shown during streaming) */}
+                {streamingMessageId && (
+                  <StreamingMessage
+                    content={streamingContent}
+                    isTyping={isTyping}
+                    isStreaming={isStreaming}
+                    traces={streamingTraces}
+                    totalTimeMs={streamingTotalTimeMs}
+                  />
+                )}
+              </>
             )}
 
-            {/* Chat input */}
+            {/* Chat input (always visible) */}
             <ChatInput
               onSubmit={handleSubmit}
               disabled={isStreaming}

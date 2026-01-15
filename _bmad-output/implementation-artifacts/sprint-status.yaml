@@ -187,7 +187,7 @@ development_status:
   11-1-qa-panel-header-position: done  # Code review passed 2026-01-15 - 41 tests, 4 issues fixed
   11-2-conversation-history: done  # Completed 2026-01-16 - 209 tests passing
   11-3-streaming-response-engine-trace: done  # Code review passed 2026-01-16 - 27 tests, 5 code review issues fixed
-  11-4-suggested-questions-input: ready-for-dev
+  11-4-suggested-questions-input: review  # Completed 2026-01-16 - 160 chat tests passing, 26 new tests
   11-5-pdf-viewer-split-view: backlog
   11-6-pdf-viewer-full-modal: backlog
   11-7-bounding-box-overlays: backlog

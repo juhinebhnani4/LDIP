@@ -212,20 +212,34 @@ describe('UploadWizard', () => {
       useUploadWizardStore.getState().setMatterName('Test Matter');
     });
 
-    it('shows Act Discovery modal when Start Processing clicked', async () => {
+    // NOTE: Act Discovery modal is DISABLED in production (H1 fix)
+    // The modal will only show when NEXT_PUBLIC_ENABLE_ACT_DISCOVERY_MOCK=true in development
+    // This test verifies the default behavior (no modal, direct navigation)
+    it('navigates directly to processing when Start Processing clicked (Act Discovery disabled)', async () => {
       const user = userEvent.setup();
       render(<UploadWizard />);
 
       await user.click(screen.getByRole('button', { name: /start processing/i }));
 
-      await waitFor(() => {
-        expect(screen.getByRole('dialog')).toBeInTheDocument();
-        expect(screen.getByText(/act references detected/i)).toBeInTheDocument();
-      });
+      // Should navigate directly without showing Act Discovery modal
+      expect(mockPush).toHaveBeenCalledWith('/upload/processing');
+    });
+
+    it('does not show Act Discovery modal in production mode', async () => {
+      const user = userEvent.setup();
+      render(<UploadWizard />);
+
+      await user.click(screen.getByRole('button', { name: /start processing/i }));
+
+      // Modal should NOT appear (Act Discovery is disabled)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 
-  describe('Act Discovery Modal interactions', () => {
+  // NOTE: Act Discovery Modal tests are skipped because the feature is disabled in production
+  // These tests would only pass when NEXT_PUBLIC_ENABLE_ACT_DISCOVERY_MOCK=true
+  // Keeping the describe block for documentation and future re-enablement
+  describe.skip('Act Discovery Modal interactions (disabled - pending backend integration)', () => {
     beforeEach(() => {
       const file = createMockFile('test.pdf');
       useUploadWizardStore.getState().addFiles([file]);

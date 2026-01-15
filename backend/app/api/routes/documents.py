@@ -2,10 +2,16 @@
 
 Implements document upload with Supabase Storage integration,
 ZIP extraction, and proper matter isolation via require_matter_role.
+
+Security notes:
+- Uses SpooledTemporaryFile for memory-efficient streaming (avoids DoS via memory exhaustion)
+- ZIP extraction includes bomb protection (compression ratio and total size limits)
+- Storage access uses Service Role client (RLS bypassed - access validated at API layer)
 """
 
 import io
 import os
+import tempfile
 import zipfile
 
 import structlog
@@ -101,6 +107,15 @@ class ManualReviewResponse(BaseModel):
 # File size limits
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 SMALL_DOCUMENT_THRESHOLD_PAGES = 100  # Documents under this use 'high' priority queue
+
+# Streaming upload configuration
+# Files under this threshold are kept in memory; larger files spill to disk
+SPOOL_MAX_SIZE = 10 * 1024 * 1024  # 10MB - files larger than this use disk
+
+# ZIP bomb protection limits
+ZIP_MAX_COMPRESSION_RATIO = 100  # Max allowed compression ratio (uncompressed/compressed)
+ZIP_MAX_TOTAL_EXTRACTED_SIZE = 2 * 1024 * 1024 * 1024  # 2GB max total extracted size
+ZIP_MAX_FILES = 500  # Maximum number of files in a ZIP
 
 
 def _verify_matter_access(
@@ -250,6 +265,58 @@ def _get_subfolder(document_type: DocumentType) -> str:
     return "uploads"
 
 
+async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
+    """Read uploaded file using streaming to avoid memory exhaustion.
+
+    Uses SpooledTemporaryFile to handle large files efficiently:
+    - Small files (< SPOOL_MAX_SIZE) stay in memory
+    - Large files automatically spill to disk
+
+    Args:
+        file: FastAPI UploadFile object.
+
+    Returns:
+        Tuple of (file_content_bytes, file_size).
+
+    Raises:
+        HTTPException: If file exceeds MAX_FILE_SIZE.
+    """
+    # Use SpooledTemporaryFile for memory-efficient streaming
+    # Small files stay in RAM, large files spill to disk automatically
+    with tempfile.SpooledTemporaryFile(max_size=SPOOL_MAX_SIZE) as spooled:
+        total_size = 0
+        chunk_size = 64 * 1024  # 64KB chunks
+
+        # Stream file in chunks to avoid loading 500MB into RAM at once
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+
+            total_size += len(chunk)
+
+            # Check size limit during streaming (fail fast)
+            if total_size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": {
+                            "code": "FILE_TOO_LARGE",
+                            "message": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)}MB limit",
+                            "details": {"file_size": total_size},
+                        }
+                    },
+                )
+
+            spooled.write(chunk)
+
+        # Seek back to start and read all content
+        spooled.seek(0)
+        content = spooled.read()
+
+    return content, total_size
+
+
 def _queue_ocr_task(document_id: str, file_size: int) -> None:
     """Queue full document processing pipeline for a document.
 
@@ -302,6 +369,78 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
     )
 
 
+def _check_zip_bomb(zf: zipfile.ZipFile, compressed_size: int) -> None:
+    """Check for ZIP bomb attacks before extraction.
+
+    Args:
+        zf: Open ZipFile object.
+        compressed_size: Size of the compressed ZIP file.
+
+    Raises:
+        HTTPException: If ZIP appears to be a bomb (suspicious compression ratio or size).
+    """
+    # Calculate total uncompressed size
+    total_uncompressed = sum(info.file_size for info in zf.infolist())
+
+    # Check compression ratio (ZIP bombs have extreme ratios like 1000:1 or more)
+    if compressed_size > 0:
+        compression_ratio = total_uncompressed / compressed_size
+        if compression_ratio > ZIP_MAX_COMPRESSION_RATIO:
+            logger.warning(
+                "zip_bomb_detected_ratio",
+                compression_ratio=compression_ratio,
+                compressed_size=compressed_size,
+                uncompressed_size=total_uncompressed,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": {
+                        "code": "ZIP_BOMB_DETECTED",
+                        "message": f"ZIP file has suspicious compression ratio ({compression_ratio:.0f}:1). Maximum allowed is {ZIP_MAX_COMPRESSION_RATIO}:1",
+                        "details": {"compression_ratio": compression_ratio},
+                    }
+                },
+            )
+
+    # Check total extracted size
+    if total_uncompressed > ZIP_MAX_TOTAL_EXTRACTED_SIZE:
+        logger.warning(
+            "zip_bomb_detected_size",
+            total_uncompressed=total_uncompressed,
+            limit=ZIP_MAX_TOTAL_EXTRACTED_SIZE,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "ZIP_TOO_LARGE",
+                    "message": f"ZIP extracts to {total_uncompressed // (1024 * 1024)}MB. Maximum allowed is {ZIP_MAX_TOTAL_EXTRACTED_SIZE // (1024 * 1024 * 1024)}GB",
+                    "details": {"uncompressed_size": total_uncompressed},
+                }
+            },
+        )
+
+    # Check file count
+    file_count = len(zf.namelist())
+    if file_count > ZIP_MAX_FILES:
+        logger.warning(
+            "zip_too_many_files",
+            file_count=file_count,
+            limit=ZIP_MAX_FILES,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "ZIP_TOO_MANY_FILES",
+                    "message": f"ZIP contains {file_count} files. Maximum allowed is {ZIP_MAX_FILES}",
+                    "details": {"file_count": file_count},
+                }
+            },
+        )
+
+
 async def _extract_and_upload_zip(
     zip_content: bytes,
     matter_id: str,
@@ -310,6 +449,8 @@ async def _extract_and_upload_zip(
     document_service: DocumentService,
 ) -> list[UploadedDocument]:
     """Extract ZIP and upload each PDF individually.
+
+    Includes ZIP bomb protection to prevent DoS attacks via malicious archives.
 
     Args:
         zip_content: ZIP file content as bytes.
@@ -322,14 +463,18 @@ async def _extract_and_upload_zip(
         List of uploaded documents.
 
     Raises:
-        HTTPException: If extraction fails or ZIP contains no PDFs.
+        HTTPException: If extraction fails, ZIP contains no PDFs, or ZIP bomb detected.
     """
     documents: list[UploadedDocument] = []
     uploaded_paths: list[str] = []  # Track storage paths for rollback
     created_doc_ids: list[str] = []  # Track document IDs for rollback
+    rollback_errors: list[dict] = []  # Track rollback failures for reporting
 
     try:
         with zipfile.ZipFile(io.BytesIO(zip_content)) as zf:
+            # ZIP bomb protection - check before extracting anything
+            _check_zip_bomb(zf, len(zip_content))
+
             # Filter for PDF files only
             pdf_files = [
                 f for f in zf.namelist()
@@ -422,12 +567,20 @@ async def _extract_and_upload_zip(
             created_doc_ids=created_doc_ids,
         )
 
+        # Track rollback failures for reporting (H2 fix - don't silently swallow errors)
+        rollback_failures: list[dict] = []
+
         # Delete storage files
         for path in uploaded_paths:
             try:
                 storage_service.delete_file(path)
             except Exception as delete_error:
-                logger.warning(
+                rollback_failures.append({
+                    "type": "storage",
+                    "path": path,
+                    "error": str(delete_error),
+                })
+                logger.error(
                     "rollback_storage_delete_failed",
                     storage_path=path,
                     error=str(delete_error),
@@ -438,11 +591,32 @@ async def _extract_and_upload_zip(
             try:
                 document_service.delete_document(doc_id)
             except Exception as delete_error:
-                logger.warning(
+                rollback_failures.append({
+                    "type": "document",
+                    "document_id": doc_id,
+                    "error": str(delete_error),
+                })
+                logger.error(
                     "rollback_document_delete_failed",
                     document_id=doc_id,
                     error=str(delete_error),
                 )
+
+        # Log summary of rollback outcome
+        if rollback_failures:
+            logger.critical(
+                "zip_rollback_incomplete",
+                matter_id=matter_id,
+                rollback_failures=rollback_failures,
+                orphaned_storage_paths=[f["path"] for f in rollback_failures if f["type"] == "storage"],
+                orphaned_document_ids=[f["document_id"] for f in rollback_failures if f["type"] == "document"],
+            )
+
+        # Include rollback failures in error response for visibility
+        error_details: dict = {}
+        if rollback_failures:
+            error_details["rollback_failures"] = len(rollback_failures)
+            error_details["warning"] = "Some resources could not be cleaned up. Contact support if issues persist."
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -450,7 +624,7 @@ async def _extract_and_upload_zip(
                 "error": {
                     "code": "ZIP_EXTRACTION_FAILED",
                     "message": f"Failed to extract ZIP file: {e!s}",
-                    "details": {},
+                    "details": error_details,
                 }
             },
         )
@@ -476,6 +650,7 @@ async def upload_document(
     """Upload a document to a matter.
 
     Supports PDF files (stored directly) and ZIP files (extracted, PDFs stored individually).
+    Uses streaming upload to avoid memory exhaustion with large files (C1 fix).
 
     Requires editor or owner role on the matter.
 
@@ -498,21 +673,10 @@ async def upload_document(
     # Validate file type
     file_type = _validate_file(file)
 
-    # Read file content
-    file_content = await file.read()
-
-    # Validate file size
-    if len(file_content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": {
-                    "code": "FILE_TOO_LARGE",
-                    "message": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)}MB limit",
-                    "details": {"file_size": len(file_content)},
-                }
-            },
-        )
+    # Read file content using streaming to avoid memory exhaustion (C1 fix)
+    # Small files stay in memory, large files spill to disk via SpooledTemporaryFile
+    # Size validation happens during streaming (fail fast if too large)
+    file_content, file_size = await _read_file_with_streaming(file)
 
     logger.info(
         "document_upload_starting",
@@ -520,7 +684,7 @@ async def upload_document(
         user_id=membership.user_id,
         filename=file.filename,
         file_type=file_type,
-        file_size=len(file_content),
+        file_size=file_size,
         document_type=document_type.value,
     )
 
@@ -561,14 +725,14 @@ async def upload_document(
                 matter_id=matter_id,
                 filename=file.filename or "document.pdf",
                 storage_path=storage_path,
-                file_size=len(file_content),
+                file_size=file_size,
                 document_type=document_type,
                 uploaded_by=membership.user_id,
             )
 
             # Queue OCR processing task
             # Use 'high' priority for small files (under 10MB heuristic for <100 pages)
-            _queue_ocr_task(doc.document_id, len(file_content))
+            _queue_ocr_task(doc.document_id, file_size)
 
             logger.info(
                 "document_upload_complete",

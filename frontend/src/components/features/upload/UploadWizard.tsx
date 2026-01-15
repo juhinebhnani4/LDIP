@@ -23,49 +23,16 @@ import type { DetectedAct } from '@/types/upload';
  * Stages: FILE_SELECTION → REVIEW → ACT_DISCOVERY → (hand off to upload progress)
  *
  * Per ADR-005: Act Discovery is shown before final upload begins.
+ *
+ * NOTE: Act Discovery modal is currently disabled pending backend integration.
+ * The modal will be re-enabled once the Act Detection API (Epic 3) is available.
  */
 
-/** Mock data for Act Discovery (MVP - backend not yet available) */
-const MOCK_DETECTED_ACTS: DetectedAct[] = [
-  {
-    id: 'act-1',
-    actName: 'Securities Act, 1992',
-    citationCount: 5,
-    status: 'found',
-    sourceFile: 'Annexure_P3.pdf',
-  },
-  {
-    id: 'act-2',
-    actName: 'SARFAESI Act, 2002',
-    citationCount: 3,
-    status: 'found',
-    sourceFile: 'Annexure_K.pdf',
-  },
-  {
-    id: 'act-3',
-    actName: 'BNS Act, 2023',
-    citationCount: 12,
-    status: 'missing',
-  },
-  {
-    id: 'act-4',
-    actName: 'Negotiable Instruments Act',
-    citationCount: 8,
-    status: 'missing',
-  },
-  {
-    id: 'act-5',
-    actName: 'DRT Act, 1993',
-    citationCount: 4,
-    status: 'missing',
-  },
-  {
-    id: 'act-6',
-    actName: 'Companies Act, 2013',
-    citationCount: 2,
-    status: 'missing',
-  },
-];
+// Act Discovery is disabled until backend integration is complete
+// Set to true only in development mode with explicit env flag
+const ENABLE_ACT_DISCOVERY_MOCK =
+  process.env.NODE_ENV === 'development' &&
+  process.env.NEXT_PUBLIC_ENABLE_ACT_DISCOVERY_MOCK === 'true';
 
 export function UploadWizard() {
   const router = useRouter();
@@ -114,9 +81,15 @@ export function UploadWizard() {
   );
 
   const handleStartProcessing = useCallback(() => {
-    // For MVP: Show mock Act Discovery modal if not already seen
-    if (!hasSeenActModal && fileCount > 0) {
-      setDetectedActs(MOCK_DETECTED_ACTS);
+    // Act Discovery is disabled in production - only show with explicit dev flag (H1 fix)
+    // This prevents showing fake "Securities Act, 1992" to users uploading real documents
+    // Re-enable once Epic 3 Act Detection API is integrated
+    if (ENABLE_ACT_DISCOVERY_MOCK && !hasSeenActModal && fileCount > 0) {
+      // Mock detected acts for development only
+      const mockActs: DetectedAct[] = [
+        { id: 'act-1', actName: 'Mock Act (Dev Only)', citationCount: 1, status: 'missing' },
+      ];
+      setDetectedActs(mockActs);
       setIsActModalOpen(true);
       setStage('ACT_DISCOVERY');
       return;

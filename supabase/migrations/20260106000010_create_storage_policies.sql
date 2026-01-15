@@ -7,17 +7,24 @@
 --   documents/{matter_id}/exports/{filename}   - Generated exports (optional)
 --
 -- =============================================================================
--- ⚠️  IMPORTANT: MANUAL SETUP REQUIRED
+-- ⚠️  IMPORTANT: BUCKET SETUP REQUIRED
 -- =============================================================================
+--
+-- AUTOMATED SETUP (recommended):
+--   Run: npm run setup:storage
+--   Or:  python scripts/setup_storage_bucket.py
 --
 -- This migration creates RLS policies for Supabase Storage. Before running:
 --
 -- 1. CREATE THE BUCKET (required before policies can work):
---    Option A - Via Supabase Dashboard:
+--    Option A - Via setup script (preferred for CI/CD):
+--      npm run setup:storage  (creates bucket if not exists)
+--
+--    Option B - Via Supabase Dashboard:
 --      Storage > New Bucket > Name: "documents" > Public: OFF
 --      File size limit: 50MB (free tier) or 500MB (paid tier)
 --
---    Option B - Via Supabase CLI:
+--    Option C - Via Supabase CLI:
 --      supabase storage create documents
 --
 -- 2. PERMISSIONS NOTE:
@@ -27,6 +34,22 @@
 --
 -- 3. VERIFICATION after migration:
 --    SELECT * FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage';
+--
+-- =============================================================================
+-- SECURITY NOTE (C2 - RLS vs Service Role)
+-- =============================================================================
+--
+-- These RLS policies are designed for DIRECT client access to Supabase Storage.
+-- However, the current implementation uses a PROXY pattern:
+--   Frontend → Backend API → Supabase Storage (Service Role)
+--
+-- The Service Role client BYPASSES RLS entirely. Access control is enforced at
+-- the API layer via require_matter_role() dependency (Layer 4 defense).
+--
+-- These policies serve as:
+--   1. Defense-in-depth if direct access is ever enabled
+--   2. Documentation of intended access rules
+--   3. Protection against service key credential leaks
 --
 -- =============================================================================
 --

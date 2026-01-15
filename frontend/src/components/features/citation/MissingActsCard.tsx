@@ -15,7 +15,6 @@ import {
   AlertCircle,
   Upload,
   SkipForward,
-  X,
   Loader2,
   ChevronDown,
   ChevronUp,

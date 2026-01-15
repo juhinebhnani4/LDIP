@@ -9,7 +9,7 @@
  * @see Story 10C.3: Citations Tab List and Act Discovery
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Eye,
   AlertTriangle,
@@ -160,7 +160,7 @@ export function CitationsList({
   } = useSplitView({ enableKeyboardShortcuts: true });
 
   // Set citation IDs for navigation when citations change
-  useMemo(() => {
+  useEffect(() => {
     if (citations.length > 0) {
       setCitationIds(citations.map((c) => c.id));
     }
@@ -303,23 +303,27 @@ export function CitationsList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[200px]">
+              <TableHead
+                className="w-[200px]"
+                aria-sort={sortField === 'actName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+              >
                 <button
                   type="button"
                   className="flex items-center hover:text-foreground"
                   onClick={() => handleSort('actName')}
-                  aria-sort={sortField === 'actName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Act Name
                   {getSortIcon('actName')}
                 </button>
               </TableHead>
-              <TableHead className="w-[100px]">
+              <TableHead
+                className="w-[100px]"
+                aria-sort={sortField === 'sectionNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+              >
                 <button
                   type="button"
                   className="flex items-center hover:text-foreground"
                   onClick={() => handleSort('sectionNumber')}
-                  aria-sort={sortField === 'sectionNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Section
                   {getSortIcon('sectionNumber')}
@@ -327,23 +331,27 @@ export function CitationsList({
               </TableHead>
               <TableHead>Citation Text</TableHead>
               <TableHead className="w-[150px]">Source Doc</TableHead>
-              <TableHead className="w-[120px]">
+              <TableHead
+                className="w-[120px]"
+                aria-sort={sortField === 'verificationStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+              >
                 <button
                   type="button"
                   className="flex items-center hover:text-foreground"
                   onClick={() => handleSort('verificationStatus')}
-                  aria-sort={sortField === 'verificationStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Status
                   {getSortIcon('verificationStatus')}
                 </button>
               </TableHead>
-              <TableHead className="w-[80px]">
+              <TableHead
+                className="w-[80px]"
+                aria-sort={sortField === 'confidence' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+              >
                 <button
                   type="button"
                   className="flex items-center hover:text-foreground"
                   onClick={() => handleSort('confidence')}
-                  aria-sort={sortField === 'confidence' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
                   Conf.
                   {getSortIcon('confidence')}

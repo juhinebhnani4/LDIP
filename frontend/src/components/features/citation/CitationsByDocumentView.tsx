@@ -239,7 +239,9 @@ export function CitationsByDocumentView({
                       </Badge>
                     )}
                     <Badge variant="secondary">
-                      Pages: {uniquePages[0]}-{uniquePages[uniquePages.length - 1]}
+                      {uniquePages.length === 1 || uniquePages[0] === uniquePages[uniquePages.length - 1]
+                        ? `Page ${uniquePages[0]}`
+                        : `Pages ${uniquePages[0]}-${uniquePages[uniquePages.length - 1]}`}
                     </Badge>
                   </div>
                 </button>

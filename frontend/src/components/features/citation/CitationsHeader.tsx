@@ -8,13 +8,12 @@
  * @see Story 10C.3 - Citations Tab List and Act Discovery
  */
 
-import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Scale,
   List,
   Layers,
   File,
-  Search,
   Filter,
   X,
   CheckCircle,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';

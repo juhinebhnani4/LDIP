@@ -4,7 +4,7 @@
  * @see Story 10C.3 - Citations Tab List and Act Discovery
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CitationsContent } from './CitationsContent';
@@ -248,15 +248,18 @@ describe('CitationsContent', () => {
 
     await user.click(screen.getByRole('button', { name: /review issues/i }));
 
-    // Check that useCitationsList was called with the filter
-    expect(useCitationsModule.useCitationsList).toHaveBeenCalledWith(
-      'matter-123',
-      expect.objectContaining({
-        filters: expect.objectContaining({
-          showOnlyIssues: true,
-        }),
-      })
-    );
+    // Filter changes are debounced by 300ms, so wait for the debounce to apply
+    await waitFor(() => {
+      // Check that useCitationsList was called with the filter after debounce
+      expect(useCitationsModule.useCitationsList).toHaveBeenCalledWith(
+        'matter-123',
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            showOnlyIssues: true,
+          }),
+        })
+      );
+    }, { timeout: 500 });
   });
 
   it('hides attention banner when no issues or missing acts', () => {

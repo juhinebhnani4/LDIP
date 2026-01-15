@@ -181,9 +181,9 @@ describe('CitationsList', () => {
   it('has sortable columns with aria-sort attributes', () => {
     render(<CitationsList {...defaultProps} />);
 
-    // Act Name column should have sorting
+    // Act Name column should have sorting - aria-sort is now on TableHead (th), not button
     const actNameHeader = screen.getByText('Act Name');
-    expect(actNameHeader.closest('button')).toHaveAttribute('aria-sort');
+    expect(actNameHeader.closest('th')).toHaveAttribute('aria-sort');
   });
 
   it('changes sort direction when clicking column header twice', async () => {
@@ -191,17 +191,19 @@ describe('CitationsList', () => {
     render(<CitationsList {...defaultProps} />);
 
     const actNameButton = screen.getByText('Act Name').closest('button');
+    const actNameTh = screen.getByText('Act Name').closest('th');
 
     // Act Name is the default sort field, starts as ascending
-    expect(actNameButton).toHaveAttribute('aria-sort', 'ascending');
+    // aria-sort is now on the th element, not the button
+    expect(actNameTh).toHaveAttribute('aria-sort', 'ascending');
 
     // First click on same column - toggle to descending
     await user.click(actNameButton!);
-    expect(actNameButton).toHaveAttribute('aria-sort', 'descending');
+    expect(actNameTh).toHaveAttribute('aria-sort', 'descending');
 
     // Second click - toggle back to ascending
     await user.click(actNameButton!);
-    expect(actNameButton).toHaveAttribute('aria-sort', 'ascending');
+    expect(actNameTh).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('sorts citations when clicking column header', async () => {

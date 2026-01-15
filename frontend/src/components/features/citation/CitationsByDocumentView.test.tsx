@@ -74,8 +74,10 @@ describe('CitationsByDocumentView', () => {
   it('shows page range badge', () => {
     render(<CitationsByDocumentView {...defaultProps} />);
 
-    expect(screen.getByText('Pages: 45-50')).toBeInTheDocument();
-    expect(screen.getByText('Pages: 12-12')).toBeInTheDocument();
+    // Multi-page document shows "Pages X-Y"
+    expect(screen.getByText('Pages 45-50')).toBeInTheDocument();
+    // Single page document shows "Page X" (not "Pages: X-X")
+    expect(screen.getByText('Page 12')).toBeInTheDocument();
   });
 
   it('shows Issues badge for documents with problematic citations', () => {

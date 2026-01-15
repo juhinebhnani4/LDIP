@@ -4,7 +4,7 @@
  * @see Story 10C.3 - Citations Tab List and Act Discovery
  */
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   useCitationsList,
@@ -211,11 +211,13 @@ describe('useCitationsList', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    // Should filter to only mismatch and act_unavailable
-    expect(result.current.citations).toHaveLength(2);
+    // Should filter to only mismatch and section_not_found (not act_unavailable - that's just awaiting upload)
+    expect(result.current.citations).toHaveLength(1);
     expect(result.current.citations.every((c) =>
-      ['mismatch', 'section_not_found', 'act_unavailable'].includes(c.verificationStatus)
+      ['mismatch', 'section_not_found'].includes(c.verificationStatus)
     )).toBe(true);
+    // Verify metadata is updated for client-side filtering
+    expect(result.current.meta?.total).toBe(1);
   });
 
   it('should handle pagination', async () => {
@@ -358,9 +360,11 @@ describe('useActMutations', () => {
 
     const { result } = renderHook(() => useActMutations('matter-123'));
 
-    await result.current.markUploaded({
-      actName: 'Test Act',
-      actDocumentId: 'doc-1',
+    await act(async () => {
+      await result.current.markUploaded({
+        actName: 'Test Act',
+        actDocumentId: 'doc-1',
+      });
     });
 
     expect(citationsApi.markActUploaded).toHaveBeenCalledWith('matter-123', {
@@ -378,7 +382,9 @@ describe('useActMutations', () => {
 
     const { result } = renderHook(() => useActMutations('matter-123'));
 
-    await result.current.markSkipped({ actName: 'Test Act' });
+    await act(async () => {
+      await result.current.markSkipped({ actName: 'Test Act' });
+    });
 
     expect(citationsApi.markActSkipped).toHaveBeenCalledWith('matter-123', {
       actName: 'Test Act',
@@ -394,9 +400,11 @@ describe('useActMutations', () => {
 
     const { result } = renderHook(() => useActMutations('matter-123'));
 
-    await result.current.markUploadedAndVerify({
-      actName: 'Test Act',
-      actDocumentId: 'doc-1',
+    await act(async () => {
+      await result.current.markUploadedAndVerify({
+        actName: 'Test Act',
+        actDocumentId: 'doc-1',
+      });
     });
 
     expect(citationsApi.markActUploadedAndVerify).toHaveBeenCalledWith(

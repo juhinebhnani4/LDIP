@@ -114,13 +114,11 @@ function buildApiOptions(
 
 /**
  * Determine if a verification status is considered an "issue".
+ * Note: act_unavailable is NOT an issue - it's just awaiting Act upload.
+ * Issues are verification problems that need user attention.
  */
 function isIssueStatus(status: VerificationStatus): boolean {
-  return (
-    status === 'mismatch' ||
-    status === 'section_not_found' ||
-    status === 'act_unavailable'
-  );
+  return status === 'mismatch' || status === 'section_not_found';
 }
 
 // =============================================================================
@@ -170,9 +168,14 @@ export function useCitationsList(
 
       // Apply client-side "show only issues" filter if enabled
       if (filters?.showOnlyIssues) {
+        const filteredData = response.data.filter((c) => isIssueStatus(c.verificationStatus));
         return {
-          data: response.data.filter((c) => isIssueStatus(c.verificationStatus)),
-          meta: response.meta,
+          data: filteredData,
+          meta: {
+            ...response.meta,
+            total: filteredData.length,
+            totalPages: 1, // Client-side filtering shows all on one page
+          },
         };
       }
 

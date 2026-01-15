@@ -9,7 +9,7 @@
  * @see Story 10C.3 - Citations Tab List and Act Discovery
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CitationsHeader, CitationsViewMode, CitationsFilterState } from './CitationsHeader';
@@ -48,8 +48,26 @@ export function CitationsContent({
   // View state
   const [viewMode, setViewMode] = useState<CitationsViewMode>('list');
   const [filters, setFilters] = useState<CitationsFilterState>(DEFAULT_FILTERS);
+  const [debouncedFilters, setDebouncedFilters] = useState<CitationsFilterState>(DEFAULT_FILTERS);
   const [currentPage, setCurrentPage] = useState(1);
   const [showMissingActsCard, setShowMissingActsCard] = useState(false);
+  const filterDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce filter changes to avoid excessive API calls
+  useEffect(() => {
+    if (filterDebounceRef.current) {
+      clearTimeout(filterDebounceRef.current);
+    }
+    filterDebounceRef.current = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300);
+
+    return () => {
+      if (filterDebounceRef.current) {
+        clearTimeout(filterDebounceRef.current);
+      }
+    };
+  }, [filters]);
 
   // Split view hook
   const { openSplitView } = useSplitView({ enableKeyboardShortcuts: true });
@@ -72,7 +90,7 @@ export function CitationsContent({
   } = useCitationsList(matterId, {
     page: currentPage,
     perPage: 20,
-    filters,
+    filters: debouncedFilters,
   });
 
   // Act mutations

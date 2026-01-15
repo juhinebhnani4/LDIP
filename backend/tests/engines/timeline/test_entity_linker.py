@@ -36,9 +36,9 @@ def entity_linker():
 @pytest.fixture
 def sample_entities():
     """Create sample entities for testing."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return [
         EntityNode(
             id="entity-1",

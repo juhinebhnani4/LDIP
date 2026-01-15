@@ -6,7 +6,7 @@ Tests the complete job lifecycle from creation through processing stages,
 including failure and retry scenarios with partial progress preservation.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -55,8 +55,8 @@ class TestJobLifecycleIntegration:
                         "id": job_id,
                         **data,
                         "status": data.get("status", "QUEUED"),
-                        "created_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                     }
                     jobs_storage[job_id] = job_data
                     result.execute.return_value = MagicMock(data=[job_data])
@@ -117,7 +117,7 @@ class TestJobLifecycleIntegration:
                             # Verify matter_id if provided
                             if matter_id is None or job.get("matter_id") == matter_id:
                                 jobs_storage[job_id].update(data)
-                                jobs_storage[job_id]["updated_at"] = datetime.utcnow().isoformat()
+                                jobs_storage[job_id]["updated_at"] = datetime.now(UTC).isoformat()
                                 return MagicMock(data=[jobs_storage[job_id]])
                         return MagicMock(data=[])
 
@@ -136,7 +136,7 @@ class TestJobLifecycleIntegration:
                     stage_data = {
                         "id": stage_id,
                         **data,
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                     }
                     stages_storage.append(stage_data)
                     result.execute.return_value = MagicMock(data=[stage_data])
@@ -506,8 +506,8 @@ class TestMatterIsolationIntegration:
                 "document_id": str(uuid4()),
                 "job_type": "DOCUMENT_PROCESSING",
                 "status": "COMPLETED",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             },
             {
                 "id": str(uuid4()),
@@ -515,8 +515,8 @@ class TestMatterIsolationIntegration:
                 "document_id": str(uuid4()),
                 "job_type": "DOCUMENT_PROCESSING",
                 "status": "PROCESSING",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             },
             {
                 "id": str(uuid4()),
@@ -524,8 +524,8 @@ class TestMatterIsolationIntegration:
                 "document_id": str(uuid4()),
                 "job_type": "DOCUMENT_PROCESSING",
                 "status": "QUEUED",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             },
         ]
 

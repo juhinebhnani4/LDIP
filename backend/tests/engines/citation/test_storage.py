@@ -3,7 +3,7 @@
 Story 3-1: Act Citation Extraction (AC: #3, #4)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -62,7 +62,7 @@ class TestSaveCitations:
                 citations=[],
                 unique_acts=[],
                 source_document_id="doc-456",
-                extraction_timestamp=datetime.utcnow(),
+                extraction_timestamp=datetime.now(UTC),
             ),
         )
 
@@ -124,7 +124,7 @@ class TestSaveCitations:
                     citations=citations,
                     unique_acts=["Negotiable Instruments Act, 1881"],
                     source_document_id="doc-456",
-                    extraction_timestamp=datetime.utcnow(),
+                    extraction_timestamp=datetime.now(UTC),
                 ),
             )
 
@@ -187,7 +187,7 @@ class TestSaveCitations:
                     ],
                     unique_acts=["NI Act"],
                     source_document_id="doc-456",
-                    extraction_timestamp=datetime.utcnow(),
+                    extraction_timestamp=datetime.now(UTC),
                 ),
             )
 

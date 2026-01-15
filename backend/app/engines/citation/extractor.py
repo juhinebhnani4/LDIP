@@ -13,7 +13,7 @@ import asyncio
 import json
 import re
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Final
 
@@ -218,7 +218,7 @@ class CitationExtractor:
                 source_document_id=document_id,
                 source_chunk_id=chunk_id,
                 page_number=page_number,
-                extraction_timestamp=datetime.utcnow(),
+                extraction_timestamp=datetime.now(UTC),
             )
 
         # Truncate if too long
@@ -264,7 +264,7 @@ class CitationExtractor:
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
-            extraction_timestamp=datetime.utcnow(),
+            extraction_timestamp=datetime.now(UTC),
         )
 
     def extract_from_text_sync(
@@ -297,7 +297,7 @@ class CitationExtractor:
                 source_document_id=document_id,
                 source_chunk_id=chunk_id,
                 page_number=page_number,
-                extraction_timestamp=datetime.utcnow(),
+                extraction_timestamp=datetime.now(UTC),
             )
 
         # Truncate if too long
@@ -335,7 +335,7 @@ class CitationExtractor:
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
-            extraction_timestamp=datetime.utcnow(),
+            extraction_timestamp=datetime.now(UTC),
         )
 
     def _extract_with_regex(self, text: str) -> list[ExtractedCitation]:

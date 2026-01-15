@@ -11,7 +11,7 @@ Estimates can be tuned via environment variables.
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 import structlog
@@ -382,7 +382,7 @@ class TimeEstimator:
         Returns:
             Estimated completion datetime.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Queue wait time
         wait_time = self.estimate_queue_wait_time(queue_position)

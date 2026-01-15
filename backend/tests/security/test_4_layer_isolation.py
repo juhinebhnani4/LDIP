@@ -505,10 +505,11 @@ class TestCrossLayerIntegration:
 class TestAuditLogging:
     """Test audit logging for security events."""
 
-    def test_log_matter_access_granted(self, valid_matter_id: str, valid_user_id: str):
+    @pytest.mark.asyncio
+    async def test_log_matter_access_granted(self, valid_matter_id: str, valid_user_id: str):
         """Test logging successful access."""
         with patch("app.api.deps.logger") as mock_logger:
-            log_matter_access(
+            await log_matter_access(
                 user_id=valid_user_id,
                 matter_id=valid_matter_id,
                 action="view",
@@ -521,10 +522,11 @@ class TestAuditLogging:
             assert call_kwargs["matter_id"] == valid_matter_id
             assert call_kwargs["result"] == "granted"
 
-    def test_log_matter_access_denied(self, valid_matter_id: str, valid_user_id: str):
+    @pytest.mark.asyncio
+    async def test_log_matter_access_denied(self, valid_matter_id: str, valid_user_id: str):
         """Test logging denied access."""
         with patch("app.api.deps.logger") as mock_logger:
-            log_matter_access(
+            await log_matter_access(
                 user_id=valid_user_id,
                 matter_id=valid_matter_id,
                 action="delete",

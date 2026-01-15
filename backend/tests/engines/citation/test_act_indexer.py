@@ -6,6 +6,7 @@ Story 3-3: Citation Verification (AC: #1)
 """
 
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -142,7 +143,7 @@ class TestActIndex:
             act_name="Test Act",
             sections={"138": ["chunk-1"], "139": ["chunk-2"], "10": ["chunk-3"]},
             boundaries=[],
-            indexed_at=datetime.utcnow(),
+            indexed_at=datetime.now(UTC),
         )
 
         # Should be sorted numerically

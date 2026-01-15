@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.core.security import get_current_user, get_optional_user
 from app.models.auth import AuthenticatedUser
 from app.models.matter import MatterRole
+from app.services.audit_service import AuditService, get_audit_service
 from app.services.supabase.client import get_supabase_client
 from app.services.matter_service import MatterService
 
@@ -113,6 +114,20 @@ def get_matter_service(
         MatterService instance.
     """
     return MatterService(db)
+
+
+def get_audit_service_dep(
+    db: Any = Depends(get_db),
+) -> AuditService:
+    """Get audit service instance with database client.
+
+    Args:
+        db: Supabase client for database logging.
+
+    Returns:
+        AuditService instance with DB client for compliance logging.
+    """
+    return get_audit_service(db)
 
 
 class MatterMembership:
@@ -493,18 +508,20 @@ def require_matter_owner() -> Callable[..., MatterAccessContext]:
 # =============================================================================
 
 
-def log_matter_access(
+async def log_matter_access(
     user_id: str,
     matter_id: str,
     action: str,
     result: str,
     request: Request | None = None,
     details: dict[str, Any] | None = None,
+    audit_service: AuditService | None = None,
 ) -> None:
     """Log a matter access event for audit purposes.
 
     This function provides consistent audit logging for all matter
-    access events, both successful and failed.
+    access events, both successful and failed. Logs to both structured
+    logs and the audit_logs database table when audit_service is provided.
 
     Args:
         user_id: The user attempting access.
@@ -513,6 +530,7 @@ def log_matter_access(
         result: The result (granted, denied, error).
         request: Optional FastAPI request for IP address.
         details: Optional additional details to log.
+        audit_service: Optional AuditService for database logging.
     """
     log_data = {
         "user_id": user_id,
@@ -521,18 +539,36 @@ def log_matter_access(
         "result": result,
     }
 
+    ip_address = None
+    path = None
+
     if request and request.client:
-        log_data["ip_address"] = request.client.host
-        log_data["path"] = request.url.path
+        ip_address = request.client.host
+        path = request.url.path
+        log_data["ip_address"] = ip_address
+        log_data["path"] = path
         log_data["method"] = request.method
 
     if details:
         log_data.update(details)
 
+    # Log to structured logs
     if result == "granted":
         logger.info("matter_access_audit", **log_data)
     else:
         logger.warning("matter_access_audit", **log_data)
+
+    # Log to database via AuditService if available
+    if audit_service is not None:
+        await audit_service.log_matter_access(
+            user_id=user_id,
+            matter_id=matter_id,
+            action=action,
+            granted=(result == "granted"),
+            ip_address=ip_address,
+            path=path,
+            reason=details.get("reason") if details else None,
+        )
 
 
 # Re-export commonly used dependencies for convenience
@@ -545,6 +581,7 @@ __all__ = [
     "require_matter_role",
     "require_matter_role_from_form",
     "get_matter_service",
+    "get_audit_service_dep",
     "MatterMembership",
     "MatterAccessContext",
     "validate_matter_access",
@@ -554,4 +591,5 @@ __all__ = [
     "log_matter_access",
     "AuthenticatedUser",
     "MatterRole",
+    "AuditService",
 ]

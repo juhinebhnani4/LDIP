@@ -13,7 +13,7 @@ without blocking the event loop.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 from math import ceil
 
@@ -258,7 +258,7 @@ class JobTrackingService:
         """
         update_data: dict = {
             "status": status.value,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
 
         if stage is not None:
@@ -275,9 +275,9 @@ class JobTrackingService:
 
         # Set timestamps based on status
         if status == JobStatus.PROCESSING:
-            update_data["started_at"] = datetime.utcnow().isoformat()
+            update_data["started_at"] = datetime.now(UTC).isoformat()
         elif status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.SKIPPED):
-            update_data["completed_at"] = datetime.utcnow().isoformat()
+            update_data["completed_at"] = datetime.now(UTC).isoformat()
 
         def _update():
             query = (
@@ -321,7 +321,7 @@ class JobTrackingService:
             Updated ProcessingJob or None if not found.
         """
         update_data = update.model_dump(exclude_none=True)
-        update_data["updated_at"] = datetime.utcnow().isoformat()
+        update_data["updated_at"] = datetime.now(UTC).isoformat()
 
         # Convert enum to value if present
         if "status" in update_data and isinstance(update_data["status"], JobStatus):
@@ -369,7 +369,7 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "retry_count": new_retry_count,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
             )
@@ -413,7 +413,7 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "metadata": new_metadata,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
             )
@@ -448,7 +448,7 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "estimated_completion": estimated_completion.isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
             )
@@ -489,7 +489,7 @@ class JobTrackingService:
                     "job_id": job_id,
                     "stage_name": stage_name,
                     "status": StageStatus.IN_PROGRESS.value,
-                    "started_at": datetime.utcnow().isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "metadata": metadata or {},
                 })
                 .execute()
@@ -550,7 +550,7 @@ class JobTrackingService:
                 self.client.table("job_stage_history")
                 .update({
                     "status": StageStatus.COMPLETED.value,
-                    "completed_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "metadata": {**existing_metadata, **(metadata or {})},
                 })
                 .eq("id", stage_id)
@@ -573,7 +573,7 @@ class JobTrackingService:
     ) -> JobStageHistory | None:
         """Create a completed stage record (for cases where start wasn't recorded)."""
         def _insert():
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(UTC).isoformat()
             return (
                 self.client.table("job_stage_history")
                 .insert({
@@ -641,7 +641,7 @@ class JobTrackingService:
                 self.client.table("job_stage_history")
                 .update({
                     "status": StageStatus.FAILED.value,
-                    "completed_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "error_message": error_message,
                     "metadata": {**existing_metadata, **(metadata or {})},
                 })
@@ -666,7 +666,7 @@ class JobTrackingService:
     ) -> JobStageHistory | None:
         """Create a failed stage record."""
         def _insert():
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(UTC).isoformat()
             return (
                 self.client.table("job_stage_history")
                 .insert({
@@ -785,7 +785,7 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "retry_count": 0,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
             )
@@ -1040,7 +1040,7 @@ class JobTrackingService:
                     "error_code": None,
                     "started_at": None,
                     "completed_at": None,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)
@@ -1082,8 +1082,8 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "status": JobStatus.CANCELLED.value,
-                    "completed_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)
@@ -1125,7 +1125,7 @@ class JobTrackingService:
                 self.client.table("processing_jobs")
                 .update({
                     "status": JobStatus.SKIPPED.value,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)

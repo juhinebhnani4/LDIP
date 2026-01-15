@@ -3,7 +3,7 @@
 Story 2c-3: Background Job Status Tracking and Retry
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -346,12 +346,12 @@ class TestCompletionTimeEstimate:
         self, estimator: TimeEstimator
     ) -> None:
         """Should include queue wait in completion estimate."""
-        before = datetime.utcnow()
+        before = datetime.now(UTC)
         result = estimator.estimate_completion_time(
             page_count=10,
             queue_position=3,
         )
-        after = datetime.utcnow()
+        after = datetime.now(UTC)
 
         # Should be in the future
         assert result >= before
@@ -369,7 +369,7 @@ class TestCompletionTimeEstimate:
         self, estimator: TimeEstimator
     ) -> None:
         """Should use remaining time when current stage is provided."""
-        before = datetime.utcnow()
+        before = datetime.now(UTC)
         result = estimator.estimate_completion_time(
             page_count=10,
             queue_position=0,

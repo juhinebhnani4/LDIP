@@ -8,7 +8,7 @@ Story 3-3: Citation Verification (AC: #1)
 
 import asyncio
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Final
 
@@ -224,7 +224,7 @@ class ActIndexer:
                 act_name=act_name,
                 sections=sections,
                 boundaries=boundaries,
-                indexed_at=datetime.utcnow(),
+                indexed_at=datetime.now(UTC),
             )
 
             # Cache the index

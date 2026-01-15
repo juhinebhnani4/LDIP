@@ -3,7 +3,7 @@
 Story 3-1: Act Citation Extraction (AC: #4)
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -36,8 +36,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-2",
@@ -47,8 +47,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=15,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-3",
@@ -58,8 +58,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.AVAILABLE,
                     user_action=UserAction.UPLOADED,
                     citation_count=10,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )
@@ -96,8 +96,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-2",
@@ -107,8 +107,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.AVAILABLE,
                     user_action=UserAction.UPLOADED,
                     citation_count=10,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )
@@ -142,8 +142,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-2",
@@ -153,8 +153,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.AVAILABLE,
                     user_action=UserAction.UPLOADED,
                     citation_count=10,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-3",
@@ -164,8 +164,8 @@ class TestGetDiscoveryReport:
                     resolution_status=ActResolutionStatus.SKIPPED,
                     user_action=UserAction.SKIPPED,
                     citation_count=3,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )
@@ -217,8 +217,8 @@ class TestGetMissingActs:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-2",
@@ -228,8 +228,8 @@ class TestGetMissingActs:
                     resolution_status=ActResolutionStatus.AVAILABLE,
                     user_action=UserAction.UPLOADED,
                     citation_count=10,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-3",
@@ -239,8 +239,8 @@ class TestGetMissingActs:
                     resolution_status=ActResolutionStatus.SKIPPED,
                     user_action=UserAction.SKIPPED,
                     citation_count=3,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )
@@ -275,8 +275,8 @@ class TestGetActResolutionByName:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )
@@ -332,8 +332,8 @@ class TestMarkActUploaded:
                 resolution_status=ActResolutionStatus.AVAILABLE,
                 user_action=UserAction.UPLOADED,
                 citation_count=5,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         )
 
@@ -392,8 +392,8 @@ class TestMarkActSkipped:
                 resolution_status=ActResolutionStatus.SKIPPED,
                 user_action=UserAction.SKIPPED,
                 citation_count=5,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         )
 
@@ -431,8 +431,8 @@ class TestGetDiscoveryStats:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=5,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-2",
@@ -442,8 +442,8 @@ class TestGetDiscoveryStats:
                     resolution_status=ActResolutionStatus.MISSING,
                     user_action=UserAction.PENDING,
                     citation_count=10,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-3",
@@ -453,8 +453,8 @@ class TestGetDiscoveryStats:
                     resolution_status=ActResolutionStatus.AVAILABLE,
                     user_action=UserAction.UPLOADED,
                     citation_count=15,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
                 ActResolution(
                     id="res-4",
@@ -464,8 +464,8 @@ class TestGetDiscoveryStats:
                     resolution_status=ActResolutionStatus.SKIPPED,
                     user_action=UserAction.SKIPPED,
                     citation_count=3,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
                 ),
             ]
         )

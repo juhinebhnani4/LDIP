@@ -53,6 +53,9 @@ USING (
 );
 
 -- Policy 3: Owners can insert new members to their matters
+-- SECURITY: Only existing owners can add members. Initial owner assignment
+-- is handled by the auto_assign_matter_owner trigger (SECURITY DEFINER).
+-- The previous OR clause allowing self-assignment was an IDOR vulnerability.
 CREATE POLICY "Owners can insert members"
 ON public.matter_attorneys FOR INSERT
 WITH CHECK (
@@ -61,11 +64,6 @@ WITH CHECK (
     WHERE ma.matter_id = matter_attorneys.matter_id
     AND ma.user_id = auth.uid()
     AND ma.role = 'owner'
-  )
-  -- Also allow the auto-assign trigger (which runs as SECURITY DEFINER)
-  OR (
-    -- Allow inserting self as owner when creating a matter
-    user_id = auth.uid() AND role = 'owner'
   )
 );
 
@@ -147,11 +145,20 @@ USING (
 -- TRIGGER: Auto-assign owner on matter creation
 -- =============================================================================
 
+-- This trigger handles owner assignment when using the anon/authenticated key
+-- (where auth.uid() is available). When using the service role key,
+-- auth.uid() returns NULL, so the application code handles owner assignment
+-- explicitly in matter_service.py.
 CREATE OR REPLACE FUNCTION public.auto_assign_matter_owner()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.matter_attorneys (matter_id, user_id, role, invited_by)
-  VALUES (NEW.id, auth.uid(), 'owner', auth.uid());
+  -- Only insert if auth.uid() is available (authenticated key, not service role)
+  -- Service role operations handle owner assignment explicitly in application code
+  IF auth.uid() IS NOT NULL THEN
+    INSERT INTO public.matter_attorneys (matter_id, user_id, role, invited_by)
+    VALUES (NEW.id, auth.uid(), 'owner', auth.uid())
+    ON CONFLICT (matter_id, user_id) DO NOTHING;  -- Prevent duplicate key errors
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -162,4 +169,4 @@ CREATE TRIGGER on_matter_created
   EXECUTE FUNCTION public.auto_assign_matter_owner();
 
 -- Comment
-COMMENT ON FUNCTION public.auto_assign_matter_owner() IS 'Automatically assigns the creating user as owner of a new matter';
+COMMENT ON FUNCTION public.auto_assign_matter_owner() IS 'Automatically assigns the creating user as owner of a new matter (only when auth.uid() is available)';

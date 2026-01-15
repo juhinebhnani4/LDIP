@@ -12,7 +12,7 @@ Note: These tests require Redis and Supabase to be running.
 """
 
 import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ def sample_extraction_result() -> CitationExtractionResult:
         unique_acts=["Negotiable Instruments Act, 1881", "Indian Penal Code, 1860"],
         source_document_id=str(uuid4()),
         page_number=5,
-        extraction_timestamp=datetime.utcnow().isoformat(),
+        extraction_timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -75,7 +75,7 @@ def mock_supabase_client():
                 inserted_data.extend(data)
                 # Add id and timestamps to each record for proper return
                 return_data = [
-                    {**d, "id": str(uuid4()), "created_at": datetime.utcnow().isoformat(), "updated_at": datetime.utcnow().isoformat()}
+                    {**d, "id": str(uuid4()), "created_at": datetime.now(UTC).isoformat(), "updated_at": datetime.now(UTC).isoformat()}
                     if isinstance(d, dict) else {"id": str(uuid4())}
                     for d in data
                 ]
@@ -86,8 +86,8 @@ def mock_supabase_client():
                 return_data = {
                     **data,
                     "id": str(uuid4()),
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 } if isinstance(data, dict) else {"id": str(uuid4())}
                 result.execute.return_value.data = [return_data]
             return result
@@ -208,7 +208,7 @@ class TestMatterIsolation:
                 ],
                 unique_acts=["Negotiable Instruments Act, 1881"],
                 source_document_id=str(uuid4()),
-                extraction_timestamp=datetime.utcnow().isoformat(),
+                extraction_timestamp=datetime.now(UTC).isoformat(),
             )
 
             await storage.save_citations(
@@ -264,7 +264,7 @@ class TestActResolutionTracking:
                 ],
                 unique_acts=["Negotiable Instruments Act, 1881"],
                 source_document_id=str(uuid4()),
-                extraction_timestamp=datetime.utcnow().isoformat(),
+                extraction_timestamp=datetime.now(UTC).isoformat(),
             )
 
             await storage.save_citations(

@@ -12,7 +12,7 @@ Story 3-1: Act Citation Extraction (AC: #3, #4)
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Final
 
@@ -163,7 +163,7 @@ class CitationStorageService:
                         # Confidence: Model uses 0-100 for display, DB uses 0-1 for indexing
                         "confidence": citation.confidence / 100.0,
                         "extraction_metadata": {
-                            "extraction_timestamp": datetime.utcnow().isoformat(),
+                            "extraction_timestamp": datetime.now(UTC).isoformat(),
                             "source_chunk_id": extraction_result.source_chunk_id,
                         },
                     }
@@ -394,7 +394,7 @@ class CitationStorageService:
                 def _update():
                     return self.client.table("act_resolutions").update({
                         "citation_count": (row.get("citation_count", 0) or 0) + 1,
-                        "updated_at": datetime.utcnow().isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                     }).eq("id", row["id"]).execute()
 
                 update_result = await asyncio.to_thread(_update)
@@ -487,7 +487,7 @@ class CitationStorageService:
             Updated ActResolution or None.
         """
         try:
-            update_data: dict = {"updated_at": datetime.utcnow().isoformat()}
+            update_data: dict = {"updated_at": datetime.now(UTC).isoformat()}
 
             if act_document_id is not None:
                 update_data["act_document_id"] = act_document_id
@@ -655,7 +655,7 @@ class CitationStorageService:
         try:
             update_data: dict = {
                 "verification_status": verification_status.value,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
 
             if target_act_document_id is not None:
@@ -808,7 +808,7 @@ class CitationStorageService:
             def _update():
                 return self.client.table("citations").update({
                     "verification_status": to_status.value,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 }).eq(
                     "matter_id", matter_id
                 ).eq(

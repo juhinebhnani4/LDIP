@@ -8,7 +8,7 @@ Story 4-3: Events Table + MIG Integration
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from math import ceil
 import time
 
@@ -337,7 +337,7 @@ class TimelineBuilder:
             segments=segments,
             entity_views=entity_views,
             statistics=statistics,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(UTC),
             page=page,
             per_page=per_page,
             total_events=events_response.meta.total,

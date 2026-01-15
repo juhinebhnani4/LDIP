@@ -13,7 +13,7 @@ without blocking the event loop.
 
 import asyncio
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
@@ -281,7 +281,7 @@ class MIGGraphService:
                 self.client.table("identity_nodes")
                 .update({
                     "mention_count": new_count,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", entity_id)
                 .eq("matter_id", matter_id)
@@ -880,7 +880,7 @@ class MIGGraphService:
                 self.client.table("identity_nodes")
                 .update({
                     "aliases": aliases,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", entity_id)
                 .eq("matter_id", matter_id)

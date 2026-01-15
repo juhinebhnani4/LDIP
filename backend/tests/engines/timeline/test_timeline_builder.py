@@ -6,7 +6,7 @@ Story 4-3: Events Table + MIG Integration
 """
 
 import pytest
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.engines.timeline.timeline_builder import (
@@ -92,7 +92,7 @@ def mock_full_event():
 @pytest.fixture
 def sample_entities():
     """Create sample entities for testing."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return [
         EntityNode(
             id="entity-1",

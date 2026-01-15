@@ -15,7 +15,7 @@ Key concepts:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -191,7 +191,7 @@ class PartialProgressTracker:
         if stage_name not in self._stages:
             self._stages[stage_name] = StageProgress(
                 stage_name=stage_name,
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(UTC),
             )
 
         return self._stages[stage_name]

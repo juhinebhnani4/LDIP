@@ -6,7 +6,7 @@ Story 3-3: Citation Verification (AC: #1, #2, #3)
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -52,8 +52,8 @@ def mock_citation():
         target_bbox_ids=[],
         confidence=85.0,
         extraction_metadata={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 

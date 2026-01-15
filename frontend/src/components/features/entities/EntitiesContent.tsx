@@ -43,6 +43,7 @@ export function EntitiesContent({ matterId, className }: EntitiesContentProps) {
   const [viewMode, setViewMode] = useState<EntityViewMode>('graph');
   const [filters, setFilters] = useState<EntityFilterState>(DEFAULT_ENTITY_FILTERS);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
 
   // Fetch entities and relationships
   const { entities, isLoading: entitiesLoading, error: entitiesError } = useEntities(
@@ -106,8 +107,13 @@ export function EntitiesContent({ matterId, className }: EntitiesContentProps) {
   }, []);
 
   const handleFocusInGraph = useCallback(() => {
-    // Graph will highlight based on selectedEntityId
-  }, []);
+    if (selectedEntityId) {
+      // Trigger focus on the selected node
+      setFocusNodeId(selectedEntityId);
+      // Reset after animation completes to allow re-triggering
+      setTimeout(() => setFocusNodeId(null), 600);
+    }
+  }, [selectedEntityId]);
 
   const isLoading = entitiesLoading || edgesLoading;
 
@@ -152,6 +158,7 @@ export function EntitiesContent({ matterId, className }: EntitiesContentProps) {
               data={graphData}
               selectedNodeId={selectedEntityId}
               onNodeSelect={handleNodeSelect}
+              focusNodeId={focusNodeId}
               className="h-[600px]"
             />
           ) : viewMode === 'list' ? (

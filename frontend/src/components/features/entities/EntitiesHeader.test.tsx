@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { EntitiesHeader } from './EntitiesHeader';
 import type { EntityFilterState, EntityType, EntityViewMode } from '@/types/entity';
 
@@ -87,16 +87,25 @@ describe('EntitiesHeader', () => {
       expect(screen.getByDisplayValue('John')).toBeInTheDocument();
     });
 
-    it('calls onFiltersChange when searching', () => {
+    it('calls onFiltersChange when searching (debounced)', async () => {
+      vi.useFakeTimers();
       const onFiltersChange = vi.fn();
       render(<EntitiesHeader {...defaultProps} onFiltersChange={onFiltersChange} />);
 
       const input = screen.getByRole('textbox', { name: /search entities/i });
       fireEvent.change(input, { target: { value: 'test' } });
 
+      // Should not be called immediately (debounced)
+      expect(onFiltersChange).not.toHaveBeenCalled();
+
+      // Fast-forward past the debounce delay (300ms)
+      vi.advanceTimersByTime(300);
+
       expect(onFiltersChange).toHaveBeenCalledWith(
         expect.objectContaining({ searchQuery: 'test' })
       );
+
+      vi.useRealTimers();
     });
   });
 
@@ -115,9 +124,9 @@ describe('EntitiesHeader', () => {
           filters={{ ...defaultFilters, entityTypes: ['PERSON', 'ORG'] }}
         />
       );
-      // The filter badge shows the count - look for the badge specifically
-      const filterButton = screen.getByRole('button', { name: /filter by entity type/i });
-      // Badge should be inside or near the button, find all text "2"
+      // Verify button exists, then check for badge count
+      expect(screen.getByRole('button', { name: /filter by entity type/i })).toBeInTheDocument();
+      // Badge should show the count of selected filters
       const badges = screen.getAllByText('2');
       // At least one should be present (the filter count badge)
       expect(badges.length).toBeGreaterThanOrEqual(1);

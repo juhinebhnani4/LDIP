@@ -8,7 +8,7 @@
  * @see Story 10C.1 - Entities Tab MIG Graph Visualization
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   Network,
   List,
@@ -76,6 +76,7 @@ export function EntitiesHeader({
 }: EntitiesHeaderProps) {
   const [searchValue, setSearchValue] = useState(filters.searchQuery);
   const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -85,13 +86,32 @@ export function EntitiesHeader({
     return count;
   }, [filters]);
 
+  // Debounced search - updates filter after 300ms of no typing
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearchValue(value);
-      onFiltersChange({ ...filters, searchQuery: value });
+
+      // Clear existing timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      // Set new debounced update
+      debounceTimerRef.current = setTimeout(() => {
+        onFiltersChange({ ...filters, searchQuery: value });
+      }, 300);
     },
     [filters, onFiltersChange]
   );
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleTypeToggle = useCallback(
     (type: EntityType) => {

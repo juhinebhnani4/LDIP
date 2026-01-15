@@ -9,8 +9,8 @@
  * @see Story 10C.1 - Entities Tab MIG Graph Visualization
  */
 
-import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { memo, useCallback, type KeyboardEvent } from 'react';
+import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react';
 import { User, Building2, Landmark, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -72,9 +72,33 @@ export interface EntityNodeProps extends NodeProps {
   data: EntityNodeData;
 }
 
-export const EntityNode = memo(function EntityNode({ data }: EntityNodeProps) {
+export const EntityNode = memo(function EntityNode({ data, id }: EntityNodeProps) {
   const { icon: Icon, color, label } = entityTypeConfig[data.entityType];
   const size = calculateNodeSize(data.mentionCount);
+  const { fitView } = useReactFlow();
+
+  // Handle keyboard interaction - Enter/Space selects, Escape deselects
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        // Trigger click event to select/deselect node
+        (event.target as HTMLElement).click();
+      } else if (event.key === 'Escape') {
+        // Blur the current element to deselect
+        (event.target as HTMLElement).blur();
+      } else if (event.key === 'f' || event.key === 'F') {
+        // Focus/fit view on this node
+        event.preventDefault();
+        fitView({
+          nodes: [{ id }],
+          duration: 500,
+          padding: 0.5,
+        });
+      }
+    },
+    [fitView, id]
+  );
 
   return (
     <TooltipProvider>
@@ -91,8 +115,9 @@ export const EntityNode = memo(function EntityNode({ data }: EntityNodeProps) {
             style={{ width: size, height: size }}
             role="button"
             tabIndex={0}
-            aria-label={`${data.canonicalName}, ${label}, ${data.mentionCount} mentions`}
-            aria-selected={data.isSelected}
+            aria-label={`${data.canonicalName}, ${label}, ${data.mentionCount} mentions. Press Enter to select, F to focus.`}
+            aria-pressed={data.isSelected}
+            onKeyDown={handleKeyDown}
           >
             <Icon className="h-5 w-5 mb-1" aria-hidden="true" />
 

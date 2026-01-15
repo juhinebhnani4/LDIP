@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, fireEvent } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { EntityEdge, getEdgeStyle, type EntityEdgeProps } from './EntityEdge';
-import type { EntityEdgeData } from '@/types/entity';
 import { Position } from '@xyflow/react';
 
 const createMockEdgeProps = (

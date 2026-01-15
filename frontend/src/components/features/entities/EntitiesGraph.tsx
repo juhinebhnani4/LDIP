@@ -9,14 +9,16 @@
  * @see Story 10C.1 - Entities Tab MIG Graph Visualization
  */
 
-import { useCallback, useMemo, useEffect, useState } from 'react';
+import { useCallback, useMemo, useEffect, useState, useRef } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Controls,
   MiniMap,
   Background,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type OnNodeClick,
   type NodeTypes,
   type EdgeTypes,
@@ -44,23 +46,27 @@ const edgeTypes: EdgeTypes = {
   relationship: EntityEdge,
 };
 
-const LARGE_GRAPH_LIMIT = 50;
+const LARGE_GRAPH_LIMIT = 100;
 
 export interface EntitiesGraphProps {
   data: EntityGraphData;
   selectedNodeId: string | null;
   onNodeSelect: (nodeId: string | null) => void;
+  focusNodeId?: string | null;
   className?: string;
 }
 
-export function EntitiesGraph({
+function EntitiesGraphInner({
   data,
   selectedNodeId,
   onNodeSelect,
+  focusNodeId,
   className,
 }: EntitiesGraphProps) {
   const [showAllNodes, setShowAllNodes] = useState(false);
-  const [layoutApplied, setLayoutApplied] = useState(false);
+  const layoutAppliedRef = useRef(false);
+  const prevDataKey = useRef<string>('');
+  const { fitView } = useReactFlow();
 
   const isLarge = isLargeGraph(data.nodes.length);
   const shouldFilter = isLarge && !showAllNodes;
@@ -91,20 +97,38 @@ export function EntitiesGraph({
     return applyDagreLayout(initialNodes, initialEdges);
   }, [initialNodes, initialEdges]);
 
+  // Generate a key to detect when data changes require re-layout
+  const dataKey = `${data.nodes.length}-${showAllNodes}`;
+
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Sync layout when data changes - using refs to avoid ESLint setState warnings
   useEffect(() => {
-    if (!layoutApplied && layoutedNodes.length > 0) {
+    const needsLayout = prevDataKey.current !== dataKey;
+
+    if (needsLayout || (!layoutAppliedRef.current && layoutedNodes.length > 0)) {
       setNodes(layoutedNodes);
       setEdges(initialEdges);
-      setLayoutApplied(true);
+      layoutAppliedRef.current = true;
+      prevDataKey.current = dataKey;
     }
-  }, [layoutedNodes, initialEdges, setNodes, setEdges, layoutApplied]);
+  }, [layoutedNodes, initialEdges, setNodes, setEdges, dataKey]);
 
+  // Focus on specific node when focusNodeId changes
   useEffect(() => {
-    setLayoutApplied(false);
-  }, [data.nodes.length, showAllNodes]);
+    if (focusNodeId) {
+      // Small delay to ensure nodes are rendered
+      const timer = setTimeout(() => {
+        fitView({
+          nodes: [{ id: focusNodeId }],
+          duration: 500,
+          padding: 0.5,
+        });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [focusNodeId, fitView]);
 
   const highlightedNodes = useMemo(() => {
     return updateNodeStates(nodes, selectedNodeId, edges);
@@ -186,6 +210,15 @@ export function EntitiesGraph({
         </ReactFlow>
       </div>
     </div>
+  );
+}
+
+// Wrapper component that provides ReactFlow context
+export function EntitiesGraph(props: EntitiesGraphProps) {
+  return (
+    <ReactFlowProvider>
+      <EntitiesGraphInner {...props} />
+    </ReactFlowProvider>
   );
 }
 

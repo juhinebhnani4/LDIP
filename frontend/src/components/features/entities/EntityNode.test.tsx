@@ -11,9 +11,7 @@ vi.mock('@/components/ui/tooltip', () => ({
     <div data-testid="tooltip-content">{children}</div>
   ),
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => (
-    <>{children}</>
-  ),
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 const createMockNodeData = (overrides: Partial<EntityNodeData> = {}): EntityNodeData => ({
@@ -167,17 +165,17 @@ describe('EntityNode', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute(
         'aria-label',
-        'John Doe, Person, 42 mentions'
+        'John Doe, Person, 42 mentions. Press Enter to select, F to focus.'
       );
     });
 
-    it('has aria-selected when selected', () => {
+    it('has aria-pressed when selected', () => {
       renderEntityNode({
         data: createMockNodeData({ isSelected: true }),
       });
 
       const button = screen.getByRole('button');
-      expect(button).toHaveAttribute('aria-selected', 'true');
+      expect(button).toHaveAttribute('aria-pressed', 'true');
     });
   });
 

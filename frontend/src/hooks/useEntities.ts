@@ -147,6 +147,9 @@ export function useEntityMentions(
 /**
  * Fetch all entity relationships for graph visualization.
  * Returns edges for all entities in a matter.
+ *
+ * TODO: Optimize with dedicated bulk endpoint (e.g., GET /matters/:id/relationships)
+ * to avoid N+1 queries. Current implementation fetches each entity individually.
  */
 export function useEntityRelationships(
   matterId: string | null,
@@ -156,8 +159,6 @@ export function useEntityRelationships(
   isLoading: boolean;
   error: Error | null;
 } {
-  // For now, we extract relationships from individual entity fetches
-  // This could be optimized with a dedicated bulk endpoint
   const { data, error, isLoading } = useSWRImmutable<EntityEdge[]>(
     matterId && entities.length > 0
       ? ['entityRelationships', matterId, entities.map((e) => e.id).join(',')]
@@ -166,8 +167,9 @@ export function useEntityRelationships(
       // Fetch relationships for each entity and deduplicate
       const edgeMap = new Map<string, EntityEdge>();
 
-      // Fetch in batches to avoid too many parallel requests
-      const batchSize = 10;
+      // Fetch in batches - larger batch size (20) to reduce sequential waits
+      // TODO: Replace with bulk endpoint when available
+      const batchSize = 20;
       for (let i = 0; i < entities.length; i += batchSize) {
         const batch = entities.slice(i, i + batchSize);
         const results = await Promise.all(

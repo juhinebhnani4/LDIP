@@ -15,6 +15,15 @@ vi.mock('./QAPanelPlaceholder', () => ({
   QAPanelPlaceholder: () => <div data-testid="qa-panel-placeholder">Placeholder</div>,
 }));
 
+// Mock ConversationHistory
+vi.mock('./ConversationHistory', () => ({
+  ConversationHistory: ({ matterId, userId }: { matterId: string; userId: string }) => (
+    <div data-testid="conversation-history" data-matter-id={matterId} data-user-id={userId}>
+      Conversation History
+    </div>
+  ),
+}));
+
 describe('FloatingQAPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,10 +46,17 @@ describe('FloatingQAPanel', () => {
     expect(screen.getByText('ASK LDIP')).toBeInTheDocument();
   });
 
-  it('renders placeholder content', () => {
+  it('renders placeholder content when no matterId/userId', () => {
     render(<FloatingQAPanel />);
 
     expect(screen.getByTestId('qa-panel-placeholder')).toBeInTheDocument();
+  });
+
+  it('renders ConversationHistory when matterId and userId provided', () => {
+    render(<FloatingQAPanel matterId="matter-123" userId="user-456" />);
+
+    expect(screen.getByTestId('conversation-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('qa-panel-placeholder')).not.toBeInTheDocument();
   });
 
   it('renders resize handle with aria-label', () => {

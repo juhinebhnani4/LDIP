@@ -183,7 +183,7 @@ development_status:
   # Epic 11: Q&A Panel & PDF Viewer
   epic-11: in-progress  # First story created 2026-01-15
   11-1-qa-panel-header-position: done  # Code review passed 2026-01-15 - 41 tests, 4 issues fixed
-  11-2-conversation-history: backlog
+  11-2-conversation-history: done  # Completed 2026-01-16 - 209 tests passing
   11-3-streaming-response-engine-trace: backlog
   11-4-suggested-questions-input: backlog
   11-5-pdf-viewer-split-view: backlog

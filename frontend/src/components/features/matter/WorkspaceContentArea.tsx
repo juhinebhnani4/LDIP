@@ -7,6 +7,7 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
+import { useUser } from '@/hooks';
 import { QAPanel } from '@/components/features/chat/QAPanel';
 import { FloatingQAPanel } from '@/components/features/chat/FloatingQAPanel';
 import { QAPanelExpandButton } from '@/components/features/chat/QAPanelExpandButton';
@@ -24,6 +25,7 @@ import { QAPanelExpandButton } from '@/components/features/chat/QAPanelExpandBut
  * - Hidden: [Tab Content] + expand button
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
+ * Story 11.2: Implement Q&A Conversation History
  */
 interface WorkspaceContentAreaProps {
   /** Tab content to render in main area */
@@ -34,12 +36,15 @@ interface WorkspaceContentAreaProps {
 
 export function WorkspaceContentArea({
   children,
+  matterId,
 }: WorkspaceContentAreaProps) {
   const position = useQAPanelStore((state) => state.position);
   const rightWidth = useQAPanelStore((state) => state.rightWidth);
   const bottomHeight = useQAPanelStore((state) => state.bottomHeight);
   const setRightWidth = useQAPanelStore((state) => state.setRightWidth);
   const setBottomHeight = useQAPanelStore((state) => state.setBottomHeight);
+  const { user } = useUser();
+  const userId = user?.id;
 
   // Right sidebar layout
   if (position === 'right') {
@@ -55,7 +60,7 @@ export function WorkspaceContentArea({
           maxSize={60}
           onResize={setRightWidth}
         >
-          <QAPanel />
+          <QAPanel matterId={matterId} userId={userId} />
         </ResizablePanel>
       </ResizablePanelGroup>
     );
@@ -75,7 +80,7 @@ export function WorkspaceContentArea({
           maxSize={60}
           onResize={setBottomHeight}
         >
-          <QAPanel />
+          <QAPanel matterId={matterId} userId={userId} />
         </ResizablePanel>
       </ResizablePanelGroup>
     );
@@ -86,7 +91,7 @@ export function WorkspaceContentArea({
     return (
       <div className="relative flex-1">
         <div className="h-full overflow-auto">{children}</div>
-        <FloatingQAPanel />
+        <FloatingQAPanel matterId={matterId} userId={userId} />
       </div>
     );
   }

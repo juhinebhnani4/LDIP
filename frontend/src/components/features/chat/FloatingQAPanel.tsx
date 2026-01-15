@@ -8,7 +8,9 @@ import {
   MIN_FLOAT_HEIGHT,
 } from '@/stores/qaPanelStore';
 import { QAPanelHeader } from './QAPanelHeader';
+import { ConversationHistory } from './ConversationHistory';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
+import type { SourceReference } from '@/types/chat';
 
 /**
  * Floating Q&A Panel
@@ -23,12 +25,22 @@ import { QAPanelPlaceholder } from './QAPanelPlaceholder';
  * - Position and size persisted to localStorage
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
+ * Story 11.2: Implement Q&A Conversation History
  */
 
 /** Pixels to move per arrow key press */
 const KEYBOARD_MOVE_STEP = 20;
 
-export function FloatingQAPanel() {
+interface FloatingQAPanelProps {
+  /** Matter ID for loading conversation history */
+  matterId?: string;
+  /** User ID for loading conversation history */
+  userId?: string;
+  /** Callback when a source reference is clicked */
+  onSourceClick?: (source: SourceReference) => void;
+}
+
+export function FloatingQAPanel({ matterId, userId, onSourceClick }: FloatingQAPanelProps) {
   const floatX = useQAPanelStore((state) => state.floatX);
   const floatY = useQAPanelStore((state) => state.floatY);
   const floatWidth = useQAPanelStore((state) => state.floatWidth);
@@ -190,7 +202,15 @@ export function FloatingQAPanel() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        <QAPanelPlaceholder />
+        {matterId && userId ? (
+          <ConversationHistory
+            matterId={matterId}
+            userId={userId}
+            onSourceClick={onSourceClick}
+          />
+        ) : (
+          <QAPanelPlaceholder />
+        )}
       </div>
 
       {/* Resize handle in corner */}

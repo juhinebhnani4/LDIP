@@ -129,6 +129,21 @@ export {
   type QAPanelPosition,
 } from './qaPanelStore';
 
+// PDF Split View store for source reference viewer (Story 11.5)
+export {
+  usePdfSplitViewStore,
+  selectPdfSplitViewIsOpen,
+  selectPdfDocumentUrl,
+  selectPdfDocumentName,
+  selectPdfCurrentPage,
+  selectPdfInitialPage,
+  selectPdfScale,
+  selectPdfBoundingBoxes,
+  selectPdfMatterId,
+  selectPdfDocumentId,
+  selectPdfChunkId,
+} from './pdfSplitViewStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

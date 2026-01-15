@@ -511,14 +511,23 @@ N/A - Successful implementation without significant issues
 3. **PDF Viewer Integration**: Click handler shows toast placeholder - full integration in Story 11.5
 4. **Props Threading**: matterId and userId passed from WorkspaceContentArea through QAPanel/FloatingQAPanel to ConversationHistory
 5. **User ID Resolution**: Uses existing useUser() hook from auth module
-6. **Test Count**: 209 tests total for chat-related components and stores
+6. **Test Count**: 112 tests total for chat-related components and stores (after code review fixes)
+
+### Code Review Fixes Applied (2026-01-16)
+
+1. **Fixed React act() warnings** in ConversationHistory.test.tsx - added proper `waitFor` to avoid async state update warnings
+2. **Added error boundary for timestamp parsing** in ChatMessage.tsx - invalid timestamps now show "Unknown time" instead of crashing
+3. **Removed unused `restoreSession` function** from chat.ts - dead code removed along with its tests
+4. **Added development warning log** for fallback message ID generation in chat.ts
+5. **Added accessibility labels** to message bubbles - `<article>` element with `aria-label` for screen readers
+6. **Added 3 new tests** for accessibility and invalid timestamp handling
 
 ### File List
 
 **New Files Created:**
 - `frontend/src/types/chat.ts` - Chat type definitions
 - `frontend/src/components/features/chat/ChatMessage.tsx` - Message bubble component
-- `frontend/src/components/features/chat/ChatMessage.test.tsx` - 15 tests
+- `frontend/src/components/features/chat/ChatMessage.test.tsx` - 18 tests (added accessibility + error handling tests)
 - `frontend/src/components/features/chat/SourceReference.tsx` - Clickable source link
 - `frontend/src/components/features/chat/SourceReference.test.tsx` - 11 tests
 - `frontend/src/components/features/chat/ConversationHistory.tsx` - Message list container
@@ -526,7 +535,7 @@ N/A - Successful implementation without significant issues
 - `frontend/src/stores/chatStore.ts` - Zustand store for conversation state
 - `frontend/src/stores/chatStore.test.ts` - 27 tests
 - `frontend/src/lib/api/chat.ts` - Chat API client
-- `frontend/src/lib/api/chat.test.ts` - 15 tests
+- `frontend/src/lib/api/chat.test.ts` - 13 tests (removed restoreSession tests)
 
 **Modified Files:**
 - `frontend/src/components/features/chat/QAPanel.tsx` - Added ConversationHistory integration

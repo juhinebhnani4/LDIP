@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isValid } from 'date-fns';
 import { User, Bot } from 'lucide-react';
 import { SourceReference } from './SourceReference';
 import type { ChatMessage as ChatMessageType, SourceReference as SourceReferenceType } from '@/types/chat';
@@ -22,16 +22,29 @@ interface ChatMessageProps {
  *
  * Story 11.2: Implement Q&A Conversation History (AC: #1)
  */
+/**
+ * Format timestamp with fallback for invalid dates.
+ */
+function formatTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (!isValid(date)) {
+    return 'Unknown time';
+  }
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
 export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const roleLabel = isUser ? 'Your message' : 'LDIP assistant message';
 
   return (
-    <div
+    <article
       className={cn(
         'flex gap-3 px-4 py-3',
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
       data-testid={`chat-message-${message.role}`}
+      aria-label={roleLabel}
     >
       {/* Avatar */}
       <div
@@ -77,9 +90,9 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
 
         {/* Timestamp */}
         <span className="text-xs text-muted-foreground">
-          {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+          {formatTimestamp(message.timestamp)}
         </span>
       </div>
-    </div>
+    </article>
   );
 }

@@ -164,4 +164,25 @@ describe('ChatMessage', () => {
     render(<ChatMessage message={messageWithEmptySources} />);
     expect(screen.queryByTestId('source-reference')).not.toBeInTheDocument();
   });
+
+  test('user message has correct aria-label', () => {
+    render(<ChatMessage message={userMessage} />);
+    expect(screen.getByRole('article', { name: 'Your message' })).toBeInTheDocument();
+  });
+
+  test('assistant message has correct aria-label', () => {
+    render(<ChatMessage message={assistantMessage} />);
+    expect(screen.getByRole('article', { name: 'LDIP assistant message' })).toBeInTheDocument();
+  });
+
+  test('handles invalid timestamp gracefully', () => {
+    const invalidTimestampMessage: ChatMessageType = {
+      id: 'msg-invalid',
+      role: 'user',
+      content: 'Test message',
+      timestamp: 'invalid-date-string',
+    };
+    render(<ChatMessage message={invalidTimestampMessage} />);
+    expect(screen.getByText('Unknown time')).toBeInTheDocument();
+  });
 });

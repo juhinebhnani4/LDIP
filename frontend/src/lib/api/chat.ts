@@ -51,8 +51,16 @@ interface BackendArchivedResponse {
  * Handles snake_case to camelCase conversion.
  */
 function transformMessage(backendMessage: BackendSessionMessage): ChatMessage {
+  let messageId = backendMessage.id;
+  if (!messageId) {
+    messageId = crypto.randomUUID();
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[chat.ts] Backend message missing ID, generated fallback:', messageId);
+    }
+  }
+
   return {
-    id: backendMessage.id ?? crypto.randomUUID(),
+    id: messageId,
     role: backendMessage.role,
     content: backendMessage.content,
     timestamp: backendMessage.timestamp,
@@ -126,22 +134,3 @@ export async function getArchivedMessages(
   };
 }
 
-/**
- * Restore session from archived messages.
- *
- * Called to restore last 10 messages when session is cold-started.
- *
- * @param matterId - The matter UUID
- * @param userId - The user UUID
- * @returns Restored session context
- */
-export async function restoreSession(
-  matterId: string,
-  userId: string
-): Promise<SessionContext> {
-  const response = await api.post<{ data: BackendSessionContext }>(
-    `/api/v1/session/${matterId}/${userId}/restore`,
-    {}
-  );
-  return transformSessionContext(response.data);
-}

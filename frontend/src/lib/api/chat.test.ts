@@ -1,17 +1,15 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { getConversationHistory, getArchivedMessages, restoreSession } from './chat';
+import { getConversationHistory, getArchivedMessages } from './chat';
 import { api } from './client';
 
 // Mock the API client
 vi.mock('./client', () => ({
   api: {
     get: vi.fn(),
-    post: vi.fn(),
   },
 }));
 
 const mockApiGet = vi.mocked(api.get);
-const mockApiPost = vi.mocked(api.post);
 
 describe('chat API', () => {
   const matterId = 'matter-123';
@@ -224,47 +222,6 @@ describe('chat API', () => {
       const result = await getArchivedMessages(matterId, userId);
 
       expect(result.hasMore).toBe(true);
-    });
-  });
-
-  describe('restoreSession', () => {
-    const mockRestoreResponse = {
-      data: {
-        session_id: 'restored-session-1',
-        matter_id: matterId,
-        user_id: userId,
-        messages: [
-          {
-            id: 'restored-1',
-            role: 'user' as const,
-            content: 'Restored question',
-            timestamp: '2026-01-14T10:00:00Z',
-          },
-        ],
-        entities: [],
-        has_archived: false,
-      },
-    };
-
-    test('calls correct API endpoint with POST', async () => {
-      mockApiPost.mockResolvedValue(mockRestoreResponse);
-
-      await restoreSession(matterId, userId);
-
-      expect(mockApiPost).toHaveBeenCalledWith(
-        `/api/v1/session/${matterId}/${userId}/restore`,
-        {}
-      );
-    });
-
-    test('transforms response to SessionContext', async () => {
-      mockApiPost.mockResolvedValue(mockRestoreResponse);
-
-      const result = await restoreSession(matterId, userId);
-
-      expect(result.sessionId).toBe('restored-session-1');
-      expect(result.messages).toHaveLength(1);
-      expect(result.hasArchived).toBe(false);
     });
   });
 });

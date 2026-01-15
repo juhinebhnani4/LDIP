@@ -81,6 +81,11 @@ describe('ConversationHistory', () => {
 
     // Should show loading indicator
     expect(screen.getByTestId('conversation-history')).toBeInTheDocument();
+
+    // Wait for the async operation to complete to avoid act() warnings
+    await waitFor(() => {
+      expect(mockGetConversationHistory).toHaveBeenCalled();
+    });
   });
 
   test('renders placeholder when no messages', async () => {
@@ -271,6 +276,11 @@ describe('ConversationHistory', () => {
     render(<ConversationHistory matterId={matterId} userId={userId} />);
 
     expect(screen.getByTestId('conversation-history')).toBeInTheDocument();
+
+    // Wait for the async operation to complete to avoid act() warnings
+    await waitFor(() => {
+      expect(mockGetConversationHistory).toHaveBeenCalled();
+    });
   });
 
   test('renders multiple messages in correct order', async () => {

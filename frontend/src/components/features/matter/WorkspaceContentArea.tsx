@@ -70,6 +70,9 @@ export function WorkspaceContentArea({
    */
   const handleSourceClick = useCallback(
     async (source: SourceReference) => {
+      // Track the document being opened to prevent race conditions
+      const targetDocumentId = source.documentId;
+
       try {
         // Fetch document details to get signed URL
         const response = await fetch(`/api/documents/${source.documentId}`);
@@ -92,10 +95,18 @@ export function WorkspaceContentArea({
         // Bounding box highlighting is optional - don't block or error if unavailable
         if (source.chunkId) {
           try {
-            const bboxes = await fetchByChunkId(source.chunkId);
+            const { bboxes, pageNumber: fetchedPageNumber } = await fetchByChunkId(source.chunkId);
+
+            // Verify we're still viewing the same document (race condition guard)
+            const currentDocumentId = usePdfSplitViewStore.getState().documentId;
+            if (currentDocumentId !== targetDocumentId) {
+              // User navigated to different document, discard these bboxes
+              return;
+            }
+
             if (bboxes.length > 0) {
-              // Get page number from the source reference, or use initial page
-              const pageNumber = source.page ?? 1;
+              // Use page number from API response, fall back to source.page only if unavailable
+              const pageNumber = fetchedPageNumber ?? source.page ?? 1;
               setBoundingBoxes(
                 bboxes.map((bbox) => ({
                   x: bbox.x,

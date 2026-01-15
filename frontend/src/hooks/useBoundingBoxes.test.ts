@@ -49,14 +49,14 @@ describe('useBoundingBoxes', () => {
 
       const { result } = renderHook(() => useBoundingBoxes());
 
-      let bboxes;
+      let fetchResult: { bboxes: unknown[]; pageNumber: number | null } | undefined;
       await act(async () => {
-        bboxes = await result.current.fetchByChunkId('chunk-123');
+        fetchResult = await result.current.fetchByChunkId('chunk-123');
       });
 
       expect(mockFetch).toHaveBeenCalledWith('/api/chunks/chunk-123/bounding-boxes');
-      expect(bboxes).toHaveLength(1);
-      expect(bboxes![0]).toEqual({
+      expect(fetchResult!.bboxes).toHaveLength(1);
+      expect(fetchResult!.bboxes[0]).toEqual({
         bboxId: 'bbox-1',
         x: 0.1, // Normalized from 10%
         y: 0.2, // Normalized from 20%
@@ -64,10 +64,13 @@ describe('useBoundingBoxes', () => {
         height: 0.05, // Normalized from 5%
         text: 'Test text',
       });
+      // Verify page number is returned directly
+      expect(fetchResult!.pageNumber).toBe(5);
+      // Also verify hook state is updated
       expect(result.current.bboxPageNumber).toBe(5);
     });
 
-    it('should return empty array for 404 response', async () => {
+    it('should return empty result for 404 response', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
@@ -75,12 +78,13 @@ describe('useBoundingBoxes', () => {
 
       const { result } = renderHook(() => useBoundingBoxes());
 
-      let bboxes;
+      let fetchResult: { bboxes: unknown[]; pageNumber: number | null } | undefined;
       await act(async () => {
-        bboxes = await result.current.fetchByChunkId('chunk-not-found');
+        fetchResult = await result.current.fetchByChunkId('chunk-not-found');
       });
 
-      expect(bboxes).toEqual([]);
+      expect(fetchResult!.bboxes).toEqual([]);
+      expect(fetchResult!.pageNumber).toBeNull();
       expect(result.current.error).toBeNull();
     });
 
@@ -167,16 +171,16 @@ describe('useBoundingBoxes', () => {
 
       const { result } = renderHook(() => useBoundingBoxes());
 
-      let bboxes;
+      let fetchResult: { bboxes: unknown[]; pageNumber: number | null } | undefined;
       await act(async () => {
-        bboxes = await result.current.fetchByPage('doc-1', 3);
+        fetchResult = await result.current.fetchByPage('doc-1', 3);
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/documents/doc-1/pages/3/bounding-boxes'
       );
-      expect(bboxes).toHaveLength(1);
-      expect(bboxes![0]).toEqual({
+      expect(fetchResult!.bboxes).toHaveLength(1);
+      expect(fetchResult!.bboxes[0]).toEqual({
         bboxId: 'bbox-page-1',
         x: 0.25,
         y: 0.3,
@@ -184,6 +188,8 @@ describe('useBoundingBoxes', () => {
         height: 0.1,
         text: 'Page text',
       });
+      // Verify page number is returned
+      expect(fetchResult!.pageNumber).toBe(3);
     });
   });
 
@@ -226,6 +232,57 @@ describe('useBoundingBoxes', () => {
       expect(result.current.boundingBoxes).toHaveLength(0);
       expect(result.current.bboxPageNumber).toBeNull();
       expect(result.current.error).toBeNull();
+    });
+
+    it('should clear cache so subsequent fetches hit the API again', async () => {
+      const mockApiResponse = {
+        data: [
+          {
+            id: 'bbox-1',
+            document_id: 'doc-1',
+            page_number: 1,
+            x: 10,
+            y: 20,
+            width: 50,
+            height: 5,
+            text: 'Test',
+            confidence: 0.95,
+            reading_order_index: 1,
+          },
+        ],
+      };
+
+      // First fetch
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockApiResponse),
+      });
+
+      const { result } = renderHook(() => useBoundingBoxes());
+
+      await act(async () => {
+        await result.current.fetchByChunkId('chunk-123');
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Clear cache
+      act(() => {
+        result.current.clearBboxes();
+      });
+
+      // Second fetch should hit API again (not cache)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockApiResponse),
+      });
+
+      await act(async () => {
+        await result.current.fetchByChunkId('chunk-123');
+      });
+
+      // Should have called fetch twice now (cache was cleared)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -28,6 +28,15 @@ interface ApiBoundingBoxData {
   reading_order_index: number | null;
 }
 
+/**
+ * Result of a bbox fetch operation including page number.
+ * Exported for consumers who need to type the return value.
+ */
+export interface BboxFetchResult {
+  bboxes: SplitViewBoundingBox[];
+  pageNumber: number | null;
+}
+
 interface UseBoundingBoxesReturn {
   /** Normalized bounding boxes (0-1 coordinates) ready for canvas rendering */
   boundingBoxes: SplitViewBoundingBox[];
@@ -37,11 +46,11 @@ interface UseBoundingBoxesReturn {
   error: string | null;
   /** Page number the bounding boxes belong to */
   bboxPageNumber: number | null;
-  /** Fetch bounding boxes by chunk ID */
-  fetchByChunkId: (chunkId: string) => Promise<SplitViewBoundingBox[]>;
-  /** Fetch bounding boxes by document and page */
-  fetchByPage: (documentId: string, pageNumber: number) => Promise<SplitViewBoundingBox[]>;
-  /** Clear all bounding boxes */
+  /** Fetch bounding boxes by chunk ID - returns bboxes and page number */
+  fetchByChunkId: (chunkId: string) => Promise<BboxFetchResult>;
+  /** Fetch bounding boxes by document and page - returns bboxes and page number */
+  fetchByPage: (documentId: string, pageNumber: number) => Promise<BboxFetchResult>;
+  /** Clear all bounding boxes and cache */
   clearBboxes: () => void;
 }
 
@@ -62,16 +71,21 @@ function normalizeBbox(bbox: ApiBoundingBoxData): SplitViewBoundingBox {
 /**
  * Hook for fetching and managing bounding box data.
  *
+ * Story 11.7: Implement Bounding Box Overlays
+ * - AC #1: Fetches bbox data and page number from API
+ * - AC #3: Supports cross-reference navigation via fetchByPage
+ *
  * @returns Object with bbox data, loading state, error state, and fetch functions
  *
  * @example
  * ```tsx
- * const { boundingBoxes, fetchByChunkId, isLoading, error } = useBoundingBoxes();
+ * const { fetchByChunkId, isLoading, error } = useBoundingBoxes();
  *
- * // Fetch bbox data when source is clicked
+ * // Fetch bbox data when source is clicked (returns bboxes AND page number)
  * const handleSourceClick = async (chunkId: string) => {
- *   const bboxes = await fetchByChunkId(chunkId);
- *   // Use bboxes for highlighting
+ *   const { bboxes, pageNumber } = await fetchByChunkId(chunkId);
+ *   // Use bboxes for highlighting, pageNumber to navigate to correct page
+ *   setBoundingBoxes(bboxes, pageNumber);
  * };
  * ```
  */
@@ -89,9 +103,10 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
   /**
    * Fetch bounding boxes by chunk ID.
    * Uses GET /api/chunks/{chunkId}/bounding-boxes endpoint.
+   * Returns both bboxes and page number for immediate use by caller.
    */
   const fetchByChunkId = useCallback(
-    async (chunkId: string): Promise<SplitViewBoundingBox[]> => {
+    async (chunkId: string): Promise<BboxFetchResult> => {
       const cacheKey = `chunk:${chunkId}`;
 
       // Check cache first
@@ -99,7 +114,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
         const cached = cacheRef.current.get(cacheKey)!;
         setBoundingBoxes(cached.bboxes);
         setBboxPageNumber(cached.pageNumber);
-        return cached.bboxes;
+        return { bboxes: cached.bboxes, pageNumber: cached.pageNumber };
       }
 
       setIsLoading(true);
@@ -113,7 +128,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
             // No bboxes found is not an error, just empty result
             setBoundingBoxes([]);
             setBboxPageNumber(null);
-            return [];
+            return { bboxes: [], pageNumber: null };
           }
           throw new Error(`Failed to fetch bounding boxes: ${response.statusText}`);
         }
@@ -131,13 +146,13 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
 
         setBoundingBoxes(normalized);
         setBboxPageNumber(pageNumber);
-        return normalized;
+        return { bboxes: normalized, pageNumber };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error fetching bounding boxes';
         setError(errorMessage);
         setBoundingBoxes([]);
         setBboxPageNumber(null);
-        return [];
+        return { bboxes: [], pageNumber: null };
       } finally {
         setIsLoading(false);
       }
@@ -148,9 +163,10 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
   /**
    * Fetch bounding boxes by document ID and page number.
    * Uses GET /api/documents/{documentId}/pages/{pageNumber}/bounding-boxes endpoint.
+   * Returns both bboxes and page number for immediate use by caller.
    */
   const fetchByPage = useCallback(
-    async (documentId: string, pageNumber: number): Promise<SplitViewBoundingBox[]> => {
+    async (documentId: string, pageNumber: number): Promise<BboxFetchResult> => {
       const cacheKey = `page:${documentId}:${pageNumber}`;
 
       // Check cache first
@@ -158,7 +174,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
         const cached = cacheRef.current.get(cacheKey)!;
         setBoundingBoxes(cached.bboxes);
         setBboxPageNumber(pageNumber);
-        return cached.bboxes;
+        return { bboxes: cached.bboxes, pageNumber };
       }
 
       setIsLoading(true);
@@ -174,7 +190,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
             // No bboxes found is not an error, just empty result
             setBoundingBoxes([]);
             setBboxPageNumber(pageNumber);
-            return [];
+            return { bboxes: [], pageNumber };
           }
           throw new Error(`Failed to fetch bounding boxes: ${response.statusText}`);
         }
@@ -189,13 +205,13 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
 
         setBoundingBoxes(normalized);
         setBboxPageNumber(pageNumber);
-        return normalized;
+        return { bboxes: normalized, pageNumber };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error fetching bounding boxes';
         setError(errorMessage);
         setBoundingBoxes([]);
         setBboxPageNumber(pageNumber);
-        return [];
+        return { bboxes: [], pageNumber };
       } finally {
         setIsLoading(false);
       }
@@ -204,12 +220,15 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
   );
 
   /**
-   * Clear all bounding boxes and reset state.
+   * Clear all bounding boxes, reset state, and clear cache.
+   * Call this when changing documents to prevent stale data.
    */
   const clearBboxes = useCallback(() => {
     setBoundingBoxes([]);
     setBboxPageNumber(null);
     setError(null);
+    // Clear cache to prevent stale data when bboxes are updated on backend
+    cacheRef.current.clear();
   }, []);
 
   return {

@@ -12,15 +12,10 @@ import { QAPanelPlaceholder } from './QAPanelPlaceholder';
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
  */
-interface QAPanelProps {
-  /** Matter ID for the current workspace */
-  matterId: string;
-}
-
-export function QAPanel({ matterId }: QAPanelProps) {
+export function QAPanel() {
   return (
     <div className="flex h-full flex-col bg-background">
-      <QAPanelHeader matterId={matterId} />
+      <QAPanelHeader />
       <QAPanelPlaceholder />
     </div>
   );

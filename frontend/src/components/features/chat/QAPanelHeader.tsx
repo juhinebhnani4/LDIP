@@ -30,8 +30,8 @@ import type { QAPanelPosition } from '@/stores/qaPanelStore';
  * Story 10A.3: Main Content Area and Q&A Panel Integration
  */
 interface QAPanelHeaderProps {
-  /** Matter ID for the current workspace */
-  matterId: string;
+  /** Optional additional action buttons (e.g., minimize for floating mode) */
+  actions?: React.ReactNode;
 }
 
 const POSITION_OPTIONS: Array<{
@@ -46,7 +46,7 @@ const POSITION_OPTIONS: Array<{
   { value: 'hidden', label: 'Hide Panel', icon: EyeOff, separator: true },
 ];
 
-export function QAPanelHeader({ matterId: _matterId }: QAPanelHeaderProps) {
+export function QAPanelHeader({ actions }: QAPanelHeaderProps = {}) {
   const position = useQAPanelStore((state) => state.position);
   const setPosition = useQAPanelStore((state) => state.setPosition);
 
@@ -54,6 +54,7 @@ export function QAPanelHeader({ matterId: _matterId }: QAPanelHeaderProps) {
     <div className="flex items-center justify-between border-b p-3">
       <h2 className="text-sm font-semibold">Q&A Assistant</h2>
       <div className="flex items-center gap-1">
+        {actions}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Panel position">

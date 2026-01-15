@@ -34,7 +34,6 @@ interface WorkspaceContentAreaProps {
 
 export function WorkspaceContentArea({
   children,
-  matterId,
 }: WorkspaceContentAreaProps) {
   const position = useQAPanelStore((state) => state.position);
   const rightWidth = useQAPanelStore((state) => state.rightWidth);
@@ -56,7 +55,7 @@ export function WorkspaceContentArea({
           maxSize={60}
           onResize={setRightWidth}
         >
-          <QAPanel matterId={matterId} />
+          <QAPanel />
         </ResizablePanel>
       </ResizablePanelGroup>
     );
@@ -76,7 +75,7 @@ export function WorkspaceContentArea({
           maxSize={60}
           onResize={setBottomHeight}
         >
-          <QAPanel matterId={matterId} />
+          <QAPanel />
         </ResizablePanel>
       </ResizablePanelGroup>
     );
@@ -87,7 +86,7 @@ export function WorkspaceContentArea({
     return (
       <div className="relative flex-1">
         <div className="h-full overflow-auto">{children}</div>
-        <FloatingQAPanel matterId={matterId} />
+        <FloatingQAPanel />
       </div>
     );
   }

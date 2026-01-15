@@ -51,17 +51,13 @@ vi.mock('@/components/ui/resizable', () => ({
   ),
 }));
 
-// Mock Q&A Panel components
+// Mock Q&A Panel components - no longer take matterId prop
 vi.mock('@/components/features/chat/QAPanel', () => ({
-  QAPanel: ({ matterId }: { matterId: string }) => (
-    <div data-testid="qa-panel">QA Panel: {matterId}</div>
-  ),
+  QAPanel: () => <div data-testid="qa-panel">QA Panel</div>,
 }));
 
 vi.mock('@/components/features/chat/FloatingQAPanel', () => ({
-  FloatingQAPanel: ({ matterId }: { matterId: string }) => (
-    <div data-testid="floating-qa-panel">Floating QA: {matterId}</div>
-  ),
+  FloatingQAPanel: () => <div data-testid="floating-qa-panel">Floating QA</div>,
 }));
 
 vi.mock('@/components/features/chat/QAPanelExpandButton', () => ({
@@ -116,9 +112,6 @@ describe('WorkspaceContentArea', () => {
       );
 
       expect(screen.getByTestId('qa-panel')).toBeInTheDocument();
-      expect(screen.getByTestId('qa-panel')).toHaveTextContent(
-        `QA Panel: ${mockMatterId}`
-      );
     });
 
     it('renders resize handle with handle indicator', () => {
@@ -215,9 +208,6 @@ describe('WorkspaceContentArea', () => {
       );
 
       expect(screen.getByTestId('floating-qa-panel')).toBeInTheDocument();
-      expect(screen.getByTestId('floating-qa-panel')).toHaveTextContent(
-        `Floating QA: ${mockMatterId}`
-      );
     });
 
     it('renders children in content area', () => {

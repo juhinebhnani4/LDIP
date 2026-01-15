@@ -4,9 +4,7 @@ import { QAPanel } from './QAPanel';
 
 // Mock the child components
 vi.mock('./QAPanelHeader', () => ({
-  QAPanelHeader: ({ matterId }: { matterId: string }) => (
-    <div data-testid="qa-panel-header">Header: {matterId}</div>
-  ),
+  QAPanelHeader: () => <div data-testid="qa-panel-header">Header</div>,
 }));
 
 vi.mock('./QAPanelPlaceholder', () => ({
@@ -14,28 +12,25 @@ vi.mock('./QAPanelPlaceholder', () => ({
 }));
 
 describe('QAPanel', () => {
-  const mockMatterId = 'test-matter-123';
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders the QAPanelHeader with matterId', () => {
-    render(<QAPanel matterId={mockMatterId} />);
+  it('renders the QAPanelHeader', () => {
+    render(<QAPanel />);
 
     const header = screen.getByTestId('qa-panel-header');
     expect(header).toBeInTheDocument();
-    expect(header).toHaveTextContent(`Header: ${mockMatterId}`);
   });
 
   it('renders the QAPanelPlaceholder', () => {
-    render(<QAPanel matterId={mockMatterId} />);
+    render(<QAPanel />);
 
     expect(screen.getByTestId('qa-panel-placeholder')).toBeInTheDocument();
   });
 
   it('has proper layout structure with flex column', () => {
-    const { container } = render(<QAPanel matterId={mockMatterId} />);
+    const { container } = render(<QAPanel />);
 
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper).toHaveClass('flex');
@@ -44,7 +39,7 @@ describe('QAPanel', () => {
   });
 
   it('has background color class', () => {
-    const { container } = render(<QAPanel matterId={mockMatterId} />);
+    const { container } = render(<QAPanel />);
 
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper).toHaveClass('bg-background');

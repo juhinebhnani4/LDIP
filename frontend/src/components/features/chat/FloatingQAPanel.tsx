@@ -9,6 +9,7 @@ import {
   MIN_FLOAT_WIDTH,
   MIN_FLOAT_HEIGHT,
 } from '@/stores/qaPanelStore';
+import { QAPanelHeader } from './QAPanelHeader';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 
 /**
@@ -18,19 +19,18 @@ import { QAPanelPlaceholder } from './QAPanelPlaceholder';
  * Can be moved anywhere within the viewport and resized from the corner.
  *
  * Features:
- * - Drag-to-move via header
+ * - Drag-to-move via header (mouse or keyboard arrow keys)
  * - Corner resize handle
  * - Constrained to viewport
  * - Position and size persisted to localStorage
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
  */
-interface FloatingQAPanelProps {
-  /** Matter ID for the current workspace */
-  matterId: string;
-}
 
-export function FloatingQAPanel({ matterId: _matterId }: FloatingQAPanelProps) {
+/** Pixels to move per arrow key press */
+const KEYBOARD_MOVE_STEP = 20;
+
+export function FloatingQAPanel() {
   const floatX = useQAPanelStore((state) => state.floatX);
   const floatY = useQAPanelStore((state) => state.floatY);
   const floatWidth = useQAPanelStore((state) => state.floatWidth);
@@ -58,6 +58,38 @@ export function FloatingQAPanel({ matterId: _matterId }: FloatingQAPanelProps) {
       };
     },
     [floatX, floatY]
+  );
+
+  // Handle keyboard navigation for drag area
+  const handleDragKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      let newX = floatX;
+      let newY = floatY;
+
+      switch (e.key) {
+        case 'ArrowUp':
+          newY = Math.max(0, floatY - KEYBOARD_MOVE_STEP);
+          e.preventDefault();
+          break;
+        case 'ArrowDown':
+          newY = Math.min(window.innerHeight - floatHeight, floatY + KEYBOARD_MOVE_STEP);
+          e.preventDefault();
+          break;
+        case 'ArrowLeft':
+          newX = Math.max(0, floatX - KEYBOARD_MOVE_STEP);
+          e.preventDefault();
+          break;
+        case 'ArrowRight':
+          newX = Math.min(window.innerWidth - floatWidth, floatX + KEYBOARD_MOVE_STEP);
+          e.preventDefault();
+          break;
+        default:
+          return;
+      }
+
+      setFloatPosition(newX, newY);
+    },
+    [floatX, floatY, floatWidth, floatHeight, setFloatPosition]
   );
 
   // Handle resize start from corner
@@ -139,6 +171,25 @@ export function FloatingQAPanel({ matterId: _matterId }: FloatingQAPanelProps) {
     setPosition('hidden');
   }, [setPosition]);
 
+  // Minimize button for floating mode
+  const minimizeAction = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleMinimize}
+          aria-label="Minimize panel"
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Minimize</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+
   return (
     <div
       ref={panelRef}
@@ -152,31 +203,16 @@ export function FloatingQAPanel({ matterId: _matterId }: FloatingQAPanelProps) {
       role="dialog"
       aria-label="Q&A Assistant"
     >
-      {/* Draggable header */}
+      {/* Draggable header - supports mouse drag and keyboard navigation */}
       <div
         className={`cursor-move ${isDragging ? 'cursor-grabbing' : ''}`}
         onMouseDown={handleDragStart}
+        onKeyDown={handleDragKeyDown}
+        tabIndex={0}
+        role="button"
+        aria-label="Drag to move panel. Use arrow keys to reposition."
       >
-        <div className="flex items-center justify-between border-b p-3">
-          <h2 className="text-sm font-semibold">Q&A Assistant</h2>
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleMinimize}
-                  aria-label="Minimize panel"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Minimize</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
+        <QAPanelHeader actions={minimizeAction} />
       </div>
 
       {/* Content */}
@@ -188,10 +224,9 @@ export function FloatingQAPanel({ matterId: _matterId }: FloatingQAPanelProps) {
       <div
         className="absolute bottom-0 right-0 flex h-4 w-4 cursor-se-resize items-center justify-center"
         onMouseDown={handleResizeStart}
-        role="slider"
+        role="separator"
+        aria-orientation="horizontal"
         aria-label="Resize panel"
-        aria-valuemin={MIN_FLOAT_WIDTH}
-        aria-valuemax={800}
         aria-valuenow={floatWidth}
         tabIndex={0}
       >

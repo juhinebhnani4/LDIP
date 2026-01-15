@@ -394,6 +394,37 @@ describe('qaPanelStore', () => {
         expect(parsed.state.unreadCount).toBeUndefined();
       }
     });
+
+    it('loads state from localStorage on initialization', async () => {
+      // Pre-populate localStorage with saved state
+      const savedState = {
+        state: {
+          position: 'float',
+          previousPosition: 'bottom',
+          rightWidth: 45,
+          bottomHeight: 40,
+          floatX: 200,
+          floatY: 150,
+          floatWidth: 500,
+          floatHeight: 600,
+        },
+        version: 0,
+      };
+      localStorage.setItem('ldip-qa-panel-preferences', JSON.stringify(savedState));
+
+      // Trigger store rehydration by calling persist.rehydrate
+      await act(async () => {
+        await useQAPanelStore.persist.rehydrate();
+      });
+
+      const state = useQAPanelStore.getState();
+      expect(state.position).toBe('float');
+      expect(state.rightWidth).toBe(45);
+      expect(state.floatX).toBe(200);
+      expect(state.floatY).toBe(150);
+      expect(state.floatWidth).toBe(500);
+      expect(state.floatHeight).toBe(600);
+    });
   });
 
   describe('Selectors', () => {

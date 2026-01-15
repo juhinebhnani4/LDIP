@@ -34,8 +34,6 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }));
 
 describe('QAPanelHeader', () => {
-  const mockMatterId = 'test-matter-123';
-
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state
@@ -45,26 +43,26 @@ describe('QAPanelHeader', () => {
   });
 
   it('renders Q&A Assistant title', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     expect(screen.getByText('Q&A Assistant')).toBeInTheDocument();
   });
 
   it('renders position dropdown menu', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     expect(screen.getByTestId('dropdown-menu')).toBeInTheDocument();
   });
 
   it('renders settings button with aria-label', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const button = screen.getByRole('button', { name: /panel position/i });
     expect(button).toBeInTheDocument();
   });
 
   it('shows all four position options', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const items = screen.getAllByTestId('dropdown-item');
     expect(items.length).toBe(4);
@@ -76,7 +74,7 @@ describe('QAPanelHeader', () => {
   });
 
   it('shows Panel Position label in dropdown', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     expect(screen.getByTestId('dropdown-label')).toHaveTextContent(
       'Panel Position'
@@ -85,7 +83,7 @@ describe('QAPanelHeader', () => {
 
   it('calls setPosition when right sidebar option clicked', async () => {
     const user = userEvent.setup();
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const items = screen.getAllByTestId('dropdown-item');
     const rightItem = items.find((item) =>
@@ -99,7 +97,7 @@ describe('QAPanelHeader', () => {
 
   it('calls setPosition when bottom panel option clicked', async () => {
     const user = userEvent.setup();
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const items = screen.getAllByTestId('dropdown-item');
     const bottomItem = items.find((item) =>
@@ -113,7 +111,7 @@ describe('QAPanelHeader', () => {
 
   it('calls setPosition when floating option clicked', async () => {
     const user = userEvent.setup();
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const items = screen.getAllByTestId('dropdown-item');
     const floatItem = items.find((item) =>
@@ -127,7 +125,7 @@ describe('QAPanelHeader', () => {
 
   it('calls setPosition when hide panel option clicked', async () => {
     const user = userEvent.setup();
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const items = screen.getAllByTestId('dropdown-item');
     const hideItem = items.find((item) =>
@@ -140,7 +138,7 @@ describe('QAPanelHeader', () => {
   });
 
   it('has proper layout structure', () => {
-    const { container } = render(<QAPanelHeader matterId={mockMatterId} />);
+    const { container } = render(<QAPanelHeader />);
 
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper).toHaveClass('flex');
@@ -151,11 +149,39 @@ describe('QAPanelHeader', () => {
   });
 
   it('renders title with correct styling', () => {
-    render(<QAPanelHeader matterId={mockMatterId} />);
+    render(<QAPanelHeader />);
 
     const title = screen.getByText('Q&A Assistant');
     expect(title.tagName).toBe('H2');
     expect(title).toHaveClass('text-sm');
     expect(title).toHaveClass('font-semibold');
+  });
+
+  it('shows checkmark for the current position', () => {
+    act(() => {
+      useQAPanelStore.getState().setPosition('bottom');
+    });
+
+    render(<QAPanelHeader />);
+
+    // Find the bottom item and check it has a checkmark (lucide-react Check icon)
+    const items = screen.getAllByTestId('dropdown-item');
+    const bottomItem = items.find((item) =>
+      item.textContent?.includes('Bottom Panel')
+    );
+
+    // The Check icon should be a child of the bottom item
+    const checkIcon = bottomItem?.querySelector('svg');
+    expect(checkIcon).toBeInTheDocument();
+  });
+
+  it('renders custom actions when provided', () => {
+    const CustomAction = () => (
+      <button data-testid="custom-action">Custom</button>
+    );
+
+    render(<QAPanelHeader actions={<CustomAction />} />);
+
+    expect(screen.getByTestId('custom-action')).toBeInTheDocument();
   });
 });

@@ -68,7 +68,9 @@ export default function ProcessingPage() {
   const cleanupRef = useRef<(() => void) | null>(null);
   const isBackgroundedRef = useRef(false);
 
-  // Redirect if no files - use layoutEffect to redirect before paint
+  // Redirect if no files - use useLayoutEffect to redirect before paint
+  // This prevents a flash of content before redirect. Safe in client component ('use client').
+  // Note: useLayoutEffect warnings in SSR are not an issue here because this is a client component.
   useLayoutEffect(() => {
     if (files.length === 0) {
       reset();

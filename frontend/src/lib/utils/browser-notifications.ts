@@ -84,7 +84,8 @@ export function showProcessingCompleteNotification(
   try {
     const notification = new Notification(NOTIFICATION_TITLE, {
       body: `Matter "${matterName}" is ready for analysis`,
-      icon: '/ldip-icon.png', // Add icon to public folder if not exists
+      // Use favicon as fallback icon - always available in Next.js apps
+      icon: '/favicon.ico',
       tag: `matter-complete-${matterId}`, // Prevents duplicate notifications
       requireInteraction: false,
     });

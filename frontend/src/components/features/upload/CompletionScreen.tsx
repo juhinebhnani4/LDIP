@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useUploadWizardStore } from '@/stores/uploadWizardStore';
 import type { LiveDiscovery } from '@/types/upload';
+import styles from './CompletionScreen.module.css';
 
 /** Redirect delay in milliseconds */
 const REDIRECT_DELAY_MS = 3000;
@@ -107,14 +108,14 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
         <CardContent className="py-10 px-8 text-center">
           {/* Animated checkmark */}
           <div
-            className="mx-auto mb-6 completion-icon"
+            className={cn('mx-auto mb-6', styles.completionIcon)}
             aria-label="Processing complete"
           >
             <div className="relative inline-flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
+              <div className={cn('absolute inset-0 rounded-full bg-green-500/20', styles.pulseRing)} />
               <div className="relative rounded-full bg-green-100 dark:bg-green-900/30 p-4">
                 <CheckCircle2
-                  className="size-16 text-green-600 dark:text-green-400 completion-checkmark"
+                  className={cn('size-16 text-green-600 dark:text-green-400', styles.checkmark)}
                   aria-hidden="true"
                 />
               </div>
@@ -172,41 +173,6 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
           </Button>
         </CardContent>
       </Card>
-
-      {/* CSS animations for checkmark */}
-      <style jsx global>{`
-        @keyframes checkmark-appear {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          50% {
-            transform: scale(1.2);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        .completion-checkmark {
-          animation: checkmark-appear 0.5s ease-out;
-        }
-
-        @keyframes completion-pulse {
-          0%,
-          100% {
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
-          }
-          50% {
-            box-shadow: 0 0 0 20px rgba(34, 197, 94, 0);
-          }
-        }
-
-        .completion-icon > div > div:first-child {
-          animation: completion-pulse 2s infinite;
-        }
-      `}</style>
     </div>
   );
 }

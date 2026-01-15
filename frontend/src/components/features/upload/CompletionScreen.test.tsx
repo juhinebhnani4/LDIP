@@ -186,7 +186,7 @@ describe('CompletionScreen', () => {
       expect(screen.getByText(/redirecting in 3 seconds/i)).toBeInTheDocument();
     });
 
-    it('auto-redirects after countdown completes', () => {
+    it('auto-redirects after countdown completes', async () => {
       useUploadWizardStore.setState({
         files: [createMockFile('test.pdf')],
         matterName: 'Test Matter',
@@ -194,9 +194,17 @@ describe('CompletionScreen', () => {
 
       render(<CompletionScreen />);
 
-      // Run all timers
-      act(() => {
-        vi.runAllTimers();
+      // Advance through countdown: 3s -> 2s -> 1s -> 0s -> redirect
+      // Each step needs act() to process state updates
+      for (let i = 0; i < 4; i++) {
+        await act(async () => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+
+      // Allow final redirect timeout to execute
+      await act(async () => {
+        vi.advanceTimersByTime(100);
       });
 
       expect(mockPush).toHaveBeenCalledWith('/');

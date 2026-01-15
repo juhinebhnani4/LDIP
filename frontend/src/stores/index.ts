@@ -92,13 +92,12 @@ export {
   type BackgroundMatter,
 } from './backgroundProcessingStore';
 
-// Notification store for in-app notifications (Story 9-1, 9-6)
+// Notification store for in-app notifications (Story 9-1)
 export {
   useNotificationStore,
   selectUnreadNotifications,
   selectNotificationsByMatter,
   selectHighPriorityUnread,
-  addProcessingCompleteNotification,
 } from './notificationStore';
 
 // Future stores (to be added in later stories):

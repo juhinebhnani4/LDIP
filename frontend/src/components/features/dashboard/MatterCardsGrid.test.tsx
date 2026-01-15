@@ -154,7 +154,7 @@ describe('MatterCardsGrid', () => {
     render(<MatterCardsGrid />);
 
     const newMatterLink = screen.getByRole('link', { name: /create new matter/i });
-    expect(newMatterLink).toHaveAttribute('href', '/matter/new');
+    expect(newMatterLink).toHaveAttribute('href', '/upload');
     expect(screen.getByText('New Matter')).toBeInTheDocument();
   });
 

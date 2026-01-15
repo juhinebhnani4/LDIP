@@ -32,7 +32,7 @@ interface MatterCardsGridProps {
 /** New Matter card - always first in grid */
 function NewMatterCard() {
   return (
-    <Link href="/matter/new" aria-label="Create new matter">
+    <Link href="/upload" aria-label="Create new matter">
       <Card className="h-full min-h-[200px] border-dashed hover:border-primary hover:bg-accent/50 transition-colors cursor-pointer">
         <CardContent className="flex flex-col items-center justify-center h-full gap-3 py-8">
           <div className="rounded-full bg-primary/10 p-4">
@@ -76,7 +76,7 @@ function EmptyState() {
         Create your first matter to start uploading documents and extracting insights.
       </p>
       <Link
-        href="/matter/new"
+        href="/upload"
         className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
       >
         <Plus className="size-4" />

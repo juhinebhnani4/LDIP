@@ -181,8 +181,8 @@ development_status:
   epic-10d-retrospective: optional
 
   # Epic 11: Q&A Panel & PDF Viewer
-  epic-11: backlog
-  11-1-qa-panel-header-position: backlog
+  epic-11: in-progress  # First story created 2026-01-15
+  11-1-qa-panel-header-position: review  # Ready for review 2026-01-15
   11-2-conversation-history: backlog
   11-3-streaming-response-engine-trace: backlog
   11-4-suggested-questions-input: backlog

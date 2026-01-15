@@ -3,11 +3,11 @@ import { render, screen } from '@testing-library/react';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 
 describe('QAPanelPlaceholder', () => {
-  it('renders Q&A Assistant heading', () => {
+  it('renders ASK LDIP heading', () => {
     render(<QAPanelPlaceholder />);
 
     expect(
-      screen.getByRole('heading', { name: 'Q&A Assistant' })
+      screen.getByRole('heading', { name: 'ASK LDIP' })
     ).toBeInTheDocument();
   });
 
@@ -52,7 +52,7 @@ describe('QAPanelPlaceholder', () => {
   it('has proper text styling', () => {
     render(<QAPanelPlaceholder />);
 
-    const heading = screen.getByRole('heading', { name: 'Q&A Assistant' });
+    const heading = screen.getByRole('heading', { name: 'ASK LDIP' });
     expect(heading.tagName).toBe('H3');
     expect(heading).toHaveClass('text-lg');
     expect(heading).toHaveClass('font-medium');

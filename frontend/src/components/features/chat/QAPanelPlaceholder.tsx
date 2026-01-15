@@ -14,7 +14,7 @@ export function QAPanelPlaceholder() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
       <MessageSquare className="mb-4 h-12 w-12 text-muted-foreground" />
-      <h3 className="mb-2 text-lg font-medium">Q&A Assistant</h3>
+      <h3 className="mb-2 text-lg font-medium">ASK LDIP</h3>
       <p className="max-w-xs text-sm text-muted-foreground">
         Ask questions about your matter. The AI will analyze documents and
         provide answers with citations.

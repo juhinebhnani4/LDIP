@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { GripHorizontal, Minimize2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { GripHorizontal } from 'lucide-react';
 import {
   useQAPanelStore,
   MIN_FLOAT_WIDTH,
@@ -37,7 +35,6 @@ export function FloatingQAPanel() {
   const floatHeight = useQAPanelStore((state) => state.floatHeight);
   const setFloatPosition = useQAPanelStore((state) => state.setFloatPosition);
   const setFloatSize = useQAPanelStore((state) => state.setFloatSize);
-  const setPosition = useQAPanelStore((state) => state.setPosition);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -166,30 +163,6 @@ export function FloatingQAPanel() {
     setFloatSize,
   ]);
 
-  // Handle minimize to hidden
-  const handleMinimize = useCallback(() => {
-    setPosition('hidden');
-  }, [setPosition]);
-
-  // Minimize button for floating mode
-  const minimizeAction = (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleMinimize}
-          aria-label="Minimize panel"
-        >
-          <Minimize2 className="h-4 w-4" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>Minimize</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-
   return (
     <div
       ref={panelRef}
@@ -212,7 +185,7 @@ export function FloatingQAPanel() {
         role="button"
         aria-label="Drag to move panel. Use arrow keys to reposition."
       >
-        <QAPanelHeader actions={minimizeAction} />
+        <QAPanelHeader />
       </div>
 
       {/* Content */}

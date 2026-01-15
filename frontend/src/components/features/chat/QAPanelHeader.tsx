@@ -3,6 +3,7 @@
 import {
   Check,
   EyeOff,
+  Minus,
   Move,
   PanelBottom,
   PanelRight,
@@ -17,6 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 import type { QAPanelPosition } from '@/stores/qaPanelStore';
 
@@ -50,10 +56,29 @@ export function QAPanelHeader({ actions }: QAPanelHeaderProps = {}) {
   const position = useQAPanelStore((state) => state.position);
   const setPosition = useQAPanelStore((state) => state.setPosition);
 
+  const handleMinimize = () => {
+    setPosition('hidden');
+  };
+
   return (
     <div className="flex items-center justify-between border-b p-3">
-      <h2 className="text-sm font-semibold">Q&A Assistant</h2>
+      <h2 className="text-sm font-semibold">ASK LDIP</h2>
       <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleMinimize}
+              aria-label="Minimize panel"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Minimize</p>
+          </TooltipContent>
+        </Tooltip>
         {actions}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

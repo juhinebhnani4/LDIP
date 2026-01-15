@@ -1,26 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { act } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FloatingQAPanel } from './FloatingQAPanel';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 
-// Mock Tooltip components
-vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="tooltip-content">{children}</div>
-  ),
-}));
-
-// Mock QAPanelHeader - receives actions prop
+// Mock QAPanelHeader - now has minimize button built-in
 vi.mock('./QAPanelHeader', () => ({
-  QAPanelHeader: ({ actions }: { actions?: React.ReactNode }) => (
-    <div data-testid="qa-panel-header">
-      Q&A Assistant
-      {actions}
-    </div>
+  QAPanelHeader: () => (
+    <div data-testid="qa-panel-header">ASK LDIP</div>
   ),
 }));
 
@@ -45,17 +31,10 @@ describe('FloatingQAPanel', () => {
     expect(dialog).toBeInTheDocument();
   });
 
-  it('renders Q&A Assistant title in header', () => {
+  it('renders ASK LDIP title in header', () => {
     render(<FloatingQAPanel />);
 
-    expect(screen.getByText('Q&A Assistant')).toBeInTheDocument();
-  });
-
-  it('renders minimize button with aria-label', () => {
-    render(<FloatingQAPanel />);
-
-    const button = screen.getByRole('button', { name: /minimize panel/i });
-    expect(button).toBeInTheDocument();
+    expect(screen.getByText('ASK LDIP')).toBeInTheDocument();
   });
 
   it('renders placeholder content', () => {
@@ -69,21 +48,6 @@ describe('FloatingQAPanel', () => {
 
     const handle = screen.getByRole('separator', { name: /resize panel/i });
     expect(handle).toBeInTheDocument();
-  });
-
-  it('sets position to hidden when minimize clicked', async () => {
-    const user = userEvent.setup();
-
-    act(() => {
-      useQAPanelStore.getState().setPosition('float');
-    });
-
-    render(<FloatingQAPanel />);
-
-    const button = screen.getByRole('button', { name: /minimize panel/i });
-    await user.click(button);
-
-    expect(useQAPanelStore.getState().position).toBe('hidden');
   });
 
   it('has fixed positioning with correct z-index', () => {
@@ -126,12 +90,6 @@ describe('FloatingQAPanel', () => {
     expect(dialog).toHaveClass('shadow-lg');
   });
 
-  it('renders tooltip for minimize button', () => {
-    render(<FloatingQAPanel />);
-
-    expect(screen.getByTestId('tooltip-content')).toHaveTextContent('Minimize');
-  });
-
   it('reuses QAPanelHeader component', () => {
     render(<FloatingQAPanel />);
 
@@ -139,25 +97,6 @@ describe('FloatingQAPanel', () => {
   });
 
   describe('Drag behavior', () => {
-    it('does not start drag when clicking button', () => {
-      render(<FloatingQAPanel />);
-
-      const button = screen.getByRole('button', { name: /minimize panel/i });
-
-      // Initial position
-      const initialX = useQAPanelStore.getState().floatX;
-      const initialY = useQAPanelStore.getState().floatY;
-
-      // Click button (should not start drag)
-      fireEvent.mouseDown(button);
-      fireEvent.mouseMove(document, { clientX: 500, clientY: 500 });
-      fireEvent.mouseUp(document);
-
-      // Position should not change
-      expect(useQAPanelStore.getState().floatX).toBe(initialX);
-      expect(useQAPanelStore.getState().floatY).toBe(initialY);
-    });
-
     it('has draggable header area with cursor-move class', () => {
       render(<FloatingQAPanel />);
 

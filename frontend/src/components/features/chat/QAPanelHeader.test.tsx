@@ -5,6 +5,15 @@ import { act } from '@testing-library/react';
 import { QAPanelHeader } from './QAPanelHeader';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 
+// Mock Tooltip components
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="tooltip-content">{children}</div>
+  ),
+}));
+
 // Mock DropdownMenu components
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: React.ReactNode }) => (
@@ -42,10 +51,10 @@ describe('QAPanelHeader', () => {
     });
   });
 
-  it('renders Q&A Assistant title', () => {
+  it('renders ASK LDIP title', () => {
     render(<QAPanelHeader />);
 
-    expect(screen.getByText('Q&A Assistant')).toBeInTheDocument();
+    expect(screen.getByText('ASK LDIP')).toBeInTheDocument();
   });
 
   it('renders position dropdown menu', () => {
@@ -151,10 +160,33 @@ describe('QAPanelHeader', () => {
   it('renders title with correct styling', () => {
     render(<QAPanelHeader />);
 
-    const title = screen.getByText('Q&A Assistant');
+    const title = screen.getByText('ASK LDIP');
     expect(title.tagName).toBe('H2');
     expect(title).toHaveClass('text-sm');
     expect(title).toHaveClass('font-semibold');
+  });
+
+  it('renders minimize button with aria-label', () => {
+    render(<QAPanelHeader />);
+
+    const button = screen.getByRole('button', { name: /minimize panel/i });
+    expect(button).toBeInTheDocument();
+  });
+
+  it('renders minimize tooltip', () => {
+    render(<QAPanelHeader />);
+
+    expect(screen.getByTestId('tooltip-content')).toHaveTextContent('Minimize');
+  });
+
+  it('calls setPosition with hidden when minimize clicked', async () => {
+    const user = userEvent.setup();
+    render(<QAPanelHeader />);
+
+    const button = screen.getByRole('button', { name: /minimize panel/i });
+    await user.click(button);
+
+    expect(useQAPanelStore.getState().position).toBe('hidden');
   });
 
   it('shows checkmark for the current position', () => {

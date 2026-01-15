@@ -181,10 +181,11 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Mock: Add new collaborator to list
+      const emailPrefix = emailToInvite.split('@')[0] ?? emailToInvite;
       const newCollaborator: Collaborator = {
         id: `temp-${Date.now()}`,
         email: emailToInvite,
-        name: emailToInvite.split('@')[0], // Use email prefix as name for mock
+        name: emailPrefix, // Use email prefix as name for mock
         role: role,
       };
 

@@ -1,36 +1,33 @@
-import { Clock } from 'lucide-react';
+import { TimelineContent } from '@/components/features/timeline';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 interface TimelinePageProps {
   params: Promise<{ matterId: string }>;
 }
 
 /**
- * Timeline Tab Placeholder Page
+ * Timeline Tab Page
  *
- * Will show vertical event list and horizontal multi-track timeline views.
+ * Displays chronological vertical list of events with:
+ * - Event count and date range header
+ * - Event cards with type icons, dates, descriptions
+ * - Actor links to Entities tab
+ * - Source document links
+ * - Verification status badges
+ * - Connector lines with duration between events
+ * - Gap detection for significant delays
  *
- * Story 10A.2: Tab Bar Navigation (placeholder)
- * Implementation: Epic 10B
+ * Story 10B.3: Timeline Tab Vertical List View
  */
 export default async function TimelinePage({ params }: TimelinePageProps) {
-  const { matterId } = await params;
+  // Wait for params (Next.js 15 async params)
+  await params;
 
   return (
-    <div className="container py-8" id="tabpanel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <Clock className="h-16 w-16 text-muted-foreground mb-4" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold mb-2">Timeline</h1>
-        <p className="text-muted-foreground max-w-md">
-          The Timeline tab will show events in vertical list and horizontal
-          multi-track views with filtering and manual event creation.
-        </p>
-        <p className="text-sm text-muted-foreground mt-4">
-          Coming in Epic 10B
-        </p>
-        <p className="text-xs text-muted-foreground/70 mt-2">
-          Matter ID: {matterId}
-        </p>
+    <TooltipProvider>
+      <div className="container py-6">
+        <TimelineContent />
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

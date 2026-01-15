@@ -206,3 +206,17 @@ export type {
   SummaryVerification,
   SummaryVerificationDecision,
 } from './summary';
+
+// Timeline types (Story 10B.3: Timeline Tab Vertical List View)
+export type {
+  DatePrecision,
+  TimelineEntityReference,
+  TimelineEvent,
+  TimelineEventType,
+  TimelinePaginationMeta,
+  TimelineResponse,
+  TimelineStats,
+  TimelineStatsResponse,
+  TimelineViewMode,
+  UseTimelineOptions,
+} from './timeline';

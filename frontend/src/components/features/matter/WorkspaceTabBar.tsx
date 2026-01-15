@@ -52,7 +52,7 @@ export const TAB_CONFIG: TabConfig[] = [
   { id: 'contradictions', label: 'Contradictions', icon: AlertTriangle, epic: 'Phase 2' },
   { id: 'verification', label: 'Verification', icon: CheckCircle, epic: 'Epic 10D' },
   { id: 'documents', label: 'Documents', icon: FolderOpen, epic: 'Epic 10D' },
-] as const satisfies readonly TabConfig[];
+];
 
 export const DEFAULT_TAB: TabId = 'summary';
 
@@ -193,10 +193,10 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
           return;
       }
 
-      if (targetIndex !== null) {
+      if (targetIndex !== null && targetIndex >= 0 && targetIndex < TAB_CONFIG.length) {
         event.preventDefault();
-        const targetTabId = TAB_CONFIG[targetIndex].id;
-        const targetRef = tabRefs.current.get(targetTabId);
+        const targetTab = TAB_CONFIG[targetIndex] as TabConfig;
+        const targetRef = tabRefs.current.get(targetTab.id);
         targetRef?.focus();
       }
     },

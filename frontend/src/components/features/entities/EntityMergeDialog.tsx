@@ -10,16 +10,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import {
-  User,
-  Building2,
-  Landmark,
-  Package,
-  ArrowRight,
-  Check,
-  AlertTriangle,
-  Loader2,
-} from 'lucide-react';
+import { ArrowRight, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,33 +31,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { EntityType, EntityListItem } from '@/types/entity';
-
-const entityTypeConfig: Record<
-  EntityType,
-  { icon: typeof User; color: string; label: string }
-> = {
-  PERSON: {
-    icon: User,
-    color: 'text-blue-600 dark:text-blue-400',
-    label: 'Person',
-  },
-  ORG: {
-    icon: Building2,
-    color: 'text-green-600 dark:text-green-400',
-    label: 'Organization',
-  },
-  INSTITUTION: {
-    icon: Landmark,
-    color: 'text-purple-600 dark:text-purple-400',
-    label: 'Institution',
-  },
-  ASSET: {
-    icon: Package,
-    color: 'text-amber-600 dark:text-amber-400',
-    label: 'Asset',
-  },
-};
+import { entityTypeConfig } from '@/lib/utils/entityConstants';
+import type { EntityListItem } from '@/types/entity';
 
 export interface EntityMergeDialogProps {
   open: boolean;

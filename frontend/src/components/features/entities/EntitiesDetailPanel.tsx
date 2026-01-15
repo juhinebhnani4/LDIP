@@ -11,11 +11,9 @@
  */
 
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import {
   User,
-  Building2,
-  Landmark,
-  Package,
   X,
   Focus,
   FileText,
@@ -46,8 +44,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useEntityMentions } from '@/hooks/useEntities';
+import { entityTypeConfig } from '@/lib/utils/entityConstants';
 import type {
-  EntityType,
   EntityWithRelations,
   RelationshipType,
   EntityMention,
@@ -62,32 +60,6 @@ export interface ViewInDocumentParams {
   bboxIds?: string[];
   entityId?: string;
 }
-
-const entityTypeConfig: Record<
-  EntityType,
-  { icon: typeof User; color: string; label: string }
-> = {
-  PERSON: {
-    icon: User,
-    color: 'text-blue-600 dark:text-blue-400',
-    label: 'Person',
-  },
-  ORG: {
-    icon: Building2,
-    color: 'text-green-600 dark:text-green-400',
-    label: 'Organization',
-  },
-  INSTITUTION: {
-    icon: Landmark,
-    color: 'text-purple-600 dark:text-purple-400',
-    label: 'Institution',
-  },
-  ASSET: {
-    icon: Package,
-    color: 'text-amber-600 dark:text-amber-400',
-    label: 'Asset',
-  },
-};
 
 const relationshipLabels: Record<RelationshipType, string> = {
   ALIAS_OF: 'Alias of',
@@ -159,6 +131,9 @@ export function EntitiesDetailPanel({
       await onAddAlias(newAlias.trim());
       setNewAlias('');
       setAddAliasMode(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to add alias';
+      toast.error(message);
     } finally {
       setIsAddingAlias(false);
     }

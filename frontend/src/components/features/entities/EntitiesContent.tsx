@@ -37,11 +37,11 @@ import {
   filterEdgesForNodes,
 } from '@/lib/utils/entityGraph';
 import { DEFAULT_ENTITY_FILTERS } from '@/types/entity';
+import { ENTITY_VIEW_HEIGHT } from '@/lib/utils/entityConstants';
 import type {
   EntityViewMode,
   EntityFilterState,
   EntityGraphData,
-  EntityListItem,
 } from '@/types/entity';
 
 export interface EntitiesContentProps {
@@ -276,7 +276,7 @@ export function EntitiesContent({
     return (
       <div
         className={cn(
-          'flex items-center justify-center h-[600px] bg-muted/30 border rounded-lg',
+          `flex items-center justify-center ${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg`,
           className
         )}
       >
@@ -309,7 +309,7 @@ export function EntitiesContent({
         {/* Main content area */}
         <div className="flex-1 min-w-0">
           {isLoading ? (
-            <div className="h-[600px] bg-muted/30 border rounded-lg flex items-center justify-center">
+            <div className={`${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg flex items-center justify-center`}>
               <div className="space-y-4 text-center">
                 <Skeleton className="h-8 w-8 rounded-full mx-auto" />
                 <Skeleton className="h-4 w-32 mx-auto" />
@@ -321,7 +321,7 @@ export function EntitiesContent({
               selectedNodeId={selectedEntityId}
               onNodeSelect={handleEntitySelect}
               focusNodeId={focusNodeId}
-              className="h-[600px]"
+              className={ENTITY_VIEW_HEIGHT}
             />
           ) : viewMode === 'list' ? (
             <EntitiesListView

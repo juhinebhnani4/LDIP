@@ -544,18 +544,39 @@ None - implementation completed without issues
 9. Updated `EntitiesContent.tsx` to integrate all views, merge flow, and alias management
 10. All 39 EntitiesDetailPanel tests passing
 
+### Code Review Fixes (2026-01-15)
+
+**Issues Fixed:**
+1. ✅ [HIGH] Removed unused `EntityListItem` import from `EntitiesContent.tsx`
+2. ✅ [HIGH] Removed unused `Check` import from `EntitiesGridView.tsx`
+3. ✅ [HIGH] Removed unused `Circle` import from `EntitiesListView.tsx`
+4. ✅ [HIGH] Added error handling with toast notification to `handleAddAlias` in `EntitiesDetailPanel.tsx`
+5. ✅ [LOW] Extracted `entityTypeConfig` to shared utility `frontend/src/lib/utils/entityConstants.ts` (eliminated 4x duplication)
+6. ✅ [LOW] Extracted hardcoded `h-[600px]` height to `ENTITY_VIEW_HEIGHT` constant in shared utility
+
+**Files Updated:**
+- `EntitiesContent.tsx` - Removed unused import, added shared constant imports
+- `EntitiesGridView.tsx` - Removed unused import, refactored to use shared constants
+- `EntitiesListView.tsx` - Removed unused import, refactored to use shared constants
+- `EntitiesDetailPanel.tsx` - Added error handling with toast, refactored to use shared constants
+- `EntityMergeDialog.tsx` - Refactored to use shared constants
+
+**New Shared Utility Created:**
+- `frontend/src/lib/utils/entityConstants.ts` - Shared `entityTypeConfig` and `ENTITY_VIEW_HEIGHT` constants
+
 ### File List
 
 **New Files:**
 - `frontend/src/components/features/entities/EntityMergeDialog.tsx`
 - `frontend/src/components/features/entities/EntitiesListView.tsx`
 - `frontend/src/components/features/entities/EntitiesGridView.tsx`
+- `frontend/src/lib/utils/entityConstants.ts` - Shared entity constants (added in code review)
 
 **Modified Files:**
-- `frontend/src/components/features/entities/EntitiesDetailPanel.tsx` - Enhanced with paginated mentions, document links, alias management
+- `frontend/src/components/features/entities/EntitiesDetailPanel.tsx` - Enhanced with paginated mentions, document links, alias management, error handling
 - `frontend/src/components/features/entities/EntitiesDetailPanel.test.tsx` - Added tests for new features
 - `frontend/src/components/features/entities/EntitiesHeader.tsx` - Added multi-select mode and merge button
-- `frontend/src/components/features/entities/EntitiesContent.tsx` - Integrated all views and merge flow
+- `frontend/src/components/features/entities/EntitiesContent.tsx` - Integrated all views and merge flow, refactored imports
 - `frontend/src/components/features/entities/index.ts` - Updated barrel exports
 - `frontend/src/lib/api/entities.ts` - Added merge and alias API functions
 - `frontend/src/hooks/useEntities.ts` - Added merge and alias mutation hooks
@@ -566,3 +587,4 @@ None - implementation completed without issues
 |------|--------|--------|
 | 2026-01-15 | Story created with comprehensive developer context | Claude Opus 4.5 |
 | 2026-01-15 | Story implementation completed - all tasks done | Claude Opus 4.5 |
+| 2026-01-15 | Code review fixes: 4 HIGH, 2 LOW issues fixed; created shared entityConstants.ts | Claude Opus 4.5 |

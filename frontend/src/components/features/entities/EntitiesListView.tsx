@@ -10,14 +10,9 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import {
-  User,
-  Building2,
-  Landmark,
-  Package,
   ChevronUp,
   ChevronDown,
   CheckCircle2,
-  Circle,
   AlertTriangle,
   Clock,
 } from 'lucide-react';
@@ -34,33 +29,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { EntityType, EntityListItem } from '@/types/entity';
-
-const entityTypeConfig: Record<
-  EntityType,
-  { icon: typeof User; color: string; label: string }
-> = {
-  PERSON: {
-    icon: User,
-    color: 'text-blue-600 dark:text-blue-400',
-    label: 'Person',
-  },
-  ORG: {
-    icon: Building2,
-    color: 'text-green-600 dark:text-green-400',
-    label: 'Organization',
-  },
-  INSTITUTION: {
-    icon: Landmark,
-    color: 'text-purple-600 dark:text-purple-400',
-    label: 'Institution',
-  },
-  ASSET: {
-    icon: Package,
-    color: 'text-amber-600 dark:text-amber-400',
-    label: 'Asset',
-  },
-};
+import { entityTypeConfig, ENTITY_VIEW_HEIGHT } from '@/lib/utils/entityConstants';
+import type { EntityListItem } from '@/types/entity';
 
 type SortField = 'canonicalName' | 'entityType' | 'mentionCount';
 type SortDirection = 'asc' | 'desc';
@@ -152,7 +122,7 @@ export function EntitiesListView({
     return (
       <div
         className={cn(
-          'flex items-center justify-center h-[600px] bg-muted/30 border rounded-lg',
+          `flex items-center justify-center ${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg`,
           className
         )}
       >
@@ -165,7 +135,7 @@ export function EntitiesListView({
 
   return (
     <div className={cn('border rounded-lg bg-background', className)}>
-      <ScrollArea className="h-[600px]">
+      <ScrollArea className={ENTITY_VIEW_HEIGHT}>
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>

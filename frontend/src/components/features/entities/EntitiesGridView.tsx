@@ -9,16 +9,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  User,
-  Building2,
-  Landmark,
-  Package,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Check,
-} from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,37 +20,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { EntityType, EntityListItem } from '@/types/entity';
-
-const entityTypeConfig: Record<
-  EntityType,
-  { icon: typeof User; color: string; bgColor: string; label: string }
-> = {
-  PERSON: {
-    icon: User,
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-50 dark:bg-blue-950',
-    label: 'Person',
-  },
-  ORG: {
-    icon: Building2,
-    color: 'text-green-600 dark:text-green-400',
-    bgColor: 'bg-green-50 dark:bg-green-950',
-    label: 'Organization',
-  },
-  INSTITUTION: {
-    icon: Landmark,
-    color: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'bg-purple-50 dark:bg-purple-950',
-    label: 'Institution',
-  },
-  ASSET: {
-    icon: Package,
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-950',
-    label: 'Asset',
-  },
-};
+import { entityTypeConfig, ENTITY_VIEW_HEIGHT } from '@/lib/utils/entityConstants';
+import type { EntityListItem } from '@/types/entity';
 
 export interface EntitiesGridViewProps {
   entities: EntityListItem[];
@@ -120,7 +82,7 @@ export function EntitiesGridView({
     return (
       <div
         className={cn(
-          'flex items-center justify-center h-[600px] bg-muted/30 border rounded-lg',
+          `flex items-center justify-center ${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg`,
           className
         )}
       >
@@ -132,7 +94,7 @@ export function EntitiesGridView({
   }
 
   return (
-    <ScrollArea className={cn('h-[600px] pr-4', className)}>
+    <ScrollArea className={cn(ENTITY_VIEW_HEIGHT, 'pr-4', className)}>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-1">
         {entities.map((entity) => {
           const config = entityTypeConfig[entity.entityType];

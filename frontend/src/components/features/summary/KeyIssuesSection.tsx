@@ -1,17 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import { CheckCircle2, Clock, Flag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { KeyIssue, KeyIssueVerificationStatus } from '@/types/summary';
+import { InlineVerificationButtons } from './InlineVerificationButtons';
+import { SummaryNotesDialog } from './SummaryNotesDialog';
+import type { KeyIssue, KeyIssueVerificationStatus, SummaryVerificationDecision } from '@/types/summary';
 
 /**
  * Key Issues Section Component
  *
  * Displays the numbered list of key issues with verification status badges.
+ * Now includes inline verification buttons on hover.
  *
  * Story 10B.1: Summary Tab Content (AC #1)
+ * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
  */
 
 interface KeyIssuesSectionProps {
@@ -19,17 +24,23 @@ interface KeyIssuesSectionProps {
   keyIssues: KeyIssue[];
   /** Optional className for styling */
   className?: string;
+  /** Callback when an issue is verified */
+  onVerifyIssue?: (issueId: string) => Promise<void>;
+  /** Callback when an issue is flagged */
+  onFlagIssue?: (issueId: string) => Promise<void>;
+  /** Callback when note is saved for an issue */
+  onSaveIssueNote?: (issueId: string, note: string) => Promise<void>;
 }
 
-interface VerificationBadgeProps {
+interface IssueVerificationBadgeProps {
   /** Verification status */
   status: KeyIssueVerificationStatus;
 }
 
 /**
- * Verification status badge
+ * Verification status badge for key issues
  */
-function VerificationBadge({ status }: VerificationBadgeProps) {
+function IssueVerificationBadge({ status }: IssueVerificationBadgeProps) {
   switch (status) {
     case 'verified':
       return (
@@ -60,29 +71,99 @@ function VerificationBadge({ status }: VerificationBadgeProps) {
 interface KeyIssueItemProps {
   /** Key issue data */
   issue: KeyIssue;
+  /** Callback when verified */
+  onVerify?: () => Promise<void>;
+  /** Callback when flagged */
+  onFlag?: () => Promise<void>;
+  /** Callback when note is saved */
+  onSaveNote?: (note: string) => Promise<void>;
 }
 
 /**
- * Individual key issue item
+ * Individual key issue item with inline verification
  */
-function KeyIssueItem({ issue }: KeyIssueItemProps) {
+function KeyIssueItem({ issue, onVerify, onFlag, onSaveNote }: KeyIssueItemProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
+  const [verificationDecision, setVerificationDecision] = useState<SummaryVerificationDecision | undefined>(
+    issue.verificationStatus === 'verified' ? 'verified' :
+    issue.verificationStatus === 'flagged' ? 'flagged' : undefined
+  );
+
+  const handleVerify = async () => {
+    if (onVerify) {
+      await onVerify();
+      setVerificationDecision('verified');
+    }
+  };
+
+  const handleFlag = async () => {
+    if (onFlag) {
+      await onFlag();
+      setVerificationDecision('flagged');
+    }
+  };
+
+  const handleSaveNote = async (note: string) => {
+    if (onSaveNote) {
+      await onSaveNote(note);
+    }
+  };
+
+  // Determine current status for badge display
+  const currentStatus: KeyIssueVerificationStatus =
+    verificationDecision === 'verified' ? 'verified' :
+    verificationDecision === 'flagged' ? 'flagged' :
+    issue.verificationStatus;
+
   return (
-    <li className="flex items-start gap-3 py-3">
-      <span
-        className="flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground text-sm font-medium shrink-0"
-        aria-hidden="true"
+    <>
+      <li
+        className="flex items-start gap-3 py-3 relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        {issue.number}
-      </span>
-      <div className="flex-1 min-w-0 pt-0.5">
-        <p className="text-sm leading-relaxed">{issue.title}</p>
-      </div>
-      <VerificationBadge status={issue.verificationStatus} />
-    </li>
+        <span
+          className="flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground text-sm font-medium shrink-0"
+          aria-hidden="true"
+        >
+          {issue.number}
+        </span>
+        <div className="flex-1 min-w-0 pt-0.5">
+          <p className="text-sm leading-relaxed">{issue.title}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <InlineVerificationButtons
+            sectionType="key_issue"
+            sectionId={issue.id}
+            currentDecision={verificationDecision}
+            onVerify={handleVerify}
+            onFlag={handleFlag}
+            onAddNote={() => setIsNotesDialogOpen(true)}
+            isVisible={isHovered}
+          />
+          <IssueVerificationBadge status={currentStatus} />
+        </div>
+      </li>
+
+      <SummaryNotesDialog
+        isOpen={isNotesDialogOpen}
+        onClose={() => setIsNotesDialogOpen(false)}
+        onSave={handleSaveNote}
+        sectionType="key_issue"
+        sectionId={issue.id}
+      />
+    </>
   );
 }
 
-export function KeyIssuesSection({ keyIssues, className }: KeyIssuesSectionProps) {
+export function KeyIssuesSection({
+  keyIssues,
+  className,
+  onVerifyIssue,
+  onFlagIssue,
+  onSaveIssueNote,
+}: KeyIssuesSectionProps) {
   if (keyIssues.length === 0) {
     return (
       <section className={className} aria-labelledby="key-issues-heading">
@@ -128,7 +209,13 @@ export function KeyIssuesSection({ keyIssues, className }: KeyIssuesSectionProps
         <CardContent className="pt-0">
           <ol className="divide-y" aria-label="Key issues list">
             {keyIssues.map((issue) => (
-              <KeyIssueItem key={issue.id} issue={issue} />
+              <KeyIssueItem
+                key={issue.id}
+                issue={issue}
+                onVerify={onVerifyIssue ? () => onVerifyIssue(issue.id) : undefined}
+                onFlag={onFlagIssue ? () => onFlagIssue(issue.id) : undefined}
+                onSaveNote={onSaveIssueNote ? (note) => onSaveIssueNote(issue.id, note) : undefined}
+              />
             ))}
           </ol>
         </CardContent>

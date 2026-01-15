@@ -19,5 +19,6 @@ export { useVerificationQueue } from './useVerificationQueue';
 export { useVerificationStats } from './useVerificationStats';
 export { useVerificationActions } from './useVerificationActions';
 
-// Summary hooks (Story 10B.1)
+// Summary hooks (Story 10B.1, Story 10B.2)
 export { useMatterSummary } from './useMatterSummary';
+export { useSummaryVerification } from './useSummaryVerification';

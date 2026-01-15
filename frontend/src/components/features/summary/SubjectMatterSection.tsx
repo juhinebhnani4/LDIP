@@ -1,20 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { FileText, ExternalLink, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { SubjectMatter } from '@/types/summary';
+import { InlineVerificationButtons } from './InlineVerificationButtons';
+import { VerificationBadge } from './VerificationBadge';
+import { SummaryNotesDialog } from './SummaryNotesDialog';
+import type { SubjectMatter, SummaryVerificationDecision } from '@/types/summary';
 
 /**
  * Subject Matter Section Component
  *
  * Displays the AI-generated subject matter description with source citations.
+ * Now includes inline verification buttons on hover.
  *
  * Story 10B.1: Summary Tab Content (AC #1)
+ * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
  */
 
 interface SubjectMatterSectionProps {
@@ -22,38 +27,77 @@ interface SubjectMatterSectionProps {
   subjectMatter: SubjectMatter;
   /** Optional className for styling */
   className?: string;
+  /** Callback when section is verified */
+  onVerify?: () => Promise<void>;
+  /** Callback when section is flagged */
+  onFlag?: () => Promise<void>;
+  /** Callback when note is saved */
+  onSaveNote?: (note: string) => Promise<void>;
 }
 
 export function SubjectMatterSection({
   subjectMatter,
   className,
+  onVerify,
+  onFlag,
+  onSaveNote,
 }: SubjectMatterSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
+  const [isHovered, setIsHovered] = useState(false);
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
+  const [verificationDecision, setVerificationDecision] = useState<SummaryVerificationDecision | undefined>(
+    subjectMatter.isVerified ? 'verified' : undefined
+  );
+
+  const handleVerify = async () => {
+    if (onVerify) {
+      await onVerify();
+      setVerificationDecision('verified');
+    }
+  };
+
+  const handleFlag = async () => {
+    if (onFlag) {
+      await onFlag();
+      setVerificationDecision('flagged');
+    }
+  };
+
+  const handleSaveNote = async (note: string) => {
+    if (onSaveNote) {
+      await onSaveNote(note);
+    }
+  };
 
   return (
     <section className={className} aria-labelledby="subject-matter-heading">
       <h2 id="subject-matter-heading" className="text-lg font-semibold mb-4">
         Subject Matter
       </h2>
-      <Card>
+      <Card
+        className="relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               <CardTitle className="text-base">Case Overview</CardTitle>
             </div>
-            {subjectMatter.isVerified ? (
-              <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
-                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-                Verified
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="gap-1 text-amber-600 border-amber-600">
-                <Clock className="h-3 w-3" aria-hidden="true" />
-                Pending Verification
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              <InlineVerificationButtons
+                sectionType="subject_matter"
+                sectionId={matterId}
+                currentDecision={verificationDecision}
+                onVerify={handleVerify}
+                onFlag={handleFlag}
+                onAddNote={() => setIsNotesDialogOpen(true)}
+                isVisible={isHovered}
+              />
+              <VerificationBadge decision={verificationDecision} />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-2">
@@ -84,18 +128,16 @@ export function SubjectMatterSection({
               </div>
             </div>
           )}
-
-          {/* Verification button */}
-          {!subjectMatter.isVerified && (
-            <div className="mt-4 pt-4 border-t">
-              <Button variant="outline" size="sm">
-                <CheckCircle2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                Verify
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      <SummaryNotesDialog
+        isOpen={isNotesDialogOpen}
+        onClose={() => setIsNotesDialogOpen(false)}
+        onSave={handleSaveNote}
+        sectionType="subject_matter"
+        sectionId={matterId}
+      />
     </section>
   );
 }

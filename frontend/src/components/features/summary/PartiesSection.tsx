@@ -1,21 +1,27 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { User, ExternalLink, CheckCircle2, Clock } from 'lucide-react';
+import { User, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { PartyInfo, PartyRole } from '@/types/summary';
+import { InlineVerificationButtons } from './InlineVerificationButtons';
+import { VerificationBadge } from './VerificationBadge';
+import { SummaryNotesDialog } from './SummaryNotesDialog';
+import type { PartyInfo, PartyRole, SummaryVerificationDecision } from '@/types/summary';
 
 /**
  * Parties Section Component
  *
  * Displays the key parties (Petitioner, Respondent) in the matter.
  * Each party card shows entity name, source reference, and verification status.
+ * Now includes inline verification buttons on hover.
  *
  * Story 10B.1: Summary Tab Content (AC #3)
+ * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
  */
 
 interface PartiesSectionProps {
@@ -23,6 +29,12 @@ interface PartiesSectionProps {
   parties: PartyInfo[];
   /** Optional className for styling */
   className?: string;
+  /** Callback when a party is verified */
+  onVerifyParty?: (entityId: string) => Promise<void>;
+  /** Callback when a party is flagged */
+  onFlagParty?: (entityId: string) => Promise<void>;
+  /** Callback when note is saved for a party */
+  onSavePartyNote?: (entityId: string, note: string) => Promise<void>;
 }
 
 interface PartyCardProps {
@@ -30,6 +42,12 @@ interface PartyCardProps {
   party: PartyInfo;
   /** Matter ID for navigation */
   matterId: string;
+  /** Callback when verified */
+  onVerify?: () => Promise<void>;
+  /** Callback when flagged */
+  onFlag?: () => Promise<void>;
+  /** Callback when note is saved */
+  onSaveNote?: (note: string) => Promise<void>;
 }
 
 /**
@@ -63,67 +81,114 @@ function getRoleBadgeVariant(role: PartyRole): 'default' | 'secondary' | 'outlin
 /**
  * Individual party card
  */
-function PartyCard({ party, matterId }: PartyCardProps) {
+function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
+  const [verificationDecision, setVerificationDecision] = useState<SummaryVerificationDecision | undefined>(
+    party.isVerified ? 'verified' : undefined
+  );
+
+  const handleVerify = async () => {
+    if (onVerify) {
+      await onVerify();
+      setVerificationDecision('verified');
+    }
+  };
+
+  const handleFlag = async () => {
+    if (onFlag) {
+      await onFlag();
+      setVerificationDecision('flagged');
+    }
+  };
+
+  const handleSaveNote = async (note: string) => {
+    if (onSaveNote) {
+      await onSaveNote(note);
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <Badge variant={getRoleBadgeVariant(party.role)}>
-            {getRoleLabel(party.role)}
-          </Badge>
-          {party.isVerified ? (
-            <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
-              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
-              Verified
+    <>
+      <Card
+        className="relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <Badge variant={getRoleBadgeVariant(party.role)}>
+              {getRoleLabel(party.role)}
             </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1 text-amber-600 border-amber-600">
-              <Clock className="h-3 w-3" aria-hidden="true" />
-              Pending
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <div className="flex items-start gap-3">
-          <div className="flex items-center justify-center size-10 rounded-full bg-muted">
-            <User className="size-5 text-muted-foreground" aria-hidden="true" />
+            <div className="flex items-center gap-2">
+              <InlineVerificationButtons
+                sectionType="parties"
+                sectionId={party.entityId}
+                currentDecision={verificationDecision}
+                onVerify={handleVerify}
+                onFlag={handleFlag}
+                onAddNote={() => setIsNotesDialogOpen(true)}
+                isVisible={isHovered}
+              />
+              <VerificationBadge decision={verificationDecision} />
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-base truncate">{party.entityName}</h3>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {party.sourceDocument}, p. {party.sourcePage}
-            </p>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="flex items-start gap-3">
+            <div className="flex items-center justify-center size-10 rounded-full bg-muted">
+              <User className="size-5 text-muted-foreground" aria-hidden="true" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-base truncate">{party.entityName}</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {party.sourceDocument}, p. {party.sourcePage}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2 mt-4">
-          <Button asChild variant="outline" size="sm" className="flex-1">
-            <Link href={`/matters/${matterId}/entities?entityId=${party.entityId}`}>
-              <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              View Entity
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="flex-1"
-          >
-            <Link
-              href={`/matters/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
-              aria-label={`View source: ${party.sourceDocument}, page ${party.sourcePage}`}
+          <div className="flex gap-2 mt-4">
+            <Button asChild variant="outline" size="sm" className="flex-1">
+              <Link href={`/matters/${matterId}/entities?entityId=${party.entityId}`}>
+                <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                View Entity
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="flex-1"
             >
-              <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              View Source
-            </Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+              <Link
+                href={`/matters/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
+                aria-label={`View source: ${party.sourceDocument}, page ${party.sourcePage}`}
+              >
+                <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                View Source
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <SummaryNotesDialog
+        isOpen={isNotesDialogOpen}
+        onClose={() => setIsNotesDialogOpen(false)}
+        onSave={handleSaveNote}
+        sectionType="parties"
+        sectionId={party.entityId}
+      />
+    </>
   );
 }
 
-export function PartiesSection({ parties, className }: PartiesSectionProps) {
+export function PartiesSection({
+  parties,
+  className,
+  onVerifyParty,
+  onFlagParty,
+  onSavePartyNote,
+}: PartiesSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
 
@@ -145,17 +210,26 @@ export function PartiesSection({ parties, className }: PartiesSectionProps) {
     );
   }
 
+  const renderPartyCard = (party: PartyInfo) => (
+    <PartyCard
+      key={party.entityId}
+      party={party}
+      matterId={matterId}
+      onVerify={onVerifyParty ? () => onVerifyParty(party.entityId) : undefined}
+      onFlag={onFlagParty ? () => onFlagParty(party.entityId) : undefined}
+      onSaveNote={onSavePartyNote ? (note) => onSavePartyNote(party.entityId, note) : undefined}
+    />
+  );
+
   return (
     <section className={className} aria-labelledby="parties-heading">
       <h2 id="parties-heading" className="text-lg font-semibold mb-4">
         Parties
       </h2>
       <div className="grid gap-4 sm:grid-cols-2">
-        {petitioner && <PartyCard party={petitioner} matterId={matterId} />}
-        {respondent && <PartyCard party={respondent} matterId={matterId} />}
-        {otherParties.map((party) => (
-          <PartyCard key={party.entityId} party={party} matterId={matterId} />
-        ))}
+        {petitioner && renderPartyCard(petitioner)}
+        {respondent && renderPartyCard(respondent)}
+        {otherParties.map(renderPartyCard)}
       </div>
     </section>
   );

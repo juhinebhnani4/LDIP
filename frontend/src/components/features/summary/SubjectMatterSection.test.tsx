@@ -67,11 +67,13 @@ describe('SubjectMatterSection', () => {
   });
 
   describe('verification status', () => {
-    it('shows Pending Verification badge when not verified', () => {
+    it('shows no verification badge when not verified', () => {
       const subjectMatter = createMockSubjectMatter({ isVerified: false });
       render(<SubjectMatterSection subjectMatter={subjectMatter} />);
 
-      expect(screen.getByText('Pending Verification')).toBeInTheDocument();
+      // When not verified, no badge is shown until user takes action
+      expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+      expect(screen.queryByText('Flagged')).not.toBeInTheDocument();
     });
 
     it('shows Verified badge when verified', () => {
@@ -81,18 +83,23 @@ describe('SubjectMatterSection', () => {
       expect(screen.getByText('Verified')).toBeInTheDocument();
     });
 
-    it('shows Verify button when not verified', () => {
+    it('has inline verification buttons accessible on hover', () => {
       const subjectMatter = createMockSubjectMatter({ isVerified: false });
       render(<SubjectMatterSection subjectMatter={subjectMatter} />);
 
-      expect(screen.getByRole('button', { name: /Verify/i })).toBeInTheDocument();
+      // Verification buttons should be present (even if hidden via opacity)
+      expect(screen.getByRole('button', { name: /verify this section/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /flag this section/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add note to this section/i })).toBeInTheDocument();
     });
 
-    it('hides Verify button when verified', () => {
+    it('hides verify button when already verified', () => {
       const subjectMatter = createMockSubjectMatter({ isVerified: true });
       render(<SubjectMatterSection subjectMatter={subjectMatter} />);
 
-      expect(screen.queryByRole('button', { name: /^Verify$/i })).not.toBeInTheDocument();
+      // Verify button should be disabled when already verified
+      const verifyButton = screen.getByRole('button', { name: /verify this section/i });
+      expect(verifyButton).toBeDisabled();
     });
   });
 

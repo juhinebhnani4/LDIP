@@ -70,18 +70,29 @@ describe('PartiesSection', () => {
   });
 
   describe('verification status', () => {
-    it('shows Pending badge for unverified party', () => {
-      const parties = createMockParties([{ isVerified: false }]);
+    it('shows no verification badge for unverified party', () => {
+      const parties = createMockParties([{ isVerified: false }, { isVerified: false }]);
       render(<PartiesSection parties={parties} />);
 
-      expect(screen.getByText('Pending')).toBeInTheDocument();
+      // When not verified, no badge is shown until user takes action
+      expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+      expect(screen.queryByText('Flagged')).not.toBeInTheDocument();
     });
 
     it('shows Verified badge for verified party', () => {
-      const parties = createMockParties([{}, { isVerified: true }]);
+      const parties = createMockParties([{ isVerified: false }, { isVerified: true }]);
       render(<PartiesSection parties={parties} />);
 
       expect(screen.getByText('Verified')).toBeInTheDocument();
+    });
+
+    it('has inline verification buttons for each party', () => {
+      const parties = createMockParties([{ isVerified: false }, { isVerified: false }]);
+      render(<PartiesSection parties={parties} />);
+
+      // Each party should have verification buttons (2 parties * 3 buttons = 6)
+      const verifyButtons = screen.getAllByRole('button', { name: /verify this section/i });
+      expect(verifyButtons).toHaveLength(2);
     });
   });
 

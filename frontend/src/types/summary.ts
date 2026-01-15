@@ -4,7 +4,70 @@
  * Types for the Matter Summary tab data structure.
  *
  * Story 10B.1: Summary Tab Content
+ * Story 10B.2: Summary Tab Verification and Edit
  */
+
+/**
+ * Summary verification decision
+ */
+export type SummaryVerificationDecision = 'verified' | 'flagged';
+
+/**
+ * Summary section types that can be verified
+ */
+export type SummarySectionType =
+  | 'parties'
+  | 'subject_matter'
+  | 'current_status'
+  | 'key_issue';
+
+/**
+ * Summary section verification record
+ */
+export interface SummaryVerification {
+  /** Section type */
+  sectionType: SummarySectionType;
+  /** Section ID (e.g., party entityId, issue id) */
+  sectionId: string;
+  /** Verification decision */
+  decision: SummaryVerificationDecision;
+  /** User who verified */
+  verifiedBy: string;
+  /** Verification timestamp (ISO) */
+  verifiedAt: string;
+  /** Optional notes */
+  notes?: string;
+}
+
+/**
+ * Summary section note
+ */
+export interface SummaryNote {
+  /** Section type */
+  sectionType: SummarySectionType;
+  /** Section ID */
+  sectionId: string;
+  /** Note text */
+  text: string;
+  /** Created by user */
+  createdBy: string;
+  /** Created timestamp (ISO) */
+  createdAt: string;
+}
+
+/**
+ * Edit history for summary sections
+ */
+export interface SummaryEditHistory {
+  /** Original AI-generated content */
+  originalContent: string;
+  /** User-edited content */
+  editedContent: string;
+  /** Edited by user */
+  editedBy: string;
+  /** Edited timestamp (ISO) */
+  editedAt: string;
+}
 
 /**
  * Type of attention item requiring user action

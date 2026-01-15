@@ -1,36 +1,28 @@
-import { FolderOpen } from 'lucide-react';
+import { DocumentsContent } from '@/components/features/document/DocumentsContent';
 
 interface DocumentsPageProps {
   params: Promise<{ matterId: string }>;
 }
 
 /**
- * Documents Tab Placeholder Page
+ * Documents Tab Page
  *
- * Will show file list with document actions (download, delete, OCR status).
+ * Displays the document list for a matter with upload functionality.
  *
- * Story 10A.2: Tab Bar Navigation (placeholder)
- * Implementation: Epic 10D
+ * Story 10D.3: Documents Tab File List
+ * Task 5: Update documents page to use DocumentsContent
  */
 export default async function DocumentsPage({ params }: DocumentsPageProps) {
   const { matterId } = await params;
 
   return (
-    <div className="container py-8" id="tabpanel-documents" role="tabpanel" aria-labelledby="tab-documents">
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold mb-2">Documents</h1>
-        <p className="text-muted-foreground max-w-md">
-          The Documents tab will show a file list with document actions
-          including download, delete, and OCR status information.
-        </p>
-        <p className="text-sm text-muted-foreground mt-4">
-          Coming in Epic 10D
-        </p>
-        <p className="text-xs text-muted-foreground/70 mt-2">
-          Matter ID: {matterId}
-        </p>
-      </div>
+    <div
+      className="container py-8"
+      id="tabpanel-documents"
+      role="tabpanel"
+      aria-labelledby="tab-documents"
+    >
+      <DocumentsContent matterId={matterId} />
     </div>
   );
 }

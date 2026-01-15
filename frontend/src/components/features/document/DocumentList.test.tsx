@@ -30,6 +30,7 @@ const mockDocuments: DocumentListItem[] = [
     matterId: 'matter-123',
     filename: 'petition.pdf',
     fileSize: 1024 * 100, // 100 KB
+    pageCount: 25,
     documentType: 'case_file',
     isReferenceMaterial: false,
     status: 'completed',
@@ -43,6 +44,7 @@ const mockDocuments: DocumentListItem[] = [
     matterId: 'matter-123',
     filename: 'indian_contract_act.pdf',
     fileSize: 1024 * 500, // 500 KB
+    pageCount: 120,
     documentType: 'act',
     isReferenceMaterial: true,
     status: 'pending',
@@ -56,6 +58,7 @@ const mockDocuments: DocumentListItem[] = [
     matterId: 'matter-123',
     filename: 'annexure_a.pdf',
     fileSize: 1024 * 250, // 250 KB
+    pageCount: null,
     documentType: 'annexure',
     isReferenceMaterial: false,
     status: 'processing',
@@ -139,16 +142,15 @@ describe('DocumentList', () => {
       });
     });
 
-    it('displays status labels', async () => {
+    it('displays user-friendly status labels per AC requirements', async () => {
       render(<DocumentList matterId={matterId} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Completed')).toBeInTheDocument();
-        // "Pending" appears in both status column and OCR Quality badge for pending docs
-        expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(1);
-        // "Processing" appears in both table header column AND status label for docs with status: 'processing'
-        // Use getAllByText since there are multiple matches (header + status label)
-        expect(screen.getAllByText('Processing').length).toBeGreaterThanOrEqual(2);
+        // AC says: completed/ocr_complete -> "Indexed", processing/pending -> "Processing", failed -> "Failed"
+        expect(screen.getByText('Indexed')).toBeInTheDocument();
+        // "Processing" appears multiple times: header column AND status labels for pending/processing docs
+        // Use getAllByText since there are multiple matches
+        expect(screen.getAllByText('Processing').length).toBeGreaterThanOrEqual(3); // header + 2 docs
       });
     });
 
@@ -507,6 +509,49 @@ describe('DocumentList', () => {
       // Selection should be cleared
       await waitFor(() => {
         expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Page Count Column (AC #1)', () => {
+    it('displays page count for documents with page count', async () => {
+      render(<DocumentList matterId={matterId} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('25')).toBeInTheDocument(); // doc-1
+        expect(screen.getByText('120')).toBeInTheDocument(); // doc-2
+      });
+    });
+
+    it('displays dash for documents without page count', async () => {
+      render(<DocumentList matterId={matterId} />);
+
+      await waitFor(() => {
+        // doc-3 has pageCount: null, should show "—"
+        expect(screen.getByText('—')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Action Menu Column (Story 10D.4 placeholder)', () => {
+    it('renders action menu buttons for each document', async () => {
+      render(<DocumentList matterId={matterId} />);
+
+      await waitFor(() => {
+        // Should have action buttons for each document
+        const actionButtons = screen.getAllByRole('button', { name: /actions for/i });
+        expect(actionButtons.length).toBe(3); // 3 documents
+      });
+    });
+
+    it('action menu buttons are disabled (placeholder for Story 10D.4)', async () => {
+      render(<DocumentList matterId={matterId} />);
+
+      await waitFor(() => {
+        const actionButtons = screen.getAllByRole('button', { name: /actions for/i });
+        actionButtons.forEach((button) => {
+          expect(button).toBeDisabled();
+        });
       });
     });
   });

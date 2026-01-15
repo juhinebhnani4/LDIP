@@ -96,6 +96,7 @@ export interface DocumentListItem {
   matterId: string;
   filename: string;
   fileSize: number;
+  pageCount: number | null;
   documentType: DocumentType;
   isReferenceMaterial: boolean;
   status: DocumentStatus;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { MoreVertical } from 'lucide-react';
 import type {
   DocumentFilters,
   DocumentListItem,
@@ -19,7 +20,7 @@ import { DocumentTypeBadge } from './DocumentTypeBadge';
 import { OCRQualityBadge } from './OCRQualityBadge';
 import { DocumentProcessingStatus } from './DocumentProcessingStatus';
 import { Button } from '@/components/ui/button';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -51,12 +52,16 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+/**
+ * User-friendly status labels per AC requirements.
+ * Simplifies technical statuses to "Indexed", "Processing", or "Failed".
+ */
 const STATUS_LABELS: Record<DocumentStatus, string> = {
-  pending: 'Pending',
+  pending: 'Processing',
   processing: 'Processing',
-  ocr_complete: 'OCR Complete',
-  completed: 'Completed',
-  ocr_failed: 'OCR Failed',
+  ocr_complete: 'Indexed',
+  completed: 'Indexed',
+  ocr_failed: 'Failed',
   failed: 'Failed',
 };
 
@@ -111,7 +116,10 @@ function DocumentListSkeleton() {
               <TableHead><Skeleton className="h-4 w-16" /></TableHead>
               <TableHead><Skeleton className="h-4 w-16" /></TableHead>
               <TableHead><Skeleton className="h-4 w-12" /></TableHead>
+              <TableHead><Skeleton className="h-4 w-10" /></TableHead>
               <TableHead><Skeleton className="h-4 w-20" /></TableHead>
+              <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+              <TableHead><Skeleton className="h-4 w-8" /></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -123,7 +131,10 @@ function DocumentListSkeleton() {
                 <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-10" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-8" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -388,7 +399,9 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                   </TableHead>
                 ))}
                 <TableHead>OCR Quality</TableHead>
+                <TableHead>Pages</TableHead>
                 <TableHead>Processing</TableHead>
+                <TableHead className="w-10">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -451,6 +464,12 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                       {STATUS_LABELS[doc.status]}
                     </span>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatFileSize(doc.fileSize)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDate(doc.uploadedAt)}
+                  </TableCell>
                   <TableCell>
                     <OCRQualityBadge
                       status={doc.ocrQualityStatus}
@@ -458,11 +477,8 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                       showPercentage={true}
                     />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatFileSize(doc.fileSize)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(doc.uploadedAt)}
+                  <TableCell className="text-muted-foreground text-center">
+                    {doc.pageCount ?? '—'}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <DocumentProcessingStatus
@@ -470,6 +486,25 @@ export function DocumentList({ matterId, onDocumentClick }: DocumentListProps) {
                       compact={false}
                       onStatusChange={loadDocuments}
                     />
+                  </TableCell>
+                  {/* Action menu - placeholder for Story 10D.4 */}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`Actions for ${doc.filename}`}
+                          disabled
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Actions coming in Story 10D.4</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}

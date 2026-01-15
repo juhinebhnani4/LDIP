@@ -100,6 +100,17 @@ export {
   selectHighPriorityUnread,
 } from './notificationStore';
 
+// Workspace store for tab navigation state (Story 10A.2)
+export {
+  useWorkspaceStore,
+  selectTotalIssueCount,
+  selectIsAnyTabProcessing,
+  selectTabsWithIssuesCount,
+  type TabId,
+  type TabStats,
+  type TabProcessingStatus,
+} from './workspaceStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

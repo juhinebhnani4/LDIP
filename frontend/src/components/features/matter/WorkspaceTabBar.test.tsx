@@ -194,7 +194,7 @@ describe('WorkspaceTabBar', () => {
       render(<WorkspaceTabBar matterId={mockMatterId} />);
 
       const entitiesTab = screen.getByRole('tab', { name: /entities/i });
-      const spinner = within(entitiesTab).getByText('processing');
+      const spinner = within(entitiesTab).getByText('Entities processing');
       expect(spinner).toHaveClass('sr-only');
       // The spinner icon should have animate-spin class
       expect(entitiesTab.querySelector('.animate-spin')).toBeInTheDocument();
@@ -344,6 +344,15 @@ describe('WorkspaceTabBar', () => {
       TAB_CONFIG.forEach((tab) => {
         const tabElement = screen.getByRole('tab', { name: new RegExp(tab.label) });
         expect(tabElement).toHaveAttribute('aria-controls', `tabpanel-${tab.id}`);
+      });
+    });
+
+    it('has id attribute for aria-labelledby reference from tab panels', () => {
+      render(<WorkspaceTabBar matterId={mockMatterId} />);
+
+      TAB_CONFIG.forEach((tab) => {
+        const tabElement = screen.getByRole('tab', { name: new RegExp(tab.label) });
+        expect(tabElement).toHaveAttribute('id', `tab-${tab.id}`);
       });
     });
 

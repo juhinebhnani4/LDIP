@@ -56,7 +56,7 @@ export const TAB_CONFIG: TabConfig[] = [
 
 export const DEFAULT_TAB: TabId = 'summary';
 
-export const TAB_LABELS: Record<TabId, string> = {
+export const TAB_LABELS = {
   summary: 'Summary',
   timeline: 'Timeline',
   entities: 'Entities',
@@ -64,9 +64,9 @@ export const TAB_LABELS: Record<TabId, string> = {
   contradictions: 'Contradictions',
   verification: 'Verification',
   documents: 'Documents',
-};
+} as const satisfies Record<TabId, string>;
 
-export const TAB_EPIC_INFO: Record<TabId, string> = {
+export const TAB_EPIC_INFO = {
   summary: 'Epic 10B',
   timeline: 'Epic 10B',
   entities: 'Epic 10C',
@@ -74,7 +74,7 @@ export const TAB_EPIC_INFO: Record<TabId, string> = {
   contradictions: 'Phase 2',
   verification: 'Epic 10D',
   documents: 'Epic 10D',
-};
+} as const satisfies Record<TabId, string>;
 
 /**
  * Tab Status Indicator Component
@@ -85,13 +85,15 @@ export const TAB_EPIC_INFO: Record<TabId, string> = {
  * - Regular count when items are ready
  */
 interface TabStatusIndicatorProps {
-  tabId: TabId;
+  /** Tab label for accessible status announcements */
+  tabLabel: string;
   count?: number;
   issueCount?: number;
   isProcessing?: boolean;
 }
 
 function TabStatusIndicator({
+  tabLabel,
   count,
   issueCount,
   isProcessing,
@@ -101,7 +103,7 @@ function TabStatusIndicator({
     return (
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-        <span className="sr-only">processing</span>
+        <span className="sr-only">{tabLabel} processing</span>
       </span>
     );
   }
@@ -227,6 +229,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
           return (
             <Link
               key={tab.id}
+              id={`tab-${tab.id}`}
               ref={(el) => setTabRef(tab.id, el)}
               href={getTabHref(tab.id)}
               role="tab"
@@ -246,7 +249,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
               <TabIcon className="h-4 w-4" aria-hidden="true" />
               <span>{tab.label}</span>
               <TabStatusIndicator
-                tabId={tab.id}
+                tabLabel={tab.label}
                 count={stats?.count}
                 issueCount={stats?.issueCount}
                 isProcessing={isProcessing}

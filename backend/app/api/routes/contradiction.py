@@ -2,12 +2,14 @@
 
 Story 5-1: Entity-Grouped Statement Querying
 Story 5-2: Statement Pair Comparison
+Story 14-2: Contradictions List API (all contradictions for a matter)
 
 Provides endpoints for:
-- GET /api/contradictions/entities/{entity_id}/statements - Get statements about an entity
-- POST /api/contradictions/entities/{entity_id}/compare - Compare statement pairs for contradictions
+- GET /api/matters/{matter_id}/contradictions - Get ALL contradictions for a matter (grouped by entity)
+- GET /api/matters/{matter_id}/contradictions/entities/{entity_id}/statements - Get statements about an entity
+- POST /api/matters/{matter_id}/contradictions/entities/{entity_id}/compare - Compare statement pairs
 
-Part of Epic 5: Consistency & Contradiction Engine.
+Part of Epic 5: Consistency & Contradiction Engine and Epic 14: MVP Gap Remediation.
 """
 
 from typing import Annotated
@@ -25,6 +27,12 @@ from app.models.contradiction import (
     EntityComparisonsResponse,
     EntityStatementsResponse,
 )
+from app.models.contradiction_list import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    ContradictionListErrorResponse,
+    ContradictionsListResponse,
+)
 from app.services.contradiction import (
     StatementComparisonService,
     StatementQueryService,
@@ -38,6 +46,11 @@ from app.services.contradiction.comparator import (
 from app.services.contradiction.statement_query import (
     EntityNotFoundError,
     StatementQueryError,
+)
+from app.services.contradiction_list_service import (
+    ContradictionListService,
+    ContradictionListServiceError,
+    get_contradiction_list_service,
 )
 
 router = APIRouter(
@@ -59,6 +72,201 @@ def _get_comparison_service() -> StatementComparisonService:
         StatementComparisonService: Singleton service for GPT-4 statement comparison.
     """
     return get_statement_comparison_service()
+
+
+def _get_contradiction_list_service() -> ContradictionListService:
+    """Get contradiction list service instance (Story 14-2).
+
+    Returns:
+        ContradictionListService: Singleton service for contradiction list queries.
+    """
+    return get_contradiction_list_service()
+
+
+# =============================================================================
+# Story 14.2: Contradictions List Endpoint (Matter Level)
+# =============================================================================
+
+
+@router.get(
+    "",
+    response_model=ContradictionsListResponse,
+    responses={
+        404: {"model": ContradictionListErrorResponse, "description": "Matter not found"},
+        500: {"model": ContradictionListErrorResponse, "description": "Internal error"},
+    },
+)
+async def get_all_contradictions(
+    matter_id: Annotated[str, Path(description="Matter UUID")],
+    severity: Annotated[
+        str | None,
+        Query(
+            description="Filter by severity: high, medium, low",
+        ),
+    ] = None,
+    contradiction_type: Annotated[
+        str | None,
+        Query(
+            alias="contradictionType",
+            description="Filter by type: semantic_contradiction, factual_contradiction, date_mismatch, amount_mismatch",
+        ),
+    ] = None,
+    entity_id: Annotated[
+        str | None,
+        Query(
+            alias="entityId",
+            description="Filter to specific entity UUID",
+        ),
+    ] = None,
+    document_id: Annotated[
+        str | None,
+        Query(
+            alias="documentId",
+            description="Filter by source document UUID",
+        ),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    per_page: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            alias="perPage",
+            description=f"Items per page (max {MAX_PAGE_SIZE})",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
+    sort_by: Annotated[
+        str,
+        Query(
+            alias="sortBy",
+            description="Sort field: severity, createdAt, entityName",
+        ),
+    ] = "severity",
+    sort_order: Annotated[
+        str,
+        Query(
+            alias="sortOrder",
+            description="Sort direction: asc, desc",
+        ),
+    ] = "desc",
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    service: ContradictionListService = Depends(_get_contradiction_list_service),
+) -> ContradictionsListResponse:
+    """Get all contradictions for a matter, grouped by entity.
+
+    Story 14.2: Returns paginated list of all contradictions detected in a matter.
+    Contradictions are grouped by entity for display in the Contradictions Tab.
+
+    **Acceptance Criteria:**
+    - AC #1: GET /api/matters/{matter_id}/contradictions endpoint
+    - AC #2: Response structure with entity grouping and full details
+    - AC #3: Filtering support (severity, type, entity, document)
+    - AC #4: Pagination with configurable page size (max 100)
+    - AC #5: Data from statement_comparisons table
+    - AC #6: Sort options (severity, createdAt, entityName)
+
+    **Query Parameters:**
+    - severity: Filter by HIGH/MEDIUM/LOW
+    - contradictionType: Filter by type
+    - entityId: Filter to specific entity
+    - documentId: Filter by source document
+    - page/perPage: Pagination (default 1/20)
+    - sortBy/sortOrder: Sorting (default severity/desc)
+
+    Args:
+        matter_id: Matter UUID.
+        severity: Optional severity filter.
+        contradiction_type: Optional type filter.
+        entity_id: Optional entity filter.
+        document_id: Optional document filter.
+        page: Page number.
+        per_page: Items per page.
+        sort_by: Sort field.
+        sort_order: Sort direction.
+        membership: Validated matter membership.
+        service: Contradiction list service.
+
+    Returns:
+        ContradictionsListResponse with entity-grouped contradictions.
+
+    Raises:
+        HTTPException 404: If matter not found or user lacks access.
+        HTTPException 500: If query fails.
+    """
+    logger.info(
+        "get_all_contradictions_api_request",
+        matter_id=matter_id,
+        severity=severity,
+        contradiction_type=contradiction_type,
+        entity_id=entity_id,
+        document_id=document_id,
+        page=page,
+        per_page=per_page,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        user_id=membership.user_id,
+    )
+
+    try:
+        response = await service.get_all_contradictions(
+            matter_id=matter_id,
+            severity=severity,
+            contradiction_type=contradiction_type,
+            entity_id=entity_id,
+            document_id=document_id,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+        logger.info(
+            "get_all_contradictions_api_success",
+            matter_id=matter_id,
+            total=response.meta.total,
+            entity_groups=len(response.data),
+            page=page,
+        )
+
+        return response
+
+    except ContradictionListServiceError as e:
+        logger.error(
+            "get_all_contradictions_api_service_error",
+            matter_id=matter_id,
+            error=str(e),
+            code=e.code,
+        )
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        ) from e
+
+    except Exception as e:
+        logger.error(
+            "get_all_contradictions_api_error",
+            matter_id=matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to retrieve contradictions",
+                    "details": {},
+                }
+            },
+        ) from e
 
 
 # =============================================================================

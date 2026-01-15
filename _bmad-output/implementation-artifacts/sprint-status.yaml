@@ -190,7 +190,7 @@ development_status:
   11-4-suggested-questions-input: done  # Code review passed 2026-01-16 - 3 issues fixed, 32 tests passing
   11-5-pdf-viewer-split-view: done  # Story completed 2026-01-16 - PDF split-view for source references, 56 tests passing
   11-6-pdf-viewer-full-modal: done  # Story completed 2026-01-16 - Full screen modal for PDF, 90 tests passing
-  11-7-bounding-box-overlays: backlog
+  11-7-bounding-box-overlays: ready-for-dev  # Story file created 2026-01-16 - Ultimate context engine
   epic-11-retrospective: optional
 
   # Epic 12: Export Builder
@@ -218,7 +218,7 @@ development_status:
 
   # CRITICAL GAPS (Blocking MVP)
   14-1-summary-api-endpoint: done         # Completed 2026-01-16 - 34 tests passing, all ACs met
-  14-2-contradictions-list-api: backlog     # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
+  14-2-contradictions-list-api: review  # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
   14-3-upload-stage-3-4: backlog            # Story 9.5 - 0% complete, Processing progress + Live discoveries UI
 
   # HIGH PRIORITY GAPS (Affects UX)

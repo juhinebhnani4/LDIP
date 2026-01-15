@@ -174,7 +174,7 @@ export function FloatingQAPanel() {
         height: floatHeight,
       }}
       role="dialog"
-      aria-label="Q&A Assistant"
+      aria-label="ASK LDIP"
     >
       {/* Draggable header - supports mouse drag and keyboard navigation */}
       <div

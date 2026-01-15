@@ -1,6 +1,6 @@
 # Story 11.1: Implement Q&A Panel Header and Position
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -319,6 +319,7 @@ None required - implementation was straightforward.
 ### Change Log
 
 - 2026-01-15: Implemented Story 11.1 - Q&A Panel header shows "ASK LDIP" with minimize button in all positions
+- 2026-01-15: Code review fixes - Removed unused `actions` prop from QAPanelHeader, updated FloatingQAPanel aria-label to "ASK LDIP", cleaned up stale comments and tests
 
 ### File List
 

@@ -207,13 +207,4 @@ describe('QAPanelHeader', () => {
     expect(checkIcon).toBeInTheDocument();
   });
 
-  it('renders custom actions when provided', () => {
-    const CustomAction = () => (
-      <button data-testid="custom-action">Custom</button>
-    );
-
-    render(<QAPanelHeader actions={<CustomAction />} />);
-
-    expect(screen.getByTestId('custom-action')).toBeInTheDocument();
-  });
 });

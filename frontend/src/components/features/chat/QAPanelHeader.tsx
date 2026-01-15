@@ -31,14 +31,12 @@ import type { QAPanelPosition } from '@/stores/qaPanelStore';
  *
  * Header component for the Q&A panel with position controls.
  * Allows users to switch between right sidebar, bottom panel,
- * floating window, and hidden modes.
+ * floating window, and hidden modes. Includes built-in minimize
+ * button that works in all panel positions.
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
+ * Story 11.1: Updated title to "ASK LDIP" and added minimize button
  */
-interface QAPanelHeaderProps {
-  /** Optional additional action buttons (e.g., minimize for floating mode) */
-  actions?: React.ReactNode;
-}
 
 const POSITION_OPTIONS: Array<{
   value: QAPanelPosition;
@@ -52,7 +50,7 @@ const POSITION_OPTIONS: Array<{
   { value: 'hidden', label: 'Hide Panel', icon: EyeOff, separator: true },
 ];
 
-export function QAPanelHeader({ actions }: QAPanelHeaderProps = {}) {
+export function QAPanelHeader() {
   const position = useQAPanelStore((state) => state.position);
   const setPosition = useQAPanelStore((state) => state.setPosition);
 
@@ -79,7 +77,6 @@ export function QAPanelHeader({ actions }: QAPanelHeaderProps = {}) {
             <p>Minimize</p>
           </TooltipContent>
         </Tooltip>
-        {actions}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Panel position">

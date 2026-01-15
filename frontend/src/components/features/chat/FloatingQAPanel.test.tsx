@@ -27,7 +27,7 @@ describe('FloatingQAPanel', () => {
   it('renders as a dialog with aria-label', () => {
     render(<FloatingQAPanel />);
 
-    const dialog = screen.getByRole('dialog', { name: /q&a assistant/i });
+    const dialog = screen.getByRole('dialog', { name: /ask ldip/i });
     expect(dialog).toBeInTheDocument();
   });
 

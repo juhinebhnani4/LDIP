@@ -1013,6 +1013,95 @@ async def get_document(
         )
 
 
+# =============================================================================
+# Document Delete Response Model
+# =============================================================================
+
+
+class DocumentDeleteResponse(BaseModel):
+    """Response for document soft-delete operation."""
+
+    data: dict[str, str | bool]
+
+
+# =============================================================================
+# Document Delete Endpoint (Story 10D.4)
+# =============================================================================
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=DocumentDeleteResponse,
+)
+async def delete_document(
+    document_id: str = Path(..., description="Document UUID"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> DocumentDeleteResponse:
+    """Soft-delete a document (30-day retention).
+
+    Sets deleted_at timestamp on the document. The document will be
+    permanently deleted after 30 days.
+
+    Requires OWNER role on the matter.
+    """
+    try:
+        # Get document first to get matter_id for access verification
+        doc = document_service.get_document(document_id)
+
+        # Verify user has OWNER role on the document's matter
+        _verify_matter_access(
+            matter_id=doc.matter_id,
+            user_id=current_user.id,
+            matter_service=matter_service,
+            allowed_roles=[MatterRole.OWNER],
+        )
+
+        # Perform soft delete
+        result = document_service.soft_delete_document(document_id)
+
+        return DocumentDeleteResponse(
+            data={
+                "success": True,
+                "message": "Document will be permanently deleted after 30 days",
+                "deleted_at": result["deleted_at"],
+            }
+        )
+
+    except HTTPException:
+        raise
+    except DocumentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": "Document not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+    except DocumentServiceError as e:
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "document_delete_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "DELETE_FAILED",
+                    "message": f"Failed to delete document: {e!s}",
+                    "details": {},
+                }
+            },
+        )
+
+
 @router.patch(
     "/{document_id}",
     response_model=DocumentDetailResponse,
@@ -1026,7 +1115,7 @@ async def update_document(
 ) -> DocumentDetailResponse:
     """Update document metadata.
 
-    Allows updating document_type and is_reference_material.
+    Allows updating document_type, is_reference_material, and filename.
     When document_type is changed to 'act', is_reference_material is automatically
     set to true unless explicitly overridden.
 
@@ -1049,6 +1138,7 @@ async def update_document(
             document_id=document_id,
             document_type=update.document_type,
             is_reference_material=update.is_reference_material,
+            filename=update.filename,
         )
 
         return DocumentDetailResponse(data=updated_doc)

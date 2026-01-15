@@ -129,6 +129,16 @@ export interface DocumentDetailResponse {
 export interface DocumentUpdateRequest {
   documentType?: DocumentType;
   isReferenceMaterial?: boolean;
+  filename?: string;
+}
+
+/** Delete document response */
+export interface DocumentDeleteResponse {
+  data: {
+    success: boolean;
+    message: string;
+    deletedAt: string;
+  };
 }
 
 /** Bulk update request */

@@ -343,6 +343,9 @@ export async function updateDocument(
   if (update.isReferenceMaterial !== undefined) {
     body.is_reference_material = update.isReferenceMaterial;
   }
+  if (update.filename !== undefined) {
+    body.filename = update.filename;
+  }
 
   const response = await fetch(url, {
     method: 'PATCH',
@@ -483,4 +486,57 @@ export async function requestManualReview(
   const data = await response.json();
   const result = toCamelCase<ManualReviewResponse>(data);
   return result.data;
+}
+
+// =============================================================================
+// Document Action API Functions (Story 10D.4)
+// =============================================================================
+
+/**
+ * Delete a document (soft-delete with 30-day retention)
+ *
+ * @param documentId - Document ID to delete
+ * @returns Delete response with message
+ */
+export async function deleteDocument(
+  documentId: string
+): Promise<{ success: boolean; message: string; deletedAt: string }> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/documents/${documentId}`;
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to delete document: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  return toCamelCase<{ success: boolean; message: string; deletedAt: string }>(data.data);
+}
+
+/**
+ * Rename a document
+ *
+ * @param documentId - Document ID to rename
+ * @param filename - New filename
+ * @returns Updated document
+ */
+export async function renameDocument(
+  documentId: string,
+  filename: string
+): Promise<Document> {
+  return updateDocument(documentId, { filename });
 }

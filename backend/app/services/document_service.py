@@ -373,6 +373,7 @@ class DocumentService:
         document_id: str,
         document_type: DocumentType | None = None,
         is_reference_material: bool | None = None,
+        filename: str | None = None,
     ) -> Document:
         """Update document metadata.
 
@@ -382,6 +383,7 @@ class DocumentService:
             is_reference_material: Override reference material flag.
                                    If not provided and document_type is 'act',
                                    automatically set to True.
+            filename: New filename (if provided).
 
         Returns:
             Updated document.
@@ -410,6 +412,9 @@ class DocumentService:
 
         if is_reference_material is not None:
             update_data["is_reference_material"] = is_reference_material
+
+        if filename is not None:
+            update_data["filename"] = filename
 
         if not update_data:
             # Nothing to update
@@ -581,6 +586,74 @@ class DocumentService:
             raise DocumentServiceError(
                 message=f"Failed to delete document: {e!s}",
                 code="DELETE_FAILED"
+            ) from e
+
+    def soft_delete_document(self, document_id: str) -> dict:
+        """Soft delete a document by setting deleted_at timestamp.
+
+        Documents are retained for 30 days before permanent deletion.
+
+        Args:
+            document_id: Document UUID.
+
+        Returns:
+            Dict with deleted_at timestamp.
+
+        Raises:
+            DocumentNotFoundError: If document doesn't exist.
+            DocumentServiceError: If soft delete fails.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        try:
+            # First verify document exists
+            result = self.client.table("documents").select("id").eq(
+                "id", document_id
+            ).execute()
+
+            if not result.data:
+                raise DocumentNotFoundError(document_id)
+
+            # Set deleted_at timestamp
+            deleted_at = datetime.now(timezone.utc)
+            update_result = self.client.table("documents").update({
+                "deleted_at": deleted_at.isoformat(),
+            }).eq("id", document_id).execute()
+
+            if not update_result.data:
+                raise DocumentServiceError(
+                    message="Failed to soft delete document",
+                    code="SOFT_DELETE_FAILED"
+                )
+
+            logger.info(
+                "document_soft_deleted",
+                document_id=document_id,
+                deleted_at=deleted_at.isoformat(),
+            )
+
+            return {
+                "deleted_at": deleted_at.isoformat(),
+                "document_id": document_id,
+            }
+
+        except DocumentNotFoundError:
+            raise
+        except DocumentServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "document_soft_delete_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            raise DocumentServiceError(
+                message=f"Failed to soft delete document: {e!s}",
+                code="SOFT_DELETE_FAILED"
             ) from e
 
     def _parse_datetime(self, value: str | None) -> datetime | None:

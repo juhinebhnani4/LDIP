@@ -544,15 +544,23 @@ describe('DocumentList', () => {
       });
     });
 
-    it('action menu buttons are disabled (placeholder for Story 10D.4)', async () => {
+    it('action menu buttons are enabled and open dropdown on click', async () => {
+      const user = userEvent.setup();
       render(<DocumentList matterId={matterId} />);
 
       await waitFor(() => {
         const actionButtons = screen.getAllByRole('button', { name: /actions for/i });
         actionButtons.forEach((button) => {
-          expect(button).toBeDisabled();
+          expect(button).not.toBeDisabled();
         });
       });
+
+      // Click an action button to verify dropdown opens
+      const actionButtons = screen.getAllByRole('button', { name: /actions for/i });
+      await user.click(actionButtons[0]);
+
+      // Should show the View option in dropdown
+      expect(screen.getByRole('menuitem', { name: /view/i })).toBeInTheDocument();
     });
   });
 });

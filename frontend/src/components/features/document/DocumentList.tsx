@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { MoreVertical } from 'lucide-react';
 import type {
   DocumentFilters,
   DocumentListItem,
@@ -11,16 +10,23 @@ import type {
   DocumentType,
   PaginationMeta,
 } from '@/types/document';
+import type { MatterRole } from '@/types/matter';
 import {
   bulkUpdateDocuments,
+  deleteDocument,
+  fetchDocument,
   fetchDocuments,
+  renameDocument,
   updateDocument,
 } from '@/lib/api/documents';
 import { DocumentTypeBadge } from './DocumentTypeBadge';
 import { OCRQualityBadge } from './OCRQualityBadge';
 import { DocumentProcessingStatus } from './DocumentProcessingStatus';
+import { DocumentActionMenu } from './DocumentActionMenu';
+import { RenameDocumentDialog } from './RenameDocumentDialog';
+import { DeleteDocumentDialog } from './DeleteDocumentDialog';
 import { Button } from '@/components/ui/button';
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -47,6 +53,8 @@ interface DocumentListProps {
   /** Callback when documents are refreshed internally (only used when documents prop is not provided) */
   onRefresh?: () => void;
   onDocumentClick?: (doc: DocumentListItem) => void;
+  /** User's role on the matter - affects action menu visibility */
+  userRole?: MatterRole;
 }
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
@@ -169,7 +177,13 @@ function DocumentListEmpty() {
  * 1. Controlled mode: When `documents` prop is provided, uses that data (no internal fetching)
  * 2. Uncontrolled mode: When `documents` prop is not provided, fetches data internally
  */
-export function DocumentList({ matterId, documents: externalDocuments, onRefresh, onDocumentClick }: DocumentListProps) {
+export function DocumentList({
+  matterId,
+  documents: externalDocuments,
+  onRefresh,
+  onDocumentClick,
+  userRole = 'editor',
+}: DocumentListProps) {
   // Internal state for uncontrolled mode
   const [internalDocuments, setInternalDocuments] = useState<DocumentListItem[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
@@ -179,6 +193,11 @@ export function DocumentList({ matterId, documents: externalDocuments, onRefresh
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [sort, setSort] = useState<DocumentSort>({ column: 'uploaded_at', order: 'desc' });
   const [page, setPage] = useState(1);
+
+  // Dialog state for document actions
+  const [selectedDocument, setSelectedDocument] = useState<DocumentListItem | null>(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Use external documents if provided, otherwise use internal state
   const isControlled = externalDocuments !== undefined;
@@ -300,6 +319,57 @@ export function DocumentList({ matterId, documents: externalDocuments, onRefresh
       }
       return newFilters;
     });
+  };
+
+  // ============================================================================
+  // Document Action Handlers (Story 10D.4)
+  // ============================================================================
+
+  const handleViewDocument = async (doc: DocumentListItem) => {
+    try {
+      const document = await fetchDocument(doc.id);
+      // Open the signed URL in a new tab
+      window.open(document.storagePath, '_blank');
+    } catch {
+      toast.error('Failed to open document');
+    }
+  };
+
+  const handleRenameDocument = async (newFilename: string) => {
+    if (!selectedDocument) return;
+    try {
+      await renameDocument(selectedDocument.id, newFilename);
+      toast.success('Document renamed successfully');
+      loadDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to rename document';
+      toast.error(message);
+      throw err; // Re-throw to let dialog handle error state
+    }
+  };
+
+  const handleSetAsAct = async (doc: DocumentListItem) => {
+    try {
+      await updateDocument(doc.id, { documentType: 'act' });
+      toast.success('Document set as Act');
+      loadDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set document as Act';
+      toast.error(message);
+    }
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!selectedDocument) return;
+    try {
+      await deleteDocument(selectedDocument.id);
+      toast.success('Document deleted');
+      loadDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete document';
+      toast.error(message);
+      throw err; // Re-throw to let dialog handle error state
+    }
   };
 
   // Only show loading in uncontrolled mode
@@ -509,24 +579,22 @@ export function DocumentList({ matterId, documents: externalDocuments, onRefresh
                       onStatusChange={loadDocuments}
                     />
                   </TableCell>
-                  {/* Action menu - placeholder for Story 10D.4 */}
+                  {/* Action menu (Story 10D.4) */}
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          aria-label={`Actions for ${doc.filename}`}
-                          disabled
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Actions coming in Story 10D.4</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <DocumentActionMenu
+                      document={doc}
+                      userRole={userRole}
+                      onView={() => handleViewDocument(doc)}
+                      onRename={() => {
+                        setSelectedDocument(doc);
+                        setRenameDialogOpen(true);
+                      }}
+                      onSetAsAct={() => handleSetAsAct(doc)}
+                      onDelete={() => {
+                        setSelectedDocument(doc);
+                        setDeleteDialogOpen(true);
+                      }}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -565,6 +633,26 @@ export function DocumentList({ matterId, documents: externalDocuments, onRefresh
         </div>
       )}
     </div>
+
+      {/* Rename Dialog */}
+      {selectedDocument && (
+        <RenameDocumentDialog
+          open={renameDialogOpen}
+          onOpenChange={setRenameDialogOpen}
+          document={selectedDocument}
+          onRename={handleRenameDocument}
+        />
+      )}
+
+      {/* Delete Dialog */}
+      {selectedDocument && (
+        <DeleteDocumentDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          document={selectedDocument}
+          onDelete={handleDeleteDocument}
+        />
+      )}
     </TooltipProvider>
   );
 }

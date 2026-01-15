@@ -177,7 +177,7 @@ development_status:
   10d-1-verification-queue-datatable: complete  # Completed 2026-01-15 - VerificationContent created, 46 tests passing
   10d-2-verification-statistics-filtering: done  # Code review passed 2026-01-15 - 132 tests, 4 issues fixed
   10d-3-documents-file-list: done  # Code review passed 2026-01-15 - 53 tests, 5 issues fixed
-  10d-4-documents-file-actions: backlog
+  10d-4-documents-file-actions: ready-for-review  # Implementation complete 2026-01-15
   epic-10d-retrospective: optional
 
   # Epic 11: Q&A Panel & PDF Viewer

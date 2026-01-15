@@ -222,6 +222,12 @@ class DocumentUpdate(BaseModel):
         None,
         description="Override reference material flag (auto-set for acts)"
     )
+    filename: str | None = Field(
+        None,
+        min_length=1,
+        max_length=255,
+        description="New filename for the document"
+    )
 
 
 class BulkDocumentUpdate(BaseModel):

@@ -363,6 +363,113 @@ class TestDeleteDocument:
             document_service.delete_document("non-existent-id")
 
 
+class TestSoftDeleteDocument:
+    """Tests for soft_delete_document method."""
+
+    def test_soft_delete_document_success(
+        self,
+        document_service: DocumentService,
+        mock_supabase_client: MagicMock,
+    ) -> None:
+        """Test successful soft deletion."""
+        # Setup mock
+        mock_table = MagicMock()
+        mock_supabase_client.table.return_value = mock_table
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.return_value = MagicMock(data=[{"id": "doc-123"}])
+        mock_table.update.return_value = mock_table
+        mock_table.update.return_value.eq.return_value = mock_table
+        mock_table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "doc-123", "deleted_at": "2026-01-15T10:00:00+00:00"}]
+        )
+
+        # Execute
+        result = document_service.soft_delete_document("doc-123")
+
+        # Verify
+        assert result["document_id"] == "doc-123"
+        assert "deleted_at" in result
+
+    def test_soft_delete_document_not_found(
+        self,
+        document_service: DocumentService,
+        mock_supabase_client: MagicMock,
+    ) -> None:
+        """Test soft deleting non-existent document raises error."""
+        # Setup mock to return empty on existence check
+        mock_table = MagicMock()
+        mock_supabase_client.table.return_value = mock_table
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.return_value = MagicMock(data=[])
+
+        # Execute and verify
+        with pytest.raises(DocumentNotFoundError):
+            document_service.soft_delete_document("non-existent-id")
+
+    def test_soft_delete_document_update_fails(
+        self,
+        document_service: DocumentService,
+        mock_supabase_client: MagicMock,
+    ) -> None:
+        """Test soft delete update failure raises error."""
+        # Setup mock with separate select and update chains
+        mock_table = MagicMock()
+        mock_supabase_client.table.return_value = mock_table
+
+        # Mock for select chain (existence check)
+        mock_select_chain = MagicMock()
+        mock_table.select.return_value = mock_select_chain
+        mock_select_chain.eq.return_value = mock_select_chain
+        mock_select_chain.execute.return_value = MagicMock(data=[{"id": "doc-123"}])
+
+        # Mock for update chain (update fails)
+        mock_update_chain = MagicMock()
+        mock_table.update.return_value = mock_update_chain
+        mock_update_chain.eq.return_value = mock_update_chain
+        mock_update_chain.execute.return_value = MagicMock(data=[])  # Empty = failure
+
+        # Execute and verify
+        with pytest.raises(DocumentServiceError) as exc_info:
+            document_service.soft_delete_document("doc-123")
+
+        assert exc_info.value.code == "SOFT_DELETE_FAILED"
+
+
+class TestUpdateDocumentFilename:
+    """Tests for update_document with filename field."""
+
+    def test_update_document_filename_success(
+        self,
+        document_service: DocumentService,
+        mock_supabase_client: MagicMock,
+        sample_document_data: dict,
+    ) -> None:
+        """Test successful filename update."""
+        # Setup mock
+        mock_table = MagicMock()
+        mock_supabase_client.table.return_value = mock_table
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.return_value = MagicMock(data=[sample_document_data])
+
+        # Update returns new filename
+        updated_data = sample_document_data.copy()
+        updated_data["filename"] = "new-name.pdf"
+        mock_table.update.return_value = mock_table
+        mock_table.update.return_value.eq.return_value = mock_table
+        mock_table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[updated_data]
+        )
+
+        # Execute
+        result = document_service.update_document("doc-12345", filename="new-name.pdf")
+
+        # Verify
+        assert result.filename == "new-name.pdf"
+
+
 class TestDatetimeParsing:
     """Tests for datetime parsing helper."""
 

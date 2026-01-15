@@ -2,6 +2,7 @@
  * CitationsList Component Tests
  *
  * @see Story 10C.3 - Citations Tab List and Act Discovery
+ * @see Story 10C.4 - Split-View moved to CitationsContent level
  */
 
 import { render, screen } from '@testing-library/react';
@@ -10,23 +11,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { CitationsList } from './CitationsList';
 import type { CitationListItem, PaginationMeta } from '@/types/citation';
 
-// Mock the useSplitView hook
-vi.mock('@/hooks/useSplitView', () => ({
-  useSplitView: () => ({
-    isOpen: false,
-    isFullScreen: false,
-    splitViewData: null,
-    isLoading: false,
-    error: null,
-    navigationInfo: { currentIndex: 0, total: 0 },
-    openSplitView: vi.fn(),
-    closeSplitView: vi.fn(),
-    toggleFullScreen: vi.fn(),
-    navigateToPrev: vi.fn(),
-    navigateToNext: vi.fn(),
-    setCitationIds: vi.fn(),
-  }),
-}));
+// Note: useSplitView mock removed in Story 10C.4 - split-view now handled at CitationsContent level
 
 const mockCitations: CitationListItem[] = [
   {
@@ -320,6 +305,43 @@ describe('CitationsList', () => {
 
     const viewButtons = screen.getAllByTitle('View in split view');
     expect(viewButtons).toHaveLength(3);
+  });
+
+  it('calls onViewCitation when view button is clicked (Story 10C.4)', async () => {
+    const user = userEvent.setup();
+    const onViewCitation = vi.fn();
+
+    render(
+      <CitationsList
+        {...defaultProps}
+        onViewCitation={onViewCitation}
+      />
+    );
+
+    // Click the first View button
+    const viewButtons = screen.getAllByTitle('View in split view');
+    await user.click(viewButtons[0]);
+
+    // Should call with the citation ID (order depends on default sorting by actName)
+    expect(onViewCitation).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('calls onViewCitation when fix button is clicked (Story 10C.4)', async () => {
+    const user = userEvent.setup();
+    const onViewCitation = vi.fn();
+
+    render(
+      <CitationsList
+        {...defaultProps}
+        onViewCitation={onViewCitation}
+      />
+    );
+
+    // Click the Fix button (only shows for mismatch/section_not_found)
+    const fixButtons = screen.getAllByTitle('Fix issue');
+    await user.click(fixButtons[0]);
+
+    expect(onViewCitation).toHaveBeenCalled();
   });
 
   it('shows status badges with correct variants', () => {

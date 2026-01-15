@@ -4,12 +4,15 @@
  * CitationsContent Component
  *
  * Main container for the Citations tab, managing view modes, filters,
- * and integrating all citation-related components.
+ * and integrating all citation-related components including split-view.
  *
  * @see Story 10C.3 - Citations Tab List and Act Discovery
+ * @see Story 10C.4 - Split-View Verification Integration
  */
 
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CitationsHeader, CitationsViewMode, CitationsFilterState } from './CitationsHeader';
@@ -18,6 +21,8 @@ import { CitationsList } from './CitationsList';
 import { CitationsByActView } from './CitationsByActView';
 import { CitationsByDocumentView } from './CitationsByDocumentView';
 import { MissingActsCard } from './MissingActsCard';
+import { SplitViewCitationPanel } from './SplitViewCitationPanel';
+import { SplitViewModal } from './SplitViewModal';
 import {
   useCitationsList,
   useCitationStats,
@@ -69,8 +74,21 @@ export function CitationsContent({
     };
   }, [filters]);
 
-  // Split view hook
-  const { openSplitView } = useSplitView({ enableKeyboardShortcuts: true });
+  // Split view hook - all state and actions at CitationsContent level (Story 10C.4)
+  const {
+    isOpen: isSplitViewOpen,
+    isFullScreen,
+    splitViewData,
+    isLoading: splitViewLoading,
+    error: splitViewError,
+    navigationInfo,
+    openSplitView,
+    closeSplitView,
+    toggleFullScreen,
+    navigateToPrev,
+    navigateToNext,
+    setCitationIds,
+  } = useSplitView({ enableKeyboardShortcuts: true });
 
   // Fetch data
   const { stats, isLoading: statsLoading, mutate: refreshStats } = useCitationStats(matterId);
@@ -104,6 +122,13 @@ export function CitationsContent({
   }, [stats]);
 
   const isLoading = statsLoading || summaryLoading || actsLoading;
+
+  // Set citation IDs for split-view navigation when citations change (Story 10C.4)
+  useEffect(() => {
+    if (citations.length > 0) {
+      setCitationIds(citations.map((c) => c.id));
+    }
+  }, [citations, setCitationIds]);
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: CitationsViewMode) => {
@@ -194,6 +219,64 @@ export function CitationsContent({
     );
   }
 
+  // Render citations content based on viewMode
+  const renderCitationsContent = () => (
+    <div className="flex gap-4 h-full">
+      {/* Main content - view based on viewMode */}
+      <div className="flex-1 min-w-0 overflow-auto">
+        {viewMode === 'list' && (
+          <CitationsList
+            matterId={matterId}
+            citations={citations}
+            meta={meta}
+            isLoading={citationsLoading}
+            error={citationsError?.message}
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            onDocumentClick={handleDocumentClick}
+            onViewCitation={handleViewCitation}
+          />
+        )}
+
+        {viewMode === 'byAct' && (
+          <CitationsByActView
+            citations={citations}
+            summary={summary}
+            isLoading={citationsLoading}
+            error={citationsError?.message}
+            onViewCitation={handleViewCitation}
+            onFixCitation={handleFixCitation}
+          />
+        )}
+
+        {viewMode === 'byDocument' && (
+          <CitationsByDocumentView
+            citations={citations}
+            isLoading={citationsLoading}
+            error={citationsError?.message}
+            onViewCitation={handleViewCitation}
+            onFixCitation={handleFixCitation}
+            onDocumentClick={handleDocumentClick}
+          />
+        )}
+      </div>
+
+      {/* Sidebar - Missing Acts Card */}
+      {(showMissingActsCard || missingCount > 0) && (
+        <div className="w-80 flex-shrink-0">
+          <MissingActsCard
+            matterId={matterId}
+            acts={acts}
+            isLoading={actsLoading || mutationLoading}
+            onActUploadedAndVerify={handleActUploadedAndVerify}
+            onActSkipped={handleActSkipped}
+            onRefresh={handleRefresh}
+          />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={cn('flex flex-col h-full space-y-4', className)}>
       {/* Header with stats and filters */}
@@ -215,60 +298,54 @@ export function CitationsContent({
         onUploadMissingActs={handleUploadMissingActs}
       />
 
-      {/* Main content area with sidebar layout */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Main content - view based on viewMode */}
-        <div className="flex-1 min-w-0 overflow-auto">
-          {viewMode === 'list' && (
-            <CitationsList
-              matterId={matterId}
-              citations={citations}
-              meta={meta}
-              isLoading={citationsLoading}
-              error={citationsError?.message}
-              currentPage={currentPage}
-              onPageChange={handlePageChange}
-              onDocumentClick={handleDocumentClick}
-            />
-          )}
+      {/* Main content area - with split-view when open (Story 10C.4) */}
+      <div className="flex-1 min-h-0">
+        {isSplitViewOpen && !isFullScreen ? (
+          // Split layout: citations content + split-view panels side by side
+          <PanelGroup direction="horizontal" className="h-full">
+            {/* Citations content panel (resizable) */}
+            <Panel defaultSize={35} minSize={20} className="overflow-auto">
+              {renderCitationsContent()}
+            </Panel>
 
-          {viewMode === 'byAct' && (
-            <CitationsByActView
-              citations={citations}
-              summary={summary}
-              isLoading={citationsLoading}
-              error={citationsError?.message}
-              onViewCitation={handleViewCitation}
-              onFixCitation={handleFixCitation}
-            />
-          )}
+            {/* Resize handle */}
+            <PanelResizeHandle className="w-2 bg-border hover:bg-primary/20 transition-colors flex items-center justify-center group">
+              <GripVertical className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            </PanelResizeHandle>
 
-          {viewMode === 'byDocument' && (
-            <CitationsByDocumentView
-              citations={citations}
-              isLoading={citationsLoading}
-              error={citationsError?.message}
-              onViewCitation={handleViewCitation}
-              onFixCitation={handleFixCitation}
-              onDocumentClick={handleDocumentClick}
-            />
-          )}
-        </div>
-
-        {/* Sidebar - Missing Acts Card */}
-        {(showMissingActsCard || missingCount > 0) && (
-          <div className="w-80 flex-shrink-0">
-            <MissingActsCard
-              matterId={matterId}
-              acts={acts}
-              isLoading={actsLoading || mutationLoading}
-              onActUploadedAndVerify={handleActUploadedAndVerify}
-              onActSkipped={handleActSkipped}
-              onRefresh={handleRefresh}
-            />
-          </div>
+            {/* Split-view panel */}
+            <Panel defaultSize={65} minSize={40}>
+              <SplitViewCitationPanel
+                data={splitViewData!}
+                isFullScreen={false}
+                isLoading={splitViewLoading}
+                error={splitViewError}
+                navigationInfo={navigationInfo}
+                onClose={closeSplitView}
+                onToggleFullScreen={toggleFullScreen}
+                onPrev={navigateToPrev}
+                onNext={navigateToNext}
+              />
+            </Panel>
+          </PanelGroup>
+        ) : (
+          // Normal layout: citations content without split-view
+          renderCitationsContent()
         )}
       </div>
+
+      {/* Full-screen modal (Story 10C.4) */}
+      <SplitViewModal
+        isOpen={isSplitViewOpen && isFullScreen}
+        data={splitViewData}
+        navigationInfo={navigationInfo}
+        isLoading={splitViewLoading}
+        error={splitViewError}
+        onClose={closeSplitView}
+        onExitFullScreen={toggleFullScreen}
+        onPrev={navigateToPrev}
+        onNext={navigateToNext}
+      />
     </div>
   );
 }

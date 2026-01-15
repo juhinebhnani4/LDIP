@@ -4,12 +4,14 @@
  * Citations List Component
  *
  * Displays citations in a sortable table with enhanced columns.
+ * Split-view rendering is now handled at CitationsContent level (Story 10C.4).
  *
  * @see Story 3-4: Split-View Citation Highlighting
  * @see Story 10C.3: Citations Tab List and Act Discovery
+ * @see Story 10C.4: Split-View Verification Integration
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Eye,
   AlertTriangle,
@@ -35,9 +37,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useSplitView } from '@/hooks/useSplitView';
-import { SplitViewCitationPanel } from './SplitViewCitationPanel';
-import { SplitViewModal } from './SplitViewModal';
 import type { CitationListItem, VerificationStatus, PaginationMeta } from '@/types/citation';
 
 export interface CitationsListProps {
@@ -57,6 +56,8 @@ export interface CitationsListProps {
   onPageChange?: (page: number) => void;
   /** Callback when document name is clicked */
   onDocumentClick?: (documentId: string, page: number) => void;
+  /** Callback when view citation button is clicked (Story 10C.4 - split-view moved to parent) */
+  onViewCitation?: (citationId: string) => void;
 }
 
 type SortField = 'actName' | 'sectionNumber' | 'verificationStatus' | 'confidence' | 'sourcePage';
@@ -132,7 +133,7 @@ const ITEMS_PER_PAGE = 20;
  * ```
  */
 export function CitationsList({
-  matterId,
+  matterId: _matterId,  // Kept for API consistency; split-view logic moved to parent (Story 10C.4)
   citations,
   meta,
   isLoading = false,
@@ -140,31 +141,10 @@ export function CitationsList({
   currentPage = 1,
   onPageChange,
   onDocumentClick,
+  onViewCitation,
 }: CitationsListProps) {
   const [sortField, setSortField] = useState<SortField>('actName');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-
-  const {
-    isOpen,
-    isFullScreen,
-    splitViewData,
-    isLoading: splitViewLoading,
-    error: splitViewError,
-    navigationInfo,
-    openSplitView,
-    closeSplitView,
-    toggleFullScreen,
-    navigateToPrev,
-    navigateToNext,
-    setCitationIds,
-  } = useSplitView({ enableKeyboardShortcuts: true });
-
-  // Set citation IDs for navigation when citations change
-  useEffect(() => {
-    if (citations.length > 0) {
-      setCitationIds(citations.map((c) => c.id));
-    }
-  }, [citations, setCitationIds]);
 
   // Sort citations client-side
   const sortedCitations = useMemo(() => {
@@ -213,10 +193,13 @@ export function CitationsList({
     }
   };
 
-  // Handle view citation click
-  const handleViewCitation = (citationId: string) => {
-    openSplitView(citationId, matterId);
-  };
+  // Handle view citation click - delegate to parent (Story 10C.4)
+  const handleViewCitation = useCallback(
+    (citationId: string) => {
+      onViewCitation?.(citationId);
+    },
+    [onViewCitation]
+  );
 
   // Handle document click
   const handleDocumentClick = (documentId: string, page: number) => {
@@ -436,36 +419,7 @@ export function CitationsList({
           </TableBody>
         </Table>
       </div>
-
-      {/* Split View Panel (conditional) */}
-      {isOpen && !isFullScreen && splitViewData && (
-        <SplitViewCitationPanel
-          data={splitViewData}
-          isFullScreen={false}
-          isLoading={splitViewLoading}
-          error={splitViewError}
-          navigationInfo={navigationInfo}
-          onClose={closeSplitView}
-          onToggleFullScreen={toggleFullScreen}
-          onPrev={navigateToPrev}
-          onNext={navigateToNext}
-        />
-      )}
-
-      {/* Full Screen Modal (conditional) */}
-      {isOpen && isFullScreen && (
-        <SplitViewModal
-          data={splitViewData}
-          isOpen={isFullScreen}
-          isLoading={splitViewLoading}
-          error={splitViewError}
-          navigationInfo={navigationInfo}
-          onClose={closeSplitView}
-          onExitFullScreen={toggleFullScreen}
-          onPrev={navigateToPrev}
-          onNext={navigateToNext}
-        />
-      )}
+      {/* Split-view panels now rendered at CitationsContent level (Story 10C.4) */}
     </div>
   );
 }

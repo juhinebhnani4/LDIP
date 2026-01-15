@@ -2,6 +2,7 @@
  * CitationsContent Component Tests
  *
  * @see Story 10C.3 - Citations Tab List and Act Discovery
+ * @see Story 10C.4 - Split-View Verification Integration
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -16,8 +17,16 @@ vi.mock('@/hooks/useCitations');
 vi.mock('@/hooks/useSplitView', () => ({
   useSplitView: () => ({
     isOpen: false,
+    isFullScreen: false,
+    splitViewData: null,
+    isLoading: false,
+    error: null,
+    navigationInfo: { currentIndex: 0, totalCount: 0, canPrev: false, canNext: false },
     openSplitView: vi.fn(),
     closeSplitView: vi.fn(),
+    toggleFullScreen: vi.fn(),
+    navigateToPrev: vi.fn(),
+    navigateToNext: vi.fn(),
     setCitationIds: vi.fn(),
   }),
 }));

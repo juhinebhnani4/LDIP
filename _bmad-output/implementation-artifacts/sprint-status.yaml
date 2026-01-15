@@ -12,6 +12,8 @@
 # - UX Decisions: _bmad-output/project-planning-artifacts/UX-Decisions-Log.md
 # - Architecture: _bmad-output/architecture.md
 # - Project Context: _bmad-output/project-context.md
+# - MVP Gap Analysis: _bmad-output/implementation-artifacts/mvp-gap-analysis-2026-01-16.md
+# - Epics & FR Mapping: _bmad-output/project-planning-artifacts/epics.md
 
 # STATUS DEFINITIONS:
 # ==================
@@ -185,7 +187,7 @@ development_status:
   11-1-qa-panel-header-position: done  # Code review passed 2026-01-15 - 41 tests, 4 issues fixed
   11-2-conversation-history: done  # Completed 2026-01-16 - 209 tests passing
   11-3-streaming-response-engine-trace: done  # Code review passed 2026-01-16 - 27 tests, 5 code review issues fixed
-  11-4-suggested-questions-input: backlog
+  11-4-suggested-questions-input: ready-for-dev
   11-5-pdf-viewer-split-view: backlog
   11-6-pdf-viewer-full-modal: backlog
   11-7-bounding-box-overlays: backlog
@@ -210,11 +212,29 @@ development_status:
   epic-13-retrospective: optional
 
   # Epic 14: MVP Gap Remediation (Discovered 2026-01-16)
-  # These endpoints were specified in LDIP-MVP-Complete-Specification.md (Week 11-12)
-  # but were deferred during implementation and never tracked.
+  # SOURCE OF TRUTH: _bmad-output/implementation-artifacts/mvp-gap-analysis-2026-01-16.md
+  # Contains: FR citations, evidence, impact analysis for each gap
   epic-14-mvp-gaps: backlog
-  14-1-summary-api-endpoint: backlog  # GET /api/matters/{id}/summary - Executive summary generation
-  14-2-summary-verification-api: backlog  # POST /api/matters/{id}/summary/verify + /notes
+
+  # CRITICAL GAPS (Blocking MVP)
+  14-1-summary-api-endpoint: backlog        # GET /api/matters/{id}/summary - Executive summary generation (GPT-4)
+  14-2-contradictions-list-api: backlog     # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
+  14-3-upload-stage-3-4: backlog            # Story 9.5 - 0% complete, Processing progress + Live discoveries UI
+
+  # HIGH PRIORITY GAPS (Affects UX)
+  14-4-summary-verification-api: backlog    # POST /api/matters/{id}/summary/verify + /notes
+  14-5-dashboard-real-apis: backlog         # Activity Feed + Quick Stats APIs (Story 9.3 uses mock data)
+  14-6-summary-fe-integration: backlog      # EditableSection + CitationLink integration (Story 10B.2)
+
+  # MEDIUM PRIORITY GAPS (Deferred but tracked)
+  14-7-anomaly-auto-trigger: backlog        # Pipeline integration - auto-detect after entity linking (Story 4.4)
+  14-8-timeline-real-api: backlog           # Switch from mock to real API in useTimeline hooks (Story 10B.5)
+
+  # DEFERRED TESTS (Non-blocking but should be addressed)
+  # - OCR backend/frontend integration tests (Story 2B.3)
+  # - useSSE hook tests (Story 11.3)
+  # - Documents component tests (Story 10D.3)
+
   epic-14-retrospective: optional
 
 # =============================================================================

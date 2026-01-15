@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { DashboardContent } from './DashboardContent';
+import { DashboardSidebar } from './DashboardSidebar';
 
 /**
  * Dashboard Page
@@ -65,32 +66,8 @@ export default async function DashboardPage() {
         <DashboardContent />
       </div>
 
-      {/* Right side - 30% width - Activity feed placeholder (Story 9-3) */}
-      <div className="hidden lg:block flex-[3] min-w-0">
-        <div className="sticky top-20 space-y-6">
-          {/* Activity Feed placeholder */}
-          <div className="rounded-lg border bg-card p-4">
-            <h2 className="font-semibold mb-3">Activity Feed</h2>
-            <p className="text-sm text-muted-foreground">
-              Recent activity will appear here.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2 italic">
-              Coming in Story 9-3
-            </p>
-          </div>
-
-          {/* Quick Stats placeholder */}
-          <div className="rounded-lg border bg-card p-4">
-            <h2 className="font-semibold mb-3">Quick Stats</h2>
-            <p className="text-sm text-muted-foreground">
-              Dashboard statistics will appear here.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2 italic">
-              Coming in Story 9-3
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Right side - 30% width - Activity feed and Quick Stats (Story 9-3) */}
+      <DashboardSidebar className="hidden lg:block flex-[3] min-w-0" />
     </div>
   );
 }

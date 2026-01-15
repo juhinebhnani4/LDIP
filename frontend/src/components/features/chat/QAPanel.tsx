@@ -99,7 +99,8 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
   }, [setError, setTyping]);
 
   // Initialize SSE hook
-  const { isStreaming, startStream, abortStream } = useSSE({
+  // Note: abortStream available but not exposed in UI yet (future story for cancel button)
+  const { isStreaming, startStream } = useSSE({
     onTyping: handleTyping,
     onToken: handleToken,
     onEngineComplete: handleEngineComplete,

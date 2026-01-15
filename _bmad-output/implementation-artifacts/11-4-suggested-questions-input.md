@@ -1,6 +1,6 @@
 # Story 11.4: Implement Suggested Questions and Message Input
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -426,4 +426,8 @@ N/A - No debugging issues encountered.
 ## Change Log
 
 - 2026-01-16: Story 11.4 implementation complete - Suggested questions for empty Q&A panel state
+- 2026-01-16: Code review fixes applied:
+  - Removed unused `abortStream` from QAPanel.tsx (lint warning fix)
+  - Updated test to verify behavior not implementation details (data-variant removed)
+  - Corrected misleading comment about SuggestedQuestions mocking in QAPanel.test.tsx
 

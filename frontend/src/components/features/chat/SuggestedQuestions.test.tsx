@@ -72,14 +72,17 @@ describe('SuggestedQuestions', () => {
     expect(mockOnQuestionClick).toHaveBeenCalledWith('Who are the main parties involved?');
   });
 
-  it('renders questions as buttons with outline variant', () => {
+  it('renders questions as clickable buttons', () => {
     render(<SuggestedQuestions onQuestionClick={mockOnQuestionClick} />);
 
-    // Buttons have role="listitem" for accessibility, so query by listitem
+    // Verify all questions render as interactive buttons (listitems)
     const buttons = screen.getAllByRole('listitem');
+    expect(buttons).toHaveLength(6);
+
+    // Verify buttons are focusable and clickable (behavior test)
     buttons.forEach((button) => {
-      // Check that buttons have outline variant styling (data-variant attribute from shadcn)
-      expect(button).toHaveAttribute('data-variant', 'outline');
+      expect(button).toBeVisible();
+      expect(button).not.toBeDisabled();
     });
   });
 

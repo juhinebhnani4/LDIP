@@ -87,7 +87,7 @@ vi.mock('./StreamingMessage', () => ({
   StreamingMessage: () => <div data-testid="streaming-message">Streaming...</div>,
 }));
 
-// SuggestedQuestions is NOT mocked - we test its integration
+// SuggestedQuestions is mocked to isolate QAPanel behavior testing
 vi.mock('./SuggestedQuestions', () => ({
   SuggestedQuestions: ({ onQuestionClick }: { onQuestionClick: (q: string) => void }) => (
     <div data-testid="suggested-questions">

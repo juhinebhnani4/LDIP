@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CurrentStatusSection, CurrentStatusSectionSkeleton } from './CurrentStatusSection';
 import type { CurrentStatus } from '@/types/summary';
+
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ matterId: 'test-matter-id' }),
+}));
 
 const createMockStatus = (overrides: Partial<CurrentStatus> = {}): CurrentStatus => ({
   lastOrderDate: '2024-01-15T00:00:00.000Z',
@@ -69,19 +74,32 @@ describe('CurrentStatusSection', () => {
       const status = createMockStatus({ isVerified: true });
       render(<CurrentStatusSection currentStatus={status} />);
 
-      // Should only have View Full Order button, not Verify
-      const buttons = screen.getAllByRole('button');
-      expect(buttons).toHaveLength(1);
-      expect(buttons[0]).toHaveTextContent('View Full Order');
+      // Should not have Verify button
+      expect(screen.queryByRole('button', { name: /^Verify$/i })).not.toBeInTheDocument();
     });
   });
 
   describe('actions', () => {
-    it('has View Full Order button', () => {
+    it('has View Full Order link with correct href', () => {
       const status = createMockStatus();
       render(<CurrentStatusSection currentStatus={status} />);
 
-      expect(screen.getByRole('button', { name: /View Full Order/i })).toBeInTheDocument();
+      const viewOrderLink = screen.getByRole('link', { name: /View Full Order/i });
+      expect(viewOrderLink).toBeInTheDocument();
+      expect(viewOrderLink).toHaveAttribute(
+        'href',
+        '/matters/test-matter-id/documents?doc=Order_2024_01.pdf&page=1'
+      );
+    });
+
+    it('View Full Order link has accessible aria-label', () => {
+      const status = createMockStatus();
+      render(<CurrentStatusSection currentStatus={status} />);
+
+      const viewOrderLink = screen.getByRole('link', {
+        name: 'View full order: Order_2024_01.pdf, page 1',
+      });
+      expect(viewOrderLink).toBeInTheDocument();
     });
   });
 

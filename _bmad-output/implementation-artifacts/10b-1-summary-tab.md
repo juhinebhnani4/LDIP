@@ -1,6 +1,6 @@
 # Story 10B.1: Implement Summary Tab Content
 
-Status: review
+Status: done
 
 ## Story
 
@@ -459,13 +459,21 @@ None - implementation completed without blocking issues.
 - Created comprehensive TypeScript type definitions in `types/summary.ts`
 - Created SWR-based data hook with mock data for MVP (`useMatterSummary`)
 - Added shadcn/ui Alert component (was missing from project)
-- All 96 component tests passing
-- All 1266 total frontend tests passing
+- All 98 component tests passing (after code review fixes)
+- All 1268 total frontend tests passing
 - Lint passes with zero warnings
 - Uses Next.js Link for tab navigation (not Zustand store action)
 - Navigation pattern uses proper Next.js routing via Link components
 - Installed `swr` package for data fetching
 - All sections have proper accessibility (aria-labelledby, role="tabpanel")
+- **Code Review Fixes (2026-01-15):**
+  - View Entity button now passes entityId in query params for pre-selection
+  - View Source buttons are now functional Links to documents tab
+  - View Full Order link is now functional Link to documents tab
+  - All source links have aria-labels for accessibility
+  - Removed unreachable default cases in switch statements
+  - Added clarifying comment for URL parsing in mock fetcher
+  - Updated tests to verify navigation links work correctly
 
 ### File List
 
@@ -499,3 +507,4 @@ None - implementation completed without blocking issues.
 ## Change Log
 
 - 2026-01-15: Story implementation complete - all tasks completed, 96 tests passing, ready for code review
+- 2026-01-15: Code review passed - 6 issues fixed (3 Medium, 3 Low), 98 tests passing, story marked done

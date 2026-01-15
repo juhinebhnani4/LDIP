@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { FileText, ExternalLink, CheckCircle2, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,9 @@ export function SubjectMatterSection({
   subjectMatter,
   className,
 }: SubjectMatterSectionProps) {
+  const params = useParams<{ matterId: string }>();
+  const matterId = params.matterId;
+
   return (
     <section className={className} aria-labelledby="subject-matter-heading">
       <h2 id="subject-matter-heading" className="text-lg font-semibold mb-4">
@@ -62,12 +67,18 @@ export function SubjectMatterSection({
                 {subjectMatter.sources.map((source, index) => (
                   <Button
                     key={`${source.documentName}-${index}`}
+                    asChild
                     variant="ghost"
                     size="sm"
                     className="h-7 text-xs"
                   >
-                    <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
-                    {source.documentName} (pp. {source.pageRange})
+                    <Link
+                      href={`/matters/${matterId}/documents?doc=${encodeURIComponent(source.documentName)}&pages=${encodeURIComponent(source.pageRange)}`}
+                      aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
+                      {source.documentName} (pp. {source.pageRange})
+                    </Link>
                   </Button>
                 ))}
               </div>

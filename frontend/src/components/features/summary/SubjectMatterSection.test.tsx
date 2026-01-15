@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SubjectMatterSection, SubjectMatterSectionSkeleton } from './SubjectMatterSection';
 import type { SubjectMatter } from '@/types/summary';
+
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ matterId: 'test-matter-id' }),
+}));
 
 const createMockSubjectMatter = (overrides: Partial<SubjectMatter> = {}): SubjectMatter => ({
   description: 'This matter concerns an RTI application seeking disclosure of records.',
@@ -36,13 +41,21 @@ describe('SubjectMatterSection', () => {
       expect(screen.getByText(/This matter concerns an RTI application/)).toBeInTheDocument();
     });
 
-    it('displays source citations', () => {
+    it('displays source citations as links', () => {
       const subjectMatter = createMockSubjectMatter();
       render(<SubjectMatterSection subjectMatter={subjectMatter} />);
 
       expect(screen.getByText('Sources:')).toBeInTheDocument();
       expect(screen.getByText(/Petition\.pdf.*pp\. 1-3/)).toBeInTheDocument();
       expect(screen.getByText(/Application\.pdf.*pp\. 1-2/)).toBeInTheDocument();
+
+      // Verify sources are navigable links
+      const sourceLinks = screen.getAllByRole('link', { name: /View source:/i });
+      expect(sourceLinks).toHaveLength(2);
+      expect(sourceLinks[0]).toHaveAttribute(
+        'href',
+        '/matters/test-matter-id/documents?doc=Petition.pdf&pages=1-3'
+      );
     });
 
     it('handles empty sources array', () => {

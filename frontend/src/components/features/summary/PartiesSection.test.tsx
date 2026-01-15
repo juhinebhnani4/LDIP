@@ -86,20 +86,41 @@ describe('PartiesSection', () => {
   });
 
   describe('navigation', () => {
-    it('has View Entity button linking to entities tab', () => {
+    it('has View Entity button linking to entities tab with entityId', () => {
       const parties = createMockParties();
       render(<PartiesSection parties={parties} />);
 
       const viewEntityLinks = screen.getAllByRole('link', { name: /View Entity/i });
-      expect(viewEntityLinks[0]).toHaveAttribute('href', '/matters/test-matter-id/entities');
+      expect(viewEntityLinks[0]).toHaveAttribute(
+        'href',
+        '/matters/test-matter-id/entities?entityId=petitioner-1'
+      );
     });
 
-    it('has View Source button for each party', () => {
+    it('has View Source link for each party with correct href', () => {
       const parties = createMockParties();
       render(<PartiesSection parties={parties} />);
 
-      const viewSourceButtons = screen.getAllByRole('button', { name: /View Source/i });
-      expect(viewSourceButtons).toHaveLength(2);
+      const viewSourceLinks = screen.getAllByRole('link', { name: /View Source/i });
+      expect(viewSourceLinks).toHaveLength(2);
+      expect(viewSourceLinks[0]).toHaveAttribute(
+        'href',
+        '/matters/test-matter-id/documents?doc=Petition.pdf&page=1'
+      );
+      expect(viewSourceLinks[1]).toHaveAttribute(
+        'href',
+        '/matters/test-matter-id/documents?doc=Petition.pdf&page=2'
+      );
+    });
+
+    it('View Source links have accessible aria-labels', () => {
+      const parties = createMockParties();
+      render(<PartiesSection parties={parties} />);
+
+      const viewSourceLink = screen.getByRole('link', {
+        name: 'View source: Petition.pdf, page 1',
+      });
+      expect(viewSourceLink).toBeInTheDocument();
     });
   });
 

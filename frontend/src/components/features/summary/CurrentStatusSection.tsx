@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Calendar, ExternalLink, CheckCircle2, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +48,8 @@ export function CurrentStatusSection({
   currentStatus,
   className,
 }: CurrentStatusSectionProps) {
+  const params = useParams<{ matterId: string }>();
+  const matterId = params.matterId;
   const formattedDate = formatDate(currentStatus.lastOrderDate);
 
   return (
@@ -82,9 +86,14 @@ export function CurrentStatusSection({
               Source: {currentStatus.sourceDocument}, p. {currentStatus.sourcePage}
             </div>
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm">
-                <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                View Full Order
+              <Button asChild variant="ghost" size="sm">
+                <Link
+                  href={`/matters/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
+                  aria-label={`View full order: ${currentStatus.sourceDocument}, page ${currentStatus.sourcePage}`}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                  View Full Order
+                </Link>
               </Button>
               {!currentStatus.isVerified && (
                 <Button variant="outline" size="sm">

@@ -106,7 +106,8 @@ async function mockFetcher(url: string): Promise<MatterSummaryResponse> {
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 500));
 
-  // Extract matterId from URL
+  // Extract matterId from URL format: /api/matters/{matterId}/summary
+  // at(-2) gets the second-to-last segment which is the matterId
   const matterId = url.split('/').at(-2) ?? '';
 
   return {

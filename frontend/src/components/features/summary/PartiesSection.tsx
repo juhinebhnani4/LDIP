@@ -43,8 +43,6 @@ function getRoleLabel(role: PartyRole): string {
       return 'Respondent';
     case 'other':
       return 'Other Party';
-    default:
-      return 'Party';
   }
 }
 
@@ -57,7 +55,7 @@ function getRoleBadgeVariant(role: PartyRole): 'default' | 'secondary' | 'outlin
       return 'default';
     case 'respondent':
       return 'secondary';
-    default:
+    case 'other':
       return 'outline';
   }
 }
@@ -100,14 +98,24 @@ function PartyCard({ party, matterId }: PartyCardProps) {
         </div>
         <div className="flex gap-2 mt-4">
           <Button asChild variant="outline" size="sm" className="flex-1">
-            <Link href={`/matters/${matterId}/entities`}>
+            <Link href={`/matters/${matterId}/entities?entityId=${party.entityId}`}>
               <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
               View Entity
             </Link>
           </Button>
-          <Button variant="ghost" size="sm" className="flex-1">
-            <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-            View Source
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="flex-1"
+          >
+            <Link
+              href={`/matters/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
+              aria-label={`View source: ${party.sourceDocument}, page ${party.sourcePage}`}
+            >
+              <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              View Source
+            </Link>
           </Button>
         </div>
       </CardContent>

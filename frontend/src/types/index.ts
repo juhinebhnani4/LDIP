@@ -207,16 +207,22 @@ export type {
   SummaryVerificationDecision,
 } from './summary';
 
-// Timeline types (Story 10B.3: Timeline Tab Vertical List View)
+// Timeline types (Story 10B.3: Timeline Tab Vertical List View, Story 10B.4: Alternative Views)
 export type {
   DatePrecision,
+  EventCluster,
   TimelineEntityReference,
   TimelineEvent,
   TimelineEventType,
+  TimelineGap,
   TimelinePaginationMeta,
   TimelineResponse,
+  TimelineScale,
   TimelineStats,
   TimelineStatsResponse,
+  TimelineTrack,
   TimelineViewMode,
   UseTimelineOptions,
+  YearLabel,
+  ZoomLevel as TimelineZoomLevel,
 } from './timeline';

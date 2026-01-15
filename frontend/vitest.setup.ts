@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Mock ResizeObserver for Radix UI components (ScrollArea, Slider)
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+global.ResizeObserver = ResizeObserverMock;
+
 // Mock pointer capture methods for Radix UI compatibility in jsdom
 // These methods are not implemented in jsdom but are used by Radix primitives
 Element.prototype.hasPointerCapture = vi.fn(() => false);

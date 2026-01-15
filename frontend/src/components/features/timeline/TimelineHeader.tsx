@@ -1,18 +1,24 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { List, LayoutTemplate, Table2 } from 'lucide-react';
+import { List, LayoutTemplate, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { TimelineStats, TimelineViewMode } from '@/types/timeline';
 
 /**
  * Timeline Header Component
  *
  * Displays event count, date range, and view mode toggle.
- * Only List mode is active for Story 10B.3.
+ * Supports List, Horizontal, and Multi-Track views.
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #1)
+ * Story 10B.4: Timeline Tab Alternative Views (AC #1)
  */
 
 interface TimelineHeaderProps {
@@ -89,43 +95,54 @@ export function TimelineHeader({
         role="group"
         aria-label="View mode selection"
       >
-        <Button
-          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 px-3"
-          onClick={() => onViewModeChange('list')}
-          aria-pressed={viewMode === 'list'}
-          aria-label="List view"
-        >
-          <List className="h-4 w-4 mr-1.5" aria-hidden="true" />
-          <span className="text-xs">List</span>
-        </Button>
-        <Button
-          variant={viewMode === 'horizontal' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 px-3"
-          onClick={() => onViewModeChange('horizontal')}
-          aria-pressed={viewMode === 'horizontal'}
-          aria-label="Horizontal timeline view"
-          disabled
-          title="Coming soon in Story 10B.4"
-        >
-          <LayoutTemplate className="h-4 w-4 mr-1.5" aria-hidden="true" />
-          <span className="text-xs">Horizontal</span>
-        </Button>
-        <Button
-          variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 px-3"
-          onClick={() => onViewModeChange('table')}
-          aria-pressed={viewMode === 'table'}
-          aria-label="Table view"
-          disabled
-          title="Coming soon"
-        >
-          <Table2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
-          <span className="text-xs">Table</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => onViewModeChange('list')}
+              aria-pressed={viewMode === 'list'}
+              aria-label="List view"
+            >
+              <List className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              <span className="text-xs">List</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Vertical chronological list</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={viewMode === 'horizontal' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => onViewModeChange('horizontal')}
+              aria-pressed={viewMode === 'horizontal'}
+              aria-label="Horizontal timeline view"
+            >
+              <LayoutTemplate className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              <span className="text-xs">Horizontal</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Horizontal axis with zoom</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={viewMode === 'multitrack' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => onViewModeChange('multitrack')}
+              aria-pressed={viewMode === 'multitrack'}
+              aria-label="Multi-track view"
+            >
+              <Users className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              <span className="text-xs">Multi-Track</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Parallel timelines by actor</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

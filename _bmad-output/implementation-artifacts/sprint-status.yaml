@@ -159,8 +159,8 @@ development_status:
   epic-10b: in-progress  # First story created 2026-01-15
   10b-1-summary-tab: done  # Code review passed 2026-01-15 - 98 tests, 6 issues fixed
   10b-2-summary-inline-verification: done  # Code review passed 2026-01-15 - 51 new tests, lint fixed
-  10b-3-timeline-vertical-list: backlog
-  10b-4-timeline-horizontal-multitrack: backlog
+  10b-3-timeline-vertical-list: done
+  10b-4-timeline-horizontal-multitrack: done  # 168 timeline tests passing - Horizontal + Multi-Track views implemented
   10b-5-timeline-filtering-manual-events: backlog
   epic-10b-retrospective: optional
 

@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimelineHeader, TimelineHeaderSkeleton } from './TimelineHeader';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { TimelineStats } from '@/types/timeline';
+
+// Helper to render with TooltipProvider
+function renderWithTooltip(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 const mockStats: TimelineStats = {
   totalEvents: 47,
@@ -23,7 +29,7 @@ const mockStats: TimelineStats = {
 describe('TimelineHeader', () => {
   describe('event count display', () => {
     it('displays event count', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -36,7 +42,7 @@ describe('TimelineHeader', () => {
 
     it('uses singular form for single event', () => {
       const singleEventStats = { ...mockStats, totalEvents: 1 };
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={singleEventStats}
           viewMode="list"
@@ -48,7 +54,7 @@ describe('TimelineHeader', () => {
     });
 
     it('displays 0 events when stats is undefined', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={undefined}
           viewMode="list"
@@ -62,7 +68,7 @@ describe('TimelineHeader', () => {
 
   describe('date range display', () => {
     it('displays date range', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -79,7 +85,7 @@ describe('TimelineHeader', () => {
         dateRangeStart: null,
         dateRangeEnd: null,
       };
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={noDateStats}
           viewMode="list"
@@ -96,7 +102,7 @@ describe('TimelineHeader', () => {
         dateRangeStart: '2024-01-01',
         dateRangeEnd: '2024-01-31',
       };
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={sameMonthStats}
           viewMode="list"
@@ -109,8 +115,8 @@ describe('TimelineHeader', () => {
   });
 
   describe('view mode toggles', () => {
-    it('shows view mode toggle buttons', () => {
-      render(
+    it('shows view mode toggle buttons for all three views', () => {
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -122,11 +128,11 @@ describe('TimelineHeader', () => {
       expect(
         screen.getByRole('button', { name: /horizontal/i })
       ).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /table/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /multi-track/i })).toBeInTheDocument();
     });
 
     it('shows List as active when viewMode is list', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -138,8 +144,34 @@ describe('TimelineHeader', () => {
       expect(listButton).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('disables Horizontal and Table buttons for this story', () => {
-      render(
+    it('shows Horizontal as active when viewMode is horizontal', () => {
+      renderWithTooltip(
+        <TimelineHeader
+          stats={mockStats}
+          viewMode="horizontal"
+          onViewModeChange={vi.fn()}
+        />
+      );
+
+      const horizontalButton = screen.getByRole('button', { name: /horizontal/i });
+      expect(horizontalButton).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('shows Multi-Track as active when viewMode is multitrack', () => {
+      renderWithTooltip(
+        <TimelineHeader
+          stats={mockStats}
+          viewMode="multitrack"
+          onViewModeChange={vi.fn()}
+        />
+      );
+
+      const multitrackButton = screen.getByRole('button', { name: /multi-track/i });
+      expect(multitrackButton).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('all view mode buttons are enabled', () => {
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -147,20 +179,19 @@ describe('TimelineHeader', () => {
         />
       );
 
-      expect(
-        screen.getByRole('button', { name: /horizontal/i })
-      ).toBeDisabled();
-      expect(screen.getByRole('button', { name: /table/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /list/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /horizontal/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /multi-track/i })).not.toBeDisabled();
     });
 
     it('calls onViewModeChange when List button clicked', async () => {
       const user = userEvent.setup();
       const onViewModeChange = vi.fn();
 
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
-          viewMode="list"
+          viewMode="horizontal"
           onViewModeChange={onViewModeChange}
         />
       );
@@ -168,11 +199,43 @@ describe('TimelineHeader', () => {
       await user.click(screen.getByRole('button', { name: /list/i }));
       expect(onViewModeChange).toHaveBeenCalledWith('list');
     });
+
+    it('calls onViewModeChange when Horizontal button clicked', async () => {
+      const user = userEvent.setup();
+      const onViewModeChange = vi.fn();
+
+      renderWithTooltip(
+        <TimelineHeader
+          stats={mockStats}
+          viewMode="list"
+          onViewModeChange={onViewModeChange}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /horizontal/i }));
+      expect(onViewModeChange).toHaveBeenCalledWith('horizontal');
+    });
+
+    it('calls onViewModeChange when Multi-Track button clicked', async () => {
+      const user = userEvent.setup();
+      const onViewModeChange = vi.fn();
+
+      renderWithTooltip(
+        <TimelineHeader
+          stats={mockStats}
+          viewMode="list"
+          onViewModeChange={onViewModeChange}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /multi-track/i }));
+      expect(onViewModeChange).toHaveBeenCalledWith('multitrack');
+    });
   });
 
   describe('loading state', () => {
     it('shows skeleton when isLoading is true', () => {
-      const { container } = render(
+      const { container } = renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -189,7 +252,7 @@ describe('TimelineHeader', () => {
 
   describe('accessibility', () => {
     it('has appropriate role and aria-label on header', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -203,7 +266,7 @@ describe('TimelineHeader', () => {
     });
 
     it('has aria-label on view mode group', () => {
-      render(
+      renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"
@@ -219,7 +282,7 @@ describe('TimelineHeader', () => {
 
   describe('styling', () => {
     it('applies className prop', () => {
-      const { container } = render(
+      const { container } = renderWithTooltip(
         <TimelineHeader
           stats={mockStats}
           viewMode="list"

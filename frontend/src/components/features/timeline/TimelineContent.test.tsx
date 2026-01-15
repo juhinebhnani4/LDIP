@@ -149,7 +149,7 @@ describe('TimelineContent', () => {
         mutate: vi.fn(),
       });
 
-      const { container } = render(<TimelineContent />);
+      const { container } = renderWithProvider(<TimelineContent />);
 
       // Should show skeletons
       const skeletons = container.querySelectorAll('[class*="animate-pulse"]');
@@ -165,7 +165,7 @@ describe('TimelineContent', () => {
         mutate: vi.fn(),
       });
 
-      const { container } = render(<TimelineContent />);
+      const { container } = renderWithProvider(<TimelineContent />);
 
       // Header should show skeleton
       const skeletons = container.querySelectorAll('[class*="animate-pulse"]');
@@ -184,7 +184,7 @@ describe('TimelineContent', () => {
         mutate: vi.fn(),
       });
 
-      render(<TimelineContent />);
+      renderWithProvider(<TimelineContent />);
 
       expect(screen.getByRole('alert')).toBeInTheDocument();
       expect(screen.getByText('Error')).toBeInTheDocument();

@@ -125,8 +125,84 @@ export interface TimelineStatsResponse {
 
 /**
  * View modes for timeline display
+ * - list: Vertical chronological list (Story 10B.3)
+ * - horizontal: Horizontal axis with zoom (Story 10B.4)
+ * - multitrack: Parallel tracks by actor (Story 10B.4)
  */
-export type TimelineViewMode = 'list' | 'horizontal' | 'table';
+export type TimelineViewMode = 'list' | 'horizontal' | 'multitrack';
+
+/**
+ * Zoom level for horizontal/multitrack views
+ */
+export type ZoomLevel = 'year' | 'quarter' | 'month' | 'week' | 'day';
+
+/**
+ * Timeline track for multi-track view
+ */
+export interface TimelineTrack {
+  /** Actor entity ID */
+  entityId: string;
+  /** Actor name */
+  actorName: string;
+  /** Actor type (PERSON, ORG, INSTITUTION) */
+  actorType: string;
+  /** Events for this actor */
+  events: TimelineEvent[];
+}
+
+/**
+ * Event cluster for grouped events
+ */
+export interface EventCluster {
+  /** Cluster ID */
+  id: string;
+  /** Cluster center date */
+  centerDate: string;
+  /** Events in cluster */
+  events: TimelineEvent[];
+  /** Whether cluster is expanded */
+  isExpanded: boolean;
+}
+
+/**
+ * Timeline gap for significant delays
+ */
+export interface TimelineGap {
+  /** Gap start date */
+  startDate: string;
+  /** Gap end date */
+  endDate: string;
+  /** Duration in days */
+  durationDays: number;
+  /** Whether significant (> 90 days) */
+  isSignificant: boolean;
+}
+
+/**
+ * Year label for timeline axis
+ */
+export interface YearLabel {
+  /** Year number */
+  year: number;
+  /** Position on axis (percentage or pixels) */
+  position: number;
+}
+
+/**
+ * Timeline scale calculation result
+ */
+export interface TimelineScale {
+  /** Scale multiplier based on zoom level */
+  scale: number;
+  /** Year labels for axis */
+  yearLabels: YearLabel[];
+  /** Minimum date in range */
+  minDate: Date | null;
+  /** Maximum date in range */
+  maxDate: Date | null;
+  /** Total width in pixels (for horizontal scroll) */
+  totalWidth: number;
+}
 
 /**
  * Options for useTimeline hook

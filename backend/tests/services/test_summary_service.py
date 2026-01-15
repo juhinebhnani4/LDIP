@@ -314,6 +314,63 @@ class TestSummaryCache:
         assert call_args[0][0] == f"summary:{matter_id}"
         assert call_args[0][1] == 3600  # 1 hour TTL
 
+    @pytest.mark.asyncio
+    async def test_invalidate_cache_deletes_key(self, mock_redis_client) -> None:
+        """Should delete cache key on invalidation."""
+        service = SummaryService()
+        matter_id = "12345678-1234-1234-1234-123456789abc"
+        mock_redis_client.delete = AsyncMock(return_value=1)
+
+        async def mock_get_redis():
+            return mock_redis_client
+
+        with patch(
+            "app.services.summary_service.get_redis_client",
+            side_effect=mock_get_redis,
+        ):
+            result = await service.invalidate_cache(matter_id)
+
+        assert result is True
+        mock_redis_client.delete.assert_called_once_with(f"summary:{matter_id}")
+
+    @pytest.mark.asyncio
+    async def test_invalidate_cache_returns_false_on_miss(
+        self, mock_redis_client
+    ) -> None:
+        """Should return False when key was not in cache."""
+        service = SummaryService()
+        matter_id = "12345678-1234-1234-1234-123456789abc"
+        mock_redis_client.delete = AsyncMock(return_value=0)
+
+        async def mock_get_redis():
+            return mock_redis_client
+
+        with patch(
+            "app.services.summary_service.get_redis_client",
+            side_effect=mock_get_redis,
+        ):
+            result = await service.invalidate_cache(matter_id)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_invalidate_cache_handles_errors(self, mock_redis_client) -> None:
+        """Should return False on Redis errors."""
+        service = SummaryService()
+        matter_id = "12345678-1234-1234-1234-123456789abc"
+        mock_redis_client.delete = AsyncMock(side_effect=Exception("Redis error"))
+
+        async def mock_get_redis():
+            return mock_redis_client
+
+        with patch(
+            "app.services.summary_service.get_redis_client",
+            side_effect=mock_get_redis,
+        ):
+            result = await service.invalidate_cache(matter_id)
+
+        assert result is False
+
 
 # =============================================================================
 # GPT-4 Generation Tests

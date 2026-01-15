@@ -331,3 +331,32 @@ None - all tests passing.
 - backend/app/main.py (added summary router import and registration)
 - backend/app/services/memory/redis_keys.py (added summary_cache_key function)
 - frontend/src/hooks/useMatterSummary.ts (replaced mock with real API)
+- backend/app/workers/tasks/document_tasks.py (added cache invalidation on job completion)
+
+### Code Review Fixes (2026-01-16)
+
+**7 issues found and fixed during adversarial code review:**
+
+1. **[HIGH] Bug: Citation count query used wrong case** - `summary_service.py:338`
+   - Changed `"VERIFIED"` to `"verified"` to match database enum values
+
+2. **[HIGH] AC #4 incomplete: Cache invalidation not wired**
+   - Added `invalidate_cache()` call in `_mark_job_completed()` in document_tasks.py
+   - Summary cache now invalidates when document processing completes
+
+3. **[MEDIUM] Added cache invalidation tests**
+   - Added 3 new tests: `test_invalidate_cache_deletes_key`, `test_invalidate_cache_returns_false_on_miss`, `test_invalidate_cache_handles_errors`
+
+4. **[MEDIUM] Extracted hardcoded limits to constants**
+   - `MAX_PARTIES = 4` in summary_service.py
+   - `MAX_KEY_ISSUES = 5` in summary_service.py
+   - `MAX_CHUNKS_FOR_SUMMARY = 10` in summary_service.py
+   - `MAX_PROMPT_CHUNKS = 10` in prompts.py
+   - `MAX_PROMPT_EVENTS = 5` in prompts.py
+
+5. **[MEDIUM] Implemented party verification check**
+   - Removed TODO comment
+   - Added `_check_party_verified()` method to check finding_verifications table
+   - Parties now have correct `is_verified` status
+
+**Test Results After Fixes:** 37 tests passing (3 new cache invalidation tests added)

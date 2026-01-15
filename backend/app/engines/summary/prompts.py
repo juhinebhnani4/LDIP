@@ -12,6 +12,16 @@ Output is additionally sanitized by language_policing_service.
 """
 
 # =============================================================================
+# Configuration Constants
+# =============================================================================
+
+# Maximum chunks to include in GPT-4 prompt context
+MAX_PROMPT_CHUNKS = 10
+
+# Maximum events to include for current status context
+MAX_PROMPT_EVENTS = 5
+
+# =============================================================================
 # Story 14.1: Subject Matter Prompt (Task 4.1)
 # =============================================================================
 
@@ -206,7 +216,7 @@ def _format_chunks(chunks: list[dict]) -> str:
         return "No document excerpts available."
 
     formatted = []
-    for i, chunk in enumerate(chunks[:10], 1):  # Limit to 10 chunks
+    for i, chunk in enumerate(chunks[:MAX_PROMPT_CHUNKS], 1):
         doc_name = chunk.get("document_name", "Unknown")
         page = chunk.get("page_number", "?")
         content = chunk.get("content", "")[:1000]  # Limit content length
@@ -231,7 +241,7 @@ def _format_events(events: list[dict]) -> str:
         return "No timeline events available."
 
     formatted = []
-    for event in events[:5]:  # Limit to 5 most recent
+    for event in events[:MAX_PROMPT_EVENTS]:
         date = event.get("event_date", "Unknown date")
         desc = event.get("description", "")[:200]
         doc = event.get("document_name", "")

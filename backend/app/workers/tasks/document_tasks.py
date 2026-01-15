@@ -89,6 +89,7 @@ from app.services.rag.embedder import (
     EmbeddingServiceError,
     get_embedding_service,
 )
+from app.services.summary_service import get_summary_service
 from app.services.storage_service import (
     StorageError,
     StorageService,
@@ -526,6 +527,25 @@ def _mark_job_completed(
                 old_status=JobStatus.PROCESSING.value,
                 new_status=JobStatus.COMPLETED.value,
             )
+
+            # Invalidate summary cache so next summary fetch gets fresh data
+            # Story 14.1: AC #4 - Invalidate cache on processing completion
+            try:
+                summary_service = get_summary_service()
+                _run_async(summary_service.invalidate_cache(matter_id))
+                logger.info(
+                    "summary_cache_invalidated_on_job_complete",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                )
+            except Exception as cache_err:
+                # Non-fatal: log and continue
+                logger.warning(
+                    "summary_cache_invalidation_failed_on_job_complete",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                    error=str(cache_err),
+                )
 
         logger.info(
             "job_tracking_job_completed",

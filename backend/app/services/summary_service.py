@@ -50,6 +50,19 @@ from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)
 
+# =============================================================================
+# Story 14.1: Configuration Constants
+# =============================================================================
+
+# Maximum number of parties to return in summary (sorted by role importance)
+MAX_PARTIES = 4
+
+# Maximum number of key issues to extract
+MAX_KEY_ISSUES = 5
+
+# Maximum chunks to use for GPT-4 generation context
+MAX_CHUNKS_FOR_SUMMARY = 10
+
 
 # =============================================================================
 # Story 14.1: Exceptions
@@ -335,7 +348,7 @@ class SummaryService:
                 lambda: self.supabase.table("citations")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
-                .neq("verification_status", "VERIFIED")
+                .neq("verification_status", "verified")
                 .execute()
             )
             return result.count or 0
@@ -416,6 +429,11 @@ class SummaryService:
                         break
 
                 doc_data = row.get("documents", {}) or {}
+
+                # Check if this party entity has been verified
+                # Party verification comes from finding_verifications table
+                is_verified = await self._check_party_verified(matter_id, entity_id)
+
                 parties.append(
                     PartyInfo(
                         entity_id=entity_id,
@@ -423,7 +441,7 @@ class SummaryService:
                         role=role,
                         source_document=doc_data.get("name", "Unknown"),
                         source_page=row.get("page_number") or 1,
-                        is_verified=False,  # TODO: Check verification table
+                        is_verified=is_verified,
                     )
                 )
 
@@ -435,11 +453,39 @@ class SummaryService:
             }
             parties.sort(key=lambda p: role_order.get(p.role, 2))
 
-            return parties[:4]  # Limit to 4 parties
+            return parties[:MAX_PARTIES]
 
         except Exception as e:
             logger.warning("get_parties_failed", error=str(e), matter_id=matter_id)
             return []
+
+    async def _check_party_verified(self, matter_id: str, entity_id: str) -> bool:
+        """Check if a party entity has been verified.
+
+        Args:
+            matter_id: Matter UUID.
+            entity_id: Entity UUID.
+
+        Returns:
+            True if entity has approved verification, False otherwise.
+        """
+        try:
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("finding_verifications")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("finding_id", entity_id)
+                .eq("decision", "approved")
+                .execute()
+            )
+            return (result.count or 0) > 0
+        except Exception as e:
+            logger.debug(
+                "check_party_verified_failed",
+                error=str(e),
+                entity_id=entity_id,
+            )
+            return False
 
     # =========================================================================
     # Stats (Task 2.4) - AC #7
@@ -681,7 +727,7 @@ class SummaryService:
             policing = get_language_policing_service()
 
             issues = []
-            for item in parsed.get("issues", [])[:5]:  # Limit to 5
+            for item in parsed.get("issues", [])[:MAX_KEY_ISSUES]:
                 policed_title = policing.sanitize_text(
                     item.get("title", "")
                 ).sanitized_text

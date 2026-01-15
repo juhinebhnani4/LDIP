@@ -29,6 +29,8 @@ import { useVerificationStore } from '@/stores/verificationStore';
 interface VerificationContentProps {
   /** Matter ID */
   matterId: string;
+  /** Optional callback to start a focused review session */
+  onStartSession?: () => void;
 }
 
 /**
@@ -110,7 +112,7 @@ function VerificationError({ message }: { message?: string }) {
  * <VerificationContent matterId="matter-123" />
  * ```
  */
-export function VerificationContent({ matterId }: VerificationContentProps) {
+export function VerificationContent({ matterId, onStartSession }: VerificationContentProps) {
   // Dialog state for notes input
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [notesAction, setNotesAction] = useState<'reject' | 'flag'>('reject');
@@ -244,7 +246,7 @@ export function VerificationContent({ matterId }: VerificationContentProps) {
   return (
     <div className="space-y-6">
       {/* Statistics Header */}
-      <VerificationStats stats={stats} isLoading={statsLoading} />
+      <VerificationStats stats={stats} isLoading={statsLoading} onStartSession={onStartSession} />
 
       {/* Filter Controls */}
       <VerificationFilters

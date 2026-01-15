@@ -1,10 +1,11 @@
 /**
  * Verification Feature Components
  *
- * Story 8-5: Implement Verification Queue UI
- * Story 10D.1: Verification Tab Queue (DataTable)
  * Epic 8: Safety Layer (Guardrails, Policing, Verification)
  * Epic 10D: Verification & Documents Tabs
+ *
+ * Story 10D.1: Verification Tab Queue (DataTable) - VerificationContent container
+ * Story 8-5: Implement Verification Queue UI - Core queue components
  */
 
 export { VerificationPage } from './VerificationPage';

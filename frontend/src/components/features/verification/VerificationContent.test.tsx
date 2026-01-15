@@ -293,4 +293,126 @@ describe('VerificationContent', () => {
 
     expect(screen.getByText('No verifications pending.')).toBeInTheDocument();
   });
+
+  // Issue 1: Test for notes dialog reset state
+  it('resets notes dialog state when canceled', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click reject to open notes dialog
+    const rejectButtons = screen.getAllByLabelText('Reject');
+    await user.click(rejectButtons[0]!);
+
+    // Dialog should open
+    expect(screen.getByText('Reject Verification')).toBeInTheDocument();
+
+    // Type some notes
+    const notesInput = screen.getByLabelText('Notes (required)');
+    await user.type(notesInput, 'Test notes');
+    expect(notesInput).toHaveValue('Test notes');
+
+    // Click cancel
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    await user.click(cancelButton);
+
+    // Open dialog again
+    await user.click(rejectButtons[0]!);
+
+    // Notes should be reset
+    const newNotesInput = screen.getByLabelText('Notes (required)');
+    expect(newNotesInput).toHaveValue('');
+  });
+
+  // Issue 2: Test for reject dialog submission flow
+  it('completes full reject dialog submission flow', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click reject to open notes dialog
+    const rejectButtons = screen.getAllByLabelText('Reject');
+    await user.click(rejectButtons[0]!);
+
+    // Dialog should open with reject title
+    expect(screen.getByText('Reject Verification')).toBeInTheDocument();
+
+    // Enter notes
+    const notesInput = screen.getByLabelText('Notes (required)');
+    await user.type(notesInput, 'Rejection reason: incorrect citation');
+
+    // Submit
+    const submitButton = screen.getByRole('button', { name: 'Reject' });
+    await user.click(submitButton);
+
+    // Verify reject was called with notes
+    expect(mockReject).toHaveBeenCalledWith('1', 'Rejection reason: incorrect citation');
+  });
+
+  // Issue 2: Test for flag dialog submission flow
+  it('completes full flag dialog submission flow', async () => {
+    const user = userEvent.setup();
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Click flag to open notes dialog
+    const flagButtons = screen.getAllByLabelText('Flag');
+    await user.click(flagButtons[0]!);
+
+    // Dialog should open with flag title
+    expect(screen.getByText('Flag for Review')).toBeInTheDocument();
+
+    // Enter notes
+    const notesInput = screen.getByLabelText('Notes (required)');
+    await user.type(notesInput, 'Needs senior review');
+
+    // Submit
+    const submitButton = screen.getByRole('button', { name: 'Flag' });
+    await user.click(submitButton);
+
+    // Verify flag was called with notes
+    expect(mockFlag).toHaveBeenCalledWith('1', 'Needs senior review');
+  });
+
+  // Issue 3: Test for inline error div structure
+  it('renders inline error with correct styling classes when data exists but refresh failed', () => {
+    (useVerificationQueue as Mock).mockReturnValue({
+      filteredQueue: [mockQueueItem('1')],
+      filters: mockFilters,
+      isLoading: false,
+      error: 'Network error during refresh',
+      setFilters: mockSetFilters,
+      resetFilters: mockResetFilters,
+      findingTypes: [],
+      refresh: mockRefreshQueue,
+    });
+
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Find the inline error element
+    const errorDiv = screen.getByText('Network error during refresh');
+
+    // Verify it has the correct styling classes
+    expect(errorDiv).toHaveClass('p-4');
+    expect(errorDiv).toHaveClass('bg-destructive/10');
+    expect(errorDiv).toHaveClass('text-destructive');
+    expect(errorDiv).toHaveClass('rounded-lg');
+
+    // Verify content is still displayed alongside the error
+    expect(screen.getByText('Verification Center')).toBeInTheDocument();
+    expect(screen.getByText('Test finding summary for 1')).toBeInTheDocument();
+  });
+
+  // Issue 4: Test that onStartSession is passed to VerificationStats
+  it('renders Start Review Session button when onStartSession is provided', () => {
+    const mockOnStartSession = vi.fn();
+    render(<VerificationContent matterId="matter-123" onStartSession={mockOnStartSession} />);
+
+    // Button should be rendered when onStartSession is provided
+    expect(screen.getByRole('button', { name: 'Start Review Session' })).toBeInTheDocument();
+  });
+
+  it('does not render Start Review Session button when onStartSession is not provided', () => {
+    render(<VerificationContent matterId="matter-123" />);
+
+    // Button should NOT be rendered when onStartSession is not provided
+    expect(screen.queryByRole('button', { name: 'Start Review Session' })).not.toBeInTheDocument();
+  });
 });

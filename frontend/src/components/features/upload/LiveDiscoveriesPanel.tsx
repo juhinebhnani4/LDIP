@@ -148,7 +148,7 @@ function MiniTimelinePreview({ dateInfo }: { dateInfo: DiscoveredDate }) {
     }
 
     return result;
-  }, [startYear, endYear, yearSpan]);
+  }, [startYear, yearSpan]);
 
   return (
     <Card className="animate-fade-in">
@@ -239,7 +239,7 @@ export function LiveDiscoveriesPanel({
       let allEntities: DiscoveredEntity[] = [];
       let allCitations: DiscoveredCitation[] = [];
       let dateData: DiscoveredDate | null = null;
-      let insightsList: EarlyInsight[] = [];
+      const insightsList: EarlyInsight[] = [];
       let totalEntityCount = 0;
       let totalDateCount = 0;
       let totalCitationCount = 0;

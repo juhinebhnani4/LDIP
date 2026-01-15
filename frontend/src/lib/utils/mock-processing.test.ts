@@ -114,7 +114,6 @@ describe('mock-processing', () => {
 
       cleanup(); // Cancel after initial calls
 
-      const callCountBefore = onProgress.mock.calls.length;
       await vi.runAllTimersAsync();
       const callCountAfter = onProgress.mock.calls.length;
 
@@ -255,7 +254,7 @@ describe('mock-processing', () => {
 
       // Each file should have progress updates
       expect(fileProgress.size).toBe(3);
-      for (const [fileName, updates] of fileProgress) {
+      for (const [, updates] of fileProgress) {
         const lastUpdate = updates[updates.length - 1];
         expect(lastUpdate.status).toBe('complete');
       }

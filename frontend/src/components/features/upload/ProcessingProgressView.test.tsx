@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ProcessingProgressView } from './ProcessingProgressView';
-import type { ProcessingStage } from '@/types/upload';
 
 describe('ProcessingProgressView', () => {
   describe('rendering', () => {

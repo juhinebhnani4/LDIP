@@ -9,7 +9,7 @@
  * Uses mock progress simulation for MVP until backend is ready.
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useUploadWizardStore } from '@/stores/uploadWizardStore';
@@ -37,25 +37,22 @@ export default function ProcessingPage() {
   );
   const setMatterId = useUploadWizardStore((state) => state.setMatterId);
 
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const [simulationStarted, setSimulationStarted] = useState(false);
+  // Use ref to track simulation state (avoids re-running effect)
+  const simulationStartedRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  // Redirect if no files
-  useEffect(() => {
-    if (files.length === 0 && !isRedirecting) {
-      queueMicrotask(() => {
-        setIsRedirecting(true);
-        reset();
-        router.replace('/upload');
-      });
+  // Redirect if no files - use layoutEffect to redirect before paint
+  useLayoutEffect(() => {
+    if (files.length === 0) {
+      reset();
+      router.replace('/upload');
     }
-  }, [files.length, reset, router, isRedirecting]);
+  }, [files.length, reset, router]);
 
   // Start simulation when component mounts (with files)
   useEffect(() => {
-    if (files.length > 0 && !simulationStarted && !isRedirecting) {
-      setSimulationStarted(true);
+    if (files.length > 0 && !simulationStartedRef.current) {
+      simulationStartedRef.current = true;
 
       // Clear any previous processing state
       clearProcessingState();
@@ -86,8 +83,6 @@ export default function ProcessingPage() {
     };
   }, [
     files,
-    simulationStarted,
-    isRedirecting,
     clearProcessingState,
     setMatterId,
     setUploadProgress,
@@ -102,8 +97,8 @@ export default function ProcessingPage() {
     // For MVP, we just navigate away (simulation continues until page unmount)
   }, []);
 
-  // Show loading state while redirecting
-  if (files.length === 0 || isRedirecting) {
+  // Show loading state while redirecting (files.length === 0)
+  if (files.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

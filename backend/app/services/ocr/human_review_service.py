@@ -4,7 +4,7 @@ Manages the queue of words requiring human review due to very low
 OCR confidence (<50%).
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
@@ -15,7 +15,6 @@ from app.models.ocr_validation import (
     HumanReviewItem,
     HumanReviewStatus,
     LowConfidenceWord,
-    ValidationLogEntry,
     ValidationResult,
 )
 from app.services.supabase.client import get_service_client
@@ -267,6 +266,7 @@ class HumanReviewService:
         review_id: str,
         corrected_text: str,
         user_id: str,
+        authorized_matter_id: str | None = None,
     ) -> ValidationResult:
         """Submit a human correction for a review item.
 
@@ -274,12 +274,13 @@ class HumanReviewService:
             review_id: Review item UUID.
             corrected_text: Human-corrected text.
             user_id: UUID of the reviewing user.
+            authorized_matter_id: Matter ID the user is authorized for (CRITICAL for IDOR prevention).
 
         Returns:
             ValidationResult with the correction.
 
         Raises:
-            HumanReviewServiceError: If submission fails.
+            HumanReviewServiceError: If submission fails or user not authorized.
         """
         if self.client is None:
             raise HumanReviewServiceError(
@@ -302,10 +303,25 @@ class HumanReviewService:
                 )
 
             item = item_result.data
+
+            # CRITICAL: Validate matter_id matches authorized matter (IDOR prevention)
+            if authorized_matter_id and item["matter_id"] != authorized_matter_id:
+                logger.warning(
+                    "human_review_idor_attempt",
+                    review_id=review_id,
+                    item_matter_id=item["matter_id"],
+                    authorized_matter_id=authorized_matter_id,
+                    user_id=user_id,
+                )
+                raise HumanReviewServiceError(
+                    message=f"Review item {review_id} not found",
+                    code="ITEM_NOT_FOUND"  # Don't reveal the item exists in another matter
+                )
+
             original_text = item["original_text"]
 
             # Update the review item
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             self.client.table("ocr_human_review").update({
                 "corrected_text": corrected_text,
                 "status": HumanReviewStatus.COMPLETED.value,
@@ -375,15 +391,17 @@ class HumanReviewService:
         self,
         review_id: str,
         user_id: str,
+        authorized_matter_id: str | None = None,
     ) -> None:
         """Skip a review item (accept original text).
 
         Args:
             review_id: Review item UUID.
             user_id: UUID of the reviewing user.
+            authorized_matter_id: Matter ID the user is authorized for (CRITICAL for IDOR prevention).
 
         Raises:
-            HumanReviewServiceError: If skipping fails.
+            HumanReviewServiceError: If skipping fails or user not authorized.
         """
         if self.client is None:
             raise HumanReviewServiceError(
@@ -392,7 +410,34 @@ class HumanReviewService:
             )
 
         try:
-            now = datetime.now(timezone.utc).isoformat()
+            # CRITICAL: Validate matter_id matches authorized matter (IDOR prevention)
+            if authorized_matter_id:
+                item_result = self.client.table("ocr_human_review").select(
+                    "id, matter_id"
+                ).eq(
+                    "id", review_id
+                ).single().execute()
+
+                if not item_result.data:
+                    raise HumanReviewServiceError(
+                        message=f"Review item {review_id} not found",
+                        code="ITEM_NOT_FOUND"
+                    )
+
+                if item_result.data["matter_id"] != authorized_matter_id:
+                    logger.warning(
+                        "human_review_skip_idor_attempt",
+                        review_id=review_id,
+                        item_matter_id=item_result.data["matter_id"],
+                        authorized_matter_id=authorized_matter_id,
+                        user_id=user_id,
+                    )
+                    raise HumanReviewServiceError(
+                        message=f"Review item {review_id} not found",
+                        code="ITEM_NOT_FOUND"  # Don't reveal the item exists in another matter
+                    )
+
+            now = datetime.now(UTC).isoformat()
             self.client.table("ocr_human_review").update({
                 "status": HumanReviewStatus.SKIPPED.value,
                 "reviewed_by": user_id,

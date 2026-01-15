@@ -1,4 +1,23 @@
-"""Supabase client configuration and initialization."""
+"""Supabase client configuration and initialization.
+
+SECURITY MODEL (4-Layer Matter Isolation):
+- Layer 1: Database RLS (bypassed by service role - intentional)
+- Layer 2: Vector namespace isolation (enforced in SQL functions)
+- Layer 3: Storage bucket policies (enforced by Supabase)
+- Layer 4: Application authorization (FastAPI deps + service validation)
+
+The backend uses service role key which bypasses RLS (Layer 1).
+This is intentional because:
+1. Celery workers run as background jobs without user JWT context
+2. The application layer (Layer 4) handles authorization via:
+   - FastAPI dependencies (require_matter_role)
+   - Service-level matter_id validation (CRITICAL)
+   - API middleware checks
+
+CRITICAL: All services using these clients MUST validate matter_id
+ownership before performing operations. See HumanReviewService for
+the pattern of validating item.matter_id matches authorized matter.
+"""
 
 from functools import lru_cache
 
@@ -16,16 +35,17 @@ _supabase_client: Client | None = None
 def _create_supabase_client() -> Client | None:
     """Create and configure Supabase client.
 
-    Uses service role key to bypass RLS since authorization is handled
-    by the application layer (Layer 4 of 4-layer security model).
+    SECURITY: Uses service role key which bypasses RLS (Layer 1).
+    All calling code MUST validate matter access at Layer 4.
+    This client is for backend services that handle their own authorization.
 
     Returns:
         Configured Supabase client or None if not configured.
     """
     settings = get_settings()
 
-    # Use service role key for backend operations (bypasses RLS)
-    # Application handles authorization via 4-layer security model
+    # Service role key bypasses RLS - application layer handles authorization
+    # CRITICAL: Callers MUST validate matter_id ownership before operations
     key = settings.supabase_service_key or settings.supabase_key
 
     if not settings.supabase_url or not key:

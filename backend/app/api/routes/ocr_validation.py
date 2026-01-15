@@ -2,12 +2,14 @@
 
 Endpoints for document validation status, validation history,
 and human review queue management.
+
+SECURITY: Human review endpoints are rate-limited to prevent bulk manipulation.
 """
 
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import (
@@ -15,6 +17,7 @@ from app.api.deps import (
     MatterRole,
     require_matter_role,
 )
+from app.core.rate_limit import HUMAN_REVIEW_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
 from app.models.ocr_validation import (
@@ -385,7 +388,9 @@ async def get_pending_human_reviews(
     "/{matter_id}/human-review/{review_id}",
     response_model=HumanReviewCorrectionResponse,
 )
+@limiter.limit(HUMAN_REVIEW_RATE_LIMIT)
 async def submit_human_correction(
+    request: Request,  # Required for rate limiter
     review_id: str = Path(..., description="Review item UUID"),
     correction: HumanReviewCorrectionRequest = ...,
     membership: MatterMembership = Depends(
@@ -397,12 +402,15 @@ async def submit_human_correction(
 
     Updates the OCR text with the corrected value and logs the correction.
     Only editors and owners can submit corrections.
+
+    Rate limited to 30 requests/minute per user to prevent bulk manipulation.
     """
     try:
         result = human_review_service.submit_correction(
             review_id=review_id,
             corrected_text=correction.corrected_text,
             user_id=membership.user_id,
+            authorized_matter_id=membership.matter_id,  # CRITICAL: IDOR prevention
         )
 
         return HumanReviewCorrectionResponse(
@@ -448,7 +456,9 @@ async def submit_human_correction(
     "/{matter_id}/human-review/{review_id}/skip",
     response_model=HumanReviewCorrectionResponse,
 )
+@limiter.limit(HUMAN_REVIEW_RATE_LIMIT)
 async def skip_human_review(
+    request: Request,  # Required for rate limiter
     review_id: str = Path(..., description="Review item UUID"),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
@@ -459,11 +469,14 @@ async def skip_human_review(
 
     Marks the review item as skipped without making changes.
     Only editors and owners can skip reviews.
+
+    Rate limited to 30 requests/minute per user to prevent bulk manipulation.
     """
     try:
         human_review_service.skip_review(
             review_id=review_id,
             user_id=membership.user_id,
+            authorized_matter_id=membership.matter_id,  # CRITICAL: IDOR prevention
         )
 
         return HumanReviewCorrectionResponse(

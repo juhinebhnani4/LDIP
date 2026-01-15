@@ -7,10 +7,28 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from app.api.routes import anomalies, bounding_boxes, chunks, citations, contradiction, documents, entities, health, jobs, matters, ocr_validation, search, timeline, verifications
+from app.api.routes import (
+    anomalies,
+    bounding_boxes,
+    chunks,
+    citations,
+    contradiction,
+    documents,
+    entities,
+    health,
+    jobs,
+    matters,
+    ocr_validation,
+    search,
+    timeline,
+    verifications,
+)
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.rate_limit import limiter
 
 # Configure structured logging on module load
 configure_logging()
@@ -100,6 +118,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Configure rate limiting
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # Include routers
     app.include_router(health.router, prefix="/api")

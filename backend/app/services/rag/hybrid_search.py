@@ -22,7 +22,11 @@ from app.services.supabase.client import get_supabase_client
 logger = structlog.get_logger(__name__)
 
 # Default limits for rerank pipeline
-DEFAULT_HYBRID_LIMIT = 20
+# NOTE: Increased from 20 to 50 for better recall (Issue #5 from code review)
+# Reranking 50 items is still fast (~100ms) and significantly improves
+# "needle in haystack" performance where the best result might be ranked
+# 25-30 by BM25/semantic but would be top-3 after reranking
+DEFAULT_HYBRID_LIMIT = 50
 DEFAULT_RERANK_TOP_N = 3
 
 

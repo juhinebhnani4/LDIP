@@ -12,12 +12,13 @@
  *   const { messages, addMessage } = useChatStore();
  *
  * Story 11.2: Implement Q&A Conversation History
+ * Story 11.3: Streaming Response with Engine Trace
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getConversationHistory, getArchivedMessages } from '@/lib/api/chat';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, EngineTrace } from '@/types/chat';
 
 // ============================================================================
 // Constants
@@ -46,6 +47,15 @@ interface ChatState {
   currentMatterId: string | null;
   /** User ID for the current session */
   currentUserId: string | null;
+  /** Story 11.3: Streaming state */
+  /** ID of message currently being streamed */
+  streamingMessageId: string | null;
+  /** Accumulated content during streaming */
+  streamingContent: string;
+  /** Engine traces accumulated during streaming */
+  streamingTraces: EngineTrace[];
+  /** Whether typing indicator should show */
+  isTyping: boolean;
 }
 
 interface ChatActions {
@@ -65,6 +75,16 @@ interface ChatActions {
   setError: (error: string | null) => void;
   /** Reset store to initial state */
   reset: () => void;
+  /** Story 11.3: Start streaming a new response */
+  startStreaming: (messageId: string) => void;
+  /** Story 11.3: Append token to streaming content */
+  appendToken: (token: string, accumulated: string) => void;
+  /** Story 11.3: Add engine trace during streaming */
+  addTrace: (trace: EngineTrace) => void;
+  /** Story 11.3: Complete streaming and finalize message */
+  completeStreaming: (finalContent: string, traces: EngineTrace[]) => void;
+  /** Story 11.3: Set typing indicator */
+  setTyping: (isTyping: boolean) => void;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -81,6 +101,11 @@ const initialState: ChatState = {
   currentSessionId: null,
   currentMatterId: null,
   currentUserId: null,
+  // Story 11.3: Streaming state
+  streamingMessageId: null,
+  streamingContent: '',
+  streamingTraces: [],
+  isTyping: false,
 };
 
 // ============================================================================
@@ -187,6 +212,56 @@ export const useChatStore = create<ChatStore>()(
       reset: () => {
         set(initialState);
       },
+
+      // Story 11.3: Streaming actions
+      startStreaming: (messageId) => {
+        set({
+          streamingMessageId: messageId,
+          streamingContent: '',
+          streamingTraces: [],
+          isTyping: true,
+          error: null,
+        });
+      },
+
+      appendToken: (_token, accumulated) => {
+        set({
+          streamingContent: accumulated,
+          isTyping: false,
+        });
+      },
+
+      addTrace: (trace) => {
+        set((state) => ({
+          streamingTraces: [...state.streamingTraces, trace],
+        }));
+      },
+
+      completeStreaming: (finalContent, traces) => {
+        const { streamingMessageId, messages } = get();
+        if (!streamingMessageId) return;
+
+        // Create the completed assistant message
+        const completedMessage: ChatMessage = {
+          id: streamingMessageId,
+          role: 'assistant',
+          content: finalContent,
+          timestamp: new Date().toISOString(),
+          engineTraces: traces,
+        };
+
+        set({
+          messages: [...messages, completedMessage],
+          streamingMessageId: null,
+          streamingContent: '',
+          streamingTraces: [],
+          isTyping: false,
+        });
+      },
+
+      setTyping: (isTyping) => {
+        set({ isTyping });
+      },
     }),
     {
       name: STORAGE_KEY,
@@ -232,4 +307,25 @@ export const selectIsEmpty = (state: ChatStore): boolean => {
  */
 export const selectHasUserMessages = (state: ChatStore): boolean => {
   return state.messages.some((m) => m.role === 'user');
+};
+
+/**
+ * Story 11.3: Selector for checking if streaming is active
+ */
+export const selectIsStreaming = (state: ChatStore): boolean => {
+  return state.streamingMessageId !== null;
+};
+
+/**
+ * Story 11.3: Selector for streaming content
+ */
+export const selectStreamingContent = (state: ChatStore): string => {
+  return state.streamingContent;
+};
+
+/**
+ * Story 11.3: Selector for streaming traces
+ */
+export const selectStreamingTraces = (state: ChatStore): EngineTrace[] => {
+  return state.streamingTraces;
 };

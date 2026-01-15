@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { User, Bot } from 'lucide-react';
 import { SourceReference } from './SourceReference';
+import { EngineTrace } from './EngineTrace';
 import type { ChatMessage as ChatMessageType, SourceReference as SourceReferenceType } from '@/types/chat';
 
 interface ChatMessageProps {
@@ -21,6 +22,7 @@ interface ChatMessageProps {
  * Assistant messages appear on the left with muted styling and may include source references.
  *
  * Story 11.2: Implement Q&A Conversation History (AC: #1)
+ * Story 11.3: Streaming Response with Engine Trace (AC: #2-3)
  */
 /**
  * Format timestamp with fallback for invalid dates.
@@ -92,6 +94,17 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
         <span className="text-xs text-muted-foreground">
           {formatTimestamp(message.timestamp)}
         </span>
+
+        {/* Engine trace (assistant only) - Story 11.3 */}
+        {!isUser && message.engineTraces && message.engineTraces.length > 0 && (
+          <EngineTrace
+            traces={message.engineTraces}
+            totalTimeMs={message.engineTraces.reduce(
+              (sum, t) => sum + t.executionTimeMs,
+              0
+            )}
+          />
+        )}
       </div>
     </article>
   );

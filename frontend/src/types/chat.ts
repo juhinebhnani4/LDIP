@@ -4,6 +4,7 @@
  * Type definitions for the Q&A conversation history functionality.
  *
  * Story 11.2: Implement Q&A Conversation History
+ * Story 11.3: Streaming Response with Engine Trace
  */
 
 /**
@@ -22,6 +23,23 @@ export interface SourceReference {
 }
 
 /**
+ * Engine execution trace for displaying processing details.
+ * Story 11.3: Streaming Response with Engine Trace
+ */
+export interface EngineTrace {
+  /** Engine identifier (citation, timeline, contradiction, rag) */
+  engine: string;
+  /** Execution time in milliseconds */
+  executionTimeMs: number;
+  /** Number of findings produced */
+  findingsCount: number;
+  /** Whether execution succeeded */
+  success: boolean;
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
  * Chat message representing either a user question or assistant response.
  */
 export interface ChatMessage {
@@ -35,6 +53,8 @@ export interface ChatMessage {
   timestamp: string;
   /** Source references for citations (assistant messages only) */
   sources?: SourceReference[];
+  /** Engine execution traces (assistant messages only) - Story 11.3 */
+  engineTraces?: EngineTrace[];
 }
 
 /**

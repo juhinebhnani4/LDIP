@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.routes import (
     anomalies,
     bounding_boxes,
+    chat,
     chunks,
     citations,
     contradiction,
@@ -142,10 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(anomalies.router, prefix="/api")
     app.include_router(contradiction.router, prefix="/api")
     app.include_router(verifications.router, prefix="/api")
-
-    # Future routers (to be implemented in later stories):
-    # app.include_router(engines.router, prefix="/api")
-    # app.include_router(chat.router, prefix="/api")
+    app.include_router(chat.router, prefix="/api")
 
     return app
 

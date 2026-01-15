@@ -1,6 +1,6 @@
 # Story 2B.2: Implement Gemini-Based OCR Validation
 
-Status: review
+Status: done
 
 ## Story
 

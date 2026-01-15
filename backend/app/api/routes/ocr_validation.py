@@ -127,7 +127,7 @@ async def get_validation_status(
 
     try:
         # Get document to verify access (RLS will filter)
-        doc = document_service.get_document(document_id)
+        document_service.get_document(document_id)
 
         # Get validation status from document
         doc_result = client.table("documents").select(
@@ -193,7 +193,7 @@ async def get_validation_status(
                     "details": {},
                 }
             },
-        )
+        ) from None
     except Exception as e:
         logger.error(
             "validation_status_failed",
@@ -209,7 +209,7 @@ async def get_validation_status(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -302,7 +302,7 @@ async def get_validation_log(
                     "details": {},
                 }
             },
-        )
+        ) from None
     except Exception as e:
         logger.error(
             "validation_log_failed",
@@ -318,7 +318,7 @@ async def get_validation_log(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -381,7 +381,7 @@ async def get_pending_human_reviews(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @matters_router.post(
@@ -434,7 +434,7 @@ async def submit_human_correction(
                         "details": {},
                     }
                 },
-            )
+            ) from None
         logger.error(
             "human_review_correction_failed",
             review_id=review_id,
@@ -449,7 +449,7 @@ async def submit_human_correction(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @matters_router.post(
@@ -498,7 +498,7 @@ async def skip_human_review(
                         "details": {},
                     }
                 },
-            )
+            ) from None
         logger.error(
             "human_review_skip_failed",
             review_id=review_id,
@@ -513,7 +513,7 @@ async def skip_human_review(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @matters_router.get(
@@ -552,4 +552,4 @@ async def get_human_review_stats(
                     "details": {},
                 }
             },
-        )
+        ) from e

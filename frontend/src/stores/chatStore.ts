@@ -18,7 +18,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getConversationHistory, getArchivedMessages } from '@/lib/api/chat';
-import type { ChatMessage, EngineTrace } from '@/types/chat';
+import type { ChatMessage, EngineTrace, SourceReference } from '@/types/chat';
 
 // ============================================================================
 // Constants
@@ -82,7 +82,7 @@ interface ChatActions {
   /** Story 11.3: Add engine trace during streaming */
   addTrace: (trace: EngineTrace) => void;
   /** Story 11.3: Complete streaming and finalize message */
-  completeStreaming: (finalContent: string, traces: EngineTrace[]) => void;
+  completeStreaming: (finalContent: string, traces: EngineTrace[], sources?: SourceReference[]) => void;
   /** Story 11.3: Set typing indicator */
   setTyping: (isTyping: boolean) => void;
 }
@@ -237,7 +237,7 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
 
-      completeStreaming: (finalContent, traces) => {
+      completeStreaming: (finalContent, traces, sources) => {
         const { streamingMessageId, messages } = get();
         if (!streamingMessageId) return;
 
@@ -248,6 +248,7 @@ export const useChatStore = create<ChatStore>()(
           content: finalContent,
           timestamp: new Date().toISOString(),
           engineTraces: traces,
+          sources: sources,
         };
 
         set({

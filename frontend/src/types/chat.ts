@@ -18,8 +18,37 @@ export interface SourceReference {
   documentName: string;
   /** Page number in the document (1-indexed) */
   page?: number;
-  /** Bounding box IDs for highlighting specific content */
+  /** Chunk UUID for specific content reference */
+  chunkId?: string;
+  /** Relevance/confidence score from engine */
+  confidence?: number;
+  /** Bounding box IDs for highlighting specific content (UI-only) */
   bboxIds?: string[];
+}
+
+/**
+ * Source reference as received from backend API (snake_case).
+ * Story 11.3: Maps to SourceReferenceEvent from backend/app/models/chat.py
+ */
+export interface SourceReferenceAPI {
+  document_id: string;
+  document_name?: string | null;
+  page?: number | null;
+  chunk_id?: string | null;
+  confidence?: number | null;
+}
+
+/**
+ * Transform backend API source reference to frontend format.
+ */
+export function transformSourceReference(api: SourceReferenceAPI): SourceReference {
+  return {
+    documentId: api.document_id,
+    documentName: api.document_name ?? 'Unknown Document',
+    page: api.page ?? undefined,
+    chunkId: api.chunk_id ?? undefined,
+    confidence: api.confidence ?? undefined,
+  };
 }
 
 /**
@@ -37,6 +66,31 @@ export interface EngineTrace {
   success: boolean;
   /** Error message if failed */
   error?: string;
+}
+
+/**
+ * Engine trace as received from backend API (snake_case).
+ * Story 11.3: Maps to EngineTraceEvent from backend/app/models/chat.py
+ */
+export interface EngineTraceAPI {
+  engine: string;
+  execution_time_ms: number;
+  findings_count: number;
+  success: boolean;
+  error?: string | null;
+}
+
+/**
+ * Transform backend API engine trace to frontend format.
+ */
+export function transformEngineTrace(api: EngineTraceAPI): EngineTrace {
+  return {
+    engine: api.engine,
+    executionTimeMs: api.execution_time_ms,
+    findingsCount: api.findings_count,
+    success: api.success,
+    error: api.error ?? undefined,
+  };
 }
 
 /**

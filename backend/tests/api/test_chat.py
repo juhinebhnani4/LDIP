@@ -10,8 +10,7 @@ Tests:
 - Error handling
 """
 
-from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -19,7 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from app.engines.orchestrator.streaming import StreamingOrchestrator
 from app.main import app
 from app.models.chat import StreamEvent, StreamEventType
-from app.models.orchestrator import EngineType, OrchestratorResult
+from app.models.orchestrator import EngineExecutionResult, EngineType, OrchestratorResult
 
 
 # =============================================================================
@@ -39,7 +38,7 @@ def mock_orchestrator_result() -> OrchestratorResult:
         sources=[],
         confidence=0.85,
         engine_results=[
-            MagicMock(
+            EngineExecutionResult(
                 engine=EngineType.CITATION,
                 success=True,
                 execution_time_ms=150,

@@ -96,12 +96,12 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
         </span>
 
         {/* Engine trace (assistant only) - Story 11.3 */}
+        {/* Note: Use max instead of sum since engines run in parallel */}
         {!isUser && message.engineTraces && message.engineTraces.length > 0 && (
           <EngineTrace
             traces={message.engineTraces}
-            totalTimeMs={message.engineTraces.reduce(
-              (sum, t) => sum + t.executionTimeMs,
-              0
+            totalTimeMs={Math.max(
+              ...message.engineTraces.map((t) => t.executionTimeMs)
             )}
           />
         )}

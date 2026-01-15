@@ -75,7 +75,15 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
       success: t.success,
       error: t.error,
     }));
-    completeStreaming(data.response, traces);
+    // Convert sources from hook data to SourceReference type
+    const sources: SourceReference[] = data.sources.map((s) => ({
+      documentId: s.documentId,
+      documentName: s.documentName ?? 'Unknown Document',
+      page: s.page,
+      chunkId: s.chunkId,
+      confidence: s.confidence,
+    }));
+    completeStreaming(data.response, traces, sources);
   }, [completeStreaming]);
 
   const handleError = useCallback((error: Error) => {
@@ -123,11 +131,10 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
   // Show placeholder if we don't have matter/user context
   const canLoadHistory = Boolean(matterId && userId);
 
-  // Calculate total time from traces for streaming message
-  const streamingTotalTimeMs = streamingTraces.reduce(
-    (sum, t) => sum + t.executionTimeMs,
-    0
-  );
+  // Calculate total time from traces for streaming message (use max since engines run in parallel)
+  const streamingTotalTimeMs = streamingTraces.length > 0
+    ? Math.max(...streamingTraces.map((t) => t.executionTimeMs))
+    : 0;
 
   return (
     <div className="flex h-full flex-col bg-background">

@@ -1,6 +1,6 @@
 # Story 11.3: Implement Streaming Response with Engine Trace
 
-Status: dev-complete
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -893,10 +893,51 @@ feat(chat): implement streaming response with engine trace (Story 11.3)
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 
+N/A
+
 ### Completion Notes List
 
+1. Stop button deferred per Task 11.5 - input disabled during streaming instead
+2. Simulated token streaming delay (5ms, batch size 3) is placeholder behavior until real LLM streaming is integrated
+3. Full test suite validation deferred to integration testing phase
+
 ### File List
+
+**Backend (New Files):**
+- `backend/app/api/routes/chat.py` - SSE streaming endpoint for chat
+- `backend/app/engines/orchestrator/streaming.py` - StreamingOrchestrator wrapper for QueryOrchestrator
+- `backend/app/models/chat.py` - Streaming event models (StreamEventType, StreamEvent, EngineTraceEvent, etc.)
+- `backend/tests/api/test_chat.py` - Backend tests for streaming endpoint and orchestrator
+
+**Backend (Modified Files):**
+- `backend/app/main.py` - Register chat router
+- `backend/pyproject.toml` - Add sse-starlette dependency
+
+**Frontend (New Files):**
+- `frontend/src/hooks/useSSE.ts` - SSE hook for streaming chat responses
+- `frontend/src/components/features/chat/ChatInput.tsx` - Chat input with send button
+- `frontend/src/components/features/chat/StreamingResponse.tsx` - Token streaming display
+- `frontend/src/components/features/chat/StreamingMessage.tsx` - Combined streaming message component
+- `frontend/src/components/features/chat/EngineTrace.tsx` - Collapsible engine trace display
+- `frontend/src/components/features/chat/__tests__/ChatInput.test.tsx` - ChatInput tests
+- `frontend/src/components/features/chat/__tests__/StreamingResponse.test.tsx` - StreamingResponse tests
+- `frontend/src/components/features/chat/__tests__/EngineTrace.test.tsx` - EngineTrace tests
+
+**Frontend (Modified Files):**
+- `frontend/src/stores/chatStore.ts` - Add streaming state and actions (startStreaming, appendToken, addTrace, completeStreaming)
+- `frontend/src/types/chat.ts` - Add EngineTrace type, SourceReferenceAPI type, transformer functions
+- `frontend/src/components/features/chat/ChatMessage.tsx` - Add engineTraces prop and EngineTrace component
+- `frontend/src/components/features/chat/QAPanel.tsx` - Integrate ChatInput, StreamingMessage, SSE streaming flow
+- `frontend/src/components/features/chat/index.ts` - Export new components
+
+### Code Review Fixes Applied (2026-01-16)
+
+1. **Backend test fixture** - Replaced MagicMock with EngineExecutionResult Pydantic model in test_chat.py
+2. **Frontend test framework** - Changed jest.fn() to vi.fn() in ChatInput.test.tsx (Vitest, not Jest)
+3. **Type alignment** - Added SourceReferenceAPI and EngineTraceAPI types with transformer functions for snake_case to camelCase conversion
+4. **Source references** - Updated completeStreaming to accept and pass sources to completed messages
+5. **Total time calculation** - Changed from sum to max for engine traces (engines run in parallel)

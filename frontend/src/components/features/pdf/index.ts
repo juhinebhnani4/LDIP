@@ -3,6 +3,7 @@
  *
  * Story 3-4: Split-View Citation Highlighting
  * Story 11.5: PDF Viewer Split-View Mode
+ * Story 11.6: PDF Viewer Full Modal Mode
  *
  * Components for PDF viewing with bounding box highlighting.
  */
@@ -21,3 +22,6 @@ export type { PDFSplitViewProps } from './PDFSplitView';
 
 export { PDFSplitViewHeader } from './PDFSplitViewHeader';
 export type { PDFSplitViewHeaderProps } from './PDFSplitViewHeader';
+
+// Story 11.6: PDF Full Screen Modal
+export { PDFFullScreenModal } from './PDFFullScreenModal';

@@ -5,6 +5,7 @@
  * from Q&A responses, citations, or other source references.
  *
  * Story 11.5: Implement PDF Viewer Split-View Mode
+ * Story 11.6: Implement PDF Viewer Full Modal Mode
  *
  * USAGE PATTERN (MANDATORY - from project-context.md):
  * CORRECT - Selector pattern:
@@ -25,6 +26,9 @@ import type { SourceReference } from '@/types/chat';
 interface PdfSplitViewState {
   /** Whether the split view panel is open */
   isOpen: boolean;
+
+  /** Whether the full screen modal is open (Story 11.6) */
+  isFullScreenOpen: boolean;
 
   /** URL of the document to display */
   documentUrl: string | null;
@@ -68,6 +72,12 @@ interface PdfSplitViewActions {
   /** Close the PDF split view */
   closePdfSplitView: () => void;
 
+  /** Open the full screen modal (Story 11.6) */
+  openFullScreenModal: () => void;
+
+  /** Close the full screen modal, preserving split view state (Story 11.6) */
+  closeFullScreenModal: () => void;
+
   /** Set the current page */
   setCurrentPage: (page: number) => void;
 
@@ -94,6 +104,7 @@ type PdfSplitViewStore = PdfSplitViewState & PdfSplitViewActions;
 
 const initialState: PdfSplitViewState = {
   isOpen: false,
+  isFullScreenOpen: false,
   documentUrl: null,
   documentName: null,
   matterId: null,
@@ -143,6 +154,7 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
   closePdfSplitView: () => {
     set({
       isOpen: false,
+      isFullScreenOpen: false,
       documentUrl: null,
       documentName: null,
       matterId: null,
@@ -154,6 +166,18 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
       chunkId: null,
       scale: 1.0,
     });
+  },
+
+  openFullScreenModal: () => {
+    // Only open full screen if split view is already open with a document
+    set((state) => ({
+      isFullScreenOpen: state.isOpen && state.documentUrl !== null,
+    }));
+  },
+
+  closeFullScreenModal: () => {
+    // Close full screen but preserve split view state (returns to split view)
+    set({ isFullScreenOpen: false });
   },
 
   setCurrentPage: (page: number) => {
@@ -186,6 +210,10 @@ export const usePdfSplitViewStore = create<PdfSplitViewStore>()((set) => ({
 /** Select whether PDF split view is open */
 export const selectPdfSplitViewIsOpen = (state: PdfSplitViewStore) =>
   state.isOpen;
+
+/** Select whether full screen modal is open (Story 11.6) */
+export const selectIsFullScreenOpen = (state: PdfSplitViewStore) =>
+  state.isFullScreenOpen;
 
 /** Select document URL */
 export const selectPdfDocumentUrl = (state: PdfSplitViewStore) =>

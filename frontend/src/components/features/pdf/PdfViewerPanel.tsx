@@ -7,6 +7,7 @@
  * Only renders visible page + 1 buffer for performance per project-context.md.
  *
  * Story 3-4: Split-View Citation Highlighting (AC: #1, #5)
+ * Story 11.6: Implement PDF Viewer Full Modal Mode (AC: #2 - Fit to Page)
  */
 
 import {
@@ -22,6 +23,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Minimize2,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -145,6 +147,29 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     },
     [onScaleChange]
   );
+
+  // Fit to page handler - calculates scale to fit entire page in viewport (Story 11.6)
+  const handleFitToPage = useCallback(() => {
+    if (!containerRef.current || pageSize.width === 0 || pageSize.height === 0) {
+      return;
+    }
+
+    const container = containerRef.current;
+    // Account for padding (16px = p-4 on each side)
+    const availableWidth = container.clientWidth - 32;
+    const availableHeight = container.clientHeight - 32;
+
+    // Calculate scale to fit page in both dimensions
+    const scaleX = availableWidth / pageSize.width;
+    const scaleY = availableHeight / pageSize.height;
+
+    // Use the smaller scale to ensure the entire page fits
+    const fitScale = Math.min(scaleX, scaleY);
+
+    // Clamp to allowed range
+    const clampedScale = Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE));
+    handleScaleChange(clampedScale);
+  }, [pageSize.width, pageSize.height, handleScaleChange]);
 
   // Load PDF document
   useEffect(() => {
@@ -393,6 +418,17 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
             title="Fit to width"
           >
             <Maximize className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleFitToPage}
+            title="Fit to page"
+            aria-label="Fit entire page in view"
+          >
+            <Minimize2 className="h-4 w-4" />
           </Button>
         </div>
       </div>

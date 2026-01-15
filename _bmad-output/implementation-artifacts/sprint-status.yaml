@@ -151,9 +151,9 @@ development_status:
   epic-9-retrospective: optional
 
   # Epic 10A: Workspace Shell & Navigation
-  epic-10a: in-progress  # First story created 2026-01-15
+  epic-10a: done  # All stories completed 2026-01-16
   10a-1-workspace-shell-header: done  # Completed 2026-01-15 - 52 tests passing, WorkspaceHeader + EditableMatterName + ExportDropdown + ShareDialog
-  10a-2-tab-bar-navigation: review  # Completed 2026-01-15 - 59 tests passing, WorkspaceTabBar + workspaceStore + placeholder pages
+  10a-2-tab-bar-navigation: done  # Completed 2026-01-16 - 59 tests passing, WorkspaceTabBar + workspaceStore + placeholder pages
   10a-3-content-area-qa-panel: done  # Completed 2026-01-15 - 1170 tests passing, WorkspaceContentArea + Q&A Panel (4 positions), Code review passed (7 issues fixed)
   epic-10a-retrospective: optional
 
@@ -167,11 +167,11 @@ development_status:
   epic-10b-retrospective: optional
 
   # Epic 10C: Entities & Citations Tabs
-  epic-10c: in-progress  # First story created 2026-01-15
-  10c-1-entities-mig-graph: review  # Story completed 2026-01-15 - MIG Graph visualization with React Flow, 148 tests passing
-  10c-2-entities-detail-merge: complete  # Completed 2026-01-15 - Detail panel, merge dialog, list/grid views, 39 tests passing
-  10c-3-citations-act-discovery: review  # Story completed 2026-01-15 - Citations Tab list, Act Discovery, 201 tests passing
-  10c-4-citations-split-view: review  # Story completed 2026-01-15 - Split-view integration at tab level, 211 tests passing
+  epic-10c: done  # All stories completed 2026-01-16
+  10c-1-entities-mig-graph: done  # Story completed 2026-01-15 - MIG Graph visualization with React Flow, 148 tests passing
+  10c-2-entities-detail-merge: done  # Completed 2026-01-16 - Detail panel, merge dialog, list/grid views, 39 tests passing
+  10c-3-citations-act-discovery: done  # Story completed 2026-01-15 - Citations Tab list, Act Discovery, 201 tests passing
+  10c-4-citations-split-view: done  # Story completed 2026-01-15 - Split-view integration at tab level, 211 tests passing
   epic-10c-retrospective: optional
 
   # Epic 10D: Verification & Documents Tabs
@@ -188,8 +188,8 @@ development_status:
   11-2-conversation-history: done  # Completed 2026-01-16 - 209 tests passing
   11-3-streaming-response-engine-trace: done  # Code review passed 2026-01-16 - 27 tests, 5 code review issues fixed
   11-4-suggested-questions-input: done  # Code review passed 2026-01-16 - 3 issues fixed, 32 tests passing
-  11-5-pdf-viewer-split-view: backlog
-  11-6-pdf-viewer-full-modal: backlog
+  11-5-pdf-viewer-split-view: done  # Story completed 2026-01-16 - PDF split-view for source references, 56 tests passing
+  11-6-pdf-viewer-full-modal: done  # Story completed 2026-01-16 - Full screen modal for PDF, 90 tests passing
   11-7-bounding-box-overlays: backlog
   epic-11-retrospective: optional
 
@@ -214,10 +214,10 @@ development_status:
   # Epic 14: MVP Gap Remediation (Discovered 2026-01-16)
   # SOURCE OF TRUTH: _bmad-output/implementation-artifacts/mvp-gap-analysis-2026-01-16.md
   # Contains: FR citations, evidence, impact analysis for each gap
-  epic-14-mvp-gaps: backlog
+  epic-14-mvp-gaps: in-progress  # First story (14-1) created 2026-01-16
 
   # CRITICAL GAPS (Blocking MVP)
-  14-1-summary-api-endpoint: backlog        # GET /api/matters/{id}/summary - Executive summary generation (GPT-4)
+  14-1-summary-api-endpoint: in-progress  # GET /api/matters/{id}/summary - Executive summary generation (GPT-4)
   14-2-contradictions-list-api: backlog     # GET /api/matters/{id}/contradictions - List ALL contradictions (FR23)
   14-3-upload-stage-3-4: backlog            # Story 9.5 - 0% complete, Processing progress + Live discoveries UI
 
@@ -229,6 +229,13 @@ development_status:
   # MEDIUM PRIORITY GAPS (Deferred but tracked)
   14-7-anomaly-auto-trigger: backlog        # Pipeline integration - auto-detect after entity linking (Story 4.4)
   14-8-timeline-real-api: backlog           # Switch from mock to real API in useTimeline hooks (Story 10B.5)
+
+  # FRONTEND-BACKEND WIRING GAPS (Added 2026-01-16 via Course Correction)
+  # FR Sources: Story 9.1 (notifications, search), Story 10A.1 (share), Story 10A.2 (tab stats)
+  14-9-share-dialog-api-wiring: backlog     # Wire ShareDialog to existing GET/POST/DELETE /api/matters/{id}/members (backend exists, ~1-2h)
+  14-10-notifications-backend-frontend: backlog  # Create notifications table + 3 endpoints + wire frontend (~4-6h)
+  14-11-global-search-rag: backlog          # RAG-powered search across user's matters + wire frontend (~6-8h)
+  14-12-tab-stats-api: backlog              # GET /api/matters/{id}/tab-stats aggregation + wire workspaceStore (~2-3h)
 
   # DEFERRED TESTS (Non-blocking but should be addressed)
   # - OCR backend/frontend integration tests (Story 2B.3)

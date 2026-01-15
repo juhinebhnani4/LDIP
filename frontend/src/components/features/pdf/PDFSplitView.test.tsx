@@ -2,6 +2,7 @@
  * PDFSplitView Unit Tests
  *
  * Story 11.5: Implement PDF Viewer Split-View Mode (AC: #1, #3, #4, #5)
+ * Story 11.6: Implement PDF Viewer Full Modal Mode (integration)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -9,12 +10,9 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PDFSplitView } from './PDFSplitView';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
 
-// Mock sonner toast
-vi.mock('sonner', () => ({
-  toast: {
-    info: vi.fn(),
-    error: vi.fn(),
-  },
+// Mock PDFFullScreenModal to avoid modal rendering complexity
+vi.mock('./PDFFullScreenModal', () => ({
+  PDFFullScreenModal: () => <div data-testid="pdf-full-screen-modal" />,
 }));
 
 // Mock PdfViewerPanel to avoid PDF.js complexity in unit tests
@@ -177,9 +175,7 @@ describe('PDFSplitView', () => {
       expect(usePdfSplitViewStore.getState().isOpen).toBe(false);
     });
 
-    it('shows toast when expand button is clicked (placeholder for Story 11.6)', async () => {
-      const { toast } = await import('sonner');
-
+    it('opens full screen modal when expand button is clicked (Story 11.6)', () => {
       render(
         <PDFSplitView>
           <div>Content</div>
@@ -189,7 +185,19 @@ describe('PDFSplitView', () => {
       // Click expand button
       fireEvent.click(screen.getByRole('button', { name: /open document in full screen/i }));
 
-      expect(toast.info).toHaveBeenCalledWith('Full screen mode will be available in Story 11.6');
+      // Full screen modal should be open
+      expect(usePdfSplitViewStore.getState().isFullScreenOpen).toBe(true);
+    });
+
+    it('renders PDFFullScreenModal component (Story 11.6)', () => {
+      render(
+        <PDFSplitView>
+          <div>Content</div>
+        </PDFSplitView>
+      );
+
+      // The mocked modal should be rendered
+      expect(screen.getByTestId('pdf-full-screen-modal')).toBeInTheDocument();
     });
 
     it('workspace content remains interactive (AC: #1)', () => {
@@ -235,6 +243,69 @@ describe('PDFSplitView', () => {
           'https://example.com/doc.pdf'
         );
       });
+    });
+
+    it('opens full screen modal when F key is pressed (Story 11.6 AC: #4.4)', () => {
+      render(
+        <PDFSplitView>
+          <div>Content</div>
+        </PDFSplitView>
+      );
+
+      // Press F key
+      fireEvent.keyDown(document, { key: 'f' });
+
+      // Full screen should be open
+      expect(usePdfSplitViewStore.getState().isFullScreenOpen).toBe(true);
+    });
+
+    it('opens full screen modal when uppercase F key is pressed (Story 11.6)', () => {
+      render(
+        <PDFSplitView>
+          <div>Content</div>
+        </PDFSplitView>
+      );
+
+      // Press uppercase F key
+      fireEvent.keyDown(document, { key: 'F' });
+
+      // Full screen should be open
+      expect(usePdfSplitViewStore.getState().isFullScreenOpen).toBe(true);
+    });
+
+    it('does not open full screen when F is pressed in input field', () => {
+      render(
+        <PDFSplitView>
+          <input data-testid="text-input" type="text" />
+        </PDFSplitView>
+      );
+
+      const input = screen.getByTestId('text-input');
+
+      // Press F key while input is focused
+      fireEvent.keyDown(input, { key: 'f', target: input });
+
+      // Full screen should NOT be open
+      expect(usePdfSplitViewStore.getState().isFullScreenOpen).toBe(false);
+    });
+
+    it('does not close split view on Escape when full screen is open (Story 11.6)', () => {
+      // Open full screen modal
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      render(
+        <PDFSplitView>
+          <div>Content</div>
+        </PDFSplitView>
+      );
+
+      // Press Escape
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      // Split view should still be open (full screen handles its own Escape)
+      expect(usePdfSplitViewStore.getState().isOpen).toBe(true);
     });
 
     it('does not close on other key presses', () => {

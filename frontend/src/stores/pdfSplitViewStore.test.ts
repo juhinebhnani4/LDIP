@@ -2,6 +2,7 @@
  * PDF Split View Store Tests
  *
  * Story 11.5: Implement PDF Viewer Split-View Mode
+ * Story 11.6: Implement PDF Viewer Full Modal Mode
  */
 
 import { describe, test, expect, beforeEach } from 'vitest';
@@ -9,6 +10,7 @@ import { act } from '@testing-library/react';
 import {
   usePdfSplitViewStore,
   selectPdfSplitViewIsOpen,
+  selectIsFullScreenOpen,
   selectPdfDocumentUrl,
   selectPdfCurrentPage,
   selectPdfTotalPages,
@@ -27,6 +29,11 @@ describe('pdfSplitViewStore', () => {
     test('has isOpen false by default', () => {
       const state = usePdfSplitViewStore.getState();
       expect(state.isOpen).toBe(false);
+    });
+
+    test('has isFullScreenOpen false by default (Story 11.6)', () => {
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(false);
     });
 
     test('has null document values by default', () => {
@@ -310,6 +317,174 @@ describe('pdfSplitViewStore', () => {
       const state = usePdfSplitViewStore.getState();
       expect(state.boundingBoxes).toEqual([]);
     });
+
+    test('also closes full screen modal (Story 11.6)', () => {
+      // Open split view first
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+      });
+
+      // Open full screen modal
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      // Close split view
+      act(() => {
+        usePdfSplitViewStore.getState().closePdfSplitView();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(false);
+    });
+  });
+
+  describe('openFullScreenModal (Story 11.6)', () => {
+    const mockSource: SourceReference = {
+      documentId: 'doc-123',
+      documentName: 'Test.pdf',
+      page: 5,
+    };
+
+    test('sets isFullScreenOpen to true when split view is open', () => {
+      // Open split view first
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+      });
+
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(true);
+    });
+
+    test('does not open if split view is not open', () => {
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(false);
+    });
+
+    test('does not open if document URL is null', () => {
+      // Manually set state to simulate edge case
+      act(() => {
+        usePdfSplitViewStore.setState({ isOpen: true, documentUrl: null });
+      });
+
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(false);
+    });
+
+    test('preserves all other state when opening full screen', () => {
+      // Set up split view with modified state
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+        usePdfSplitViewStore.getState().setCurrentPage(10);
+        usePdfSplitViewStore.getState().setTotalPages(50);
+        usePdfSplitViewStore.getState().setScale(1.5);
+      });
+
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.currentPage).toBe(10);
+      expect(state.totalPages).toBe(50);
+      expect(state.scale).toBe(1.5);
+      expect(state.documentUrl).toBe('https://example.com/doc.pdf');
+      expect(state.documentName).toBe('Test.pdf');
+    });
+  });
+
+  describe('closeFullScreenModal (Story 11.6)', () => {
+    const mockSource: SourceReference = {
+      documentId: 'doc-123',
+      documentName: 'Test.pdf',
+      page: 5,
+    };
+
+    test('sets isFullScreenOpen to false', () => {
+      // Open both split view and full screen
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      act(() => {
+        usePdfSplitViewStore.getState().closeFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      expect(state.isFullScreenOpen).toBe(false);
+    });
+
+    test('preserves split view state (returns to split view)', () => {
+      // Open both split view and full screen
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+        usePdfSplitViewStore.getState().setCurrentPage(15);
+        usePdfSplitViewStore.getState().setScale(2.0);
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      // Close full screen modal
+      act(() => {
+        usePdfSplitViewStore.getState().closeFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      // Split view should still be open
+      expect(state.isOpen).toBe(true);
+      expect(state.documentUrl).toBe('https://example.com/doc.pdf');
+      expect(state.documentName).toBe('Test.pdf');
+      expect(state.currentPage).toBe(15);
+      expect(state.scale).toBe(2.0);
+    });
+
+    test('state changes in full screen mode are preserved after closing', () => {
+      // Open both split view and full screen
+      act(() => {
+        usePdfSplitViewStore
+          .getState()
+          .openPdfSplitView(mockSource, 'matter-1', 'https://example.com/doc.pdf');
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      // Make changes while in full screen
+      act(() => {
+        usePdfSplitViewStore.getState().setCurrentPage(25);
+        usePdfSplitViewStore.getState().setScale(1.75);
+      });
+
+      // Close full screen
+      act(() => {
+        usePdfSplitViewStore.getState().closeFullScreenModal();
+      });
+
+      const state = usePdfSplitViewStore.getState();
+      // Changes should persist
+      expect(state.currentPage).toBe(25);
+      expect(state.scale).toBe(1.75);
+    });
   });
 
   describe('setCurrentPage', () => {
@@ -489,6 +664,28 @@ describe('pdfSplitViewStore', () => {
       });
 
       expect(selectPdfTotalPages(usePdfSplitViewStore.getState())).toBe(15);
+    });
+
+    test('selectIsFullScreenOpen returns isFullScreenOpen state (Story 11.6)', () => {
+      expect(selectIsFullScreenOpen(usePdfSplitViewStore.getState())).toBe(false);
+
+      // Open split view first
+      act(() => {
+        usePdfSplitViewStore.getState().openPdfSplitView(
+          { documentId: 'doc-1', documentName: 'Test.pdf' },
+          'matter-1',
+          'https://example.com/doc.pdf'
+        );
+      });
+
+      expect(selectIsFullScreenOpen(usePdfSplitViewStore.getState())).toBe(false);
+
+      // Open full screen
+      act(() => {
+        usePdfSplitViewStore.getState().openFullScreenModal();
+      });
+
+      expect(selectIsFullScreenOpen(usePdfSplitViewStore.getState())).toBe(true);
     });
   });
 });

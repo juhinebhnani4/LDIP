@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -120,12 +121,15 @@ export function PDFFullScreenModal() {
       <DialogContent
         className="flex h-[95vh] max-w-[95vw] flex-col gap-0 overflow-hidden p-0"
         showCloseButton={false}
-        aria-describedby={undefined}
       >
-        {/* Visually hidden title for accessibility */}
+        {/* Visually hidden title and description for accessibility */}
         <DialogTitle className="sr-only">
           {documentName ?? 'Document'} - Full Screen View
         </DialogTitle>
+        <DialogDescription className="sr-only">
+          Full screen PDF viewer. Use arrow keys to navigate pages, plus and
+          minus keys to zoom, or press Escape to close.
+        </DialogDescription>
 
         {/* Header bar with document name, page info, and close button */}
         <div

@@ -148,6 +148,24 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     [onScaleChange]
   );
 
+  // Fit to width handler - calculates scale to fit page width in viewport (Story 11.6)
+  const handleFitToWidth = useCallback(() => {
+    if (!containerRef.current || pageSize.width === 0) {
+      return;
+    }
+
+    const container = containerRef.current;
+    // Account for padding (16px = p-4 on each side)
+    const availableWidth = container.clientWidth - 32;
+
+    // Calculate scale to fit page width
+    const fitScale = availableWidth / pageSize.width;
+
+    // Clamp to allowed range
+    const clampedScale = Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE));
+    handleScaleChange(clampedScale);
+  }, [pageSize.width, handleScaleChange]);
+
   // Fit to page handler - calculates scale to fit entire page in viewport (Story 11.6)
   const handleFitToPage = useCallback(() => {
     if (!containerRef.current || pageSize.width === 0 || pageSize.height === 0) {
@@ -359,6 +377,7 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
               onChange={(e) => setPageInput(e.target.value)}
               className="h-8 w-14 text-center text-sm"
               aria-label="Page number"
+              title="Enter page number and press Enter"
             />
             <span className="text-sm text-muted-foreground">/ {numPages}</span>
           </form>
@@ -414,8 +433,9 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            onClick={() => handleScaleChange(1.0)}
+            onClick={handleFitToWidth}
             title="Fit to width"
+            aria-label="Fit page width to view"
           >
             <Maximize className="h-4 w-4" />
           </Button>

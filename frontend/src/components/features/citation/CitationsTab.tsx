@@ -3,41 +3,42 @@
 /**
  * Citations Tab Component
  *
- * Story 3-4: Split-View Citation Highlighting
- *
  * Tab component for the matter workspace that displays citations
- * and provides access to split-view verification.
+ * with full Act Discovery Report UI and verification features.
+ *
+ * @see Story 3-4: Split-View Citation Highlighting
+ * @see Story 10C.3: Citations Tab List and Act Discovery
  */
 
-import { CitationsList } from './CitationsList';
+import { CitationsContent } from './CitationsContent';
 
 export interface CitationsTabProps {
   /** Matter ID */
   matterId: string;
+  /** Callback when user wants to view in document */
+  onViewInDocument?: (documentId: string, page: number) => void;
 }
 
 /**
  * Citations Tab for matter workspace.
  *
- * Displays the citations list with split view integration.
- * This is the main entry point for viewing and verifying citations.
+ * Displays citations list with filtering, multiple view modes,
+ * Act Discovery Report, and split view integration.
  *
  * @example
  * ```tsx
  * <CitationsTab matterId="matter-123" />
  * ```
  */
-export function CitationsTab({ matterId }: CitationsTabProps) {
+export function CitationsTab({ matterId, onViewInDocument }: CitationsTabProps) {
   return (
-    <div className="p-4">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold">Citations</h2>
-        <p className="text-sm text-muted-foreground">
-          View and verify citations extracted from case documents
-        </p>
-      </div>
-
-      <CitationsList matterId={matterId} />
+    <div className="h-full p-4">
+      <CitationsContent
+        matterId={matterId}
+        onViewInDocument={onViewInDocument}
+      />
     </div>
   );
 }
+
+CitationsTab.displayName = 'CitationsTab';

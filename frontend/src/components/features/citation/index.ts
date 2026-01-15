@@ -40,3 +40,26 @@ export type { CitationsListProps } from './CitationsList';
 
 export { CitationsTab } from './CitationsTab';
 export type { CitationsTabProps } from './CitationsTab';
+
+// Citations Tab Enhanced (Story 10C.3)
+export { CitationsHeader } from './CitationsHeader';
+export type {
+  CitationsHeaderProps,
+  CitationsViewMode,
+  CitationsFilterState,
+} from './CitationsHeader';
+
+export { CitationsAttentionBanner } from './CitationsAttentionBanner';
+export type { CitationsAttentionBannerProps } from './CitationsAttentionBanner';
+
+export { CitationsByActView } from './CitationsByActView';
+export type { CitationsByActViewProps } from './CitationsByActView';
+
+export { CitationsByDocumentView } from './CitationsByDocumentView';
+export type { CitationsByDocumentViewProps } from './CitationsByDocumentView';
+
+export { MissingActsCard } from './MissingActsCard';
+export type { MissingActsCardProps } from './MissingActsCard';
+
+export { CitationsContent } from './CitationsContent';
+export type { CitationsContentProps } from './CitationsContent';

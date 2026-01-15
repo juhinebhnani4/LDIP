@@ -26,3 +26,13 @@ export { useSummaryVerification } from './useSummaryVerification';
 // Timeline hooks (Story 10B.3)
 export { useTimeline } from './useTimeline';
 export { useTimelineStats } from './useTimelineStats';
+
+// Citation hooks (Story 10C.3)
+export {
+  useCitationsList,
+  useCitationStats,
+  useCitationSummaryByAct,
+  useActDiscoveryReport,
+  useActMutations,
+  getActNamesFromSummary,
+} from './useCitations';

@@ -168,7 +168,7 @@ development_status:
   epic-10c: in-progress  # First story created 2026-01-15
   10c-1-entities-mig-graph: review  # Story completed 2026-01-15 - MIG Graph visualization with React Flow, 148 tests passing
   10c-2-entities-detail-merge: complete  # Completed 2026-01-15 - Detail panel, merge dialog, list/grid views, 39 tests passing
-  10c-3-citations-act-discovery: backlog
+  10c-3-citations-act-discovery: review  # Story completed 2026-01-15 - Citations Tab list, Act Discovery, 201 tests passing
   10c-4-citations-split-view: backlog
   epic-10c-retrospective: optional
 

@@ -64,18 +64,27 @@ export type {
   Entity,
   EntityBase,
   EntityEdge,
+  EntityEdgeData,
+  EntityFilterState,
+  EntityGraphData,
+  EntityGraphEdge,
+  EntityGraphNode,
   EntityListItem,
   EntityListOptions,
   EntityMention,
   EntityMentionsOptions,
   EntityMentionsResponse,
   EntityMetadata,
+  EntityNodeData,
   EntityResponse,
   EntityType,
+  EntityViewMode,
   EntityWithRelations,
   PaginationMeta,
   RelationshipType,
 } from './entity';
+
+export { DEFAULT_ENTITY_FILTERS } from './entity';
 
 // Job types (Story 2c-3: Background Job Tracking)
 export type {

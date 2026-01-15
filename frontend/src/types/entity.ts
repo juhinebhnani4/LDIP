@@ -5,6 +5,8 @@
  * Matches backend Pydantic models in app/models/entity.py
  */
 
+import type { Node, Edge } from '@xyflow/react';
+
 /** Entity type classification */
 export type EntityType = 'PERSON' | 'ORG' | 'INSTITUTION' | 'ASSET';
 
@@ -201,3 +203,77 @@ export interface AliasExpandedSearchResponse {
   data: SearchResultItem[];
   meta: AliasExpandedSearchMeta;
 }
+
+
+// =============================================================================
+// Graph Visualization Types (Story 10C.1)
+// =============================================================================
+
+/**
+ * React Flow node data for entity
+ */
+export interface EntityNodeData {
+  id: string;
+  canonicalName: string;
+  entityType: EntityType;
+  mentionCount: number;
+  aliases: string[];
+  metadata: EntityMetadata;
+  isSelected?: boolean;
+  isConnected?: boolean;
+  isDimmed?: boolean;
+}
+
+/**
+ * React Flow node with entity data
+ */
+export type EntityGraphNode = Node<EntityNodeData, 'entity'>;
+
+/**
+ * React Flow edge data for relationship
+ */
+export interface EntityEdgeData {
+  relationshipType: RelationshipType;
+  confidence: number;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * React Flow edge with relationship data
+ */
+export type EntityGraphEdge = Edge<EntityEdgeData>;
+
+/**
+ * Full graph data structure
+ */
+export interface EntityGraphData {
+  nodes: EntityGraphNode[];
+  edges: EntityGraphEdge[];
+}
+
+/**
+ * View modes for entities tab
+ */
+export type EntityViewMode = 'graph' | 'list' | 'grid';
+
+/**
+ * Filter state for entities
+ */
+export interface EntityFilterState {
+  entityTypes: EntityType[];
+  roles: string[];
+  verificationStatus: 'all' | 'verified' | 'pending' | 'flagged';
+  minMentionCount: number;
+  searchQuery: string;
+}
+
+/**
+ * Default filter state
+ */
+export const DEFAULT_ENTITY_FILTERS: EntityFilterState = {
+  entityTypes: [],
+  roles: [],
+  verificationStatus: 'all',
+  minMentionCount: 0,
+  searchQuery: '',
+};

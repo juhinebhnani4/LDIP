@@ -211,8 +211,9 @@ export interface AliasExpandedSearchResponse {
 
 /**
  * React Flow node data for entity
+ * Uses index signature to satisfy @xyflow/react's Record<string, unknown> constraint
  */
-export interface EntityNodeData {
+export interface EntityNodeData extends Record<string, unknown> {
   id: string;
   canonicalName: string;
   entityType: EntityType;
@@ -233,8 +234,9 @@ export type EntityGraphNode = Node<EntityNodeData, 'entity'>;
 
 /**
  * React Flow edge data for relationship
+ * Uses index signature to satisfy @xyflow/react's Record<string, unknown> constraint
  */
-export interface EntityEdgeData {
+export interface EntityEdgeData extends Record<string, unknown> {
   relationshipType: RelationshipType;
   confidence: number;
   metadata: Record<string, unknown>;

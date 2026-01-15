@@ -56,7 +56,7 @@ import type { ManualEventCreateRequest, TimelineEventType } from '@/types/timeli
 import { EVENT_TYPE_LABELS, EVENT_TYPE_ICONS } from './eventTypeIcons';
 
 /**
- * Form values type for add event form
+ * Form values type for AddEvent form
  */
 interface AddEventFormValues {
   eventDate: Date;
@@ -64,8 +64,8 @@ interface AddEventFormValues {
   title: string;
   description: string;
   entityIds: string[];
-  sourceDocumentId: string | null | undefined;
-  sourcePage: number | null | undefined;
+  sourceDocumentId: string | null;
+  sourcePage: number | null;
 }
 
 /**
@@ -88,7 +88,7 @@ const addEventSchema = z.object({
   entityIds: z.array(z.string()).default([]),
   sourceDocumentId: z.string().nullable().optional(),
   sourcePage: z.coerce.number().int().positive().nullable().optional(),
-}) satisfies z.ZodType<AddEventFormValues>;
+});
 
 /**
  * Entity option for actor selection
@@ -147,15 +147,15 @@ export function AddEventDialog({
 }: AddEventDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<AddEventFormValues>({
+  const form = useForm({
     resolver: zodResolver(addEventSchema),
     defaultValues: {
-      eventType: undefined,
+      eventType: undefined as AddEventFormValues['eventType'] | undefined,
       title: '',
       description: '',
-      entityIds: [],
-      sourceDocumentId: null,
-      sourcePage: null,
+      entityIds: [] as string[],
+      sourceDocumentId: null as string | null,
+      sourcePage: null as number | null,
     },
   });
 
@@ -225,7 +225,7 @@ export function AddEventDialog({
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmit as Parameters<typeof form.handleSubmit>[0])} className="space-y-4">
             {/* Event Date Field */}
             <FormField
               control={form.control}
@@ -419,7 +419,7 @@ export function AddEventDialog({
                             min={1}
                             placeholder="e.g., 5"
                             {...field}
-                            value={field.value ?? ''}
+                            value={typeof field.value === 'number' ? field.value : ''}
                             onChange={(e) =>
                               field.onChange(
                                 e.target.value ? parseInt(e.target.value, 10) : null

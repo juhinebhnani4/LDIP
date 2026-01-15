@@ -173,7 +173,7 @@ describe('AddEventDialog', () => {
 
       // Required fields should have * indicator
       const eventDateLabels = screen.getAllByText(/event date/i);
-      expect(eventDateLabels[0].parentElement).toHaveTextContent('*');
+      expect(eventDateLabels[0]!.parentElement).toHaveTextContent('*');
     });
 
     it('has info badge about manual event', () => {

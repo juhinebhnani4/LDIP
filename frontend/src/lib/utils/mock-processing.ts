@@ -194,7 +194,7 @@ async function simulateProcessing(
   for (let i = 0; i < STAGES_IN_ORDER.length; i++) {
     if (signal.aborted) return;
 
-    const stage = STAGES_IN_ORDER[i];
+    const stage = STAGES_IN_ORDER[i]!;
     const stageDuration = STAGE_DURATIONS[stage];
     const duration = randomBetween(stageDuration.min, stageDuration.max);
 

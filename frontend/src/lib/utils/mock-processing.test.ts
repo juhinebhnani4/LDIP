@@ -157,8 +157,8 @@ describe('mock-processing', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(progressUpdates[0]).toBeLessThan(progressUpdates[progressUpdates.length - 1]);
-      expect(progressUpdates[progressUpdates.length - 1]).toBe(100);
+      expect(progressUpdates[0]!).toBeLessThan(progressUpdates[progressUpdates.length - 1]!);
+      expect(progressUpdates[progressUpdates.length - 1]!).toBe(100);
 
       cleanup();
     });
@@ -255,7 +255,7 @@ describe('mock-processing', () => {
       // Each file should have progress updates
       expect(fileProgress.size).toBe(3);
       for (const [, updates] of fileProgress) {
-        const lastUpdate = updates[updates.length - 1];
+        const lastUpdate = updates[updates.length - 1]!;
         expect(lastUpdate.status).toBe('complete');
       }
 

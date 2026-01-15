@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditableMatterName } from './EditableMatterName';
@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Properly typed mock toast using vitest's Mock type
-const mockToast = toast as {
+const mockToast = toast as unknown as {
   success: Mock;
   error: Mock;
   info: Mock;

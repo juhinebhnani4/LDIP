@@ -28,7 +28,7 @@ const createMockNodeData = (overrides: Partial<EntityNodeData> = {}): EntityNode
 });
 
 const renderEntityNode = (props: Partial<EntityNodeProps> = {}) => {
-  const defaultProps: EntityNodeProps = {
+  const defaultProps = {
     id: 'node-1',
     data: createMockNodeData(),
     type: 'entity',
@@ -39,8 +39,11 @@ const renderEntityNode = (props: Partial<EntityNodeProps> = {}) => {
     selected: false,
     isConnectable: true,
     zIndex: 1,
+    selectable: true,
+    deletable: true,
+    draggable: true,
     ...props,
-  };
+  } as EntityNodeProps;
 
   return render(
     <ReactFlowProvider>

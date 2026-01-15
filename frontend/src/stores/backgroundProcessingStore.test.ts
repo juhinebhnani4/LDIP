@@ -237,8 +237,8 @@ describe('backgroundProcessingStore', () => {
 
       const notifications = useNotificationStore.getState().notifications;
       expect(notifications.length).toBe(1);
-      expect(notifications[0].title).toBe('Processing Complete');
-      expect(notifications[0].type).toBe('success');
+      expect(notifications[0]!.title).toBe('Processing Complete');
+      expect(notifications[0]!.type).toBe('success');
     });
 
     it('warns when matter not found', () => {
@@ -318,7 +318,7 @@ describe('backgroundProcessingStore', () => {
         const result = selectProcessingMatters(state);
 
         expect(result.length).toBe(1);
-        expect(result[0].status).toBe('processing');
+        expect(result[0]!.status).toBe('processing');
       });
     });
 
@@ -348,7 +348,7 @@ describe('backgroundProcessingStore', () => {
         const result = selectCompletedMatters(state);
 
         expect(result.length).toBe(1);
-        expect(result[0].status).toBe('ready');
+        expect(result[0]!.status).toBe('ready');
       });
     });
 

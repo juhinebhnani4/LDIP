@@ -186,7 +186,7 @@ describe('ActivityFeed', () => {
       setupMockStore();
       render(<ActivityFeed />);
 
-      const firstActivityLink = screen.getAllByRole('link')[0];
+      const firstActivityLink = screen.getAllByRole('link')[0]!;
       await user.click(firstActivityLink);
 
       expect(mockMarkActivityRead).toHaveBeenCalledWith('activity-1');
@@ -195,11 +195,11 @@ describe('ActivityFeed', () => {
     it('does not mark already read activity again', async () => {
       const user = userEvent.setup();
       const activities = createMockActivities();
-      activities[0].isRead = true;
+      activities[0]!.isRead = true;
       setupMockStore({ activities });
       render(<ActivityFeed />);
 
-      const firstActivityLink = screen.getAllByRole('link')[0];
+      const firstActivityLink = screen.getAllByRole('link')[0]!;
       await user.click(firstActivityLink);
 
       expect(mockMarkActivityRead).not.toHaveBeenCalled();

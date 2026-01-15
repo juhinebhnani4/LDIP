@@ -68,13 +68,14 @@ function truncateName(name: string, maxLength: number): string {
   return `${name.slice(0, maxLength - 3)}...`;
 }
 
-export interface EntityNodeProps extends NodeProps {
-  data: EntityNodeData;
-}
+// Use generic NodeProps to avoid type constraint issues with @xyflow/react
+export type EntityNodeProps = NodeProps;
 
-export const EntityNode = memo(function EntityNode({ data, id }: EntityNodeProps) {
-  const { icon: Icon, color, label } = entityTypeConfig[data.entityType];
-  const size = calculateNodeSize(data.mentionCount);
+export const EntityNode = memo(function EntityNode(props: EntityNodeProps) {
+  const { data, id } = props;
+  const nodeData = data as unknown as EntityNodeData;
+  const { icon: Icon, color, label } = entityTypeConfig[nodeData.entityType];
+  const size = calculateNodeSize(nodeData.mentionCount);
   const { fitView } = useReactFlow();
 
   // Handle keyboard interaction - Enter/Space selects, Escape deselects
@@ -108,22 +109,22 @@ export const EntityNode = memo(function EntityNode({ data, id }: EntityNodeProps
             className={cn(
               'flex flex-col items-center justify-center rounded-full border-2 transition-all duration-200',
               'bg-background shadow-md cursor-pointer',
-              data.isSelected && 'ring-4 ring-primary ring-offset-2',
-              data.isConnected && 'ring-2 ring-primary/50',
-              data.isDimmed && 'opacity-30',
-              data.isSelectedForMerge && 'ring-4 ring-amber-500 ring-offset-2 border-amber-500'
+              nodeData.isSelected && 'ring-4 ring-primary ring-offset-2',
+              nodeData.isConnected && 'ring-2 ring-primary/50',
+              nodeData.isDimmed && 'opacity-30',
+              nodeData.isSelectedForMerge && 'ring-4 ring-amber-500 ring-offset-2 border-amber-500'
             )}
             style={{ width: size, height: size }}
             role="button"
             tabIndex={0}
-            aria-label={`${data.canonicalName}, ${label}, ${data.mentionCount} mentions. Press Enter to select, F to focus.`}
-            aria-pressed={data.isSelected}
+            aria-label={`${nodeData.canonicalName}, ${label}, ${nodeData.mentionCount} mentions. Press Enter to select, F to focus.`}
+            aria-pressed={nodeData.isSelected}
             onKeyDown={handleKeyDown}
           >
             <Icon className="h-5 w-5 mb-1" aria-hidden="true" />
 
             <span className="text-xs font-medium text-center px-2 truncate max-w-full">
-              {truncateName(data.canonicalName, 15)}
+              {truncateName(nodeData.canonicalName, 15)}
             </span>
 
             <Badge
@@ -149,15 +150,15 @@ export const EntityNode = memo(function EntityNode({ data, id }: EntityNodeProps
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
           <div className="space-y-1">
-            <p className="font-medium">{data.canonicalName}</p>
+            <p className="font-medium">{nodeData.canonicalName}</p>
             <p className="text-muted-foreground text-sm">
-              {label} &bull; {data.mentionCount} mention
-              {data.mentionCount !== 1 ? 's' : ''}
+              {label} &bull; {nodeData.mentionCount} mention
+              {nodeData.mentionCount !== 1 ? 's' : ''}
             </p>
-            {data.aliases.length > 0 && (
+            {nodeData.aliases.length > 0 && (
               <p className="text-muted-foreground text-sm">
-                {data.aliases.length} alias
-                {data.aliases.length !== 1 ? 'es' : ''}
+                {nodeData.aliases.length} alias
+                {nodeData.aliases.length !== 1 ? 'es' : ''}
               </p>
             )}
           </div>

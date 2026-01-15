@@ -120,7 +120,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
   );
   const documents = documentsData?.data?.map((doc) => ({
     id: doc.id,
-    name: doc.originalFilename,
+    name: doc.filename,
   })) ?? [];
 
   // Handle view mode change

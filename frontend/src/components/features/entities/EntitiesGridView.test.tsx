@@ -8,7 +8,6 @@ const createMockEntity = (
   overrides: Partial<EntityListItem> = {}
 ): EntityListItem => ({
   id: 'entity-1',
-  matterId: 'matter-1',
   canonicalName: 'John Doe',
   entityType: 'PERSON',
   mentionCount: 42,
@@ -16,8 +15,6 @@ const createMockEntity = (
     roles: ['Petitioner'],
     firstExtractionConfidence: 0.92,
   },
-  createdAt: '2026-01-15T00:00:00Z',
-  updatedAt: '2026-01-15T00:00:00Z',
   ...overrides,
 });
 
@@ -254,7 +251,7 @@ describe('EntitiesGridView', () => {
       );
 
       const checkboxes = screen.getAllByRole('checkbox');
-      await userEvent.click(checkboxes[0]);
+      await userEvent.click(checkboxes[0]!);
 
       expect(onToggleMergeSelection).toHaveBeenCalledWith('entity-1');
     });

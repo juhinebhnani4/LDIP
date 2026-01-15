@@ -125,19 +125,19 @@ describe('transformEntitiesToNodes', () => {
     const nodes = transformEntitiesToNodes(entities);
 
     expect(nodes).toHaveLength(2);
-    expect(nodes[0].id).toBe('e1');
-    expect(nodes[0].type).toBe('entity');
-    expect(nodes[0].data.canonicalName).toBe('Entity 1');
-    expect(nodes[1].id).toBe('e2');
+    expect(nodes[0]!.id).toBe('e1');
+    expect(nodes[0]!.type).toBe('entity');
+    expect(nodes[0]!.data.canonicalName).toBe('Entity 1');
+    expect(nodes[1]!.id).toBe('e2');
   });
 
   it('sets default node states', () => {
     const entities = [createMockEntity()];
     const nodes = transformEntitiesToNodes(entities);
 
-    expect(nodes[0].data.isSelected).toBe(false);
-    expect(nodes[0].data.isConnected).toBe(false);
-    expect(nodes[0].data.isDimmed).toBe(false);
+    expect(nodes[0]!.data.isSelected).toBe(false);
+    expect(nodes[0]!.data.isConnected).toBe(false);
+    expect(nodes[0]!.data.isDimmed).toBe(false);
   });
 
   it('uses provided positions when available', () => {
@@ -146,7 +146,7 @@ describe('transformEntitiesToNodes', () => {
 
     const nodes = transformEntitiesToNodes(entities, positions);
 
-    expect(nodes[0].position).toEqual({ x: 100, y: 200 });
+    expect(nodes[0]!.position).toEqual({ x: 100, y: 200 });
   });
 
   it('extracts aliases from metadata', () => {
@@ -158,7 +158,7 @@ describe('transformEntitiesToNodes', () => {
 
     const nodes = transformEntitiesToNodes(entities);
 
-    expect(nodes[0].data.aliases).toEqual(['Alias 1', 'Alias 2']);
+    expect(nodes[0]!.data.aliases).toEqual(['Alias 1', 'Alias 2']);
   });
 });
 
@@ -176,11 +176,11 @@ describe('transformRelationshipsToEdges', () => {
     const edges = transformRelationshipsToEdges(relationships);
 
     expect(edges).toHaveLength(1);
-    expect(edges[0].id).toBe('rel-1');
-    expect(edges[0].source).toBe('e1');
-    expect(edges[0].target).toBe('e2');
-    expect(edges[0].type).toBe('relationship');
-    expect(edges[0].data?.relationshipType).toBe('ALIAS_OF');
+    expect(edges[0]!.id).toBe('rel-1');
+    expect(edges[0]!.source).toBe('e1');
+    expect(edges[0]!.target).toBe('e2');
+    expect(edges[0]!.type).toBe('relationship');
+    expect(edges[0]!.data?.relationshipType).toBe('ALIAS_OF');
   });
 
   it('preserves confidence score', () => {
@@ -190,7 +190,7 @@ describe('transformRelationshipsToEdges', () => {
 
     const edges = transformRelationshipsToEdges(relationships);
 
-    expect(edges[0].data?.confidence).toBe(0.92);
+    expect(edges[0]!.data?.confidence).toBe(0.92);
   });
 });
 
@@ -252,7 +252,7 @@ describe('applyDagreLayout', () => {
 
     expect(result).toHaveLength(2);
     // Nodes should have different positions
-    expect(result[0].position).not.toEqual(result[1].position);
+    expect(result[0]!.position).not.toEqual(result[1]!.position);
   });
 
   it('handles disconnected nodes', () => {
@@ -265,8 +265,8 @@ describe('applyDagreLayout', () => {
 
     expect(result).toHaveLength(2);
     // Both nodes should have positions
-    expect(result[0].position).toBeDefined();
-    expect(result[1].position).toBeDefined();
+    expect(result[0]!.position).toBeDefined();
+    expect(result[1]!.position).toBeDefined();
   });
 });
 
@@ -291,7 +291,7 @@ describe('filterNodesByTypes', () => {
     const result = filterNodesByTypes(nodes, ['PERSON']);
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('n1');
+    expect(result[0]!.id).toBe('n1');
   });
 
   it('filters by multiple types', () => {
@@ -328,7 +328,7 @@ describe('filterNodesBySearch', () => {
     const result = filterNodesBySearch(nodes, 'John');
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('n1');
+    expect(result[0]!.id).toBe('n1');
   });
 
   it('is case insensitive', () => {
@@ -379,8 +379,8 @@ describe('filterEdgesForNodes', () => {
     const result = filterEdgesForNodes(edges, nodeIds);
 
     expect(result).toHaveLength(1);
-    expect(result[0].source).toBe('n1');
-    expect(result[0].target).toBe('n2');
+    expect(result[0]!.source).toBe('n1');
+    expect(result[0]!.target).toBe('n2');
   });
 
   it('removes edges with missing nodes', () => {
@@ -403,9 +403,9 @@ describe('updateNodeStates', () => {
 
     const result = updateNodeStates(nodes, null, []);
 
-    expect(result[0].data.isSelected).toBe(false);
-    expect(result[0].data.isConnected).toBe(false);
-    expect(result[0].data.isDimmed).toBe(false);
+    expect(result[0]!.data.isSelected).toBe(false);
+    expect(result[0]!.data.isConnected).toBe(false);
+    expect(result[0]!.data.isDimmed).toBe(false);
   });
 
   it('marks selected node', () => {
@@ -416,8 +416,8 @@ describe('updateNodeStates', () => {
 
     const result = updateNodeStates(nodes, 'n1', []);
 
-    expect(result[0].data.isSelected).toBe(true);
-    expect(result[1].data.isSelected).toBe(false);
+    expect(result[0]!.data.isSelected).toBe(true);
+    expect(result[1]!.data.isSelected).toBe(false);
   });
 
   it('marks connected nodes', () => {
@@ -430,9 +430,9 @@ describe('updateNodeStates', () => {
 
     const result = updateNodeStates(nodes, 'n1', edges);
 
-    expect(result[0].data.isConnected).toBe(false); // selected, not connected
-    expect(result[1].data.isConnected).toBe(true);
-    expect(result[2].data.isConnected).toBe(false);
+    expect(result[0]!.data.isConnected).toBe(false); // selected, not connected
+    expect(result[1]!.data.isConnected).toBe(true);
+    expect(result[2]!.data.isConnected).toBe(false);
   });
 
   it('dims unconnected nodes', () => {
@@ -445,9 +445,9 @@ describe('updateNodeStates', () => {
 
     const result = updateNodeStates(nodes, 'n1', edges);
 
-    expect(result[0].data.isDimmed).toBe(false); // selected
-    expect(result[1].data.isDimmed).toBe(false); // connected
-    expect(result[2].data.isDimmed).toBe(true); // not connected
+    expect(result[0]!.data.isDimmed).toBe(false); // selected
+    expect(result[1]!.data.isDimmed).toBe(false); // connected
+    expect(result[2]!.data.isDimmed).toBe(true); // not connected
   });
 });
 
@@ -517,8 +517,8 @@ describe('getTopEntitiesByMentions', () => {
     const result = getTopEntitiesByMentions(entities, 2);
 
     expect(result).toHaveLength(2);
-    expect(result[0].id).toBe('e2'); // 20 mentions
-    expect(result[1].id).toBe('e3'); // 10 mentions
+    expect(result[0]!.id).toBe('e2'); // 20 mentions
+    expect(result[1]!.id).toBe('e3'); // 10 mentions
   });
 
   it('returns all entities if limit exceeds count', () => {
@@ -540,6 +540,6 @@ describe('getTopEntitiesByMentions', () => {
 
     getTopEntitiesByMentions(entities, 1);
 
-    expect(entities[0].id).toBe('e1'); // Original order preserved
+    expect(entities[0]!.id).toBe('e1'); // Original order preserved
   });
 });

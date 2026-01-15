@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Properly typed mock toast using vitest's Mock type
-const mockToast = toast as {
+const mockToast = toast as unknown as {
   success: Mock;
   error: Mock;
   info: Mock;

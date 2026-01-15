@@ -8,7 +8,6 @@ const createMockEntity = (
   overrides: Partial<EntityListItem> = {}
 ): EntityListItem => ({
   id: 'entity-1',
-  matterId: 'matter-1',
   canonicalName: 'John Doe',
   entityType: 'PERSON',
   mentionCount: 42,
@@ -16,8 +15,6 @@ const createMockEntity = (
     roles: ['Petitioner'],
     firstExtractionConfidence: 0.92,
   },
-  createdAt: '2026-01-15T00:00:00Z',
-  updatedAt: '2026-01-15T00:00:00Z',
   ...overrides,
 });
 
@@ -189,10 +186,10 @@ describe('EntitiesListView', () => {
       render(<EntitiesListView {...defaultProps} />);
 
       const rows = screen.getAllByRole('row').slice(1); // Skip header row
-      expect(within(rows[0]).getByText('John Doe')).toBeInTheDocument();
-      expect(within(rows[1]).getByText('ACME Corporation')).toBeInTheDocument();
-      expect(within(rows[2]).getByText('Supreme Court')).toBeInTheDocument();
-      expect(within(rows[3]).getByText('Property Asset')).toBeInTheDocument();
+      expect(within(rows[0]!).getByText('John Doe')).toBeInTheDocument();
+      expect(within(rows[1]!).getByText('ACME Corporation')).toBeInTheDocument();
+      expect(within(rows[2]!).getByText('Supreme Court')).toBeInTheDocument();
+      expect(within(rows[3]!).getByText('Property Asset')).toBeInTheDocument();
     });
 
     it('toggles sort direction when clicking same column', async () => {
@@ -204,8 +201,8 @@ describe('EntitiesListView', () => {
 
       const rows = screen.getAllByRole('row').slice(1);
       // Should now be ascending
-      expect(within(rows[0]).getByText('Property Asset')).toBeInTheDocument();
-      expect(within(rows[3]).getByText('John Doe')).toBeInTheDocument();
+      expect(within(rows[0]!).getByText('Property Asset')).toBeInTheDocument();
+      expect(within(rows[3]!).getByText('John Doe')).toBeInTheDocument();
     });
 
     it('sorts by name when Name column clicked', async () => {
@@ -216,7 +213,7 @@ describe('EntitiesListView', () => {
 
       const rows = screen.getAllByRole('row').slice(1);
       // Should be sorted by name descending (Z-A)
-      expect(within(rows[0]).getByText('Supreme Court')).toBeInTheDocument();
+      expect(within(rows[0]!).getByText('Supreme Court')).toBeInTheDocument();
     });
 
     it('sorts by type when Type column clicked', async () => {
@@ -274,7 +271,7 @@ describe('EntitiesListView', () => {
       );
 
       const checkboxes = screen.getAllByRole('checkbox');
-      await userEvent.click(checkboxes[0]);
+      await userEvent.click(checkboxes[0]!);
 
       expect(onToggleMergeSelection).toHaveBeenCalledWith('entity-1');
     });

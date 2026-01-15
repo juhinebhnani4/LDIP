@@ -62,7 +62,7 @@ import type {
 import { EVENT_TYPE_LABELS, EVENT_TYPE_ICONS } from './eventTypeIcons';
 
 /**
- * Form values types for edit event forms
+ * Form values type for editing manual events
  */
 interface EditManualFormValues {
   eventDate: Date;
@@ -72,6 +72,9 @@ interface EditManualFormValues {
   entityIds: string[];
 }
 
+/**
+ * Form values type for editing auto events
+ */
 interface EditAutoFormValues {
   eventType: 'filing' | 'notice' | 'hearing' | 'order' | 'transaction' | 'document' | 'deadline';
 }
@@ -94,7 +97,7 @@ const editManualEventSchema = z.object({
     .max(2000, 'Description cannot exceed 2000 characters')
     .default(''),
   entityIds: z.array(z.string()).default([]),
-}) satisfies z.ZodType<EditManualFormValues>;
+});
 
 /**
  * Schema for editing auto-extracted events (classification only)
@@ -104,7 +107,7 @@ const editAutoEventSchema = z.object({
     ['filing', 'notice', 'hearing', 'order', 'transaction', 'document', 'deadline'],
     { message: 'Event type is required' }
   ),
-}) satisfies z.ZodType<EditAutoFormValues>;
+});
 
 /**
  * Entity option for actor selection
@@ -157,21 +160,22 @@ export function EditEventDialog({
   const isManualEvent = event?.isManual === true;
 
   // Form for manual events (full edit)
-  const manualForm = useForm<EditManualFormValues>({
+  const manualForm = useForm({
     resolver: zodResolver(editManualEventSchema),
     defaultValues: {
-      eventType: undefined,
+      eventType: undefined as EditManualFormValues['eventType'] | undefined,
       title: '',
       description: '',
-      entityIds: [],
+      entityIds: [] as string[],
     },
   });
 
   // Form for auto events (classification only)
-  const autoForm = useForm<EditAutoFormValues>({
-    resolver: zodResolver(editAutoEventSchema),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autoForm = useForm({
+    resolver: zodResolver(editAutoEventSchema) as any,
     defaultValues: {
-      eventType: undefined,
+      eventType: undefined as EditAutoFormValues['eventType'] | undefined,
     },
   });
 
@@ -290,7 +294,7 @@ export function EditEventDialog({
           /* Full edit form for manual events */
           <Form {...manualForm}>
             <form
-              onSubmit={manualForm.handleSubmit(handleManualSubmit)}
+              onSubmit={manualForm.handleSubmit(handleManualSubmit as Parameters<typeof manualForm.handleSubmit>[0])}
               className="space-y-4"
             >
               {/* Event Date Field */}
@@ -464,7 +468,7 @@ export function EditEventDialog({
           /* Classification-only form for auto events */
           <Form {...autoForm}>
             <form
-              onSubmit={autoForm.handleSubmit(handleAutoSubmit)}
+              onSubmit={autoForm.handleSubmit(handleAutoSubmit as Parameters<typeof autoForm.handleSubmit>[0])}
               className="space-y-4"
             >
               {/* Event Type Field */}

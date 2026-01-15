@@ -19,9 +19,9 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  type OnNodeClick,
   type NodeTypes,
   type EdgeTypes,
+  type NodeMouseHandler,
   BackgroundVariant,
 } from '@xyflow/react';
 import { AlertTriangle } from 'lucide-react';
@@ -38,12 +38,13 @@ import {
 } from '@/lib/utils/entityGraph';
 import type { EntityGraphData, EntityGraphNode } from '@/types/entity';
 
+// Type assertions needed due to @xyflow/react's strict generic type requirements
 const nodeTypes: NodeTypes = {
-  entity: EntityNode,
+  entity: EntityNode as NodeTypes[string],
 };
 
 const edgeTypes: EdgeTypes = {
-  relationship: EntityEdge,
+  relationship: EntityEdge as EdgeTypes[string],
 };
 
 const LARGE_GRAPH_LIMIT = 100;
@@ -156,8 +157,8 @@ function EntitiesGraphInner({
     return nodesWithState;
   }, [nodes, edges, selectedNodeId, isMultiSelectMode, selectedForMerge]);
 
-  const handleNodeClick: OnNodeClick<EntityGraphNode> = useCallback(
-    (_event: React.MouseEvent, node: EntityGraphNode) => {
+  const handleNodeClick: NodeMouseHandler<EntityGraphNode> = useCallback(
+    (_event, node) => {
       // In multi-select mode, click toggles merge selection
       if (isMultiSelectMode && onToggleMergeSelection) {
         onToggleMergeSelection(node.id);
@@ -231,7 +232,7 @@ function EntitiesGraphInner({
             aria-label="Graph zoom controls"
           />
           <MiniMap
-            nodeColor={(node) => getEntityTypeColor(node.data?.entityType)}
+            nodeColor={(node) => getEntityTypeColor(node.data?.entityType as import('@/types/entity').EntityType)}
             maskColor="rgba(0, 0, 0, 0.1)"
             aria-hidden="true"
           />

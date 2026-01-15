@@ -41,7 +41,7 @@ describe('WorkspaceTabBar', () => {
 
       const expectedOrder = ['Summary', 'Timeline', 'Entities', 'Citations', 'Contradictions', 'Verification', 'Documents'];
       tabs.forEach((tab, index) => {
-        expect(tab).toHaveTextContent(expectedOrder[index]);
+        expect(tab).toHaveTextContent(expectedOrder[index]!);
       });
     });
 

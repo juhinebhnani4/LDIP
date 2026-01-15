@@ -8,7 +8,6 @@ const createMockEntity = (
   overrides: Partial<EntityListItem> = {}
 ): EntityListItem => ({
   id: 'entity-1',
-  matterId: 'matter-1',
   canonicalName: 'John Doe',
   entityType: 'PERSON',
   mentionCount: 42,
@@ -17,8 +16,6 @@ const createMockEntity = (
     aliasesFound: ['J. Doe', 'Johnny'],
     firstExtractionConfidence: 0.92,
   },
-  createdAt: '2026-01-15T00:00:00Z',
-  updatedAt: '2026-01-15T00:00:00Z',
   ...overrides,
 });
 
@@ -198,7 +195,7 @@ describe('EntityMergeDialog', () => {
       });
 
       // Entity with fewer mentions should be source (deleted)
-      const [sourceId, targetId] = onConfirm.mock.calls[0];
+      const [sourceId, targetId] = onConfirm.mock.calls[0]!;
       expect(sourceId).toBe('entity-2'); // J. Doe (5 mentions) deleted
       expect(targetId).toBe('entity-1'); // John Doe (42 mentions) kept
     });

@@ -41,27 +41,28 @@ const relationshipConfig: Record<
   },
 };
 
-export interface EntityEdgeProps extends EdgeProps {
-  data?: EntityEdgeData;
-}
+// Use generic EdgeProps to avoid type constraint issues with @xyflow/react
+export type EntityEdgeProps = EdgeProps;
 
-export const EntityEdge = memo(function EntityEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-  selected,
-  markerEnd,
-}: EntityEdgeProps) {
+export const EntityEdge = memo(function EntityEdge(props: EntityEdgeProps) {
+  const {
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    data,
+    selected,
+    markerEnd,
+  } = props;
   const [isHovered, setIsHovered] = useState(false);
 
-  const relationshipType = data?.relationshipType ?? 'RELATED_TO';
+  const edgeData = data as unknown as EntityEdgeData | undefined;
+  const relationshipType = edgeData?.relationshipType ?? 'RELATED_TO';
   const config = relationshipConfig[relationshipType];
-  const confidence = data?.confidence ?? 0;
+  const confidence = edgeData?.confidence ?? 0;
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,

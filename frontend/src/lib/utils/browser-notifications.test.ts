@@ -175,12 +175,12 @@ describe('browser-notifications', () => {
 
     it('requests permission when status is default', async () => {
       const mockRequestPermission = vi.fn().mockResolvedValue('granted');
-      const mockNotification = vi.fn();
+      const mockNotification = vi.fn() as unknown as typeof Notification;
       Object.defineProperty(mockNotification, 'permission', {
         value: 'default',
         writable: true,
       });
-      mockNotification.requestPermission = mockRequestPermission;
+      (mockNotification as unknown as { requestPermission: typeof mockRequestPermission }).requestPermission = mockRequestPermission;
       vi.stubGlobal('Notification', mockNotification);
 
       const result = await requestNotificationPermission();
@@ -191,12 +191,12 @@ describe('browser-notifications', () => {
 
     it('returns false when permission request is denied', async () => {
       const mockRequestPermission = vi.fn().mockResolvedValue('denied');
-      const mockNotification = vi.fn();
+      const mockNotification = vi.fn() as unknown as typeof Notification;
       Object.defineProperty(mockNotification, 'permission', {
         value: 'default',
         writable: true,
       });
-      mockNotification.requestPermission = mockRequestPermission;
+      (mockNotification as unknown as { requestPermission: typeof mockRequestPermission }).requestPermission = mockRequestPermission;
       vi.stubGlobal('Notification', mockNotification);
 
       const result = await requestNotificationPermission();
@@ -207,12 +207,12 @@ describe('browser-notifications', () => {
     it('handles permission request errors', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const mockRequestPermission = vi.fn().mockRejectedValue(new Error('User cancelled'));
-      const mockNotification = vi.fn();
+      const mockNotification = vi.fn() as unknown as typeof Notification;
       Object.defineProperty(mockNotification, 'permission', {
         value: 'default',
         writable: true,
       });
-      mockNotification.requestPermission = mockRequestPermission;
+      (mockNotification as unknown as { requestPermission: typeof mockRequestPermission }).requestPermission = mockRequestPermission;
       vi.stubGlobal('Notification', mockNotification);
 
       const result = await requestNotificationPermission();

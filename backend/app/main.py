@@ -22,6 +22,7 @@ from app.api.routes import (
     documents,
     entities,
     exports,
+    global_search,
     health,
     jobs,
     matters,
@@ -160,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(activity.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(notifications.router, prefix="/api")
+    app.include_router(global_search.router, prefix="/api")
 
     return app
 

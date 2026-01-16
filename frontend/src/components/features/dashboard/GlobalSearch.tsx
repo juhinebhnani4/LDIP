@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, FileText, Briefcase, X } from 'lucide-react';
+import { Search, FileText, Briefcase, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,73 +9,8 @@ import {
   PopoverContent,
   PopoverAnchor,
 } from '@/components/ui/popover';
-
-/** Search result item type */
-interface SearchResult {
-  id: string;
-  type: 'matter' | 'document';
-  title: string;
-  matterId: string;
-  matterTitle: string;
-  matchedContent: string;
-}
-
-/** Mock search results for development */
-function getMockSearchResults(query: string): SearchResult[] {
-  if (!query.trim()) return [];
-
-  const allResults: SearchResult[] = [
-    {
-      id: 'result-1',
-      type: 'matter',
-      title: 'Smith vs. Jones',
-      matterId: 'matter-1',
-      matterTitle: 'Smith vs. Jones',
-      matchedContent: 'Contract dispute regarding property boundaries...',
-    },
-    {
-      id: 'result-2',
-      type: 'document',
-      title: 'Contract_Agreement_2024.pdf',
-      matterId: 'matter-1',
-      matterTitle: 'Smith vs. Jones',
-      matchedContent: '...the terms of the agreement state that...',
-    },
-    {
-      id: 'result-3',
-      type: 'matter',
-      title: 'Acme Corp Acquisition',
-      matterId: 'matter-2',
-      matterTitle: 'Acme Corp Acquisition',
-      matchedContent: 'Corporate acquisition and merger documentation...',
-    },
-    {
-      id: 'result-4',
-      type: 'document',
-      title: 'Due_Diligence_Report.pdf',
-      matterId: 'matter-2',
-      matterTitle: 'Acme Corp Acquisition',
-      matchedContent: '...financial analysis shows growth potential...',
-    },
-    {
-      id: 'result-5',
-      type: 'document',
-      title: 'Evidence_Summary.docx',
-      matterId: 'matter-1',
-      matterTitle: 'Smith vs. Jones',
-      matchedContent: '...witness testimony corroborates the claim...',
-    },
-  ];
-
-  // Simple filtering based on query
-  const lowerQuery = query.toLowerCase();
-  return allResults.filter(
-    (result) =>
-      result.title.toLowerCase().includes(lowerQuery) ||
-      result.matterTitle.toLowerCase().includes(lowerQuery) ||
-      result.matchedContent.toLowerCase().includes(lowerQuery)
-  );
-}
+import { toast } from 'sonner';
+import { globalSearch, type SearchResult } from '@/lib/api/globalSearch';
 
 /** Debounce delay in milliseconds */
 const DEBOUNCE_DELAY = 300;
@@ -109,33 +44,51 @@ export function GlobalSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastQueryRef = useRef<string>('');
 
   // Debounced search function
   const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
       setResults([]);
       setIsLoading(false);
+      setError(null);
       return;
     }
 
+    lastQueryRef.current = searchQuery;
     setIsLoading(true);
-    try {
-      // TODO: Replace with actual API call when backend is available
-      // const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
-      // const { data } = await response.json();
+    setError(null);
 
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      const searchResults = getMockSearchResults(searchQuery);
-      setResults(searchResults);
-    } catch {
-      setResults([]);
+    try {
+      const searchResults = await globalSearch(searchQuery);
+      // Only update if this is still the current query
+      if (lastQueryRef.current === searchQuery) {
+        setResults(searchResults);
+      }
+    } catch (err) {
+      // Only update if this is still the current query
+      if (lastQueryRef.current === searchQuery) {
+        setResults([]);
+        const message = err instanceof Error ? err.message : 'Search failed';
+        setError(message);
+        toast.error('Search failed. Please try again.');
+      }
     } finally {
-      setIsLoading(false);
+      if (lastQueryRef.current === searchQuery) {
+        setIsLoading(false);
+      }
     }
   }, []);
+
+  // Retry search on error
+  const handleRetry = useCallback(() => {
+    if (query.trim()) {
+      performSearch(query);
+    }
+  }, [query, performSearch]);
 
   // Handle input change with debouncing
   const handleInputChange = useCallback(
@@ -161,6 +114,7 @@ export function GlobalSearch() {
     setIsOpen(false);
     setQuery('');
     setResults([]);
+    setError(null);
 
     // Navigate based on type
     if (result.type === 'matter') {
@@ -174,6 +128,7 @@ export function GlobalSearch() {
   const handleClear = useCallback(() => {
     setQuery('');
     setResults([]);
+    setError(null);
     inputRef.current?.focus();
   }, []);
 
@@ -204,8 +159,9 @@ export function GlobalSearch() {
     };
   }, []);
 
-  const showResults = results.length > 0;
-  const showEmpty = !isLoading && query.trim() && results.length === 0;
+  const showResults = results.length > 0 && !error;
+  const showEmpty = !isLoading && !error && query.trim().length >= 2 && results.length === 0;
+  const showError = !isLoading && error !== null;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -249,6 +205,23 @@ export function GlobalSearch() {
         {showEmpty && (
           <div className="py-4 text-center text-sm text-muted-foreground">
             No results found for &quot;{query}&quot;
+          </div>
+        )}
+        {showError && (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <span>Search failed</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </Button>
           </div>
         )}
         {showResults && (

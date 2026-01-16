@@ -1,0 +1,180 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_frontend:
+        description: 'Deploy frontend to Vercel'
+        required: true
+        default: true
+        type: boolean
+      deploy_backend:
+        description: 'Deploy backend to Railway'
+        required: true
+        default: true
+        type: boolean
+      skip_tests:
+        description: 'Skip tests (emergency deploys only)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # Run tests before deployment unless explicitly skipped
+  pre-deploy-tests:
+    if: ${{ !inputs.skip_tests }}
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python with uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Run frontend tests
+        if: ${{ inputs.deploy_frontend }}
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run type-check
+          npm test -- --passWithNoTests
+
+      - name: Run backend tests
+        if: ${{ inputs.deploy_backend }}
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run ruff check .
+          uv run pytest -v --ignore=tests/integration
+        env:
+          REDIS_URL: redis://localhost:6379/0
+          CELERY_BROKER_URL: redis://localhost:6379/1
+          CELERY_RESULT_BACKEND: redis://localhost:6379/2
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_KEY: placeholder
+          SUPABASE_SERVICE_KEY: placeholder
+          SUPABASE_JWT_SECRET: placeholder
+
+  # Notify about deployment start
+  notify-start:
+    runs-on: ubuntu-latest
+    needs: [pre-deploy-tests]
+    if: always() && (needs.pre-deploy-tests.result == 'success' || inputs.skip_tests)
+    steps:
+      - name: Log deployment start
+        run: |
+          echo "Starting production deployment"
+          echo "Frontend: ${{ inputs.deploy_frontend }}"
+          echo "Backend: ${{ inputs.deploy_backend }}"
+          echo "Tests skipped: ${{ inputs.skip_tests }}"
+
+  # Deploy frontend via Vercel CLI (optional - Vercel also auto-deploys)
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: [notify-start]
+    if: ${{ inputs.deploy_frontend }}
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel
+        id: deploy
+        working-directory: frontend
+        run: |
+          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
+          echo "url=$(cat deployment-url.txt)" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # Deploy backend via Railway CLI
+  deploy-backend:
+    runs-on: ubuntu-latest
+    needs: [notify-start]
+    if: ${{ inputs.deploy_backend }}
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        working-directory: backend
+        run: |
+          railway up --service ldip-backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Deploy Celery Worker
+        working-directory: backend
+        run: |
+          railway up --service ldip-worker
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # Post-deployment verification
+  verify-deployment:
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, deploy-backend]
+    if: always() && (needs.deploy-frontend.result == 'success' || needs.deploy-backend.result == 'success')
+
+    steps:
+      - name: Wait for services to stabilize
+        run: sleep 30
+
+      - name: Verify backend health
+        if: ${{ inputs.deploy_backend }}
+        run: |
+          curl -f ${{ secrets.PRODUCTION_BACKEND_URL }}/api/health || exit 1
+        continue-on-error: true
+
+      - name: Verify frontend accessibility
+        if: ${{ inputs.deploy_frontend }}
+        run: |
+          curl -f ${{ secrets.PRODUCTION_FRONTEND_URL }} || exit 1
+        continue-on-error: true
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend deployed: ${{ inputs.deploy_frontend }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend deployed: ${{ inputs.deploy_backend }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please verify the deployment manually." >> $GITHUB_STEP_SUMMARY

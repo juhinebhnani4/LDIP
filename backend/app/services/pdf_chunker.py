@@ -354,8 +354,10 @@ class PDFChunker:
                 page_start = page_end + 1
                 chunk_index += 1
 
-                # Release references to free memory
-                del reader.pages[page_start - 2 : page_end - 1]
+                # Note: pypdf's lazy loading handles memory automatically.
+                # Explicit deletion of pages from reader is not recommended
+                # as it can cause issues with page indexing. Memory is released
+                # when the reader goes out of scope or when chunks are written to disk.
 
             logger.info(
                 "pdf_streaming_split_complete",

@@ -666,7 +666,6 @@ class TestStoragePathValidation:
         ]
 
         uuid_pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        import re
 
         for path in invalid_paths:
             parts = path.split("/")

@@ -785,7 +785,7 @@ class OCRChunkService:
         if completed_statuses is None:
             completed_statuses = ["ocr_complete", "completed", "failed"]
 
-        def _query():
+        def _query_chunks():
             # Query chunks older than cutoff
             return (
                 self.client.table("document_ocr_chunks")
@@ -794,9 +794,19 @@ class OCRChunkService:
                 .execute()
             )
 
-        response = await asyncio.to_thread(_query)
+        def _query_document_status(doc_id: str):
+            # Query document status to verify it's in a completed state
+            return (
+                self.client.table("documents")
+                .select("status")
+                .eq("id", doc_id)
+                .limit(1)
+                .execute()
+            )
 
-        # Aggregate by document
+        response = await asyncio.to_thread(_query_chunks)
+
+        # Aggregate by document and filter by document status
         doc_chunks: dict[str, dict] = {}
         for row in (response.data or []):
             doc_id = row["document_id"]
@@ -808,7 +818,31 @@ class OCRChunkService:
                 }
             doc_chunks[doc_id]["chunk_count"] += 1
 
-        return list(doc_chunks.values())
+        # Filter to only documents with completed statuses
+        result = []
+        for doc_id, doc_info in doc_chunks.items():
+            try:
+                doc_response = await asyncio.to_thread(
+                    lambda d=doc_id: _query_document_status(d)
+                )
+                if doc_response.data:
+                    doc_status = doc_response.data[0].get("status", "")
+                    if doc_status in completed_statuses:
+                        result.append(doc_info)
+                    else:
+                        logger.debug(
+                            "skipping_stale_chunks_document_not_complete",
+                            document_id=doc_id,
+                            status=doc_status,
+                        )
+            except Exception as e:
+                logger.warning(
+                    "failed_to_check_document_status",
+                    document_id=doc_id,
+                    error=str(e),
+                )
+
+        return result
 
     # =========================================================================
     # Idempotency Operations (Story 17.4)

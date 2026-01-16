@@ -225,6 +225,76 @@ export async function listExports(
 }
 
 // =============================================================================
+// Story 12.4: Executive Summary Quick Export Types and Functions
+// =============================================================================
+
+/**
+ * Response from executive summary generation.
+ * Story 12.4: AC #2, #3 - Quick export response.
+ */
+export interface ExecutiveSummaryResponse {
+  exportId: string;
+  status: ExportStatus;
+  downloadUrl: string | null;
+  fileName: string;
+  contentSummary: {
+    partiesIncluded: number;
+    datesIncluded: number;
+    issuesIncluded: number;
+    pendingVerificationCount: number;
+  };
+}
+
+/**
+ * Generate executive summary PDF with one click.
+ *
+ * Story 12.4: AC #1, #2 - Quick export without configuration.
+ *
+ * @param matterId - Matter UUID.
+ * @returns Executive summary response with download URL.
+ *
+ * @example
+ * ```ts
+ * const result = await generateExecutiveSummary('matter-123');
+ * if (result.downloadUrl) {
+ *   window.open(result.downloadUrl, '_blank');
+ * }
+ * ```
+ */
+export async function generateExecutiveSummary(
+  matterId: string
+): Promise<ExecutiveSummaryResponse> {
+  const response = await api.post<{
+    data: {
+      export_id: string;
+      status: ExportStatus;
+      download_url: string | null;
+      file_name: string;
+      content_summary: {
+        parties_included: number;
+        dates_included: number;
+        issues_included: number;
+        pending_verification_count: number;
+      };
+    };
+  }>(`/api/matters/${matterId}/exports/executive-summary`, {});
+
+  const data = response.data;
+  return {
+    exportId: data.export_id,
+    status: data.status,
+    downloadUrl: data.download_url,
+    fileName: data.file_name,
+    contentSummary: {
+      partiesIncluded: data.content_summary.parties_included,
+      datesIncluded: data.content_summary.dates_included,
+      issuesIncluded: data.content_summary.issues_included,
+      pendingVerificationCount: data.content_summary.pending_verification_count,
+    },
+  };
+}
+
+// =============================================================================
 // Story 12-3: Consolidated API Object
 // =============================================================================
 
@@ -235,4 +305,5 @@ export const exportsApi = {
   generate: generateExport,
   get: getExport,
   list: listExports,
+  generateExecutiveSummary,
 };

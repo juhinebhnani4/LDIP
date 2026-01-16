@@ -1,20 +1,27 @@
 """Export API routes for document generation.
 
 Story 12-3: Export Verification Check and Format Generation
+Story 12-4: Partner Executive Summary Export
 Epic 12: Export Builder
 
 Provides endpoints for:
 - Generating export documents (PDF, Word, PowerPoint)
 - Getting export status and download URLs
 - Listing export history for a matter
+- Quick export: Executive Summary (Story 12.4)
 
 Implements:
 - AC #3: Support PDF, Word, and PowerPoint formats
 - AC #4: Include verification status in exports
+- Story 12.4: One-click executive summary export
 """
+
+import uuid
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from pydantic import BaseModel, Field
 
 from app.api.deps import (
     MatterMembership,
@@ -26,15 +33,61 @@ from app.models.export import (
     ExportGenerationResponse,
     ExportRequest,
     ExportResponse,
+    ExportStatus,
 )
 from app.services.export import (
+    ExecutiveSummaryPDFGenerator,
     ExportService,
     ExportServiceError,
+    get_executive_summary_service,
     get_export_service,
 )
 
 router = APIRouter(prefix="/matters/{matter_id}/exports", tags=["exports"])
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Story 12.4: Executive Summary Response Model
+# =============================================================================
+
+
+class ExecutiveSummaryContentSummary(BaseModel):
+    """Summary of content included in executive summary.
+
+    Story 12.4: AC #2, #3 - Content counts for response.
+    """
+
+    parties_included: int = Field(..., description="Number of parties included")
+    dates_included: int = Field(..., description="Number of critical dates included")
+    issues_included: int = Field(..., description="Number of verified issues included")
+    pending_verification_count: int = Field(
+        ..., description="Count of findings pending verification (AC #3)"
+    )
+
+
+class ExecutiveSummaryData(BaseModel):
+    """Data payload for executive summary generation.
+
+    Story 12.4: Quick export data with content summary.
+    """
+
+    export_id: str = Field(..., description="Export UUID for tracking")
+    status: ExportStatus = Field(..., description="Current status (completed)")
+    download_url: str | None = Field(None, description="Signed download URL")
+    file_name: str = Field(..., description="Generated filename")
+    content_summary: ExecutiveSummaryContentSummary = Field(
+        ..., description="Summary of content included"
+    )
+
+
+class ExecutiveSummaryResponse(BaseModel):
+    """Response for executive summary generation.
+
+    Story 12.4: Quick export response wrapped in data per project-context.md.
+    """
+
+    data: ExecutiveSummaryData = Field(..., description="Executive summary data")
 
 
 def _get_export_service() -> ExportService:
@@ -281,6 +334,154 @@ async def list_exports(
                 "error": {
                     "code": "LIST_EXPORTS_FAILED",
                     "message": f"Failed to list exports: {e}",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Story 12.4: Executive Summary Quick Export Endpoint
+# =============================================================================
+
+
+@router.post(
+    "/executive-summary",
+    response_model=ExecutiveSummaryResponse,
+    responses={
+        200: {"description": "Executive summary generated successfully"},
+        400: {"description": "Generation failed"},
+        403: {"description": "Access denied"},
+        404: {"description": "Matter not found"},
+    },
+)
+async def generate_executive_summary(
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    db=Depends(get_db),
+) -> ExecutiveSummaryResponse:
+    """Generate a one-click executive summary PDF.
+
+    Story 12.4: AC #1, #2, #3, #4 - Quick export for partners.
+
+    This endpoint generates a pre-configured 1-2 page PDF containing:
+    - Case Overview (2-3 paragraphs)
+    - Key Parties (max 10)
+    - Critical Dates (max 10)
+    - Verified Issues only (with badges)
+    - Recommended Actions (max 5)
+    - Footer with pending count and workspace link
+
+    No configuration required - just call and download.
+
+    Args:
+        matter_id: Matter UUID.
+        membership: Validated matter membership (editor/owner required).
+        db: Supabase client.
+
+    Returns:
+        ExecutiveSummaryResponse with download URL and content summary.
+    """
+    logger.info(
+        "executive_summary_generation_requested",
+        matter_id=matter_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Extract content
+        summary_service = get_executive_summary_service()
+        content = await summary_service.extract_content(matter_id, db)
+
+        # Generate PDF
+        now = datetime.now(UTC)
+        pdf_generator = ExecutiveSummaryPDFGenerator()
+        pdf_bytes = pdf_generator.generate(content, now)
+
+        # Generate filename
+        date_str = now.strftime("%Y-%m-%d")
+        safe_name = "".join(
+            c for c in content.matter_name if c.isalnum() or c in " -_"
+        )[:50].strip() or "Matter"
+        file_name = f"{safe_name}-Executive-Summary-{date_str}.pdf"
+
+        # Upload to storage
+        export_id = str(uuid.uuid4())
+        file_path = f"exports/{matter_id}/{export_id}/{file_name}"
+
+        try:
+            db.storage.from_("exports").upload(
+                file_path,
+                pdf_bytes,
+                {"content-type": "application/pdf"},
+            )
+
+            # Create signed URL (valid for 1 hour)
+            signed_result = db.storage.from_("exports").create_signed_url(
+                file_path,
+                expires_in=3600,
+            )
+            download_url = signed_result.get("signedURL", signed_result.get("signedUrl", ""))
+
+        except Exception as upload_error:
+            logger.error(
+                "executive_summary_upload_failed",
+                matter_id=matter_id,
+                error=str(upload_error),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "UPLOAD_FAILED",
+                        "message": "Failed to upload executive summary.",
+                        "details": {},
+                    }
+                },
+            ) from upload_error
+
+        logger.info(
+            "executive_summary_generation_completed",
+            matter_id=matter_id,
+            export_id=export_id,
+            file_name=file_name,
+            parties=content.parties_count,
+            dates=content.dates_count,
+            issues=content.issues_count,
+        )
+
+        return ExecutiveSummaryResponse(
+            data=ExecutiveSummaryData(
+                export_id=export_id,
+                status=ExportStatus.COMPLETED,
+                download_url=download_url,
+                file_name=file_name,
+                content_summary=ExecutiveSummaryContentSummary(
+                    parties_included=content.parties_count,
+                    dates_included=content.dates_count,
+                    issues_included=content.issues_count,
+                    pending_verification_count=content.pending_verification_count,
+                ),
+            )
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "executive_summary_generation_failed",
+            matter_id=matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "GENERATION_FAILED",
+                    "message": "Failed to generate executive summary. Please try again.",
                     "details": {},
                 }
             },

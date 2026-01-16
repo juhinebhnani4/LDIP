@@ -400,3 +400,337 @@ class TestExportRequestModel:
                 sections=["executive-summary"],
             )
             assert request.format == fmt
+
+
+# =============================================================================
+# Story 12.4: Executive Summary Service Tests
+# =============================================================================
+
+
+class TestExecutiveSummaryService:
+    """Tests for ExecutiveSummaryService content extraction.
+
+    Story 12.4: Task 5.1 - Backend unit tests for content extraction.
+    """
+
+    def test_build_case_overview_with_description(self):
+        """Test case overview builds from subject_matter description."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        subject_matter = {
+            "description": "This is a contract dispute case involving breach of agreement.",
+            "case_type": "civil",
+        }
+        current_status = {
+            "stage": "Discovery",
+            "description": "Document review in progress.",
+        }
+
+        overview = service._build_case_overview(subject_matter, current_status)
+
+        assert "contract dispute" in overview
+        assert "Document review" in overview
+
+    def test_build_case_overview_truncation(self):
+        """Test case overview truncates at MAX_OVERVIEW_WORDS."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        # Create long description exceeding 300 words
+        long_text = " ".join(["word"] * 400)
+        subject_matter = {"description": long_text}
+        current_status = {}
+
+        overview = service._build_case_overview(subject_matter, current_status)
+
+        # Should be truncated
+        words = overview.split()
+        assert len(words) <= service.MAX_OVERVIEW_WORDS + 1  # +1 for "..."
+
+    def test_extract_parties_limits_to_max(self):
+        """Test parties extraction limits to MAX_PARTIES."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        # Create 15 parties
+        parties_data = [
+            {"role": f"Party{i}", "name": f"Name{i}", "relevance": ""}
+            for i in range(15)
+        ]
+
+        result = service._extract_parties(parties_data)
+
+        assert len(result) == service.MAX_PARTIES  # 10
+
+    def test_extract_parties_sorts_by_role_priority(self):
+        """Test parties sorted by role importance."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        parties_data = [
+            {"role": "witness", "name": "Witness A", "relevance": ""},
+            {"role": "plaintiff", "name": "Plaintiff", "relevance": ""},
+            {"role": "defendant", "name": "Defendant", "relevance": ""},
+        ]
+
+        result = service._extract_parties(parties_data)
+
+        # Plaintiff should be first (priority 1)
+        assert result[0]["name"] == "Plaintiff"
+        assert result[1]["name"] == "Defendant"
+        assert result[2]["name"] == "Witness A"
+
+    def test_extract_attention_items_limits_to_max(self):
+        """Test attention items limited to MAX_ACTIONS."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        # Create 10 attention items
+        items = [{"action": f"Action {i}"} for i in range(10)]
+
+        result = service._extract_attention_items(items)
+
+        assert len(result) == service.MAX_ACTIONS  # 5
+
+    def test_extract_attention_items_handles_string_format(self):
+        """Test attention items handles both dict and string formats."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryService
+
+        service = ExecutiveSummaryService()
+
+        items = [
+            {"action": "Action from dict"},
+            "Plain string action",
+            {"description": "Description as action"},
+        ]
+
+        result = service._extract_attention_items(items)
+
+        assert "Action from dict" in result
+        assert "Plain string action" in result
+        assert "Description as action" in result
+
+
+# =============================================================================
+# Story 12.4: Executive Summary PDF Generator Tests
+# =============================================================================
+
+
+class TestExecutiveSummaryPDFGenerator:
+    """Tests for ExecutiveSummaryPDFGenerator.
+
+    Story 12.4: Task 5.2 - Backend tests for PDF page limits.
+    """
+
+    def test_generate_pdf_basic(self):
+        """Test generating basic executive summary PDF."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        content = ExecutiveSummaryContent(
+            matter_name="Test Matter",
+            matter_id="test-123",
+            case_overview="This is a test case overview.",
+            parties=[
+                {"role": "Plaintiff", "name": "John Doe", "relevance": "Primary"},
+            ],
+            critical_dates=[
+                {"date": "2024-01-15", "type": "filing", "description": "Initial filing"},
+            ],
+            verified_issues=[
+                {"type": "contradiction", "severity": "high", "summary": "Test issue", "detail": "Details"},
+            ],
+            recommended_actions=["Review documents", "Schedule hearing"],
+            pending_verification_count=3,
+            parties_count=1,
+            dates_count=1,
+            issues_count=1,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator()
+        pdf_bytes = generator.generate(content)
+
+        # Verify PDF header
+        assert pdf_bytes.startswith(b"%PDF")
+        # Verify PDF footer
+        assert b"%%EOF" in pdf_bytes
+
+    def test_generate_pdf_includes_verified_badge(self):
+        """Test PDF includes [VERIFIED] badge on issues (AC #3)."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        content = ExecutiveSummaryContent(
+            matter_name="Badge Test",
+            matter_id="test-badge",
+            case_overview="Test overview.",
+            parties=[],
+            critical_dates=[],
+            verified_issues=[
+                {"type": "citation", "severity": "high", "summary": "Citation issue", "detail": ""},
+            ],
+            recommended_actions=[],
+            pending_verification_count=0,
+            parties_count=0,
+            dates_count=0,
+            issues_count=1,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator()
+
+        # Build content lines to check for VERIFIED badge
+        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines_text = "\n".join(lines)
+
+        assert "[VERIFIED]" in lines_text
+
+    def test_generate_pdf_includes_pending_count(self):
+        """Test PDF includes pending verification count (AC #3)."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        content = ExecutiveSummaryContent(
+            matter_name="Pending Count Test",
+            matter_id="test-pending",
+            case_overview="Test overview.",
+            parties=[],
+            critical_dates=[],
+            verified_issues=[],
+            recommended_actions=[],
+            pending_verification_count=5,
+            parties_count=0,
+            dates_count=0,
+            issues_count=0,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator()
+        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines_text = "\n".join(lines)
+
+        assert "5 additional findings pending verification" in lines_text
+
+    def test_generate_pdf_includes_workspace_link(self):
+        """Test PDF includes workspace link (AC #4)."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        content = ExecutiveSummaryContent(
+            matter_name="Link Test",
+            matter_id="test-matter-id-123",
+            case_overview="Test overview.",
+            parties=[],
+            critical_dates=[],
+            verified_issues=[],
+            recommended_actions=[],
+            pending_verification_count=0,
+            parties_count=0,
+            dates_count=0,
+            issues_count=0,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator(frontend_url="https://app.ldip.ai")
+        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines_text = "\n".join(lines)
+
+        assert "https://app.ldip.ai/matters/test-matter-id-123" in lines_text
+        assert "Generated from full analysis - open LDIP for complete details" in lines_text
+
+    def test_page_limit_enforcement(self):
+        """Test content truncation when exceeding 2 pages (AC #3)."""
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        # Create content that would exceed 2 pages
+        content = ExecutiveSummaryContent(
+            matter_name="Long Test",
+            matter_id="test-long",
+            case_overview="Test overview with content.",
+            parties=[
+                {"role": f"Party{i}", "name": f"Name{i}", "relevance": f"Relevance{i}"}
+                for i in range(10)
+            ],
+            critical_dates=[
+                {"date": f"2024-01-{i:02d}", "type": "hearing", "description": f"Event {i}"}
+                for i in range(1, 11)
+            ],
+            verified_issues=[
+                {"type": "contradiction", "severity": "high", "summary": f"Issue {i}", "detail": f"Detail {i}"}
+                for i in range(10)
+            ],
+            recommended_actions=[f"Action {i}" for i in range(10)],
+            pending_verification_count=5,
+            parties_count=10,
+            dates_count=10,
+            issues_count=10,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator()
+        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+
+        # Apply truncation
+        truncated_lines = generator._enforce_page_limit(lines, content)
+
+        # Should be within 2 pages (120 lines max)
+        max_lines = generator.LINES_PER_PAGE * generator.MAX_PAGES
+        assert len(truncated_lines) <= max_lines
+
+    def test_word_wrap(self):
+        """Test word wrapping utility."""
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        generator = ExecutiveSummaryPDFGenerator()
+
+        long_text = "This is a very long line that should be wrapped at word boundaries for proper display"
+        wrapped = generator._word_wrap(long_text, 30)
+
+        # Each line should be <= 30 chars (except possibly last word)
+        for line in wrapped[:-1]:
+            assert len(line) <= 35  # Some tolerance for word boundaries
+
+    def test_generate_pdf_with_empty_matter(self):
+        """Test generating PDF when matter has no data (Issue #8 coverage).
+
+        Verifies the service handles gracefully when:
+        - No summary data
+        - No events
+        - No contradictions/citations
+        """
+        from app.services.export.executive_summary_service import ExecutiveSummaryContent
+        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+
+        # Create content representing an empty matter
+        content = ExecutiveSummaryContent(
+            matter_name="Empty Matter",
+            matter_id="empty-matter-123",
+            case_overview="No case overview available.",
+            parties=[],
+            critical_dates=[],
+            verified_issues=[],
+            recommended_actions=[],
+            pending_verification_count=0,
+            parties_count=0,
+            dates_count=0,
+            issues_count=0,
+        )
+
+        generator = ExecutiveSummaryPDFGenerator()
+        pdf_bytes = generator.generate(content)
+
+        # Verify PDF is still generated with valid structure
+        assert pdf_bytes.startswith(b"%PDF")
+        assert b"%%EOF" in pdf_bytes
+
+        # Verify placeholder messages are included
+        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines_text = "\n".join(lines)
+
+        assert "No parties recorded" in lines_text
+        assert "No critical dates recorded" in lines_text
+        assert "No verified issues" in lines_text
+        assert "No recommended actions" in lines_text

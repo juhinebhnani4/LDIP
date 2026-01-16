@@ -2,6 +2,7 @@
  * Notification Store
  *
  * Zustand store for managing notifications in the dashboard header.
+ * Story 14.10: Wired to real backend API.
  *
  * USAGE PATTERN (MANDATORY - from project-context.md):
  * CORRECT - Selector pattern:
@@ -14,9 +15,15 @@
  */
 
 import { create } from 'zustand';
-import type { Notification, NotificationType, NotificationPriority } from '@/types/notification';
+import type { Notification } from '@/types/notification';
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '@/lib/api/notifications';
+import { toast } from 'sonner';
 
-/** Generate unique ID for notification */
+/** Generate unique ID for notification (used for local-only notifications) */
 function generateNotificationId(): string {
   return `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
@@ -36,14 +43,14 @@ interface NotificationState {
 }
 
 interface NotificationActions {
-  /** Fetch notifications from API (or use mock data for now) */
+  /** Fetch notifications from API */
   fetchNotifications: () => Promise<void>;
 
   /** Mark a single notification as read */
-  markAsRead: (notificationId: string) => void;
+  markAsRead: (notificationId: string) => Promise<void>;
 
   /** Mark all notifications as read */
-  markAllAsRead: () => void;
+  markAllAsRead: () => Promise<void>;
 
   /** Add a new notification (for real-time updates) */
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => void;
@@ -68,69 +75,7 @@ function calculateUnreadCount(notifications: Notification[]): number {
   return notifications.filter((n) => !n.isRead).length;
 }
 
-/** Mock notifications for development (backend API not yet available) */
-function getMockNotifications(): Notification[] {
-  const now = new Date();
-  return [
-    {
-      id: generateNotificationId(),
-      type: 'success' as NotificationType,
-      title: 'Processing Complete',
-      message: 'Document "Contract_2024.pdf" has been processed successfully.',
-      matterId: 'matter-1',
-      matterTitle: 'Smith vs. Jones',
-      isRead: false,
-      createdAt: new Date(now.getTime() - 5 * 60000).toISOString(), // 5 min ago
-      priority: 'medium' as NotificationPriority,
-    },
-    {
-      id: generateNotificationId(),
-      type: 'warning' as NotificationType,
-      title: 'Verification Needed',
-      message: '3 citations require verification in "Evidence Summary".',
-      matterId: 'matter-1',
-      matterTitle: 'Smith vs. Jones',
-      isRead: false,
-      createdAt: new Date(now.getTime() - 30 * 60000).toISOString(), // 30 min ago
-      priority: 'high' as NotificationPriority,
-    },
-    {
-      id: generateNotificationId(),
-      type: 'in_progress' as NotificationType,
-      title: 'OCR Processing',
-      message: 'Processing 5 new documents...',
-      matterId: 'matter-2',
-      matterTitle: 'Acme Corp Acquisition',
-      isRead: false,
-      createdAt: new Date(now.getTime() - 2 * 60000).toISOString(), // 2 min ago
-      priority: 'low' as NotificationPriority,
-    },
-    {
-      id: generateNotificationId(),
-      type: 'info' as NotificationType,
-      title: 'Matter Opened',
-      message: 'You opened matter "Acme Corp Acquisition".',
-      matterId: 'matter-2',
-      matterTitle: 'Acme Corp Acquisition',
-      isRead: true,
-      createdAt: new Date(now.getTime() - 60 * 60000).toISOString(), // 1 hour ago
-      priority: 'low' as NotificationPriority,
-    },
-    {
-      id: generateNotificationId(),
-      type: 'error' as NotificationType,
-      title: 'Upload Failed',
-      message: 'Failed to upload "LargeFile.pdf". File size exceeds limit.',
-      matterId: null,
-      matterTitle: null,
-      isRead: true,
-      createdAt: new Date(now.getTime() - 2 * 60 * 60000).toISOString(), // 2 hours ago
-      priority: 'high' as NotificationPriority,
-    },
-  ];
-}
-
-export const useNotificationStore = create<NotificationStore>()((set) => ({
+export const useNotificationStore = create<NotificationStore>()((set, get) => ({
   // Initial state
   notifications: [],
   unreadCount: 0,
@@ -141,26 +86,26 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
   fetchNotifications: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: Replace with actual API call when backend is available
-      // const response = await fetch('/api/notifications');
-      // const { data } = await response.json();
-
-      // Using mock data for now
-      await new Promise((resolve) => setTimeout(resolve, 300)); // Simulate network delay
-      const notifications = getMockNotifications();
+      // Story 14.10: Call real API
+      const { notifications, unreadCount } = await getNotifications({ limit: 20 });
 
       set({
         notifications,
-        unreadCount: calculateUnreadCount(notifications),
+        unreadCount,
         isLoading: false,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch notifications';
       set({ error: message, isLoading: false });
+      // Don't show toast on fetch error - it's noisy during polling
     }
   },
 
-  markAsRead: (notificationId: string) => {
+  markAsRead: async (notificationId: string) => {
+    // Optimistic update
+    const previousNotifications = get().notifications;
+    const previousUnreadCount = get().unreadCount;
+
     set((state) => {
       const notifications = state.notifications.map((n) =>
         n.id === notificationId ? { ...n, isRead: true } : n
@@ -171,11 +116,22 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
       };
     });
 
-    // TODO: Sync with backend when API is available
-    // await fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' });
+    try {
+      // Story 14.10: Sync with backend
+      await markNotificationRead(notificationId);
+    } catch (error) {
+      // Revert on error
+      set({ notifications: previousNotifications, unreadCount: previousUnreadCount });
+      const message = error instanceof Error ? error.message : 'Failed to mark notification as read';
+      toast.error(message);
+    }
   },
 
-  markAllAsRead: () => {
+  markAllAsRead: async () => {
+    // Optimistic update
+    const previousNotifications = get().notifications;
+    const previousUnreadCount = get().unreadCount;
+
     set((state) => {
       const notifications = state.notifications.map((n) => ({ ...n, isRead: true }));
       return {
@@ -184,8 +140,16 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
       };
     });
 
-    // TODO: Sync with backend when API is available
-    // await fetch('/api/notifications/read-all', { method: 'POST' });
+    try {
+      // Story 14.10: Sync with backend
+      await markAllNotificationsRead();
+    } catch (error) {
+      // Revert on error
+      set({ notifications: previousNotifications, unreadCount: previousUnreadCount });
+      const message =
+        error instanceof Error ? error.message : 'Failed to mark all notifications as read';
+      toast.error(message);
+    }
   },
 
   addNotification: (notification) => {

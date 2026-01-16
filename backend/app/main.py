@@ -25,6 +25,7 @@ from app.api.routes import (
     health,
     jobs,
     matters,
+    notifications,
     ocr_validation,
     search,
     summary,
@@ -32,6 +33,7 @@ from app.api.routes import (
     verifications,
 )
 from app.core.config import get_settings
+from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
 from app.core.rate_limit import limiter
 
@@ -122,7 +124,12 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Correlation-ID"],  # Allow frontend to access correlation ID
     )
+
+    # Add correlation ID middleware for distributed tracing (Story 13.1)
+    # This runs after CORS (middleware added last runs first)
+    app.add_middleware(CorrelationMiddleware)
 
     # Configure rate limiting
     app.state.limiter = limiter
@@ -152,6 +159,7 @@ def create_app() -> FastAPI:
     app.include_router(summary.router, prefix="/api")
     app.include_router(activity.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(notifications.router, prefix="/api")
 
     return app
 

@@ -1,6 +1,7 @@
 """Activity Service for managing user activity feed.
 
 Story 14.5: Dashboard Real APIs (Task 3)
+Story 14.10: Notification Integration (Task 5)
 
 Provides CRUD operations for activities.
 Activities are per-user (not per-matter) - users see activities from all their matters.
@@ -13,10 +14,53 @@ from functools import lru_cache
 
 import structlog
 
-from app.models.activity import ActivityCreate, ActivityRecord, ActivityTypeEnum
+from app.models.activity import ActivityRecord, ActivityTypeEnum
+from app.models.notification import NotificationPriorityEnum, NotificationTypeEnum
 from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Story 14.10: Activity → Notification Type Mapping (Task 5.2)
+# =============================================================================
+
+# Map activity types to notification types and titles
+# matter_opened is NOT mapped - too noisy for notifications (AC #6)
+ACTIVITY_TO_NOTIFICATION: dict[
+    ActivityTypeEnum, tuple[NotificationTypeEnum, str]
+] = {
+    ActivityTypeEnum.PROCESSING_COMPLETE: (
+        NotificationTypeEnum.SUCCESS,
+        "Processing Complete",
+    ),
+    ActivityTypeEnum.PROCESSING_STARTED: (
+        NotificationTypeEnum.IN_PROGRESS,
+        "Processing Started",
+    ),
+    ActivityTypeEnum.PROCESSING_FAILED: (
+        NotificationTypeEnum.ERROR,
+        "Processing Failed",
+    ),
+    ActivityTypeEnum.CONTRADICTIONS_FOUND: (
+        NotificationTypeEnum.WARNING,
+        "Contradictions Found",
+    ),
+    ActivityTypeEnum.VERIFICATION_NEEDED: (
+        NotificationTypeEnum.WARNING,
+        "Verification Needed",
+    ),
+    # matter_opened NOT mapped - activity feed only
+}
+
+# Map activity types to notification priorities
+ACTIVITY_TO_PRIORITY: dict[ActivityTypeEnum, NotificationPriorityEnum] = {
+    ActivityTypeEnum.PROCESSING_FAILED: NotificationPriorityEnum.HIGH,
+    ActivityTypeEnum.CONTRADICTIONS_FOUND: NotificationPriorityEnum.HIGH,
+    ActivityTypeEnum.VERIFICATION_NEEDED: NotificationPriorityEnum.MEDIUM,
+    ActivityTypeEnum.PROCESSING_COMPLETE: NotificationPriorityEnum.MEDIUM,
+    ActivityTypeEnum.PROCESSING_STARTED: NotificationPriorityEnum.LOW,
+}
 
 
 # =============================================================================
@@ -112,6 +156,7 @@ class ActivityService:
         """Create a new activity for a user.
 
         Story 14.5: AC #6 - Create activity when key events occur.
+        Story 14.10: AC #6 - Also creates corresponding notification.
 
         Args:
             user_id: User ID who owns this activity.
@@ -154,6 +199,14 @@ class ActivityService:
                 matter_id=matter_id,
                 type=type.value,
                 activity_id=row["id"],
+            )
+
+            # Story 14.10: Create corresponding notification (Task 5.1)
+            await self._create_notification_for_activity(
+                user_id=user_id,
+                matter_id=matter_id,
+                activity_type=type,
+                description=description,
             )
 
             return ActivityRecord(
@@ -382,6 +435,75 @@ class ActivityService:
             return 0
 
     # =========================================================================
+    # Story 14.10: Create Notification for Activity (Task 5.1)
+    # =========================================================================
+
+    async def _create_notification_for_activity(
+        self,
+        user_id: str,
+        activity_type: ActivityTypeEnum,
+        description: str,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create a notification corresponding to an activity.
+
+        Story 14.10: AC #6 - Create notification when activity is created.
+        Only creates notification for activity types that are mapped.
+        matter_opened is NOT mapped (too noisy for notifications).
+
+        Args:
+            user_id: User ID who will receive the notification.
+            activity_type: Activity type to map to notification type.
+            description: Activity description to use as notification message.
+            matter_id: Optional matter ID for matter-specific notifications.
+        """
+        # Check if this activity type should create a notification
+        if activity_type not in ACTIVITY_TO_NOTIFICATION:
+            logger.debug(
+                "skipping_notification_for_activity_type",
+                activity_type=activity_type.value,
+                reason="not_mapped",
+            )
+            return
+
+        notification_type, title = ACTIVITY_TO_NOTIFICATION[activity_type]
+        priority = ACTIVITY_TO_PRIORITY.get(
+            activity_type, NotificationPriorityEnum.MEDIUM
+        )
+
+        try:
+            notification_data = {
+                "user_id": user_id,
+                "matter_id": matter_id,
+                "type": notification_type.value,
+                "title": title,
+                "message": description,
+                "priority": priority.value,
+            }
+
+            await asyncio.to_thread(
+                lambda: self.supabase.table("notifications")
+                .insert(notification_data)
+                .execute()
+            )
+
+            logger.debug(
+                "notification_created_for_activity",
+                user_id=user_id,
+                activity_type=activity_type.value,
+                notification_type=notification_type.value,
+            )
+
+        except Exception as e:
+            # Log but don't fail - notifications are non-critical
+            logger.warning(
+                "notification_creation_failed",
+                user_id=user_id,
+                activity_type=activity_type.value,
+                error=str(e),
+            )
+
+    # =========================================================================
     # Task 6: Create Activities for Matter Members
     # =========================================================================
 
@@ -395,8 +517,9 @@ class ActivityService:
         """Create activities for all members of a matter.
 
         Story 14.5: AC #6 - Create activity when key events occur.
+        Story 14.10: AC #6 - Also creates corresponding notifications.
         Since background jobs don't have user context, this creates
-        activities for all matter members.
+        activities and notifications for all matter members.
 
         Args:
             matter_id: Matter ID to get members from.
@@ -454,6 +577,14 @@ class ActivityService:
                 created_count=created_count,
             )
 
+            # Story 14.10: Create notifications for all members (Task 5.1)
+            await self._create_notifications_for_matter_members(
+                matter_id=matter_id,
+                user_ids=user_ids,
+                activity_type=type,
+                description=description,
+            )
+
             return created_count
 
         except Exception as e:
@@ -464,6 +595,78 @@ class ActivityService:
                 error=str(e),
             )
             return 0
+
+    # =========================================================================
+    # Story 14.10: Create Notifications for Matter Members (Task 5.1)
+    # =========================================================================
+
+    async def _create_notifications_for_matter_members(
+        self,
+        matter_id: str,
+        user_ids: list[str],
+        activity_type: ActivityTypeEnum,
+        description: str,
+    ) -> None:
+        """Create notifications for all members of a matter.
+
+        Story 14.10: AC #6 - Create notifications when activities are created.
+        Only creates notifications for activity types that are mapped.
+
+        Args:
+            matter_id: Matter ID for matter-specific notifications.
+            user_ids: List of user IDs to create notifications for.
+            activity_type: Activity type to map to notification type.
+            description: Activity description to use as notification message.
+        """
+        # Check if this activity type should create a notification
+        if activity_type not in ACTIVITY_TO_NOTIFICATION:
+            logger.debug(
+                "skipping_notifications_for_activity_type",
+                activity_type=activity_type.value,
+                reason="not_mapped",
+            )
+            return
+
+        notification_type, title = ACTIVITY_TO_NOTIFICATION[activity_type]
+        priority = ACTIVITY_TO_PRIORITY.get(
+            activity_type, NotificationPriorityEnum.MEDIUM
+        )
+
+        try:
+            notifications_data = [
+                {
+                    "user_id": user_id,
+                    "matter_id": matter_id,
+                    "type": notification_type.value,
+                    "title": title,
+                    "message": description,
+                    "priority": priority.value,
+                }
+                for user_id in user_ids
+            ]
+
+            await asyncio.to_thread(
+                lambda: self.supabase.table("notifications")
+                .insert(notifications_data)
+                .execute()
+            )
+
+            logger.debug(
+                "notifications_created_for_matter_members",
+                matter_id=matter_id,
+                activity_type=activity_type.value,
+                notification_type=notification_type.value,
+                member_count=len(user_ids),
+            )
+
+        except Exception as e:
+            # Log but don't fail - notifications are non-critical
+            logger.warning(
+                "notifications_creation_failed_for_matter_members",
+                matter_id=matter_id,
+                activity_type=activity_type.value,
+                error=str(e),
+            )
 
 
 # =============================================================================

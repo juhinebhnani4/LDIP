@@ -219,6 +219,9 @@ export function TimelineContent({ className }: TimelineContentProps) {
     [matterId, deleteEvent, refreshTimeline, refreshStats]
   );
 
+  // Calculate active filter count for display
+  const activeFilterCount = countActiveFilters(filters);
+
   // Render the appropriate view based on mode
   const renderTimelineView = () => {
     // Use filtered events for display
@@ -252,6 +255,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
             events={displayEvents}
             isLoading={eventsLoading}
             isError={eventsError || statsError}
+            hasFiltersApplied={activeFilterCount > 0}
             onEditEvent={handleEditEvent}
             onDeleteEvent={handleDeleteEvent}
             className="mt-4"
@@ -259,9 +263,6 @@ export function TimelineContent({ className }: TimelineContentProps) {
         );
     }
   };
-
-  // Calculate active filter count for display
-  const activeFilterCount = countActiveFilters(filters);
 
   return (
     <div

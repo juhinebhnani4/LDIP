@@ -31,6 +31,8 @@ interface TimelineListProps {
   isError?: boolean;
   /** Error message to display */
   errorMessage?: string;
+  /** Whether filters are currently applied (shows different empty state) */
+  hasFiltersApplied?: boolean;
   /** Callback when edit is clicked on an event */
   onEditEvent?: (event: TimelineEvent) => void;
   /** Callback when delete is clicked on a manual event */
@@ -77,22 +79,26 @@ function YearSeparator({ year }: { year: number }) {
 
 /**
  * Empty State Component
+ * Shows different messages based on whether filters are applied
  */
-function EmptyState() {
+function EmptyState({ hasFiltersApplied }: { hasFiltersApplied?: boolean }) {
   return (
     <div
       className="flex flex-col items-center justify-center py-12 text-center"
       role="status"
-      aria-label="No events found"
+      aria-label={hasFiltersApplied ? 'No matching events' : 'No events found'}
     >
       <Clock
         className="h-12 w-12 text-muted-foreground mb-4"
         aria-hidden="true"
       />
-      <h3 className="text-lg font-medium">No Events Found</h3>
+      <h3 className="text-lg font-medium">
+        {hasFiltersApplied ? 'No Matching Events' : 'No Events Found'}
+      </h3>
       <p className="text-sm text-muted-foreground mt-2 max-w-md">
-        Timeline events will appear here once documents are processed and dates
-        are extracted.
+        {hasFiltersApplied
+          ? 'No events match your current filters. Try adjusting or clearing your filters.'
+          : 'Timeline events will appear here once documents are processed and dates are extracted.'}
       </p>
     </div>
   );
@@ -145,6 +151,7 @@ export function TimelineList({
   isLoading,
   isError,
   errorMessage,
+  hasFiltersApplied,
   onEditEvent,
   onDeleteEvent,
   className,
@@ -170,7 +177,7 @@ export function TimelineList({
 
   // Handle empty state
   if (events.length === 0) {
-    return <EmptyState />;
+    return <EmptyState hasFiltersApplied={hasFiltersApplied} />;
   }
 
   return (

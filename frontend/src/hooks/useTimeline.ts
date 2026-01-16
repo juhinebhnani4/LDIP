@@ -2,7 +2,7 @@
  * Timeline Hook
  *
  * SWR hook for fetching timeline data with entity information.
- * Uses mock data for MVP - actual API integration exists.
+ * Connected to real backend API at /api/matters/{matterId}/timeline/full
  *
  * Story 10B.3: Timeline Tab Vertical List View
  * Story 10B.5: Timeline Filtering and Manual Event Addition
@@ -16,191 +16,6 @@ import type {
   UseTimelineOptions,
   TimelineFilterState,
 } from '@/types/timeline';
-
-/** Mock data for MVP - demonstrates UI functionality */
-const MOCK_EVENTS: TimelineEvent[] = [
-  {
-    id: 'evt-1',
-    eventDate: '2016-05-15',
-    eventDatePrecision: 'day',
-    eventDateText: '15th May 2016',
-    eventType: 'filing',
-    description:
-      'RTI Application filed by Nirav D. Jobalia requesting disclosure of infrastructure development contracts.',
-    documentId: 'doc-1',
-    sourcePage: 1,
-    confidence: 0.95,
-    entities: [
-      {
-        entityId: 'ent-1',
-        canonicalName: 'Nirav D. Jobalia',
-        entityType: 'PERSON',
-        role: 'petitioner',
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: true,
-  },
-  {
-    id: 'evt-2',
-    eventDate: '2016-06-10',
-    eventDatePrecision: 'day',
-    eventDateText: '10th June 2016',
-    eventType: 'notice',
-    description:
-      'Notice issued to Custodian of Records requesting response within 30 days.',
-    documentId: 'doc-2',
-    sourcePage: 1,
-    confidence: 0.92,
-    entities: [
-      {
-        entityId: 'ent-2',
-        canonicalName: 'Custodian of Records',
-        entityType: 'ORG',
-        role: 'respondent',
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: false,
-  },
-  {
-    id: 'evt-3',
-    eventDate: '2018-02-20',
-    eventDatePrecision: 'day',
-    eventDateText: '20th February 2018',
-    eventType: 'order',
-    description:
-      'Court order directing respondent to provide detailed response on exemption claims.',
-    documentId: 'doc-3',
-    sourcePage: 2,
-    confidence: 0.98,
-    entities: [
-      {
-        entityId: 'ent-3',
-        canonicalName: 'Special Court, Ahmedabad',
-        entityType: 'INSTITUTION',
-        role: null,
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: true,
-  },
-  {
-    id: 'evt-4',
-    eventDate: '2018-03-15',
-    eventDatePrecision: 'day',
-    eventDateText: '15th March 2018',
-    eventType: 'hearing',
-    description:
-      'Hearing held for arguments on Section 8 exemption applicability.',
-    documentId: 'doc-4',
-    sourcePage: 1,
-    confidence: 0.88,
-    entities: [
-      {
-        entityId: 'ent-1',
-        canonicalName: 'Nirav D. Jobalia',
-        entityType: 'PERSON',
-        role: 'petitioner',
-      },
-      {
-        entityId: 'ent-2',
-        canonicalName: 'Custodian of Records',
-        entityType: 'ORG',
-        role: 'respondent',
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: false,
-    hasContradiction: true,
-    contradictionDetails:
-      'Respondent claims documents were provided, petitioner disputes this.',
-  },
-  {
-    id: 'evt-5',
-    eventDate: '2020-08-01',
-    eventDatePrecision: 'month',
-    eventDateText: 'August 2020',
-    eventType: 'transaction',
-    description:
-      'Infrastructure contract #IC-2020-045 executed for highway development project.',
-    documentId: 'doc-5',
-    sourcePage: 12,
-    confidence: 0.75,
-    entities: [
-      {
-        entityId: 'ent-4',
-        canonicalName: 'Gujarat State Road Corp',
-        entityType: 'ORG',
-        role: null,
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: false,
-  },
-  {
-    id: 'evt-6',
-    eventDate: '2023-01-10',
-    eventDatePrecision: 'day',
-    eventDateText: '10th January 2023',
-    eventType: 'deadline',
-    description:
-      'Statutory deadline for filing response to RTI appeal under Section 19.',
-    documentId: 'doc-6',
-    sourcePage: 1,
-    confidence: 0.93,
-    entities: [],
-    isAmbiguous: false,
-    isVerified: true,
-  },
-  {
-    id: 'evt-7',
-    eventDate: '2024-01-15',
-    eventDatePrecision: 'day',
-    eventDateText: '15th January 2024',
-    eventType: 'order',
-    description:
-      'Final order issued directing partial disclosure of non-exempt documents within 30 days.',
-    documentId: 'doc-7',
-    sourcePage: 5,
-    confidence: 0.97,
-    entities: [
-      {
-        entityId: 'ent-3',
-        canonicalName: 'Special Court, Ahmedabad',
-        entityType: 'INSTITUTION',
-        role: null,
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: true,
-  },
-  // Manual event example for Story 10B.5
-  {
-    id: 'evt-8',
-    eventDate: '2017-09-20',
-    eventDatePrecision: 'day',
-    eventDateText: '20th September 2017',
-    eventType: 'filing',
-    description:
-      'Supplementary RTI application filed to include additional contract details.',
-    documentId: null,
-    sourcePage: null,
-    confidence: 1.0,
-    entities: [
-      {
-        entityId: 'ent-1',
-        canonicalName: 'Nirav D. Jobalia',
-        entityType: 'PERSON',
-        role: 'petitioner',
-      },
-    ],
-    isAmbiguous: false,
-    isVerified: false,
-    isManual: true,
-    createdBy: 'user-123',
-  },
-];
 
 /**
  * Convert snake_case API response to camelCase frontend types
@@ -286,62 +101,27 @@ function applyFilters(
 }
 
 /**
- * Mock fetcher for MVP - simulates API call
- * TODO: Replace with actual API call when ready
- */
-async function mockFetcher(url: string): Promise<TimelineResponse> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 600));
-
-  // Parse URL to get page and perPage
-  const urlObj = new URL(url, 'http://localhost');
-  const page = parseInt(urlObj.searchParams.get('page') ?? '1', 10);
-  const perPage = parseInt(urlObj.searchParams.get('per_page') ?? '50', 10);
-
-  // Apply pagination to mock data
-  const total = MOCK_EVENTS.length;
-  const totalPages = Math.ceil(total / perPage);
-  const start = (page - 1) * perPage;
-  const end = start + perPage;
-  const paginatedEvents = MOCK_EVENTS.slice(start, end);
-
-  return {
-    data: paginatedEvents,
-    meta: {
-      total,
-      page,
-      perPage,
-      totalPages,
-    },
-  };
-}
-
-/**
  * Real fetcher for production - transforms snake_case to camelCase
- * TODO(Story-10B.5): Enable this when backend API is verified and working
+ * Uses the API client for proper auth handling
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function realFetcher(url: string): Promise<TimelineResponse> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error('Failed to fetch timeline');
-  }
-  const json = await res.json();
+async function fetcher(url: string): Promise<TimelineResponse> {
+  const { api } = await import('@/lib/api/client');
+  const response = await api.get<{
+    data: Record<string, unknown>[];
+    meta: { total: number; page: number; per_page: number; total_pages: number };
+  }>(url);
 
   // Transform snake_case API response to camelCase
   return {
-    data: json.data.map(transformEvent),
+    data: response.data.map(transformEvent),
     meta: {
-      total: json.meta.total,
-      page: json.meta.page,
-      perPage: json.meta.per_page,
-      totalPages: json.meta.total_pages,
+      total: response.meta.total,
+      page: response.meta.page,
+      perPage: response.meta.per_page,
+      totalPages: response.meta.total_pages,
     },
   };
 }
-
-// TODO(Story-10B.5): Switch to realFetcher when backend API is verified
-const fetcher = mockFetcher;
 
 /**
  * Extended options for useTimeline hook with filtering

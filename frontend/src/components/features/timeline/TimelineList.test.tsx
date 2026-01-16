@@ -139,6 +139,32 @@ describe('TimelineList', () => {
         screen.getByRole('status', { name: /no events found/i })
       ).toBeInTheDocument();
     });
+
+    it('shows filtered empty state when hasFiltersApplied is true', () => {
+      render(<TimelineList events={[]} hasFiltersApplied />);
+
+      expect(screen.getByText('No Matching Events')).toBeInTheDocument();
+      expect(
+        screen.getByText(/no events match your current filters/i)
+      ).toBeInTheDocument();
+    });
+
+    it('has appropriate status role for filtered empty state', () => {
+      render(<TimelineList events={[]} hasFiltersApplied />);
+
+      expect(
+        screen.getByRole('status', { name: /no matching events/i })
+      ).toBeInTheDocument();
+    });
+
+    it('shows default empty state when hasFiltersApplied is false', () => {
+      render(<TimelineList events={[]} hasFiltersApplied={false} />);
+
+      expect(screen.getByText('No Events Found')).toBeInTheDocument();
+      expect(
+        screen.getByText(/timeline events will appear here/i)
+      ).toBeInTheDocument();
+    });
   });
 
   describe('loading state', () => {

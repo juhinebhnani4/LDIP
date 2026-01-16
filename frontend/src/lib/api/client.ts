@@ -274,7 +274,7 @@ export const timelineEventApi = {
     request: ManualEventCreateRequest
   ): Promise<ManualEventResponse> => {
     const response = await api.post<Record<string, unknown>>(
-      `/api/v1/matters/${matterId}/timeline/events`,
+      `/api/matters/${matterId}/timeline/events`,
       toSnakeCaseManualEvent(request)
     )
     return fromSnakeCaseManualEvent(response)
@@ -291,7 +291,7 @@ export const timelineEventApi = {
     request: ManualEventUpdateRequest
   ): Promise<ManualEventResponse> => {
     const response = await api.patch<Record<string, unknown>>(
-      `/api/v1/matters/${matterId}/timeline/events/${eventId}`,
+      `/api/matters/${matterId}/timeline/events/${eventId}`,
       toSnakeCaseManualEventUpdate(request)
     )
     return fromSnakeCaseManualEvent(response)
@@ -302,7 +302,7 @@ export const timelineEventApi = {
    * Only manual events can be deleted.
    */
   delete: async (matterId: string, eventId: string): Promise<void> => {
-    await api.delete<void>(`/api/v1/matters/${matterId}/timeline/events/${eventId}`)
+    await api.delete<void>(`/api/matters/${matterId}/timeline/events/${eventId}`)
   },
 
   /**
@@ -314,15 +314,9 @@ export const timelineEventApi = {
     isVerified: boolean
   ): Promise<ManualEventResponse> => {
     const response = await api.patch<Record<string, unknown>>(
-      `/api/v1/matters/${matterId}/timeline/events/${eventId}/verify`,
+      `/api/matters/${matterId}/timeline/events/${eventId}/verify`,
       { is_verified: isVerified }
     )
     return fromSnakeCaseManualEvent(response)
   },
 }
-
-
-
-
-
-

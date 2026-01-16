@@ -198,12 +198,12 @@ development_status:
   12-1-export-modal-section-selection: done  # Code review complete 2026-01-16
   12-2-inline-editing-preview: done  # Code review complete 2026-01-16 - 11 issues fixed
   12-3-verification-check-format-generation: done  # Code review complete 2026-01-16 - 10 issues fixed, 29 tests total (14 BE + 15 FE)
-  12-4-partner-executive-summary: backlog
+  12-4-partner-executive-summary: review  # Implementation complete 2026-01-16 - 39 tests (26 BE + 13 FE), ready for code review
   epic-12-retrospective: optional
 
   # Epic 13: Observability & Production Hardening
-  epic-13: backlog
-  13-1-axiom-logging-integration: backlog
+  epic-13: in-progress  # First story created 2026-01-16
+  13-1-axiom-logging-integration: ready-for-dev  # Story file created 2026-01-16
   13-2-circuit-breakers-tenacity: backlog
   13-3-rate-limiting-slowapi: backlog
   13-4-graceful-degradation-error-states: backlog
@@ -228,7 +228,7 @@ development_status:
 
   # MEDIUM PRIORITY GAPS (Deferred but tracked)
   14-7-anomaly-auto-trigger: done  # Code review complete 2026-01-16 - 7 issues fixed, 20 tests passing
-  14-8-timeline-real-api: backlog           # Switch from mock to real API in useTimeline hooks (Story 10B.5)
+  14-8-timeline-real-api: done       # Code review complete 2026-01-16 - 11 API tests, all review issues fixed
 
   # FRONTEND-BACKEND WIRING GAPS (Added 2026-01-16 via Course Correction)
   # FR Sources: Story 9.1 (notifications, search), Story 10A.1 (share), Story 10A.2 (tab stats)

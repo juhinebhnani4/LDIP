@@ -1095,6 +1095,7 @@ def link_entities_for_matter(
                 logger.info(
                     "auto_triggering_anomaly_detection",
                     matter_id=matter_id,
+                    events_processed=total_events,
                     events_linked=events_with_links,
                 )
                 detect_timeline_anomalies.delay(
@@ -1204,13 +1205,41 @@ def link_entities_after_extraction(
         )
 
         if not entities:
-            return {
+            # No MIG entities, but still trigger anomaly detection for timeline events
+            # Events could have sequence/gap anomalies even without entity links
+            result = {
                 "status": "completed",
                 "document_id": document_id,
                 "events_processed": len(events),
                 "events_linked": 0,
                 "reason": "no_mig_entities",
             }
+            # Trigger anomaly detection if there are events to analyze (Story 14-7)
+            if len(events) > 0:
+                try:
+                    logger.info(
+                        "auto_triggering_anomaly_detection",
+                        document_id=document_id,
+                        matter_id=matter_id,
+                        events_processed=len(events),
+                        events_linked=0,
+                        reason="no_mig_entities_but_events_exist",
+                    )
+                    detect_timeline_anomalies.delay(
+                        matter_id=matter_id,
+                        force_redetect=False,
+                        job_id=None,
+                    )
+                    result["anomaly_detection_queued"] = True
+                except Exception as e:
+                    logger.warning(
+                        "anomaly_detection_trigger_failed",
+                        document_id=document_id,
+                        matter_id=matter_id,
+                        error=str(e),
+                    )
+                    result["anomaly_detection_queued"] = False
+            return result
 
         # Link entities
         events_linked = 0
@@ -1254,12 +1283,14 @@ def link_entities_after_extraction(
         }
 
         # Auto-trigger anomaly detection for incremental processing (Story 14-7)
-        if events_linked > 0:
+        # Trigger when events exist (even without links) - consistent with link_entities_for_matter
+        if events_linked > 0 or len(events) > 0:
             try:
                 logger.info(
-                    "auto_triggering_anomaly_detection_incremental",
+                    "auto_triggering_anomaly_detection",
                     document_id=document_id,
                     matter_id=matter_id,
+                    events_processed=len(events),
                     events_linked=events_linked,
                 )
                 detect_timeline_anomalies.delay(
@@ -1297,6 +1328,10 @@ def link_entities_after_extraction(
             }
 
         raise
+
+    finally:
+        # Clean up event loop at end of task (consistency with link_entities_for_matter)
+        _cleanup_task_loop()
 
 
 # =============================================================================

@@ -341,7 +341,7 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
     @patch("app.workers.tasks.engine_tasks.get_event_entity_linker")
     @patch("app.workers.tasks.engine_tasks.get_mig_graph_service")
     @patch("app.workers.tasks.engine_tasks.get_timeline_service")
-    def test_does_not_trigger_when_no_events_linked(
+    def test_triggers_when_events_exist_but_no_links_made(
         self,
         mock_get_timeline: MagicMock,
         mock_get_mig: MagicMock,
@@ -350,7 +350,10 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
         mock_detect_anomalies: MagicMock,
         mock_services: dict,
     ) -> None:
-        """Should not trigger when no events were linked."""
+        """Should trigger anomaly detection when events exist even if no links made.
+
+        Events without entity links can still have sequence/gap anomalies.
+        """
         from app.workers.tasks.engine_tasks import link_entities_after_extraction
 
         # Setup mocks
@@ -382,11 +385,116 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
             matter_id="matter-123",
         )
 
-        # Verify anomaly detection was NOT triggered
+        # Verify anomaly detection WAS triggered (events exist even if no links)
+        mock_detect_anomalies.delay.assert_called_once_with(
+            matter_id="matter-123",
+            force_redetect=False,
+            job_id=None,
+        )
+
+        # Result should have anomaly_detection_queued = True
+        assert result["anomaly_detection_queued"] is True
+        assert result["events_linked"] == 0
+        assert result["events_processed"] == 1
+
+    @patch("app.workers.tasks.engine_tasks.detect_timeline_anomalies")
+    @patch("app.workers.tasks.engine_tasks.get_timeline_cache_service")
+    @patch("app.workers.tasks.engine_tasks.get_event_entity_linker")
+    @patch("app.workers.tasks.engine_tasks.get_mig_graph_service")
+    @patch("app.workers.tasks.engine_tasks.get_timeline_service")
+    def test_triggers_when_no_mig_entities_but_events_exist(
+        self,
+        mock_get_timeline: MagicMock,
+        mock_get_mig: MagicMock,
+        mock_get_linker: MagicMock,
+        mock_get_cache: MagicMock,
+        mock_detect_anomalies: MagicMock,
+        mock_services: dict,
+    ) -> None:
+        """Should trigger anomaly detection when no MIG entities but events exist.
+
+        Matters without MIG entities can still have timeline events with anomalies.
+        """
+        from app.workers.tasks.engine_tasks import link_entities_after_extraction
+
+        # Setup mocks
+        mock_get_timeline.return_value = mock_services["timeline_service"]
+        mock_get_mig.return_value = mock_services["mig_service"]
+        mock_get_linker.return_value = mock_services["entity_linker"]
+        mock_get_cache.return_value = mock_services["cache_service"]
+
+        # Create mock event
+        mock_event = MagicMock()
+        mock_event.id = "event-1"
+        mock_event.description = "Test event"
+        mock_event.document_id = "doc-123"
+        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
+            mock_event
+        ]
+
+        # No MIG entities
+        mock_services["mig_service"].get_entities_by_matter = AsyncMock(
+            return_value=([], 0)
+        )
+
+        # Execute task
+        result = link_entities_after_extraction.run(
+            document_id="doc-123",
+            matter_id="matter-123",
+        )
+
+        # Verify anomaly detection WAS triggered
+        mock_detect_anomalies.delay.assert_called_once_with(
+            matter_id="matter-123",
+            force_redetect=False,
+            job_id=None,
+        )
+
+        # Result should indicate success with anomaly detection queued
+        assert result["status"] == "completed"
+        assert result["reason"] == "no_mig_entities"
+        assert result["anomaly_detection_queued"] is True
+        assert result["events_processed"] == 1
+        assert result["events_linked"] == 0
+
+    @patch("app.workers.tasks.engine_tasks.detect_timeline_anomalies")
+    @patch("app.workers.tasks.engine_tasks.get_timeline_cache_service")
+    @patch("app.workers.tasks.engine_tasks.get_event_entity_linker")
+    @patch("app.workers.tasks.engine_tasks.get_mig_graph_service")
+    @patch("app.workers.tasks.engine_tasks.get_timeline_service")
+    def test_does_not_trigger_when_no_events(
+        self,
+        mock_get_timeline: MagicMock,
+        mock_get_mig: MagicMock,
+        mock_get_linker: MagicMock,
+        mock_get_cache: MagicMock,
+        mock_detect_anomalies: MagicMock,
+        mock_services: dict,
+    ) -> None:
+        """Should not trigger when no events exist for the document."""
+        from app.workers.tasks.engine_tasks import link_entities_after_extraction
+
+        # Setup mocks
+        mock_get_timeline.return_value = mock_services["timeline_service"]
+        mock_get_mig.return_value = mock_services["mig_service"]
+        mock_get_linker.return_value = mock_services["entity_linker"]
+        mock_get_cache.return_value = mock_services["cache_service"]
+
+        # No events for this document
+        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = []
+
+        # Execute task
+        result = link_entities_after_extraction.run(
+            document_id="doc-123",
+            matter_id="matter-123",
+        )
+
+        # Verify anomaly detection was NOT triggered (no events)
         mock_detect_anomalies.delay.assert_not_called()
 
         # Result should not have anomaly_detection_queued key
         assert "anomaly_detection_queued" not in result
+        assert result["events_processed"] == 0
         assert result["events_linked"] == 0
 
 

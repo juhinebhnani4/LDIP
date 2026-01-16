@@ -1,6 +1,6 @@
 # Story 14.7: Anomaly Detection Auto-Trigger
 
-Status: review
+Status: done
 
 ## Story
 
@@ -308,12 +308,22 @@ N/A
    - Unit tests: TestLinkEntitiesForMatterAnomalyTrigger (4 tests), TestLinkEntitiesAfterExtractionAnomalyTrigger (2 tests), TestDetectTimelineAnomaliesJobCreation (2 tests), TestAnomalyTriggerGracefulFailure (2 tests), TestManualRetriggerAfterAutoTriggerFailure (1 test)
    - Integration tests: Full pipeline flow, job creation, anomaly storage, sequence/gap detection, idempotency
 
+4. **Code Review Fixes (2026-01-16)**
+   - **Issue #1 FIXED**: Added missing `_cleanup_task_loop()` to `link_entities_after_extraction` finally block
+   - **Issue #2 FIXED**: Aligned trigger conditions - both tasks now trigger when `events > 0` (not just when links made)
+   - **Issue #3 FIXED**: Added anomaly detection trigger to `no_mig_entities` early return path
+   - **Issue #4 NOTED**: AC#3 scoped detection is at matter level (per "where practical" qualifier) - full scoped detection would require significant anomaly detector changes
+   - **Issue #5 FIXED**: Added 2 new tests for `no_mig_entities` and `events_exist_but_no_links` cases
+   - **Issue #6 FIXED**: Aligned log messages to include `events_processed` and `events_linked` consistently
+   - **Issue #7 NOTED**: Line numbers in Dev Notes are approximate references
+   - All 20 tests passing after fixes (13 unit tests + 7 integration tests)
+
 ### File List
 
 **Modified:**
-- [backend/app/workers/tasks/engine_tasks.py](backend/app/workers/tasks/engine_tasks.py) - Added auto-trigger logic to `link_entities_for_matter` (lines 1091-1114), `link_entities_after_extraction` (lines 1256-1279), and job creation in `detect_timeline_anomalies` (lines 1346-1362)
+- [backend/app/workers/tasks/engine_tasks.py](backend/app/workers/tasks/engine_tasks.py) - Auto-trigger logic in `link_entities_for_matter` (lines ~1091-1115), `link_entities_after_extraction` (lines ~1206-1311 including no_mig_entities path), job creation in `detect_timeline_anomalies` (lines ~1349-1366)
 
 **Created:**
-- [backend/tests/workers/test_engine_tasks_anomaly_trigger.py](backend/tests/workers/test_engine_tasks_anomaly_trigger.py) - 11 unit tests for auto-trigger functionality
+- [backend/tests/workers/test_engine_tasks_anomaly_trigger.py](backend/tests/workers/test_engine_tasks_anomaly_trigger.py) - 13 unit tests for auto-trigger functionality (including 2 new edge case tests)
 - [backend/tests/integration/test_timeline_pipeline_with_anomalies.py](backend/tests/integration/test_timeline_pipeline_with_anomalies.py) - 7 integration tests for full pipeline
 

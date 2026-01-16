@@ -13,9 +13,12 @@
  *   const { tabCounts, tabProcessingStatus, fetchTabStats } = useWorkspaceStore();
  *
  * Story 10A.2: Tab Bar Navigation
+ * Story 14.12: Tab Stats API - Wired to real backend
  */
 
 import { create } from 'zustand';
+
+import { fetchTabStats as fetchTabStatsApi, transformTabStatsResponse } from '@/lib/api/tabStats';
 
 /**
  * Tab ID type - must match route segments
@@ -135,36 +138,19 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
     set({ isLoadingTabStats: true, tabStatsError: null, currentMatterId: matterId });
 
     try {
-      // TODO: Replace with actual API call
-      // GET /api/matters/{matter_id}/tab-stats
+      // Story 14.12: Call real API endpoint
+      const response = await fetchTabStatsApi(matterId);
+      const { tabCounts, tabProcessingStatus } = transformTabStatsResponse(response);
 
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Mock data for MVP
       set({
-        tabCounts: {
-          summary: { count: 1, issueCount: 0 },
-          timeline: { count: 24, issueCount: 0 },
-          entities: { count: 18, issueCount: 2 },
-          citations: { count: 45, issueCount: 3 },
-          contradictions: { count: 7, issueCount: 7 },
-          verification: { count: 12, issueCount: 5 },
-          documents: { count: 8, issueCount: 0 },
-        },
-        tabProcessingStatus: {
-          summary: 'ready',
-          timeline: 'ready',
-          entities: 'ready',
-          citations: 'ready',
-          contradictions: 'ready',
-          verification: 'ready',
-          documents: 'ready',
-        },
+        tabCounts,
+        tabProcessingStatus,
         isLoadingTabStats: false,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch tab stats';
+      // Log error but don't block UI - tabs will show without counts
+      console.error('Tab stats fetch failed:', message);
       set({ tabStatsError: message, isLoadingTabStats: false });
     }
   },

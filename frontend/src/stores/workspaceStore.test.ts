@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import {
   useWorkspaceStore,
@@ -8,12 +8,52 @@ import {
 } from './workspaceStore';
 import type { TabId, TabStats, TabProcessingStatus } from './workspaceStore';
 
+// Story 14.12: Mock the tabStats API module
+vi.mock('@/lib/api/tabStats', () => ({
+  fetchTabStats: vi.fn(),
+  transformTabStatsResponse: vi.fn((response) => ({
+    tabCounts: response.data.tabCounts,
+    tabProcessingStatus: response.data.tabProcessingStatus,
+  })),
+}));
+
+import { fetchTabStats } from '@/lib/api/tabStats';
+const mockFetchTabStats = vi.mocked(fetchTabStats);
+
+// Mock API response data factory
+const createMockApiResponse = () => ({
+  data: {
+    tabCounts: {
+      summary: { count: 1, issueCount: 0 },
+      timeline: { count: 24, issueCount: 0 },
+      entities: { count: 18, issueCount: 2 },
+      citations: { count: 45, issueCount: 3 },
+      contradictions: { count: 7, issueCount: 7 },
+      verification: { count: 12, issueCount: 5 },
+      documents: { count: 8, issueCount: 0 },
+    },
+    tabProcessingStatus: {
+      summary: 'ready' as const,
+      timeline: 'ready' as const,
+      entities: 'ready' as const,
+      citations: 'ready' as const,
+      contradictions: 'ready' as const,
+      verification: 'ready' as const,
+      documents: 'ready' as const,
+    },
+  },
+});
+
 describe('workspaceStore', () => {
   beforeEach(() => {
     // Reset store state before each test
     act(() => {
       useWorkspaceStore.getState().resetWorkspace();
     });
+    // Reset all mocks
+    vi.clearAllMocks();
+    // Setup default mock response
+    mockFetchTabStats.mockResolvedValue(createMockApiResponse());
   });
 
   describe('Initial State', () => {
@@ -185,25 +225,32 @@ describe('workspaceStore', () => {
       expect(useWorkspaceStore.getState().currentMatterId).toBe('matter-456');
     });
 
-    it('populates tab counts with mock data', async () => {
+    it('calls API with correct matter ID', async () => {
+      await useWorkspaceStore.getState().fetchTabStats('matter-123');
+
+      expect(mockFetchTabStats).toHaveBeenCalledWith('matter-123');
+    });
+
+    it('populates tab counts from API response', async () => {
       await useWorkspaceStore.getState().fetchTabStats('matter-123');
 
       const state = useWorkspaceStore.getState();
-      expect(state.tabCounts.summary).toBeDefined();
-      expect(state.tabCounts.timeline).toBeDefined();
-      expect(state.tabCounts.entities).toBeDefined();
-      expect(state.tabCounts.citations).toBeDefined();
-      expect(state.tabCounts.contradictions).toBeDefined();
-      expect(state.tabCounts.verification).toBeDefined();
-      expect(state.tabCounts.documents).toBeDefined();
+      expect(state.tabCounts.summary).toEqual({ count: 1, issueCount: 0 });
+      expect(state.tabCounts.timeline).toEqual({ count: 24, issueCount: 0 });
+      expect(state.tabCounts.entities).toEqual({ count: 18, issueCount: 2 });
+      expect(state.tabCounts.citations).toEqual({ count: 45, issueCount: 3 });
+      expect(state.tabCounts.contradictions).toEqual({ count: 7, issueCount: 7 });
+      expect(state.tabCounts.verification).toEqual({ count: 12, issueCount: 5 });
+      expect(state.tabCounts.documents).toEqual({ count: 8, issueCount: 0 });
     });
 
-    it('populates tab processing status with mock data', async () => {
+    it('populates tab processing status from API response', async () => {
       await useWorkspaceStore.getState().fetchTabStats('matter-123');
 
       const state = useWorkspaceStore.getState();
       expect(state.tabProcessingStatus.summary).toBe('ready');
       expect(state.tabProcessingStatus.timeline).toBe('ready');
+      expect(state.tabProcessingStatus.documents).toBe('ready');
     });
 
     it('clears error on successful fetch', async () => {
@@ -214,6 +261,46 @@ describe('workspaceStore', () => {
       await useWorkspaceStore.getState().fetchTabStats('matter-123');
 
       expect(useWorkspaceStore.getState().tabStatsError).toBeNull();
+    });
+
+    it('handles API error gracefully', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetchTabStats.mockRejectedValue(new Error('Network error'));
+
+      await useWorkspaceStore.getState().fetchTabStats('matter-123');
+
+      const state = useWorkspaceStore.getState();
+      expect(state.tabStatsError).toBe('Network error');
+      expect(state.isLoadingTabStats).toBe(false);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('skips fetch if data already loaded for same matter', async () => {
+      // First fetch
+      await useWorkspaceStore.getState().fetchTabStats('matter-123');
+      mockFetchTabStats.mockClear();
+
+      // Second fetch for same matter should skip
+      await useWorkspaceStore.getState().fetchTabStats('matter-123');
+
+      expect(mockFetchTabStats).not.toHaveBeenCalled();
+    });
+
+    it('fetches again for different matter', async () => {
+      // First fetch
+      await useWorkspaceStore.getState().fetchTabStats('matter-123');
+      mockFetchTabStats.mockClear();
+
+      // Reset to allow fetch for new matter
+      act(() => {
+        useWorkspaceStore.setState({ tabCounts: {} });
+      });
+
+      // Second fetch for different matter should proceed
+      await useWorkspaceStore.getState().fetchTabStats('matter-456');
+
+      expect(mockFetchTabStats).toHaveBeenCalledWith('matter-456');
     });
   });
 

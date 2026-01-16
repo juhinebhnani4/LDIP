@@ -1,3 +1,11 @@
+/**
+ * Activity Store Tests
+ *
+ * Story 14.5: Dashboard Real APIs
+ *
+ * Tests for activity store with mocked API calls.
+ */
+
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
   useActivityStore,
@@ -6,9 +14,57 @@ import {
   selectUnreadCount,
   selectActivitiesByMatter,
 } from './activityStore';
-import type { ActivityType } from '@/types/activity';
+import type { Activity, ActivityType, DashboardStats } from '@/types/activity';
+import * as activityApiModule from '@/lib/api/activity';
+
+// Mock the API module
+vi.mock('@/lib/api/activity', () => ({
+  activityApi: {
+    list: vi.fn(),
+    markRead: vi.fn(),
+  },
+  dashboardApi: {
+    getStats: vi.fn(),
+  },
+}));
+
+// Create mock activity data
+function createMockActivity(
+  overrides: Partial<Activity> = {}
+): Activity {
+  return {
+    id: `activity_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    matterId: 'mock-matter-id',
+    matterName: 'Mock Matter',
+    type: 'processing_complete' as ActivityType,
+    description: 'Mock activity',
+    timestamp: new Date().toISOString(),
+    isRead: false,
+    ...overrides,
+  };
+}
+
+// Create mock stats data
+function createMockStats(
+  overrides: Partial<DashboardStats> = {}
+): DashboardStats {
+  return {
+    activeMatters: 5,
+    verifiedFindings: 127,
+    pendingReviews: 3,
+    ...overrides,
+  };
+}
 
 describe('activityStore', () => {
+  const mockActivityApi = activityApiModule.activityApi as {
+    list: ReturnType<typeof vi.fn>;
+    markRead: ReturnType<typeof vi.fn>;
+  };
+  const mockDashboardApi = activityApiModule.dashboardApi as {
+    getStats: ReturnType<typeof vi.fn>;
+  };
+
   beforeEach(() => {
     // Reset store state before each test
     useActivityStore.setState({
@@ -19,6 +75,22 @@ describe('activityStore', () => {
       error: null,
       statsLastFetched: null,
     });
+
+    // Reset mocks
+    vi.clearAllMocks();
+
+    // Setup default successful responses
+    mockActivityApi.list.mockResolvedValue({
+      activities: [
+        createMockActivity({ id: 'activity-1', isRead: false }),
+        createMockActivity({ id: 'activity-2', isRead: true }),
+      ],
+      total: 2,
+    });
+    mockActivityApi.markRead.mockResolvedValue(
+      createMockActivity({ id: 'activity-1', isRead: true })
+    );
+    mockDashboardApi.getStats.mockResolvedValue(createMockStats());
   });
 
   afterEach(() => {
@@ -42,7 +114,7 @@ describe('activityStore', () => {
       await useActivityStore.getState().fetchActivities();
 
       const state = useActivityStore.getState();
-      expect(state.activities.length).toBeGreaterThan(0);
+      expect(state.activities.length).toBe(2);
     });
 
     it('clears error state on successful fetch', async () => {
@@ -65,6 +137,16 @@ describe('activityStore', () => {
       expect(activity?.timestamp).toBeDefined();
       expect(typeof activity?.isRead).toBe('boolean');
     });
+
+    it('handles API error gracefully', async () => {
+      mockActivityApi.list.mockRejectedValue(new Error('Network error'));
+
+      await useActivityStore.getState().fetchActivities();
+
+      const state = useActivityStore.getState();
+      expect(state.error).toBe('Network error');
+      expect(state.isLoading).toBe(false);
+    });
   });
 
   describe('fetchStats', () => {
@@ -85,9 +167,9 @@ describe('activityStore', () => {
 
       const state = useActivityStore.getState();
       expect(state.stats).not.toBeNull();
-      expect(state.stats?.activeMatters).toBeDefined();
-      expect(state.stats?.verifiedFindings).toBeDefined();
-      expect(state.stats?.pendingReviews).toBeDefined();
+      expect(state.stats?.activeMatters).toBe(5);
+      expect(state.stats?.verifiedFindings).toBe(127);
+      expect(state.stats?.pendingReviews).toBe(3);
     });
 
     it('uses cached stats within cache duration', async () => {
@@ -101,6 +183,8 @@ describe('activityStore', () => {
 
       // Should be the same timestamp (cached)
       expect(secondFetchTime).toBe(firstFetchTime);
+      // API should only be called once
+      expect(mockDashboardApi.getStats).toHaveBeenCalledTimes(1);
     });
 
     it('bypasses cache when forceRefresh is true', async () => {
@@ -117,11 +201,23 @@ describe('activityStore', () => {
 
       // Should have a newer timestamp
       expect(secondFetchTime).toBeGreaterThan(firstFetchTime ?? 0);
+      // API should be called twice
+      expect(mockDashboardApi.getStats).toHaveBeenCalledTimes(2);
+    });
+
+    it('handles API error gracefully', async () => {
+      mockDashboardApi.getStats.mockRejectedValue(new Error('Stats error'));
+
+      await useActivityStore.getState().fetchStats();
+
+      const state = useActivityStore.getState();
+      expect(state.error).toBe('Stats error');
+      expect(state.isStatsLoading).toBe(false);
     });
   });
 
   describe('markActivityRead', () => {
-    it('marks a specific activity as read', async () => {
+    it('marks a specific activity as read (optimistic update)', async () => {
       await useActivityStore.getState().fetchActivities();
 
       const unreadActivity = useActivityStore
@@ -132,10 +228,48 @@ describe('activityStore', () => {
       if (unreadActivity) {
         useActivityStore.getState().markActivityRead(unreadActivity.id);
 
+        // Optimistic update should happen immediately
         const updatedActivity = useActivityStore
           .getState()
           .activities.find((a) => a.id === unreadActivity.id);
         expect(updatedActivity?.isRead).toBe(true);
+      }
+    });
+
+    it('calls API to persist read state', async () => {
+      await useActivityStore.getState().fetchActivities();
+
+      const unreadActivity = useActivityStore
+        .getState()
+        .activities.find((a) => !a.isRead);
+
+      if (unreadActivity) {
+        useActivityStore.getState().markActivityRead(unreadActivity.id);
+
+        expect(mockActivityApi.markRead).toHaveBeenCalledWith(unreadActivity.id);
+      }
+    });
+
+    it('reverts on API failure', async () => {
+      mockActivityApi.markRead.mockRejectedValue(new Error('API error'));
+
+      await useActivityStore.getState().fetchActivities();
+
+      const unreadActivity = useActivityStore
+        .getState()
+        .activities.find((a) => !a.isRead);
+
+      if (unreadActivity) {
+        useActivityStore.getState().markActivityRead(unreadActivity.id);
+
+        // Wait for API call to complete
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // Should revert to unread
+        const updatedActivity = useActivityStore
+          .getState()
+          .activities.find((a) => a.id === unreadActivity.id);
+        expect(updatedActivity?.isRead).toBe(false);
       }
     });
 
@@ -243,8 +377,6 @@ describe('activityStore', () => {
 
   describe('selectors', () => {
     it('selectRecentActivities returns max 10 activities', async () => {
-      await useActivityStore.getState().fetchActivities();
-
       // Add more activities to exceed limit
       for (let i = 0; i < 15; i++) {
         useActivityStore.getState().addActivity({
@@ -265,6 +397,7 @@ describe('activityStore', () => {
 
       const unread = selectUnreadActivities(useActivityStore.getState());
       expect(unread.every((a) => !a.isRead)).toBe(true);
+      expect(unread.length).toBe(1); // Only activity-1 is unread in mock
     });
 
     it('selectUnreadCount returns correct count', async () => {
@@ -275,11 +408,10 @@ describe('activityStore', () => {
       const selectorCount = selectUnreadCount(state);
 
       expect(selectorCount).toBe(actualUnread);
+      expect(selectorCount).toBe(1); // Only 1 unread in mock
     });
 
     it('selectActivitiesByMatter filters correctly', async () => {
-      await useActivityStore.getState().fetchActivities();
-
       // Add activity with known matter
       useActivityStore.getState().addActivity({
         matterId: 'test-matter-123',
@@ -293,7 +425,7 @@ describe('activityStore', () => {
         useActivityStore.getState()
       );
 
-      expect(matterActivities.length).toBeGreaterThan(0);
+      expect(matterActivities.length).toBe(1);
       expect(matterActivities.every((a) => a.matterId === 'test-matter-123')).toBe(true);
     });
 

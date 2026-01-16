@@ -196,7 +196,7 @@ development_status:
   # Epic 12: Export Builder
   epic-12: in-progress  # First story created 2026-01-16
   12-1-export-modal-section-selection: review  # Code complete 2026-01-16, lint/types pass, tests written
-  12-2-inline-editing-preview: backlog
+  12-2-inline-editing-preview: ready-for-dev
   12-3-verification-check-format-generation: backlog
   12-4-partner-executive-summary: backlog
   epic-12-retrospective: optional
@@ -223,7 +223,7 @@ development_status:
 
   # HIGH PRIORITY GAPS (Affects UX)
   14-4-summary-verification-api: done  # Completed 2026-01-16 - 48 tests passing (23 API + 13 service + 12 frontend)
-  14-5-dashboard-real-apis: backlog         # Activity Feed + Quick Stats APIs (Story 9.3 uses mock data)
+  14-5-dashboard-real-apis: review   # Activity Feed + Quick Stats APIs - Implementation complete 2026-01-16
   14-6-summary-fe-integration: backlog      # EditableSection + CitationLink integration (Story 10B.2)
 
   # MEDIUM PRIORITY GAPS (Deferred but tracked)

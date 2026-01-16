@@ -95,6 +95,11 @@ from app.services.storage_service import (
     StorageService,
     get_storage_service,
 )
+from app.services.activity_service import (
+    ActivityService,
+    get_activity_service,
+)
+from app.models.activity import ActivityTypeEnum
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -479,6 +484,31 @@ def _mark_job_failed(
                 new_status=JobStatus.FAILED.value,
             )
 
+            # Story 14.5: AC #6 - Create activity for processing failure
+            try:
+                activity_service = get_activity_service()
+                _run_async(
+                    activity_service.create_activity_for_matter_members(
+                        matter_id=matter_id,
+                        type=ActivityTypeEnum.PROCESSING_FAILED,
+                        description="Document processing failed",
+                        metadata={"job_id": job_id, "error_code": error_code},
+                    )
+                )
+                logger.info(
+                    "activity_created_on_job_failed",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                )
+            except Exception as activity_err:
+                # Non-fatal: log and continue
+                logger.warning(
+                    "activity_creation_failed_on_job_failed",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                    error=str(activity_err),
+                )
+
         logger.info(
             "job_tracking_job_failed",
             job_id=job_id,
@@ -545,6 +575,31 @@ def _mark_job_completed(
                     job_id=job_id,
                     matter_id=matter_id,
                     error=str(cache_err),
+                )
+
+            # Story 14.5: AC #6 - Create activity for processing completion
+            try:
+                activity_service = get_activity_service()
+                _run_async(
+                    activity_service.create_activity_for_matter_members(
+                        matter_id=matter_id,
+                        type=ActivityTypeEnum.PROCESSING_COMPLETE,
+                        description="Document processing complete",
+                        metadata={"job_id": job_id},
+                    )
+                )
+                logger.info(
+                    "activity_created_on_job_complete",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                )
+            except Exception as activity_err:
+                # Non-fatal: log and continue
+                logger.warning(
+                    "activity_creation_failed_on_job_complete",
+                    job_id=job_id,
+                    matter_id=matter_id,
+                    error=str(activity_err),
                 )
 
         logger.info(

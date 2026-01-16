@@ -3,6 +3,8 @@
  *
  * Zustand store for managing activities and dashboard stats.
  *
+ * Story 14.5: Dashboard Real APIs - Wired to backend API endpoints.
+ *
  * USAGE PATTERN (MANDATORY - from project-context.md):
  * CORRECT - Selector pattern:
  *   const activities = useActivityStore((state) => state.activities);
@@ -15,6 +17,7 @@
 
 import { create } from 'zustand';
 import type { Activity, DashboardStats } from '@/types/activity';
+import { activityApi, dashboardApi } from '@/lib/api/activity';
 
 /** Maximum number of activities to display in the feed */
 const MAX_ACTIVITIES_DISPLAY = 10;
@@ -48,10 +51,10 @@ interface ActivityState {
 }
 
 interface ActivityActions {
-  /** Fetch activities from API (or use mock data for now) */
+  /** Fetch activities from backend API */
   fetchActivities: () => Promise<void>;
 
-  /** Fetch dashboard stats from API (or use mock data for now) */
+  /** Fetch dashboard stats from backend API */
   fetchStats: (forceRefresh?: boolean) => Promise<void>;
 
   /** Mark an activity as read */
@@ -72,82 +75,6 @@ interface ActivityActions {
 
 type ActivityStore = ActivityState & ActivityActions;
 
-/**
- * Mock activities for development (backend API not yet available).
- * TODO: Replace with actual API call when backend provides activities endpoint
- */
-function getMockActivities(): Activity[] {
-  const now = new Date();
-  return [
-    {
-      id: generateActivityId(),
-      matterId: 'matter-1',
-      matterName: 'Shah v. Mehta',
-      type: 'processing_complete',
-      description: 'Processing complete',
-      timestamp: new Date(now.getTime() - 2 * 60 * 60000).toISOString(), // 2 hours ago
-      isRead: false,
-    },
-    {
-      id: generateActivityId(),
-      matterId: 'matter-2',
-      matterName: 'SEBI v. Parekh',
-      type: 'matter_opened',
-      description: 'Matter opened',
-      timestamp: new Date(now.getTime() - 3 * 60 * 60000).toISOString(), // 3 hours ago
-      isRead: false,
-    },
-    {
-      id: generateActivityId(),
-      matterId: 'matter-3',
-      matterName: 'Custody Dispute - Sharma',
-      type: 'contradictions_found',
-      description: '3 contradictions found',
-      timestamp: new Date(now.getTime() - 24 * 60 * 60000).toISOString(), // Yesterday
-      isRead: false,
-    },
-    {
-      id: generateActivityId(),
-      matterId: 'matter-4',
-      matterName: 'Tax Matter - Gupta',
-      type: 'processing_started',
-      description: 'Processing started',
-      timestamp: new Date(now.getTime() - 26 * 60 * 60000).toISOString(), // Yesterday
-      isRead: true,
-    },
-    {
-      id: generateActivityId(),
-      matterId: 'matter-1',
-      matterName: 'Shah v. Mehta',
-      type: 'verification_needed',
-      description: '5 citations need verification',
-      timestamp: new Date(now.getTime() - 48 * 60 * 60000).toISOString(), // 2 days ago
-      isRead: true,
-    },
-    {
-      id: generateActivityId(),
-      matterId: 'matter-5',
-      matterName: 'Corporate Merger - ABC Ltd',
-      type: 'processing_failed',
-      description: 'Processing failed - retry needed',
-      timestamp: new Date(now.getTime() - 72 * 60 * 60000).toISOString(), // 3 days ago
-      isRead: true,
-    },
-  ];
-}
-
-/**
- * Mock stats for development (backend API not yet available).
- * TODO: Replace with actual API call when backend provides stats endpoint
- */
-function getMockStats(): DashboardStats {
-  return {
-    activeMatters: 5,
-    verifiedFindings: 127,
-    pendingReviews: 3,
-  };
-}
-
 export const useActivityStore = create<ActivityStore>()((set, get) => ({
   // Initial state
   activities: [],
@@ -161,13 +88,8 @@ export const useActivityStore = create<ActivityStore>()((set, get) => ({
   fetchActivities: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: Replace with actual API call when backend is available
-      // const response = await fetch('/api/activities?limit=10');
-      // const { data } = await response.json();
-
-      // Using mock data for now
-      await new Promise((resolve) => setTimeout(resolve, 300)); // Simulate network delay
-      const activities = getMockActivities();
+      // Story 14.5: Fetch from real backend API
+      const { activities } = await activityApi.list({ limit: MAX_ACTIVITIES_DISPLAY });
 
       set({
         activities,
@@ -194,13 +116,8 @@ export const useActivityStore = create<ActivityStore>()((set, get) => ({
 
     set({ isStatsLoading: true, error: null });
     try {
-      // TODO: Replace with actual API call when backend is available
-      // const response = await fetch('/api/stats/dashboard');
-      // const { data } = await response.json();
-
-      // Using mock data for now
-      await new Promise((resolve) => setTimeout(resolve, 200)); // Simulate network delay
-      const stats = getMockStats();
+      // Story 14.5: Fetch from real backend API
+      const stats = await dashboardApi.getStats();
 
       set({
         stats,
@@ -214,14 +131,23 @@ export const useActivityStore = create<ActivityStore>()((set, get) => ({
   },
 
   markActivityRead: (activityId: string) => {
+    // Optimistic update
     set((state) => ({
       activities: state.activities.map((a) =>
         a.id === activityId ? { ...a, isRead: true } : a
       ),
     }));
 
-    // TODO: Sync with backend when API is available
-    // await fetch(`/api/activities/${activityId}/read`, { method: 'PATCH' });
+    // Story 14.5: Sync with backend API (fire and forget - no await in action)
+    activityApi.markRead(activityId).catch((error) => {
+      // Revert on failure
+      set((state) => ({
+        activities: state.activities.map((a) =>
+          a.id === activityId ? { ...a, isRead: false } : a
+        ),
+      }));
+      console.error('Failed to mark activity as read:', error);
+    });
   },
 
   markAllRead: () => {

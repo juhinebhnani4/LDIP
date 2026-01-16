@@ -11,12 +11,14 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.routes import (
+    activity,
     anomalies,
     bounding_boxes,
     chat,
     chunks,
     citations,
     contradiction,
+    dashboard,
     documents,
     entities,
     health,
@@ -146,6 +148,8 @@ def create_app() -> FastAPI:
     app.include_router(verifications.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(summary.router, prefix="/api")
+    app.include_router(activity.router, prefix="/api")
+    app.include_router(dashboard.router, prefix="/api")
 
     return app
 

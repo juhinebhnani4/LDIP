@@ -68,6 +68,7 @@ class Matter(MatterBase):
     status: MatterStatus = Field(default=MatterStatus.ACTIVE, description="Matter status")
     created_at: datetime = Field(..., description="When the matter was created")
     updated_at: datetime = Field(..., description="When the matter was last updated")
+    deleted_at: datetime | None = Field(None, description="Soft delete timestamp (NULL = not deleted)")
     role: MatterRole | None = Field(None, description="Current user's role on this matter")
     member_count: int = Field(default=0, description="Number of members on this matter")
 

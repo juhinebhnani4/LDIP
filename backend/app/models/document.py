@@ -126,6 +126,18 @@ class Document(DocumentBase):
         None,
         description="Error details if OCR processing failed"
     )
+    ocr_retry_count: int = Field(
+        default=0,
+        description="Number of OCR retry attempts"
+    )
+    validation_status: str | None = Field(
+        None,
+        description="OCR validation status: 'pending', 'validated', 'requires_human_review'"
+    )
+    deleted_at: datetime | None = Field(
+        None,
+        description="Soft delete timestamp (NULL = not deleted)"
+    )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

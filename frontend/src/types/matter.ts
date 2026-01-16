@@ -47,6 +47,7 @@ export interface Matter extends MatterBase {
   status: MatterStatus;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
   role: MatterRole | null;
   memberCount: number;
 }

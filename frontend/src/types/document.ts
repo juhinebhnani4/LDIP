@@ -65,6 +65,9 @@ export interface UploadResponse {
   };
 }
 
+/** OCR validation status */
+export type OCRValidationStatus = 'pending' | 'validated' | 'requires_human_review';
+
 /** Document record from database */
 export interface Document {
   id: string;
@@ -86,6 +89,9 @@ export interface Document {
   ocrConfidencePerPage: number[] | null;
   ocrQualityStatus: OCRQualityStatus | null;
   ocrError: string | null;
+  ocrRetryCount: number;
+  validationStatus: OCRValidationStatus | null;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

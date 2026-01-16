@@ -58,6 +58,7 @@ celery_app.conf.update(
         # Document ingestion tasks can be long-running; keep in default until
         # we implement true priority routing by story.
         "app.workers.tasks.document_tasks.*": {"queue": "default"},
+        "app.workers.tasks.chunked_document_tasks.*": {"queue": "default"},
         "app.workers.tasks.engine_tasks.*": {"queue": "default"},
     },
     # SSL configuration for Upstash Redis (rediss:// protocol)
@@ -71,6 +72,12 @@ celery_app.conf.update(
             "schedule": settings.job_recovery_scan_interval * 60,  # Convert minutes to seconds
             "options": {"queue": "low"},  # Low priority queue
         },
+        "cleanup-stale-chunks": {
+            "task": "app.workers.tasks.maintenance_tasks.cleanup_stale_chunks",
+            "schedule": 3600,  # Run every hour
+            "args": [24],  # 24 hour retention period
+            "options": {"queue": "low"},  # Low priority queue
+        },
     },
 )
 
@@ -80,6 +87,7 @@ celery_app.autodiscover_tasks(["app.workers.tasks"])
 # Explicit imports to ensure tasks are registered
 # (autodiscover can be unreliable on Windows)
 from app.workers.tasks import (  # noqa: E402, F401
+    chunked_document_tasks,
     document_tasks,
     engine_tasks,
     maintenance_tasks,

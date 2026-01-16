@@ -69,3 +69,58 @@ def recover_stale_jobs(self) -> dict:
         logger.error("job_recovery_task_failed", error=str(e))
         # Don't retry on failure - will run again on next schedule
         return {"error": str(e)}
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.cleanup_stale_chunks",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def cleanup_stale_chunks(self, retention_hours: int = 24) -> dict:
+    """Periodic task to clean up stale chunk records.
+
+    Story 15.4: Chunk Cleanup Mechanism
+
+    This task runs on a schedule (configured in celery.py beat_schedule)
+    and automatically cleans up chunk records older than the retention period.
+
+    Args:
+        retention_hours: Hours to retain chunk records (default 24).
+
+    Returns:
+        Dictionary with cleanup results.
+    """
+    from app.services.chunk_cleanup_service import get_chunk_cleanup_service
+
+    logger.info(
+        "chunk_cleanup_task_started",
+        retention_hours=retention_hours,
+    )
+
+    try:
+        cleanup_service = get_chunk_cleanup_service()
+
+        # Run cleanup asynchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                cleanup_service.cleanup_stale_chunks(retention_hours=retention_hours)
+            )
+        finally:
+            loop.close()
+
+        logger.info(
+            "chunk_cleanup_task_completed",
+            documents_cleaned=result.get("documents_cleaned", 0),
+            total_chunks_deleted=result.get("total_chunks_deleted", 0),
+            errors=len(result.get("errors", [])),
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error("chunk_cleanup_task_failed", error=str(e))
+        # Don't retry on failure - will run again on next schedule
+        return {"error": str(e)}

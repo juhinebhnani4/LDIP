@@ -730,6 +730,146 @@ class OCRChunkService:
         )
 
     # =========================================================================
+    # Cleanup Operations (Story 15.4)
+    # =========================================================================
+
+    async def delete_chunks_for_document(self, document_id: str) -> int:
+        """Delete all chunk records for a document.
+
+        Used for cleanup after successful OCR processing completes.
+
+        Args:
+            document_id: Document UUID.
+
+        Returns:
+            Number of records deleted.
+        """
+        def _delete():
+            return (
+                self.client.table("document_ocr_chunks")
+                .delete()
+                .eq("document_id", document_id)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_delete)
+        count = len(response.data) if response.data else 0
+
+        logger.info(
+            "chunks_deleted",
+            document_id=document_id,
+            count=count,
+        )
+
+        return count
+
+    async def get_stale_chunk_documents(
+        self,
+        cutoff_date: datetime,
+        completed_statuses: list[str] | None = None,
+    ) -> list[dict]:
+        """Find documents with stale chunks ready for cleanup.
+
+        Returns documents where:
+        - Chunk records exist older than cutoff_date
+        - Parent document status is in completed_statuses
+
+        Args:
+            cutoff_date: Delete chunks created before this date.
+            completed_statuses: Document statuses to consider complete.
+                              Defaults to ['ocr_complete', 'completed', 'failed'].
+
+        Returns:
+            List of dicts with document_id, matter_id, and chunk_count.
+        """
+        if completed_statuses is None:
+            completed_statuses = ["ocr_complete", "completed", "failed"]
+
+        def _query():
+            # Query chunks older than cutoff
+            return (
+                self.client.table("document_ocr_chunks")
+                .select("document_id, matter_id")
+                .lt("created_at", cutoff_date.isoformat())
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
+
+        # Aggregate by document
+        doc_chunks: dict[str, dict] = {}
+        for row in (response.data or []):
+            doc_id = row["document_id"]
+            if doc_id not in doc_chunks:
+                doc_chunks[doc_id] = {
+                    "document_id": doc_id,
+                    "matter_id": row["matter_id"],
+                    "chunk_count": 0,
+                }
+            doc_chunks[doc_id]["chunk_count"] += 1
+
+        return list(doc_chunks.values())
+
+    # =========================================================================
+    # Retry Operations (Story 16.5)
+    # =========================================================================
+
+    async def reset_chunk_for_retry(self, chunk_id: str) -> DocumentOCRChunk:
+        """Reset a failed chunk back to pending for retry.
+
+        Clears error message and result data, allowing the chunk
+        to be reprocessed.
+
+        Args:
+            chunk_id: Chunk UUID.
+
+        Returns:
+            Updated DocumentOCRChunk with 'pending' status.
+
+        Raises:
+            ChunkNotFoundError: If chunk doesn't exist.
+            InvalidStatusTransitionError: If chunk is not in 'failed' status.
+        """
+        chunk = await self.get_chunk(chunk_id)
+        if not chunk:
+            raise ChunkNotFoundError(chunk_id)
+
+        if chunk.status != ChunkStatus.FAILED:
+            raise InvalidStatusTransitionError(
+                chunk.status.value,
+                ChunkStatus.PENDING.value,
+            )
+
+        def _update():
+            return (
+                self.client.table("document_ocr_chunks")
+                .update({
+                    "status": ChunkStatus.PENDING.value,
+                    "error_message": None,
+                    "result_storage_path": None,
+                    "result_checksum": None,
+                    "processing_started_at": None,
+                    "processing_completed_at": None,
+                })
+                .eq("id", chunk_id)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_update)
+
+        if response.data:
+            updated_chunk = self._db_row_to_chunk(response.data[0])
+            logger.info(
+                "chunk_reset_for_retry",
+                chunk_id=chunk_id,
+                document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
+            )
+            return updated_chunk
+
+        raise OCRChunkServiceError(f"Failed to reset chunk {chunk_id} for retry")
+
+    # =========================================================================
     # Helper Methods
     # =========================================================================
 

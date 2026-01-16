@@ -42,6 +42,7 @@ from app.models.summary import (
     PartyRole,
     SubjectMatter,
     SubjectMatterSource,
+    SummarySectionTypeEnum,
 )
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import SUMMARY_CACHE_TTL, summary_cache_key
@@ -462,20 +463,24 @@ class SummaryService:
     async def _check_party_verified(self, matter_id: str, entity_id: str) -> bool:
         """Check if a party entity has been verified.
 
+        Story 14.4: AC #7 - Now uses summary_verifications table.
+
         Args:
             matter_id: Matter UUID.
             entity_id: Entity UUID.
 
         Returns:
-            True if entity has approved verification, False otherwise.
+            True if entity has verified status in summary_verifications.
         """
         try:
+            # Story 14.4: Check summary_verifications table for party verification
             result = await asyncio.to_thread(
-                lambda: self.supabase.table("finding_verifications")
+                lambda: self.supabase.table("summary_verifications")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
-                .eq("finding_id", entity_id)
-                .eq("decision", "approved")
+                .eq("section_type", SummarySectionTypeEnum.PARTIES.value)
+                .eq("section_id", entity_id)
+                .eq("decision", "verified")
                 .execute()
             )
             return (result.count or 0) > 0
@@ -486,6 +491,90 @@ class SummaryService:
                 entity_id=entity_id,
             )
             return False
+
+    async def _check_section_verified(
+        self,
+        matter_id: str,
+        section_type: SummarySectionTypeEnum,
+        section_id: str,
+    ) -> bool:
+        """Check if a summary section has been verified.
+
+        Story 14.4: AC #7 - Check summary_verifications table.
+
+        Args:
+            matter_id: Matter UUID.
+            section_type: Type of section.
+            section_id: Section identifier.
+
+        Returns:
+            True if section has verified decision.
+        """
+        try:
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("summary_verifications")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("section_type", section_type.value)
+                .eq("section_id", section_id)
+                .eq("decision", "verified")
+                .execute()
+            )
+            return (result.count or 0) > 0
+        except Exception as e:
+            logger.debug(
+                "check_section_verified_failed",
+                error=str(e),
+                section_type=section_type.value,
+                section_id=section_id,
+            )
+            return False
+
+    async def _get_issue_verification_status(
+        self,
+        matter_id: str,
+        issue_id: str,
+    ) -> KeyIssueVerificationStatus:
+        """Get verification status for a key issue.
+
+        Story 14.4: AC #7 - Map summary_verifications to KeyIssueVerificationStatus.
+
+        Args:
+            matter_id: Matter UUID.
+            issue_id: Issue identifier.
+
+        Returns:
+            KeyIssueVerificationStatus (verified, pending, or flagged).
+        """
+        try:
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("summary_verifications")
+                .select("decision")
+                .eq("matter_id", matter_id)
+                .eq("section_type", SummarySectionTypeEnum.KEY_ISSUE.value)
+                .eq("section_id", issue_id)
+                .limit(1)
+                .execute()
+            )
+
+            if not result.data:
+                return KeyIssueVerificationStatus.PENDING
+
+            decision = result.data[0].get("decision")
+            if decision == "verified":
+                return KeyIssueVerificationStatus.VERIFIED
+            elif decision == "flagged":
+                return KeyIssueVerificationStatus.FLAGGED
+            else:
+                return KeyIssueVerificationStatus.PENDING
+
+        except Exception as e:
+            logger.debug(
+                "get_issue_verification_status_failed",
+                error=str(e),
+                issue_id=issue_id,
+            )
+            return KeyIssueVerificationStatus.PENDING
 
     # =========================================================================
     # Stats (Task 2.4) - AC #7
@@ -625,6 +714,7 @@ class SummaryService:
         """Generate subject matter description using GPT-4.
 
         Story 14.1: AC #3 - GPT-4 for executive summary generation.
+        Story 14.4: AC #7 - Check real verification status.
 
         Args:
             matter_id: Matter UUID.
@@ -670,10 +760,17 @@ class SummaryService:
                 for s in parsed.get("sources", [])
             ]
 
+            # Story 14.4: Check real verification status from summary_verifications
+            is_verified = await self._check_section_verified(
+                matter_id,
+                SummarySectionTypeEnum.SUBJECT_MATTER,
+                "main",
+            )
+
             return SubjectMatter(
                 description=policed_description,
                 sources=sources,
-                is_verified=False,
+                is_verified=is_verified,
             )
 
         except Exception as e:
@@ -696,6 +793,7 @@ class SummaryService:
         """Extract key issues using GPT-4.
 
         Story 14.1: AC #3 - GPT-4 for key issues extraction.
+        Story 14.4: AC #7 - Check real verification status for each issue.
 
         Args:
             matter_id: Matter UUID.
@@ -732,12 +830,19 @@ class SummaryService:
                     item.get("title", "")
                 ).sanitized_text
 
+                issue_id = item.get("id", f"issue-{uuid.uuid4().hex[:8]}")
+
+                # Story 14.4: Check real verification status for this issue
+                verification = await self._get_issue_verification_status(
+                    matter_id, issue_id
+                )
+
                 issues.append(
                     KeyIssue(
-                        id=item.get("id", f"issue-{uuid.uuid4().hex[:8]}"),
+                        id=issue_id,
                         number=item.get("number", len(issues) + 1),
                         title=policed_title,
-                        verification_status=KeyIssueVerificationStatus.PENDING,
+                        verification_status=verification,
                     )
                 )
 
@@ -760,6 +865,7 @@ class SummaryService:
         """Get current status using GPT-4.
 
         Story 14.1: AC #2 - Current status with last order.
+        Story 14.4: AC #7 - Check real verification status.
 
         Args:
             matter_id: Matter UUID.
@@ -808,12 +914,19 @@ class SummaryService:
             if last_order_date == "Unknown":
                 last_order_date = datetime.now(UTC).isoformat()
 
+            # Story 14.4: Check real verification status from summary_verifications
+            is_verified = await self._check_section_verified(
+                matter_id,
+                SummarySectionTypeEnum.CURRENT_STATUS,
+                "main",
+            )
+
             return CurrentStatus(
                 last_order_date=last_order_date,
                 description=policed_description,
                 source_document=parsed.get("sourceDocument", "Unknown"),
                 source_page=parsed.get("sourcePage", 1),
-                is_verified=False,
+                is_verified=is_verified,
             )
 
         except Exception as e:

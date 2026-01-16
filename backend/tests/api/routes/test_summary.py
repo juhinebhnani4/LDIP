@@ -466,3 +466,247 @@ class TestSummaryModelValidation:
         assert "eventsExtracted" in json_data
         assert "citationsFound" in json_data
         assert "verificationPercent" in json_data
+
+
+# =============================================================================
+# Story 14.4: Summary Verification API Tests
+# =============================================================================
+
+from app.models.summary import (
+    SummarySectionTypeEnum,
+    SummaryVerificationCreate,
+    SummaryVerificationDecisionEnum,
+    SummaryVerificationRecord,
+    SummaryNoteCreate,
+    SummaryNoteRecord,
+)
+
+
+@pytest.fixture
+def mock_editor_access() -> MatterAccessContext:
+    """Create mock editor access context for testing."""
+    return MatterAccessContext(
+        matter_id="matter-123",
+        user_id="user-editor",
+        role=MatterRole.EDITOR,
+        access_level="editor",
+    )
+
+
+@pytest.fixture
+def mock_verification_record() -> SummaryVerificationRecord:
+    """Create mock verification record for testing."""
+    return SummaryVerificationRecord(
+        id="verification-123",
+        matter_id="matter-123",
+        section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+        section_id="main",
+        decision=SummaryVerificationDecisionEnum.VERIFIED,
+        notes="Reviewed and approved",
+        verified_by="user-editor",
+        verified_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC).isoformat(),
+    )
+
+
+@pytest.fixture
+def mock_note_record() -> SummaryNoteRecord:
+    """Create mock note record for testing."""
+    return SummaryNoteRecord(
+        id="note-123",
+        matter_id="matter-123",
+        section_type=SummarySectionTypeEnum.PARTIES,
+        section_id="entity-123",
+        text="Need to verify this party",
+        created_by="user-editor",
+        created_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC).isoformat(),
+    )
+
+
+class TestVerifySummarySection:
+    """Test POST /summary/verify endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_verify_section_success(
+        self, mock_editor_access, mock_verification_record, mock_summary
+    ) -> None:
+        """Should successfully verify a section."""
+        from app.api.routes.summary import verify_summary_section
+        from app.services.summary_verification_service import SummaryVerificationService
+        from app.services.summary_service import SummaryService
+
+        mock_verification_service = MagicMock(spec=SummaryVerificationService)
+        mock_verification_service.record_verification = AsyncMock(
+            return_value=mock_verification_record
+        )
+
+        mock_summary_service = MagicMock(spec=SummaryService)
+        mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
+
+        request = SummaryVerificationCreate(
+            section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+            section_id="main",
+            decision=SummaryVerificationDecisionEnum.VERIFIED,
+            notes="Reviewed and approved",
+        )
+
+        response = await verify_summary_section(
+            access=mock_editor_access,
+            request=request,
+            verification_service=mock_verification_service,
+            summary_service=mock_summary_service,
+        )
+
+        assert response.data.id == "verification-123"
+        assert response.data.decision == SummaryVerificationDecisionEnum.VERIFIED
+        mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
+
+    @pytest.mark.asyncio
+    async def test_flag_section_success(
+        self, mock_editor_access, mock_summary
+    ) -> None:
+        """Should successfully flag a section."""
+        from app.api.routes.summary import verify_summary_section
+        from app.services.summary_verification_service import SummaryVerificationService
+        from app.services.summary_service import SummaryService
+
+        flagged_record = SummaryVerificationRecord(
+            id="verification-456",
+            matter_id="matter-123",
+            section_type=SummarySectionTypeEnum.CURRENT_STATUS,
+            section_id="main",
+            decision=SummaryVerificationDecisionEnum.FLAGGED,
+            notes=None,
+            verified_by="user-editor",
+            verified_at=datetime.now(UTC).isoformat(),
+        )
+
+        mock_verification_service = MagicMock(spec=SummaryVerificationService)
+        mock_verification_service.record_verification = AsyncMock(
+            return_value=flagged_record
+        )
+
+        mock_summary_service = MagicMock(spec=SummaryService)
+        mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
+
+        request = SummaryVerificationCreate(
+            section_type=SummarySectionTypeEnum.CURRENT_STATUS,
+            section_id="main",
+            decision=SummaryVerificationDecisionEnum.FLAGGED,
+        )
+
+        response = await verify_summary_section(
+            access=mock_editor_access,
+            request=request,
+            verification_service=mock_verification_service,
+            summary_service=mock_summary_service,
+        )
+
+        assert response.data.decision == SummaryVerificationDecisionEnum.FLAGGED
+
+
+class TestAddSummaryNote:
+    """Test POST /summary/notes endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_add_note_success(
+        self, mock_editor_access, mock_note_record
+    ) -> None:
+        """Should successfully add a note."""
+        from app.api.routes.summary import add_summary_note
+        from app.services.summary_verification_service import SummaryVerificationService
+
+        mock_verification_service = MagicMock(spec=SummaryVerificationService)
+        mock_verification_service.add_note = AsyncMock(return_value=mock_note_record)
+
+        request = SummaryNoteCreate(
+            section_type=SummarySectionTypeEnum.PARTIES,
+            section_id="entity-123",
+            text="Need to verify this party",
+        )
+
+        response = await add_summary_note(
+            access=mock_editor_access,
+            request=request,
+            verification_service=mock_verification_service,
+        )
+
+        assert response.data.id == "note-123"
+        assert response.data.text == "Need to verify this party"
+        mock_verification_service.add_note.assert_called_once()
+
+
+class TestGetSummaryVerifications:
+    """Test GET /summary/verifications endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_verifications_success(
+        self, mock_viewer_access, mock_verification_record
+    ) -> None:
+        """Should successfully get verifications."""
+        from app.api.routes.summary import get_summary_verifications
+        from app.services.summary_verification_service import SummaryVerificationService
+
+        mock_verification_service = MagicMock(spec=SummaryVerificationService)
+        mock_verification_service.get_verifications = AsyncMock(
+            return_value=[mock_verification_record]
+        )
+
+        response = await get_summary_verifications(
+            access=mock_viewer_access,
+            section_type=None,
+            verification_service=mock_verification_service,
+        )
+
+        assert len(response.data) == 1
+        assert response.data[0].id == "verification-123"
+        assert response.meta["total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_verifications_with_filter(
+        self, mock_viewer_access, mock_verification_record
+    ) -> None:
+        """Should filter verifications by section type."""
+        from app.api.routes.summary import get_summary_verifications
+        from app.services.summary_verification_service import SummaryVerificationService
+
+        mock_verification_service = MagicMock(spec=SummaryVerificationService)
+        mock_verification_service.get_verifications = AsyncMock(
+            return_value=[mock_verification_record]
+        )
+
+        await get_summary_verifications(
+            access=mock_viewer_access,
+            section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+            verification_service=mock_verification_service,
+        )
+
+        mock_verification_service.get_verifications.assert_called_once_with(
+            matter_id="matter-123",
+            section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+        )
+
+
+class TestVerificationModelSerialization:
+    """Test verification model serialization."""
+
+    def test_verification_record_serialization(
+        self, mock_verification_record
+    ) -> None:
+        """SummaryVerificationRecord should serialize with camelCase."""
+        json_data = mock_verification_record.model_dump(by_alias=True)
+
+        assert "matterId" in json_data
+        assert "sectionType" in json_data
+        assert "sectionId" in json_data
+        assert "verifiedBy" in json_data
+        assert "verifiedAt" in json_data
+
+    def test_note_record_serialization(self, mock_note_record) -> None:
+        """SummaryNoteRecord should serialize with camelCase."""
+        json_data = mock_note_record.model_dump(by_alias=True)
+
+        assert "matterId" in json_data
+        assert "sectionType" in json_data
+        assert "sectionId" in json_data
+        assert "createdBy" in json_data
+        assert "createdAt" in json_data

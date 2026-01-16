@@ -4,18 +4,65 @@
  * Provides verification actions for summary sections.
  *
  * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
+ * Story 14.4: Summary Verification API - Wire to real API
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { api } from '@/lib/api/client';
 import type {
   SummarySectionType,
   SummaryVerification,
   SummaryNote,
 } from '@/types/summary';
 
+// =============================================================================
+// Story 14.4: API Response Types
+// =============================================================================
+
+interface SummaryVerificationResponse {
+  data: {
+    id: string;
+    matterId: string;
+    sectionType: SummarySectionType;
+    sectionId: string;
+    decision: 'verified' | 'flagged';
+    notes?: string;
+    verifiedBy: string;
+    verifiedAt: string;
+  };
+}
+
+interface SummaryNoteResponse {
+  data: {
+    id: string;
+    matterId: string;
+    sectionType: SummarySectionType;
+    sectionId: string;
+    text: string;
+    createdBy: string;
+    createdAt: string;
+  };
+}
+
+interface SummaryVerificationsListResponse {
+  data: Array<{
+    id: string;
+    matterId: string;
+    sectionType: SummarySectionType;
+    sectionId: string;
+    decision: 'verified' | 'flagged';
+    notes?: string;
+    verifiedBy: string;
+    verifiedAt: string;
+  }>;
+  meta: { total: number };
+}
+
 interface UseSummaryVerificationOptions {
   /** Matter ID */
   matterId: string;
+  /** Current user name for verification attribution */
+  userName?: string;
   /** Callback when verification is successful */
   onSuccess?: () => void;
   /** Callback when verification fails */
@@ -37,14 +84,18 @@ interface UseSummaryVerificationReturn {
   verifications: Map<string, SummaryVerification>;
   /** Notes */
   notes: Map<string, SummaryNote[]>;
+  /** Refresh verifications from server */
+  refresh: () => Promise<void>;
 }
 
 /**
  * Hook for managing summary section verifications
+ *
+ * Story 14.4: Wired to real API endpoints
  */
 export function useSummaryVerification({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used when API is implemented
   matterId,
+  userName = 'Unknown User',
   onSuccess,
   onError,
 }: UseSummaryVerificationOptions): UseSummaryVerificationReturn {
@@ -56,36 +107,98 @@ export function useSummaryVerification({
   const getKey = (sectionType: SummarySectionType, sectionId: string) =>
     `${sectionType}:${sectionId}`;
 
+  // Story 14.4: Load existing verifications on mount
+  const loadVerifications = useCallback(async () => {
+    if (!matterId) return;
+
+    try {
+      const response = await api.get<SummaryVerificationsListResponse>(
+        `/api/v1/matters/${matterId}/summary/verifications`
+      );
+
+      const newVerifications = new Map<string, SummaryVerification>();
+      for (const v of response.data) {
+        newVerifications.set(getKey(v.sectionType, v.sectionId), {
+          sectionType: v.sectionType,
+          sectionId: v.sectionId,
+          decision: v.decision,
+          verifiedBy: v.verifiedBy,
+          verifiedAt: v.verifiedAt,
+          notes: v.notes,
+        });
+      }
+      setVerifications(newVerifications);
+    } catch {
+      // Silently fail - verifications will be empty
+    }
+  }, [matterId]);
+
+  // Load verifications on mount
+  useEffect(() => {
+    loadVerifications();
+  }, [loadVerifications]);
+
   const verifySection = useCallback(
     async (sectionType: SummarySectionType, sectionId: string) => {
       setIsLoading(true);
       setError(null);
 
+      // Optimistic update
+      const optimisticVerification: SummaryVerification = {
+        sectionType,
+        sectionId,
+        decision: 'verified',
+        verifiedBy: userName,
+        verifiedAt: new Date().toISOString(),
+      };
+
+      const key = getKey(sectionType, sectionId);
+      const previousVerification = verifications.get(key);
+
+      setVerifications((prev) => {
+        const next = new Map(prev);
+        next.set(key, optimisticVerification);
+        return next;
+      });
+
       try {
-        // TODO: Replace with actual API call when backend is ready
-        // await api.post(`/matters/${matterId}/summary/verify`, {
-        //   sectionType,
-        //   sectionId,
-        //   decision: 'verified',
-        // });
+        // Story 14.4: Call real API endpoint
+        const response = await api.post<SummaryVerificationResponse>(
+          `/api/v1/matters/${matterId}/summary/verify`,
+          {
+            sectionType,
+            sectionId,
+            decision: 'verified',
+          }
+        );
 
-        // Optimistic update
-        const verification: SummaryVerification = {
-          sectionType,
-          sectionId,
-          decision: 'verified',
-          verifiedBy: 'Current User', // TODO: Get from auth context
-          verifiedAt: new Date().toISOString(),
-        };
-
+        // Update with server response
         setVerifications((prev) => {
           const next = new Map(prev);
-          next.set(getKey(sectionType, sectionId), verification);
+          next.set(key, {
+            sectionType: response.data.sectionType,
+            sectionId: response.data.sectionId,
+            decision: response.data.decision,
+            verifiedBy: response.data.verifiedBy,
+            verifiedAt: response.data.verifiedAt,
+            notes: response.data.notes,
+          });
           return next;
         });
 
         onSuccess?.();
       } catch (err) {
+        // Rollback on error
+        setVerifications((prev) => {
+          const next = new Map(prev);
+          if (previousVerification) {
+            next.set(key, previousVerification);
+          } else {
+            next.delete(key);
+          }
+          return next;
+        });
+
         const error = err instanceof Error ? err : new Error('Failed to verify section');
         setError(error);
         onError?.(error);
@@ -94,7 +207,7 @@ export function useSummaryVerification({
         setIsLoading(false);
       }
     },
-    [onSuccess, onError]
+    [matterId, userName, verifications, onSuccess, onError]
   );
 
   const flagSection = useCallback(
@@ -102,31 +215,62 @@ export function useSummaryVerification({
       setIsLoading(true);
       setError(null);
 
+      // Optimistic update
+      const optimisticVerification: SummaryVerification = {
+        sectionType,
+        sectionId,
+        decision: 'flagged',
+        verifiedBy: userName,
+        verifiedAt: new Date().toISOString(),
+      };
+
+      const key = getKey(sectionType, sectionId);
+      const previousVerification = verifications.get(key);
+
+      setVerifications((prev) => {
+        const next = new Map(prev);
+        next.set(key, optimisticVerification);
+        return next;
+      });
+
       try {
-        // TODO: Replace with actual API call when backend is ready
-        // await api.post(`/matters/${matterId}/summary/flag`, {
-        //   sectionType,
-        //   sectionId,
-        //   decision: 'flagged',
-        // });
+        // Story 14.4: Call real API endpoint
+        const response = await api.post<SummaryVerificationResponse>(
+          `/api/v1/matters/${matterId}/summary/verify`,
+          {
+            sectionType,
+            sectionId,
+            decision: 'flagged',
+          }
+        );
 
-        // Optimistic update
-        const verification: SummaryVerification = {
-          sectionType,
-          sectionId,
-          decision: 'flagged',
-          verifiedBy: 'Current User', // TODO: Get from auth context
-          verifiedAt: new Date().toISOString(),
-        };
-
+        // Update with server response
         setVerifications((prev) => {
           const next = new Map(prev);
-          next.set(getKey(sectionType, sectionId), verification);
+          next.set(key, {
+            sectionType: response.data.sectionType,
+            sectionId: response.data.sectionId,
+            decision: response.data.decision,
+            verifiedBy: response.data.verifiedBy,
+            verifiedAt: response.data.verifiedAt,
+            notes: response.data.notes,
+          });
           return next;
         });
 
         onSuccess?.();
       } catch (err) {
+        // Rollback on error
+        setVerifications((prev) => {
+          const next = new Map(prev);
+          if (previousVerification) {
+            next.set(key, previousVerification);
+          } else {
+            next.delete(key);
+          }
+          return next;
+        });
+
         const error = err instanceof Error ? err : new Error('Failed to flag section');
         setError(error);
         onError?.(error);
@@ -135,7 +279,7 @@ export function useSummaryVerification({
         setIsLoading(false);
       }
     },
-    [onSuccess, onError]
+    [matterId, userName, verifications, onSuccess, onError]
   );
 
   const addNote = useCallback(
@@ -143,33 +287,69 @@ export function useSummaryVerification({
       setIsLoading(true);
       setError(null);
 
+      // Optimistic update
+      const optimisticNote: SummaryNote = {
+        sectionType,
+        sectionId,
+        text: noteText,
+        createdBy: userName,
+        createdAt: new Date().toISOString(),
+      };
+
+      const key = getKey(sectionType, sectionId);
+
+      setNotes((prev) => {
+        const next = new Map(prev);
+        const existing = prev.get(key) || [];
+        next.set(key, [...existing, optimisticNote]);
+        return next;
+      });
+
       try {
-        // TODO: Replace with actual API call when backend is ready
-        // await api.post(`/matters/${matterId}/summary/notes`, {
-        //   sectionType,
-        //   sectionId,
-        //   text: noteText,
-        // });
+        // Story 14.4: Call real API endpoint
+        const response = await api.post<SummaryNoteResponse>(
+          `/api/v1/matters/${matterId}/summary/notes`,
+          {
+            sectionType,
+            sectionId,
+            text: noteText,
+          }
+        );
 
-        // Optimistic update
-        const note: SummaryNote = {
-          sectionType,
-          sectionId,
-          text: noteText,
-          createdBy: 'Current User', // TODO: Get from auth context
-          createdAt: new Date().toISOString(),
-        };
-
+        // Replace optimistic note with server response
         setNotes((prev) => {
           const next = new Map(prev);
-          const key = getKey(sectionType, sectionId);
           const existing = prev.get(key) || [];
-          next.set(key, [...existing, note]);
+          // Remove optimistic note and add server response
+          const withoutOptimistic = existing.filter(
+            (n) => n.createdAt !== optimisticNote.createdAt
+          );
+          next.set(key, [
+            ...withoutOptimistic,
+            {
+              sectionType: response.data.sectionType,
+              sectionId: response.data.sectionId,
+              text: response.data.text,
+              createdBy: response.data.createdBy,
+              createdAt: response.data.createdAt,
+            },
+          ]);
           return next;
         });
 
         onSuccess?.();
       } catch (err) {
+        // Rollback on error
+        setNotes((prev) => {
+          const next = new Map(prev);
+          const existing = prev.get(key) || [];
+          next.set(
+            key,
+            existing.filter((n) => n.createdAt !== optimisticNote.createdAt)
+          );
+          return next;
+        });
+
         const error = err instanceof Error ? err : new Error('Failed to add note');
         setError(error);
         onError?.(error);
@@ -178,7 +358,7 @@ export function useSummaryVerification({
         setIsLoading(false);
       }
     },
-    [onSuccess, onError]
+    [matterId, userName, onSuccess, onError]
   );
 
   return {
@@ -189,5 +369,6 @@ export function useSummaryVerification({
     error,
     verifications,
     notes,
+    refresh: loadVerifications,
   };
 }

@@ -374,3 +374,203 @@ class SummaryErrorResponse(BaseModel):
     """
 
     error: SummaryErrorDetail
+
+
+# =============================================================================
+# Story 14.4: Summary Verification Models (Task 3)
+# =============================================================================
+
+
+class SummaryVerificationDecisionEnum(str, Enum):
+    """Summary section verification decision.
+
+    Story 14.4: AC #1 - Verification decision types.
+    """
+
+    VERIFIED = "verified"
+    FLAGGED = "flagged"
+
+
+class SummarySectionTypeEnum(str, Enum):
+    """Summary section types that can be verified.
+
+    Story 14.4: AC #4 - Section type enum matching database.
+    """
+
+    PARTIES = "parties"
+    SUBJECT_MATTER = "subject_matter"
+    CURRENT_STATUS = "current_status"
+    KEY_ISSUE = "key_issue"
+
+
+class SummaryVerificationCreate(BaseModel):
+    """Request to create/update summary verification.
+
+    Story 14.4: AC #1 - POST /summary/verify request body.
+    """
+
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Type of section being verified",
+    )
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Entity ID for parties, 'main' for other sections, issue ID for key_issue",
+    )
+    decision: SummaryVerificationDecisionEnum = Field(
+        ...,
+        description="Verification decision: verified or flagged",
+    )
+    notes: str | None = Field(
+        None,
+        max_length=2000,
+        description="Optional notes",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryVerificationRecord(BaseModel):
+    """Summary verification record from database.
+
+    Story 14.4: AC #3 - Verification record response.
+    """
+
+    id: str = Field(
+        ...,
+        description="Verification record ID",
+    )
+    matter_id: str = Field(
+        ...,
+        alias="matterId",
+        description="Matter ID",
+    )
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Section type",
+    )
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Section ID",
+    )
+    decision: SummaryVerificationDecisionEnum = Field(
+        ...,
+        description="Verification decision",
+    )
+    notes: str | None = Field(
+        None,
+        description="Optional notes",
+    )
+    verified_by: str = Field(
+        ...,
+        alias="verifiedBy",
+        description="User ID who verified",
+    )
+    verified_at: str = Field(
+        ...,
+        alias="verifiedAt",
+        description="Verification timestamp (ISO)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryNoteCreate(BaseModel):
+    """Request to create summary note.
+
+    Story 14.4: AC #2 - POST /summary/notes request body.
+    """
+
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Type of section",
+    )
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Section ID",
+    )
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Note text content",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryNoteRecord(BaseModel):
+    """Summary note record from database.
+
+    Story 14.4: AC #5 - Note record response.
+    """
+
+    id: str = Field(
+        ...,
+        description="Note ID",
+    )
+    matter_id: str = Field(
+        ...,
+        alias="matterId",
+        description="Matter ID",
+    )
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Section type",
+    )
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Section ID",
+    )
+    text: str = Field(
+        ...,
+        description="Note text",
+    )
+    created_by: str = Field(
+        ...,
+        alias="createdBy",
+        description="User ID who created",
+    )
+    created_at: str = Field(
+        ...,
+        alias="createdAt",
+        description="Creation timestamp (ISO)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryVerificationResponse(BaseModel):
+    """API response for single verification.
+
+    Story 14.4: AC #1 - Single verification response wrapper.
+    """
+
+    data: SummaryVerificationRecord
+
+
+class SummaryVerificationsListResponse(BaseModel):
+    """API response for verification list.
+
+    Story 14.4: AC #3 - List verification response wrapper.
+    """
+
+    data: list[SummaryVerificationRecord]
+    meta: dict = Field(default_factory=dict)
+
+
+class SummaryNoteResponse(BaseModel):
+    """API response for single note.
+
+    Story 14.4: AC #2 - Single note response wrapper.
+    """
+
+    data: SummaryNoteRecord

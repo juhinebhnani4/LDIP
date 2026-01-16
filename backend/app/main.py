@@ -117,7 +117,14 @@ def create_app() -> FastAPI:
 
     app.openapi = custom_openapi
 
-    # Configure CORS
+    # Add correlation ID middleware for distributed tracing (Story 13.1)
+    # Middleware execution order is LIFO (last added runs first)
+    # So we add CorrelationMiddleware first, then CORS last to ensure
+    # CORS headers are added to ALL responses including auth errors
+    app.add_middleware(CorrelationMiddleware)
+
+    # Configure CORS - MUST be added LAST to run FIRST
+    # This ensures CORS headers are added even to 401/403/500 error responses
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -126,10 +133,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Correlation-ID"],  # Allow frontend to access correlation ID
     )
-
-    # Add correlation ID middleware for distributed tracing (Story 13.1)
-    # This runs after CORS (middleware added last runs first)
-    app.add_middleware(CorrelationMiddleware)
 
     # Configure rate limiting with custom 429 handler (Story 13.3)
     app.state.limiter = limiter

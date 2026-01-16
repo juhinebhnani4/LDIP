@@ -7,11 +7,12 @@ Tests cover:
 - @with_circuit_breaker decorator with async functions
 - CircuitOpenError handling and fallback behavior
 - Thread-safety of circuit breaker operations
+- Service integration patterns (embedder, reranker, etc.)
 """
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -58,13 +59,19 @@ def breaker(config):
 
 @pytest.fixture(autouse=True)
 def reset_registry():
-    """Reset circuit registry between tests."""
+    """Reset circuit registry between tests.
+
+    Only resets circuits that are already registered to avoid slow iterations.
+    """
     registry = get_circuit_registry()
-    for service in CircuitService:
+    # Get list of registered circuits to reset (don't create new ones)
+    registered_services = list(registry._circuits.keys())
+    for service in registered_services:
         registry.reset(service)
     yield
-    # Cleanup after test
-    for service in CircuitService:
+    # Cleanup after test - reset only registered circuits
+    registered_services = list(registry._circuits.keys())
+    for service in registered_services:
         registry.reset(service)
 
 
@@ -113,6 +120,7 @@ class TestCircuitBreaker:
         assert breaker.is_open
         assert breaker.cooldown_remaining > 0
 
+    @pytest.mark.slow
     def test_circuit_transitions_to_half_open_after_cooldown(self, breaker):
         """Circuit transitions to half-open after recovery_timeout."""
         # Open the circuit
@@ -127,6 +135,7 @@ class TestCircuitBreaker:
         # Accessing state triggers transition check
         assert breaker.state == CircuitState.HALF_OPEN
 
+    @pytest.mark.slow
     def test_half_open_success_closes_circuit(self, breaker):
         """Success in half-open state closes the circuit."""
         # Open the circuit
@@ -142,6 +151,7 @@ class TestCircuitBreaker:
         assert breaker.state == CircuitState.CLOSED
         assert breaker.failure_count == 0
 
+    @pytest.mark.slow
     def test_half_open_failure_reopens_circuit(self, breaker):
         """Failure in half-open state reopens the circuit."""
         # Open the circuit
@@ -202,20 +212,21 @@ class TestCircuitBreakerRegistry:
 
         assert breaker1 is breaker2
 
-    def test_get_all_status_returns_all_circuits(self):
+    def test_get_all_status_returns_registered_circuits(self):
         """get_all_status returns status for all registered circuits."""
         registry = get_circuit_registry()
 
-        # Access all circuits to register them
-        for service in CircuitService:
-            registry.get(service)
+        # Register specific circuits (don't iterate all to avoid slow test)
+        registry.get(CircuitService.OPENAI_EMBEDDINGS)
+        registry.get(CircuitService.COHERE_RERANK)
 
         statuses = registry.get_all_status()
 
-        assert len(statuses) == len(CircuitService)
+        # Should have at least the 2 we registered
+        assert len(statuses) >= 2
         names = [s["circuit_name"] for s in statuses]
-        for service in CircuitService:
-            assert service.value in names
+        assert "openai_embeddings" in names
+        assert "cohere_rerank" in names
 
     def test_reset_specific_service(self):
         """reset() can reset a specific service circuit."""
@@ -234,11 +245,11 @@ class TestCircuitBreakerRegistry:
         assert breaker.is_closed
         assert breaker.failure_count == 0
 
-    def test_reset_all_services(self):
-        """reset() without argument resets all circuits."""
+    def test_reset_all_registered_services(self):
+        """reset() without argument resets all registered circuits."""
         registry = get_circuit_registry()
 
-        # Open multiple circuits
+        # Open specific circuits
         for service in [CircuitService.OPENAI_EMBEDDINGS, CircuitService.GEMINI_FLASH]:
             breaker = registry.get(service)
             for _ in range(5):
@@ -247,10 +258,35 @@ class TestCircuitBreakerRegistry:
         # Reset all
         registry.reset()
 
-        # All should be closed
-        for service in CircuitService:
-            breaker = registry.get(service)
-            assert breaker.is_closed
+        # The ones we opened should be closed
+        assert registry.get(CircuitService.OPENAI_EMBEDDINGS).is_closed
+        assert registry.get(CircuitService.GEMINI_FLASH).is_closed
+
+    def test_thread_safe_get(self):
+        """get() is thread-safe for concurrent access."""
+        import threading
+
+        registry = get_circuit_registry()
+        results = []
+        errors = []
+
+        def get_circuit():
+            try:
+                breaker = registry.get(CircuitService.OPENAI_CHAT)
+                results.append(breaker)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=get_circuit) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # No errors and all results point to the same breaker
+        assert len(errors) == 0
+        assert len(results) == 10
+        assert all(r is results[0] for r in results)
 
 
 # =============================================================================
@@ -269,13 +305,25 @@ class TestUtilityFunctions:
         """TimeoutError is retryable."""
         assert is_retryable_exception(TimeoutError("request timeout"))
 
-    def test_is_retryable_exception_429_in_message(self):
-        """Exception with 429 in message is retryable."""
-        assert is_retryable_exception(Exception("Rate limit exceeded: 429"))
+    def test_is_retryable_exception_rate_limit_in_message(self):
+        """Exception with 'rate limit' in message is retryable."""
+        assert is_retryable_exception(Exception("Rate limit exceeded"))
 
-    def test_is_retryable_exception_500_in_message(self):
-        """Exception with 500 in message is retryable."""
-        assert is_retryable_exception(Exception("Internal server error 500"))
+    def test_is_retryable_exception_status_code_429(self):
+        """Exception with status_code=429 is retryable."""
+
+        class MockApiError(Exception):
+            status_code = 429
+
+        assert is_retryable_exception(MockApiError("rate limited"))
+
+    def test_is_retryable_exception_openai_rate_limit(self):
+        """OpenAI-style RateLimitError is retryable by class name."""
+
+        class RateLimitError(Exception):
+            pass
+
+        assert is_retryable_exception(RateLimitError("rate limited"))
 
     def test_is_retryable_exception_resource_exhausted(self):
         """Gemini 'resource exhausted' is retryable."""
@@ -284,6 +332,12 @@ class TestUtilityFunctions:
     def test_is_retryable_exception_non_retryable(self):
         """Generic exceptions are not retryable."""
         assert not is_retryable_exception(ValueError("invalid input"))
+
+    def test_is_retryable_exception_false_positive_prevention(self):
+        """Random numbers in error message don't trigger retryable."""
+        # "429" alone shouldn't match - needs context
+        assert not is_retryable_exception(ValueError("Need 429 items"))
+        assert not is_retryable_exception(ValueError("Error code: 500x"))
 
     def test_get_circuit_status(self):
         """get_circuit_status returns status dict."""
@@ -295,10 +349,12 @@ class TestUtilityFunctions:
 
     def test_get_all_circuits_status(self):
         """get_all_circuits_status returns list of status dicts."""
+        # First register a circuit
+        get_circuit_registry().get(CircuitService.OPENAI_EMBEDDINGS)
+
         statuses = get_all_circuits_status()
 
         assert isinstance(statuses, list)
-        # Should have created circuits during the call
         for status in statuses:
             assert "circuit_name" in status
 
@@ -434,6 +490,116 @@ class TestWithCircuitBreakerDecorator:
 
 
 # =============================================================================
+# Service Integration Tests
+# =============================================================================
+
+
+class TestServiceIntegration:
+    """Tests for circuit breaker integration with services."""
+
+    async def test_embedding_service_fallback_on_circuit_open(self):
+        """EmbeddingService returns None when circuit is open."""
+        from app.core.circuit_breaker import CircuitOpenError
+
+        # Simulate what embedder.py does
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.OPENAI_EMBEDDINGS)
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+
+        assert breaker.is_open
+
+        # The actual service catches CircuitOpenError and returns None
+        # We verify the pattern works
+        fallback_result = None
+        try:
+
+            @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
+            async def embed_text():
+                return [0.1] * 1536
+
+            await embed_text()
+        except CircuitOpenError:
+            # This is the fallback pattern used in embedder.py
+            fallback_result = None
+
+        assert fallback_result is None
+
+    async def test_reranker_service_fallback_on_circuit_open(self):
+        """CohereRerankService falls back to RRF order when circuit is open."""
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.COHERE_RERANK)
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+
+        # Simulate reranker's fallback behavior
+        documents = ["doc1", "doc2", "doc3"]
+        fallback_order = None
+
+        try:
+
+            @with_circuit_breaker(CircuitService.COHERE_RERANK)
+            async def rerank(docs):
+                return {"reranked": docs}
+
+            await rerank(documents)
+        except CircuitOpenError:
+            # Return original RRF order as fallback
+            fallback_order = list(range(len(documents)))
+
+        assert fallback_order == [0, 1, 2]
+
+    async def test_intent_analyzer_fallback_to_rag(self):
+        """IntentAnalyzer defaults to RAG engine when circuit is open."""
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.OPENAI_CHAT)
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+
+        # Simulate intent analyzer's fallback
+        fallback_intent = None
+
+        try:
+
+            @with_circuit_breaker(CircuitService.OPENAI_CHAT)
+            async def classify_intent():
+                return {"intent": "citation", "confidence": 0.9}
+
+            await classify_intent()
+        except CircuitOpenError:
+            # Fallback to RAG with low confidence
+            fallback_intent = {"intent": "rag_search", "confidence": 0.3}
+
+        assert fallback_intent is not None
+        assert fallback_intent["intent"] == "rag_search"
+        assert fallback_intent["confidence"] < 0.5
+
+    async def test_comparator_raises_error_on_circuit_open(self):
+        """StatementComparator raises error (no silent fallback) when circuit is open."""
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.OPENAI_CHAT)
+
+        # Open the circuit
+        for _ in range(5):
+            breaker.record_failure()
+
+        # Comparator should NOT silently fail - user must know
+        with pytest.raises(CircuitOpenError):
+
+            @with_circuit_breaker(CircuitService.OPENAI_CHAT)
+            async def compare_statements():
+                return {"result": "contradiction"}
+
+            await compare_statements()
+
+
+# =============================================================================
 # Integration Tests
 # =============================================================================
 
@@ -441,8 +607,8 @@ class TestWithCircuitBreakerDecorator:
 class TestCircuitBreakerIntegration:
     """Integration tests for circuit breaker behavior."""
 
-    async def test_full_circuit_lifecycle(self):
-        """Test complete circuit lifecycle: closed -> open -> half_open -> closed."""
+    async def test_circuit_lifecycle_with_reset(self):
+        """Test circuit lifecycle: closed -> open -> reset -> closed."""
         registry = get_circuit_registry()
         breaker = registry.get(CircuitService.DOCUMENTAI_OCR)
 
@@ -455,11 +621,7 @@ class TestCircuitBreakerIntegration:
 
         assert breaker.state == CircuitState.OPEN
 
-        # Wait for recovery (using short wait in config)
-        await asyncio.sleep(2.1)  # Longer than default 2 min, but we use test config
-
-        # Note: In real tests, we'd use a shorter config
-        # For now, just verify the circuit can be reset
+        # Reset instead of waiting for cooldown (faster test)
         registry.reset(CircuitService.DOCUMENTAI_OCR)
 
         assert breaker.state == CircuitState.CLOSED

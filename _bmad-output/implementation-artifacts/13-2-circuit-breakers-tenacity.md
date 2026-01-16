@@ -51,8 +51,8 @@ So that **failures don't cascade and the system degrades gracefully**.
 - [x] Task 4: Apply circuit breakers to Gemini services (AC: #1, #2, #3)
   - [x] 4.1 Refactor `gemini_validator.py` (OCR validation) to use centralized circuit breaker
   - [x] 4.2 Refactor `date_extractor.py` (timeline) to use centralized circuit breaker
-  - [x] 4.3 Refactor `event_classifier.py` (timeline) - Not implemented (not found in codebase)
-  - [x] 4.4 Refactor `extractor.py` (MIG entity extraction) - Not implemented (not found in codebase)
+  - [N/A] 4.3 Refactor `event_classifier.py` (timeline) - Not applicable (file not in codebase)
+  - [N/A] 4.4 Refactor `extractor.py` (MIG entity extraction) - Not applicable (file not in codebase)
   - [x] 4.5 Implement fallback for Gemini: skip validation/extraction, return empty result (graceful degradation)
 
 - [x] Task 5: Apply circuit breakers to Cohere and DocumentAI (AC: #1, #2, #3)

@@ -98,33 +98,77 @@ RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
 def is_retryable_exception(exc: Exception) -> bool:
     """Check if an exception is retryable.
 
+    Checks both exception types and error context to determine if an
+    operation should be retried. Handles OpenAI, Cohere, and Gemini errors.
+
     Args:
         exc: The exception to check.
 
     Returns:
         True if the exception should trigger a retry.
     """
-    # Check standard exceptions
+    # Check standard exceptions first
     if isinstance(exc, RETRYABLE_EXCEPTIONS):
         return True
 
-    # Check error message for HTTP status codes
+    # Check for OpenAI SDK exceptions by class name (avoids hard import)
+    exc_class_name = type(exc).__name__
+    openai_retryable = (
+        "RateLimitError",
+        "APIConnectionError",
+        "APITimeoutError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+    )
+    if exc_class_name in openai_retryable:
+        return True
+
+    # Check for Cohere API errors
+    if exc_class_name == "ApiError":
+        # Cohere ApiError - check status code if available
+        status_code = getattr(exc, "status_code", None)
+        if status_code is not None and status_code in (429, 500, 502, 503, 504):
+            return True
+
+    # Check for Google/Gemini errors
+    google_retryable = (
+        "ResourceExhausted",
+        "ServiceUnavailable",
+        "DeadlineExceeded",
+        "Unavailable",
+    )
+    if exc_class_name in google_retryable:
+        return True
+
+    # Check HTTP status code in exception attributes (common pattern)
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if isinstance(status_code, int) and status_code in (429, 500, 502, 503, 504):
+        return True
+
+    # Fallback: Check error message for specific HTTP status patterns
+    # Use stricter patterns to avoid false positives
     error_str = str(exc).lower()
-    retryable_indicators = (
-        "429",  # Rate limit
-        "500",  # Internal server error
-        "502",  # Bad gateway
-        "503",  # Service unavailable
-        "504",  # Gateway timeout
-        "rate",  # Rate limit
-        "quota",  # Quota exceeded
-        "timeout",  # Timeout
-        "connection",  # Connection error
-        "temporary",  # Temporary error
-        "resource exhausted",  # Gemini rate limit
+    retryable_patterns = (
+        "status code 429",
+        "status code 500",
+        "status code 502",
+        "status code 503",
+        "status code 504",
+        "status_code=429",
+        "status_code=500",
+        "status_code=502",
+        "status_code=503",
+        "status_code=504",
+        "rate limit",
+        "rate_limit",
+        "ratelimit",
+        "quota exceeded",
+        "resource exhausted",
+        "temporarily unavailable",
+        "service unavailable",
     )
 
-    return any(indicator in error_str for indicator in retryable_indicators)
+    return any(pattern in error_str for pattern in retryable_patterns)
 
 
 # =============================================================================
@@ -326,13 +370,19 @@ class CircuitBreaker:
             Dictionary with circuit status details.
         """
         with self._lock:
+            # Calculate cooldown inline to avoid deadlock (lock is not re-entrant)
+            cooldown = 0.0
+            if self._state == CircuitState.OPEN and self._last_failure_time is not None:
+                elapsed = time.time() - self._last_failure_time
+                cooldown = max(0.0, self.config.recovery_timeout - elapsed)
+
             return {
                 "circuit_name": self.name,
                 "state": self._state.value,
                 "failure_count": self._failure_count,
                 "success_count": self._success_count,
                 "last_failure": self._last_failure_time,
-                "cooldown_remaining": self.cooldown_remaining,
+                "cooldown_remaining": cooldown,
                 "config": {
                     "failure_threshold": self.config.failure_threshold,
                     "recovery_timeout": self.config.recovery_timeout,
@@ -369,11 +419,14 @@ class CircuitBreakerRegistry:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
                     cls._instance._circuits: dict[CircuitService, CircuitBreaker] = {}
+                    cls._instance._circuits_lock = Lock()
                     cls._instance._initialized = False
         return cls._instance
 
     def get(self, service: CircuitService) -> CircuitBreaker:
         """Get or create circuit breaker for a service.
+
+        Thread-safe: uses locking to prevent duplicate circuit creation.
 
         Args:
             service: The external service.
@@ -381,19 +434,26 @@ class CircuitBreakerRegistry:
         Returns:
             CircuitBreaker instance for the service.
         """
-        if service not in self._circuits:
-            config = SERVICE_CONFIGS.get(service, CircuitConfig())
-            self._circuits[service] = CircuitBreaker(
-                name=service.value,
-                config=config,
-            )
-            logger.info(
-                "circuit_breaker_created",
-                circuit_name=service.value,
-                failure_threshold=config.failure_threshold,
-                recovery_timeout=config.recovery_timeout,
-            )
-        return self._circuits[service]
+        # Fast path: check without lock first (safe for read)
+        if service in self._circuits:
+            return self._circuits[service]
+
+        # Slow path: acquire lock to create circuit
+        with self._circuits_lock:
+            # Double-check after acquiring lock
+            if service not in self._circuits:
+                config = SERVICE_CONFIGS.get(service, CircuitConfig())
+                self._circuits[service] = CircuitBreaker(
+                    name=service.value,
+                    config=config,
+                )
+                logger.info(
+                    "circuit_breaker_created",
+                    circuit_name=service.value,
+                    failure_threshold=config.failure_threshold,
+                    recovery_timeout=config.recovery_timeout,
+                )
+            return self._circuits[service]
 
     def get_all_status(self) -> list[dict[str, Any]]:
         """Get status of all registered circuit breakers.

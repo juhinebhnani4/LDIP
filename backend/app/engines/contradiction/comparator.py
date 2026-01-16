@@ -1,12 +1,16 @@
 """Statement Comparator Engine for pairwise contradiction detection.
 
 Story 5-2: Statement Pair Comparison
+Story 13-2: Circuit breaker protection for GPT-4 calls
 
 Compares pairs of statements about the same entity using GPT-4 to detect
 contradictions. Implements chain-of-thought reasoning for attorney review.
 
 CRITICAL: Uses GPT-4 per LLM routing rules (ADR-002).
 Contradiction detection = high-stakes reasoning, user-facing.
+
+Fallback: Circuit open raises ComparatorError - no silent fallback for
+high-stakes contradiction detection (user must be aware of degraded state).
 """
 
 import asyncio
@@ -18,6 +22,11 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_circuit_breaker,
+)
 from app.core.config import get_settings
 from app.engines.contradiction.prompts import (
     STATEMENT_COMPARISON_SYSTEM_PROMPT,
@@ -46,9 +55,6 @@ GPT4_OUTPUT_COST_PER_1K = 0.03  # $0.03 per 1K output tokens
 
 # Rate limiting
 DEFAULT_BATCH_SIZE = 5  # Process 5 pairs in parallel (rate limit safe)
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 1.0
-MAX_RETRY_DELAY = 30.0
 
 
 # =============================================================================
@@ -251,7 +257,7 @@ class StatementComparator:
         doc_a_name: str | None = None,
         doc_b_name: str | None = None,
     ) -> tuple[StatementPairComparison, LLMCostTracker]:
-        """Compare a single pair of statements using GPT-4.
+        """Compare a single pair of statements using GPT-4 with circuit breaker.
 
         Args:
             statement_a: First statement.
@@ -264,7 +270,7 @@ class StatementComparator:
             Tuple of (comparison result, cost tracker).
 
         Raises:
-            ComparatorError: If comparison fails after retries.
+            ComparatorError: If comparison fails or circuit is open.
         """
         start_time = time.time()
 
@@ -279,101 +285,97 @@ class StatementComparator:
             page_b=statement_b.page_number,
         )
 
-        # Retry with exponential backoff
-        last_error: Exception | None = None
-        retry_delay = INITIAL_RETRY_DELAY
+        try:
+            # Call GPT-4 with circuit breaker protection
+            response_text, input_tokens, output_tokens = await self._call_gpt4_comparison(
+                user_prompt
+            )
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = await self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1,  # Low temperature for consistent analysis
-                )
+            # Track tokens
+            cost_tracker = LLMCostTracker(
+                model=self.model_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
 
-                # Track tokens
-                cost_tracker = LLMCostTracker(
-                    model=self.model_name,
-                    input_tokens=response.usage.prompt_tokens if response.usage else 0,
-                    output_tokens=response.usage.completion_tokens if response.usage else 0,
-                )
+            # Parse response
+            comparison = self._parse_comparison_response(
+                response_text=response_text,
+                statement_a=statement_a,
+                statement_b=statement_b,
+            )
 
-                # Parse response
-                response_text = response.choices[0].message.content
-                comparison = self._parse_comparison_response(
-                    response_text=response_text,
-                    statement_a=statement_a,
-                    statement_b=statement_b,
-                )
+            processing_time = int((time.time() - start_time) * 1000)
 
-                processing_time = int((time.time() - start_time) * 1000)
+            logger.info(
+                "statement_comparison_complete",
+                entity_name=entity_name,
+                result=comparison.result.value,
+                confidence=comparison.confidence,
+                cost_usd=cost_tracker.cost_usd,
+                processing_time_ms=processing_time,
+            )
 
-                logger.info(
-                    "statement_comparison_complete",
-                    entity_name=entity_name,
-                    result=comparison.result.value,
-                    confidence=comparison.confidence,
-                    cost_usd=cost_tracker.cost_usd,
-                    processing_time_ms=processing_time,
-                    attempts=attempt + 1,
-                )
+            return comparison, cost_tracker
 
-                return comparison, cost_tracker
+        except CircuitOpenError as e:
+            # No silent fallback for high-stakes contradiction detection
+            # User must be aware system is in degraded state
+            logger.error(
+                "comparison_circuit_open",
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+                entity_name=entity_name,
+            )
+            raise ComparatorError(
+                f"Contradiction analysis unavailable - GPT-4 circuit open. "
+                f"Retry after {e.cooldown_remaining:.0f}s",
+                code="CIRCUIT_OPEN",
+                is_retryable=True,
+            ) from e
 
-            except OpenAIConfigurationError:
-                raise
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
+        except OpenAIConfigurationError:
+            raise
 
-                # Check for retryable errors (rate limit or transient)
-                is_rate_limit = (
-                    "429" in error_str
-                    or "rate" in error_str
-                    or "quota" in error_str
-                )
-                is_transient = (
-                    "500" in error_str
-                    or "502" in error_str
-                    or "503" in error_str
-                    or "504" in error_str
-                    or "timeout" in error_str
-                    or "connection" in error_str
-                    or "temporary" in error_str
-                )
-                is_retryable = is_rate_limit or is_transient
+        except Exception as e:
+            logger.error(
+                "statement_comparison_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                entity_name=entity_name,
+            )
+            raise ComparatorError(
+                f"Statement comparison failed: {e}",
+                code="COMPARISON_FAILED",
+            ) from e
 
-                if is_retryable and attempt < MAX_RETRIES - 1:
-                    logger.warning(
-                        "statement_comparison_retrying",
-                        attempt=attempt + 1,
-                        max_attempts=MAX_RETRIES,
-                        retry_delay=retry_delay,
-                        error=str(e),
-                        is_rate_limit=is_rate_limit,
-                        is_transient=is_transient,
-                    )
-                    await asyncio.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                elif not is_retryable:
-                    # Non-retryable error, fail immediately
-                    break
+    @with_circuit_breaker(CircuitService.OPENAI_CHAT)
+    async def _call_gpt4_comparison(
+        self, user_prompt: str
+    ) -> tuple[str, int, int]:
+        """Call GPT-4 API with circuit breaker protection.
 
-        logger.error(
-            "statement_comparison_failed",
-            error=str(last_error),
-            entity_name=entity_name,
-            attempts=MAX_RETRIES,
+        Args:
+            user_prompt: Formatted user prompt.
+
+        Returns:
+            Tuple of (response_text, input_tokens, output_tokens).
+        """
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,  # Low temperature for consistent analysis
         )
 
-        raise ComparatorError(
-            f"Statement comparison failed after {MAX_RETRIES} attempts: {last_error}",
-            code="COMPARISON_FAILED",
-        )
+        response_text = response.choices[0].message.content or ""
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+
+        return response_text, input_tokens, output_tokens
 
     async def compare_all_entity_statements(
         self,

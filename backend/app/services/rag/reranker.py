@@ -1,16 +1,18 @@
 """Cohere Rerank Service for RAG pipeline.
 
+Story 13-2: Circuit breaker protection for Cohere calls
+
 This module implements document reranking using Cohere Rerank v3.5.
 The reranker takes top-N candidates from hybrid search and reranks them
 by relevance to the query using Cohere's cross-encoder model.
 
-CRITICAL: Implements graceful fallback - if Cohere API fails,
-the system falls back to RRF-ranked results from hybrid search.
+CRITICAL: Implements graceful fallback - if Cohere API fails or circuit
+is open, the system falls back to RRF-ranked results from hybrid search.
 
 Key Features:
 - 40-70% precision improvement for legal document retrieval
+- Circuit breaker protection for resilience
 - Graceful fallback to RRF on API failures
-- Retry logic with exponential backoff
 - Structured logging via structlog
 """
 
@@ -21,12 +23,12 @@ from typing import Sequence
 import cohere
 import structlog
 from cohere.core.api_error import ApiError as CohereApiError
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-)
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_circuit_breaker,
+)
 from app.core.config import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -191,18 +193,13 @@ class CohereRerankService:
             return_documents=False,  # We have originals, just need scores
         )
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        reraise=True,
-    )
     async def rerank(
         self,
         query: str,
         documents: Sequence[str],
         top_n: int = DEFAULT_TOP_N,
     ) -> RerankResult:
-        """Rerank documents by relevance to query.
+        """Rerank documents by relevance to query with circuit breaker.
 
         Uses Cohere Rerank v3.5 to score document relevance.
         Results are returned sorted by relevance_score descending.
@@ -214,9 +211,7 @@ class CohereRerankService:
 
         Returns:
             RerankResult with sorted results by relevance_score.
-
-        Raises:
-            CohereRerankServiceError: If reranking fails after retries.
+            Falls back to original order when circuit is open.
 
         Example:
             >>> result = await service.rerank(
@@ -258,15 +253,9 @@ class CohereRerankService:
         )
 
         try:
-            # Run synchronous Cohere API call in thread to avoid blocking
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._do_rerank,
-                    query,
-                    list(documents),
-                    effective_top_n,
-                ),
-                timeout=RERANK_TIMEOUT_SECONDS,
+            # Call Cohere with circuit breaker protection
+            response = await self._call_cohere_rerank(
+                query, list(documents), effective_top_n
             )
 
             # Map response to our dataclass
@@ -293,17 +282,26 @@ class CohereRerankService:
                 fallback_reason=None,
             )
 
-        except asyncio.TimeoutError as e:
+        except CircuitOpenError as e:
+            # Fallback: return original order (use RRF scores)
+            logger.warning(
+                "cohere_rerank_circuit_open_fallback",
+                query_len=len(query),
+                document_count=len(documents),
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            return self._fallback_result(query, len(documents), effective_top_n,
+                                         reason=f"Circuit open, retry after {e.cooldown_remaining:.0f}s")
+
+        except asyncio.TimeoutError:
             logger.warning(
                 "cohere_rerank_timeout",
                 query_len=len(query),
                 timeout=RERANK_TIMEOUT_SECONDS,
             )
-            raise CohereRerankServiceError(
-                message=f"Cohere API timeout after {RERANK_TIMEOUT_SECONDS}s",
-                code="COHERE_TIMEOUT",
-                is_retryable=True,
-            ) from e
+            return self._fallback_result(query, len(documents), effective_top_n,
+                                         reason=f"Timeout after {RERANK_TIMEOUT_SECONDS}s")
 
         except CohereApiError as e:
             logger.warning(
@@ -311,11 +309,8 @@ class CohereRerankService:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            raise CohereRerankServiceError(
-                message=f"Cohere API error: {e!s}",
-                code="COHERE_API_ERROR",
-                is_retryable=True,
-            ) from e
+            return self._fallback_result(query, len(documents), effective_top_n,
+                                         reason=f"API error: {e}")
 
         except Exception as e:
             logger.error(
@@ -323,11 +318,68 @@ class CohereRerankService:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            raise CohereRerankServiceError(
-                message=f"Unexpected rerank error: {e!s}",
-                code="RERANK_UNEXPECTED_ERROR",
-                is_retryable=False,
-            ) from e
+            return self._fallback_result(query, len(documents), effective_top_n,
+                                         reason=f"Unexpected error: {e}")
+
+    @with_circuit_breaker(CircuitService.COHERE_RERANK, timeout_override=RERANK_TIMEOUT_SECONDS)
+    async def _call_cohere_rerank(
+        self,
+        query: str,
+        documents: list[str],
+        top_n: int,
+    ) -> cohere.RerankResponse:
+        """Call Cohere API with circuit breaker protection.
+
+        Args:
+            query: Search query.
+            documents: Documents to rerank.
+            top_n: Number of results.
+
+        Returns:
+            Cohere rerank response.
+        """
+        # Run synchronous Cohere API call in thread to avoid blocking
+        return await asyncio.to_thread(
+            self._do_rerank,
+            query,
+            documents,
+            top_n,
+        )
+
+    def _fallback_result(
+        self,
+        query: str,
+        doc_count: int,
+        top_n: int,
+        reason: str,
+    ) -> RerankResult:
+        """Create fallback result using original document order.
+
+        Args:
+            query: Original query.
+            doc_count: Total document count.
+            top_n: Number of results requested.
+            reason: Fallback reason.
+
+        Returns:
+            RerankResult with original order preserved.
+        """
+        # Return first top_n documents in original order
+        results = [
+            RerankResultItem(
+                index=i,
+                relevance_score=1.0 - (i * 0.1),  # Decreasing scores
+            )
+            for i in range(min(top_n, doc_count))
+        ]
+
+        return RerankResult(
+            results=results,
+            query=query,
+            model=RERANK_MODEL,
+            rerank_used=False,
+            fallback_reason=reason,
+        )
 
 
 # =============================================================================

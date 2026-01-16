@@ -4,10 +4,11 @@ This module provides embedding generation for semantic search using
 OpenAI's text-embedding-3-small model. Features include:
 - Single text and batch embedding generation
 - Redis caching with 24-hour TTL
-- Retry logic with exponential backoff
+- Circuit breaker protection with retry logic (Story 13.2)
 - Rate limiting compliance
 
 CRITICAL: Used in hybrid search for semantic similarity matching.
+Fallback: Returns None on circuit open, callers should use BM25 only.
 """
 
 import hashlib
@@ -16,13 +17,12 @@ from typing import Sequence
 
 import structlog
 from openai import AsyncOpenAI
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_circuit_breaker,
+)
 from app.core.config import get_settings
 from app.services.memory.redis_keys import EMBEDDING_CACHE_TTL, embedding_cache_key
 
@@ -136,19 +136,15 @@ class EmbeddingService:
                 error=str(e),
             )
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
-    )
-    async def embed_text(self, text: str) -> list[float]:
-        """Generate embedding for single text.
+    async def embed_text(self, text: str) -> list[float] | None:
+        """Generate embedding for single text with circuit breaker protection.
 
         Args:
             text: Text content to embed. Must not be empty.
 
         Returns:
-            List of 1536 float values representing the embedding.
+            List of 1536 float values representing the embedding,
+            or None if circuit is open (fallback to BM25 only).
 
         Raises:
             EmbeddingServiceError: If embedding generation fails.
@@ -156,7 +152,8 @@ class EmbeddingService:
 
         Example:
             >>> embedding = await service.embed_text("legal agreement")
-            >>> len(embedding)
+            >>> if embedding:
+            ...     len(embedding)
             1536
         """
         if not text or not text.strip():
@@ -177,14 +174,8 @@ class EmbeddingService:
             return cached
 
         try:
-            # Generate embedding
-            response = await self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=text,
-                dimensions=EMBEDDING_DIMENSIONS,
-            )
-
-            embedding = response.data[0].embedding
+            # Generate embedding with circuit breaker
+            embedding = await self._call_openai_embedding(text)
 
             # Cache result
             await self._cache_embedding(cache_key_str, embedding)
@@ -192,10 +183,20 @@ class EmbeddingService:
             logger.info(
                 "embedding_generated",
                 text_len=len(text),
-                tokens=response.usage.total_tokens,
             )
 
             return embedding
+
+        except CircuitOpenError as e:
+            # Fallback: return None when circuit is open
+            # Callers (hybrid search) should use BM25 only
+            logger.warning(
+                "embedding_circuit_open_fallback",
+                text_len=len(text),
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            return None
 
         except Exception as e:
             logger.error(
@@ -210,17 +211,29 @@ class EmbeddingService:
                 is_retryable=True,
             ) from e
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
-    )
+    @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
+    async def _call_openai_embedding(self, text: str) -> list[float]:
+        """Call OpenAI API with circuit breaker protection.
+
+        Args:
+            text: Text to embed.
+
+        Returns:
+            Embedding vector.
+        """
+        response = await self.client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=text,
+            dimensions=EMBEDDING_DIMENSIONS,
+        )
+        return response.data[0].embedding
+
     async def embed_batch(
         self,
         texts: Sequence[str],
         skip_empty: bool = True,
     ) -> list[list[float] | None]:
-        """Generate embeddings for batch of texts.
+        """Generate embeddings for batch of texts with circuit breaker protection.
 
         Processes up to MAX_BATCH_SIZE texts in a single API call.
         Empty texts are either skipped or raise an error based on skip_empty.
@@ -232,6 +245,7 @@ class EmbeddingService:
 
         Returns:
             List of embeddings (or None for empty texts if skip_empty=True).
+            Returns all None if circuit is open (fallback to BM25 only).
             Results are in the same order as input texts.
 
         Raises:
@@ -242,7 +256,8 @@ class EmbeddingService:
             >>> embeddings = await service.embed_batch(["text1", "text2"])
             >>> len(embeddings)
             2
-            >>> len(embeddings[0])
+            >>> if embeddings[0]:
+            ...     len(embeddings[0])
             1536
         """
         if len(texts) > MAX_BATCH_SIZE:
@@ -263,28 +278,33 @@ class EmbeddingService:
             return [None] * len(texts)
 
         try:
-            # Generate embeddings in batch
-            response = await self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=valid_texts,
-                dimensions=EMBEDDING_DIMENSIONS,
-            )
+            # Generate embeddings in batch with circuit breaker
+            embeddings = await self._call_openai_batch_embedding(valid_texts)
 
             # Map back to original indices
             results: list[list[float] | None] = [None] * len(texts)
 
-            for i, embedding_data in enumerate(response.data):
+            for i, embedding in enumerate(embeddings):
                 original_idx = valid_indices[i]
-                results[original_idx] = embedding_data.embedding
+                results[original_idx] = embedding
 
             logger.info(
                 "batch_embeddings_generated",
                 batch_size=len(texts),
                 valid_count=len(valid_texts),
-                tokens=response.usage.total_tokens,
             )
 
             return results
+
+        except CircuitOpenError as e:
+            # Fallback: return all None when circuit is open
+            logger.warning(
+                "batch_embedding_circuit_open_fallback",
+                batch_size=len(texts),
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            return [None] * len(texts)
 
         except Exception as e:
             logger.error(
@@ -299,6 +319,25 @@ class EmbeddingService:
                 code="BATCH_EMBEDDING_FAILED",
                 is_retryable=True,
             ) from e
+
+    @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
+    async def _call_openai_batch_embedding(
+        self, texts: list[str]
+    ) -> list[list[float]]:
+        """Call OpenAI batch API with circuit breaker protection.
+
+        Args:
+            texts: Texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        response = await self.client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=texts,
+            dimensions=EMBEDDING_DIMENSIONS,
+        )
+        return [data.embedding for data in response.data]
 
 
 _embedding_service_instance: EmbeddingService | None = None

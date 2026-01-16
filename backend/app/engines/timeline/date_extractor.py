@@ -1,13 +1,17 @@
 """Gemini-based Date Extraction Service.
 
+Story 13-2: Circuit breaker protection for Gemini calls
+
 Uses Gemini 3 Flash for extracting dates with surrounding context
 from legal document text for timeline construction.
 
 CRITICAL: Uses Gemini for date extraction per LLM routing rules -
 this is an ingestion task, NOT user-facing reasoning.
+
+Fallback: Returns empty result when circuit is open - date extraction
+is non-critical for document ingestion to continue.
 """
 
-import asyncio
 import json
 import time
 from datetime import date
@@ -15,6 +19,11 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_circuit_breaker,
+)
 from app.core.config import get_settings
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
@@ -31,9 +40,6 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 1.0
-MAX_RETRY_DELAY = 30.0
 MAX_TEXT_LENGTH = 30000  # Max characters per extraction request
 CHUNK_OVERLAP = 500  # Characters to overlap between chunks for boundary dates
 
@@ -213,7 +219,7 @@ class DateExtractor:
         matter_id: str,
         page_number: int | None = None,
     ) -> DateExtractionResult:
-        """Extract dates from a single text chunk.
+        """Extract dates from a single text chunk with circuit breaker.
 
         Args:
             text: Text chunk to process.
@@ -223,78 +229,66 @@ class DateExtractor:
 
         Returns:
             DateExtractionResult with extracted dates.
+            Returns empty result if circuit is open (graceful degradation).
         """
         prompt = DATE_EXTRACTION_USER_PROMPT.format(text=text)
 
-        # Retry with exponential backoff
-        last_error: Exception | None = None
-        retry_delay = INITIAL_RETRY_DELAY
+        try:
+            # Call Gemini with circuit breaker protection
+            response_text = await self._call_gemini_extract(prompt)
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                # Call Gemini asynchronously
-                response = await self.model.generate_content_async(prompt)
+            # Parse response
+            result = self._parse_response(
+                response_text,
+                document_id=document_id,
+                matter_id=matter_id,
+                page_number=page_number,
+            )
 
-                # Parse response
-                result = self._parse_response(
-                    response.text,
-                    document_id=document_id,
-                    matter_id=matter_id,
-                    page_number=page_number,
-                )
+            logger.debug(
+                "date_extraction_chunk_complete",
+                document_id=document_id,
+                date_count=len(result.dates),
+            )
 
-                logger.debug(
-                    "date_extraction_chunk_complete",
-                    document_id=document_id,
-                    date_count=len(result.dates),
-                    attempts=attempt + 1,
-                )
+            return result
 
-                return result
+        except CircuitOpenError as e:
+            # Graceful degradation: return empty result
+            logger.warning(
+                "date_extraction_circuit_open_fallback",
+                document_id=document_id,
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            return self._empty_result(document_id, matter_id)
 
-            except DateConfigurationError:
-                raise
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
+        except DateConfigurationError:
+            raise
 
-                # Check for rate limit errors
-                is_rate_limit = (
-                    "429" in error_str
-                    or "rate" in error_str
-                    or "quota" in error_str
-                    or "resource exhausted" in error_str
-                )
+        except Exception as e:
+            logger.error(
+                "date_extraction_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                document_id=document_id,
+                matter_id=matter_id,
+            )
+            # Graceful degradation: return empty result
+            return self._empty_result(document_id, matter_id)
 
-                if is_rate_limit and attempt < MAX_RETRIES - 1:
-                    logger.warning(
-                        "date_extraction_rate_limited",
-                        attempt=attempt + 1,
-                        max_attempts=MAX_RETRIES,
-                        retry_delay=retry_delay,
-                        error=str(e),
-                    )
-                    await asyncio.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                elif not is_rate_limit:
-                    break
+    @with_circuit_breaker(CircuitService.GEMINI_FLASH)
+    async def _call_gemini_extract(self, prompt: str) -> str:
+        """Call Gemini API with circuit breaker protection.
 
-        logger.error(
-            "date_extraction_failed",
-            error=str(last_error),
-            document_id=document_id,
-            matter_id=matter_id,
-            attempts=MAX_RETRIES,
-        )
+        Args:
+            prompt: Extraction prompt.
 
-        # Return empty result on failure (graceful degradation)
-        return DateExtractionResult(
-            dates=[],
-            document_id=document_id,
-            matter_id=matter_id,
-            total_dates_found=0,
-            processing_time_ms=0,
-        )
+        Returns:
+            Response text from Gemini.
+        """
+        response = await self.model.generate_content_async(prompt)
+        return response.text
 
     async def _extract_from_chunks(
         self,
@@ -484,62 +478,56 @@ class DateExtractor:
         matter_id: str,
         page_number: int | None = None,
     ) -> DateExtractionResult:
-        """Synchronous single chunk extraction."""
+        """Synchronous single chunk extraction.
+
+        Note: Circuit breaker decorator is async-only, but we check
+        circuit state manually for sync calls.
+        """
+        from app.core.circuit_breaker import get_circuit_registry
+
         prompt = DATE_EXTRACTION_USER_PROMPT.format(text=text)
 
-        last_error: Exception | None = None
-        retry_delay = INITIAL_RETRY_DELAY
+        # Check circuit state (manual check for sync methods)
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.GEMINI_FLASH)
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.model.generate_content(prompt)
+        if breaker.is_open:
+            logger.warning(
+                "date_extraction_sync_circuit_open",
+                document_id=document_id,
+                cooldown_remaining=breaker.cooldown_remaining,
+            )
+            return self._empty_result(document_id, matter_id)
 
-                result = self._parse_response(
-                    response.text,
-                    document_id=document_id,
-                    matter_id=matter_id,
-                    page_number=page_number,
-                )
+        try:
+            response = self.model.generate_content(prompt)
 
-                return result
+            result = self._parse_response(
+                response.text,
+                document_id=document_id,
+                matter_id=matter_id,
+                page_number=page_number,
+            )
 
-            except DateConfigurationError:
-                raise
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
+            # Record success
+            breaker.record_success()
 
-                is_rate_limit = (
-                    "429" in error_str
-                    or "rate" in error_str
-                    or "quota" in error_str
-                    or "resource exhausted" in error_str
-                )
+            return result
 
-                if is_rate_limit and attempt < MAX_RETRIES - 1:
-                    logger.warning(
-                        "date_extraction_sync_rate_limited",
-                        attempt=attempt + 1,
-                        retry_delay=retry_delay,
-                    )
-                    time.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                elif not is_rate_limit:
-                    break
+        except DateConfigurationError:
+            raise
 
-        logger.error(
-            "date_extraction_sync_failed",
-            error=str(last_error),
-            document_id=document_id,
-        )
+        except Exception as e:
+            # Record failure for circuit breaker
+            breaker.record_failure()
 
-        return DateExtractionResult(
-            dates=[],
-            document_id=document_id,
-            matter_id=matter_id,
-            total_dates_found=0,
-            processing_time_ms=0,
-        )
+            logger.error(
+                "date_extraction_sync_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                document_id=document_id,
+            )
+            return self._empty_result(document_id, matter_id)
 
     def _parse_response(
         self,

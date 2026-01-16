@@ -1,18 +1,21 @@
 """Intent Analyzer Engine for query routing.
 
 Story 6-1: Query Intent Analysis
+Story 13-2: Circuit breaker protection for OpenAI calls
 
 Classifies user queries and routes them to appropriate engines using:
 1. Fast-path regex patterns for obvious keywords
 2. GPT-3.5 LLM classification for complex queries
 3. Multi-engine fallback for low-confidence classifications
+4. Circuit breaker protection for resilience
 
 CRITICAL: Uses GPT-3.5 per LLM routing rules (ADR-002).
 Query normalization = simple task, cost-sensitive.
 DO NOT use GPT-4 - it's 30x more expensive for a simple task.
+
+Fallback: When circuit is open, defaults to RAG engine with warning.
 """
 
-import asyncio
 import json
 import re
 import time
@@ -20,6 +23,11 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_circuit_breaker,
+)
 from app.core.config import get_settings
 from app.engines.orchestrator.prompts import (
     INTENT_CLASSIFICATION_SYSTEM_PROMPT,
@@ -42,13 +50,11 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-# Retry configuration
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 0.5
-MAX_RETRY_DELAY = 10.0
-
 # High-confidence threshold for fast-path (bypass LLM)
 FAST_PATH_CONFIDENCE = 0.95
+
+# Low confidence fallback used when circuit is open
+FALLBACK_CONFIDENCE = 0.3
 
 
 # =============================================================================
@@ -331,95 +337,107 @@ class IntentAnalyzer:
     async def _llm_classification(
         self, query: str
     ) -> tuple[IntentClassification, IntentAnalysisCost]:
-        """Classify query intent using GPT-3.5.
+        """Classify query intent using GPT-3.5 with circuit breaker.
 
         Task 4.3: Use LLM for complex queries that don't match fast-path.
+        Story 13.2: Circuit breaker protection with RAG fallback.
 
         Args:
             query: User's query.
 
         Returns:
             Tuple of (classification, cost).
+            Falls back to RAG with low confidence if circuit is open.
 
         Raises:
             IntentAnalyzerError: If classification fails after retries.
         """
         user_prompt = format_intent_prompt(query)
 
-        last_error: Exception | None = None
-        retry_delay = INITIAL_RETRY_DELAY
+        try:
+            # Call OpenAI with circuit breaker protection
+            response_text, input_tokens, output_tokens = await self._call_openai_chat(
+                user_prompt
+            )
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = await self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": INTENT_CLASSIFICATION_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1,  # Low temperature for consistent classification
-                )
+            # Track cost
+            cost = IntentAnalysisCost(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                llm_call_made=True,
+            )
+            cost.calculate_cost()
 
-                # Track cost
-                cost = IntentAnalysisCost(
-                    input_tokens=response.usage.prompt_tokens if response.usage else 0,
-                    output_tokens=response.usage.completion_tokens if response.usage else 0,
-                    llm_call_made=True,
-                )
-                cost.calculate_cost()
+            # Parse response
+            classification = self._parse_classification_response(response_text)
 
-                # Parse response
-                response_text = response.choices[0].message.content
-                classification = self._parse_classification_response(response_text)
+            logger.debug(
+                "llm_classification_success",
+                intent=classification.intent.value,
+                confidence=classification.confidence,
+            )
 
-                logger.debug(
-                    "llm_classification_success",
-                    intent=classification.intent.value,
-                    confidence=classification.confidence,
-                    attempts=attempt + 1,
-                )
+            return classification, cost
 
-                return classification, cost
+        except CircuitOpenError as e:
+            # Fallback: default to RAG engine with warning
+            logger.warning(
+                "intent_circuit_open_fallback",
+                circuit_name=e.circuit_name,
+                cooldown_remaining=e.cooldown_remaining,
+                fallback="RAG engine",
+            )
+            return (
+                IntentClassification(
+                    intent=QueryIntent.RAG_SEARCH,
+                    confidence=FALLBACK_CONFIDENCE,
+                    required_engines=[EngineType.RAG],
+                    reasoning="Circuit open - defaulting to RAG search (degraded mode)",
+                ),
+                IntentAnalysisCost(llm_call_made=False),
+            )
 
-            except OpenAIConfigurationError:
-                raise
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
+        except OpenAIConfigurationError:
+            raise
 
-                # Check for retryable errors
-                is_retryable = any(
-                    indicator in error_str
-                    for indicator in [
-                        "429", "rate", "quota", "500", "502", "503", "504",
-                        "timeout", "connection", "temporary"
-                    ]
-                )
+        except Exception as e:
+            logger.error(
+                "llm_classification_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise IntentAnalyzerError(
+                f"Intent classification failed: {e}",
+                code="CLASSIFICATION_FAILED",
+            ) from e
 
-                if is_retryable and attempt < MAX_RETRIES - 1:
-                    logger.warning(
-                        "llm_classification_retrying",
-                        attempt=attempt + 1,
-                        max_attempts=MAX_RETRIES,
-                        retry_delay=retry_delay,
-                        error=str(e),
-                    )
-                    await asyncio.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                elif not is_retryable:
-                    break
+    @with_circuit_breaker(CircuitService.OPENAI_CHAT)
+    async def _call_openai_chat(
+        self, user_prompt: str
+    ) -> tuple[str, int, int]:
+        """Call OpenAI Chat API with circuit breaker protection.
 
-        logger.error(
-            "llm_classification_failed",
-            error=str(last_error),
-            attempts=MAX_RETRIES,
+        Args:
+            user_prompt: Formatted user prompt.
+
+        Returns:
+            Tuple of (response_text, input_tokens, output_tokens).
+        """
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": INTENT_CLASSIFICATION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,  # Low temperature for consistent classification
         )
 
-        raise IntentAnalyzerError(
-            f"Intent classification failed after {MAX_RETRIES} attempts: {last_error}",
-            code="CLASSIFICATION_FAILED",
-        )
+        response_text = response.choices[0].message.content or ""
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+
+        return response_text, input_tokens, output_tokens
 
     def _parse_classification_response(self, response_text: str) -> IntentClassification:
         """Parse GPT-3.5 response into IntentClassification.

@@ -41,13 +41,6 @@ FindingType = Literal[
 ]
 
 
-# =============================================================================
-# Constants (Story 7-2)
-# =============================================================================
-
-MAX_ARCHIVED_MESSAGES = 10  # Maximum messages to store in archived session
-
-
 class SessionMessage(BaseModel):
     """A single message in the session conversation.
 
@@ -176,10 +169,10 @@ class ArchivedSession(BaseModel):
     )
 
     # Last messages (subset for restoration)
+    # Note: Max length is configured in app.core.config.archived_session_max_messages
     last_messages: list[SessionMessage] = Field(
         default_factory=list,
-        max_length=MAX_ARCHIVED_MESSAGES,
-        description=f"Last {MAX_ARCHIVED_MESSAGES} messages for context restoration",
+        description="Last N messages for context restoration (N from config)",
     )
 
     # Session stats

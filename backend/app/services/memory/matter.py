@@ -21,6 +21,7 @@ from typing import Any
 import structlog
 from pydantic import ValidationError
 
+from app.core.config import get_settings
 from app.models.memory import (
     ArchivedSession,
     EntityGraphCache,
@@ -51,10 +52,6 @@ RESEARCH_NOTES_TYPE = "research_notes"  # Story 7-4: Task 4.1
 KEY_FINDINGS_KEY = "findings"  # Key for findings array in KEY_FINDINGS_TYPE
 RESEARCH_NOTES_KEY = "notes"  # Key for notes array in RESEARCH_NOTES_TYPE
 QUERY_HISTORY_KEY = "entries"  # Key for entries array in QUERY_HISTORY_TYPE
-
-# Default query limits
-DEFAULT_ARCHIVE_QUERY_LIMIT = 10
-DEFAULT_QUERY_HISTORY_LIMIT = 100
 
 
 # =============================================================================
@@ -243,7 +240,7 @@ class MatterMemoryRepository:
         self,
         matter_id: str,
         user_id: str | None = None,
-        limit: int = DEFAULT_ARCHIVE_QUERY_LIMIT,
+        limit: int | None = None,
         offset: int = 0,
     ) -> list[ArchivedSession]:
         """Get archived sessions for a matter with pagination.
@@ -253,13 +250,18 @@ class MatterMemoryRepository:
         Args:
             matter_id: Matter UUID.
             user_id: Optional user UUID to filter by (defense-in-depth).
-            limit: Maximum records to return.
+            limit: Maximum records to return. Uses config default if None.
             offset: Records to skip.
 
         Returns:
             List of ArchivedSession objects.
         """
         self._ensure_client()
+
+        # Use configurable default limit
+        settings = get_settings()
+        if limit is None:
+            limit = settings.archived_session_query_limit
 
         try:
             query = (
@@ -310,30 +312,38 @@ class MatterMemoryRepository:
     async def get_query_history(
         self,
         matter_id: str,
-        limit: int = DEFAULT_QUERY_HISTORY_LIMIT,
+        limit: int | None = None,
     ) -> QueryHistory:
-        """Get query history for a matter.
+        """Get query history for a matter using efficient DB-side slicing.
 
         Story 7-3: AC #2 - Retrieve append-only query records.
+        Epic 7 Code Review Fix: Uses DB function to avoid loading entire JSONB blob.
 
         Args:
             matter_id: Matter UUID.
-            limit: Maximum entries to return (newest last).
+            limit: Maximum entries to return (newest last). Uses config default if None.
 
         Returns:
             QueryHistory with entries.
         """
         self._ensure_client()
 
+        # Use configurable default limit
+        settings = get_settings()
+        if limit is None:
+            limit = settings.query_history_default_limit
+
         try:
-            result = (
-                self._supabase.table("matter_memory")
-                .select("data")
-                .eq("matter_id", matter_id)
-                .eq("memory_type", QUERY_HISTORY_TYPE)
-                .maybe_single()
-                .execute()
-            )
+            # Use DB function for efficient slicing (Epic 7 Code Review Fix)
+            result = self._supabase.rpc(
+                "get_matter_memory_entries",
+                {
+                    "p_matter_id": matter_id,
+                    "p_memory_type": QUERY_HISTORY_TYPE,
+                    "p_key": QUERY_HISTORY_KEY,
+                    "p_limit": limit,
+                },
+            ).execute()
         except Exception as e:
             logger.error(
                 "get_query_history_failed",
@@ -342,23 +352,33 @@ class MatterMemoryRepository:
             )
             raise RuntimeError(f"Failed to get query history: {e}") from e
 
-        if not result.data:
-            return QueryHistory(entries=[])
+        # RPC returns the JSONB array directly
+        entries_data = result.data if result.data else []
 
-        data = result.data.get("data", {})
-        entries = data.get("entries", [])
+        # Parse entries into QueryHistoryEntry objects
+        entries = []
+        for entry_data in entries_data:
+            try:
+                entries.append(QueryHistoryEntry.model_validate(entry_data))
+            except ValidationError as e:
+                logger.warning(
+                    "query_history_entry_validation_failed",
+                    matter_id=matter_id,
+                    error=str(e),
+                )
+                continue
 
-        # Return most recent entries up to limit
-        return QueryHistory(entries=entries[-limit:])
+        return QueryHistory(entries=entries)
 
     async def append_query(
         self,
         matter_id: str,
         entry: QueryHistoryEntry,
     ) -> str:
-        """Append a query entry to history (append-only).
+        """Append a query entry to history with bounded size.
 
         Story 7-3: AC #2 - Uses DB function for atomic append.
+        Epic 7 Code Review Fix: Uses configurable limit to prevent unbounded growth.
 
         Args:
             matter_id: Matter UUID.
@@ -372,8 +392,12 @@ class MatterMemoryRepository:
         """
         self._ensure_client()
 
+        # Use configurable max entries limit
+        settings = get_settings()
+        max_entries = settings.query_history_max_entries
+
         try:
-            # Use append_to_matter_memory DB function for atomic append
+            # Use append_to_matter_memory DB function for atomic append with limit
             result = self._supabase.rpc(
                 "append_to_matter_memory",
                 {
@@ -381,6 +405,7 @@ class MatterMemoryRepository:
                     "p_memory_type": QUERY_HISTORY_TYPE,
                     "p_key": QUERY_HISTORY_KEY,
                     "p_item": entry.model_dump(mode="json"),
+                    "p_max_entries": max_entries,  # Epic 7 Code Review Fix
                 },
             ).execute()
         except Exception as e:
@@ -396,6 +421,7 @@ class MatterMemoryRepository:
             "query_appended",
             matter_id=matter_id,
             query_id=entry.query_id,
+            max_entries=max_entries,
         )
 
         # RPC returns UUID string from DB function

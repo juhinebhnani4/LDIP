@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.core.config import get_settings
 from app.models.memory import (
     ArchivedSession,
     SessionContext,
@@ -18,7 +19,6 @@ from app.models.memory import (
 )
 from app.services.memory.redis_keys import SESSION_TTL
 from app.services.memory.session import (
-    MAX_SESSION_MESSAGES,
     SessionMemoryService,
     get_session_memory_service,
     reset_session_memory_service,

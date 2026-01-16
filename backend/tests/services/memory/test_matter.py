@@ -358,10 +358,9 @@ class TestQueryHistoryMethods:
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
     ) -> None:
-        """Should return empty history when none exists."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        """Should return empty history when none exists (Epic 7 Code Review Fix)."""
+        # DB function returns empty array when no history exists
+        mock_supabase.rpc.return_value.execute.return_value.data = []
 
         history = await matter_repo.get_query_history(MATTER_ID)
 
@@ -373,7 +372,7 @@ class TestQueryHistoryMethods:
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
     ) -> None:
-        """Should return query history entries."""
+        """Should return query history entries using DB function (Epic 7 Code Review Fix)."""
         entries_data = [
             {
                 "query_id": "q1",
@@ -390,11 +389,18 @@ class TestQueryHistoryMethods:
                 "verified": True,
             },
         ]
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-            "data": {"entries": entries_data}
-        }
+        # Now uses RPC function get_matter_memory_entries for efficient DB-side slicing
+        mock_supabase.rpc.return_value.execute.return_value.data = entries_data
 
         history = await matter_repo.get_query_history(MATTER_ID)
+
+        # Verify RPC was called with correct params
+        mock_supabase.rpc.assert_called_once()
+        call_args = mock_supabase.rpc.call_args
+        assert call_args[0][0] == "get_matter_memory_entries"
+        assert call_args[0][1]["p_matter_id"] == MATTER_ID
+        assert call_args[0][1]["p_memory_type"] == QUERY_HISTORY_TYPE
+        assert call_args[0][1]["p_key"] == "entries"
 
         assert len(history.entries) == 2
         assert history.entries[0].query_id == "q1"
@@ -406,15 +412,18 @@ class TestQueryHistoryMethods:
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
     ) -> None:
-        """Should respect limit parameter."""
-        entries_data = [{"query_id": f"q{i}", "query_text": f"Query {i}", "asked_by": "u1", "asked_at": "2026-01-14T10:00:00Z"} for i in range(10)]
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-            "data": {"entries": entries_data}
-        }
+        """Should pass limit parameter to DB function (Epic 7 Code Review Fix)."""
+        entries_data = [{"query_id": f"q{i}", "query_text": f"Query {i}", "asked_by": "u1", "asked_at": "2026-01-14T10:00:00Z"} for i in range(5)]
+        # DB function returns already-limited results
+        mock_supabase.rpc.return_value.execute.return_value.data = entries_data
 
         history = await matter_repo.get_query_history(MATTER_ID, limit=5)
 
-        # Should return last 5 entries (newest)
+        # Verify limit was passed to DB function
+        call_args = mock_supabase.rpc.call_args
+        assert call_args[0][1]["p_limit"] == 5
+
+        # Should return entries from DB function
         assert len(history.entries) == 5
 
     @pytest.mark.asyncio
@@ -706,16 +715,16 @@ class TestMatterIsolationStory73:
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
     ) -> None:
-        """Query history should be filtered by matter_id."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        """Query history should be filtered by matter_id via DB function (Epic 7 Code Review Fix)."""
+        mock_supabase.rpc.return_value.execute.return_value.data = []
 
         await matter_repo.get_query_history(MATTER_ID)
 
-        # Verify matter_id filter was applied
-        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
-        assert any(call[0] == ("matter_id", MATTER_ID) for call in eq_calls)
+        # Verify matter_id filter was passed to DB function
+        mock_supabase.rpc.assert_called_once()
+        call_args = mock_supabase.rpc.call_args
+        assert call_args[0][0] == "get_matter_memory_entries"
+        assert call_args[0][1]["p_matter_id"] == MATTER_ID
 
     @pytest.mark.asyncio
     async def test_timeline_cache_isolated_by_matter(
@@ -856,8 +865,8 @@ class TestErrorHandling:
         matter_repo: MatterMemoryRepository,
         mock_supabase: MagicMock,
     ) -> None:
-        """Should raise RuntimeError on database failure."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = Exception(
+        """Should raise RuntimeError on database failure (Epic 7 Code Review Fix)."""
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
             "DB unavailable"
         )
 

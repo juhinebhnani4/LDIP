@@ -5,8 +5,8 @@ Story 7-2: Session TTL and Context Restoration
 
 Manages user session context in Redis with:
 - 7-day TTL with auto-extension on access (max 30 days)
-- Sliding window message history (max 20)
-- Entity tracking for pronoun resolution
+- Sliding window message history (configurable, default 20)
+- Entity tracking for pronoun resolution (configurable limit, default 50)
 - Session archival to Matter Memory on expiry/end
 - Context restoration from archived sessions
 
@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
+from app.core.config import get_settings
 from app.models.memory import (
-    MAX_ARCHIVED_MESSAGES,
     ArchivedSession,
     SessionContext,
     SessionEntityMention,
@@ -43,9 +43,6 @@ if TYPE_CHECKING:
     from app.services.memory.matter import MatterMemoryRepository
 
 logger = structlog.get_logger(__name__)
-
-# Maximum messages in sliding window (AC #3)
-MAX_SESSION_MESSAGES = 20
 
 
 class SessionMemoryService:
@@ -402,7 +399,7 @@ class SessionMemoryService:
         self,
         context: SessionContext,
     ) -> SessionContext:
-        """Apply sliding window to keep max 20 messages (AC #3).
+        """Apply sliding window to keep max messages (configurable, default 20).
 
         Task 4: Implements sliding window logic.
 
@@ -416,18 +413,63 @@ class SessionMemoryService:
             This is a local operation on the context object.
             Caller is responsible for persisting changes.
         """
-        if len(context.messages) <= MAX_SESSION_MESSAGES:
+        settings = get_settings()
+        max_messages = settings.session_max_messages
+
+        if len(context.messages) <= max_messages:
             return context
 
         # Remove oldest messages
-        removed_count = len(context.messages) - MAX_SESSION_MESSAGES
-        context.messages = context.messages[-MAX_SESSION_MESSAGES:]
+        removed_count = len(context.messages) - max_messages
+        context.messages = context.messages[-max_messages:]
 
         logger.info(
             "sliding_window_applied",
             session_id=context.session_id,
             removed_count=removed_count,
             retained_count=len(context.messages),
+        )
+
+        return context
+
+    def _apply_entity_limit(
+        self,
+        context: SessionContext,
+    ) -> SessionContext:
+        """Apply entity limit to prevent unbounded dictionary growth.
+
+        Epic 7 Code Review Fix: Issue #4 & #7 - entities_mentioned dict grows indefinitely.
+        Keep only the most recently mentioned entities up to the configured limit.
+
+        Args:
+            context: Session context to modify.
+
+        Returns:
+            Modified context with entity limit applied.
+        """
+        settings = get_settings()
+        max_entities = settings.session_max_entities
+
+        if len(context.entities_mentioned) <= max_entities:
+            return context
+
+        # Sort by last_mentioned timestamp (newest first) and keep top N
+        sorted_entities = sorted(
+            context.entities_mentioned.items(),
+            key=lambda x: x[1].last_mentioned,
+            reverse=True,
+        )
+
+        # Keep only the most recent entities
+        removed_count = len(context.entities_mentioned) - max_entities
+        context.entities_mentioned = dict(sorted_entities[:max_entities])
+
+        logger.info(
+            "entity_limit_applied",
+            session_id=context.session_id,
+            removed_count=removed_count,
+            retained_count=len(context.entities_mentioned),
+            max_entities=max_entities,
         )
 
         return context
@@ -487,6 +529,9 @@ class SessionMemoryService:
                     mention_count=1,
                     last_mentioned=now,
                 )
+
+        # Apply entity limit to prevent unbounded growth (Epic 7 Code Review Fix)
+        context = self._apply_entity_limit(context)
 
         # Update last activity
         context.last_activity = now
@@ -630,8 +675,10 @@ class SessionMemoryService:
 
         now = datetime.now(timezone.utc).isoformat()
 
-        # Create archived session with last N messages
-        last_messages = context.messages[-MAX_ARCHIVED_MESSAGES:]
+        # Create archived session with last N messages (configurable)
+        settings = get_settings()
+        max_archived = settings.archived_session_max_messages
+        last_messages = context.messages[-max_archived:]
 
         archive = ArchivedSession(
             session_id=context.session_id,
@@ -725,8 +772,10 @@ class SessionMemoryService:
 
         # Optionally restore last messages
         if restore_messages and archive.last_messages:
-            # Limit to requested number (max 10)
-            limit = min(message_limit, MAX_ARCHIVED_MESSAGES)
+            # Limit to requested number (max from config)
+            settings = get_settings()
+            max_archived = settings.archived_session_max_messages
+            limit = min(message_limit, max_archived)
             restored = archive.last_messages[-limit:]
             context.messages = restored
 

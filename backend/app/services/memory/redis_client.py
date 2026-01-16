@@ -57,10 +57,17 @@ async def get_redis_client() -> Any:
             )
             return _redis_client
         except ImportError:
-            logger.warning(
-                "upstash_redis_not_installed",
-                fallback="redis-py",
-                message="Install upstash-redis for production use",
+            # CRITICAL: If Upstash is configured but library missing, FAIL FAST
+            # Do NOT silently fall back to localhost - this causes production data loss
+            logger.error(
+                "upstash_redis_configured_but_not_installed",
+                upstash_url=upstash_url[:30] + "...",
+                message="UPSTASH_REDIS_REST_URL is set but upstash-redis package not installed",
+            )
+            raise RuntimeError(
+                "Upstash Redis is configured (UPSTASH_REDIS_REST_URL set) but "
+                "upstash-redis package is not installed. Install it with: "
+                "pip install upstash-redis"
             )
 
     # Fallback to standard redis-py for local development

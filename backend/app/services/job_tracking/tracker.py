@@ -1106,9 +1106,9 @@ class JobTrackingService:
         processing_times = []
 
         for row in (response.data or []):
-            status = row.get("status", "").upper()
+            status = row.get("status", "").lower()
             if status in stats:
-                stats[status.lower()] += 1
+                stats[status] += 1
 
             # Calculate processing time for completed jobs
             if status == "COMPLETED" and row.get("started_at") and row.get("completed_at"):

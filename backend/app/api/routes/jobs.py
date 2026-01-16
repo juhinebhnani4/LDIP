@@ -273,13 +273,13 @@ async def get_matter_job_stats(
 
         return JobQueueStats(
             matter_id=access.matter_id,
-            queued=stats.get("queued", 0),
-            processing=stats.get("processing", 0),
-            completed=stats.get("completed", 0),
-            failed=stats.get("failed", 0),
-            cancelled=stats.get("cancelled", 0),
-            skipped=stats.get("skipped", 0),
-            avg_processing_time_ms=stats.get("avg_processing_time_ms"),
+            queued=stats.queued,
+            processing=stats.processing,
+            completed=stats.completed,
+            failed=stats.failed,
+            cancelled=stats.cancelled,
+            skipped=stats.skipped,
+            avg_processing_time_ms=stats.avg_processing_time_ms,
         )
 
     except JobTrackingError as e:

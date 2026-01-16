@@ -9,7 +9,7 @@
  * @see Story 12.2 - Export Inline Editing and Preview - Task 4.1
  */
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Pencil, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -57,37 +57,26 @@ export function EditableSectionContent({
   placeholder = 'Enter content...',
   minHeight = '200px',
 }: EditableSectionContentProps) {
-  // Track previous textContent to detect external changes
-  const prevTextContentRef = useRef(textContent);
-  const prevIsEditingRef = useRef(isEditing);
+  // Local state for textarea value - controlled sync pattern
+  const [localText, setLocalText] = useState(textContent ?? defaultText);
 
-  // Compute local text value based on prop changes (no useEffect needed)
-  const localText = useMemo(() => {
-    // If textContent changed externally, use it
-    if (textContent !== prevTextContentRef.current && textContent !== undefined) {
-      prevTextContentRef.current = textContent;
-      return textContent;
+  // Sync local text when textContent prop changes (controlled component pattern)
+  // This is intentional - we need to sync state when prop changes
+  useEffect(() => {
+    if (textContent !== undefined) {
+      setLocalText(textContent);
     }
-    // If just entering edit mode with no textContent, use default
-    if (isEditing && !prevIsEditingRef.current && !textContent && defaultText) {
-      prevIsEditingRef.current = isEditing;
-      return defaultText;
+  }, [textContent]);
+
+  // Initialize local text with default when entering edit mode
+  useEffect(() => {
+    if (isEditing && !textContent && defaultText) {
+      setLocalText(defaultText);
     }
-    prevIsEditingRef.current = isEditing;
-    // Return current textContent or default
-    return textContent ?? defaultText;
-  }, [textContent, isEditing, defaultText]);
-
-  // Local state for textarea value (synced from computed value)
-  const [editedText, setEditedText] = useState(localText);
-
-  // Sync edited text when localText changes (prop-driven)
-  if (editedText !== localText && textContent !== undefined) {
-    setEditedText(localText);
-  }
+  }, [isEditing, textContent, defaultText]);
 
   const handleTextChange = (value: string) => {
-    setEditedText(value);
+    setLocalText(value);
     onUpdateText(value);
   };
 
@@ -112,7 +101,7 @@ export function EditableSectionContent({
       <div className="pr-8">
         {isEditing ? (
           <textarea
-            value={editedText}
+            value={localText}
             onChange={(e) => handleTextChange(e.target.value)}
             placeholder={placeholder}
             className={cn(

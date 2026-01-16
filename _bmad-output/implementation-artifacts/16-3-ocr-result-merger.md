@@ -1,6 +1,6 @@
 # Story 16.3: Implement OCR Result Merger Service
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

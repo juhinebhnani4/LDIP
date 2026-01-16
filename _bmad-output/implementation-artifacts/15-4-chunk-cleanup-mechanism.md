@@ -1,6 +1,6 @@
 # Story 15.4: Implement Chunk Cleanup Mechanism
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

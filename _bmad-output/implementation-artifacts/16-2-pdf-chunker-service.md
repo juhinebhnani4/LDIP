@@ -1,6 +1,6 @@
 # Story 16.2: Implement PDFChunker Service
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

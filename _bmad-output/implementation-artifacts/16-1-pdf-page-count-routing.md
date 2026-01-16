@@ -1,6 +1,6 @@
 # Story 16.1: Implement PDF Page Count Detection and Routing
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

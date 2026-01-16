@@ -1,6 +1,6 @@
 # Story 17.1: Implement Memory-Safe Streaming PDF Split
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

@@ -1,6 +1,6 @@
 # Story 15.3: Integrate Chunk Progress with Job Tracking
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

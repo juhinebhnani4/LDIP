@@ -1,20 +1,26 @@
 """Unit tests for dashboard API routes.
 
 Story 14.5: Dashboard Real APIs
+
+Uses FastAPI dependency_overrides pattern for proper test isolation.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.activity import DashboardStats
-from app.services.dashboard_stats_service import DashboardStatsServiceError
+from app.services.dashboard_stats_service import (
+    DashboardStatsService,
+    DashboardStatsServiceError,
+    get_dashboard_stats_service,
+)
 
 
 # Test JWT secret
@@ -52,7 +58,7 @@ def create_test_token(
 class TestGetDashboardStats:
     """Tests for GET /api/dashboard/stats endpoint."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_returns_dashboard_stats(self) -> None:
         """Should return dashboard statistics for authenticated user."""
         user_id = str(uuid4())
@@ -64,18 +70,13 @@ class TestGetDashboardStats:
             pending_reviews=3,
         )
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.dashboard_stats_service.get_dashboard_stats_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_dashboard_stats.return_value = mock_stats
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=DashboardStatsService)
+        mock_service.get_dashboard_stats.return_value = mock_stats
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_dashboard_stats_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -84,14 +85,16 @@ class TestGetDashboardStats:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "data" in data
-        assert data["data"]["activeMatters"] == 5
-        assert data["data"]["verifiedFindings"] == 127
-        assert data["data"]["pendingReviews"] == 3
+            assert response.status_code == 200
+            data = response.json()
+            assert "data" in data
+            assert data["data"]["activeMatters"] == 5
+            assert data["data"]["verifiedFindings"] == 127
+            assert data["data"]["pendingReviews"] == 3
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_returns_zero_stats_for_new_user(self) -> None:
         """Should return zero stats for user with no data."""
         user_id = str(uuid4())
@@ -103,18 +106,13 @@ class TestGetDashboardStats:
             pending_reviews=0,
         )
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.dashboard_stats_service.get_dashboard_stats_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_dashboard_stats.return_value = mock_stats
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=DashboardStatsService)
+        mock_service.get_dashboard_stats.return_value = mock_stats
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_dashboard_stats_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -123,47 +121,46 @@ class TestGetDashboardStats:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["data"]["activeMatters"] == 0
-        assert data["data"]["verifiedFindings"] == 0
-        assert data["data"]["pendingReviews"] == 0
+            assert response.status_code == 200
+            data = response.json()
+            assert data["data"]["activeMatters"] == 0
+            assert data["data"]["verifiedFindings"] == 0
+            assert data["data"]["pendingReviews"] == 0
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_rejects_unauthenticated_request(self) -> None:
         """Should return 401 for unauthenticated requests."""
-        with patch(
-            "app.core.config.get_settings", return_value=get_test_settings()
-        ):
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 response = await client.get("/api/dashboard/stats")
 
-        assert response.status_code == 401
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_handles_service_error_gracefully(self) -> None:
         """Should return 500 on service error."""
         user_id = str(uuid4())
         token = create_test_token(user_id=user_id)
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.dashboard_stats_service.get_dashboard_stats_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_dashboard_stats.side_effect = DashboardStatsServiceError(
-                "Database error",
-                code="DB_ERROR",
-                status_code=500,
-            )
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=DashboardStatsService)
+        mock_service.get_dashboard_stats.side_effect = DashboardStatsServiceError(
+            "Database error",
+            code="DB_ERROR",
+            status_code=500,
+        )
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_dashboard_stats_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -172,6 +169,8 @@ class TestGetDashboardStats:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 500
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "DB_ERROR"
+            assert response.status_code == 500
+            data = response.json()
+            assert data["detail"]["error"]["code"] == "DB_ERROR"
+        finally:
+            app.dependency_overrides.clear()

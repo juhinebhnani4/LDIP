@@ -95,8 +95,8 @@ class DashboardStatsService:
 
         Story 14.5: AC #2 - Efficient aggregation across all user's matters.
 
-        Performance: Uses three separate queries which is efficient enough
-        for dashboard loads. Each query leverages indexes.
+        Performance: Fetches matter IDs once, then runs count queries in parallel.
+        This reduces database round trips from 6 to 4.
 
         Args:
             user_id: User ID to get stats for.
@@ -109,12 +109,23 @@ class DashboardStatsService:
             DashboardStatsServiceError: If operation fails critically.
         """
         try:
+            # First, get all matter IDs for the user (single query)
+            matter_ids = await self._get_user_matter_ids(user_id)
+
+            if not matter_ids:
+                # User has no matters - return zero stats
+                return DashboardStats(
+                    active_matters=0,
+                    verified_findings=0,
+                    pending_reviews=0,
+                )
+
             # Run all three stat queries in parallel for efficiency
             active_matters_count, verified_findings_count, pending_reviews_count = (
                 await asyncio.gather(
-                    self._count_active_matters(user_id),
-                    self._count_verified_findings(user_id),
-                    self._count_pending_reviews(user_id),
+                    self._count_active_matters(matter_ids),
+                    self._count_verified_findings(matter_ids),
+                    self._count_pending_reviews(matter_ids),
                 )
             )
 
@@ -149,27 +160,41 @@ class DashboardStatsService:
                 pending_reviews=0,
             )
 
-    async def _count_active_matters(self, user_id: str) -> int:
-        """Count active (non-archived) matters for user.
+    async def _get_user_matter_ids(self, user_id: str) -> list[str]:
+        """Get all matter IDs for a user.
 
-        Uses matter_attorneys to find matters where user has any role.
-        Filters by status != 'archived' and deleted_at IS NULL.
+        Single query to fetch all matter IDs, reused by stat counting methods.
         """
         try:
-            # Get matter IDs where user is a member
-            ma_result = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 lambda: self.supabase.table("matter_attorneys")
                 .select("matter_id")
                 .eq("user_id", user_id)
                 .execute()
             )
 
-            if not ma_result.data:
-                return 0
+            if not result.data:
+                return []
 
-            matter_ids = [row["matter_id"] for row in ma_result.data]
+            return [row["matter_id"] for row in result.data]
 
-            # Count active matters
+        except Exception as e:
+            logger.debug(
+                "get_user_matter_ids_failed",
+                user_id=user_id,
+                error=str(e),
+            )
+            return []
+
+    async def _count_active_matters(self, matter_ids: list[str]) -> int:
+        """Count active (non-archived) matters for user.
+
+        Filters by status != 'archived' and deleted_at IS NULL.
+
+        Args:
+            matter_ids: Pre-fetched list of user's matter IDs.
+        """
+        try:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("matters")
                 .select("id", count="exact")
@@ -184,31 +209,20 @@ class DashboardStatsService:
         except Exception as e:
             logger.debug(
                 "count_active_matters_failed",
-                user_id=user_id,
+                matter_count=len(matter_ids),
                 error=str(e),
             )
             return 0
 
-    async def _count_verified_findings(self, user_id: str) -> int:
+    async def _count_verified_findings(self, matter_ids: list[str]) -> int:
         """Count verified findings across user's matters.
 
         Uses finding_verifications table where decision = 'approved'.
+
+        Args:
+            matter_ids: Pre-fetched list of user's matter IDs.
         """
         try:
-            # Get matter IDs where user is a member
-            ma_result = await asyncio.to_thread(
-                lambda: self.supabase.table("matter_attorneys")
-                .select("matter_id")
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not ma_result.data:
-                return 0
-
-            matter_ids = [row["matter_id"] for row in ma_result.data]
-
-            # Count verified findings (decision = 'approved')
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("finding_verifications")
                 .select("id", count="exact")
@@ -222,31 +236,20 @@ class DashboardStatsService:
         except Exception as e:
             logger.debug(
                 "count_verified_findings_failed",
-                user_id=user_id,
+                matter_count=len(matter_ids),
                 error=str(e),
             )
             return 0
 
-    async def _count_pending_reviews(self, user_id: str) -> int:
+    async def _count_pending_reviews(self, matter_ids: list[str]) -> int:
         """Count pending reviews (findings awaiting verification).
 
         Uses findings table where status = 'pending'.
+
+        Args:
+            matter_ids: Pre-fetched list of user's matter IDs.
         """
         try:
-            # Get matter IDs where user is a member
-            ma_result = await asyncio.to_thread(
-                lambda: self.supabase.table("matter_attorneys")
-                .select("matter_id")
-                .eq("user_id", user_id)
-                .execute()
-            )
-
-            if not ma_result.data:
-                return 0
-
-            matter_ids = [row["matter_id"] for row in ma_result.data]
-
-            # Count pending findings (status = 'pending')
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("findings")
                 .select("id", count="exact")
@@ -260,7 +263,7 @@ class DashboardStatsService:
         except Exception as e:
             logger.debug(
                 "count_pending_reviews_failed",
-                user_id=user_id,
+                matter_count=len(matter_ids),
                 error=str(e),
             )
             return 0

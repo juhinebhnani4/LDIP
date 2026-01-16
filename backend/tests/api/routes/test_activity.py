@@ -1,20 +1,23 @@
 """Unit tests for activity API routes.
 
 Story 14.5: Dashboard Real APIs
+
+Uses FastAPI dependency_overrides pattern for proper test isolation.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import jwt
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.activity import ActivityTypeEnum, ActivityRecord
-from app.services.activity_service import ActivityServiceError
+from app.services.activity_service import ActivityService, get_activity_service
 
 
 # Test JWT secret
@@ -71,7 +74,22 @@ def create_mock_activity(
 class TestGetActivities:
     """Tests for GET /api/activity-feed endpoint."""
 
-    @pytest.mark.asyncio
+    @pytest_asyncio.fixture
+    async def authorized_client(self) -> AsyncClient:
+        """Create an authorized async test client with mocks configured."""
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.get_activities.return_value = ([], 0)
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+
+        app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
     async def test_returns_activities_list(self) -> None:
         """Should return activities for authenticated user."""
         user_id = str(uuid4())
@@ -88,18 +106,13 @@ class TestGetActivities:
             ),
         ]
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.activity_service.get_activity_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_activities.return_value = (mock_activities, 2)
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.get_activities.return_value = (mock_activities, 2)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -108,30 +121,27 @@ class TestGetActivities:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "data" in data
-        assert len(data["data"]) == 2
-        assert data["meta"]["total"] == 2
+            assert response.status_code == 200
+            data = response.json()
+            assert "data" in data
+            assert len(data["data"]) == 2
+            assert data["meta"]["total"] == 2
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_respects_limit_parameter(self) -> None:
         """Should pass limit parameter to service."""
         user_id = str(uuid4())
         token = create_test_token(user_id=user_id)
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.activity_service.get_activity_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_activities.return_value = ([], 0)
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.get_activities.return_value = ([], 0)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -140,29 +150,26 @@ class TestGetActivities:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        mock_service.get_activities.assert_called_once()
-        call_args = mock_service.get_activities.call_args
-        assert call_args.kwargs["limit"] == 5
+            mock_service.get_activities.assert_called_once()
+            call_args = mock_service.get_activities.call_args
+            assert call_args.kwargs["limit"] == 5
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_respects_matter_id_filter(self) -> None:
         """Should pass matterId filter to service."""
         user_id = str(uuid4())
         matter_id = str(uuid4())
         token = create_test_token(user_id=user_id)
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.activity_service.get_activity_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.get_activities.return_value = ([], 0)
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.get_activities.return_value = ([], 0)
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -171,28 +178,32 @@ class TestGetActivities:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        mock_service.get_activities.assert_called_once()
-        call_args = mock_service.get_activities.call_args
-        assert call_args.kwargs["matter_id"] == matter_id
+            mock_service.get_activities.assert_called_once()
+            call_args = mock_service.get_activities.call_args
+            assert call_args.kwargs["matter_id"] == matter_id
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_rejects_unauthenticated_request(self) -> None:
         """Should return 401 for unauthenticated requests."""
-        with patch(
-            "app.core.config.get_settings", return_value=get_test_settings()
-        ):
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 response = await client.get("/api/activity-feed")
 
-        assert response.status_code == 401
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestMarkActivityRead:
     """Tests for PATCH /api/activity-feed/{id}/read endpoint."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_marks_activity_as_read(self) -> None:
         """Should mark activity as read and return updated activity."""
         user_id = str(uuid4())
@@ -205,18 +216,13 @@ class TestMarkActivityRead:
             is_read=True,
         )
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.activity_service.get_activity_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.mark_as_read.return_value = mock_activity
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.mark_as_read.return_value = mock_activity
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -225,30 +231,27 @@ class TestMarkActivityRead:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["data"]["id"] == activity_id
-        assert data["data"]["isRead"] is True
+            assert response.status_code == 200
+            data = response.json()
+            assert data["data"]["id"] == activity_id
+            assert data["data"]["isRead"] is True
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_returns_404_for_nonexistent_activity(self) -> None:
         """Should return 404 when activity not found."""
         user_id = str(uuid4())
         activity_id = str(uuid4())
         token = create_test_token(user_id=user_id)
 
-        with (
-            patch(
-                "app.core.config.get_settings", return_value=get_test_settings()
-            ),
-            patch(
-                "app.services.activity_service.get_activity_service"
-            ) as mock_get_service,
-        ):
-            mock_service = AsyncMock()
-            mock_service.mark_as_read.return_value = None
-            mock_get_service.return_value = mock_service
+        mock_service = AsyncMock(spec=ActivityService)
+        mock_service.mark_as_read.return_value = None
 
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_activity_service] = lambda: mock_service
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -257,18 +260,20 @@ class TestMarkActivityRead:
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
-        assert response.status_code == 404
-        data = response.json()
-        assert data["detail"]["error"]["code"] == "NOT_FOUND"
+            assert response.status_code == 404
+            data = response.json()
+            assert data["detail"]["error"]["code"] == "NOT_FOUND"
+        finally:
+            app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_rejects_unauthenticated_request(self) -> None:
         """Should return 401 for unauthenticated requests."""
         activity_id = str(uuid4())
 
-        with patch(
-            "app.core.config.get_settings", return_value=get_test_settings()
-        ):
+        app.dependency_overrides[get_settings] = get_test_settings
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -276,4 +281,6 @@ class TestMarkActivityRead:
                     f"/api/activity-feed/{activity_id}/read"
                 )
 
-        assert response.status_code == 401
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.clear()

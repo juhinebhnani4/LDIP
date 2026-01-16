@@ -16,7 +16,6 @@ from app.core.security import get_current_user
 from app.models.activity import (
     ActivityListMeta,
     ActivityListResponse,
-    ActivityRecord,
     ActivityResponse,
 )
 from app.models.auth import AuthenticatedUser

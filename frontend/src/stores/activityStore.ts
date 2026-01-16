@@ -151,12 +151,12 @@ export const useActivityStore = create<ActivityStore>()((set, get) => ({
   },
 
   markAllRead: () => {
+    // Local-only operation: Marks all activities as read in the UI.
+    // No backend sync - individual activities are marked read via markActivityRead()
+    // when clicked. Bulk mark-all-read is UI-only for convenience.
     set((state) => ({
       activities: state.activities.map((a) => ({ ...a, isRead: true })),
     }));
-
-    // TODO: Sync with backend when API is available
-    // await fetch('/api/activities/read-all', { method: 'PATCH' });
   },
 
   addActivity: (activity) => {

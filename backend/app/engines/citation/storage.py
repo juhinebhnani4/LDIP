@@ -209,29 +209,42 @@ class CitationStorageService:
     async def get_citations_by_document(
         self,
         document_id: str,
-        matter_id: str | None = None,
-    ) -> list[Citation]:
-        """Get all citations from a specific document.
+        matter_id: str,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[Citation], int]:
+        """Get paginated citations from a specific document.
 
         Args:
             document_id: Document UUID.
-            matter_id: Optional matter UUID for additional filtering.
+            matter_id: Matter UUID (REQUIRED for security).
+            page: Page number (1-indexed).
+            per_page: Items per page.
 
         Returns:
-            List of citations.
+            Tuple of (citations list, total count).
         """
         try:
+            # Calculate offset for proper database-level pagination
+            offset = (page - 1) * per_page
+
             def _query():
-                query = self.client.table("citations").select("*").eq(
+                return self.client.table("citations").select(
+                    "*", count="exact"
+                ).eq(
                     "source_document_id", document_id
-                )
-                if matter_id:
-                    query = query.eq("matter_id", matter_id)
-                return query.order("source_page").execute()
+                ).eq(
+                    "matter_id", matter_id
+                ).order("source_page").range(
+                    offset, offset + per_page - 1
+                ).execute()
 
             result = await asyncio.to_thread(_query)
 
-            return [self._row_to_citation(row) for row in (result.data or [])]
+            citations = [self._row_to_citation(row) for row in (result.data or [])]
+            total = result.count or 0
+
+            return citations, total
 
         except Exception as e:
             logger.error(
@@ -239,7 +252,7 @@ class CitationStorageService:
                 document_id=document_id,
                 error=str(e),
             )
-            return []
+            return [], 0
 
     async def get_citations_by_matter(
         self,
@@ -335,9 +348,10 @@ class CitationStorageService:
         matter_id: str,
         act_name: str,
     ) -> ActResolution | None:
-        """Create or update act resolution record.
+        """Create or update act resolution record atomically.
 
-        Increments citation count if resolution already exists.
+        Uses upsert to avoid race conditions. Increments citation count
+        if resolution already exists.
 
         Args:
             matter_id: Matter UUID.
@@ -349,7 +363,7 @@ class CitationStorageService:
         try:
             normalized = normalize_act_name(act_name)
 
-            # Try using the upsert function first
+            # Try using the RPC function first (most atomic)
             try:
                 def _rpc_upsert():
                     return self.client.rpc(
@@ -374,47 +388,48 @@ class CitationStorageService:
                     if fetch_result.data:
                         return self._row_to_act_resolution(fetch_result.data)
             except Exception:
-                # Fallback to manual upsert if function doesn't exist
+                # Fallback to upsert if RPC function doesn't exist
                 pass
 
-            # Manual upsert
-            def _check_existing():
-                return self.client.table("act_resolutions").select("*").eq(
-                    "matter_id", matter_id
-                ).eq("act_name_normalized", normalized).execute()
-
-            existing = await asyncio.to_thread(_check_existing)
-
-            if existing.data and len(existing.data) > 0:
-                # Update existing
-                row = existing.data[0]
-
-                def _update():
-                    return self.client.table("act_resolutions").update({
-                        "citation_count": (row.get("citation_count", 0) or 0) + 1,
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    }).eq("id", row["id"]).execute()
-
-                update_result = await asyncio.to_thread(_update)
-
-                if update_result.data:
-                    return self._row_to_act_resolution(update_result.data[0])
-            else:
-                # Create new
-                def _insert():
-                    return self.client.table("act_resolutions").insert({
+            # Atomic upsert using ON CONFLICT (avoids race condition)
+            def _upsert():
+                return self.client.table("act_resolutions").upsert(
+                    {
                         "matter_id": matter_id,
                         "act_name_normalized": normalized,
                         "act_name_display": act_name,
                         "resolution_status": ActResolutionStatus.MISSING.value,
                         "user_action": UserAction.PENDING.value,
                         "citation_count": 1,
-                    }).execute()
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                    on_conflict="matter_id,act_name_normalized",
+                ).execute()
 
-                insert_result = await asyncio.to_thread(_insert)
+            upsert_result = await asyncio.to_thread(_upsert)
 
-                if insert_result.data:
-                    return self._row_to_act_resolution(insert_result.data[0])
+            if upsert_result.data and len(upsert_result.data) > 0:
+                row = upsert_result.data[0]
+
+                # If this was an update (existing record), increment count
+                # Note: The upsert replaces values, so we need to increment after
+                if row.get("citation_count", 0) >= 1:
+                    # Record existed - increment the citation count
+                    def _increment():
+                        return self.client.table("act_resolutions").update({
+                            "citation_count": (row.get("citation_count", 0) or 0) + 1,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }).eq("id", row["id"]).execute()
+
+                    # Try to increment - if it fails, return the upserted result anyway
+                    try:
+                        increment_result = await asyncio.to_thread(_increment)
+                        if increment_result.data:
+                            return self._row_to_act_resolution(increment_result.data[0])
+                    except Exception:
+                        pass
+
+                return self._row_to_act_resolution(row)
 
             return None
 

@@ -163,9 +163,9 @@ def _run_async(coro):
     database operations use asyncio.
 
     Note:
-        This pattern creates a new event loop for each call. For better
-        performance in high-throughput scenarios, consider using
-        asyncio.to_thread() in Python 3.9+ or a shared event loop.
+        Uses asyncio.run() which properly creates and cleans up an event loop.
+        For batch operations, prefer wrapping all async calls in a single
+        async function and calling asyncio.run() once.
 
     Args:
         coro: An awaitable coroutine to execute.
@@ -176,12 +176,7 @@ def _run_async(coro):
     Example:
         >>> result = _run_async(some_async_function(arg1, arg2))
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return asyncio.run(coro)
 
 
 def _get_or_create_job(
@@ -1731,25 +1726,16 @@ def chunk_document(
         all_chunks = result.parent_chunks + result.child_chunks
 
         # Run async operations in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            # Link chunks to bboxes
-            loop.run_until_complete(
-                link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
+        async def _save_chunks_async():
+            await link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
+            return await chunks_service.save_chunks(
+                document_id=doc_id,
+                matter_id=matter_id,
+                parent_chunks=result.parent_chunks,
+                child_chunks=result.child_chunks,
             )
 
-            # Save chunks to database
-            saved_count = loop.run_until_complete(
-                chunks_service.save_chunks(
-                    document_id=doc_id,
-                    matter_id=matter_id,
-                    parent_chunks=result.parent_chunks,
-                    child_chunks=result.child_chunks,
-                )
-            )
-        finally:
-            loop.close()
+        saved_count = asyncio.run(_save_chunks_async())
 
         # Record stage completion for job tracking (Story 2c-3)
         _update_job_stage_complete(job_id, "chunking", matter_id)
@@ -2008,11 +1994,10 @@ def embed_chunks(
         failed_count = 0
         skipped_count = 0
 
-        # Run async operations in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Process all batches in a single async context
+        async def _embed_all_batches():
+            nonlocal embedded_count, failed_count, skipped_count
 
-        try:
             for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
                 batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
 
@@ -2031,9 +2016,7 @@ def embed_chunks(
 
                 try:
                     # Generate embeddings for batch
-                    embeddings = loop.run_until_complete(
-                        embedder.embed_batch(batch_texts, skip_empty=True)
-                    )
+                    embeddings = await embedder.embed_batch(batch_texts, skip_empty=True)
 
                     # Update chunks with embeddings
                     for j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings)):
@@ -2077,7 +2060,7 @@ def embed_chunks(
 
                     # Rate limit delay between batches
                     if i + EMBEDDING_BATCH_SIZE < len(chunks):
-                        time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
+                        await asyncio.sleep(EMBEDDING_RATE_LIMIT_DELAY)
 
                 except EmbeddingServiceError as e:
                     logger.warning(
@@ -2095,11 +2078,12 @@ def embed_chunks(
                     if e.is_retryable:
                         raise  # Let Celery retry
 
+        try:
+            asyncio.run(_embed_all_batches())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
                 progress_tracker.save_progress(stage_progress, force=True)
-            loop.close()
 
         # Update document status to searchable
         try:
@@ -2361,11 +2345,10 @@ def extract_entities(
         failed_chunks = 0
         skipped_chunks = 0
 
-        # Run async operations in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Process all batches in a single async context
+        async def _extract_entities_async():
+            nonlocal total_entities, total_relationships, failed_chunks, skipped_chunks
 
-        try:
             for i in range(0, len(chunks), ENTITY_EXTRACTION_BATCH_SIZE):
                 batch = chunks[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
 
@@ -2389,11 +2372,9 @@ def extract_entities(
 
                         if extraction_result.entities:
                             # Save entities to database
-                            saved_entities = loop.run_until_complete(
-                                graph_service.save_entities(
-                                    matter_id=matter_id,
-                                    extraction_result=extraction_result,
-                                )
+                            saved_entities = await graph_service.save_entities(
+                                matter_id=matter_id,
+                                extraction_result=extraction_result,
                             )
                             total_entities += len(saved_entities)
 
@@ -2439,7 +2420,7 @@ def extract_entities(
 
                 # Rate limit delay between batches
                 if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks):
-                    time.sleep(ENTITY_EXTRACTION_RATE_LIMIT_DELAY)
+                    await asyncio.sleep(ENTITY_EXTRACTION_RATE_LIMIT_DELAY)
 
                 logger.debug(
                     "extract_entities_batch_complete",
@@ -2448,11 +2429,12 @@ def extract_entities(
                     total_batches=(len(chunks) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
                 )
 
+        try:
+            asyncio.run(_extract_entities_async())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
                 progress_tracker.save_progress(stage_progress, force=True)
-            loop.close()
 
         # Broadcast entity extraction completion
         broadcast_document_status(
@@ -2652,32 +2634,13 @@ def resolve_aliases(
                 code="DATABASE_NOT_CONFIGURED",
             )
 
-        # Run async operations in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
+        # Run async operations in single context
+        async def _resolve_aliases_async():
             # Get all entities for this matter
-            entities = loop.run_until_complete(
-                graph_service.get_entities(matter_id=matter_id)
-            )
+            entities = await graph_service.get_entities(matter_id=matter_id)
 
             if not entities:
-                # No entities to resolve - mark stage and job complete
-                _update_job_stage_complete(job_id, "alias_resolution", matter_id)
-                _mark_job_completed(job_id, matter_id)
-                logger.info(
-                    "resolve_aliases_no_entities",
-                    document_id=doc_id,
-                    matter_id=matter_id,
-                )
-                return {
-                    "status": "alias_resolution_complete",
-                    "document_id": doc_id,
-                    "aliases_created": 0,
-                    "reason": "No entities found for alias resolution",
-                    "job_id": job_id,
-                }
+                return None, 0  # No entities to resolve
 
             # Build entity contexts from mentions for Gemini analysis
             entity_contexts: dict[str, str] = {}
@@ -2698,25 +2661,21 @@ def resolve_aliases(
                         entity_contexts[entity_id] += f" | {context}"
 
             # Run alias resolution
-            resolution_result, edges_to_create = loop.run_until_complete(
-                resolver.resolve_aliases(
-                    matter_id=matter_id,
-                    entities=entities,
-                    entity_contexts=entity_contexts,
-                )
+            resolution_result, edges_to_create = await resolver.resolve_aliases(
+                matter_id=matter_id,
+                entities=entities,
+                entity_contexts=entity_contexts,
             )
 
             # Create alias edges in the database
             aliases_created = 0
             for edge in edges_to_create:
-                created_edge = loop.run_until_complete(
-                    graph_service.create_alias_edge(
-                        matter_id=matter_id,
-                        source_id=edge.source_entity_id,
-                        target_id=edge.target_entity_id,
-                        confidence=edge.confidence or 0.0,
-                        metadata=edge.metadata,
-                    )
+                created_edge = await graph_service.create_alias_edge(
+                    matter_id=matter_id,
+                    source_id=edge.source_entity_id,
+                    target_id=edge.target_entity_id,
+                    confidence=edge.confidence or 0.0,
+                    metadata=edge.metadata,
                 )
                 if created_edge:
                     aliases_created += 1
@@ -2733,24 +2692,40 @@ def resolve_aliases(
                     if source_entity and target_entity:
                         # Canonical is the one with more mentions
                         if source_entity.mention_count >= target_entity.mention_count:
-                            loop.run_until_complete(
-                                graph_service.add_alias_to_entity(
-                                    entity_id=source_entity.id,
-                                    matter_id=matter_id,
-                                    alias=target_entity.canonical_name,
-                                )
+                            await graph_service.add_alias_to_entity(
+                                entity_id=source_entity.id,
+                                matter_id=matter_id,
+                                alias=target_entity.canonical_name,
                             )
                         else:
-                            loop.run_until_complete(
-                                graph_service.add_alias_to_entity(
-                                    entity_id=target_entity.id,
-                                    matter_id=matter_id,
-                                    alias=source_entity.canonical_name,
-                                )
+                            await graph_service.add_alias_to_entity(
+                                entity_id=target_entity.id,
+                                matter_id=matter_id,
+                                alias=source_entity.canonical_name,
                             )
 
-        finally:
-            loop.close()
+            return resolution_result, aliases_created
+
+        result = asyncio.run(_resolve_aliases_async())
+
+        if result[0] is None:
+            # No entities to resolve - mark stage and job complete
+            _update_job_stage_complete(job_id, "alias_resolution", matter_id)
+            _mark_job_completed(job_id, matter_id)
+            logger.info(
+                "resolve_aliases_no_entities",
+                document_id=doc_id,
+                matter_id=matter_id,
+            )
+            return {
+                "status": "alias_resolution_complete",
+                "document_id": doc_id,
+                "aliases_created": 0,
+                "reason": "No entities found for alias resolution",
+                "job_id": job_id,
+            }
+
+        resolution_result, aliases_created = result
 
         # Broadcast alias resolution completion
         broadcast_document_status(
@@ -3031,11 +3006,10 @@ def extract_citations(
         failed_chunks = 0
         skipped_chunks = 0
 
-        # Run async operations in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Process all batches in a single async context
+        async def _extract_citations_async():
+            nonlocal total_citations, failed_chunks, skipped_chunks
 
-        try:
             for i in range(0, len(chunks), CITATION_EXTRACTION_BATCH_SIZE):
                 batch = chunks[i : i + CITATION_EXTRACTION_BATCH_SIZE]
 
@@ -3059,12 +3033,10 @@ def extract_citations(
 
                         if extraction_result.citations:
                             # Save citations to database
-                            saved_count = loop.run_until_complete(
-                                storage.save_citations(
-                                    matter_id=matter_id,
-                                    document_id=doc_id,
-                                    extraction_result=extraction_result,
-                                )
+                            saved_count = await storage.save_citations(
+                                matter_id=matter_id,
+                                document_id=doc_id,
+                                extraction_result=extraction_result,
                             )
                             total_citations += saved_count
 
@@ -3108,7 +3080,7 @@ def extract_citations(
 
                 # Rate limit delay between batches
                 if i + CITATION_EXTRACTION_BATCH_SIZE < len(chunks):
-                    time.sleep(CITATION_EXTRACTION_RATE_LIMIT_DELAY)
+                    await asyncio.sleep(CITATION_EXTRACTION_RATE_LIMIT_DELAY)
 
                 logger.debug(
                     "extract_citations_batch_complete",
@@ -3117,11 +3089,12 @@ def extract_citations(
                     total_batches=(len(chunks) + CITATION_EXTRACTION_BATCH_SIZE - 1) // CITATION_EXTRACTION_BATCH_SIZE,
                 )
 
+        try:
+            asyncio.run(_extract_citations_async())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
                 progress_tracker.save_progress(stage_progress, force=True)
-            loop.close()
 
         # Broadcast citation extraction completion
         broadcast_document_status(

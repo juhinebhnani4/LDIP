@@ -160,16 +160,11 @@ class PartialProgressTracker:
         try:
             import asyncio
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                job = loop.run_until_complete(self.job_tracker.get_job(self.job_id))
-                if job and job.metadata:
-                    partial_progress = job.metadata.get("partial_progress", {})
-                    for stage_name, stage_data in partial_progress.items():
-                        self._stages[stage_name] = StageProgress.from_dict(stage_data)
-            finally:
-                loop.close()
+            job = asyncio.run(self.job_tracker.get_job(self.job_id))
+            if job and job.metadata:
+                partial_progress = job.metadata.get("partial_progress", {})
+                for stage_name, stage_data in partial_progress.items():
+                    self._stages[stage_name] = StageProgress.from_dict(stage_data)
 
         except Exception as e:
             logger.warning(
@@ -217,11 +212,8 @@ class PartialProgressTracker:
         try:
             import asyncio
 
-            # Get current metadata
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                job = loop.run_until_complete(self.job_tracker.get_job(self.job_id))
+            async def _save_progress_async():
+                job = await self.job_tracker.get_job(self.job_id)
                 if not job:
                     return
 
@@ -236,9 +228,7 @@ class PartialProgressTracker:
                 from app.models.job import ProcessingJobUpdate
 
                 update = ProcessingJobUpdate(metadata=metadata)
-                loop.run_until_complete(
-                    self.job_tracker.update_job(self.job_id, update)
-                )
+                await self.job_tracker.update_job(self.job_id, update)
 
                 logger.debug(
                     "partial_progress_saved",
@@ -248,8 +238,7 @@ class PartialProgressTracker:
                     total=stage.total_items,
                 )
 
-            finally:
-                loop.close()
+            asyncio.run(_save_progress_async())
 
         except Exception as e:
             logger.warning(
@@ -271,10 +260,8 @@ class PartialProgressTracker:
         try:
             import asyncio
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                job = loop.run_until_complete(self.job_tracker.get_job(self.job_id))
+            async def _clear_stage_async():
+                job = await self.job_tracker.get_job(self.job_id)
                 if job and job.metadata:
                     metadata = job.metadata
                     if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
@@ -283,11 +270,9 @@ class PartialProgressTracker:
                         from app.models.job import ProcessingJobUpdate
 
                         update = ProcessingJobUpdate(metadata=metadata)
-                        loop.run_until_complete(
-                            self.job_tracker.update_job(self.job_id, update)
-                        )
-            finally:
-                loop.close()
+                        await self.job_tracker.update_job(self.job_id, update)
+
+            asyncio.run(_clear_stage_async())
 
         except Exception as e:
             logger.warning(

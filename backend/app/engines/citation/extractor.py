@@ -42,7 +42,8 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES: Final[int] = 3
 INITIAL_RETRY_DELAY: Final[float] = 1.0
 MAX_RETRY_DELAY: Final[float] = 30.0
-MAX_TEXT_LENGTH: Final[int] = 30000  # Max characters per extraction request
+MAX_TEXT_LENGTH: Final[int] = 30000  # Max characters per extraction chunk
+CHUNK_OVERLAP: Final[int] = 500  # Overlap between chunks to avoid missing citations at boundaries
 
 # Regex patterns for common citation formats
 CITATION_PATTERNS: Final[list[re.Pattern]] = [
@@ -181,6 +182,54 @@ class CitationExtractor:
 
         return self._model
 
+    def _chunk_text(self, text: str) -> list[str]:
+        """Split text into overlapping chunks for processing.
+
+        Splits at sentence boundaries when possible to avoid breaking citations.
+
+        Args:
+            text: Text to split into chunks.
+
+        Returns:
+            List of text chunks with overlap.
+        """
+        if len(text) <= MAX_TEXT_LENGTH:
+            return [text]
+
+        chunks = []
+        start = 0
+
+        while start < len(text):
+            end = start + MAX_TEXT_LENGTH
+
+            if end >= len(text):
+                # Last chunk - take the rest
+                chunks.append(text[start:])
+                break
+
+            # Try to find a sentence boundary near the end
+            search_start = max(start + MAX_TEXT_LENGTH - 1000, start)
+            search_region = text[search_start:end]
+
+            # Look for sentence endings
+            best_break = None
+            for sep in [". ", ".\n", ".\r\n", "? ", "! "]:
+                idx = search_region.rfind(sep)
+                if idx != -1:
+                    best_break = search_start + idx + len(sep)
+                    break
+
+            if best_break and best_break > start + MAX_TEXT_LENGTH // 2:
+                end = best_break
+            # else use the hard cutoff
+
+            chunks.append(text[start:end])
+
+            # Start next chunk with overlap to avoid missing citations at boundaries
+            start = end - CHUNK_OVERLAP
+
+        return chunks
+
     async def extract_from_text(
         self,
         text: str,
@@ -190,6 +239,9 @@ class CitationExtractor:
         chunk_id: str | None = None,
     ) -> CitationExtractionResult:
         """Extract citations from text using Gemini and regex.
+
+        For large documents, processes text in chunks to avoid truncation
+        and data loss. Citations are deduplicated across chunks.
 
         Args:
             text: Document text to extract citations from.
@@ -220,26 +272,45 @@ class CitationExtractor:
                 extraction_timestamp=datetime.now(UTC),
             )
 
-        # Truncate if too long
-        if len(text) > MAX_TEXT_LENGTH:
-            logger.warning(
-                "citation_extraction_text_truncated",
-                original_length=len(text),
-                max_length=MAX_TEXT_LENGTH,
-                document_id=document_id,
-            )
-            text = text[:MAX_TEXT_LENGTH]
-
         start_time = time.time()
 
-        # Step 1: Extract with regex first (fast, reliable)
-        regex_citations = self._extract_with_regex(text)
+        # Split into chunks if text is too long (fixes silent data loss issue)
+        chunks = self._chunk_text(text)
+        total_chunks = len(chunks)
 
-        # Step 2: Extract with Gemini (comprehensive)
-        gemini_citations = await self._extract_with_gemini(text, document_id)
+        if total_chunks > 1:
+            logger.info(
+                "citation_extraction_chunked",
+                document_id=document_id,
+                original_length=len(text),
+                chunk_count=total_chunks,
+            )
 
-        # Step 3: Merge and deduplicate
-        all_citations = self._merge_citations(regex_citations, gemini_citations)
+        all_regex_citations: list[ExtractedCitation] = []
+        all_gemini_citations: list[ExtractedCitation] = []
+
+        # Process each chunk
+        for i, chunk_text in enumerate(chunks):
+            # Step 1: Extract with regex (fast, reliable)
+            regex_citations = self._extract_with_regex(chunk_text)
+            all_regex_citations.extend(regex_citations)
+
+            # Step 2: Extract with Gemini (comprehensive)
+            gemini_citations = await self._extract_with_gemini(chunk_text, document_id)
+            all_gemini_citations.extend(gemini_citations)
+
+            if total_chunks > 1:
+                logger.debug(
+                    "citation_extraction_chunk_complete",
+                    document_id=document_id,
+                    chunk=i + 1,
+                    total_chunks=total_chunks,
+                    regex_found=len(regex_citations),
+                    gemini_found=len(gemini_citations),
+                )
+
+        # Step 3: Merge and deduplicate across all chunks
+        all_citations = self._merge_citations(all_regex_citations, all_gemini_citations)
 
         # Step 4: Normalize act names and compute unique acts
         unique_acts = self._get_unique_acts(all_citations)
@@ -252,8 +323,9 @@ class CitationExtractor:
             matter_id=matter_id,
             citation_count=len(all_citations),
             unique_act_count=len(unique_acts),
-            regex_count=len(regex_citations),
-            gemini_count=len(gemini_citations),
+            regex_count=len(all_regex_citations),
+            gemini_count=len(all_gemini_citations),
+            chunks_processed=total_chunks,
             processing_time_ms=processing_time,
         )
 
@@ -277,6 +349,7 @@ class CitationExtractor:
         """Synchronous wrapper for citation extraction.
 
         For use in Celery tasks or other synchronous contexts.
+        Processes large documents in chunks to avoid data loss.
 
         Args:
             text: Document text to extract citations from.
@@ -299,20 +372,35 @@ class CitationExtractor:
                 extraction_timestamp=datetime.now(UTC),
             )
 
-        # Truncate if too long
-        if len(text) > MAX_TEXT_LENGTH:
-            text = text[:MAX_TEXT_LENGTH]
-
         start_time = time.time()
 
-        # Step 1: Extract with regex first
-        regex_citations = self._extract_with_regex(text)
+        # Split into chunks if text is too long (fixes silent data loss issue)
+        chunks = self._chunk_text(text)
+        total_chunks = len(chunks)
 
-        # Step 2: Extract with Gemini (sync)
-        gemini_citations = self._extract_with_gemini_sync(text, document_id)
+        if total_chunks > 1:
+            logger.info(
+                "citation_extraction_sync_chunked",
+                document_id=document_id,
+                original_length=len(text),
+                chunk_count=total_chunks,
+            )
+
+        all_regex_citations: list[ExtractedCitation] = []
+        all_gemini_citations: list[ExtractedCitation] = []
+
+        # Process each chunk
+        for chunk_text in chunks:
+            # Step 1: Extract with regex first
+            regex_citations = self._extract_with_regex(chunk_text)
+            all_regex_citations.extend(regex_citations)
+
+            # Step 2: Extract with Gemini (sync)
+            gemini_citations = self._extract_with_gemini_sync(chunk_text, document_id)
+            all_gemini_citations.extend(gemini_citations)
 
         # Step 3: Merge and deduplicate
-        all_citations = self._merge_citations(regex_citations, gemini_citations)
+        all_citations = self._merge_citations(all_regex_citations, all_gemini_citations)
 
         # Step 4: Get unique acts
         unique_acts = self._get_unique_acts(all_citations)
@@ -325,6 +413,7 @@ class CitationExtractor:
             matter_id=matter_id,
             citation_count=len(all_citations),
             unique_act_count=len(unique_acts),
+            chunks_processed=total_chunks,
             processing_time_ms=processing_time,
         )
 

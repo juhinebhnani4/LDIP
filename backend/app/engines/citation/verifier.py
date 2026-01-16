@@ -638,7 +638,7 @@ class CitationVerifier:
         for attempt in range(MAX_RETRIES):
             try:
                 # Rate limiting
-                await asyncio.sleep(RATE_LIMIT_DELAY)
+                await asyncio.sleep(_get_rate_limit_delay())
 
                 response = await self.model.generate_content_async(prompt)
                 return response.text
@@ -733,6 +733,9 @@ class CitationVerifier:
     ) -> VerificationResult:
         """Synchronous wrapper for citation verification.
 
+        DEPRECATED: Prefer using verify_citation() directly with asyncio.run()
+        at the Celery task level to avoid Event Loop Storm.
+
         For use in Celery tasks or other synchronous contexts.
 
         Args:
@@ -743,14 +746,9 @@ class CitationVerifier:
         Returns:
             VerificationResult with status and explanation.
         """
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(
-                self.verify_citation(citation, act_document_id, act_name)
-            )
-        finally:
-            loop.close()
+        return asyncio.run(
+            self.verify_citation(citation, act_document_id, act_name)
+        )
 
 
 # =============================================================================

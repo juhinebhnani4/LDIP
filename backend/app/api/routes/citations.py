@@ -173,15 +173,13 @@ async def list_citations(
 
     try:
         if document_id:
-            # Get by document
-            citations = await storage_service.get_citations_by_document(
+            # Get by document with proper database pagination
+            citations, total = await storage_service.get_citations_by_document(
                 document_id=document_id,
                 matter_id=matter_id,
+                page=page,
+                per_page=per_page,
             )
-            # Apply pagination manually
-            total = len(citations)
-            offset = (page - 1) * per_page
-            citations = citations[offset : offset + per_page]
         else:
             # Get by matter with filters
             citations, total = await storage_service.get_citations_by_matter(

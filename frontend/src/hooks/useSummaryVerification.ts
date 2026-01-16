@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api/client';
+import { toast } from 'sonner';
 import type {
   SummarySectionType,
   SummaryVerification,
@@ -201,6 +202,7 @@ export function useSummaryVerification({
 
         const error = err instanceof Error ? err : new Error('Failed to verify section');
         setError(error);
+        toast.error('Failed to verify section. Please try again.');
         onError?.(error);
         throw error;
       } finally {
@@ -273,6 +275,7 @@ export function useSummaryVerification({
 
         const error = err instanceof Error ? err : new Error('Failed to flag section');
         setError(error);
+        toast.error('Failed to flag section. Please try again.');
         onError?.(error);
         throw error;
       } finally {
@@ -287,8 +290,9 @@ export function useSummaryVerification({
       setIsLoading(true);
       setError(null);
 
-      // Optimistic update
+      // Optimistic update with temporary id
       const optimisticNote: SummaryNote = {
+        id: `temp-${Date.now()}`,
         sectionType,
         sectionId,
         text: noteText,
@@ -322,11 +326,12 @@ export function useSummaryVerification({
           const existing = prev.get(key) || [];
           // Remove optimistic note and add server response
           const withoutOptimistic = existing.filter(
-            (n) => n.createdAt !== optimisticNote.createdAt
+            (n) => n.id !== optimisticNote.id
           );
           next.set(key, [
             ...withoutOptimistic,
             {
+              id: response.data.id,
               sectionType: response.data.sectionType,
               sectionId: response.data.sectionId,
               text: response.data.text,
@@ -339,19 +344,22 @@ export function useSummaryVerification({
 
         onSuccess?.();
       } catch (err) {
-        // Rollback on error
+        // Rollback on error - remove optimistic note, delete key if empty
         setNotes((prev) => {
           const next = new Map(prev);
           const existing = prev.get(key) || [];
-          next.set(
-            key,
-            existing.filter((n) => n.createdAt !== optimisticNote.createdAt)
-          );
+          const filtered = existing.filter((n) => n.id !== optimisticNote.id);
+          if (filtered.length === 0) {
+            next.delete(key);
+          } else {
+            next.set(key, filtered);
+          }
           return next;
         });
 
         const error = err instanceof Error ? err : new Error('Failed to add note');
         setError(error);
+        toast.error('Failed to add note. Please try again.');
         onError?.(error);
         throw error;
       } finally {

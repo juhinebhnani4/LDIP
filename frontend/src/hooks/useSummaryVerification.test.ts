@@ -18,6 +18,14 @@ vi.mock('@/lib/api/client', () => ({
   },
 }));
 
+// Mock sonner toast
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
 describe('useSummaryVerification', () => {
   const matterId = 'matter-123';
 
@@ -282,6 +290,7 @@ describe('useSummaryVerification', () => {
       const notes = result.current.notes.get(key);
       expect(notes).toHaveLength(1);
       expect(notes![0].text).toBe('Need to verify this party');
+      expect(notes![0].id).toBe('n1'); // Server-provided ID
       expect(onSuccess).toHaveBeenCalled();
     });
 
@@ -307,8 +316,8 @@ describe('useSummaryVerification', () => {
 
       const key = 'parties:entity-123';
       const notes = result.current.notes.get(key);
-      // After rollback, notes should be empty (either undefined or empty array)
-      expect(notes?.length ?? 0).toBe(0);
+      // After rollback, key should be deleted (undefined) since notes array was empty
+      expect(notes).toBeUndefined();
     });
   });
 
@@ -413,6 +422,75 @@ describe('useSummaryVerification', () => {
       });
 
       expect(result.current.error).toBeNull();
+    });
+
+    it('should show toast notification on verify failure', async () => {
+      const { toast } = await import('sonner');
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('API Error'));
+
+      const { result } = renderHook(() =>
+        useSummaryVerification({ matterId })
+      );
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalled();
+      });
+
+      await act(async () => {
+        try {
+          await result.current.verifySection('subject_matter', 'main');
+        } catch {
+          // Expected
+        }
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('Failed to verify section. Please try again.');
+    });
+
+    it('should show toast notification on flag failure', async () => {
+      const { toast } = await import('sonner');
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('API Error'));
+
+      const { result } = renderHook(() =>
+        useSummaryVerification({ matterId })
+      );
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalled();
+      });
+
+      await act(async () => {
+        try {
+          await result.current.flagSection('current_status', 'main');
+        } catch {
+          // Expected
+        }
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('Failed to flag section. Please try again.');
+    });
+
+    it('should show toast notification on addNote failure', async () => {
+      const { toast } = await import('sonner');
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('API Error'));
+
+      const { result } = renderHook(() =>
+        useSummaryVerification({ matterId })
+      );
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalled();
+      });
+
+      await act(async () => {
+        try {
+          await result.current.addNote('parties', 'entity-123', 'Test note');
+        } catch {
+          // Expected
+        }
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('Failed to add note. Please try again.');
     });
   });
 });

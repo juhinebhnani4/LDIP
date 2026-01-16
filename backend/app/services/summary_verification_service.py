@@ -9,7 +9,7 @@ CRITICAL: All operations respect matter isolation via RLS policies.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
@@ -136,7 +136,7 @@ class SummaryVerificationService:
             SummaryVerificationServiceError: If operation fails.
         """
         try:
-            now = datetime.utcnow().isoformat() + "Z"
+            now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
             # Build upsert data
             data = {

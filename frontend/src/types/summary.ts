@@ -43,6 +43,8 @@ export interface SummaryVerification {
  * Summary section note
  */
 export interface SummaryNote {
+  /** Unique note ID (server-generated, temp ID during optimistic updates) */
+  id?: string;
   /** Section type */
   sectionType: SummarySectionType;
   /** Section ID */

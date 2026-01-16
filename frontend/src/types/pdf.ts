@@ -64,37 +64,37 @@ export interface HighlightColors {
   border: string;
 }
 
-/** Color scheme for highlight statuses */
+/** Color scheme for highlight statuses - jaanch.ai brand palette */
 export const HIGHLIGHT_COLORS = {
-  /** Source citation in case document - Yellow */
+  /** Source citation in case document - Warm Cream / Muted Gold */
   source: {
-    background: '#FDE047',
-    border: '#CA8A04',
+    background: '#f5f0d8',
+    border: '#b8973b',
   },
-  /** Verified section in Act document - Blue */
+  /** Verified section in Act document - Light Indigo */
   verified: {
-    background: '#BFDBFE',
-    border: '#3B82F6',
+    background: '#e8eef8',
+    border: '#0d1b5e',
   },
-  /** Mismatch in Act document - Red */
+  /** Mismatch in Act document - Soft Pink / Burgundy */
   mismatch: {
-    background: '#FECACA',
-    border: '#EF4444',
+    background: '#f2d4d7',
+    border: '#8b2635',
   },
-  /** Section not found - Orange */
+  /** Section not found - Warm Peach / Aged Gold */
   sectionNotFound: {
-    background: '#FED7AA',
-    border: '#F97316',
+    background: '#f5e8d8',
+    border: '#c4a35a',
   },
-  /** Entity mention highlight - Blue (Story 11.7) */
+  /** Entity mention highlight - Light Indigo (Story 11.7) */
   entity: {
-    background: '#BFDBFE',
-    border: '#3B82F6',
+    background: '#e8eef8',
+    border: '#0d1b5e',
   },
-  /** Contradiction highlight - Red (Story 11.7) */
+  /** Contradiction highlight - Soft Pink / Burgundy (Story 11.7) */
   contradiction: {
-    background: '#FECACA',
-    border: '#EF4444',
+    background: '#f2d4d7',
+    border: '#8b2635',
   },
 } as const;
 

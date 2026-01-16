@@ -5,25 +5,22 @@ Tests verification of citations against Act documents.
 Story 3-3: Citation Verification (AC: #1, #2, #3)
 """
 
-import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.engines.citation.verifier import (
-    CitationVerificationError,
     CitationVerifier,
     VerificationConfigurationError,
     get_citation_verifier,
 )
+from app.models.chunk import ChunkType, ChunkWithContent
 from app.models.citation import (
     Citation,
     VerificationResult,
     VerificationStatus,
 )
-from app.models.chunk import ChunkType, ChunkWithContent
-
 
 # =============================================================================
 # Fixtures

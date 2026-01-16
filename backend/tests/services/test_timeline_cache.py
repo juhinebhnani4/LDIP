@@ -5,29 +5,27 @@ Tests Redis-based caching for timeline data.
 Story 4-3: Events Table + MIG Integration
 """
 
-import pytest
 import json
 from datetime import date, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from app.services.timeline_cache import (
-    TimelineCacheService,
-    get_timeline_cache_service,
-    TIMELINE_CACHE_TTL,
-    _serialize_timeline,
-    _deserialize_timeline,
-)
+import pytest
+
 from app.engines.timeline.timeline_builder import (
     ConstructedTimeline,
+    EntityReference,
+    EntityTimelineView,
     TimelineEvent,
     TimelineStatistics,
-    EntityTimelineView,
-    EntityReference,
-    TimelineSegment,
 )
 from app.models.entity import EntityType
 from app.models.timeline import EventType
-
+from app.services.timeline_cache import (
+    TimelineCacheService,
+    _deserialize_timeline,
+    _serialize_timeline,
+    get_timeline_cache_service,
+)
 
 # =============================================================================
 # Test Constants
@@ -286,7 +284,7 @@ class TestStatisticsCache:
     async def test_get_statistics_hit(self, cache_service, sample_statistics):
         """Test retrieving cached statistics."""
         # Create serialized stats manually
-        from app.services.timeline_cache import _stats_to_dict, TimelineCacheEncoder
+        from app.services.timeline_cache import TimelineCacheEncoder, _stats_to_dict
 
         serialized = json.dumps(
             _stats_to_dict(sample_statistics),
@@ -334,8 +332,8 @@ class TestEntityViewCache:
     async def test_get_entity_view_hit(self, cache_service, sample_entity_view):
         """Test retrieving cached entity view."""
         from app.services.timeline_cache import (
-            _entity_view_to_dict,
             TimelineCacheEncoder,
+            _entity_view_to_dict,
         )
 
         serialized = json.dumps(

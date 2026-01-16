@@ -3,14 +3,12 @@
 Story 4-4: Timeline Anomaly Detection
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models.anomaly import (
     AnomaliesListResponse,
-    Anomaly,
     AnomalyCreate,
     AnomalySeverity,
     AnomalySummaryResponse,
@@ -18,10 +16,8 @@ from app.models.anomaly import (
 )
 from app.services.anomaly_service import (
     AnomalyService,
-    AnomalyServiceError,
     get_anomaly_service,
 )
-
 
 # =============================================================================
 # Test Fixtures

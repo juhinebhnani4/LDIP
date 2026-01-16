@@ -19,7 +19,7 @@ Key format: session:{matter_id}:{user_id}:context
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
@@ -109,7 +109,7 @@ class SessionMemoryService:
             True if max lifetime reached, False otherwise.
         """
         created_at = datetime.fromisoformat(context.created_at.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lifetime_seconds = (now - created_at).total_seconds()
 
         return lifetime_seconds >= MAX_SESSION_LIFETIME
@@ -134,7 +134,7 @@ class SessionMemoryService:
         await self._ensure_client()
 
         session_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         context = SessionContext(
             session_id=session_id,
@@ -283,13 +283,13 @@ class SessionMemoryService:
             else:
                 # Normal TTL extension
                 context.ttl_extended_count += 1
-                context.last_activity = datetime.now(timezone.utc).isoformat()
+                context.last_activity = datetime.now(UTC).isoformat()
 
                 # Update total_lifetime_days
                 created_at = datetime.fromisoformat(
                     context.created_at.replace("Z", "+00:00")
                 )
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 context.total_lifetime_days = (now - created_at).days
 
                 # Update stored context with extended TTL
@@ -349,7 +349,7 @@ class SessionMemoryService:
         # Note: auto_create=True guarantees non-None return
 
         # Create message with current timestamp
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         message = SessionMessage(
             role=role,
             content=content,
@@ -503,7 +503,7 @@ class SessionMemoryService:
         )
         # Note: auto_create=True guarantees non-None return
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for entity in entities:
             entity_id = entity.get("id", entity.get("entity_id"))
@@ -673,7 +673,7 @@ class SessionMemoryService:
             )
             return None
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Create archived session with last N messages (configurable)
         settings = get_settings()

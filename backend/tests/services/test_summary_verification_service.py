@@ -9,9 +9,9 @@ Test Categories:
 - Error handling
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.summary import (
     SummarySectionTypeEnum,

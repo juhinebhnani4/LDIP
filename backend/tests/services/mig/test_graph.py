@@ -1,21 +1,19 @@
 """Unit tests for the MIG Graph service."""
 
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models.entity import (
     EntityExtractionResult,
-    EntityNode,
     EntityType,
     ExtractedEntity,
     ExtractedEntityMention,
     RelationshipType,
 )
 from app.services.mig.graph import (
-    MIGGraphService,
     MIGGraphError,
+    MIGGraphService,
     MIGNotFoundError,
     get_mig_graph_service,
 )

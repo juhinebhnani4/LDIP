@@ -3,38 +3,21 @@
 import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Activity as ActivityIcon, ArrowRight } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useActivityStore, selectRecentActivities } from '@/stores/activityStore';
+import { useActivityStore } from '@/stores/activityStore';
 import { ActivityFeedItem, ActivityFeedItemSkeleton } from './ActivityFeedItem';
 import { getDayGroupLabel } from '@/utils/formatRelativeTime';
 import type { Activity } from '@/types/activity';
+
+const MAX_ACTIVITIES_DISPLAY = 10;
 
 /**
  * Activity Feed Component
  *
  * Displays recent activities with icon-coded entries grouped by day.
  * Activities are clickable and navigate to the relevant matter/tab.
- *
- * UX Layout from Story 9-3:
- * ┌────────────────────────────┐
- * │  ACTIVITY FEED             │
- * │                            │
- * │  Today                     │
- * │  ─────                     │
- * │  • 🟢 Shah v. Mehta        │
- * │    Processing complete ✓   │
- * │                            │
- * │  • 🔵 SEBI v. Parekh       │
- * │    Matter opened           │
- * │                            │
- * │  Yesterday                 │
- * │  ─────────                 │
- * │  • 🟠 Custody Dispute      │
- * │    3 contradictions found  │
- * │                            │
- * │  [View All Activity →]     │
- * └────────────────────────────┘
  */
 
 interface ActivityFeedProps {
@@ -59,8 +42,10 @@ function groupActivitiesByDay(activities: Activity[]): Map<string, Activity[]> {
 }
 
 export function ActivityFeed({ className }: ActivityFeedProps) {
-  // Use selector pattern (MANDATORY from project-context.md)
-  const activities = useActivityStore(selectRecentActivities);
+  // Use useShallow to prevent infinite loop from array slicing creating new references
+  const activities = useActivityStore(
+    useShallow((state) => state.activities.slice(0, MAX_ACTIVITIES_DISPLAY))
+  );
   const isLoading = useActivityStore((state) => state.isLoading);
   const error = useActivityStore((state) => state.error);
   const fetchActivities = useActivityStore((state) => state.fetchActivities);

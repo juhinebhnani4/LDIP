@@ -3,14 +3,13 @@
 Story 5-1: Service layer tests for entity statement querying.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.contradiction import EntityStatements, PaginationMeta
+from app.models.contradiction import EntityStatements
 from app.services.contradiction.statement_query import (
     EntityNotFoundError,
-    StatementQueryError,
     StatementQueryService,
     get_statement_query_service,
 )

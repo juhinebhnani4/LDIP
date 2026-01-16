@@ -6,7 +6,7 @@ Story 5-2: API endpoint tests for statement pair comparison.
 Uses FastAPI dependency_overrides for proper test isolation.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import jwt
@@ -19,6 +19,7 @@ from app.core.config import Settings
 from app.main import app
 from app.models.contradiction import (
     DocumentStatements,
+    EntityComparisonsResponse,
     EntityStatements,
     EntityStatementsResponse,
     PaginationMeta,
@@ -28,7 +29,6 @@ from app.models.contradiction import (
 )
 from app.models.matter import MatterRole
 from app.services.contradiction.statement_query import EntityNotFoundError
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -55,8 +55,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -139,9 +139,9 @@ class TestGetEntityStatements:
         mock_service_response: EntityStatementsResponse,
     ) -> None:
         """Should return 200 with entity statements on success."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         # Mock matter service for auth
         mock_matter_service = MagicMock()
@@ -179,9 +179,9 @@ class TestGetEntityStatements:
     @pytest.mark.anyio
     async def test_get_entity_statements_not_found(self) -> None:
         """Should return 404 when entity not found."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
@@ -218,9 +218,9 @@ class TestGetEntityStatements:
         mock_service_response: EntityStatementsResponse,
     ) -> None:
         """Should pass query parameters to service."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
@@ -261,9 +261,9 @@ class TestGetEntityStatements:
     @pytest.mark.anyio
     async def test_get_entity_statements_empty_result(self) -> None:
         """Should return 200 with empty statements (AC #4)."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         empty_response = EntityStatementsResponse(
             data=EntityStatements(
@@ -318,9 +318,9 @@ class TestGetEntityStatementsValueExtraction:
     @pytest.mark.anyio
     async def test_response_includes_extracted_dates(self) -> None:
         """Should include extracted dates in statements."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         response_with_dates = EntityStatementsResponse(
             data=EntityStatements(
@@ -392,9 +392,9 @@ class TestGetEntityStatementsValueExtraction:
     @pytest.mark.anyio
     async def test_response_includes_extracted_amounts(self) -> None:
         """Should include extracted amounts in statements."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         response_with_amounts = EntityStatementsResponse(
             data=EntityStatements(
@@ -470,9 +470,9 @@ class TestGetEntityStatementsAliasResolution:
     @pytest.mark.anyio
     async def test_response_includes_aliases_searched(self) -> None:
         """Should include aliasesIncluded in response."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_statement_service
+        from app.core.config import get_settings
 
         response_with_aliases = EntityStatementsResponse(
             data=EntityStatements(
@@ -590,9 +590,9 @@ class TestCompareEntityStatements:
         mock_comparison_response: "EntityComparisonsResponse",
     ) -> None:
         """Should return 200 with comparison results on success."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
@@ -628,9 +628,9 @@ class TestCompareEntityStatements:
     @pytest.mark.anyio
     async def test_compare_entity_statements_not_found(self) -> None:
         """Should return 404 when entity not found."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
@@ -664,9 +664,9 @@ class TestCompareEntityStatements:
     @pytest.mark.anyio
     async def test_compare_entity_statements_too_many(self) -> None:
         """Should return 422 when too many statements."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
+        from app.core.config import get_settings
         from app.services.contradiction.comparator import TooManyStatementsError
 
         mock_matter_service = MagicMock()
@@ -705,9 +705,9 @@ class TestCompareEntityStatements:
         mock_comparison_response: "EntityComparisonsResponse",
     ) -> None:
         """Should pass query parameters to service."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
@@ -752,9 +752,9 @@ class TestCompareEntityStatementsChainOfThought:
     @pytest.mark.anyio
     async def test_response_includes_reasoning(self) -> None:
         """Should include chain-of-thought reasoning in response."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
+        from app.core.config import get_settings
         from app.models.contradiction import (
             ComparisonMeta,
             ComparisonResult,
@@ -843,10 +843,9 @@ class TestCompareEntityStatementsMatterIsolation:
     @pytest.mark.anyio
     async def test_matter_id_validated(self) -> None:
         """Should validate matter_id for every request."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.contradiction import _get_comparison_service
-        from app.services.contradiction.comparator import ComparisonServiceError
+        from app.core.config import get_settings
 
         mock_matter_service = MagicMock()
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR

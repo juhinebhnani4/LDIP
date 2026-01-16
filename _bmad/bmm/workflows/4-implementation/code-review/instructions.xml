@@ -57,18 +57,68 @@
   <step n="3" goal="Execute adversarial review">
     <critical>VALIDATE EVERY CLAIM - Check git reality vs story claims</critical>
 
-    <!-- MANDATORY: Run Full Test Suite FIRST -->
-    <critical>🧪 FULL TEST SUITE IS MANDATORY - Not just story tests!</critical>
-    <action>Run `pytest tests/ -v --tb=short` to execute ALL tests in the project</action>
-    <action>Record total test count, pass count, fail count, skip count</action>
-    <check if="any tests fail">
-      <action>Mark as CRITICAL finding: "Full test suite has {{fail_count}} failing tests"</action>
-      <action>List each failing test with error message</action>
+    <!-- SMART TEST EXECUTION: Only run tests affected by changes -->
+    <critical>🧪 RUN AFFECTED TESTS ONLY - Faster reviews, same quality!</critical>
+
+    <!-- Step 3a: Discover affected test files from git changes -->
+    <action>Set {{affected_tests}} = empty list</action>
+    <action>Set {{backend_test_files}} = empty list</action>
+    <action>Set {{frontend_test_files}} = empty list</action>
+
+    <!-- Map changed source files to their test files -->
+    <action>For EACH file in git changes (from Step 1):
+      **Backend (Python)**:
+      - If file is `backend/src/services/foo.py` → look for `backend/tests/services/test_foo.py`
+      - If file is `backend/src/engines/bar/baz.py` → look for `backend/tests/engines/bar/test_baz.py`
+      - If file is `backend/src/api/routes/qux.py` → look for `backend/tests/api/routes/test_qux.py`
+      - If file is a test file itself (`test_*.py`) → add directly
+      - Pattern: Replace `src/` with `tests/` and prefix filename with `test_`
+
+      **Frontend (TypeScript/React)**:
+      - If file is `frontend/src/components/Foo.tsx` → look for `frontend/src/components/Foo.test.tsx`
+      - If file is `frontend/src/hooks/useBar.ts` → look for `frontend/src/hooks/useBar.test.ts`
+      - If file is `frontend/src/stores/bazStore.ts` → look for `frontend/src/stores/bazStore.test.ts`
+      - If file is a test file itself (`*.test.tsx` or `*.test.ts`) → add directly
+      - Pattern: Same directory, append `.test` before extension
+    </action>
+
+    <action>Filter to only test files that actually exist</action>
+    <action>Add to {{backend_test_files}} or {{frontend_test_files}} respectively</action>
+
+    <!-- Execute backend tests if any affected -->
+    <check if="{{backend_test_files}} is not empty">
+      <action>Run `cd backend && python -m pytest {{backend_test_files}} -v --tb=short`</action>
+      <action>Record: pass count, fail count, skip count for backend</action>
     </check>
-    <check if="skip count increased from baseline">
-      <action>Mark as MEDIUM finding: "Skipped tests increased - investigate why"</action>
+    <check if="{{backend_test_files}} is empty">
+      <action>Note: "No backend test files affected by changes"</action>
     </check>
-    <action>Verify story-specific tests pass (should be subset of full suite)</action>
+
+    <!-- Execute frontend tests if any affected -->
+    <check if="{{frontend_test_files}} is not empty">
+      <action>Run `cd frontend && npm run test:run -- {{frontend_test_files}}`</action>
+      <action>Record: pass count, fail count, skip count for frontend</action>
+    </check>
+    <check if="{{frontend_test_files}} is empty">
+      <action>Note: "No frontend test files affected by changes"</action>
+    </check>
+
+    <!-- Handle test failures -->
+    <check if="any affected tests fail">
+      <action>Mark as CRITICAL finding: "{{fail_count}} tests failing in affected files"</action>
+      <action>List each failing test with error message and file:line</action>
+    </check>
+
+    <!-- Offer full suite option -->
+    <ask optional="true">Affected tests completed. Run full test suite? (usually not needed)
+      - [y] Yes, run all tests (slow - may take several minutes)
+      - [n] No, continue with review (recommended)
+    </ask>
+    <check if="user chooses y">
+      <action>Run backend: `cd backend && python -m pytest tests/ -v --tb=short --timeout=120`</action>
+      <action>Run frontend: `cd frontend && npm run test:run`</action>
+      <action>Report full suite results</action>
+    </check>
 
     <!-- Git vs Story Discrepancies -->
     <action>Review git vs story File List discrepancies:

@@ -11,14 +11,12 @@ Tests for:
 - Export API endpoints
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.models.export import (
     ExportFormat,
     ExportRequest,
     ExportSectionEdit,
-    ExportStatus,
     VerificationSummaryForExport,
 )
 from app.models.verification import (
@@ -26,10 +24,9 @@ from app.models.verification import (
     ExportEligibilityResult,
     ExportWarningFinding,
 )
-from app.services.export.pdf_generator import PDFGenerator
 from app.services.export.docx_generator import DocxGenerator
+from app.services.export.pdf_generator import PDFGenerator
 from app.services.export.pptx_generator import PptxGenerator
-
 
 # =============================================================================
 # Story 12-3: Export Eligibility Tests (Task 8.1)
@@ -127,7 +124,7 @@ class TestPDFGenerator:
         }
 
         verification = VerificationSummaryForExport(
-            export_date=datetime.now(timezone.utc),
+            export_date=datetime.now(UTC),
             total_findings=5,
             verified_count=3,
             pending_count=2,
@@ -415,7 +412,9 @@ class TestExecutiveSummaryService:
 
     def test_build_case_overview_with_description(self):
         """Test case overview builds from subject_matter description."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -435,7 +434,9 @@ class TestExecutiveSummaryService:
 
     def test_build_case_overview_truncation(self):
         """Test case overview truncates at MAX_OVERVIEW_WORDS."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -452,7 +453,9 @@ class TestExecutiveSummaryService:
 
     def test_extract_parties_limits_to_max(self):
         """Test parties extraction limits to MAX_PARTIES."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -468,7 +471,9 @@ class TestExecutiveSummaryService:
 
     def test_extract_parties_sorts_by_role_priority(self):
         """Test parties sorted by role importance."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -487,7 +492,9 @@ class TestExecutiveSummaryService:
 
     def test_extract_attention_items_limits_to_max(self):
         """Test attention items limited to MAX_ACTIONS."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -500,7 +507,9 @@ class TestExecutiveSummaryService:
 
     def test_extract_attention_items_handles_string_format(self):
         """Test attention items handles both dict and string formats."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryService
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryService,
+        )
 
         service = ExecutiveSummaryService()
 
@@ -530,8 +539,12 @@ class TestExecutiveSummaryPDFGenerator:
 
     def test_generate_pdf_basic(self):
         """Test generating basic executive summary PDF."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         content = ExecutiveSummaryContent(
             matter_name="Test Matter",
@@ -563,8 +576,12 @@ class TestExecutiveSummaryPDFGenerator:
 
     def test_generate_pdf_includes_verified_badge(self):
         """Test PDF includes [VERIFIED] badge on issues (AC #3)."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         content = ExecutiveSummaryContent(
             matter_name="Badge Test",
@@ -585,15 +602,19 @@ class TestExecutiveSummaryPDFGenerator:
         generator = ExecutiveSummaryPDFGenerator()
 
         # Build content lines to check for VERIFIED badge
-        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines = generator._build_content_lines(content, datetime.now(UTC))
         lines_text = "\n".join(lines)
 
         assert "[VERIFIED]" in lines_text
 
     def test_generate_pdf_includes_pending_count(self):
         """Test PDF includes pending verification count (AC #3)."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         content = ExecutiveSummaryContent(
             matter_name="Pending Count Test",
@@ -610,15 +631,19 @@ class TestExecutiveSummaryPDFGenerator:
         )
 
         generator = ExecutiveSummaryPDFGenerator()
-        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines = generator._build_content_lines(content, datetime.now(UTC))
         lines_text = "\n".join(lines)
 
         assert "5 additional findings pending verification" in lines_text
 
     def test_generate_pdf_includes_workspace_link(self):
         """Test PDF includes workspace link (AC #4)."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         content = ExecutiveSummaryContent(
             matter_name="Link Test",
@@ -635,7 +660,7 @@ class TestExecutiveSummaryPDFGenerator:
         )
 
         generator = ExecutiveSummaryPDFGenerator(frontend_url="https://app.ldip.ai")
-        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines = generator._build_content_lines(content, datetime.now(UTC))
         lines_text = "\n".join(lines)
 
         assert "https://app.ldip.ai/matters/test-matter-id-123" in lines_text
@@ -643,8 +668,12 @@ class TestExecutiveSummaryPDFGenerator:
 
     def test_page_limit_enforcement(self):
         """Test content truncation when exceeding 2 pages (AC #3)."""
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         # Create content that would exceed 2 pages
         content = ExecutiveSummaryContent(
@@ -671,7 +700,7 @@ class TestExecutiveSummaryPDFGenerator:
         )
 
         generator = ExecutiveSummaryPDFGenerator()
-        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines = generator._build_content_lines(content, datetime.now(UTC))
 
         # Apply truncation
         truncated_lines = generator._enforce_page_limit(lines, content)
@@ -682,7 +711,9 @@ class TestExecutiveSummaryPDFGenerator:
 
     def test_word_wrap(self):
         """Test word wrapping utility."""
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
 
         generator = ExecutiveSummaryPDFGenerator()
 
@@ -701,8 +732,12 @@ class TestExecutiveSummaryPDFGenerator:
         - No events
         - No contradictions/citations
         """
-        from app.services.export.executive_summary_service import ExecutiveSummaryContent
-        from app.services.export.executive_summary_pdf import ExecutiveSummaryPDFGenerator
+        from app.services.export.executive_summary_pdf import (
+            ExecutiveSummaryPDFGenerator,
+        )
+        from app.services.export.executive_summary_service import (
+            ExecutiveSummaryContent,
+        )
 
         # Create content representing an empty matter
         content = ExecutiveSummaryContent(
@@ -727,7 +762,7 @@ class TestExecutiveSummaryPDFGenerator:
         assert b"%%EOF" in pdf_bytes
 
         # Verify placeholder messages are included
-        lines = generator._build_content_lines(content, datetime.now(timezone.utc))
+        lines = generator._build_content_lines(content, datetime.now(UTC))
         lines_text = "\n".join(lines)
 
         assert "No parties recorded" in lines_text

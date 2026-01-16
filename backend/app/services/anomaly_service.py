@@ -6,7 +6,7 @@ for attorney review.
 Story 4-4: Timeline Anomaly Detection
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from math import ceil
 
@@ -352,7 +352,7 @@ class AnomalyService:
                     "dismissed": True,
                     "verified": False,  # Can't be both
                     "verified_by": user_id,
-                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "verified_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)
@@ -405,7 +405,7 @@ class AnomalyService:
                     "verified": True,
                     "dismissed": False,  # Can't be both
                     "verified_by": user_id,
-                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "verified_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)

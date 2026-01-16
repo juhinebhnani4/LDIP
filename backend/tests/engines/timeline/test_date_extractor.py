@@ -5,17 +5,16 @@ Story 4-1: Date Extraction with Gemini
 
 import json
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.engines.timeline.date_extractor import (
     DateConfigurationError,
     DateExtractor,
-    DateExtractorError,
     get_date_extractor,
 )
-from app.models.timeline import DateExtractionResult, ExtractedDate
+from app.models.timeline import ExtractedDate
 
 
 class TestDateExtractorInit:

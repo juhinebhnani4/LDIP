@@ -4,7 +4,7 @@ Story 7-5: Query Cache Redis Storage
 Tasks 4.2-4.5 / 5.3: Unit tests for QueryCacheService high-level methods.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,7 +18,6 @@ from app.services.memory.query_cache_service import (
 )
 from app.services.memory.query_normalizer import QueryNormalizer
 from app.services.memory.redis_keys import CACHE_TTL
-
 
 # Valid UUIDs for testing (redis_keys.py validates UUID format)
 MATTER_ID = "12345678-1234-1234-1234-123456789abc"
@@ -57,7 +56,7 @@ def service(mock_repository: AsyncMock, mock_normalizer: MagicMock) -> QueryCach
 @pytest.fixture
 def sample_cached_result() -> CachedQueryResult:
     """Create a sample cached result for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return CachedQueryResult(
         query_hash="a" * 64,
         matter_id=MATTER_ID,

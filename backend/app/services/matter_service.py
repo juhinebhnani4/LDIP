@@ -4,7 +4,7 @@ This service provides business logic for matter operations with role-based
 access control. All operations respect the user's role on the matter.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -39,7 +39,7 @@ class MatterNotFoundError(MatterServiceError):
     def __init__(self, matter_id: str):
         super().__init__(
             code="MATTER_NOT_FOUND",
-            message=f"Matter not found or you don't have access",
+            message="Matter not found or you don't have access",
             status_code=404,
         )
 
@@ -414,9 +414,8 @@ class MatterService:
         logger.info("deleting_matter", matter_id=matter_id, user_id=user_id)
 
         # Soft delete
-        from datetime import timezone
         result = self.db.table("matters").update({
-            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_at": datetime.now(UTC).isoformat(),
         }).eq("id", matter_id).execute()
 
         if not result.data:

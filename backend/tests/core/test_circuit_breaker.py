@@ -12,7 +12,6 @@ Tests cover:
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,7 +29,6 @@ from app.core.circuit_breaker import (
     is_retryable_exception,
     with_circuit_breaker,
 )
-
 
 # =============================================================================
 # Test Fixtures

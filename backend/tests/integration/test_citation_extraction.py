@@ -11,10 +11,11 @@ Tests the end-to-end citation extraction flow including:
 Note: These tests require Redis and Supabase to be running.
 """
 
-import pytest
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from app.engines.citation.abbreviations import normalize_act_name
 from app.engines.citation.extractor import CitationExtractor
@@ -22,9 +23,7 @@ from app.engines.citation.storage import CitationStorageService
 from app.models.citation import (
     CitationExtractionResult,
     ExtractedCitation,
-    VerificationStatus,
 )
-
 
 # =============================================================================
 # Test Fixtures

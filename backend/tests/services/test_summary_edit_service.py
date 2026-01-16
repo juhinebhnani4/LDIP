@@ -9,19 +9,19 @@ Test Categories:
 - Error handling
 """
 
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.summary import SummarySectionTypeEnum
 from app.services.summary_edit_service import (
-    SummaryEditService,
-    SummaryEditServiceError,
     EditNotFoundError,
     EditSaveError,
+    SummaryEditService,
+    SummaryEditServiceError,
     get_summary_edit_service,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -12,12 +12,12 @@ Test Categories:
 
 import pytest
 
-from app.services.safety.quote_detector import QuoteDetector, detect_quotes
 from app.services.safety.language_policing import (
     LanguagePolicingService,
     get_language_policing_service,
     reset_language_policing_service,
 )
+from app.services.safety.quote_detector import QuoteDetector, detect_quotes
 
 
 @pytest.fixture

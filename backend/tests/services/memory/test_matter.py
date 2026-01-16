@@ -8,27 +8,20 @@ Tasks 5.2-5.7: Test query history, timeline cache, entity graph, and staleness.
 Tasks 3.x, 4.x: Test key findings and research notes CRUD.
 """
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.models.memory import (
     ArchivedSession,
-    CachedEntity,
     EntityGraphCache,
-    EntityRelationship,
     FindingEvidence,
     KeyFinding,
-    KeyFindings,
-    QueryHistory,
     QueryHistoryEntry,
     ResearchNote,
-    ResearchNotes,
     SessionEntityMention,
     SessionMessage,
     TimelineCache,
-    TimelineCacheEntry,
 )
 from app.services.memory.matter import (
     ARCHIVED_SESSION_TYPE,
@@ -42,7 +35,6 @@ from app.services.memory.matter import (
     is_cache_stale,
     reset_matter_memory_repository,
 )
-
 
 # Valid UUIDs for testing
 MATTER_ID = "12345678-1234-1234-1234-123456789abc"

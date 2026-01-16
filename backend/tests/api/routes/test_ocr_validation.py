@@ -4,7 +4,7 @@ These tests verify the API endpoints work correctly with mocked dependencies.
 Authentication is mocked using FastAPI dependency overrides.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,7 +18,6 @@ from app.models.ocr_validation import (
     HumanReviewItem,
     HumanReviewStatus,
     ValidationResult,
-    ValidationStatus,
 )
 
 
@@ -218,7 +217,7 @@ class TestGetPendingHumanReviews:
                     context_after="in court",
                     page_number=1,
                     status=HumanReviewStatus.PENDING,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             ],
             1,

@@ -1,7 +1,7 @@
 """Unit tests for entity API routes."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import jwt
@@ -18,7 +18,6 @@ from app.models.entity import (
     RelationshipType,
 )
 from app.models.matter import MatterRole
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -45,8 +44,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -62,8 +61,8 @@ def create_mock_entity(matter_id: str, entity_id: str | None = None) -> EntityNo
         metadata={"roles": ["plaintiff"]},
         mention_count=5,
         aliases=["Mr. Jobalia", "N.D. Jobalia"],
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -77,7 +76,7 @@ def create_mock_edge(matter_id: str) -> EntityEdge:
         relationship_type=RelationshipType.HAS_ROLE,
         confidence=0.9,
         metadata={"description": "Director of"},
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -93,7 +92,7 @@ def create_mock_mention(entity_id: str) -> EntityMention:
         mention_text="Mr. Jobalia",
         context="...filed by Mr. Jobalia...",
         confidence=0.95,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 

@@ -1,8 +1,6 @@
 """Tests for bounding box extraction from Document AI responses."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from app.models.ocr import OCRBoundingBox
 from app.services.ocr.bbox_extractor import (

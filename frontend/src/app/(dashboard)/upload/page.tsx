@@ -8,7 +8,7 @@ import { UploadWizard } from '@/components/features/upload';
  */
 
 export const metadata = {
-  title: 'Create New Matter - LDIP',
+  title: 'Create New Matter - jaanch.ai',
   description: 'Upload case files to create a new matter',
 };
 

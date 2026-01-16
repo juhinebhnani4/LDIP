@@ -3,19 +3,14 @@
 Story 2c-3: Background Job Status Tracking and Retry
 """
 
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.job import (
-    JobQueueStats,
-    JobStageHistory,
     JobStatus,
     JobType,
-    ProcessingJob,
-    ProcessingJobUpdate,
     StageStatus,
 )
 from app.services.job_tracking.tracker import (
@@ -24,7 +19,6 @@ from app.services.job_tracking.tracker import (
     JobTrackingService,
     get_job_tracking_service,
 )
-
 
 # =============================================================================
 # Fixtures

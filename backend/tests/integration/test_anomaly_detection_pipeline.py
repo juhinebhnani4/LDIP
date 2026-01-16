@@ -6,27 +6,22 @@ Tests the full pipeline: events → anomaly detection → storage → retrieval
 with mocked dependencies to verify end-to-end functionality.
 """
 
-import pytest
-from datetime import date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import MagicMock
 
-from app.engines.timeline.anomaly_detector import TimelineAnomalyDetector, get_anomaly_detector
-from app.engines.timeline.legal_sequences import CaseType, LegalSequenceValidator
+import pytest
+
+from app.engines.timeline.anomaly_detector import (
+    TimelineAnomalyDetector,
+)
+from app.engines.timeline.legal_sequences import CaseType
 from app.engines.timeline.timeline_builder import TimelineEvent
 from app.models.anomaly import (
     AnomaliesListResponse,
-    Anomaly,
-    AnomalyCreate,
-    AnomalyListItem,
-    AnomalySeverity,
-    AnomalySummaryData,
-    AnomalySummaryResponse,
     AnomalyType,
-    PaginationMeta,
 )
 from app.models.timeline import EventType
-from app.services.anomaly_service import AnomalyService, get_anomaly_service
-
+from app.services.anomaly_service import AnomalyService
 
 # =============================================================================
 # Helper Functions

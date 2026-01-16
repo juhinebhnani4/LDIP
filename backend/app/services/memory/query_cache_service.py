@@ -13,7 +13,7 @@ This service is the primary interface for query caching.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -158,7 +158,7 @@ class QueryCacheService:
         normalized, query_hash = normalizer.normalize_and_hash(query)
 
         # Calculate timestamps
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(seconds=CACHE_TTL)
 
         # Create cached result

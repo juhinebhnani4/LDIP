@@ -13,7 +13,6 @@ the 4-layer matter isolation using various attack vectors:
 CRITICAL: All these tests MUST fail (attacks blocked) for security compliance.
 """
 
-import re
 import time
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -23,7 +22,6 @@ from fastapi import HTTPException
 
 from app.api.deps import validate_matter_access
 from app.services.memory.redis_keys import (
-    cache_key,
     extract_matter_id_from_key,
     matter_key,
     session_key,
@@ -34,7 +32,6 @@ from app.services.rag.namespace import (
     validate_namespace,
     validate_search_results,
 )
-
 
 # =============================================================================
 # SQL Injection Attack Tests

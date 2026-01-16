@@ -14,20 +14,14 @@ import pytest
 
 from app.models.job import (
     JobQueueStats,
-    JobStageHistory,
     JobStatus,
     JobType,
-    ProcessingJob,
-    ProcessingJobCreate,
-    ProcessingJobUpdate,
-    StageStatus,
 )
 from app.services.job_tracking import (
     JobTrackingService,
     PartialProgressTracker,
     StageProgress,
     TimeEstimator,
-    create_progress_tracker,
 )
 
 

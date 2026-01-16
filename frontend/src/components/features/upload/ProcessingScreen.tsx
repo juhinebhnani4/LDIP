@@ -42,6 +42,7 @@ export function ProcessingScreen({
   const processingStage = useUploadWizardStore((state) => state.processingStage);
   const overallProgressPct = useUploadWizardStore((state) => state.overallProgressPct);
   const liveDiscoveries = useUploadWizardStore((state) => state.liveDiscoveries);
+  const cancelFileUpload = useUploadWizardStore((state) => state.cancelFileUpload);
 
   // Convert Map to array for components
   const uploadProgressArray = useMemo((): UploadProgress[] => {
@@ -71,6 +72,14 @@ export function ProcessingScreen({
     }
     router.push('/');
   }, [onContinueInBackground, router]);
+
+  // Handle cancel file upload
+  const handleCancelFile = useCallback(
+    (fileName: string) => {
+      cancelFileUpload(fileName);
+    },
+    [cancelFileUpload]
+  );
 
   return (
     <div className={cn('min-h-screen bg-muted/30', className)}>
@@ -118,6 +127,7 @@ export function ProcessingScreen({
               <UploadProgressView
                 uploadProgress={uploadProgressArray}
                 totalFiles={files.length}
+                onCancelFile={handleCancelFile}
               />
             )}
 

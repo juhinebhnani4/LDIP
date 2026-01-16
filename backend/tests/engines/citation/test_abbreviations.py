@@ -3,7 +3,6 @@
 Story 3-1: Act Citation Extraction (AC: #2)
 """
 
-import pytest
 
 from app.engines.citation.abbreviations import (
     ACT_ABBREVIATIONS,

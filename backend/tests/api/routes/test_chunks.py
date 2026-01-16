@@ -1,11 +1,10 @@
 """Unit tests for chunk API routes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import jwt
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings
@@ -13,7 +12,6 @@ from app.main import app
 from app.models.chunk import Chunk, ChunkType, ChunkWithContent
 from app.models.matter import MatterRole
 from app.services.chunk_service import ChunkNotFoundError
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -40,8 +38,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -53,10 +51,10 @@ class TestGetDocumentChunksEndpoint:
     @pytest.mark.anyio
     async def test_returns_chunks_on_success(self) -> None:
         """Should return chunks when authorized."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
-        from app.services.document_service import get_document_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
+        from app.services.document_service import get_document_service
 
         document_id = "doc-123"
         chunk_id = "chunk-456"
@@ -117,10 +115,10 @@ class TestGetDocumentChunksEndpoint:
     @pytest.mark.anyio
     async def test_filters_by_chunk_type(self) -> None:
         """Should filter chunks by type when specified."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
-        from app.services.document_service import get_document_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
+        from app.services.document_service import get_document_service
 
         document_id = "doc-123"
 
@@ -164,8 +162,8 @@ class TestGetDocumentChunksEndpoint:
     @pytest.mark.anyio
     async def test_returns_404_for_unauthorized_document(self) -> None:
         """Should return 404 when user has no access to document's matter."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.document_service import get_document_service
 
         document_id = "doc-123"
@@ -205,8 +203,8 @@ class TestGetChunkEndpoint:
     @pytest.mark.anyio
     async def test_returns_chunk_on_success(self) -> None:
         """Should return chunk when authorized."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         chunk_id = "chunk-456"
@@ -223,7 +221,7 @@ class TestGetChunkEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_chunk_service = MagicMock()
@@ -256,8 +254,8 @@ class TestGetChunkEndpoint:
     @pytest.mark.anyio
     async def test_returns_404_for_nonexistent_chunk(self) -> None:
         """Should return 404 when chunk doesn't exist."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         chunk_id = "nonexistent-chunk"
@@ -293,8 +291,8 @@ class TestGetChunkContextEndpoint:
     @pytest.mark.anyio
     async def test_returns_context_for_child_chunk(self) -> None:
         """Should return parent and siblings for child chunk."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         chunk_id = "child-chunk"
@@ -312,7 +310,7 @@ class TestGetChunkContextEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_parent = Chunk(
@@ -327,7 +325,7 @@ class TestGetChunkContextEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_chunk_service = MagicMock()
@@ -367,8 +365,8 @@ class TestGetChunkParentEndpoint:
     @pytest.mark.anyio
     async def test_returns_parent_chunk(self) -> None:
         """Should return parent chunk for child."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         chunk_id = "child-chunk"
@@ -386,7 +384,7 @@ class TestGetChunkParentEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_parent = Chunk(
@@ -401,7 +399,7 @@ class TestGetChunkParentEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_chunk_service = MagicMock()
@@ -435,8 +433,8 @@ class TestGetChunkParentEndpoint:
     @pytest.mark.anyio
     async def test_returns_404_for_parentless_chunk(self) -> None:
         """Should return 404 when chunk has no parent."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         chunk_id = "parent-chunk"
@@ -453,7 +451,7 @@ class TestGetChunkParentEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_chunk_service = MagicMock()
@@ -489,8 +487,8 @@ class TestGetChunkChildrenEndpoint:
     @pytest.mark.anyio
     async def test_returns_child_chunks(self) -> None:
         """Should return children for parent chunk."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
+        from app.core.config import get_settings
         from app.services.chunk_service import get_chunk_service
 
         parent_id = "parent-chunk"
@@ -508,7 +506,7 @@ class TestGetChunkChildrenEndpoint:
             page_number=1,
             bbox_ids=None,
             entity_ids=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         mock_children = [
@@ -524,7 +522,7 @@ class TestGetChunkChildrenEndpoint:
                 page_number=1,
                 bbox_ids=None,
                 entity_ids=None,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             for i, child_id in enumerate(child_ids)
         ]

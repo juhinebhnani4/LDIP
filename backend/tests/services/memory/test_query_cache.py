@@ -4,7 +4,7 @@ Story 7-5: Query Cache Redis Storage
 Tasks 5.2-5.5: Unit tests for QueryCacheRepository
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -16,7 +16,6 @@ from app.services.memory.query_cache import (
     reset_query_cache_repository,
 )
 from app.services.memory.redis_keys import CACHE_TTL
-
 
 # Valid UUIDs for testing (redis_keys.py validates UUID format)
 MATTER_ID = "12345678-1234-1234-1234-123456789abc"
@@ -47,7 +46,7 @@ def repository(mock_redis: AsyncMock) -> QueryCacheRepository:
 @pytest.fixture
 def sample_cached_result() -> CachedQueryResult:
     """Create a sample cached result for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return CachedQueryResult(
         query_hash=QUERY_HASH,
         matter_id=MATTER_ID,
@@ -237,7 +236,7 @@ class TestMatterIsolation:
         mock_redis.setex.side_effect = track_setex
 
         # Create results for two different matters
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result_a = CachedQueryResult(
             query_hash=QUERY_HASH,
             matter_id=MATTER_ID,
@@ -271,7 +270,7 @@ class TestMatterIsolation:
     ) -> None:
         """Get should validate matter access."""
         # Store a result for matter A
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = CachedQueryResult(
             query_hash=QUERY_HASH,
             matter_id=MATTER_ID,

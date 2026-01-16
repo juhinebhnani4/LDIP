@@ -7,7 +7,6 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.routes import (
@@ -36,7 +35,7 @@ from app.api.routes import (
 from app.core.config import get_settings
 from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 
 # Configure structured logging on module load
 configure_logging()
@@ -132,9 +131,9 @@ def create_app() -> FastAPI:
     # This runs after CORS (middleware added last runs first)
     app.add_middleware(CorrelationMiddleware)
 
-    # Configure rate limiting
+    # Configure rate limiting with custom 429 handler (Story 13.3)
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
     # Include routers
     app.include_router(health.router, prefix="/api")

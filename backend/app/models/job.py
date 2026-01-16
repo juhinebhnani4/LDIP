@@ -170,6 +170,10 @@ class ProcessingJob(ProcessingJobBase):
     completed_at: datetime | None = Field(None, description="When processing completed")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    heartbeat_at: datetime | None = Field(
+        None,
+        description="Last heartbeat timestamp for long-running job health monitoring"
+    )
 
 
 class ProcessingJobWithHistory(ProcessingJob):

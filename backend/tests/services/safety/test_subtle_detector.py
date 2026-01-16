@@ -13,22 +13,18 @@ Tests for:
 CRITICAL: All tests use mocked OpenAI responses - never hit real API.
 """
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.safety import SubtleViolationCheck
 from app.services.safety.subtle_detector import (
-    DetectionParseError,
     OpenAIConfigurationError,
     SubtleDetectorError,
     SubtleViolationDetector,
     get_subtle_violation_detector,
     reset_subtle_violation_detector,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -317,7 +313,7 @@ class TestTimeoutHandling:
         """Should raise error on timeout (caller decides fail-open behavior)."""
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
-                side_effect=asyncio.TimeoutError()
+                side_effect=TimeoutError()
             )
 
             with pytest.raises(SubtleDetectorError):
@@ -561,7 +557,7 @@ class TestRetryLogic:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
             return mock_openai_allowed
 
         with patch.object(detector, "_client") as mock_client:

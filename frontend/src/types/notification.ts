@@ -63,29 +63,29 @@ export function getNotificationIcon(type: NotificationType): string {
 }
 
 /**
- * Get color class for notification type
+ * Get color class for notification type - jaanch.ai brand palette
  */
 export function getNotificationColorClass(type: NotificationType): string {
   const colors: Record<NotificationType, string> = {
-    success: 'text-green-600 dark:text-green-400',
-    info: 'text-blue-600 dark:text-blue-400',
-    in_progress: 'text-yellow-600 dark:text-yellow-400',
-    warning: 'text-orange-600 dark:text-orange-400',
-    error: 'text-red-600 dark:text-red-400',
+    success: 'text-[#2d5a3d] dark:text-[#4a8a5d]', // Forest Green
+    info: 'text-[#0d1b5e] dark:text-[#6b7cb8]', // Deep Indigo
+    in_progress: 'text-[#b8973b] dark:text-[#c4a85a]', // Muted Gold
+    warning: 'text-[#c4a35a] dark:text-[#d4b86a]', // Aged Gold
+    error: 'text-[#8b2635] dark:text-[#c44d5e]', // Burgundy
   };
   return colors[type];
 }
 
 /**
- * Get background color class for notification type
+ * Get background color class for notification type - jaanch.ai brand palette
  */
 export function getNotificationBgClass(type: NotificationType): string {
   const colors: Record<NotificationType, string> = {
-    success: 'bg-green-50 dark:bg-green-950/30',
-    info: 'bg-blue-50 dark:bg-blue-950/30',
-    in_progress: 'bg-yellow-50 dark:bg-yellow-950/30',
-    warning: 'bg-orange-50 dark:bg-orange-950/30',
-    error: 'bg-red-50 dark:bg-red-950/30',
+    success: 'bg-[#e5f0e8] dark:bg-[#1a2d20]/50', // Forest Green tint
+    info: 'bg-[#e8eef8] dark:bg-[#1a2444]/50', // Deep Indigo tint
+    in_progress: 'bg-[#f5f0e0] dark:bg-[#3d3520]/50', // Muted Gold tint
+    warning: 'bg-[#f5e8d8] dark:bg-[#3d3520]/50', // Aged Gold tint
+    error: 'bg-[#f2d4d7] dark:bg-[#3d1a20]/50', // Burgundy tint
   };
   return colors[type];
 }

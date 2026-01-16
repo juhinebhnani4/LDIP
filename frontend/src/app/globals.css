@@ -7,8 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,71 +50,112 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Jaanch "Intelligent Legal" Brand Colors - Light Mode */
+  /* From UX Design Document v1.2 */
+  /* Primary: Deep Navy (#1a2744), Accent: Warm Gold (#c9a227), Background: Soft Cream (#f8f6f2) */
+
+  --background: #f8f6f2;              /* Soft Cream - warm off-white */
+  --foreground: #2d3748;              /* Charcoal - primary text */
+  --card: #ffffff;                    /* Pure White - elevated surface */
+  --card-foreground: #2d3748;
+  --popover: #ffffff;
+  --popover-foreground: #2d3748;
+  --primary: #1a2744;                 /* Deep Navy - brand primary */
+  --primary-foreground: #ffffff;
+  --secondary: #f8f6f2;               /* Soft Cream */
+  --secondary-foreground: #2d3748;
+  --muted: #f8f6f2;                   /* Soft Cream */
+  --muted-foreground: #64748b;        /* Slate - secondary text */
+  --accent: #c9a227;                  /* Warm Gold */
+  --accent-foreground: #1a2744;
+  --destructive: #dc2626;             /* Error Red */
+  --destructive-foreground: #ffffff;
+  --border: #e5e2dd;                  /* Warm Gray - dividers */
+  --input: #e5e2dd;
+  --ring: #1a2744;                    /* Deep Navy for focus rings */
+
+  /* Chart colors - brand-aligned */
+  --chart-1: #1a2744;                 /* Deep Navy */
+  --chart-2: #166534;                 /* Legal Green */
+  --chart-3: #c9a227;                 /* Warm Gold */
+  --chart-4: #3b82f6;                 /* Steel Blue */
+  --chart-5: #dc2626;                 /* Error Red */
+
+  /* Sidebar - slightly darker paper tone */
+  --sidebar: #f0ede8;
+  --sidebar-foreground: #2d3748;
+  --sidebar-primary: #1a2744;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f8f6f2;
+  --sidebar-accent-foreground: #2d3748;
+  --sidebar-border: #e5e2dd;
+  --sidebar-ring: #1a2744;
+
+  /* Extended brand colors for status/semantic use */
+  --success: #166534;                 /* Legal Green */
+  --success-foreground: #ffffff;
+  --warning: #d97706;                 /* Amber */
+  --warning-foreground: #ffffff;
+  --info: #3b82f6;                    /* Steel Blue */
+  --info-foreground: #ffffff;
+
+  /* Special legal accents */
+  --seal-red: #8b0000;                /* Dark red for stamps/seals */
+  --legal-pad: #fffef0;               /* Yellow legal pad color */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Jaanch "Chambers Mode" - Dark Theme for late-night document review */
+  /* From UX Design Document v1.2 */
+  --background: #1a1a1f;              /* Dark background */
+  --foreground: #e5e5e7;              /* Light text */
+  --card: #25252d;                    /* Elevated dark surface */
+  --card-foreground: #e5e5e7;
+  --popover: #25252d;
+  --popover-foreground: #e5e5e7;
+  --primary: #1a2744;                 /* Keep Deep Navy for brand consistency */
+  --primary-foreground: #ffffff;
+  --secondary: #25252d;
+  --secondary-foreground: #e5e5e7;
+  --muted: #25252d;
+  --muted-foreground: #9ca3af;        /* Muted text */
+  --accent: #dbb536;                  /* Slightly brighter Gold for dark mode */
+  --accent-foreground: #1a1a1f;
+  --destructive: #ef4444;             /* Brighter red for visibility */
+  --destructive-foreground: #ffffff;
+  --border: #3d3d47;
+  --input: #3d3d47;
+  --ring: #dbb536;                    /* Gold ring in dark mode */
+
+  /* Chart colors - dark mode adjusted */
+  --chart-1: #4a5a7a;                 /* Lighter Navy */
+  --chart-2: #22c55e;                 /* Bright Green */
+  --chart-3: #dbb536;                 /* Bright Gold */
+  --chart-4: #60a5fa;                 /* Light Blue */
+  --chart-5: #ef4444;                 /* Bright Red */
+
+  /* Sidebar dark mode */
+  --sidebar: #1f1f24;
+  --sidebar-foreground: #e5e5e7;
+  --sidebar-primary: #dbb536;         /* Gold primary in sidebar */
+  --sidebar-primary-foreground: #1a1a1f;
+  --sidebar-accent: #25252d;
+  --sidebar-accent-foreground: #e5e5e7;
+  --sidebar-border: #3d3d47;
+  --sidebar-ring: #dbb536;
+
+  /* Extended brand colors - dark mode */
+  --success: #22c55e;                 /* Bright green for visibility */
+  --success-foreground: #1a1a1f;
+  --warning: #f59e0b;                 /* Bright amber */
+  --warning-foreground: #1a1a1f;
+  --info: #60a5fa;                    /* Light blue */
+  --info-foreground: #1a1a1f;
+
+  /* Special legal accents - dark mode */
+  --seal-red: #dc2626;                /* Brighter for visibility */
+  --legal-pad: #3d3d2a;               /* Muted yellow-brown */
 }
 
 @layer base {
@@ -122,7 +164,41 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans), Inter, system-ui, sans-serif;
   }
+  /* Headings use Fraunces serif for legal authority */
+  h1, h2, h3 {
+    font-family: var(--font-serif), Fraunces, Georgia, serif;
+  }
+  /* Monospace for code, citations, IDs */
+  code, pre, .font-mono {
+    font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  }
+}
+
+/* Bond Paper Texture - Subtle grain overlay inspired by premium print design */
+.paper-texture {
+  background-color: var(--background);
+  position: relative;
+}
+
+/* Subtle noise grain overlay - doesn't interfere with content */
+.paper-texture::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)'/%3E%3C/svg%3E");
+}
+
+/* Dark mode - slightly more visible grain */
+.dark .paper-texture::before {
+  opacity: 0.08;
 }
 
 /* Custom animations for upload/processing UI (Story 9-5) */

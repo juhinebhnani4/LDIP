@@ -10,15 +10,15 @@ Test Categories:
 - Error handling
 """
 
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.deps import MatterMembership, MatterRole
+from app.main import app
 from app.models.verification import (
     FindingVerification,
     VerificationDecision,
@@ -346,8 +346,8 @@ class TestApproveAuthenticated:
     ) -> None:
         """Should approve a verification."""
         from app.api.routes.verifications import approve_verification
-        from app.services.verification import VerificationService
         from app.models.verification import ApproveVerificationRequest
+        from app.services.verification import VerificationService
 
         approved_verification = mock_verification.model_copy()
         approved_verification.decision = VerificationDecision.APPROVED
@@ -380,7 +380,6 @@ class TestApproveAuthenticated:
         """Viewer role should not be able to approve."""
         # The actual role check happens in require_matter_role dependency
         # This test verifies the endpoint only accepts OWNER/EDITOR
-        from app.api.routes.verifications import approve_verification
 
         # The route is decorated with require_matter_role([OWNER, EDITOR])
         # so viewer would be rejected at dependency level
@@ -397,8 +396,8 @@ class TestRejectAuthenticated:
     ) -> None:
         """Should reject a verification with required notes."""
         from app.api.routes.verifications import reject_verification
-        from app.services.verification import VerificationService
         from app.models.verification import RejectVerificationRequest
+        from app.services.verification import VerificationService
 
         rejected_verification = mock_verification.model_copy()
         rejected_verification.decision = VerificationDecision.REJECTED
@@ -435,8 +434,8 @@ class TestBulkUpdateAuthenticated:
     async def test_bulk_approves_verifications(self, mock_matter_membership) -> None:
         """Should bulk approve multiple verifications."""
         from app.api.routes.verifications import bulk_update_verifications
-        from app.services.verification import VerificationService
         from app.models.verification import BulkVerificationRequest
+        from app.services.verification import VerificationService
 
         mock_service = MagicMock(spec=VerificationService)
         mock_service.bulk_update_verifications = AsyncMock(
@@ -478,8 +477,8 @@ class TestExportEligibilityAuthenticated:
     async def test_returns_eligibility_status(self, mock_matter_membership) -> None:
         """Should return export eligibility status."""
         from app.api.routes.verifications import check_export_eligibility
-        from app.services.verification import ExportEligibilityService
         from app.models.verification import ExportEligibilityResult
+        from app.services.verification import ExportEligibilityService
 
         mock_result = ExportEligibilityResult(
             eligible=False,
@@ -522,12 +521,13 @@ class TestVerificationNotFound:
     ) -> None:
         """Should return 404 when verification not found."""
         from fastapi import HTTPException
+
         from app.api.routes.verifications import approve_verification
+        from app.models.verification import ApproveVerificationRequest
         from app.services.verification import (
             VerificationService,
             VerificationServiceError,
         )
-        from app.models.verification import ApproveVerificationRequest
 
         mock_service = MagicMock(spec=VerificationService)
         error = VerificationServiceError(
@@ -542,15 +542,14 @@ class TestVerificationNotFound:
         with patch(
             "app.api.routes.verifications._get_verification_service",
             return_value=mock_service,
-        ):
-            with pytest.raises(HTTPException) as exc_info:
-                await approve_verification(
-                    matter_id="matter-123",
-                    verification_id="nonexistent-id",
-                    request=ApproveVerificationRequest(),
-                    membership=mock_matter_membership,
-                    db=mock_db,
-                    service=mock_service,
-                )
+        ), pytest.raises(HTTPException) as exc_info:
+            await approve_verification(
+                matter_id="matter-123",
+                verification_id="nonexistent-id",
+                request=ApproveVerificationRequest(),
+                membership=mock_matter_membership,
+                db=mock_db,
+                service=mock_service,
+            )
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND

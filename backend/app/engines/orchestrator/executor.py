@@ -246,7 +246,7 @@ class EngineExecutor:
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             logger.warning(

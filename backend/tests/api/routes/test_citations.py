@@ -4,7 +4,7 @@ Story 3-1: Act Citation Extraction (AC: #4)
 Story 3-3: Citation Verification
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -16,14 +16,12 @@ from app.core.config import Settings
 from app.main import app
 from app.models.citation import (
     ActDiscoverySummary,
-    ActResolution,
     ActResolutionStatus,
     Citation,
     UserAction,
     VerificationStatus,
 )
 from app.models.matter import MatterRole
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -50,8 +48,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -75,8 +73,8 @@ def create_mock_citation(
         source_bbox_ids=[str(uuid4())],
         verification_status=VerificationStatus.PENDING,
         confidence=85.0,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -949,7 +947,10 @@ class TestCitationStatsEndpoint:
     async def test_get_citation_stats_success(self) -> None:
         """Should get citation statistics."""
         from app.api.deps import get_matter_service
-        from app.api.routes.citations import _get_discovery_service, _get_storage_service
+        from app.api.routes.citations import (
+            _get_discovery_service,
+            _get_storage_service,
+        )
         from app.core.config import get_settings
 
         matter_id = str(uuid4())

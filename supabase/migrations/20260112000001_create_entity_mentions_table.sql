@@ -71,15 +71,27 @@ USING (
 );
 
 -- Policy 2: Editors and Owners can INSERT entity mentions
+-- CRITICAL: Validates both entity_id AND document_id belong to the SAME matter
+-- This prevents cross-matter reference injection attacks
 CREATE POLICY "Editors and Owners can insert entity mentions"
 ON public.entity_mentions FOR INSERT
 WITH CHECK (
+  -- Entity must belong to a matter the user can edit
   entity_id IN (
     SELECT id FROM public.identity_nodes
     WHERE matter_id IN (
       SELECT ma.matter_id FROM public.matter_attorneys ma
       WHERE ma.user_id = auth.uid()
       AND ma.role IN ('owner', 'editor')
+    )
+  )
+  AND
+  -- Document must belong to the SAME matter as the entity (cross-matter protection)
+  document_id IN (
+    SELECT d.id FROM public.documents d
+    WHERE d.matter_id = (
+      SELECT in_node.matter_id FROM public.identity_nodes in_node
+      WHERE in_node.id = entity_id
     )
   )
 );

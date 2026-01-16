@@ -249,14 +249,14 @@ export function getJobStatusLabel(status: JobStatus): string {
   return labels[status] || status;
 }
 
-/** Helper to get status color for UI */
+/** Helper to get status color for UI - jaanch.ai brand palette */
 export function getJobStatusColor(status: JobStatus): string {
   const colors: Record<JobStatus, string> = {
     QUEUED: 'text-muted-foreground',
-    PROCESSING: 'text-blue-600',
-    COMPLETED: 'text-green-600',
-    FAILED: 'text-destructive',
-    CANCELLED: 'text-yellow-600',
+    PROCESSING: 'text-[#0d1b5e] dark:text-[#6b7cb8]', // Deep Indigo
+    COMPLETED: 'text-[#2d5a3d] dark:text-[#4a8a5d]', // Forest Green
+    FAILED: 'text-destructive', // Uses CSS variable (Burgundy)
+    CANCELLED: 'text-[#c4a35a] dark:text-[#d4b86a]', // Aged Gold
     SKIPPED: 'text-muted-foreground',
   };
   return colors[status] || 'text-muted-foreground';

@@ -20,7 +20,7 @@ import uuid
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import (
@@ -29,6 +29,7 @@ from app.api.deps import (
     get_db,
     require_matter_role,
 )
+from app.core.rate_limit import EXPORT_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 from app.models.export import (
     ExportGenerationResponse,
     ExportRequest,
@@ -113,9 +114,11 @@ def _get_export_service() -> ExportService:
         404: {"description": "Matter not found"},
     },
 )
+@limiter.limit(EXPORT_RATE_LIMIT)
 async def generate_export(
+    request: Request,  # Required for rate limiter
     matter_id: str = Path(..., description="Matter UUID"),
-    request: ExportRequest = Body(...),
+    body: ExportRequest = Body(...),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
     ),
@@ -143,8 +146,8 @@ async def generate_export(
         "export_generation_requested",
         matter_id=matter_id,
         user_id=membership.user_id,
-        format=request.format.value,
-        sections=request.sections,
+        format=body.format.value,
+        sections=body.sections,
     )
 
     # Get user info for verification summary
@@ -162,7 +165,7 @@ async def generate_export(
     try:
         result = await service.generate_export(
             matter_id=matter_id,
-            request=request,
+            request=body,
             user_id=membership.user_id,
             user_email=user_email,
             user_name=user_name,
@@ -209,7 +212,9 @@ async def generate_export(
         404: {"description": "Export not found"},
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_export(
+    request: Request,  # Required for rate limiter
     matter_id: str = Path(..., description="Matter UUID"),
     export_id: str = Path(..., description="Export UUID"),
     membership: MatterMembership = Depends(
@@ -292,7 +297,9 @@ async def get_export(
         404: {"description": "Matter not found"},
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def list_exports(
+    request: Request,  # Required for rate limiter
     matter_id: str = Path(..., description="Matter UUID"),
     limit: int = 10,
     membership: MatterMembership = Depends(
@@ -355,7 +362,9 @@ async def list_exports(
         404: {"description": "Matter not found"},
     },
 )
+@limiter.limit(EXPORT_RATE_LIMIT)
 async def generate_executive_summary(
+    request: Request,  # Required for rate limiter
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])

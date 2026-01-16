@@ -62,7 +62,7 @@ export function ChatInput({
   onSubmit,
   disabled = false,
   isLoading = false,
-  placeholder = 'Ask LDIP a question...',
+  placeholder = 'Ask jaanch a question...',
   className,
 }: ChatInputProps) {
   const [value, setValue] = useState('');

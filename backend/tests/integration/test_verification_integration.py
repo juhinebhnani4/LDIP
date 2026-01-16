@@ -9,23 +9,24 @@ Tests the complete verification workflow including:
 - Export eligibility check integration
 """
 
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
-from datetime import datetime, UTC
 
-from app.services.verification import (
-    VerificationService,
-    ExportEligibilityService,
-    get_verification_service,
-    get_export_eligibility_service,
-    reset_verification_service,
-)
-from app.services.verification.export_eligibility import reset_export_eligibility_service
+import pytest
+
 from app.models.verification import (
     FindingVerificationCreate,
     FindingVerificationUpdate,
     VerificationDecision,
     VerificationRequirement,
+)
+from app.services.verification import (
+    ExportEligibilityService,
+    VerificationService,
+    reset_verification_service,
+)
+from app.services.verification.export_eligibility import (
+    reset_export_eligibility_service,
 )
 
 

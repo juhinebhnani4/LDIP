@@ -9,14 +9,18 @@ Test Categories:
 - Policing disabled scenarios
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.engines.orchestrator.aggregator import (
     ResultAggregator,
-    get_result_aggregator,
 )
-from app.models.orchestrator import EngineExecutionResult, EngineType, OrchestratorResult
+from app.models.orchestrator import (
+    EngineExecutionResult,
+    EngineType,
+    OrchestratorResult,
+)
 from app.models.safety import LanguagePolicingResult
 
 
@@ -75,12 +79,11 @@ def aggregator_with_policing(mock_settings):
     with patch(
         "app.engines.orchestrator.aggregator.get_settings",
         return_value=mock_settings
+    ), patch(
+        "app.services.safety.language_police.get_settings",
+        return_value=mock_settings
     ):
-        with patch(
-            "app.services.safety.language_police.get_settings",
-            return_value=mock_settings
-        ):
-            return ResultAggregator()
+        return ResultAggregator()
 
 
 class TestAsyncAggregationWithPolicing:
@@ -105,30 +108,29 @@ class TestAsyncAggregationWithPolicing:
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
             return_value=mock_settings
+        ), patch.object(
+            aggregator_with_policing,
+            "_language_police",
+            new=MagicMock(
+                police_output=AsyncMock(return_value=mock_policing_result)
+            ),
         ):
-            with patch.object(
-                aggregator_with_policing,
-                "_language_police",
-                new=MagicMock(
-                    police_output=AsyncMock(return_value=mock_policing_result)
-                ),
-            ):
-                result = await aggregator_with_policing.aggregate_results_async(
-                    matter_id="matter-123",
-                    query="What are the citations?",
-                    results=sample_engine_results,
-                    wall_clock_time_ms=200,
-                )
+            result = await aggregator_with_policing.aggregate_results_async(
+                matter_id="matter-123",
+                query="What are the citations?",
+                results=sample_engine_results,
+                wall_clock_time_ms=200,
+            )
 
-                # Check policing was applied
-                assert result.policing_metadata.get("policing_applied") is True
+            # Check policing was applied
+            assert result.policing_metadata.get("policing_applied") is True
 
     @pytest.mark.asyncio
     async def test_policing_metadata_populated(
         self, aggregator_with_policing, sample_engine_results, mock_settings
     ) -> None:
         """Policing metadata should be populated in result."""
-        from app.models.safety import ReplacementRecord, QuotePreservation
+        from app.models.safety import QuotePreservation, ReplacementRecord
 
         mock_policing_result = LanguagePolicingResult(
             original_text="Original text.",
@@ -162,25 +164,24 @@ class TestAsyncAggregationWithPolicing:
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
             return_value=mock_settings
+        ), patch.object(
+            aggregator_with_policing,
+            "_language_police",
+            new=MagicMock(
+                police_output=AsyncMock(return_value=mock_policing_result)
+            ),
         ):
-            with patch.object(
-                aggregator_with_policing,
-                "_language_police",
-                new=MagicMock(
-                    police_output=AsyncMock(return_value=mock_policing_result)
-                ),
-            ):
-                result = await aggregator_with_policing.aggregate_results_async(
-                    matter_id="matter-123",
-                    query="Test query",
-                    results=sample_engine_results,
-                    wall_clock_time_ms=200,
-                )
+            result = await aggregator_with_policing.aggregate_results_async(
+                matter_id="matter-123",
+                query="Test query",
+                results=sample_engine_results,
+                wall_clock_time_ms=200,
+            )
 
-                assert result.policing_metadata["policing_applied"] is True
-                assert result.policing_metadata["replacements_count"] == 1
-                assert result.policing_metadata["quotes_preserved_count"] == 2
-                assert result.policing_metadata["sanitization_time_ms"] > 0
+            assert result.policing_metadata["policing_applied"] is True
+            assert result.policing_metadata["replacements_count"] == 1
+            assert result.policing_metadata["quotes_preserved_count"] == 2
+            assert result.policing_metadata["sanitization_time_ms"] > 0
 
 
 class TestPolicingDisabled:
@@ -245,22 +246,21 @@ class TestSyncVsAsync:
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
             return_value=mock_settings
+        ), patch.object(
+            aggregator_with_policing,
+            "_language_police",
+            new=MagicMock(
+                police_output=AsyncMock(return_value=mock_policing_result)
+            ),
         ):
-            with patch.object(
-                aggregator_with_policing,
-                "_language_police",
-                new=MagicMock(
-                    police_output=AsyncMock(return_value=mock_policing_result)
-                ),
-            ):
-                result = await aggregator_with_policing.aggregate_results_async(
-                    matter_id="matter-123",
-                    query="Test query",
-                    results=sample_engine_results,
-                    wall_clock_time_ms=200,
-                )
+            result = await aggregator_with_policing.aggregate_results_async(
+                matter_id="matter-123",
+                query="Test query",
+                results=sample_engine_results,
+                wall_clock_time_ms=200,
+            )
 
-                assert result.policing_metadata.get("policing_applied") is True
+            assert result.policing_metadata.get("policing_applied") is True
 
 
 class TestErrorHandling:
@@ -274,25 +274,24 @@ class TestErrorHandling:
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
             return_value=mock_settings
+        ), patch.object(
+            aggregator_with_policing,
+            "_language_police",
+            new=MagicMock(
+                police_output=AsyncMock(side_effect=Exception("LLM error"))
+            ),
         ):
-            with patch.object(
-                aggregator_with_policing,
-                "_language_police",
-                new=MagicMock(
-                    police_output=AsyncMock(side_effect=Exception("LLM error"))
-                ),
-            ):
-                # Should NOT raise - should return result with error metadata
-                result = await aggregator_with_policing.aggregate_results_async(
-                    matter_id="matter-123",
-                    query="Test query",
-                    results=sample_engine_results,
-                    wall_clock_time_ms=200,
-                )
+            # Should NOT raise - should return result with error metadata
+            result = await aggregator_with_policing.aggregate_results_async(
+                matter_id="matter-123",
+                query="Test query",
+                results=sample_engine_results,
+                wall_clock_time_ms=200,
+            )
 
-                assert result.matter_id == "matter-123"
-                assert result.policing_metadata.get("policing_applied") is False
-                assert "error" in result.policing_metadata
+            assert result.matter_id == "matter-123"
+            assert result.policing_metadata.get("policing_applied") is False
+            assert "error" in result.policing_metadata
 
 
 class TestEmptyResponse:

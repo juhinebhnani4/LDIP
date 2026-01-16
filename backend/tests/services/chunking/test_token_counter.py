@@ -1,6 +1,5 @@
 """Unit tests for token counter utility."""
 
-import pytest
 
 from app.services.chunking.token_counter import (
     count_tokens,

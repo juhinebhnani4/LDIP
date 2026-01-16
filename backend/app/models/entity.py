@@ -250,6 +250,15 @@ class EntityExtractionResult(BaseModel):
     source_document_id: str | None = Field(None, description="Source document UUID")
     source_chunk_id: str | None = Field(None, description="Source chunk UUID")
     page_number: int | None = Field(None, description="Page number if available")
+    was_truncated: bool = Field(
+        default=False, description="True if input text was truncated due to length limits"
+    )
+    original_length: int | None = Field(
+        None, description="Original text length before truncation (None if not truncated)"
+    )
+    processed_length: int | None = Field(
+        None, description="Actual text length processed (None if not truncated)"
+    )
 
 
 # =============================================================================

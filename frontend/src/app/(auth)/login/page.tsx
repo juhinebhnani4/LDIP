@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/features/auth/LoginForm"
+import { JaanchLogo } from "@/components/ui/jaanch-logo"
 
 interface LoginPageProps {
   searchParams?: Promise<{ session_expired?: string; password_reset?: string; info?: string }>
@@ -56,9 +57,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <SessionExpiredBanner sessionExpired={sessionExpired} />
       <PasswordResetSuccessBanner passwordReset={passwordReset} />
       <VerificationLinkInfoBanner show={verificationLinkExpired} />
-      <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold">Welcome Back</h1>
-        <p className="text-muted-foreground">Sign in to access your LDIP account</p>
+      <div className="space-y-4 text-center">
+        <div className="flex justify-center">
+          <JaanchLogo variant="full" size="lg" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold">Welcome Back</h1>
+          <p className="text-muted-foreground">Sign in to access your account</p>
+        </div>
       </div>
       <LoginForm />
     </div>

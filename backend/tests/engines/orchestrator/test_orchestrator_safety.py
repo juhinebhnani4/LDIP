@@ -16,7 +16,6 @@ from app.engines.orchestrator.orchestrator import QueryOrchestrator
 from app.models.orchestrator import OrchestratorResult
 from app.models.safety import SafetyCheckResult
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -132,6 +131,7 @@ class TestBlockedQueryReturnsImmediately:
             result = await orchestrator.process_query(
                 matter_id="matter-123",
                 query="Should I file an appeal?",
+                user_id="user-456",  # Required for NFR24 audit compliance
             )
 
         # Should be blocked
@@ -180,6 +180,7 @@ class TestBlockedQueryReturnsImmediately:
             result = await orchestrator.process_query(
                 matter_id="matter-123",
                 query="Based on this evidence, is it clear that...",
+                user_id="user-456",  # Required for NFR24 audit compliance
             )
 
         # Should be blocked
@@ -235,7 +236,7 @@ class TestSafeQueryProceeds:
         # Configure executor
         mock_executor.execute_engines = AsyncMock(return_value=[])
 
-        # Configure aggregator
+        # Configure aggregator (use aggregate_results_async per Story 8-3 Code Review Fix)
         mock_aggregated_result = OrchestratorResult(
             matter_id="matter-123",
             query="What does Section 138 say?",
@@ -247,7 +248,7 @@ class TestSafeQueryProceeds:
             total_execution_time_ms=100,
             wall_clock_time_ms=100,
         )
-        mock_aggregator.aggregate_results.return_value = mock_aggregated_result
+        mock_aggregator.aggregate_results_async = AsyncMock(return_value=mock_aggregated_result)
 
         with patch("app.engines.orchestrator.orchestrator.get_execution_planner"):
             orchestrator = QueryOrchestrator(
@@ -262,6 +263,7 @@ class TestSafeQueryProceeds:
             result = await orchestrator.process_query(
                 matter_id="matter-123",
                 query="What does Section 138 say?",
+                user_id="user-456",  # Required for NFR24 audit compliance
             )
 
         # Should NOT be blocked
@@ -375,6 +377,7 @@ class TestOrchestratorResultFields:
             result = await orchestrator.process_query(
                 matter_id="matter-123",
                 query="Based on this evidence...",
+                user_id="user-456",  # Required for NFR24 audit compliance
             )
 
         # Verify blocked fields exist

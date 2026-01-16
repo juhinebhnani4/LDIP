@@ -10,7 +10,6 @@ Tests cover:
 - Matter isolation propagation
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,14 +19,12 @@ from app.engines.orchestrator.adapters import (
     ADAPTER_REGISTRY,
     CitationEngineAdapter,
     ContradictionEngineAdapter,
-    EngineAdapter,
     RAGEngineAdapter,
     TimelineEngineAdapter,
     get_adapter,
     get_cached_adapter,
 )
-from app.models.orchestrator import EngineExecutionResult, EngineType
-
+from app.models.orchestrator import EngineType
 
 # =============================================================================
 # Fixtures
@@ -46,7 +43,7 @@ def mock_citation_discovery():
 def mock_timeline_builder():
     """Mock timeline builder."""
     from dataclasses import dataclass
-    from datetime import date, datetime
+    from datetime import date
 
     @dataclass
     class MockStatistics:

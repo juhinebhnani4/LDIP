@@ -814,6 +814,7 @@ class EntityResolver:
         self,
         edges: list[EntityEdgeCreate],
         matter_id: str,
+        existing_db_edges: list[tuple[str, str]] | None = None,
     ) -> list[EntityEdgeCreate]:
         """Apply transitive closure to alias edges.
 
@@ -823,11 +824,23 @@ class EntityResolver:
         Args:
             edges: List of ALIAS_OF edges to process.
             matter_id: Matter UUID.
+            existing_db_edges: Optional list of (source_id, target_id) tuples
+                representing existing ALIAS_OF edges already in the database.
+                If provided, these are included in the transitive closure
+                computation, enabling cross-batch alias linking.
 
         Returns:
             Extended list of edges including transitive connections.
+
+        Note:
+            Currently operates only on the provided edges list. For full
+            transitive closure across existing database edges, callers should
+            query existing ALIAS_OF edges and pass them via existing_db_edges.
+            See resolve_aliases() for usage.
         """
-        if len(edges) < 2:
+        # Need at least 2 edges (or 1 edge + existing DB edges) for transitive closure
+        has_db_edges = existing_db_edges and len(existing_db_edges) > 0
+        if len(edges) < 2 and not has_db_edges:
             return edges
 
         # Build adjacency sets
@@ -844,6 +857,17 @@ class EntityResolver:
             entity_to_aliases[source].add(target)
             entity_to_aliases[target].add(source)
 
+        # Include existing DB edges in adjacency sets for transitive closure
+        if existing_db_edges:
+            for source, target in existing_db_edges:
+                if source not in entity_to_aliases:
+                    entity_to_aliases[source] = set()
+                if target not in entity_to_aliases:
+                    entity_to_aliases[target] = set()
+
+                entity_to_aliases[source].add(target)
+                entity_to_aliases[target].add(source)
+
         # Union-Find with path compression
         parent: dict[str, str] = {}
 
@@ -859,9 +883,14 @@ class EntityResolver:
             if px != py:
                 parent[px] = py
 
-        # Apply unions for existing edges
+        # Apply unions for new edges
         for edge in edges:
             union(edge.source_entity_id, edge.target_entity_id)
+
+        # Apply unions for existing DB edges (enables cross-batch transitivity)
+        if existing_db_edges:
+            for source, target in existing_db_edges:
+                union(source, target)
 
         # Group entities by their root
         groups: dict[str, list[str]] = {}
@@ -871,11 +900,17 @@ class EntityResolver:
                 groups[root] = []
             groups[root].append(entity_id)
 
-        # Track existing edges for deduplication
+        # Track existing edges for deduplication (both new and DB edges)
         existing_pairs: set[tuple[str, str]] = set()
         for edge in edges:
             pair = tuple(sorted([edge.source_entity_id, edge.target_entity_id]))
             existing_pairs.add(pair)
+
+        # Also exclude pairs that already exist in database
+        if existing_db_edges:
+            for source, target in existing_db_edges:
+                pair = tuple(sorted([source, target]))
+                existing_pairs.add(pair)
 
         # Generate transitive edges for groups with >2 entities
         transitive_edges: list[EntityEdgeCreate] = []

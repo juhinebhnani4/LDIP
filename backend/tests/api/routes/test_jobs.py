@@ -3,7 +3,7 @@
 Story 2c-3: Background Job Status Tracking and Retry
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -14,17 +14,15 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.job import (
+    JobStageHistory,
     JobStatus,
     JobType,
     ProcessingJob,
-    JobStageHistory,
     StageStatus,
 )
 from app.services.job_tracking import (
     JobNotFoundError,
-    JobTrackingError,
 )
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -51,8 +49,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -68,7 +66,7 @@ def create_mock_job(
     progress_pct: int = 25,
 ) -> ProcessingJob:
     """Create a mock ProcessingJob for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return ProcessingJob(
         id=job_id or str(uuid4()),
         matter_id=matter_id or str(uuid4()),
@@ -99,7 +97,7 @@ def create_mock_stage_history(
     status: StageStatus = StageStatus.COMPLETED,
 ) -> JobStageHistory:
     """Create a mock JobStageHistory for testing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return JobStageHistory(
         id=str(uuid4()),
         job_id=job_id,

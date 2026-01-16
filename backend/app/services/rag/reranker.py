@@ -17,8 +17,8 @@ Key Features:
 """
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import cohere
 import structlog
@@ -294,7 +294,7 @@ class CohereRerankService:
             return self._fallback_result(query, len(documents), effective_top_n,
                                          reason=f"Circuit open, retry after {e.cooldown_remaining:.0f}s")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "cohere_rerank_timeout",
                 query_len=len(query),

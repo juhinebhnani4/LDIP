@@ -10,8 +10,7 @@ Tests cover:
 - Error handling for audit failures (Task 6.8)
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,10 +23,8 @@ from app.models.orchestrator import (
     EngineType,
     LLMCostEntry,
     QueryAuditEntry,
-    QueryAuditRecord,
     QueryIntent,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -55,9 +55,10 @@ export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps
           <CardTitle className="text-base font-medium truncate">
             {filename || `Document ${job.document_id?.slice(0, 8) || 'N/A'}`}
           </CardTitle>
+          {/* jaanch.ai brand: Deep Indigo for processing state */}
           <div className="flex items-center gap-2 text-sm">
             {isProcessing && (
-              <Loader2 className="size-4 animate-spin text-blue-600" aria-hidden="true" />
+              <Loader2 className="size-4 animate-spin text-[#0d1b5e] dark:text-[#6b7cb8]" aria-hidden="true" />
             )}
             {isQueued && (
               <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -65,7 +66,7 @@ export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps
             <span
               className={
                 isProcessing
-                  ? 'text-blue-600'
+                  ? 'text-[#0d1b5e] dark:text-[#6b7cb8]'
                   : isQueued
                     ? 'text-muted-foreground'
                     : ''
@@ -103,6 +104,7 @@ export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps
             const isCompleted = index < job.completed_stages;
             const isCurrent = stage === job.current_stage;
 
+            {/* jaanch.ai brand: Forest Green completed, Deep Indigo current */}
             return (
               <Tooltip key={stage}>
                 <TooltipTrigger asChild>
@@ -111,9 +113,9 @@ export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps
                       flex-1 h-1.5 rounded-full transition-colors
                       ${
                         isCompleted
-                          ? 'bg-green-500'
+                          ? 'bg-[#2d5a3d]'
                           : isCurrent
-                            ? 'bg-blue-500 animate-pulse'
+                            ? 'bg-[#0d1b5e] animate-pulse dark:bg-[#6b7cb8]'
                             : 'bg-muted'
                       }
                     `}
@@ -125,7 +127,7 @@ export function JobProgressCard({ job, filename, onClick }: JobProgressCardProps
                 <TooltipContent>
                   <div className="flex items-center gap-1">
                     {isCompleted && (
-                      <CheckCircle2 className="size-3 text-green-500" />
+                      <CheckCircle2 className="size-3 text-[#2d5a3d] dark:text-[#4a8a5d]" />
                     )}
                     {isCurrent && (
                       <Loader2 className="size-3 animate-spin" />

@@ -1,7 +1,8 @@
 """Unit tests for parent-child chunker."""
 
-import pytest
 from uuid import UUID
+
+import pytest
 
 from app.services.chunking.parent_child_chunker import (
     ChunkData,

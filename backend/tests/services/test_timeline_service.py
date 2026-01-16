@@ -4,9 +4,10 @@ Story 4-1: Date Extraction with Gemini
 Story 4-2: Event Classification
 """
 
+from datetime import date
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.timeline import (
     ClassifiedEventsListResponse,
@@ -14,12 +15,10 @@ from app.models.timeline import (
     EventType,
     ExtractedDate,
     RawDatesListResponse,
-    RawEvent,
     UnclassifiedEventsResponse,
 )
 from app.services.timeline_service import (
     TimelineService,
-    TimelineServiceError,
     get_timeline_service,
 )
 

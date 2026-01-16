@@ -25,12 +25,10 @@ from app.engines.orchestrator.orchestrator import (
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
-    IntentAnalysisCost,
     IntentAnalysisResult,
     IntentClassification,
     QueryIntent,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -437,7 +435,7 @@ class TestAuditLoggingIntegration:
         """Create mock audit logger."""
         logger = MagicMock()
         # log_query is sync, returns QueryAuditEntry
-        from app.models.orchestrator import QueryAuditEntry, QueryIntent, EngineType
+        from app.models.orchestrator import EngineType, QueryAuditEntry, QueryIntent
 
         mock_entry = QueryAuditEntry(
             query_id="test-query-id",

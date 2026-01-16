@@ -872,12 +872,24 @@ class MIGGraphService:
 
         Returns:
             Updated EntityNode or None if failed.
+
+        Note:
+            Aliases are deduplicated before storage to prevent race condition
+            duplicates from concurrent operations.
         """
+        # Deduplicate aliases while preserving order (first occurrence wins)
+        seen = set()
+        unique_aliases = []
+        for alias in aliases:
+            if alias not in seen:
+                seen.add(alias)
+                unique_aliases.append(alias)
+
         def _update():
             return (
                 self.client.table("identity_nodes")
                 .update({
-                    "aliases": aliases,
+                    "aliases": unique_aliases,
                     "updated_at": datetime.now(UTC).isoformat(),
                 })
                 .eq("id", entity_id)
@@ -912,11 +924,34 @@ class MIGGraphService:
 
         Returns:
             Updated EntityNode or None if failed.
+
+        Note:
+            This method checks for namespace collisions - if the alias matches
+            the canonical_name of another entity in the same matter, it logs
+            a warning. Consider using merge_entities instead for disambiguation.
         """
         # Get current entity
         entity = await self.get_entity(entity_id, matter_id)
         if not entity:
             return None
+
+        # Check for namespace collision: does another entity have this as canonical_name?
+        existing_canonical = await self._find_existing_entity(
+            matter_id=matter_id,
+            canonical_name=alias,
+            entity_type=entity.entity_type,
+        )
+        if existing_canonical and existing_canonical["id"] != entity_id:
+            logger.warning(
+                "mig_alias_namespace_collision",
+                entity_id=entity_id,
+                alias=alias,
+                conflicting_entity_id=existing_canonical["id"],
+                conflicting_canonical_name=existing_canonical["canonical_name"],
+                matter_id=matter_id,
+                hint="Consider merging entities instead of adding alias",
+            )
+            # Still allow the alias addition but log the collision
 
         # Add alias if not already present
         current_aliases = entity.aliases or []

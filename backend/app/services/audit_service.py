@@ -14,7 +14,7 @@ without blocking the event loop.
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -160,7 +160,7 @@ class AuditService:
             path=path,
             method=method,
             details=details,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         # Always log to structured logs

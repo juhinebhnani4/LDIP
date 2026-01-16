@@ -5,22 +5,21 @@ Tests timeline construction with entity enrichment.
 Story 4-3: Events Table + MIG Integration
 """
 
-import pytest
 from datetime import UTC, date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.engines.timeline.timeline_builder import (
-    TimelineBuilder,
     ConstructedTimeline,
+    EntityTimelineView,
+    TimelineBuilder,
     TimelineEvent,
     TimelineStatistics,
-    EntityTimelineView,
-    EntityReference,
     get_timeline_builder,
 )
 from app.models.entity import EntityNode, EntityType
-from app.models.timeline import EventType, PaginationMeta
-
+from app.models.timeline import EventType
 
 # =============================================================================
 # Fixtures

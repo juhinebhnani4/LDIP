@@ -9,7 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.ocr_validation import CorrectionType, LowConfidenceWord, ValidationResult
+from app.models.ocr_validation import (
+    CorrectionType,
+    LowConfidenceWord,
+    ValidationResult,
+)
 from app.services.ocr.gemini_validator import (
     GeminiConfigurationError,
     GeminiOCRValidator,

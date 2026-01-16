@@ -13,7 +13,6 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # =============================================================================
 # Story 14.10: Task 2.2 - Notification Type Enum (AC #2)
 # =============================================================================

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { JaanchLogo } from '@/components/ui/jaanch-logo';
 import { NotificationsDropdown } from './NotificationsDropdown';
 import { UserProfileDropdown } from './UserProfileDropdown';
 import { GlobalSearch } from './GlobalSearch';
@@ -10,13 +11,13 @@ import { GlobalSearch } from './GlobalSearch';
 /**
  * Dashboard Header Component
  *
- * Layout from UX-Decisions-Log.md:
+ * Layout:
  * ┌─────────────────────────────────────────────────────────────────────────────────┐
  * │  HEADER                                                                         │
- * │  ┌──────┐                                      ┌────┐ ┌────┐ ┌───────────┐      │
- * │  │ LDIP │   [🔍 Search all matters...]         │ 🔔 │ │ ❓ │ │ JJ ▼     │      │
- * │  │      │                                      │ 3  │ │    │ │ Juhi     │      │
- * │  └──────┘                                      └────┘ └────┘ └───────────┘      │
+ * │  ┌────────────┐                                ┌────┐ ┌────┐ ┌───────────┐      │
+ * │  │ jaanch.ai  │   [🔍 Search all matters...]   │ 🔔 │ │ ❓ │ │ JJ ▼     │      │
+ * │  │ (logo)     │                                │ 3  │ │    │ │ Juhi     │      │
+ * │  └────────────┘                                └────┘ └────┘ └───────────┘      │
  * └─────────────────────────────────────────────────────────────────────────────────┘
  */
 
@@ -30,8 +31,8 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ user }: DashboardHeaderProps) {
   const handleHelpClick = () => {
-    // TODO: Open help modal or navigate to help page
-    window.open('https://help.ldip.app', '_blank');
+    // Opens external help documentation in new tab with security attributes
+    window.open('https://help.jaanch.ai', '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -41,10 +42,10 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
         <div className="flex items-center gap-2">
           <Link
             href="/"
-            className="flex items-center gap-2 font-bold text-lg"
-            aria-label="LDIP Home"
+            className="flex items-center"
+            aria-label="jaanch.ai Home"
           >
-            <span className="text-primary">LDIP</span>
+            <JaanchLogo variant="full" size="sm" />
           </Link>
         </div>
 

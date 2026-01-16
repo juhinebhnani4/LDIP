@@ -8,15 +8,15 @@ Test Categories:
 - Fail-safe behavior on errors
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.services.verification.export_eligibility import (
     ExportEligibilityService,
     get_export_eligibility_service,
     reset_export_eligibility_service,
 )
-from app.models.verification import VerificationDecision
 
 
 @pytest.fixture

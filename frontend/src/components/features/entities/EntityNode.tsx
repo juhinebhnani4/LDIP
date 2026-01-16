@@ -22,29 +22,33 @@ import {
 } from '@/components/ui/tooltip';
 import type { EntityNodeData, EntityType } from '@/types/entity';
 
-/** Entity type configuration for icons and colors */
+/** Entity type configuration for icons and colors - Jaanch "Intelligent Legal" brand palette (UX Design v1.2) */
 const entityTypeConfig: Record<
   EntityType,
   { icon: typeof User; color: string; label: string }
 > = {
   PERSON: {
     icon: User,
-    color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800',
+    // Deep Navy (brand primary) - Light indigo background
+    color: 'bg-[#e0e7ff] text-[#1a2744] border-[#c7d2fe] dark:bg-[#1a2744]/30 dark:text-[#93a3d1] dark:border-[#93a3d1]/30',
     label: 'Person',
   },
   ORG: {
     icon: Building2,
-    color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800',
+    // Legal Green - Light green background
+    color: 'bg-[#dcfce7] text-[#166534] border-[#bbf7d0] dark:bg-[#166534]/20 dark:text-[#22c55e] dark:border-[#22c55e]/30',
     label: 'Org',
   },
   INSTITUTION: {
     icon: Landmark,
-    color: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800',
+    // Deep Purple - Light purple background
+    color: 'bg-[#f3e8ff] text-[#7c3aed] border-[#e9d5ff] dark:bg-[#7c3aed]/20 dark:text-[#a78bfa] dark:border-[#a78bfa]/30',
     label: 'Institution',
   },
   ASSET: {
     icon: Package,
-    color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+    // Warm Gold (brand accent) - Light gold background
+    color: 'bg-[#f5e6b8] text-[#92400e] border-[#fde68a] dark:bg-[#c9a227]/20 dark:text-[#dbb536] dark:border-[#dbb536]/30',
     label: 'Asset',
   },
 };

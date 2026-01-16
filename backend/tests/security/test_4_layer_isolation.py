@@ -10,9 +10,7 @@ CRITICAL: These tests verify the security foundation of LDIP.
 All tests must pass before any deployment.
 """
 
-import re
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -44,7 +42,6 @@ from app.services.rag.namespace import (
     validate_namespace,
     validate_search_results,
 )
-
 
 # =============================================================================
 # Test Fixtures

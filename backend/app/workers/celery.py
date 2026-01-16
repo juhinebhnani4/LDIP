@@ -1,5 +1,7 @@
 """Celery application configuration."""
 
+import ssl
+
 from celery import Celery
 
 from app.core.config import get_settings
@@ -12,6 +14,11 @@ celery_app = Celery(
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
 )
+
+# SSL configuration for Upstash Redis (rediss:// protocol)
+# Only apply SSL settings if using TLS connection
+_uses_tls = settings.celery_broker_url.startswith("rediss://")
+_ssl_config = {"ssl_cert_reqs": ssl.CERT_REQUIRED} if _uses_tls else {}
 
 # Celery configuration
 celery_app.conf.update(
@@ -44,7 +51,28 @@ celery_app.conf.update(
         "app.workers.tasks.document_tasks.*": {"queue": "default"},
         "app.workers.tasks.engine_tasks.*": {"queue": "default"},
     },
+    # SSL configuration for Upstash Redis (rediss:// protocol)
+    # These settings are required for TLS connections to serverless Redis
+    broker_use_ssl=_ssl_config if _uses_tls else None,
+    redis_backend_use_ssl=_ssl_config if _uses_tls else None,
+    # Celery Beat schedule for periodic tasks
+    beat_schedule={
+        "recover-stale-jobs": {
+            "task": "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
+            "schedule": settings.job_recovery_scan_interval * 60,  # Convert minutes to seconds
+            "options": {"queue": "low"},  # Low priority queue
+        },
+    },
 )
 
 # Auto-discover tasks from the tasks submodule
 celery_app.autodiscover_tasks(["app.workers.tasks"])
+
+# Explicit imports to ensure tasks are registered
+# (autodiscover can be unreliable on Windows)
+from app.workers.tasks import (  # noqa: E402, F401
+    document_tasks,
+    engine_tasks,
+    maintenance_tasks,
+    verification_tasks,
+)

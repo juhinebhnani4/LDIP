@@ -5,12 +5,11 @@ Story 7-2: Session TTL and Context Restoration
 Tasks 6.3-6.8: Comprehensive tests for SessionMemoryService
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.config import get_settings
 from app.models.memory import (
     ArchivedSession,
     SessionContext,
@@ -23,7 +22,6 @@ from app.services.memory.session import (
     get_session_memory_service,
     reset_session_memory_service,
 )
-
 
 # Valid UUIDs for testing (redis_keys.py validates UUID format)
 MATTER_ID = "12345678-1234-1234-1234-123456789abc"
@@ -103,12 +101,12 @@ class TestSessionCreation:
         self, session_service: SessionMemoryService, mock_redis: AsyncMock
     ) -> None:
         """Should set created_at and last_activity timestamps."""
-        before = datetime.now(timezone.utc).isoformat()
+        before = datetime.now(UTC).isoformat()
         context = await session_service.create_session(
             matter_id=MATTER_ID,
             user_id=USER_ID,
         )
-        after = datetime.now(timezone.utc).isoformat()
+        after = datetime.now(UTC).isoformat()
 
         assert before <= context.created_at <= after
         assert before <= context.last_activity <= after
@@ -264,7 +262,7 @@ class TestMessageHandling:
         )
         mock_redis.get.return_value = existing_context.model_dump_json()
 
-        before = datetime.now(timezone.utc).isoformat()
+        before = datetime.now(UTC).isoformat()
         context = await session_service.add_message(
             matter_id=MATTER_ID,
             user_id=USER_ID,
@@ -576,7 +574,7 @@ class TestEntityTracking:
         )
         mock_redis.get.return_value = existing_context.model_dump_json()
 
-        before = datetime.now(timezone.utc).isoformat()
+        before = datetime.now(UTC).isoformat()
         context = await session_service.update_entities(
             matter_id=MATTER_ID,
             user_id=USER_ID,
@@ -1056,7 +1054,7 @@ class TestMaxLifetimeTTL:
 
         # Create session with created_at 30 days ago
         old_created_at = (
-            datetime.now(timezone.utc) - timedelta(days=30)
+            datetime.now(UTC) - timedelta(days=30)
         ).isoformat()
 
         existing_context = SessionContext(
@@ -1091,7 +1089,7 @@ class TestMaxLifetimeTTL:
 
         # Create session with created_at 30 days ago (just hit max)
         old_created_at = (
-            datetime.now(timezone.utc) - timedelta(days=30)
+            datetime.now(UTC) - timedelta(days=30)
         ).isoformat()
 
         existing_context = SessionContext(
@@ -1133,7 +1131,7 @@ class TestMaxLifetimeTTL:
 
         # Create session with created_at 7 days ago
         recent_created_at = (
-            datetime.now(timezone.utc) - timedelta(days=7)
+            datetime.now(UTC) - timedelta(days=7)
         ).isoformat()
 
         existing_context = SessionContext(
@@ -1194,7 +1192,7 @@ class TestMaxLifetimeTTL:
 
         # Session created 10 days ago
         created_at = (
-            datetime.now(timezone.utc) - timedelta(days=10)
+            datetime.now(UTC) - timedelta(days=10)
         ).isoformat()
 
         existing_context = SessionContext(
@@ -1348,7 +1346,6 @@ class TestContextRestoration:
     @pytest.fixture
     def mock_matter_memory_with_archive(self) -> AsyncMock:
         """Create a mock MatterMemoryRepository with archived session."""
-        from app.models.memory import ArchivedSession
 
         mock = AsyncMock()
         mock.save_archived_session.return_value = "archive-record-id"

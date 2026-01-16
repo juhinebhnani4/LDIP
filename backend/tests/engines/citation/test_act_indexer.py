@@ -5,9 +5,8 @@ Tests Act document indexing for section lookup.
 Story 3-3: Citation Verification (AC: #1)
 """
 
-import asyncio
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,7 +19,6 @@ from app.engines.citation.act_indexer import (
     get_act_indexer,
 )
 from app.models.chunk import ChunkType, ChunkWithContent
-
 
 # =============================================================================
 # Fixtures
@@ -136,7 +134,6 @@ class TestActIndex:
 
     def test_act_index_section_numbers(self):
         """Test section numbers property."""
-        from datetime import datetime
 
         index = ActIndex(
             document_id="doc-123",

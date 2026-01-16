@@ -4,8 +4,7 @@ Story 3-1: Act Citation Extraction (AC: #1, #2)
 """
 
 import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -13,7 +12,6 @@ from app.engines.citation.extractor import (
     CITATION_PATTERNS,
     CitationConfigurationError,
     CitationExtractor,
-    CitationExtractorError,
     get_citation_extractor,
 )
 from app.models.citation import ExtractedCitation

@@ -15,7 +15,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.global_search import GlobalSearchMeta, GlobalSearchResponse
 from app.services.global_search_service import (
     GlobalSearchService,
     GlobalSearchServiceError,

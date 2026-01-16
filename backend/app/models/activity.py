@@ -13,7 +13,6 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # =============================================================================
 # Story 14.5: Task 2.1 - Activity Type Enum (AC #6)
 # =============================================================================

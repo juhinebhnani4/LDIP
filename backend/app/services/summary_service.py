@@ -17,7 +17,6 @@ import json
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
-from typing import Any
 
 import structlog
 
@@ -45,13 +44,12 @@ from app.models.summary import (
     SubjectMatterSource,
     SummarySectionTypeEnum,
 )
-from app.services.summary_edit_service import (
-    SummaryEditService,
-    get_summary_edit_service,
-)
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import SUMMARY_CACHE_TTL, summary_cache_key
 from app.services.safety.language_policing import get_language_policing_service
+from app.services.summary_edit_service import (
+    get_summary_edit_service,
+)
 from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)

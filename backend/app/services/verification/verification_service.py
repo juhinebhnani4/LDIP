@@ -43,6 +43,26 @@ logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
+# Story 8-4: Engine Mapping Configuration (Code Review Fix)
+# =============================================================================
+
+# Story 8-4 Code Review Fix: Extracted to module-level constant for maintainability
+# Maps finding types to their originating engine names
+# Add new finding types here when new engines are added
+ENGINE_MAPPING: dict[str, str] = {
+    "citation_mismatch": "citation",
+    "citation_verification_failed": "citation",
+    "timeline_gap": "timeline",
+    "timeline_anomaly": "timeline",
+    "contradiction_detected": "contradiction",
+    "contradiction_statement": "contradiction",
+    "rag_low_confidence": "rag",
+    "entity_mismatch": "entity",
+    "entity_unresolved": "entity",
+}
+
+
+# =============================================================================
 # Story 8-4: Exceptions
 # =============================================================================
 
@@ -553,10 +573,9 @@ class VerificationService:
 
         Story 8-4: Task 4.8 - Bulk approve/reject for Story 8-5 queue UI.
 
-        NOTE: Current implementation uses individual updates per ID due to
-        Supabase Python client limitations with bulk WHERE IN updates.
-        Performance is acceptable for max 100 items per request.
-        Consider PostgreSQL function for high-volume scenarios.
+        Code Review Fix: Uses asyncio.gather for parallel execution with
+        concurrency limit to improve performance while avoiding overwhelming
+        the database connection pool.
 
         Args:
             verification_ids: List of verification UUIDs.
@@ -568,6 +587,8 @@ class VerificationService:
         Returns:
             Dict with updated_count and failed_ids.
         """
+        import asyncio
+
         start_time = time.perf_counter()
 
         if len(verification_ids) > 100:
@@ -586,27 +607,35 @@ class VerificationService:
         if notes is not None:
             update_fields["notes"] = notes[:2000]
 
-        updated_count = 0
-        failed_ids: list[str] = []
+        # Code Review Fix: Parallel execution with semaphore for concurrency control
+        CONCURRENCY_LIMIT = 10  # Limit concurrent DB requests
+        semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+        results: list[tuple[str, bool]] = []
 
-        for verification_id in verification_ids:
-            try:
-                result = supabase.table("finding_verifications").update(
-                    update_fields
-                ).eq("id", verification_id).execute()
+        async def update_single(verification_id: str) -> tuple[str, bool]:
+            """Update a single verification with concurrency control."""
+            async with semaphore:
+                try:
+                    result = supabase.table("finding_verifications").update(
+                        update_fields
+                    ).eq("id", verification_id).execute()
+                    return (verification_id, bool(result.data))
+                except Exception as e:
+                    logger.warning(
+                        "bulk_update_item_failed",
+                        verification_id=verification_id,
+                        error=str(e),
+                    )
+                    return (verification_id, False)
 
-                if result.data:
-                    updated_count += 1
-                else:
-                    failed_ids.append(verification_id)
+        # Execute all updates in parallel with concurrency limit
+        results = await asyncio.gather(
+            *[update_single(vid) for vid in verification_ids]
+        )
 
-            except Exception as e:
-                logger.warning(
-                    "bulk_update_item_failed",
-                    verification_id=verification_id,
-                    error=str(e),
-                )
-                failed_ids.append(verification_id)
+        # Count successes and failures
+        updated_count = sum(1 for _, success in results if success)
+        failed_ids = [vid for vid, success in results if not success]
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
 
@@ -660,6 +689,7 @@ class VerificationService:
         """Extract engine name from finding type.
 
         Story 8-4: Code Review Fix - Use explicit mapping for robustness.
+        Uses module-level ENGINE_MAPPING constant for maintainability.
 
         Args:
             finding_type: Finding type string (e.g., "citation_mismatch").
@@ -667,22 +697,9 @@ class VerificationService:
         Returns:
             Engine name string.
         """
-        # Explicit mapping for known finding types
-        engine_mapping = {
-            "citation_mismatch": "citation",
-            "citation_verification_failed": "citation",
-            "timeline_gap": "timeline",
-            "timeline_anomaly": "timeline",
-            "contradiction_detected": "contradiction",
-            "contradiction_statement": "contradiction",
-            "rag_low_confidence": "rag",
-            "entity_mismatch": "entity",
-            "entity_unresolved": "entity",
-        }
-
         # Return mapped engine or extract from prefix as fallback
-        if finding_type in engine_mapping:
-            return engine_mapping[finding_type]
+        if finding_type in ENGINE_MAPPING:
+            return ENGINE_MAPPING[finding_type]
 
         # Fallback: use first word before underscore
         return finding_type.split("_")[0] if "_" in finding_type else finding_type

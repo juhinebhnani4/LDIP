@@ -5,7 +5,7 @@ Story 14.5: Dashboard Real APIs
 Uses FastAPI dependency_overrides pattern for proper test isolation.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -16,9 +16,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.models.activity import ActivityTypeEnum, ActivityRecord
+from app.models.activity import ActivityRecord, ActivityTypeEnum
 from app.services.activity_service import ActivityService, get_activity_service
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -45,8 +44,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -66,7 +65,7 @@ def create_mock_activity(
         matter_name="Test Matter" if matter_id else None,
         type=activity_type,
         description=description,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         is_read=is_read,
     )
 

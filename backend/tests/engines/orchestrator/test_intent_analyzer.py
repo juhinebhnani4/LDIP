@@ -13,17 +13,14 @@ Tests cover:
 - Integration test with mock engine responses
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from app.engines.orchestrator.intent_analyzer import (
-    CITATION_PATTERNS,
-    CONTRADICTION_PATTERNS,
     FAST_PATH_CONFIDENCE,
-    TIMELINE_PATTERNS,
     IntentAnalyzer,
-    IntentAnalyzerError,
     IntentParseError,
     OpenAIConfigurationError,
     get_intent_analyzer,
@@ -38,7 +35,6 @@ from app.models.orchestrator import (
     IntentClassification,
     QueryIntent,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -10,18 +10,17 @@ Test Categories:
 - Activity creation for matter members
 """
 
-import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
+from app.models.activity import ActivityTypeEnum
 from app.services.activity_service import (
     ActivityService,
     ActivityServiceError,
-    ActivityNotFoundError,
-    get_activity_service,
 )
-from app.models.activity import ActivityTypeEnum
 
 
 @pytest.fixture
@@ -151,13 +150,12 @@ class TestActivityCreation:
 
         with patch.object(
             activity_service, "_supabase_client", mock_supabase
-        ):
-            with pytest.raises(ActivityServiceError) as exc_info:
-                await activity_service.create_activity(
-                    user_id=user_id,
-                    type=ActivityTypeEnum.PROCESSING_COMPLETE,
-                    description="Test",
-                )
+        ), pytest.raises(ActivityServiceError) as exc_info:
+            await activity_service.create_activity(
+                user_id=user_id,
+                type=ActivityTypeEnum.PROCESSING_COMPLETE,
+                description="Test",
+            )
 
         assert exc_info.value.code == "INSERT_FAILED"
 

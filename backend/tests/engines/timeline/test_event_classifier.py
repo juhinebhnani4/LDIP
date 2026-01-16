@@ -11,10 +11,9 @@ import pytest
 from app.engines.timeline.event_classifier import (
     ClassifierConfigurationError,
     EventClassifier,
-    EventClassifierError,
     get_event_classifier,
 )
-from app.models.timeline import EventClassificationResult, EventType
+from app.models.timeline import EventType
 
 
 class TestEventClassifierInit:
@@ -827,12 +826,11 @@ class TestErrorPaths:
     @pytest.mark.asyncio
     async def test_network_timeout_handling(self) -> None:
         """Should handle network timeouts gracefully."""
-        import asyncio
 
         classifier = EventClassifier()
 
         async def mock_timeout(*args, **kwargs):
-            raise asyncio.TimeoutError("Connection timed out")
+            raise TimeoutError("Connection timed out")
 
         mock_model = MagicMock()
         mock_model.generate_content_async = mock_timeout

@@ -55,8 +55,10 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
   const dateCount = getDiscoveryCount(liveDiscoveries, 'date');
   const citationCount = getDiscoveryCount(liveDiscoveries, 'citation');
 
-  // Handle redirect to dashboard
-  // TODO: Change to /matters/${matterId} when workspace is implemented
+  // Get matter ID for redirect to workspace
+  const matterId = useUploadWizardStore((state) => state.matterId);
+
+  // Handle redirect to workspace
   const handleRedirect = useCallback(() => {
     if (hasRedirected) return;
     setHasRedirected(true);
@@ -68,9 +70,10 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
     // Clear wizard state before redirect
     reset();
 
-    // Redirect to dashboard (workspace not implemented yet)
-    router.push('/');
-  }, [hasRedirected, onRedirect, reset, router]);
+    // Redirect to workspace (or dashboard if no matterId)
+    const destination = matterId ? `/matters/${matterId}` : '/';
+    router.push(destination);
+  }, [hasRedirected, onRedirect, reset, router, matterId]);
 
   // Handle immediate redirect via button
   const handleGoNow = useCallback(() => {

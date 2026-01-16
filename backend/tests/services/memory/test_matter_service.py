@@ -30,7 +30,6 @@ from app.services.memory.matter_service import (
     reset_matter_memory_service,
 )
 
-
 # Valid UUIDs for testing
 MATTER_ID = "12345678-1234-1234-1234-123456789abc"
 USER_ID = "abcdefab-abcd-abcd-abcd-abcdefabcdef"

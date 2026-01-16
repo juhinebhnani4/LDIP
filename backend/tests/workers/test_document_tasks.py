@@ -1,5 +1,6 @@
 """Tests for document processing Celery tasks."""
 
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +11,6 @@ from app.services.document_service import DocumentServiceError
 from app.services.ocr import OCRServiceError
 from app.services.storage_service import StorageError
 from app.workers.tasks.document_tasks import (
-    MAX_RETRIES,
     PDF_MAGIC_BYTES,
     _handle_max_retries_exceeded,
     _validate_pdf_content,
@@ -439,13 +439,14 @@ class TestExtractEntitiesTask:
     @pytest.fixture
     def mock_mig_services(self) -> dict:
         """Create mock MIG services for testing."""
+        from datetime import datetime
+
         from app.models.entity import (
             EntityExtractionResult,
             EntityNode,
             EntityType,
             ExtractedEntity,
         )
-        from datetime import datetime, timezone
 
         doc_service = MagicMock()
         doc_service.get_document_for_processing.return_value = (
@@ -481,8 +482,8 @@ class TestExtractEntitiesTask:
                 metadata={},
                 mention_count=1,
                 aliases=[],
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         ])
 
@@ -513,8 +514,9 @@ class TestExtractEntitiesTask:
         mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
 
         # Import entities for the test
+        from datetime import datetime
+
         from app.models.entity import EntityNode, EntityType
-        from datetime import datetime, timezone
 
         # Make graph_service.save_entities an async mock with proper return value
         mock_mig_services["mig_graph_service"].save_entities = AsyncMock(return_value=[
@@ -526,8 +528,8 @@ class TestExtractEntitiesTask:
                 metadata={},
                 mention_count=1,
                 aliases=[],
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
         ])
 

@@ -10,6 +10,7 @@ const createMockMatter = (overrides: Partial<MatterCardData> = {}): MatterCardDa
   status: 'active',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  deletedAt: null,
   role: 'owner',
   memberCount: 2,
   pageCount: 1000,

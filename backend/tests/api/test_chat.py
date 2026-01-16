@@ -18,8 +18,11 @@ from httpx import ASGITransport, AsyncClient
 from app.engines.orchestrator.streaming import StreamingOrchestrator
 from app.main import app
 from app.models.chat import StreamEvent, StreamEventType
-from app.models.orchestrator import EngineExecutionResult, EngineType, OrchestratorResult
-
+from app.models.orchestrator import (
+    EngineExecutionResult,
+    EngineType,
+    OrchestratorResult,
+)
 
 # =============================================================================
 # Fixtures

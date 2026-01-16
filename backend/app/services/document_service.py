@@ -4,7 +4,7 @@ Handles document record creation and management in the documents table.
 Works with StorageService for file operations.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
@@ -619,7 +619,7 @@ class DocumentService:
                 raise DocumentNotFoundError(document_id)
 
             # Set deleted_at timestamp
-            deleted_at = datetime.now(timezone.utc)
+            deleted_at = datetime.now(UTC)
             update_result = self.client.table("documents").update({
                 "deleted_at": deleted_at.isoformat(),
             }).eq("id", document_id).execute()
@@ -749,7 +749,7 @@ class DocumentService:
         }
 
         # Set processing timestamps based on status
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if status == DocumentStatus.PROCESSING:
             update_data["processing_started_at"] = now
         elif status in (DocumentStatus.OCR_COMPLETE, DocumentStatus.OCR_FAILED):

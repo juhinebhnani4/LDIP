@@ -19,16 +19,18 @@ interface OCRQualityDetailProps {
   onPageClick?: (pageNumber: number) => void;
 }
 
+/** Status configuration - jaanch.ai brand palette */
 const STATUS_CONFIG: Record<OCRQualityStatus, { label: string; color: string }> = {
-  good: { label: 'Good Quality', color: 'text-green-600' },
-  fair: { label: 'Fair Quality', color: 'text-yellow-600' },
-  poor: { label: 'Poor Quality', color: 'text-red-600' },
+  good: { label: 'Good Quality', color: 'text-[#2d5a3d] dark:text-[#4a8a5d]' }, // Forest Green
+  fair: { label: 'Fair Quality', color: 'text-[#b8973b] dark:text-[#c4a85a]' }, // Muted Gold
+  poor: { label: 'Poor Quality', color: 'text-[#8b2635] dark:text-[#c44d5e]' }, // Burgundy
 };
 
+/** Progress bar colors - jaanch.ai brand palette */
 function getProgressColor(confidence: number): string {
-  if (confidence >= OCR_QUALITY_GOOD_THRESHOLD) return 'bg-green-500';
-  if (confidence >= OCR_QUALITY_FAIR_THRESHOLD) return 'bg-yellow-500';
-  return 'bg-red-500';
+  if (confidence >= OCR_QUALITY_GOOD_THRESHOLD) return 'bg-[#2d5a3d]'; // Forest Green
+  if (confidence >= OCR_QUALITY_FAIR_THRESHOLD) return 'bg-[#b8973b]'; // Muted Gold
+  return 'bg-[#8b2635]'; // Burgundy
 }
 
 function OCRQualityDetailSkeleton() {
@@ -155,13 +157,13 @@ export function OCRQualityDetail({
             </div>
             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-green-500" /> Good (85%+)
+                <span className="w-3 h-3 rounded bg-[#2d5a3d]" /> Good (85%+)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-yellow-500" /> Fair (70-85%)
+                <span className="w-3 h-3 rounded bg-[#b8973b]" /> Fair (70-85%)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-red-500" /> Poor (&lt;70%)
+                <span className="w-3 h-3 rounded bg-[#8b2635]" /> Poor (&lt;70%)
               </span>
             </div>
           </div>
@@ -198,13 +200,14 @@ interface PageConfidenceButtonProps {
   onClick?: () => void;
 }
 
+/** Page confidence button - jaanch.ai brand palette */
 function PageConfidenceButton({ page, onClick }: PageConfidenceButtonProps) {
   const percentage = Math.round(page.confidence * 100);
   const bgColor = page.confidence >= OCR_QUALITY_GOOD_THRESHOLD
-    ? 'bg-green-100 hover:bg-green-200 border-green-200'
+    ? 'bg-[#e5f0e8] hover:bg-[#d5e8da] border-[#2d5a3d]/20' // Forest Green tint
     : page.confidence >= OCR_QUALITY_FAIR_THRESHOLD
-      ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-200'
-      : 'bg-red-100 hover:bg-red-200 border-red-200';
+      ? 'bg-[#f5f0e0] hover:bg-[#efe8d0] border-[#b8973b]/20' // Muted Gold tint
+      : 'bg-[#f2d4d7] hover:bg-[#eac4c8] border-[#8b2635]/20'; // Burgundy tint
 
   return (
     <button

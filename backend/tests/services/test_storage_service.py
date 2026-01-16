@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.storage_service import (
+    VALID_SUBFOLDERS,
     StorageError,
     StorageService,
-    VALID_SUBFOLDERS,
 )
 
 

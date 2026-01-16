@@ -17,7 +17,6 @@ Implements:
 from __future__ import annotations
 
 from datetime import datetime
-from io import BytesIO
 from typing import TYPE_CHECKING
 
 import structlog
@@ -74,7 +73,7 @@ class PDFGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None" = None,
+        verification_summary: VerificationSummaryForExport | None = None,
     ) -> bytes:
         """Generate PDF document.
 
@@ -99,7 +98,7 @@ class PDFGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None",
+        verification_summary: VerificationSummaryForExport | None,
     ) -> bytes:
         """Build minimal PDF structure.
 

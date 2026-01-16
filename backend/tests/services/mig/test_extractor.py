@@ -14,11 +14,10 @@ from app.models.entity import (
     RelationshipType,
 )
 from app.services.mig.extractor import (
-    MIGEntityExtractor,
     MIGConfigurationError,
+    MIGEntityExtractor,
     MIGExtractorError,
     get_mig_extractor,
-    MAX_TEXT_LENGTH,
 )
 
 

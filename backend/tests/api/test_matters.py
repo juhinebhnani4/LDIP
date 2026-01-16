@@ -7,17 +7,17 @@ Tests the matter API endpoints including:
 """
 
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_matter_service
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.api.deps import get_matter_service
 from app.models.matter import (
     Matter,
     MatterMember,
@@ -26,13 +26,9 @@ from app.models.matter import (
     MatterWithMembers,
 )
 from app.services.matter_service import (
-    InsufficientPermissionsError,
     MatterNotFoundError,
     MatterService,
-    MemberAlreadyExistsError,
-    UserNotFoundError,
 )
-
 
 # Test JWT secret - same as in other test files
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -55,8 +51,8 @@ def create_test_token(user_id: str = "test-user-id", email: str = "test@example.
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -82,8 +78,8 @@ def sample_matter() -> Matter:
         title="Test Matter",
         description="Test description",
         status=MatterStatus.ACTIVE,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         role=MatterRole.OWNER,
         member_count=1,
     )
@@ -97,8 +93,8 @@ def sample_matter_with_members() -> MatterWithMembers:
         title="Test Matter",
         description="Test description",
         status=MatterStatus.ACTIVE,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         role=MatterRole.OWNER,
         member_count=1,
         members=[
@@ -109,7 +105,7 @@ def sample_matter_with_members() -> MatterWithMembers:
                 full_name="Test User",
                 role=MatterRole.OWNER,
                 invited_by=None,
-                invited_at=datetime.now(timezone.utc),
+                invited_at=datetime.now(UTC),
             )
         ],
     )
@@ -377,7 +373,7 @@ class TestInviteMember:
             full_name="New User",
             role=MatterRole.EDITOR,
             invited_by="test-user-id",
-            invited_at=datetime.now(timezone.utc),
+            invited_at=datetime.now(UTC),
         )
 
         response = await client.post(

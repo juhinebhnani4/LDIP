@@ -7,15 +7,15 @@ Note: This file uses synchronous TestClient for simple auth tests,
 and pytest-asyncio fixtures for async route tests as needed.
 """
 
-import pytest
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.deps import MatterMembership, MatterRole
+from app.main import app
 from app.models.timeline import (
     ClassifiedEvent,
     ClassifiedEventsListResponse,
@@ -24,7 +24,6 @@ from app.models.timeline import (
     PaginationMeta,
     RawDateListItem,
     RawDatesListResponse,
-    RawEvent,
     UnclassifiedEventItem,
     UnclassifiedEventsResponse,
 )

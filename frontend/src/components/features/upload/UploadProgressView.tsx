@@ -11,7 +11,7 @@
  */
 
 import { useMemo } from 'react';
-import { CheckCircle2, Loader2, XCircle, File, RefreshCw, SkipForward } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, File, RefreshCw, SkipForward, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -36,6 +36,8 @@ interface UploadProgressViewProps {
   onRetryFile?: (fileName: string) => void;
   /** Callback when user clicks skip on a failed file */
   onSkipFile?: (fileName: string) => void;
+  /** Callback when user clicks cancel on an uploading/pending file */
+  onCancelFile?: (fileName: string) => void;
 }
 
 /** Status icon component for file upload state */
@@ -77,13 +79,16 @@ interface FileProgressItemProps {
   progress: UploadProgress;
   onRetry?: (fileName: string) => void;
   onSkip?: (fileName: string) => void;
+  onCancel?: (fileName: string) => void;
 }
 
 /** Individual file progress item */
-function FileProgressItem({ progress, onRetry, onSkip }: FileProgressItemProps) {
+function FileProgressItem({ progress, onRetry, onSkip, onCancel }: FileProgressItemProps) {
   const isComplete = progress.status === 'complete';
   const isError = progress.status === 'error';
   const isUploading = progress.status === 'uploading';
+  const isPending = progress.status === 'pending';
+  const canCancel = (isUploading || isPending) && onCancel;
 
   return (
     <li
@@ -116,6 +121,25 @@ function FileProgressItem({ progress, onRetry, onSkip }: FileProgressItemProps) 
             <span className="text-sm font-medium text-primary min-w-[3ch]">
               {Math.round(progress.progressPct)}%
             </span>
+          )}
+          {/* Cancel button for uploading/pending files */}
+          {canCancel && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onCancel(progress.fileName)}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    aria-label={`Cancel upload for ${progress.fileName}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Cancel Upload</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {/* Story 13.4: Retry and Skip buttons for failed files */}
           {isError && (
@@ -198,6 +222,7 @@ export function UploadProgressView({
   className,
   onRetryFile,
   onSkipFile,
+  onCancelFile,
 }: UploadProgressViewProps) {
   // Calculate overall progress
   const { completedCount, overallProgressPct } = useMemo(() => {
@@ -273,6 +298,7 @@ export function UploadProgressView({
               progress={progress}
               onRetry={onRetryFile}
               onSkip={onSkipFile}
+              onCancel={onCancelFile}
             />
           ))}
         </ul>

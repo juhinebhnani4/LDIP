@@ -10,7 +10,7 @@ not affect query processing.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
@@ -109,7 +109,7 @@ class QueryAuditLogger:
             raise ValueError(f"Invalid user_id format: {user_id}")
 
         query_id = str(uuid.uuid4())
-        asked_at = datetime.now(timezone.utc).isoformat()
+        asked_at = datetime.now(UTC).isoformat()
 
         # Extract findings from engine results (AC: #2)
         findings = self._extract_findings(result)
@@ -191,7 +191,7 @@ class QueryAuditLogger:
             raise ValueError(f"Invalid user_id format: {user_id}")
 
         query_id = str(uuid.uuid4())
-        asked_at = datetime.now(timezone.utc).isoformat()
+        asked_at = datetime.now(UTC).isoformat()
 
         # Calculate wall clock time from safety check
         wall_clock_time_ms = int(

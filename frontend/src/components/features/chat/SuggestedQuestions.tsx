@@ -1,7 +1,7 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { JaanchIcon } from '@/components/ui/jaanch-logo';
 import { cn } from '@/lib/utils';
 
 /**
@@ -42,11 +42,8 @@ export function SuggestedQuestions({
       role="region"
       aria-label="Suggested questions"
     >
-      <MessageSquare
-        className="mb-4 h-12 w-12 text-muted-foreground"
-        aria-hidden="true"
-      />
-      <h3 className="mb-2 text-lg font-medium">ASK LDIP</h3>
+      <JaanchIcon size="lg" className="mb-4 opacity-50" />
+      <h3 className="mb-2 text-lg font-medium">Ask jaanch</h3>
       <p className="mb-6 max-w-xs text-sm text-muted-foreground">
         Ask questions about your matter. The AI will analyze documents and
         provide answers with citations.

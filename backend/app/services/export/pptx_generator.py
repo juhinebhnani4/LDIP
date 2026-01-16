@@ -49,7 +49,7 @@ class PptxGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None" = None,
+        verification_summary: VerificationSummaryForExport | None = None,
     ) -> bytes:
         """Generate PowerPoint presentation.
 
@@ -76,7 +76,7 @@ class PptxGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None",
+        verification_summary: VerificationSummaryForExport | None,
     ) -> list[dict]:
         """Build slide content dictionaries."""
         slides: list[dict] = []

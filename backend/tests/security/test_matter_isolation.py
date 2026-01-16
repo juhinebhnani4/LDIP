@@ -9,8 +9,7 @@ Note: These tests require a live Supabase connection or should be run
 in an environment with RLS enabled. In CI, they can be mocked or skipped.
 """
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

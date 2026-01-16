@@ -11,15 +11,15 @@ Test Categories:
 - Cache behavior
 """
 
-import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.deps import MatterAccessContext, MatterRole
+from app.main import app
 from app.models.summary import (
     AttentionItem,
     AttentionItemType,
@@ -319,6 +319,7 @@ class TestSummaryErrorHandling:
     async def test_service_error_returns_500(self, mock_matter_access) -> None:
         """Service error should return 500."""
         from fastapi import HTTPException
+
         from app.api.routes.summary import get_matter_summary
         from app.services.summary_service import (
             SummaryService,
@@ -345,10 +346,11 @@ class TestSummaryErrorHandling:
     ) -> None:
         """OpenAI not configured should return 503."""
         from fastapi import HTTPException
+
         from app.api.routes.summary import get_matter_summary
         from app.services.summary_service import (
-            SummaryService,
             OpenAIConfigurationError,
+            SummaryService,
         )
 
         mock_service = MagicMock(spec=SummaryService)
@@ -368,6 +370,7 @@ class TestSummaryErrorHandling:
     async def test_unexpected_error_returns_500(self, mock_matter_access) -> None:
         """Unexpected error should return 500 with generic message."""
         from fastapi import HTTPException
+
         from app.api.routes.summary import get_matter_summary
         from app.services.summary_service import SummaryService
 
@@ -474,12 +477,12 @@ class TestSummaryModelValidation:
 # =============================================================================
 
 from app.models.summary import (
+    SummaryNoteCreate,
+    SummaryNoteRecord,
     SummarySectionTypeEnum,
     SummaryVerificationCreate,
     SummaryVerificationDecisionEnum,
     SummaryVerificationRecord,
-    SummaryNoteCreate,
-    SummaryNoteRecord,
 )
 
 
@@ -532,8 +535,8 @@ class TestVerifySummarySection:
     ) -> None:
         """Should successfully verify a section."""
         from app.api.routes.summary import verify_summary_section
-        from app.services.summary_verification_service import SummaryVerificationService
         from app.services.summary_service import SummaryService
+        from app.services.summary_verification_service import SummaryVerificationService
 
         mock_verification_service = MagicMock(spec=SummaryVerificationService)
         mock_verification_service.record_verification = AsyncMock(
@@ -567,8 +570,8 @@ class TestVerifySummarySection:
     ) -> None:
         """Should successfully flag a section."""
         from app.api.routes.summary import verify_summary_section
-        from app.services.summary_verification_service import SummaryVerificationService
         from app.services.summary_service import SummaryService
+        from app.services.summary_verification_service import SummaryVerificationService
 
         flagged_record = SummaryVerificationRecord(
             id="verification-456",
@@ -696,13 +699,12 @@ class TestVerificationRoleEnforcement:
         Story 14.4: AC #1 - Validates matter access via RLS (user must be editor or owner).
         This test validates that the endpoint is configured with require_role=MatterRole.EDITOR.
         """
-        from app.api.routes.summary import verify_summary_section
-        from app.api.deps import validate_matter_access, MatterRole
-
         # Verify the endpoint dependency requires EDITOR role
         # This is tested by inspecting the route configuration
         # The actual enforcement happens via FastAPI Depends
         import inspect
+
+        from app.api.routes.summary import verify_summary_section
 
         sig = inspect.signature(verify_summary_section)
         access_param = sig.parameters.get("access")
@@ -717,8 +719,9 @@ class TestVerificationRoleEnforcement:
 
         Story 14.4: AC #2 - Requires editor or owner role on matter.
         """
-        from app.api.routes.summary import add_summary_note
         import inspect
+
+        from app.api.routes.summary import add_summary_note
 
         sig = inspect.signature(add_summary_note)
         access_param = sig.parameters.get("access")
@@ -794,9 +797,9 @@ class TestSaveSectionEdit:
     async def test_save_edit_success(self, mock_editor_access, mock_edit_record) -> None:
         """Should successfully save section edit."""
         from app.api.routes.summary import save_section_edit
+        from app.models.summary import SummaryEditCreate
         from app.services.summary_edit_service import SummaryEditService
         from app.services.summary_service import SummaryService
-        from app.models.summary import SummaryEditCreate
 
         mock_edit_service = MagicMock(spec=SummaryEditService)
         mock_edit_service.save_edit = AsyncMock(return_value=mock_edit_record)
@@ -826,11 +829,12 @@ class TestSaveSectionEdit:
     @pytest.mark.asyncio
     async def test_save_edit_invalid_section_type(self, mock_editor_access) -> None:
         """Should return 422 for invalid section type."""
+        from fastapi import HTTPException
+
         from app.api.routes.summary import save_section_edit
+        from app.models.summary import SummaryEditCreate
         from app.services.summary_edit_service import SummaryEditService
         from app.services.summary_service import SummaryService
-        from app.models.summary import SummaryEditCreate
-        from fastapi import HTTPException
 
         mock_edit_service = MagicMock(spec=SummaryEditService)
         mock_summary_service = MagicMock(spec=SummaryService)
@@ -857,9 +861,9 @@ class TestSaveSectionEdit:
     async def test_save_edit_all_section_types(self, mock_editor_access, mock_edit_record) -> None:
         """Should accept all valid section types."""
         from app.api.routes.summary import save_section_edit
+        from app.models.summary import SummaryEditCreate, SummarySectionTypeEnum
         from app.services.summary_edit_service import SummaryEditService
         from app.services.summary_service import SummaryService
-        from app.models.summary import SummaryEditCreate, SummarySectionTypeEnum
 
         valid_types = ["subject_matter", "current_status", "parties", "key_issue"]
 
@@ -907,9 +911,9 @@ class TestRegenerateSection:
     async def test_regenerate_success(self, mock_editor_access, mock_summary) -> None:
         """Should successfully regenerate section."""
         from app.api.routes.summary import regenerate_section
+        from app.models.summary import SummaryRegenerateRequest, SummarySectionTypeEnum
         from app.services.summary_edit_service import SummaryEditService
         from app.services.summary_service import SummaryService
-        from app.models.summary import SummaryRegenerateRequest, SummarySectionTypeEnum
 
         mock_edit_service = MagicMock(spec=SummaryEditService)
         mock_edit_service.delete_edit = AsyncMock(return_value=True)

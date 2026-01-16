@@ -12,9 +12,8 @@ The complex async call chains make detailed mock verification fragile,
 so we focus on verifying correct HTTP behavior.
 """
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
-import asyncio
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import status
@@ -23,7 +22,6 @@ from fastapi.testclient import TestClient
 from app.core.security import get_current_user
 from app.main import app
 from app.models.auth import AuthenticatedUser
-
 
 # =============================================================================
 # Fixtures
@@ -66,7 +64,7 @@ def mock_notification_data() -> dict:
         "message": "Document 'Contract.pdf' has been processed.",
         "priority": "medium",
         "is_read": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "matters": {"title": "Smith vs. Jones"},
     }
 
@@ -85,7 +83,7 @@ def mock_notifications_list(mock_notification_data: dict) -> list[dict]:
             "message": "3 citations need review.",
             "priority": "high",
             "is_read": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "matters": {"title": "Acme Corp Case"},
         },
         {
@@ -97,7 +95,7 @@ def mock_notifications_list(mock_notification_data: dict) -> list[dict]:
             "message": "System maintenance completed.",
             "priority": "low",
             "is_read": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "matters": None,
         },
     ]

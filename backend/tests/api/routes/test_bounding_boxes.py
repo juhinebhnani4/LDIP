@@ -1,7 +1,7 @@
 """Tests for bounding box API routes."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
@@ -14,7 +14,6 @@ from app.models.matter import MatterRole
 from app.services.bounding_box_service import BoundingBoxService
 from app.services.document_service import DocumentService
 from app.services.matter_service import MatterService
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -41,8 +40,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -94,10 +93,10 @@ async def authorized_client(
     sample_bbox_data: list[dict],
 ) -> AsyncClient:
     """Create an authorized async test client with all mocks configured."""
-    from app.core.config import get_settings
     from app.api.deps import get_matter_service
-    from app.services.document_service import get_document_service
+    from app.core.config import get_settings
     from app.services.bounding_box_service import get_bounding_box_service
+    from app.services.document_service import get_document_service
 
     mock_matter_service = MagicMock(spec=MatterService)
     mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
@@ -168,10 +167,10 @@ class TestGetDocumentBoundingBoxes:
         sample_bbox_data: list[dict],
     ) -> None:
         """Should return 404 when user doesn't have access to document's matter."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
-        from app.services.document_service import get_document_service
+        from app.core.config import get_settings
         from app.services.bounding_box_service import get_bounding_box_service
+        from app.services.document_service import get_document_service
 
         mock_matter_service = MagicMock(spec=MatterService)
         mock_matter_service.get_user_role.return_value = None  # No access
@@ -247,9 +246,9 @@ class TestGetChunkBoundingBoxes:
         sample_bbox_data: list[dict],
     ) -> None:
         """Should return bounding boxes for a chunk."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.bounding_boxes import get_supabase_client
+        from app.core.config import get_settings
         from app.services.bounding_box_service import get_bounding_box_service
 
         mock_chunk_data = {
@@ -294,9 +293,9 @@ class TestGetChunkBoundingBoxes:
     @pytest.mark.anyio
     async def test_returns_404_for_nonexistent_chunk(self) -> None:
         """Should return 404 for nonexistent chunk."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.bounding_boxes import get_supabase_client
+        from app.core.config import get_settings
         from app.services.bounding_box_service import get_bounding_box_service
 
         mock_matter_service = MagicMock(spec=MatterService)
@@ -334,9 +333,9 @@ class TestGetChunkBoundingBoxes:
         sample_bbox_data: list[dict],
     ) -> None:
         """Should return 404 when user doesn't have access to chunk's matter."""
-        from app.core.config import get_settings
         from app.api.deps import get_matter_service
         from app.api.routes.bounding_boxes import get_supabase_client
+        from app.core.config import get_settings
         from app.services.bounding_box_service import get_bounding_box_service
 
         mock_chunk_data = {

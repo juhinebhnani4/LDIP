@@ -60,9 +60,6 @@ export async function requestNotificationPermission(): Promise<boolean> {
 /**
  * Show a processing complete notification
  *
- * Note: For MVP, navigates to dashboard (/) since workspace (/matters/[matterId]) is not implemented yet.
- * TODO: Change to /matters/${matterId} when workspace is implemented
- *
  * @param matterName - The name of the matter that completed processing
  * @param matterId - The ID of the completed matter (for navigation)
  */
@@ -94,9 +91,8 @@ export function showProcessingCompleteNotification(
       // Focus the window
       window.focus();
 
-      // Navigate to matter workspace (dashboard for MVP)
-      // TODO: Change to /matters/${matterId} when workspace is implemented
-      window.location.href = '/';
+      // Navigate to matter workspace
+      window.location.href = `/matters/${matterId}`;
 
       // Close the notification
       notification.close();

@@ -9,8 +9,9 @@ Test Categories:
 - Cost tracking
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.services.safety.language_police import (
     LanguagePolice,
@@ -19,7 +20,6 @@ from app.services.safety.language_police import (
     reset_language_police,
 )
 from app.services.safety.language_policing import (
-    LanguagePolicingService,
     reset_language_policing_service,
 )
 

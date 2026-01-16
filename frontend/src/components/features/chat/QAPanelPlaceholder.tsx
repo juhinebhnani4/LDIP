@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
+import { JaanchIcon } from '@/components/ui/jaanch-logo';
 
 /**
  * Q&A Panel Placeholder
@@ -13,8 +13,8 @@ import { MessageSquare } from 'lucide-react';
 export function QAPanelPlaceholder() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-      <MessageSquare className="mb-4 h-12 w-12 text-muted-foreground" />
-      <h3 className="mb-2 text-lg font-medium">ASK LDIP</h3>
+      <JaanchIcon size="lg" className="mb-4 opacity-50" />
+      <h3 className="mb-2 text-lg font-medium">Ask jaanch</h3>
       <p className="max-w-xs text-sm text-muted-foreground">
         Ask questions about your matter. The AI will analyze documents and
         provide answers with citations.

@@ -16,7 +16,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import (
@@ -24,6 +24,7 @@ from app.api.deps import (
     get_current_user,
     validate_matter_access,
 )
+from app.core.rate_limit import CRITICAL_RATE_LIMIT, limiter
 from app.engines.orchestrator.streaming import (
     StreamingOrchestrator,
     get_streaming_orchestrator,
@@ -60,9 +61,11 @@ def get_streaming_orchestrator_dep() -> StreamingOrchestrator:
 
 
 @router.post("/{matter_id}/stream")
+@limiter.limit(CRITICAL_RATE_LIMIT)
 async def stream_chat(
+    request: Request,  # Required for rate limiter
     matter_id: str,
-    request: ChatStreamRequest,
+    body: ChatStreamRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
     access: MatterAccessContext = Depends(validate_matter_access()),
     streaming_orchestrator: StreamingOrchestrator = Depends(
@@ -102,7 +105,7 @@ async def stream_chat(
         "stream_chat_request",
         matter_id=matter_id,
         user_id=current_user.id,
-        query_length=len(request.query),
+        query_length=len(body.query),
     )
 
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
@@ -111,8 +114,8 @@ async def stream_chat(
             async for event in streaming_orchestrator.process_streaming(
                 matter_id=matter_id,
                 user_id=current_user.id,
-                query=request.query,
-                session_id=request.session_id,
+                query=body.query,
+                session_id=body.session_id,
             ):
                 yield {
                     "event": event.type.value,
@@ -139,9 +142,11 @@ async def stream_chat(
 
 
 @router.post("/{matter_id}/message")
+@limiter.limit(CRITICAL_RATE_LIMIT)
 async def send_message(
+    request: Request,  # Required for rate limiter
     matter_id: str,
-    request: ChatStreamRequest,
+    body: ChatStreamRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
     access: MatterAccessContext = Depends(validate_matter_access()),
     streaming_orchestrator: StreamingOrchestrator = Depends(
@@ -173,7 +178,7 @@ async def send_message(
         "send_message_request",
         matter_id=matter_id,
         user_id=current_user.id,
-        query_length=len(request.query),
+        query_length=len(body.query),
     )
 
     try:
@@ -183,8 +188,8 @@ async def send_message(
         async for event in streaming_orchestrator.process_streaming(
             matter_id=matter_id,
             user_id=current_user.id,
-            query=request.query,
-            session_id=request.session_id,
+            query=body.query,
+            session_id=body.session_id,
         ):
             if event.type == StreamEventType.COMPLETE:
                 response_data = event.data

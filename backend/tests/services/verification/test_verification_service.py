@@ -11,22 +11,23 @@ Test Categories:
 - Bulk operations
 """
 
-import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
-from app.services.verification.verification_service import (
-    VerificationService,
-    VerificationServiceError,
-    VerificationNotFoundError,
-    get_verification_service,
-    reset_verification_service,
-)
+import pytest
+
 from app.models.verification import (
     FindingVerificationCreate,
     FindingVerificationUpdate,
     VerificationDecision,
     VerificationRequirement,
+)
+from app.services.verification.verification_service import (
+    VerificationNotFoundError,
+    VerificationService,
+    VerificationServiceError,
+    get_verification_service,
+    reset_verification_service,
 )
 
 

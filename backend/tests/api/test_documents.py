@@ -8,7 +8,7 @@ Tests the document upload API endpoints including:
 """
 
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import jwt
@@ -16,9 +16,9 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_matter_service
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.api.deps import get_matter_service
 from app.models.document import (
     Document,
     DocumentListItem,
@@ -29,9 +29,8 @@ from app.models.document import (
 )
 from app.models.matter import MatterRole
 from app.services.document_service import DocumentService, get_document_service
-from app.services.storage_service import StorageService, get_storage_service
 from app.services.matter_service import MatterService
-
+from app.services.storage_service import StorageService, get_storage_service
 
 # Test JWT secret - same as in other test files
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -58,8 +57,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -491,12 +490,12 @@ def sample_document() -> Document:
         document_type=DocumentType.CASE_FILE,
         is_reference_material=False,
         uploaded_by="test-user-id",
-        uploaded_at=datetime.now(timezone.utc),
+        uploaded_at=datetime.now(UTC),
         status=DocumentStatus.PENDING,
         processing_started_at=None,
         processing_completed_at=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -512,7 +511,7 @@ def sample_document_list() -> list[DocumentListItem]:
             document_type=DocumentType.CASE_FILE if i % 2 == 0 else DocumentType.ACT,
             is_reference_material=i % 2 != 0,
             status=DocumentStatus.COMPLETED if i % 3 == 0 else DocumentStatus.PENDING,
-            uploaded_at=datetime.now(timezone.utc),
+            uploaded_at=datetime.now(UTC),
             uploaded_by="test-user-id",
         )
         for i in range(1, 6)

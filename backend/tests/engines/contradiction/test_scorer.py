@@ -17,11 +17,11 @@ Tests cover:
 import pytest
 
 from app.engines.contradiction.scorer import (
+    HIGH_CONFIDENCE_THRESHOLD,
+    LOW_CONFIDENCE_THRESHOLD,
     ContradictionScorer,
     ScoringMetrics,
     get_contradiction_scorer,
-    HIGH_CONFIDENCE_THRESHOLD,
-    LOW_CONFIDENCE_THRESHOLD,
 )
 from app.models.contradiction import (
     ClassificationResult,
@@ -35,7 +35,6 @@ from app.models.contradiction import (
     SeverityLevel,
     StatementPairComparison,
 )
-
 
 # =============================================================================
 # Test Fixtures

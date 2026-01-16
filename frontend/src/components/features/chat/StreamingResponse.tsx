@@ -35,7 +35,7 @@ interface StreamingResponseProps {
  * Story 11.3: Task 6.1-6.6 - Token streaming display.
  *
  * Shows the AI response as it streams in, with:
- * - "LDIP is thinking..." indicator before content
+ * - "jaanch is thinking..." indicator before content
  * - Accumulated text as tokens arrive
  * - Blinking cursor during active streaming
  *
@@ -62,7 +62,7 @@ export function StreamingResponse({
           aria-live="polite"
         >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span className="text-sm">LDIP is thinking...</span>
+          <span className="text-sm">jaanch padtaal jaari...</span>
         </div>
       )}
 

@@ -7,19 +7,17 @@ with mocked LLM responses to verify end-to-end functionality.
 """
 
 import json
-import pytest
-from datetime import date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 
-from app.engines.timeline.event_classifier import EventClassifier, get_event_classifier
+import pytest
+
+from app.engines.timeline.event_classifier import EventClassifier
 from app.models.timeline import (
-    EventClassificationResult,
     EventType,
     ExtractedDate,
-    RawEvent,
 )
-from app.services.timeline_service import TimelineService, get_timeline_service
-
+from app.services.timeline_service import TimelineService
 
 # =============================================================================
 # Pipeline Integration Tests

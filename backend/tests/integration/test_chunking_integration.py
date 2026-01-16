@@ -3,14 +3,13 @@
 Tests the complete chunking flow from text input to database storage.
 """
 
-from unittest.mock import MagicMock, patch
-from uuid import uuid4
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.services.chunking.parent_child_chunker import ParentChildChunker
-from app.services.chunking.token_counter import count_tokens
 from app.services.chunking.text_splitter import RecursiveTextSplitter
+from app.services.chunking.token_counter import count_tokens
 
 
 class TestChunkingPipelineIntegration:

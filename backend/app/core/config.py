@@ -134,6 +134,12 @@ class Settings(BaseSettings):
     query_history_default_limit: int = 100  # Default entries returned from get_query_history
     archived_session_query_limit: int = 10  # Default archived sessions to return
 
+    # Job Recovery Configuration (Stale Job Detection)
+    job_stale_timeout_minutes: int = 30     # Jobs in PROCESSING for > this are considered stale
+    job_recovery_scan_interval: int = 5     # Minutes between recovery scans (Celery beat)
+    job_max_recovery_retries: int = 3       # Max times a stale job can be auto-recovered
+    job_recovery_enabled: bool = True       # Master switch for automatic job recovery
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

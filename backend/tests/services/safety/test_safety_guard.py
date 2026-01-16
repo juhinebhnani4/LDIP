@@ -12,7 +12,6 @@ Tests for:
 CRITICAL: All tests use mocked OpenAI responses - never hit real API.
 """
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,7 +24,6 @@ from app.services.safety.safety_guard import (
     reset_safety_guard,
 )
 from app.services.safety.subtle_detector import SubtleViolationDetector
-
 
 # =============================================================================
 # Fixtures

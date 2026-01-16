@@ -14,7 +14,6 @@ from app.services.job_tracking.partial_progress import (
     create_progress_tracker,
 )
 
-
 # =============================================================================
 # Test StageProgress
 # =============================================================================

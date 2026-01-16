@@ -9,16 +9,14 @@ Tests cover:
 - Cost tracking aggregation
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.models.contradiction import (
-    ComparisonMeta,
     ComparisonResult,
     ContradictionEvidence,
     DocumentStatements,
-    EntityComparisons,
     EntityComparisonsResponse,
     EntityStatements,
     EntityStatementsResponse,
@@ -28,13 +26,11 @@ from app.models.contradiction import (
     StatementPairComparison,
 )
 from app.services.contradiction.comparator import (
-    ComparisonServiceError,
     StatementComparisonService,
     TooManyStatementsError,
     get_statement_comparison_service,
 )
 from app.services.contradiction.statement_query import EntityNotFoundError
-
 
 # =============================================================================
 # Service Tests

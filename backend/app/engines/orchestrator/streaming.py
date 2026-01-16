@@ -21,7 +21,10 @@ from typing import Any
 
 import structlog
 
-from app.engines.orchestrator.orchestrator import QueryOrchestrator, get_query_orchestrator
+from app.engines.orchestrator.orchestrator import (
+    QueryOrchestrator,
+    get_query_orchestrator,
+)
 from app.models.chat import (
     EngineTraceEvent,
     SourceReferenceEvent,

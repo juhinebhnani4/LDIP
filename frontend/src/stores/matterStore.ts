@@ -19,10 +19,27 @@ import type {
   MatterSortOption,
   MatterFilterOption,
   MatterViewMode,
+  Matter,
 } from '@/types/matter';
 import { VIEW_PREFERENCE_KEY } from '@/types/matter';
-// TODO: Remove mock import when backend provides all MatterCardData fields
-import { getMockMatters } from './__mocks__/matterData';
+import { mattersApi } from '@/lib/api/matters';
+
+/**
+ * Transform backend Matter to frontend MatterCardData.
+ * Fills in default values for fields the backend doesn't yet provide.
+ * TODO: Remove defaults when backend provides these fields.
+ */
+function transformMatterToCardData(matter: Matter): MatterCardData {
+  return {
+    ...matter,
+    // These fields are not yet provided by backend - use sensible defaults
+    pageCount: 0,
+    documentCount: 0,
+    verificationPercent: 0,
+    issueCount: 0,
+    processingStatus: 'ready',
+  };
+}
 
 interface MatterState {
   /** All matters loaded from API */
@@ -99,14 +116,11 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
   fetchMatters: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: Replace with actual API call when backend provides extended fields
-      // const response = await fetch('/api/matters');
-      // const { data } = await response.json();
-      // Then extend with mock data for missing fields
+      // Fetch from real backend API
+      const { matters: apiMatters } = await mattersApi.list();
 
-      // Using mock data for now
-      await new Promise((resolve) => setTimeout(resolve, 400)); // Simulate network delay
-      const matters = getMockMatters();
+      // Transform to MatterCardData (add default values for fields backend doesn't provide yet)
+      const matters = apiMatters.map(transformMatterToCardData);
 
       set({
         matters,
@@ -120,7 +134,7 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
 
   /**
    * Fetch a single matter by ID for workspace context (Story 10A.1).
-   * First checks if matter exists in local state, otherwise fetches from mock.
+   * First checks if matter exists in local state, otherwise fetches from API.
    */
   fetchMatter: async (matterId: string) => {
     const { matters } = get();
@@ -132,18 +146,13 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
       return;
     }
 
-    // TODO: Replace with actual API call when backend is ready
-    // const response = await fetch(`/api/matters/${matterId}`);
-    // const { data } = await response.json();
-
-    // For MVP, find in mock data or create a placeholder
-    const mockMatters = getMockMatters();
-    const foundMatter = mockMatters.find((m) => m.id === matterId);
-
-    if (foundMatter) {
-      set({ currentMatter: foundMatter });
-    } else {
-      // Create a placeholder matter for unknown IDs
+    // Fetch from backend API
+    try {
+      const matterWithMembers = await mattersApi.get(matterId);
+      const matterCardData = transformMatterToCardData(matterWithMembers);
+      set({ currentMatter: matterCardData });
+    } catch {
+      // Create a placeholder matter for unknown IDs (handles 404 gracefully)
       const placeholderMatter: MatterCardData = {
         id: matterId,
         title: 'Untitled Matter',
@@ -153,6 +162,7 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
         memberCount: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        deletedAt: null,
         pageCount: 0,
         documentCount: 0,
         verificationPercent: 0,
@@ -188,15 +198,18 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
       set({ currentMatter: { ...currentMatter, title: name, updatedAt: new Date().toISOString() } });
     }
 
-    // TODO: Replace with actual API call when backend is ready
-    // await fetch(`/api/matters/${matterId}`, {
-    //   method: 'PATCH',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ title: name }),
-    // });
-
-    // Simulate network delay for MVP
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Sync with backend
+    try {
+      await mattersApi.update(matterId, { title: name });
+    } catch (error) {
+      // Revert optimistic update on failure
+      const { matters: currentMatters } = get();
+      const revertedMatters = currentMatters.map((m) =>
+        m.id === matterId ? { ...m, title: matters.find((om) => om.id === matterId)?.title ?? name } : m
+      );
+      set({ matters: revertedMatters });
+      throw error;
+    }
   },
 
   /**

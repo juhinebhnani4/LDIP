@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.engines.contradiction.comparator import (
-    ComparisonBatchResult,
     ComparatorError,
+    ComparisonBatchResult,
     ComparisonParseError,
     LLMCostTracker,
     OpenAIConfigurationError,
@@ -36,7 +36,6 @@ from app.models.contradiction import (
     StatementValue,
     StatementValueType,
 )
-
 
 # =============================================================================
 # LLM Cost Tracker Tests

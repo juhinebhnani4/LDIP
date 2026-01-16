@@ -10,6 +10,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { JaanchIcon } from '@/components/ui/jaanch-logo';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +36,7 @@ import type { QAPanelPosition } from '@/stores/qaPanelStore';
  * button that works in all panel positions.
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
- * Story 11.1: Updated title to "ASK LDIP" and added minimize button
+ * Story 11.1: Updated title with jaanch.ai icon and added minimize button
  */
 
 const POSITION_OPTIONS: Array<{
@@ -60,7 +61,10 @@ export function QAPanelHeader() {
 
   return (
     <div className="flex items-center justify-between border-b p-3">
-      <h2 className="text-sm font-semibold">ASK LDIP</h2>
+      <div className="flex items-center gap-2">
+        <JaanchIcon size="xs" />
+        <h2 className="text-sm font-semibold">Ask jaanch</h2>
+      </div>
       <div className="flex items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>

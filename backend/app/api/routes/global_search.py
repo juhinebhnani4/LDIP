@@ -6,6 +6,9 @@ across all accessible matters.
 
 CRITICAL: Matter isolation is enforced by the GlobalSearchService which queries
 matter_attorneys to determine accessible matters.
+
+Story 8-1/8-2 Code Review Fix: SafetyGuard integration added to prevent
+bypassing guardrails via global search queries.
 """
 
 import structlog
@@ -19,6 +22,7 @@ from app.services.global_search_service import (
     GlobalSearchServiceError,
     get_global_search_service,
 )
+from app.services.safety import SafetyGuard, get_safety_guard
 
 router = APIRouter(prefix="/search", tags=["search"])
 logger = structlog.get_logger(__name__)
@@ -62,6 +66,7 @@ async def global_search(
     ),
     user: AuthenticatedUser = Depends(get_current_user),
     search_service: GlobalSearchService = Depends(get_global_search_service),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> GlobalSearchResponse:
     """Search across all matters the user has access to.
 
@@ -113,6 +118,29 @@ async def global_search(
             }
         }
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    safety_result = await safety_guard.check_query(q)
+    if not safety_result.is_safe:
+        logger.info(
+            "global_search_query_blocked_by_safety",
+            user_id=user.id,
+            blocked_by=safety_result.blocked_by,
+            violation_type=safety_result.violation_type,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "SAFETY_VIOLATION",
+                    "message": safety_result.explanation or "Query blocked by safety guard",
+                    "details": {
+                        "violation_type": safety_result.violation_type,
+                        "suggested_rewrite": safety_result.suggested_rewrite,
+                    },
+                }
+            },
+        )
+
     logger.info(
         "global_search_request",
         user_id=user.id,

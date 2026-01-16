@@ -7,4 +7,6 @@ split by domain (`document_tasks`, `engine_tasks`) so that routing works.
 __all__ = [
     "document_tasks",
     "engine_tasks",
+    "verification_tasks",
+    "maintenance_tasks",
 ]

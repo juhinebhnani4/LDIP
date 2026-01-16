@@ -7,8 +7,8 @@ import pytest
 from app.models.ocr import OCRResult
 from app.services.ocr.processor import (
     OCRConfigurationError,
-    OCRProcessor,
     OCRProcessingError,
+    OCRProcessor,
     OCRServiceError,
 )
 

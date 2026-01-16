@@ -7,7 +7,7 @@ Tests the complete auth flow including:
 """
 
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import jwt
@@ -17,7 +17,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings, get_settings
 from app.main import app
-
 
 # Test JWT secret - same as in test_security.py
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -61,8 +60,8 @@ def valid_token() -> str:
         "email": "integration@example.com",
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "integration-test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -74,8 +73,8 @@ def expired_token() -> str:
     payload = {
         "sub": "expired-user-id",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1),
-        "iat": datetime.now(timezone.utc) - timedelta(hours=2),
+        "exp": datetime.now(UTC) - timedelta(hours=1),
+        "iat": datetime.now(UTC) - timedelta(hours=2),
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
@@ -170,8 +169,8 @@ class TestUnauthenticatedRequests:
         payload = {
             "sub": "test-user-id",
             "aud": "authenticated",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
         }
         wrong_signature_token = jwt.encode(payload, "wrong-secret", algorithm="HS256")
 

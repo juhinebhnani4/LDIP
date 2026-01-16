@@ -6,14 +6,15 @@ Tests for GET /api/matters/{matter_id}/tab-stats endpoint.
 Uses FastAPI dependency_overrides pattern for proper test isolation.
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_tab_stats_service_dep
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import limiter
 from app.main import app
@@ -24,7 +25,6 @@ from app.models.tab_stats import (
     TabStats,
     TabStatsData,
 )
-from app.api.deps import get_tab_stats_service_dep
 from app.services.tab_stats_service import (
     TabStatsService,
     TabStatsServiceError,
@@ -65,8 +65,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")

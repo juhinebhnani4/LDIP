@@ -206,6 +206,26 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
   setProcessingComplete: (complete: boolean) => {
     set({ isProcessingComplete: complete });
   },
+
+  // Cancel individual file upload
+  cancelFileUpload: (fileName: string) => {
+    const currentProgress = get().uploadProgress;
+    const newProgress = new Map(currentProgress);
+    const existing = newProgress.get(fileName);
+    if (existing) {
+      newProgress.set(fileName, {
+        ...existing,
+        status: 'error',
+        errorMessage: 'Upload cancelled by user',
+      });
+    }
+
+    // Remove from files list
+    const files = get().files;
+    const newFiles = files.filter((f) => f.name !== fileName);
+
+    set({ uploadProgress: newProgress, files: newFiles });
+  },
 }));
 
 /**

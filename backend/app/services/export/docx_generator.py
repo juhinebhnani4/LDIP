@@ -48,7 +48,7 @@ class DocxGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None" = None,
+        verification_summary: VerificationSummaryForExport | None = None,
     ) -> bytes:
         """Generate Word document.
 
@@ -75,7 +75,7 @@ class DocxGenerator:
         self,
         matter_name: str,
         section_content: dict[str, dict],
-        verification_summary: "VerificationSummaryForExport | None",
+        verification_summary: VerificationSummaryForExport | None,
     ) -> str:
         """Build document body XML content."""
         paragraphs: list[str] = []

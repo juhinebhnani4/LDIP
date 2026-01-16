@@ -1,9 +1,9 @@
-"""Health check endpoints (Story 13.2 - Circuit Breaker Status)."""
+"""Health check endpoints (Story 13.2, 13.3 - Circuit Breaker + Rate Limit Status)."""
 
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.api.deps import AuthenticatedUser, get_current_user, get_db
 from app.core.circuit_breaker import (
@@ -13,6 +13,7 @@ from app.core.circuit_breaker import (
     get_circuit_status,
 )
 from app.core.config import Settings, get_settings
+from app.core.rate_limit import HEALTH_RATE_LIMIT, get_rate_limit_status, limiter
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = structlog.get_logger(__name__)
@@ -254,3 +255,53 @@ async def reset_circuit(
             "status": status,
         }
     }
+
+
+# =============================================================================
+# Rate Limit Status Endpoint (Story 13.3)
+# =============================================================================
+
+
+@router.get("/rate-limits")
+@limiter.limit(HEALTH_RATE_LIMIT)
+async def get_rate_limits_status(
+    request: Request,  # Required for rate limiter
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Get current rate limit configuration and status.
+
+    Returns the rate limit tiers and their configured limits.
+    Requires authentication to identify the rate limit key.
+
+    Story 13.3: AC #4 - Rate limit status endpoint.
+
+    Returns:
+        Rate limit configuration per tier.
+
+    Example response:
+        {
+            "data": {
+                "key": "user:123e4567-e89b-12d3-a456-426614174000",
+                "tiers": {
+                    "critical": {"limit": 30, "window": "minute", "description": "LLM, chat, export endpoints"},
+                    "search": {"limit": 60, "window": "minute", "description": "Vector search endpoints"},
+                    "standard": {"limit": 100, "window": "minute", "description": "CRUD operations"},
+                    "readonly": {"limit": 120, "window": "minute", "description": "Dashboard, stats endpoints"},
+                    "health": {"limit": 300, "window": "minute", "description": "Monitoring endpoints"}
+                },
+                "storage": "memory"
+            }
+        }
+    """
+    # Set user_id in request state for rate limit key function
+    request.state.user_id = current_user.id
+
+    status = get_rate_limit_status(request)
+
+    logger.debug(
+        "rate_limits_status_requested",
+        user_id=current_user.id,
+        key=status["key"],
+    )
+
+    return {"data": status}

@@ -19,24 +19,24 @@ import {
 import { cn } from '@/lib/utils';
 import type { EntityEdgeData, RelationshipType } from '@/types/entity';
 
-/** Relationship type configuration for styling */
+/** Relationship type configuration for styling - jaanch.ai brand palette */
 const relationshipConfig: Record<
   RelationshipType,
   { label: string; color: string; dashed: boolean }
 > = {
   ALIAS_OF: {
     label: 'Alias',
-    color: '#6b7280', // gray-500
+    color: '#6b6b6b', // Soft Gray
     dashed: true,
   },
   HAS_ROLE: {
     label: 'Has Role',
-    color: '#3b82f6', // blue-500
+    color: '#0d1b5e', // Deep Indigo (brand primary)
     dashed: false,
   },
   RELATED_TO: {
     label: 'Related',
-    color: '#10b981', // green-500
+    color: '#2d5a3d', // Forest Green
     dashed: false,
   },
 };

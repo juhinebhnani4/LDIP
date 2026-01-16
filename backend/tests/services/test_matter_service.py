@@ -6,19 +6,14 @@ Tests business logic for matter operations including:
 - Member management operations
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.models.matter import (
-    Matter,
     MatterCreate,
-    MatterMember,
     MatterRole,
-    MatterStatus,
     MatterUpdate,
-    MatterWithMembers,
 )
 from app.services.matter_service import (
     CannotRemoveOwnerError,

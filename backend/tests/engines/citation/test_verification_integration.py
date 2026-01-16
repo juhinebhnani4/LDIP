@@ -6,7 +6,6 @@ through to updating citation status and broadcasting results.
 Story 3-3: Citation Verification (AC: #4, #5, #6)
 """
 
-import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,13 +13,12 @@ import pytest
 
 from app.engines.citation.storage import CitationStorageService
 from app.engines.citation.verifier import CitationVerifier
+from app.models.chunk import ChunkType, ChunkWithContent
 from app.models.citation import (
     Citation,
     VerificationResult,
     VerificationStatus,
 )
-from app.models.chunk import ChunkType, ChunkWithContent
-
 
 # =============================================================================
 # Fixtures

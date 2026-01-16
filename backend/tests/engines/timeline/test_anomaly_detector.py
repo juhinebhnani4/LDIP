@@ -4,24 +4,20 @@ Story 4-4: Timeline Anomaly Detection
 """
 
 from datetime import date
-from unittest.mock import MagicMock
 
 import pytest
 
 from app.engines.timeline.anomaly_detector import (
-    DUPLICATE_SIMILARITY_THRESHOLD,
     TimelineAnomalyDetector,
     get_anomaly_detector,
 )
 from app.engines.timeline.legal_sequences import (
     CaseType,
     LegalSequenceValidator,
-    get_legal_sequence_validator,
 )
 from app.engines.timeline.timeline_builder import TimelineEvent
-from app.models.anomaly import AnomalyCreate, AnomalySeverity, AnomalyType
+from app.models.anomaly import AnomalySeverity, AnomalyType
 from app.models.timeline import EventType
-
 
 # =============================================================================
 # Test Fixtures

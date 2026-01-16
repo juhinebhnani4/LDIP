@@ -12,7 +12,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # =============================================================================
 # Story 14.12: Task 1.2-1.3 - Core Types
 # =============================================================================

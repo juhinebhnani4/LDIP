@@ -232,15 +232,16 @@ export function updateNodeStates(
 
 /**
  * Get entity type color for minimap
+ * Uses jaanch.ai brand colors
  */
 export function getEntityTypeColor(entityType: EntityType): string {
   const colors: Record<EntityType, string> = {
-    PERSON: '#3b82f6', // blue-500
-    ORG: '#10b981', // green-500
-    INSTITUTION: '#8b5cf6', // purple-500
-    ASSET: '#f59e0b', // amber-500
+    PERSON: '#0d1b5e', // Deep Indigo (brand primary)
+    ORG: '#2d5a3d', // Forest Green
+    INSTITUTION: '#5a3d6b', // Deep Purple
+    ASSET: '#b8973b', // Muted Gold (brand accent)
   };
-  return colors[entityType] ?? '#6b7280'; // gray-500 fallback
+  return colors[entityType] ?? '#6b6b6b'; // Soft Gray fallback
 }
 
 /**

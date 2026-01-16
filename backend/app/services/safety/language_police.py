@@ -409,7 +409,7 @@ class LanguagePolice:
 
                 return parsed, input_tokens, output_tokens
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = e
                 logger.warning(
                     "llm_polish_timeout",

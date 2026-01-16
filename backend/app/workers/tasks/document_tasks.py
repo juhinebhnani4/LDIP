@@ -23,9 +23,13 @@ from app.engines.citation import (
     get_citation_extractor,
     get_citation_storage_service,
 )
+from app.models.activity import ActivityTypeEnum
 from app.models.document import DocumentStatus
 from app.models.job import JobStatus, JobType
 from app.models.ocr_validation import CorrectionType, ValidationStatus
+from app.services.activity_service import (
+    get_activity_service,
+)
 from app.services.bounding_box_service import (
     BoundingBoxService,
     get_bounding_box_service,
@@ -89,17 +93,12 @@ from app.services.rag.embedder import (
     EmbeddingServiceError,
     get_embedding_service,
 )
-from app.services.summary_service import get_summary_service
 from app.services.storage_service import (
     StorageError,
     StorageService,
     get_storage_service,
 )
-from app.services.activity_service import (
-    ActivityService,
-    get_activity_service,
-)
-from app.models.activity import ActivityTypeEnum
+from app.services.summary_service import get_summary_service
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -1881,7 +1880,6 @@ def embed_chunks(
     Raises:
         EmbeddingServiceError: If embedding generation fails (will trigger retry).
     """
-    import time
 
     from app.services.supabase.client import get_service_client
 
@@ -2229,7 +2227,6 @@ def extract_entities(
     Raises:
         MIGExtractorError: If extraction fails (will trigger retry).
     """
-    import time
 
     from app.services.supabase.client import get_service_client
 
@@ -2884,7 +2881,6 @@ def extract_citations(
     Raises:
         CitationExtractorError: If extraction fails (will trigger retry).
     """
-    import time
 
     from app.services.supabase.client import get_service_client
 

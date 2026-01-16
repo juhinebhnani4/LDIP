@@ -8,6 +8,9 @@ Provides endpoints for:
 - Alias-expanded search (expands person/org names to include aliases)
 
 All endpoints enforce 4-layer matter isolation via the API layer.
+
+Story 8-1/8-2 Code Review Fix: SafetyGuard integration added to all search
+endpoints to prevent bypassing guardrails via search queries.
 """
 
 import structlog
@@ -44,9 +47,51 @@ from app.services.rag.hybrid_search import (
     SearchWeights,
     get_hybrid_search_service,
 )
+from app.services.safety import SafetyGuard, get_safety_guard
 
 router = APIRouter(prefix="/matters/{matter_id}/search", tags=["search"])
 logger = structlog.get_logger(__name__)
+
+
+async def _check_query_safety(
+    query: str,
+    safety_guard: SafetyGuard,
+    matter_id: str,
+) -> None:
+    """Check query safety before executing search.
+
+    Story 8-1/8-2 Code Review Fix: Prevent bypassing guardrails via search.
+
+    Args:
+        query: User's search query.
+        safety_guard: SafetyGuard instance.
+        matter_id: Matter ID for logging.
+
+    Raises:
+        HTTPException: 400 Bad Request if query is blocked by safety guard.
+    """
+    safety_result = await safety_guard.check_query(query)
+
+    if not safety_result.is_safe:
+        logger.info(
+            "search_query_blocked_by_safety",
+            matter_id=matter_id,
+            blocked_by=safety_result.blocked_by,
+            violation_type=safety_result.violation_type,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "SAFETY_VIOLATION",
+                    "message": safety_result.explanation or "Query blocked by safety guard",
+                    "details": {
+                        "violation_type": safety_result.violation_type,
+                        "suggested_rewrite": safety_result.suggested_rewrite,
+                    },
+                }
+            },
+        )
 
 
 def _handle_search_error(error: HybridSearchServiceError) -> HTTPException:
@@ -116,6 +161,7 @@ async def hybrid_search(
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> SearchResponse:
     """Execute hybrid search with BM25 + semantic RRF fusion.
 
@@ -138,6 +184,9 @@ async def hybrid_search(
 
     Example query: "contract termination due to breach"
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    await _check_query_safety(body.query, safety_guard, membership.matter_id)
+
     logger.info(
         "hybrid_search_request",
         matter_id=membership.matter_id,
@@ -245,6 +294,7 @@ async def bm25_search(
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> SingleModeSearchResponse:
     """Execute BM25-only keyword search.
 
@@ -260,6 +310,9 @@ async def bm25_search(
 
     Example query: "Section 138 Negotiable Instruments Act"
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    await _check_query_safety(body.query, safety_guard, membership.matter_id)
+
     logger.info(
         "bm25_search_request",
         matter_id=membership.matter_id,
@@ -325,6 +378,7 @@ async def semantic_search(
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> SingleModeSearchResponse:
     """Execute semantic-only vector search.
 
@@ -340,6 +394,9 @@ async def semantic_search(
 
     Example query: "remedies available when one party fails to perform obligations"
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    await _check_query_safety(body.query, safety_guard, membership.matter_id)
+
     logger.info(
         "semantic_search_request",
         matter_id=membership.matter_id,
@@ -405,6 +462,7 @@ async def rerank_search(
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> RerankedSearchResponse:
     """Execute hybrid search with Cohere Rerank v3.5.
 
@@ -429,6 +487,9 @@ async def rerank_search(
 
     Example query: "contract termination clause"
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    await _check_query_safety(body.query, safety_guard, membership.matter_id)
+
     logger.info(
         "rerank_search_request",
         matter_id=membership.matter_id,
@@ -507,6 +568,7 @@ async def alias_expanded_search(
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
+    safety_guard: SafetyGuard = Depends(get_safety_guard),
 ) -> AliasExpandedSearchResponse:
     """Execute search with automatic alias expansion.
 
@@ -531,6 +593,9 @@ async def alias_expanded_search(
     Example query: "N.D. Jobalia contract"
     Expanded query: "(N.D. Jobalia OR Nirav D. Jobalia OR Mr. Jobalia) contract"
     """
+    # Story 8-1/8-2 Code Review Fix: Check query safety before search
+    await _check_query_safety(body.query, safety_guard, membership.matter_id)
+
     logger.info(
         "alias_expanded_search_request",
         matter_id=membership.matter_id,

@@ -5,18 +5,16 @@ Tests entity mention extraction and entity matching functionality.
 Story 4-3: Events Table + MIG Integration
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.engines.timeline.entity_linker import (
-    EventEntityLinker,
     EntityMention,
-    EntityLinkResult,
+    EventEntityLinker,
     get_event_entity_linker,
-    LINK_CONFIDENCE_THRESHOLD,
 )
 from app.models.entity import EntityNode, EntityType
-
 
 # =============================================================================
 # Fixtures
@@ -356,8 +354,6 @@ class TestBatchEntityLinking:
     @pytest.mark.asyncio
     async def test_link_entities_batch(self, entity_linker, sample_entities):
         """Test batch entity linking for multiple events."""
-        from app.models.timeline import RawEvent
-        from datetime import date
 
         entity_linker._mig_service.get_entities_by_matter = AsyncMock(
             return_value=(sample_entities, 3)

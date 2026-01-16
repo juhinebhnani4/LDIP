@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.ocr_confidence import OCRConfidenceResult, PageConfidence
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
     _determine_quality_status,

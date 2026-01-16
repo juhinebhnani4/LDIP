@@ -13,7 +13,7 @@ Fallback: Returns None on circuit open, callers should use BM25 only.
 
 import hashlib
 import json
-from typing import Sequence
+from collections.abc import Sequence
 
 import structlog
 from openai import AsyncOpenAI

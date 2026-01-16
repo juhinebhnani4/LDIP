@@ -4,8 +4,8 @@ Story 3-4: Split-View Citation Highlighting
 Tests the split-view API endpoint for citation display.
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, AsyncMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
@@ -19,7 +19,6 @@ from app.models.citation import (
     VerificationStatus,
 )
 from app.models.matter import MatterRole
-
 
 # Test JWT secret - same as in other test files
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -46,8 +45,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
@@ -77,8 +76,8 @@ def create_mock_citation(
         extraction_metadata={
             "verification_explanation": "Text matches exactly",
         },
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -107,9 +106,9 @@ async def test_client(
     mock_discovery_service: AsyncMock,
 ):
     """Create an async test client with mocked dependencies."""
-    from app.core.config import get_settings
     from app.api.deps import get_matter_service
-    from app.api.routes.citations import _get_storage_service, _get_discovery_service
+    from app.api.routes.citations import _get_discovery_service, _get_storage_service
+    from app.core.config import get_settings
 
     app.dependency_overrides[get_settings] = get_test_settings
     app.dependency_overrides[get_matter_service] = lambda: mock_matter_service

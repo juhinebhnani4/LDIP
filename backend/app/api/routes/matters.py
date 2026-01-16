@@ -15,6 +15,7 @@ from app.api.deps import (
     get_tab_stats_service_dep,
     require_matter_role,
 )
+from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
 from app.models.matter import (
     MatterCreate,
     MatterInvite,
@@ -28,7 +29,6 @@ from app.models.matter import (
     MemberListResponse,
     MemberResponse,
 )
-from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
 from app.models.tab_stats import TabStatsResponse
 from app.services.matter_service import (
     CannotRemoveOwnerError,

@@ -9,23 +9,22 @@ Tests the alias management endpoints:
 Story: 2c-2 Alias Resolution
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_matter_service
+from app.api.routes.entities import _get_mig_service
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.entity import EntityNode, EntityType
 from app.models.matter import MatterRole
-from app.api.deps import get_matter_service
-from app.api.routes.entities import _get_mig_service
-
 
 # Fixed timestamp for test data
-TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=timezone.utc)
+TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=UTC)
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -57,8 +56,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")

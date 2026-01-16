@@ -9,7 +9,7 @@ Note: These tests mock the service layer to avoid database dependencies.
 The mocks must be applied at the module where imports occur.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -45,14 +45,15 @@ from app.models.ocr_validation import (
     HumanReviewStatus,
     LowConfidenceWord,
     ValidationResult,
-    ValidationStatus,
 )
 from app.services.bounding_box_service import BoundingBoxService
 from app.services.document_service import DocumentService
 from app.services.ocr import OCRProcessor
 from app.services.ocr.gemini_validator import GeminiOCRValidator
 from app.services.ocr.human_review_service import HumanReviewService
-from app.services.ocr.pattern_corrector import PatternCorrector, apply_pattern_corrections
+from app.services.ocr.pattern_corrector import (
+    apply_pattern_corrections,
+)
 from app.services.ocr.validation_extractor import ValidationExtractor
 from app.services.storage_service import StorageService
 from app.workers.tasks.document_tasks import validate_ocr

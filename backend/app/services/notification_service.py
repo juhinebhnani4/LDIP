@@ -14,7 +14,6 @@ from functools import lru_cache
 import structlog
 
 from app.models.notification import (
-    NotificationCreate,
     NotificationPriorityEnum,
     NotificationRecord,
     NotificationTypeEnum,

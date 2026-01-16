@@ -209,10 +209,11 @@ class QueryOrchestrator:
             context=context,
         )
 
-        # Step 3: Aggregate results
+        # Step 3: Aggregate results (with language policing - Story 8-3)
         wall_clock_time_ms = int((time.time() - start_time) * 1000)
 
-        result = self._aggregator.aggregate_results(
+        # Story 8-3 Code Review Fix: Use async version to apply language policing
+        result = await self._aggregator.aggregate_results_async(
             matter_id=matter_id,
             query=query,
             results=engine_results,

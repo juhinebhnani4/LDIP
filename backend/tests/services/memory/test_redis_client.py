@@ -54,19 +54,18 @@ class TestRedisClient:
         mock_upstash_asyncio = MagicMock()
         mock_upstash_asyncio.Redis.return_value = mock_client
 
-        with patch.dict(os.environ, env, clear=True):
-            with patch.dict(
-                "sys.modules",
-                {
-                    "upstash_redis": MagicMock(),
-                    "upstash_redis.asyncio": mock_upstash_asyncio,
-                },
-            ):
-                reset_redis_client()
-                client = await get_redis_client()
+        with patch.dict(os.environ, env, clear=True), patch.dict(
+            "sys.modules",
+            {
+                "upstash_redis": MagicMock(),
+                "upstash_redis.asyncio": mock_upstash_asyncio,
+            },
+        ):
+            reset_redis_client()
+            client = await get_redis_client()
 
-                # Should return a client (either upstash or fallback)
-                assert client is not None
+            # Should return a client (either upstash or fallback)
+            assert client is not None
 
     @pytest.mark.asyncio
     async def test_get_redis_client_fallback_to_redis_py(self) -> None:

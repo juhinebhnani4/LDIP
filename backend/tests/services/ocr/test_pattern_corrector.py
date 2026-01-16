@@ -5,7 +5,6 @@ import pytest
 from app.models.ocr_validation import CorrectionType, LowConfidenceWord
 from app.services.ocr.pattern_corrector import (
     COMMON_OCR_PATTERNS,
-    CRITICAL_CONTENT_PATTERNS,
     PatternCorrector,
     PatternRule,
     apply_pattern_corrections,

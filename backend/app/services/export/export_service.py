@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime, timezone
-from io import BytesIO
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import structlog
@@ -96,7 +95,7 @@ class ExportService:
             ExportServiceError: If export generation fails.
         """
         export_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Get matter name for filename
         matter_name = await self._get_matter_name(matter_id, supabase)
@@ -430,8 +429,8 @@ class ExportService:
     ) -> bytes:
         """Generate document in the specified format."""
         # Import generators here to avoid circular imports
-        from app.services.export.pdf_generator import PDFGenerator
         from app.services.export.docx_generator import DocxGenerator
+        from app.services.export.pdf_generator import PDFGenerator
         from app.services.export.pptx_generator import PptxGenerator
 
         match format:
@@ -514,7 +513,7 @@ class ExportService:
                 "verification_summary": verification_summary.model_dump(),
                 "created_by": user_id,
                 "created_at": created_at.isoformat(),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             }
 
             supabase.table("exports").insert(record_data).execute()
@@ -531,7 +530,7 @@ class ExportService:
                 verification_summary=verification_summary.model_dump(),
                 created_by=user_id,
                 created_at=created_at,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
         except Exception as e:
             # Issue #4 fix: Graceful handling when exports table doesn't exist
@@ -558,7 +557,7 @@ class ExportService:
                 verification_summary=verification_summary.model_dump(),
                 created_by=user_id,
                 created_at=created_at,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
 
     @staticmethod

@@ -15,7 +15,7 @@ Manages matter-level memory storage in PostgreSQL matter_memory table:
 Table: matter_memory with memory_type discriminator
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -947,7 +947,7 @@ class MatterMemoryRepository:
             if finding.finding_id == finding_id:
                 finding_dict = finding.model_dump()
                 finding_dict.update(updates)
-                finding_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+                finding_dict["updated_at"] = datetime.now(UTC).isoformat()
                 current.findings[i] = KeyFinding.model_validate(finding_dict)
                 updated = True
                 break
@@ -1205,7 +1205,7 @@ class MatterMemoryRepository:
             if note.note_id == note_id:
                 note_dict = note.model_dump()
                 note_dict.update(updates)
-                note_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+                note_dict["updated_at"] = datetime.now(UTC).isoformat()
                 current.notes[i] = ResearchNote.model_validate(note_dict)
                 updated = True
                 break

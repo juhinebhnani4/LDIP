@@ -66,6 +66,10 @@ CREATE INDEX idx_identity_nodes_aliases ON public.identity_nodes USING GIN (alia
 -- Composite indexes for common query patterns
 CREATE INDEX idx_identity_nodes_matter_type ON public.identity_nodes(matter_id, entity_type);
 
+-- Index for listing entities sorted by mention_count (API: list_entities)
+-- This prevents slow sorts on large matters when ordering by most-mentioned
+CREATE INDEX idx_identity_nodes_matter_mentions ON public.identity_nodes(matter_id, mention_count DESC);
+
 -- Text search on canonical name and aliases
 CREATE INDEX idx_identity_nodes_name_search ON public.identity_nodes
   USING GIN (to_tsvector('english', canonical_name));
@@ -333,6 +337,12 @@ BEGIN
   UPDATE public.events
   SET entities_involved = array_replace(entities_involved, p_merge_id, p_keep_id)
   WHERE p_merge_id = ANY(entities_involved);
+
+  -- CRITICAL: Update entity_mentions to point to kept entity BEFORE deleting merged entity
+  -- This prevents cascade delete from destroying mention data (highlighting, bounding boxes)
+  UPDATE public.entity_mentions
+  SET entity_id = p_keep_id
+  WHERE entity_id = p_merge_id;
 
   -- Delete merged entity
   DELETE FROM public.identity_nodes WHERE id = p_merge_id;

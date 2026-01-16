@@ -1,18 +1,17 @@
 """Unit tests for the Cohere Rerank service."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.services.rag.reranker import (
+    DEFAULT_TOP_N,
+    RERANK_MODEL,
+    RERANK_TIMEOUT_SECONDS,
     CohereRerankService,
     CohereRerankServiceError,
     RerankResult,
     RerankResultItem,
-    RERANK_MODEL,
-    DEFAULT_TOP_N,
-    RERANK_TIMEOUT_SECONDS,
     get_cohere_rerank_service,
 )
 

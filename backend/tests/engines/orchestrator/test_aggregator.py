@@ -12,7 +12,6 @@ Tests cover:
 
 import pytest
 
-from app.core.config import get_settings
 from app.engines.orchestrator.aggregator import (
     ResultAggregator,
     _get_engine_confidence_weights,
@@ -21,9 +20,7 @@ from app.engines.orchestrator.aggregator import (
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
-    SourceReference,
 )
-
 
 # =============================================================================
 # Fixtures

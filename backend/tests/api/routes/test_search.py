@@ -1,6 +1,6 @@
 """Unit tests for search API routes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -8,6 +8,7 @@ import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import get_matter_service
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.matter import MatterRole
@@ -16,10 +17,7 @@ from app.services.rag.hybrid_search import (
     HybridSearchServiceError,
     SearchResult,
     SearchWeights,
-    get_hybrid_search_service,
 )
-from app.api.deps import get_matter_service
-
 
 # Test JWT secret
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -46,8 +44,8 @@ def create_test_token(
         "email": email,
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session",
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")

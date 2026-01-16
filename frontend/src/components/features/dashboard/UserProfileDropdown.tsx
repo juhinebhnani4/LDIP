@@ -97,7 +97,7 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
 
   const handleHelp = () => {
     // TODO: Open help modal or navigate to help page
-    window.open('https://help.ldip.app', '_blank');
+    window.open('https://help.jaanch.ai', '_blank');
   };
 
   return (

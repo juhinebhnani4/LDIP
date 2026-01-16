@@ -171,9 +171,8 @@ export function EditEventDialog({
   });
 
   // Form for auto events (classification only)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const autoForm = useForm({
-    resolver: zodResolver(editAutoEventSchema) as any,
+  const autoForm = useForm<EditAutoFormValues>({
+    resolver: zodResolver(editAutoEventSchema),
     defaultValues: {
       eventType: undefined as EditAutoFormValues['eventType'] | undefined,
     },

@@ -1,6 +1,7 @@
 """Test all API keys and services"""
 import os
 import sys
+
 from dotenv import load_dotenv
 
 # Load environment

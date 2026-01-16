@@ -6,15 +6,15 @@ Note: This file uses synchronous TestClient for simple auth tests,
 and pytest-asyncio fixtures for async route tests as needed.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.deps import MatterMembership, MatterRole
+from app.main import app
 from app.models.anomaly import (
     AnomaliesListResponse,
     Anomaly,
@@ -291,7 +291,7 @@ class TestListAnomaliesAuthenticated:
         mock_anomaly_list_item: AnomalyListItem,
     ) -> None:
         """Should return anomalies list when authenticated."""
-        from httpx import AsyncClient, ASGITransport
+        from httpx import ASGITransport, AsyncClient
 
         mock_response = AnomaliesListResponse(
             data=[mock_anomaly_list_item],
@@ -328,7 +328,7 @@ class TestGetAnomalySummaryAuthenticated:
         mock_matter_membership: MatterMembership,
     ) -> None:
         """Should return summary counts when authenticated."""
-        from httpx import AsyncClient, ASGITransport
+        from httpx import ASGITransport, AsyncClient
 
         mock_summary = AnomalySummaryResponse(
             data=AnomalySummaryData(
@@ -372,7 +372,7 @@ class TestDismissVerifyAuthenticated:
         mock_anomaly: Anomaly,
     ) -> None:
         """Should return updated anomaly when dismissed."""
-        from httpx import AsyncClient, ASGITransport
+        from httpx import ASGITransport, AsyncClient
 
         # Update mock anomaly for dismissed state
         dismissed_anomaly = mock_anomaly.model_copy()

@@ -24,12 +24,14 @@ from app.models.job import (
     ProcessingJob,
     ProcessingJobResponse,
 )
+from app.services.job_recovery import JobRecoveryService, get_job_recovery_service
 from app.services.job_tracking import (
     JobNotFoundError,
     JobTrackingError,
     JobTrackingService,
     get_job_tracking_service,
 )
+from app.workers.celery import celery_app
 from app.workers.tasks.document_tasks import process_document
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -88,6 +90,46 @@ class JobQueueStats(BaseModel):
     cancelled: int
     skipped: int
     avg_processing_time_ms: int | None = None
+
+
+class StaleJobInfo(BaseModel):
+    """Information about a stale job."""
+
+    job_id: str
+    document_id: str | None
+    matter_id: str
+    job_type: str
+    current_stage: str | None
+    stuck_since: str
+    recovery_attempts: int = 0
+
+
+class RecoveryResult(BaseModel):
+    """Result of a job recovery operation."""
+
+    success: bool
+    job_id: str
+    error: str | None = None
+    action: str | None = None
+    recovery_attempt: int | None = None
+
+
+class RecoverStaleJobsResponse(BaseModel):
+    """Response for recovering stale jobs."""
+
+    recovered: int
+    failed: int
+    total: int
+    jobs: list[RecoveryResult]
+
+
+class RecoveryStatsResponse(BaseModel):
+    """Response for recovery statistics."""
+
+    stale_jobs_count: int
+    stale_jobs: list[StaleJobInfo]
+    config: dict
+    recovered_last_hour: int
 
 
 # =============================================================================
@@ -464,8 +506,23 @@ async def cancel_job(
             status=JobStatus.CANCELLED,
         )
 
-        # TODO: If job has celery_task_id, revoke the Celery task
-        # This requires Celery app access and is non-trivial
+        # Revoke the Celery task if it has a celery_task_id
+        if job.celery_task_id:
+            try:
+                celery_app.control.revoke(job.celery_task_id, terminate=True)
+                logger.info(
+                    "celery_task_revoked",
+                    job_id=job_id,
+                    celery_task_id=job.celery_task_id,
+                )
+            except Exception as revoke_error:
+                # Log but don't fail - the job is already marked cancelled
+                logger.warning(
+                    "celery_task_revoke_failed",
+                    job_id=job_id,
+                    celery_task_id=job.celery_task_id,
+                    error=str(revoke_error),
+                )
 
         logger.info(
             "job_cancelled",
@@ -546,3 +603,129 @@ async def get_active_job_for_document(
                 }
             },
         )
+
+
+# =============================================================================
+# Job Recovery Endpoints (Admin)
+# =============================================================================
+
+
+def _get_recovery_service() -> JobRecoveryService:
+    """Get job recovery service instance."""
+    from app.api.deps import get_supabase_service_client
+    supabase = get_supabase_service_client()
+    return get_job_recovery_service(supabase)
+
+
+@router.get(
+    "/recovery/stats",
+    response_model=RecoveryStatsResponse,
+    summary="Get job recovery statistics",
+    description="Get information about stale jobs and recovery configuration.",
+)
+async def get_recovery_stats(
+    user: AuthenticatedUser = Depends(get_current_user),
+    recovery_service: JobRecoveryService = Depends(_get_recovery_service),
+) -> RecoveryStatsResponse:
+    """Get job recovery statistics and stale job information."""
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    # Find stale jobs
+    stale_jobs = await recovery_service.find_stale_jobs()
+
+    stale_job_infos = [
+        StaleJobInfo(
+            job_id=job["id"],
+            document_id=job.get("document_id"),
+            matter_id=job["matter_id"],
+            job_type=job["job_type"],
+            current_stage=job.get("current_stage"),
+            stuck_since=job["updated_at"],
+            recovery_attempts=(job.get("metadata") or {}).get("recovery_attempts", 0),
+        )
+        for job in stale_jobs
+    ]
+
+    # Get recovery stats
+    stats = await recovery_service.get_recovery_stats()
+
+    return RecoveryStatsResponse(
+        stale_jobs_count=len(stale_jobs),
+        stale_jobs=stale_job_infos,
+        config={
+            "stale_timeout_minutes": settings.job_stale_timeout_minutes,
+            "max_recovery_retries": settings.job_max_recovery_retries,
+            "recovery_enabled": settings.job_recovery_enabled,
+        },
+        recovered_last_hour=stats.get("recovered_last_hour", 0),
+    )
+
+
+@router.post(
+    "/recovery/run",
+    response_model=RecoverStaleJobsResponse,
+    summary="Recover all stale jobs",
+    description="Find and recover all jobs stuck in PROCESSING state.",
+)
+async def recover_stale_jobs(
+    user: AuthenticatedUser = Depends(get_current_user),
+    recovery_service: JobRecoveryService = Depends(_get_recovery_service),
+) -> RecoverStaleJobsResponse:
+    """Recover all stale jobs."""
+    logger.info("manual_recovery_triggered", user_id=user.id)
+
+    result = await recovery_service.recover_all_stale_jobs()
+
+    if result.get("skipped"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "RECOVERY_DISABLED",
+                    "message": "Job recovery is disabled in configuration",
+                    "details": {},
+                }
+            },
+        )
+
+    return RecoverStaleJobsResponse(
+        recovered=result.get("recovered", 0),
+        failed=result.get("failed", 0),
+        total=result.get("total", 0),
+        jobs=[
+            RecoveryResult(
+                success=j.get("success", False),
+                job_id=j.get("job_id", ""),
+                error=j.get("error"),
+                action=j.get("action"),
+                recovery_attempt=j.get("recovery_attempt"),
+            )
+            for j in result.get("jobs", [])
+        ],
+    )
+
+
+@router.post(
+    "/recovery/{job_id}",
+    response_model=RecoveryResult,
+    summary="Recover a specific stale job",
+    description="Attempt to recover a specific job stuck in PROCESSING state.",
+)
+async def recover_single_job(
+    job_id: str = Path(..., description="Job UUID to recover"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    recovery_service: JobRecoveryService = Depends(_get_recovery_service),
+) -> RecoveryResult:
+    """Recover a specific stale job."""
+    logger.info("manual_single_job_recovery", job_id=job_id, user_id=user.id)
+
+    result = await recovery_service.recover_stale_job(job_id)
+
+    return RecoveryResult(
+        success=result.get("success", False),
+        job_id=result.get("job_id", job_id),
+        error=result.get("error"),
+        action=result.get("action"),
+        recovery_attempt=result.get("recovery_attempt"),
+    )

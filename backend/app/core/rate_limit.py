@@ -32,6 +32,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+# Track if we're in degraded mode (Redis unavailable)
+_redis_degraded = False
+
 
 def _get_rate_limit_key(request: StarletteRequest) -> str:
     """Get rate limit key from request.
@@ -66,16 +69,55 @@ def _get_rate_limit_key(request: StarletteRequest) -> str:
     return get_remote_address(request)
 
 
-# Create limiter instance
-# Uses Redis storage when REDIS_URL is configured, otherwise in-memory
+# Create limiter instance with graceful Redis fallback
+# Uses Redis storage when REDIS_URL is configured and accessible, otherwise in-memory
 settings = get_settings()
-storage_uri = settings.redis_url if settings.redis_url else "memory://"
 
-limiter = Limiter(
-    key_func=_get_rate_limit_key,
-    storage_uri=storage_uri,
-    default_limits=["1000/hour"],  # Default rate limit for all endpoints
-)
+
+def _create_limiter(storage_uri: str) -> Limiter:
+    """Create a limiter with the specified storage URI."""
+    return Limiter(
+        key_func=_get_rate_limit_key,
+        storage_uri=storage_uri,
+        default_limits=["1000/hour"],  # Default rate limit for all endpoints
+    )
+
+
+def _get_limiter_with_fallback() -> tuple[Limiter, str]:
+    """Get limiter instance with graceful Redis fallback.
+
+    Attempts to use Redis if configured. If Redis connection fails,
+    falls back to in-memory storage and logs a warning.
+
+    Returns:
+        Tuple of (Limiter instance, storage_uri used).
+    """
+    global _redis_degraded
+
+    if not settings.redis_url:
+        return _create_limiter("memory://"), "memory://"
+
+    # Try Redis first
+    try:
+        import redis
+        # Test Redis connectivity
+        r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
+        r.ping()
+        _redis_degraded = False
+        logger.info("rate_limiter_storage", storage="redis", url=settings.redis_url)
+        return _create_limiter(settings.redis_url), settings.redis_url
+    except Exception as e:
+        _redis_degraded = True
+        logger.warning(
+            "rate_limiter_redis_unavailable",
+            error=str(e),
+            fallback="memory",
+            message="Rate limiter falling back to in-memory storage. Rate limits will not be shared across instances.",
+        )
+        return _create_limiter("memory://"), "memory://"
+
+
+limiter, storage_uri = _get_limiter_with_fallback()
 
 
 # =============================================================================
@@ -274,4 +316,5 @@ def get_rate_limit_status(request: Request) -> dict:
             },
         },
         "storage": "redis" if "redis" in storage_uri else "memory",
+        "degraded": _redis_degraded,
     }

@@ -260,6 +260,9 @@ export interface UploadWizardActions {
   // Completion actions (Story 9-6)
   /** Set processing complete state */
   setProcessingComplete: (complete: boolean) => void;
+
+  /** Cancel a specific file upload by name */
+  cancelFileUpload: (fileName: string) => void;
 }
 
 /** Combined store type */

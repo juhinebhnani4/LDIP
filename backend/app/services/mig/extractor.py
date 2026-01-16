@@ -179,11 +179,18 @@ class MIGEntityExtractor:
                 page_number=page_number,
             )
 
+        # Track truncation metadata
+        was_truncated = False
+        original_length = len(text)
+        processed_length = original_length
+
         # Truncate if too long
         if len(text) > MAX_TEXT_LENGTH:
+            was_truncated = True
+            processed_length = MAX_TEXT_LENGTH
             logger.warning(
                 "mig_extraction_text_truncated",
-                original_length=len(text),
+                original_length=original_length,
                 max_length=MAX_TEXT_LENGTH,
                 document_id=document_id,
             )
@@ -209,6 +216,12 @@ class MIGEntityExtractor:
                     page_number=page_number,
                 )
 
+                # Add truncation metadata to result
+                result.was_truncated = was_truncated
+                if was_truncated:
+                    result.original_length = original_length
+                    result.processed_length = processed_length
+
                 processing_time = int((time.time() - start_time) * 1000)
 
                 logger.info(
@@ -219,6 +232,7 @@ class MIGEntityExtractor:
                     relationship_count=len(result.relationships),
                     processing_time_ms=processing_time,
                     attempts=attempt + 1,
+                    was_truncated=was_truncated,
                 )
 
                 return result

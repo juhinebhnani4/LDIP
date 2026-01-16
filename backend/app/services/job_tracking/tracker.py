@@ -460,6 +460,138 @@ class JobTrackingService:
             return self._db_row_to_processing_job(response.data[0])
         return None
 
+    async def heartbeat(
+        self,
+        job_id: str,
+        progress_info: dict | None = None,
+    ) -> bool:
+        """Send heartbeat for a long-running job.
+
+        This method updates the heartbeat_at timestamp to indicate the job is
+        still actively running. Use this during long-running operations like
+        OCR or embedding generation to prevent false stale job detection.
+
+        Args:
+            job_id: Job UUID.
+            progress_info: Optional progress info to merge into metadata
+                          (e.g., {"pages_processed": 5, "total_pages": 10}).
+
+        Returns:
+            True if heartbeat was recorded, False if job not found.
+        """
+        now = datetime.now(UTC).isoformat()
+
+        def _update():
+            update_data = {
+                "heartbeat_at": now,
+                "updated_at": now,
+            }
+
+            # Optionally merge progress info into metadata
+            if progress_info:
+                # Get current metadata first
+                job_response = (
+                    self.client.table("processing_jobs")
+                    .select("metadata")
+                    .eq("id", job_id)
+                    .single()
+                    .execute()
+                )
+                if job_response.data:
+                    current_metadata = job_response.data.get("metadata") or {}
+                    update_data["metadata"] = {
+                        **current_metadata,
+                        "heartbeat_progress": progress_info,
+                        "last_heartbeat_info": {
+                            "timestamp": now,
+                            **progress_info,
+                        },
+                    }
+
+            return (
+                self.client.table("processing_jobs")
+                .update(update_data)
+                .eq("id", job_id)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_update)
+            if response.data:
+                logger.debug(
+                    "job_heartbeat",
+                    job_id=job_id,
+                    progress_info=progress_info,
+                )
+                return True
+        except Exception as e:
+            logger.warning("job_heartbeat_failed", job_id=job_id, error=str(e))
+
+        return False
+
+    def heartbeat_sync(
+        self,
+        job_id: str,
+        progress_info: dict | None = None,
+    ) -> bool:
+        """Synchronous heartbeat for use in Celery tasks.
+
+        Same as heartbeat() but synchronous for use in non-async contexts.
+
+        Args:
+            job_id: Job UUID.
+            progress_info: Optional progress info.
+
+        Returns:
+            True if heartbeat was recorded, False if failed.
+        """
+        now = datetime.now(UTC).isoformat()
+
+        try:
+            update_data = {
+                "heartbeat_at": now,
+                "updated_at": now,
+            }
+
+            if progress_info:
+                job_response = (
+                    self.client.table("processing_jobs")
+                    .select("metadata")
+                    .eq("id", job_id)
+                    .single()
+                    .execute()
+                )
+                if job_response.data:
+                    current_metadata = job_response.data.get("metadata") or {}
+                    update_data["metadata"] = {
+                        **current_metadata,
+                        "heartbeat_progress": progress_info,
+                        "last_heartbeat_info": {
+                            "timestamp": now,
+                            **progress_info,
+                        },
+                    }
+
+            response = (
+                self.client.table("processing_jobs")
+                .update(update_data)
+                .eq("id", job_id)
+                .execute()
+            )
+
+            if response.data:
+                logger.debug(
+                    "job_heartbeat_sync",
+                    job_id=job_id,
+                    progress_info=progress_info,
+                )
+                return True
+
+        except Exception as e:
+            logger.warning("job_heartbeat_sync_failed", job_id=job_id, error=str(e))
+
+        return False
+
     # =========================================================================
     # Stage History Operations
     # =========================================================================
@@ -1165,6 +1297,7 @@ class JobTrackingService:
             completed_at=self._parse_timestamp(row.get("completed_at")),
             created_at=self._parse_timestamp(row["created_at"]),
             updated_at=self._parse_timestamp(row["updated_at"]),
+            heartbeat_at=self._parse_timestamp(row.get("heartbeat_at")),
         )
 
     def _db_row_to_job_list_item(self, row: dict) -> JobListItem:

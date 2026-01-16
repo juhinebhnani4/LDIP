@@ -1,7 +1,18 @@
 /**
  * Error code to user-friendly message mapping.
  * Story 13.4: Graceful Degradation and Error States
+ * Story 13.6: User-Facing Error Messages with Actionable Guidance
  */
+
+/** Action types for error messages */
+export type ActionType = 'retry' | 'wait' | 'contact_support' | 'login' | 'refresh' | 'navigate'
+
+/** Error action configuration */
+export interface ErrorAction {
+  type: ActionType
+  label: string
+  url?: string // For navigate action
+}
 
 /** Error message with optional retry information */
 export interface ErrorMessage {
@@ -10,26 +21,36 @@ export interface ErrorMessage {
   isRetryable: boolean
 }
 
+/** Error message with action configuration (Story 13.6) */
+export interface ErrorMessageWithAction extends ErrorMessage {
+  action: ErrorAction
+  secondaryAction?: ErrorAction
+}
+
 /**
- * Map error codes to user-friendly messages.
+ * Map error codes to user-friendly messages with actionable guidance.
+ * Story 13.6: Enhanced with action configuration for each error type.
  * Designed to be clear and actionable for attorneys using the platform.
  */
-const ERROR_MESSAGES: Record<string, ErrorMessage> = {
+const ERROR_MESSAGES_WITH_ACTIONS: Record<string, ErrorMessageWithAction> = {
   // Authentication & Session
   RATE_LIMIT_EXCEEDED: {
     title: 'Too Many Requests',
     description: "You're making requests too quickly. Please wait a moment and try again.",
     isRetryable: true,
+    action: { type: 'wait', label: 'Please Wait' },
   },
   SESSION_EXPIRED: {
     title: 'Session Expired',
     description: 'Your session has expired. Please log in again to continue.',
     isRetryable: false,
+    action: { type: 'login', label: 'Log In Again' },
   },
   UNAUTHORIZED: {
     title: 'Not Authorized',
     description: 'You need to log in to access this feature.',
     isRetryable: false,
+    action: { type: 'login', label: 'Log In' },
   },
 
   // Resource Not Found
@@ -37,21 +58,25 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Matter Not Found',
     description: 'This matter could not be found. It may have been deleted or you may not have access.',
     isRetryable: false,
+    action: { type: 'navigate', label: 'Go to Dashboard', url: '/dashboard' },
   },
   DOCUMENT_NOT_FOUND: {
     title: 'Document Not Found',
     description: 'This document could not be found. It may have been removed.',
     isRetryable: false,
+    action: { type: 'navigate', label: 'Go to Documents', url: '/documents' },
   },
   ENTITY_NOT_FOUND: {
     title: 'Entity Not Found',
     description: 'This entity could not be found.',
     isRetryable: false,
+    action: { type: 'refresh', label: 'Refresh Page' },
   },
   EVENT_NOT_FOUND: {
     title: 'Event Not Found',
     description: 'This timeline event could not be found.',
     isRetryable: false,
+    action: { type: 'refresh', label: 'Refresh Page' },
   },
 
   // Permission Errors
@@ -59,11 +84,13 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Permission Denied',
     description: "You don't have permission to perform this action. Contact the matter owner if you need access.",
     isRetryable: false,
+    action: { type: 'contact_support', label: 'Request Access' },
   },
   FORBIDDEN: {
     title: 'Access Denied',
     description: "You don't have permission to access this resource.",
     isRetryable: false,
+    action: { type: 'contact_support', label: 'Contact Support' },
   },
 
   // Service Availability
@@ -71,21 +98,26 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Service Temporarily Unavailable',
     description: 'This feature is temporarily unavailable. Please try again in a few moments.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again in a Moment' },
   },
   CIRCUIT_OPEN: {
     title: 'Service Experiencing Issues',
     description: 'This service is experiencing issues. Some features may be limited until the service recovers.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
+    secondaryAction: { type: 'contact_support', label: 'Report Issue' },
   },
   TIMEOUT: {
     title: 'Request Timed Out',
     description: 'The request took too long to complete. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
   GATEWAY_TIMEOUT: {
     title: 'Server Timeout',
     description: 'The server took too long to respond. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
 
   // Processing Errors
@@ -93,21 +125,25 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Document Processing Failed',
     description: 'We could not process this document. You can retry or skip it.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Retry Document' },
   },
   LLM_FAILED: {
     title: 'AI Analysis Failed',
     description: 'AI analysis could not be completed. Results may be incomplete. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
   EXTRACTION_FAILED: {
     title: 'Extraction Failed',
     description: 'We could not extract information from this document. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
   EMBEDDING_FAILED: {
     title: 'Search Indexing Failed',
     description: 'Document search indexing failed. The document may not appear in search results.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Retry Indexing' },
   },
 
   // Validation Errors
@@ -115,16 +151,19 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Invalid Input',
     description: 'Please check your input and try again.',
     isRetryable: false,
+    action: { type: 'refresh', label: 'Clear Form' },
   },
   INVALID_FILE_TYPE: {
     title: 'Invalid File Type',
     description: 'This file type is not supported. Please upload a PDF, DOC, or image file.',
     isRetryable: false,
+    action: { type: 'navigate', label: 'Select Different File', url: '#upload' },
   },
   FILE_TOO_LARGE: {
     title: 'File Too Large',
     description: 'This file exceeds the maximum size limit. Please use a smaller file.',
     isRetryable: false,
+    action: { type: 'navigate', label: 'Select Different File', url: '#upload' },
   },
 
   // Network Errors
@@ -132,11 +171,13 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Connection Error',
     description: 'Unable to connect to the server. Please check your internet connection.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
   FETCH_FAILED: {
     title: 'Request Failed',
     description: 'The request could not be completed. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
   },
 
   // Generic
@@ -144,19 +185,43 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     title: 'Something Went Wrong',
     description: 'An unexpected error occurred. Please try again or contact support if the problem persists.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
+    secondaryAction: { type: 'contact_support', label: 'Contact Support' },
   },
   INTERNAL_SERVER_ERROR: {
     title: 'Server Error',
     description: 'A server error occurred. Our team has been notified. Please try again.',
     isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
+    secondaryAction: { type: 'contact_support', label: 'Report Issue' },
   },
 }
 
-/** Default error message for unknown errors */
-const DEFAULT_ERROR: ErrorMessage = {
+/**
+ * Legacy mapping for backward compatibility.
+ * @deprecated Use ERROR_MESSAGES_WITH_ACTIONS instead
+ */
+const ERROR_MESSAGES: Record<string, ErrorMessage> = Object.fromEntries(
+  Object.entries(ERROR_MESSAGES_WITH_ACTIONS).map(([key, value]) => [
+    key,
+    { title: value.title, description: value.description, isRetryable: value.isRetryable },
+  ])
+)
+
+/** Default error message for unknown errors (with action) */
+const DEFAULT_ERROR_WITH_ACTION: ErrorMessageWithAction = {
   title: 'Something Went Wrong',
   description: 'An unexpected error occurred. Please try again or contact support if the problem persists.',
   isRetryable: true,
+  action: { type: 'retry', label: 'Try Again' },
+  secondaryAction: { type: 'contact_support', label: 'Contact Support' },
+}
+
+/** Default error message for unknown errors (legacy) */
+const DEFAULT_ERROR: ErrorMessage = {
+  title: DEFAULT_ERROR_WITH_ACTION.title,
+  description: DEFAULT_ERROR_WITH_ACTION.description,
+  isRetryable: DEFAULT_ERROR_WITH_ACTION.isRetryable,
 }
 
 /**
@@ -165,6 +230,53 @@ const DEFAULT_ERROR: ErrorMessage = {
  */
 export function getErrorMessage(code: string): ErrorMessage {
   return ERROR_MESSAGES[code] ?? DEFAULT_ERROR
+}
+
+/**
+ * Get user-friendly error message with action for an error code.
+ * Story 13.6: Returns error message with actionable guidance.
+ */
+export function getErrorMessageWithAction(code: string): ErrorMessageWithAction {
+  return ERROR_MESSAGES_WITH_ACTIONS[code] ?? DEFAULT_ERROR_WITH_ACTION
+}
+
+/**
+ * Get error action configuration for an error code.
+ * Story 13.6: Returns the primary action for the error.
+ *
+ * @param code - The error code
+ * @param context - Optional context for dynamic action configuration
+ * @returns Error action configuration
+ */
+export function getErrorAction(
+  code: string,
+  context?: { retryAfter?: number; matterId?: string }
+): ErrorAction {
+  const errorWithAction = ERROR_MESSAGES_WITH_ACTIONS[code] ?? DEFAULT_ERROR_WITH_ACTION
+
+  // For rate limit errors, customize the label with countdown
+  if (code === 'RATE_LIMIT_EXCEEDED' && context?.retryAfter) {
+    return {
+      type: 'wait',
+      label: `Wait ${context.retryAfter}s`,
+    }
+  }
+
+  // For navigate actions with matter context, customize URL
+  if (errorWithAction.action.type === 'navigate' && context?.matterId) {
+    const url = errorWithAction.action.url?.replace('/documents', `/matters/${context.matterId}/documents`)
+    return { ...errorWithAction.action, url }
+  }
+
+  return errorWithAction.action
+}
+
+/**
+ * Get secondary error action if available.
+ * Story 13.6: Some errors have both primary and secondary actions.
+ */
+export function getSecondaryErrorAction(code: string): ErrorAction | undefined {
+  return ERROR_MESSAGES_WITH_ACTIONS[code]?.secondaryAction
 }
 
 /**

@@ -4,22 +4,20 @@ Tests name similarity algorithms, component extraction, and alias matching.
 Story: 2c-2 Alias Resolution
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from app.services.mig.entity_resolver import (
-    EntityResolver,
-    NameComponents,
-    AliasCandidate,
-    HIGH_SIMILARITY_THRESHOLD,
-    MEDIUM_SIMILARITY_THRESHOLD,
-    LOW_SIMILARITY_THRESHOLD,
-)
 from app.models.entity import EntityNode, EntityType
+from app.services.mig.entity_resolver import (
+    HIGH_SIMILARITY_THRESHOLD,
+    LOW_SIMILARITY_THRESHOLD,
+    MEDIUM_SIMILARITY_THRESHOLD,
+    EntityResolver,
+)
 
 # Fixed timestamp for test data
-TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=timezone.utc)
+TEST_TIMESTAMP = datetime(2026, 1, 14, 10, 0, 0, tzinfo=UTC)
 
 
 # =============================================================================

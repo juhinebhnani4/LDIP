@@ -19,7 +19,6 @@ from app.engines.orchestrator.planner import (
 )
 from app.models.orchestrator import EngineType
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

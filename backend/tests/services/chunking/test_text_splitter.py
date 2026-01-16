@@ -1,6 +1,5 @@
 """Unit tests for recursive text splitter."""
 
-import pytest
 
 from app.services.chunking.text_splitter import RecursiveTextSplitter
 from app.services.chunking.token_counter import count_tokens

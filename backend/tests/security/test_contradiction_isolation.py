@@ -6,7 +6,7 @@ CRITICAL: These tests ensure that the statement query service
 correctly enforces matter isolation at Layer 4 (API middleware).
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

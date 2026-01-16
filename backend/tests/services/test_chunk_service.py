@@ -1,12 +1,11 @@
 """Unit tests for chunk service."""
 
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-from app.models.chunk import Chunk, ChunkType, ChunkWithContent
+from app.models.chunk import Chunk, ChunkType
 from app.services.chunk_service import (
     ChunkNotFoundError,
     ChunkService,

@@ -1,7 +1,7 @@
 """Tests for JWT validation and security functions."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
@@ -11,7 +11,6 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.core.config import Settings
 from app.core.security import get_current_user, get_optional_user
 from app.models.auth import AuthenticatedUser
-
 
 # Test JWT secret for testing purposes only
 TEST_JWT_SECRET = "test-secret-key-for-testing-only-do-not-use-in-production"
@@ -34,8 +33,8 @@ def valid_token_payload() -> dict:
         "email": "test@example.com",
         "role": "authenticated",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         "session_id": "test-session-id",
     }
 
@@ -52,8 +51,8 @@ def expired_token() -> str:
     payload = {
         "sub": "test-user-id",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1),
-        "iat": datetime.now(timezone.utc) - timedelta(hours=2),
+        "exp": datetime.now(UTC) - timedelta(hours=1),
+        "iat": datetime.now(UTC) - timedelta(hours=2),
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
@@ -64,8 +63,8 @@ def invalid_audience_token() -> str:
     payload = {
         "sub": "test-user-id",
         "aud": "wrong-audience",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
@@ -76,8 +75,8 @@ def invalid_signature_token() -> str:
     payload = {
         "sub": "test-user-id",
         "aud": "authenticated",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, "wrong-secret", algorithm="HS256")
 
@@ -188,8 +187,8 @@ class TestGetCurrentUser:
         payload = {
             "sub": "test-user-id",
             "aud": "authenticated",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+            "iat": datetime.now(UTC),
         }
         token = jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)

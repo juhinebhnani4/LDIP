@@ -12,7 +12,7 @@ it cannot be modified or deleted (except via database admin).
 import asyncio
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -60,7 +60,7 @@ class QueryHistoryStore:
             be modified after creation.
         """
         record_id = str(uuid.uuid4())
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
 
         record = QueryAuditRecord(
             id=record_id,

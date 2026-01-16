@@ -10,18 +10,17 @@ Test Categories:
 - Language policing
 """
 
-import pytest
 import json
-from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.models.summary import (
     AttentionItemType,
-    KeyIssueVerificationStatus,
     MatterStats,
     PartyRole,
 )
-from app.services.summary_service import SummaryService, SummaryServiceError
+from app.services.summary_service import SummaryService
 
 
 @pytest.fixture
@@ -270,10 +269,9 @@ class TestSummaryCache:
     async def test_caches_summary_with_ttl(self, mock_redis_client) -> None:
         """Should cache summary with TTL."""
         from app.models.summary import (
+            CurrentStatus,
             MatterSummary,
             SubjectMatter,
-            CurrentStatus,
-            MatterStats,
         )
 
         service = SummaryService()

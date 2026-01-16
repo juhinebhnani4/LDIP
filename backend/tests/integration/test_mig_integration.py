@@ -4,7 +4,7 @@ Tests the complete entity extraction flow from document chunks to MIG storage,
 including matter isolation verification.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -14,7 +14,6 @@ from app.models.entity import (
     EntityType,
     ExtractedEntity,
     ExtractedEntityMention,
-    ExtractedRelationship,
     RelationshipType,
 )
 from app.services.mig.extractor import MIGEntityExtractor

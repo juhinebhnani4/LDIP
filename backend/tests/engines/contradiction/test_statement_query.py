@@ -9,18 +9,16 @@ Tests cover:
 - Empty results handling (AC #4)
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.engines.contradiction.statement_query import (
     StatementQueryEngine,
     ValueExtractor,
-    get_statement_query_engine,
     get_value_extractor,
 )
 from app.models.contradiction import StatementValueType
-
 
 # =============================================================================
 # Value Extractor Tests (AC #3)

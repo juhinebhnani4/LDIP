@@ -811,6 +811,159 @@ class OCRChunkService:
         return list(doc_chunks.values())
 
     # =========================================================================
+    # Idempotency Operations (Story 17.4)
+    # =========================================================================
+
+    async def check_chunk_already_processed(
+        self,
+        chunk_id: str,
+        expected_checksum: str | None = None,
+    ) -> tuple[bool, dict | None]:
+        """Check if a chunk was already successfully processed.
+
+        Story 17.4: Idempotent Chunk Processing
+
+        This enables idempotent chunk processing by checking if:
+        1. Chunk is already in 'completed' status
+        2. Result data exists in storage
+        3. Optionally, checksum matches expected value
+
+        Args:
+            chunk_id: Chunk UUID.
+            expected_checksum: Optional checksum to verify result integrity.
+
+        Returns:
+            Tuple of (already_processed, cached_result_info).
+            If already_processed is True, cached_result_info contains:
+            - result_storage_path: Path to cached OCR results
+            - result_checksum: SHA256 of cached results
+            - processing_completed_at: When processing finished
+        """
+        chunk = await self.get_chunk(chunk_id)
+
+        if not chunk:
+            logger.warning("idempotency_check_chunk_not_found", chunk_id=chunk_id)
+            return False, None
+
+        if chunk.status != ChunkStatus.COMPLETED:
+            logger.debug(
+                "idempotency_check_not_completed",
+                chunk_id=chunk_id,
+                status=chunk.status.value,
+            )
+            return False, None
+
+        if not chunk.result_storage_path or not chunk.result_checksum:
+            logger.warning(
+                "idempotency_check_missing_result",
+                chunk_id=chunk_id,
+                has_path=bool(chunk.result_storage_path),
+                has_checksum=bool(chunk.result_checksum),
+            )
+            return False, None
+
+        # Optionally verify checksum matches
+        if expected_checksum and chunk.result_checksum != expected_checksum:
+            logger.warning(
+                "idempotency_check_checksum_mismatch",
+                chunk_id=chunk_id,
+                expected=expected_checksum[:16] + "...",
+                actual=chunk.result_checksum[:16] + "...",
+            )
+            return False, None
+
+        logger.info(
+            "idempotency_check_already_processed",
+            chunk_id=chunk_id,
+            result_path=chunk.result_storage_path,
+        )
+
+        return True, {
+            "result_storage_path": chunk.result_storage_path,
+            "result_checksum": chunk.result_checksum,
+            "processing_completed_at": chunk.processing_completed_at,
+        }
+
+    async def get_or_create_chunk(
+        self,
+        document_id: str,
+        matter_id: str,
+        chunk_index: int,
+        page_start: int,
+        page_end: int,
+    ) -> tuple[DocumentOCRChunk, bool]:
+        """Get existing chunk or create new one (idempotent create).
+
+        Story 17.4: Idempotent Chunk Processing
+
+        This enables safe retries of chunk creation. If a chunk already
+        exists for the document/chunk_index combination, returns the
+        existing chunk instead of failing with DuplicateChunkError.
+
+        Args:
+            document_id: Document UUID.
+            matter_id: Matter UUID for isolation.
+            chunk_index: Zero-indexed chunk position.
+            page_start: First page of chunk (1-indexed).
+            page_end: Last page of chunk (1-indexed).
+
+        Returns:
+            Tuple of (chunk, created).
+            created is True if chunk was newly created, False if existing.
+
+        Raises:
+            InvalidPageRangeError: If page_start > page_end.
+            OCRChunkServiceError: If operation fails.
+        """
+        # First try to get existing chunk
+        def _query_existing():
+            return (
+                self.client.table("document_ocr_chunks")
+                .select("*")
+                .eq("document_id", document_id)
+                .eq("chunk_index", chunk_index)
+                .limit(1)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query_existing)
+
+        if response.data:
+            existing_chunk = self._db_row_to_chunk(response.data[0])
+            logger.debug(
+                "chunk_already_exists",
+                document_id=document_id,
+                chunk_index=chunk_index,
+                chunk_id=existing_chunk.id,
+            )
+            return existing_chunk, False
+
+        # Chunk doesn't exist, create it
+        try:
+            new_chunk = await self.create_chunk(
+                document_id=document_id,
+                matter_id=matter_id,
+                chunk_index=chunk_index,
+                page_start=page_start,
+                page_end=page_end,
+            )
+            return new_chunk, True
+        except DuplicateChunkError:
+            # Race condition - another worker created it
+            # Query again to get the existing chunk
+            response = await asyncio.to_thread(_query_existing)
+            if response.data:
+                existing_chunk = self._db_row_to_chunk(response.data[0])
+                logger.debug(
+                    "chunk_race_condition_resolved",
+                    document_id=document_id,
+                    chunk_index=chunk_index,
+                    chunk_id=existing_chunk.id,
+                )
+                return existing_chunk, False
+            raise
+
+    # =========================================================================
     # Retry Operations (Story 16.5)
     # =========================================================================
 

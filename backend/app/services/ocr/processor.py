@@ -2,6 +2,11 @@
 
 Provides document OCR processing using Google Document AI with support
 for Indian languages (Hindi, Gujarati, English).
+
+Story 17.2: Circuit Breaker for Document AI
+- Wraps Document AI API calls with circuit breaker protection
+- Fast-fails when Document AI is unhealthy
+- Prevents cascade failures in chunked processing
 """
 
 import time
@@ -11,6 +16,11 @@ import structlog
 from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import documentai_v1 as documentai
 
+from app.core.circuit_breaker import (
+    CircuitOpenError,
+    CircuitService,
+    with_sync_circuit_breaker,
+)
 from app.core.config import get_settings
 from app.models.ocr import OCRPage, OCRResult
 from app.services.ocr.bbox_extractor import extract_bounding_boxes
@@ -45,6 +55,21 @@ class OCRProcessingError(OCRServiceError):
 
     def __init__(self, message: str, is_retryable: bool = True):
         super().__init__(message, code="OCR_PROCESSING_FAILED", is_retryable=is_retryable)
+
+
+class OCRCircuitOpenError(OCRServiceError):
+    """Raised when the Document AI circuit breaker is open.
+
+    Story 17.2: Circuit Breaker for Document AI
+    """
+
+    def __init__(self, cooldown_remaining: float):
+        super().__init__(
+            f"Document AI circuit is open. Retry after {cooldown_remaining:.1f}s",
+            code="OCR_CIRCUIT_OPEN",
+            is_retryable=True,
+        )
+        self.cooldown_remaining = cooldown_remaining
 
 
 class OCRProcessor:
@@ -130,6 +155,11 @@ class OCRProcessor:
         (which run in separate worker processes). Do NOT call this directly
         from async FastAPI endpoints - use Celery task queuing instead.
 
+        Story 17.2: Wrapped with circuit breaker for resilience.
+        - Fast-fails when Document AI is unhealthy (circuit open)
+        - Retries with exponential backoff on transient failures
+        - Prevents cascade failures in parallel chunk processing
+
         Args:
             pdf_content: PDF file content as bytes.
             document_id: Optional document ID for logging and result.
@@ -140,6 +170,7 @@ class OCRProcessor:
 
         Raises:
             OCRServiceError: If processing fails.
+            OCRCircuitOpenError: If Document AI circuit breaker is open.
         """
         start_time = time.time()
 
@@ -169,9 +200,8 @@ class OCRProcessor:
                 ),
             )
 
-            # Process document
-            response = self.client.process_document(request=request)
-            document = response.document
+            # Process document with circuit breaker protection (Story 17.2)
+            document = self._call_document_ai(request)
 
             # Extract results
             pages = self._extract_pages(document)
@@ -206,6 +236,14 @@ class OCRProcessor:
 
         except OCRConfigurationError:
             raise
+        except CircuitOpenError as e:
+            # Convert to OCR-specific exception
+            logger.warning(
+                "ocr_circuit_open",
+                document_id=document_id,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            raise OCRCircuitOpenError(e.cooldown_remaining) from e
         except GoogleAPICallError as e:
             logger.error(
                 "documentai_api_error",
@@ -228,6 +266,34 @@ class OCRProcessor:
                 f"OCR processing failed: {e}",
                 is_retryable=False,
             ) from e
+
+    @with_sync_circuit_breaker(CircuitService.DOCUMENTAI_OCR)
+    def _call_document_ai(
+        self,
+        request: documentai.ProcessRequest,
+    ) -> documentai.Document:
+        """Call Document AI with circuit breaker protection.
+
+        Story 17.2: Circuit Breaker for Document AI
+
+        This internal method is wrapped with the sync circuit breaker
+        to protect against Document AI failures:
+        - Opens circuit after 3 consecutive failures
+        - 120 second recovery timeout before attempting again
+        - 2 retry attempts with exponential backoff
+
+        Args:
+            request: Document AI process request.
+
+        Returns:
+            Processed document from Document AI.
+
+        Raises:
+            GoogleAPICallError: If API call fails.
+            CircuitOpenError: If circuit is open.
+        """
+        response = self.client.process_document(request=request)
+        return response.document
 
     def _extract_pages(
         self,

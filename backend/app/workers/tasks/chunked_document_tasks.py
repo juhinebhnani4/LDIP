@@ -2,6 +2,7 @@
 
 Story 16.4: Implement Parallel Chunk Processing with Celery
 Story 16.5: Implement Individual Chunk Retry
+Story 17.3: Per-Chunk Timeout and Rate Limiting
 
 Processes large PDFs (>30 pages) by splitting into chunks and
 processing each chunk in parallel using Celery group().
@@ -10,10 +11,15 @@ processing each chunk in parallel using Celery group().
 import asyncio
 import hashlib
 import json
+import signal
+import time
+from io import BytesIO
 
+import pypdf
 import structlog
 from celery import group
 
+from app.core.circuit_breaker import CircuitOpenError
 from app.models.document import DocumentStatus
 from app.models.ocr_chunk import ChunkStatus
 from app.services.bounding_box_service import get_bounding_box_service
@@ -25,6 +31,7 @@ from app.services.document_service import (
 )
 from app.services.job_tracking import get_chunk_progress_tracker
 from app.services.ocr import OCRProcessor, get_ocr_processor
+from app.services.ocr.processor import OCRCircuitOpenError
 from app.services.ocr_chunk_service import (
     OCRChunkService,
     get_ocr_chunk_service,
@@ -50,6 +57,153 @@ logger = structlog.get_logger(__name__)
 # Configuration
 CHUNK_GROUP_TIMEOUT = 600  # 10 minute timeout for entire group
 CHUNK_LOCK_TIMEOUT = 120  # 2 minute lock expiry
+
+# Story 17.3: Per-Chunk Timeout and Rate Limiting
+CHUNK_OCR_TIMEOUT = 120  # 2 minutes per chunk OCR
+RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limit window
+MAX_CHUNKS_PER_WINDOW = 30  # Max chunks per minute (Document AI limit)
+
+
+# =============================================================================
+# Rate Limiter for Document AI (Story 17.3)
+# =============================================================================
+
+
+class ChunkRateLimiter:
+    """Token bucket rate limiter for chunk processing.
+
+    Story 17.3: Prevents exceeding Document AI API quotas.
+    Uses Redis for distributed rate limiting across workers.
+    """
+
+    def __init__(
+        self,
+        max_tokens: int = MAX_CHUNKS_PER_WINDOW,
+        window_seconds: int = RATE_LIMIT_WINDOW_SECONDS,
+    ):
+        """Initialize rate limiter.
+
+        Args:
+            max_tokens: Maximum requests per window.
+            window_seconds: Time window in seconds.
+        """
+        self.max_tokens = max_tokens
+        self.window_seconds = window_seconds
+        self._rate_limit_key = "docai_chunk_rate_limit"
+
+    def acquire(self) -> tuple[bool, float]:
+        """Try to acquire a rate limit token.
+
+        Returns:
+            Tuple of (acquired, wait_time).
+            If not acquired, wait_time is seconds to wait.
+        """
+        try:
+            from app.services.distributed_lock import get_sync_redis_client
+
+            redis_client = get_sync_redis_client()
+            current_time = time.time()
+            window_start = current_time - self.window_seconds
+
+            # Use sorted set for sliding window
+            key = self._rate_limit_key
+
+            # Remove old entries outside window
+            redis_client.zremrangebyscore(key, "-inf", window_start)
+
+            # Count current entries in window
+            current_count = redis_client.zcard(key)
+
+            if current_count < self.max_tokens:
+                # Add new entry with current timestamp as score
+                redis_client.zadd(key, {f"{current_time}:{id(self)}": current_time})
+                redis_client.expire(key, self.window_seconds * 2)  # Auto cleanup
+                return True, 0.0
+            else:
+                # Calculate wait time until oldest entry expires
+                oldest = redis_client.zrange(key, 0, 0, withscores=True)
+                if oldest:
+                    oldest_time = oldest[0][1]
+                    wait_time = (oldest_time + self.window_seconds) - current_time
+                    return False, max(0.1, wait_time)
+                return False, 1.0
+
+        except Exception as e:
+            # Fail open on Redis errors
+            logger.warning(
+                "rate_limiter_redis_error",
+                error=str(e),
+            )
+            return True, 0.0
+
+    def wait_for_token(self, max_wait: float = 60.0) -> bool:
+        """Wait for a rate limit token with backoff.
+
+        Args:
+            max_wait: Maximum seconds to wait.
+
+        Returns:
+            True if token acquired, False if timeout.
+        """
+        total_waited = 0.0
+
+        while total_waited < max_wait:
+            acquired, wait_time = self.acquire()
+
+            if acquired:
+                return True
+
+            if total_waited + wait_time > max_wait:
+                return False
+
+            logger.info(
+                "rate_limiter_waiting",
+                wait_seconds=round(wait_time, 2),
+                total_waited=round(total_waited, 2),
+            )
+            time.sleep(wait_time)
+            total_waited += wait_time
+
+        return False
+
+
+# Global rate limiter instance
+_chunk_rate_limiter: ChunkRateLimiter | None = None
+
+
+def get_chunk_rate_limiter() -> ChunkRateLimiter:
+    """Get singleton rate limiter instance."""
+    global _chunk_rate_limiter
+    if _chunk_rate_limiter is None:
+        _chunk_rate_limiter = ChunkRateLimiter()
+    return _chunk_rate_limiter
+
+
+# =============================================================================
+# Timeout Handler (Story 17.3)
+# =============================================================================
+
+
+class ChunkTimeoutError(Exception):
+    """Raised when chunk processing times out."""
+
+    def __init__(self, chunk_index: int, timeout_seconds: int):
+        self.chunk_index = chunk_index
+        self.timeout_seconds = timeout_seconds
+        super().__init__(
+            f"Chunk {chunk_index} processing timed out after {timeout_seconds}s"
+        )
+
+
+class ChunkRateLimitError(Exception):
+    """Raised when rate limit prevents chunk processing."""
+
+    def __init__(self, chunk_index: int, wait_time: float):
+        self.chunk_index = chunk_index
+        self.wait_time = wait_time
+        super().__init__(
+            f"Chunk {chunk_index} rate limited, would need to wait {wait_time:.1f}s"
+        )
 
 
 class ChunkProcessingError(Exception):
@@ -257,7 +411,7 @@ def process_document_chunked(
 
 
 # =============================================================================
-# Single Chunk Processing Task
+# Single Chunk Processing Task (Story 17.3: with timeout and rate limiting)
 # =============================================================================
 
 
@@ -266,6 +420,8 @@ def process_document_chunked(
     bind=True,
     max_retries=2,
     default_retry_delay=30,
+    soft_time_limit=CHUNK_OCR_TIMEOUT,  # Story 17.3: Soft timeout
+    time_limit=CHUNK_OCR_TIMEOUT + 30,  # Hard timeout with buffer
 )
 def process_single_chunk(
     self,
@@ -281,8 +437,14 @@ def process_single_chunk(
     doc_service: DocumentService | None = None,
     ocr_processor: OCRProcessor | None = None,
     pdf_chunker: PDFChunker | None = None,
+    rate_limiter: ChunkRateLimiter | None = None,
 ) -> dict:
     """Process a single PDF chunk through Document AI.
+
+    Story 17.3: Enhanced with per-chunk timeout and rate limiting.
+    - Soft timeout of 2 minutes per chunk (CHUNK_OCR_TIMEOUT)
+    - Rate limiting to prevent exceeding Document AI quotas
+    - Circuit breaker integration (Story 17.2) via OCR processor
 
     Acquires a distributed lock, extracts the page range,
     sends to Document AI, and stores the result.
@@ -300,10 +462,13 @@ def process_single_chunk(
         doc_service: Optional document service (for testing).
         ocr_processor: Optional OCR processor (for testing).
         pdf_chunker: Optional PDF chunker (for testing).
+        rate_limiter: Optional rate limiter (for testing).
 
     Returns:
         Chunk result dict with status and OCR data.
     """
+    start_time = time.time()
+
     # Initialize services
     storage = storage_service or get_storage_service()
     chunks_svc = chunk_service or get_ocr_chunk_service()
@@ -311,6 +476,7 @@ def process_single_chunk(
     ocr = ocr_processor or get_ocr_processor()
     chunker = pdf_chunker or get_pdf_chunker()
     progress_tracker = get_chunk_progress_tracker()
+    limiter = rate_limiter or get_chunk_rate_limiter()
 
     logger.info(
         "process_single_chunk_started",
@@ -320,6 +486,43 @@ def process_single_chunk(
         page_start=page_start,
         page_end=page_end,
     )
+
+    # Story 17.4: Idempotency check - skip if already processed
+    already_processed, cached_result = _run_async(
+        chunks_svc.check_chunk_already_processed(chunk_id)
+    )
+    if already_processed and cached_result:
+        logger.info(
+            "chunk_already_processed_skipping",
+            document_id=document_id,
+            chunk_index=chunk_index,
+            chunk_id=chunk_id,
+            result_path=cached_result.get("result_storage_path"),
+        )
+        # Return cached result info so merge can proceed
+        return {
+            "status": "success",
+            "chunk_index": chunk_index,
+            "page_start": page_start,
+            "page_end": page_end,
+            "result_path": cached_result.get("result_storage_path"),
+            "checksum": cached_result.get("result_checksum"),
+            "from_cache": True,
+            "processing_time_seconds": 0,
+        }
+
+    # Story 17.3: Rate limiting before processing
+    if not limiter.wait_for_token(max_wait=30.0):
+        logger.warning(
+            "chunk_rate_limited",
+            document_id=document_id,
+            chunk_index=chunk_index,
+        )
+        # Retry with backoff instead of failing immediately
+        raise self.retry(
+            exc=ChunkRateLimitError(chunk_index, 30.0),
+            countdown=30,  # Wait 30 seconds before retry
+        )
 
     # Acquire distributed lock to prevent duplicate processing
     with acquire_chunk_lock(document_id, chunk_index) as locked:
@@ -361,15 +564,15 @@ def process_single_chunk(
 
             if chunk_bytes is None:
                 # If exact match not found, extract directly
-                reader = __import__("pypdf").PdfReader(__import__("io").BytesIO(pdf_bytes))
-                writer = __import__("pypdf").PdfWriter()
+                reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+                writer = pypdf.PdfWriter()
                 for page_idx in range(page_start - 1, page_end):  # Convert to 0-based
                     writer.add_page(reader.pages[page_idx])
-                buffer = __import__("io").BytesIO()
+                buffer = BytesIO()
                 writer.write(buffer)
                 chunk_bytes = buffer.getvalue()
 
-            # Process through Document AI
+            # Process through Document AI (with circuit breaker - Story 17.2)
             ocr_result = ocr.process_document(
                 pdf_content=chunk_bytes,
                 document_id=f"{document_id}_chunk_{chunk_index}",
@@ -422,12 +625,15 @@ def process_single_chunk(
                     )
                 )
 
+            processing_time = time.time() - start_time
+
             logger.info(
                 "chunk_processed_successfully",
                 document_id=document_id,
                 chunk_index=chunk_index,
                 bbox_count=len(ocr_result.bounding_boxes),
                 confidence=ocr_result.overall_confidence,
+                processing_time_seconds=round(processing_time, 2),
             )
 
             return {
@@ -442,7 +648,21 @@ def process_single_chunk(
                 "page_count": ocr_result.page_count,
                 "full_text": ocr_result.full_text,
                 "bounding_boxes": result_data["bounding_boxes"],
+                "processing_time_seconds": round(processing_time, 2),
             }
+
+        except OCRCircuitOpenError as e:
+            # Circuit breaker is open - retry later (Story 17.2 + 17.3)
+            logger.warning(
+                "chunk_circuit_open_retry",
+                document_id=document_id,
+                chunk_index=chunk_index,
+                cooldown_remaining=e.cooldown_remaining,
+            )
+            raise self.retry(
+                exc=e,
+                countdown=int(e.cooldown_remaining) + 5,  # Wait for circuit to close
+            )
 
         except Exception as e:
             # Update chunk status to failed
@@ -572,6 +792,14 @@ def _merge_and_store_results(
         # Clean up chunk records (Story 15.4)
         _run_async(cleanup_service.cleanup_document_chunks(document_id))
 
+        # Story 17.7: Trigger downstream RAG re-processing
+        _trigger_rag_reprocessing(
+            document_id=document_id,
+            matter_id=matter_id,
+            full_text=merged.full_text,
+            page_count=merged.page_count,
+        )
+
         logger.info(
             "document_chunked_processing_complete",
             document_id=document_id,
@@ -589,6 +817,7 @@ def _merge_and_store_results(
             "bbox_count": saved_count,
             "overall_confidence": merged.overall_confidence,
             "job_id": job_id,
+            "rag_triggered": True,  # Story 17.7
         }
 
     except MergeValidationError as e:
@@ -617,6 +846,77 @@ def _merge_and_store_results(
             "error": e.message,
             "code": e.code,
         }
+
+
+# =============================================================================
+# RAG Re-Processing Trigger (Story 17.7)
+# =============================================================================
+
+
+def _trigger_rag_reprocessing(
+    document_id: str,
+    matter_id: str,
+    full_text: str,
+    page_count: int,
+) -> None:
+    """Trigger downstream RAG pipeline re-processing after OCR completes.
+
+    Story 17.7: Ensures the RAG pipeline (chunking, embedding, vector store)
+    is updated with the newly OCR'd document text.
+
+    This dispatches a Celery task to:
+    1. Re-chunk the document text for embedding
+    2. Generate embeddings for each chunk
+    3. Upsert to Pinecone vector store
+
+    If the RAG task queue is unavailable, logs warning but doesn't fail
+    the OCR completion (graceful degradation).
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID for namespace isolation.
+        full_text: Extracted OCR text.
+        page_count: Total pages in document.
+    """
+    try:
+        # Import here to avoid circular dependency
+        from app.workers.tasks.rag_tasks import process_document_for_rag
+
+        # Calculate text metrics for logging
+        text_length = len(full_text) if full_text else 0
+        word_count = len(full_text.split()) if full_text else 0
+
+        logger.info(
+            "rag_reprocessing_triggered",
+            document_id=document_id,
+            matter_id=matter_id,
+            page_count=page_count,
+            text_length=text_length,
+            word_count=word_count,
+        )
+
+        # Dispatch RAG processing task
+        process_document_for_rag.delay(
+            document_id=document_id,
+            matter_id=matter_id,
+            extracted_text=full_text,
+            reprocess=True,  # Indicates this is a re-processing from chunked OCR
+        )
+
+    except ImportError:
+        logger.warning(
+            "rag_task_not_available",
+            document_id=document_id,
+            message="RAG tasks not configured, skipping re-processing",
+        )
+    except Exception as e:
+        # Don't fail OCR completion if RAG trigger fails
+        logger.warning(
+            "rag_trigger_failed",
+            document_id=document_id,
+            error=str(e),
+            message="OCR completed but RAG re-processing could not be triggered",
+        )
 
 
 # =============================================================================

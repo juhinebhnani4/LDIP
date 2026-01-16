@@ -695,3 +695,123 @@ def is_circuit_open(service: CircuitService) -> bool:
     registry = get_circuit_registry()
     breaker = registry.get(service)
     return breaker.is_open
+
+
+# =============================================================================
+# Synchronous Circuit Breaker Decorator (Story 17.2)
+# =============================================================================
+
+
+def with_sync_circuit_breaker(
+    service: CircuitService,
+    *,
+    max_retries_override: int | None = None,
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Decorator for SYNCHRONOUS functions with circuit breaker protection.
+
+    Story 17.2: Circuit Breaker for Document AI Chunk Processing
+
+    This is the synchronous version of with_circuit_breaker for use in
+    Celery tasks that call blocking APIs (like Document AI).
+
+    Combines retry logic with circuit breaker pattern:
+    1. Check if circuit is open (fail fast if so)
+    2. Execute function with retries
+    3. Record success/failure to circuit breaker
+
+    Args:
+        service: The external service this function calls.
+        max_retries_override: Override the default max retries (optional).
+
+    Returns:
+        Decorated sync function with circuit breaker protection.
+
+    Example:
+        @with_sync_circuit_breaker(CircuitService.DOCUMENTAI_OCR)
+        def process_document(content: bytes) -> OCRResult:
+            return client.process_document(...)
+    """
+
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            import time
+
+            registry = get_circuit_registry()
+            breaker = registry.get(service)
+            config = breaker.config
+
+            # Check if circuit is open
+            if breaker.is_open:
+                logger.warning(
+                    "sync_circuit_breaker_rejected",
+                    circuit_name=service.value,
+                    cooldown_remaining=breaker.cooldown_remaining,
+                    correlation_id=get_correlation_id(),
+                )
+                raise CircuitOpenError(
+                    circuit_name=service.value,
+                    cooldown_remaining=breaker.cooldown_remaining,
+                )
+
+            max_retries = max_retries_override or config.max_retries
+            last_exception: Exception | None = None
+
+            # Attempt with manual retries (exponential backoff)
+            for attempt in range(max_retries):
+                try:
+                    result = func(*args, **kwargs)
+                    breaker.record_success()
+                    return result
+
+                except Exception as e:
+                    last_exception = e
+
+                    if is_retryable_exception(e):
+                        breaker.record_failure()
+
+                        if attempt < max_retries - 1:
+                            # Calculate backoff with jitter
+                            wait_time = min(
+                                config.initial_wait * (2 ** attempt) + (config.jitter * (0.5 + 0.5 * time.time() % 1)),
+                                config.max_wait,
+                            )
+                            logger.warning(
+                                "sync_circuit_breaker_retry",
+                                circuit_name=service.value,
+                                attempt=attempt + 1,
+                                max_retries=max_retries,
+                                wait_seconds=round(wait_time, 2),
+                                error=str(e),
+                                correlation_id=get_correlation_id(),
+                            )
+                            time.sleep(wait_time)
+                        else:
+                            # All retries exhausted
+                            logger.error(
+                                "sync_circuit_breaker_retries_exhausted",
+                                circuit_name=service.value,
+                                max_retries=max_retries,
+                                error=str(e),
+                                correlation_id=get_correlation_id(),
+                            )
+                            raise
+                    else:
+                        # Non-retryable exception
+                        logger.error(
+                            "sync_circuit_breaker_non_retryable",
+                            circuit_name=service.value,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                            correlation_id=get_correlation_id(),
+                        )
+                        raise
+
+            # This should never be reached
+            if last_exception:
+                raise last_exception
+            raise RuntimeError("Unexpected state in sync circuit breaker")
+
+        return wrapper
+
+    return decorator

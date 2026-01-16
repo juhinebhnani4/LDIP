@@ -1,6 +1,7 @@
 """OCR Result Merger Service for combining chunked OCR results.
 
 Story 16.3: Implement OCR Result Merger Service
+Story 17.6: Page Offset Validation
 
 Transforms chunk-relative page numbers to absolute page numbers
 and validates data integrity post-merge.
@@ -119,6 +120,9 @@ class OCRResultMerger:
         # Sort by chunk_index to ensure correct order
         sorted_results = sorted(chunk_results, key=lambda x: x.chunk_index)
 
+        # Story 17.6: Validate page ranges are contiguous and correct
+        self._validate_page_ranges(sorted_results)
+
         # Validate checksums before merge
         for chunk in sorted_results:
             if chunk.checksum:
@@ -219,6 +223,96 @@ class OCRResultMerger:
             if chunk.full_text:
                 texts.append(chunk.full_text)
         return "\n\n".join(texts)
+
+    def _validate_page_ranges(self, chunk_results: list[ChunkOCRResult]) -> None:
+        """Validate chunk page ranges are contiguous and correct.
+
+        Story 17.6: Page Offset Validation
+
+        Ensures:
+        1. Chunk indices are sequential (0, 1, 2, ...)
+        2. Page ranges are contiguous (chunk N ends where chunk N+1 starts)
+        3. Page numbers are positive
+        4. page_start <= page_end within each chunk
+
+        Args:
+            chunk_results: List of chunk results sorted by chunk_index.
+
+        Raises:
+            MergeValidationError: If page ranges are invalid.
+        """
+        if not chunk_results:
+            return
+
+        errors = []
+
+        # Check first chunk starts at page 1
+        first_chunk = chunk_results[0]
+        if first_chunk.page_start != 1:
+            errors.append(
+                f"First chunk starts at page {first_chunk.page_start}, expected 1"
+            )
+
+        for i, chunk in enumerate(chunk_results):
+            # Validate chunk_index is sequential
+            if chunk.chunk_index != i:
+                errors.append(
+                    f"Chunk at position {i} has chunk_index {chunk.chunk_index}, expected {i}"
+                )
+
+            # Validate page_start <= page_end
+            if chunk.page_start > chunk.page_end:
+                errors.append(
+                    f"Chunk {chunk.chunk_index}: page_start ({chunk.page_start}) > "
+                    f"page_end ({chunk.page_end})"
+                )
+
+            # Validate page numbers are positive
+            if chunk.page_start < 1 or chunk.page_end < 1:
+                errors.append(
+                    f"Chunk {chunk.chunk_index}: invalid page numbers "
+                    f"({chunk.page_start}-{chunk.page_end})"
+                )
+
+            # Validate page_count matches page range
+            expected_page_count = chunk.page_end - chunk.page_start + 1
+            if chunk.page_count != expected_page_count:
+                logger.warning(
+                    "page_count_mismatch",
+                    chunk_index=chunk.chunk_index,
+                    expected=expected_page_count,
+                    actual=chunk.page_count,
+                )
+
+            # Validate contiguity with previous chunk
+            if i > 0:
+                prev_chunk = chunk_results[i - 1]
+                expected_start = prev_chunk.page_end + 1
+                if chunk.page_start != expected_start:
+                    errors.append(
+                        f"Chunk {chunk.chunk_index} starts at page {chunk.page_start}, "
+                        f"expected {expected_start} (after chunk {prev_chunk.chunk_index} "
+                        f"ending at {prev_chunk.page_end})"
+                    )
+
+        if errors:
+            error_msg = "; ".join(errors)
+            logger.error(
+                "page_range_validation_failed",
+                errors=errors,
+                chunk_count=len(chunk_results),
+            )
+            raise MergeValidationError(
+                f"Page range validation failed: {error_msg}",
+                code="PAGE_RANGE_INVALID",
+            )
+
+        logger.debug(
+            "page_ranges_validated",
+            chunk_count=len(chunk_results),
+            first_page=chunk_results[0].page_start,
+            last_page=chunk_results[-1].page_end,
+        )
 
     def _validate_checksum(self, chunk: ChunkOCRResult) -> None:
         """Validate chunk result checksum.

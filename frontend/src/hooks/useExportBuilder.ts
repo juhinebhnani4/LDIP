@@ -4,6 +4,7 @@
  * Manages state for the Export Builder modal.
  *
  * @see Story 12.1 - Export Builder Modal with Section Selection
+ * @see Story 12.2 - Export Inline Editing and Preview
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -13,6 +14,8 @@ import {
   type ExportFormat,
   type ExportSection,
   type ExportSectionId,
+  type ExportSectionEdit,
+  type ExportPreviewMode,
 } from '@/types/export';
 
 export interface UseExportBuilderOptions {
@@ -49,6 +52,32 @@ export interface UseExportBuilderReturn {
   selectedSectionIds: ExportSectionId[];
   /** Reset to default state */
   reset: () => void;
+
+  // Story 12.2 - Edit state management
+  /** Current preview mode (sections list vs preview) */
+  previewMode: ExportPreviewMode;
+  /** Set preview mode */
+  setPreviewMode: (mode: ExportPreviewMode) => void;
+  /** Map of section edits keyed by section ID */
+  sectionEdits: Map<ExportSectionId, ExportSectionEdit>;
+  /** Update text content edit for a section */
+  updateSectionEdit: (sectionId: ExportSectionId, textContent: string) => void;
+  /** Remove an item from a section (for list sections) */
+  removeSectionItem: (sectionId: ExportSectionId, itemId: string) => void;
+  /** Restore a removed item to a section */
+  restoreSectionItem: (sectionId: ExportSectionId, itemId: string) => void;
+  /** Add a note to a section */
+  addSectionNote: (sectionId: ExportSectionId, note: string) => void;
+  /** Remove a note from a section */
+  removeSectionNote: (sectionId: ExportSectionId, noteIndex: number) => void;
+  /** Reset all edits */
+  resetSectionEdits: () => void;
+  /** Check if there are any unsaved edits */
+  hasEdits: boolean;
+  /** Section currently being edited inline */
+  editingSection: ExportSectionId | null;
+  /** Set the section currently being edited */
+  setEditingSection: (sectionId: ExportSectionId | null) => void;
 }
 
 /**
@@ -60,6 +89,18 @@ function createDefaultSections(): ExportSection[] {
     count: undefined,
     isLoadingCount: false,
   }));
+}
+
+/**
+ * Create a default edit object for a section
+ */
+function createDefaultEdit(sectionId: ExportSectionId): ExportSectionEdit {
+  return {
+    sectionId,
+    textContent: undefined,
+    removedItemIds: [],
+    addedNotes: [],
+  };
 }
 
 /**
@@ -75,6 +116,12 @@ function createDefaultSections(): ExportSection[] {
  *   toggleSection,
  *   reorderSections,
  *   hasSelection,
+ *   // Story 12.2 additions
+ *   previewMode,
+ *   setPreviewMode,
+ *   sectionEdits,
+ *   updateSectionEdit,
+ *   hasEdits,
  * } = useExportBuilder({ initialFormat: 'pdf' });
  * ```
  */
@@ -87,6 +134,13 @@ export function useExportBuilder(
     () => initialSections ?? createDefaultSections()
   );
   const [format] = useState<ExportFormat>(initialFormat);
+
+  // Story 12.2 - Edit state
+  const [previewMode, setPreviewMode] = useState<ExportPreviewMode>('sections');
+  const [sectionEdits, setSectionEdits] = useState<Map<ExportSectionId, ExportSectionEdit>>(
+    () => new Map()
+  );
+  const [editingSection, setEditingSection] = useState<ExportSectionId | null>(null);
 
   const toggleSection = useCallback((sectionId: ExportSectionId) => {
     setSections((prev) =>
@@ -164,8 +218,104 @@ export function useExportBuilder(
     [sections]
   );
 
+  // Story 12.2 - Edit functions
+  const updateSectionEdit = useCallback(
+    (sectionId: ExportSectionId, textContent: string) => {
+      setSectionEdits((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(sectionId) ?? createDefaultEdit(sectionId);
+        newMap.set(sectionId, { ...existing, textContent });
+        return newMap;
+      });
+    },
+    []
+  );
+
+  const removeSectionItem = useCallback(
+    (sectionId: ExportSectionId, itemId: string) => {
+      setSectionEdits((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(sectionId) ?? createDefaultEdit(sectionId);
+        if (!existing.removedItemIds.includes(itemId)) {
+          newMap.set(sectionId, {
+            ...existing,
+            removedItemIds: [...existing.removedItemIds, itemId],
+          });
+        }
+        return newMap;
+      });
+    },
+    []
+  );
+
+  const restoreSectionItem = useCallback(
+    (sectionId: ExportSectionId, itemId: string) => {
+      setSectionEdits((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(sectionId);
+        if (existing) {
+          newMap.set(sectionId, {
+            ...existing,
+            removedItemIds: existing.removedItemIds.filter((id) => id !== itemId),
+          });
+        }
+        return newMap;
+      });
+    },
+    []
+  );
+
+  const addSectionNote = useCallback(
+    (sectionId: ExportSectionId, note: string) => {
+      setSectionEdits((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(sectionId) ?? createDefaultEdit(sectionId);
+        newMap.set(sectionId, {
+          ...existing,
+          addedNotes: [...existing.addedNotes, note],
+        });
+        return newMap;
+      });
+    },
+    []
+  );
+
+  const removeSectionNote = useCallback(
+    (sectionId: ExportSectionId, noteIndex: number) => {
+      setSectionEdits((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(sectionId);
+        if (existing) {
+          newMap.set(sectionId, {
+            ...existing,
+            addedNotes: existing.addedNotes.filter((_, i) => i !== noteIndex),
+          });
+        }
+        return newMap;
+      });
+    },
+    []
+  );
+
+  const resetSectionEdits = useCallback(() => {
+    setSectionEdits(new Map());
+    setEditingSection(null);
+  }, []);
+
+  const hasEdits = useMemo(() => {
+    for (const edit of sectionEdits.values()) {
+      if (edit.textContent !== undefined) return true;
+      if (edit.removedItemIds.length > 0) return true;
+      if (edit.addedNotes.length > 0) return true;
+    }
+    return false;
+  }, [sectionEdits]);
+
   const reset = useCallback(() => {
     setSections(createDefaultSections());
+    setSectionEdits(new Map());
+    setEditingSection(null);
+    setPreviewMode('sections');
   }, []);
 
   return {
@@ -182,5 +332,18 @@ export function useExportBuilder(
     hasSelection,
     selectedSectionIds,
     reset,
+    // Story 12.2
+    previewMode,
+    setPreviewMode,
+    sectionEdits,
+    updateSectionEdit,
+    removeSectionItem,
+    restoreSectionItem,
+    addSectionNote,
+    removeSectionNote,
+    resetSectionEdits,
+    hasEdits,
+    editingSection,
+    setEditingSection,
   };
 }

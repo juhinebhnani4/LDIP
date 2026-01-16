@@ -42,6 +42,30 @@ export interface ExportBuilderState {
   format: ExportFormat;
 }
 
+/**
+ * Section edit state for inline editing in export preview.
+ * Edits are stored client-side only and passed to export generation.
+ *
+ * @see Story 12.2 - Export Inline Editing and Preview
+ */
+export interface ExportSectionEdit {
+  /** Section being edited */
+  sectionId: ExportSectionId;
+  /** Modified text content (for text-based sections) */
+  textContent?: string;
+  /** IDs of removed items (for list sections like timeline, entities) */
+  removedItemIds: string[];
+  /** Added notes to append to section */
+  addedNotes: string[];
+}
+
+/**
+ * Preview mode for the export builder modal.
+ *
+ * @see Story 12.2 - Export Inline Editing and Preview
+ */
+export type ExportPreviewMode = 'sections' | 'preview';
+
 /** Default export sections configuration */
 export const DEFAULT_EXPORT_SECTIONS: Omit<ExportSection, 'count' | 'isLoadingCount'>[] = [
   {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { QAPanelHeader } from './QAPanelHeader';
 import { ConversationHistory } from './ConversationHistory';
@@ -8,8 +8,10 @@ import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 import { ChatInput } from './ChatInput';
 import { StreamingMessage } from './StreamingMessage';
 import { SuggestedQuestions } from './SuggestedQuestions';
+import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData } from '@/hooks/useSSE';
+import { ApiError, canRetryError } from '@/lib/api/client';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
 
 interface QAPanelProps {
@@ -50,6 +52,11 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
   // Story 11.4: Empty state detection for suggested questions
   const isEmpty = useChatStore(selectIsEmpty);
 
+  // Story 13.4: Track last query and error for retry functionality
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<Error | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+
   // Convert EngineTraceData from hook to EngineTrace type
   const convertTrace = useCallback((data: EngineTraceData): EngineTrace => ({
     engine: data.engine,
@@ -89,13 +96,22 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
       confidence: s.confidence,
     }));
     completeStreaming(data.response, traces, sources);
+    // Story 13.4: Clear error state on success
+    setStreamError(null);
+    setIsRetrying(false);
   }, [completeStreaming]);
 
   const handleError = useCallback((error: Error) => {
     setError(error.message);
-    toast.error(error.message);
+    // Story 13.4: Store error for inline retry display
+    setStreamError(error);
+    setIsRetrying(false);
     // Reset streaming state on error
     setTyping(false);
+    // Only show toast for non-retryable errors
+    if (!canRetryError(error)) {
+      toast.error(error.message);
+    }
   }, [setError, setTyping]);
 
   // Initialize SSE hook
@@ -115,6 +131,10 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
       return;
     }
 
+    // Story 13.4: Store query for potential retry
+    setLastQuery(query);
+    setStreamError(null);
+
     // Create user message
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -133,6 +153,20 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
     // Start SSE stream
     await startStream(`/api/chat/${matterId}/stream`, { query });
   }, [matterId, userId, addMessage, startStreaming, startStream]);
+
+  // Story 13.4: Handle retry for failed queries
+  const handleRetry = useCallback(async () => {
+    if (!lastQuery) return;
+    setIsRetrying(true);
+    setStreamError(null);
+    await handleSubmit(lastQuery);
+  }, [lastQuery, handleSubmit]);
+
+  // Story 13.4: Dismiss error without retrying
+  const handleDismissError = useCallback(() => {
+    setStreamError(null);
+    setLastQuery(null);
+  }, []);
 
   // Show placeholder if we don't have matter/user context
   const canLoadHistory = Boolean(matterId && userId);
@@ -174,6 +208,18 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
                   />
                 )}
               </>
+            )}
+
+            {/* Story 13.4: Inline error alert for streaming errors */}
+            {streamError && canRetryError(streamError) && (
+              <div className="px-4 py-2">
+                <ErrorAlert
+                  error={streamError}
+                  onRetry={handleRetry}
+                  onDismiss={handleDismissError}
+                  isRetrying={isRetrying}
+                />
+              </div>
             )}
 
             {/* Chat input (always visible) */}

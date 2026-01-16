@@ -1,21 +1,84 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { getErrorMessage, isRetryableError, getErrorCodeFromStatus } from '@/lib/utils/error-messages'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+/** Rate limit details from API response */
+export interface RateLimitDetails {
+  /** Seconds to wait before retrying */
+  retryAfter: number
+  /** Current rate limit ceiling */
+  limit: number
+  /** Remaining requests in current window */
+  remaining: number
+}
+
 /**
  * Custom error class for API errors with structured information.
+ * Story 13.4: Enhanced with isRetryable, userMessage, and rate limit details
  */
 export class ApiError extends Error {
+  /** Whether this error can be retried */
+  public readonly isRetryable: boolean
+  /** User-friendly message suitable for display */
+  public readonly userMessage: string
+  /** Rate limit details (only present for 429 errors) */
+  public readonly rateLimitDetails?: RateLimitDetails
+
   constructor(
     public code: string,
     message: string,
-    public status: number
+    public status: number,
+    details?: { retryAfter?: number; limit?: number; remaining?: number }
   ) {
     super(message)
     this.name = 'ApiError'
+
+    // Derive isRetryable and userMessage from error code
+    this.isRetryable = isRetryableError(code)
+    this.userMessage = getErrorMessage(code).description
+
+    // Store rate limit details if present
+    if (details?.retryAfter !== undefined) {
+      this.rateLimitDetails = {
+        retryAfter: details.retryAfter,
+        limit: details.limit ?? 0,
+        remaining: details.remaining ?? 0,
+      }
+    }
   }
+}
+
+/**
+ * Parse error response and create ApiError with proper details.
+ * Story 13.4: Enhanced error parsing for rate limits and circuit breakers
+ */
+function createApiError(response: Response, errorBody: Record<string, unknown>): ApiError {
+  const errorData = errorBody.error as Record<string, unknown> | undefined
+  const code = (errorData?.code as string) ?? getErrorCodeFromStatus(response.status)
+  const message = (errorData?.message as string) ?? 'Request failed'
+  const details = errorData?.details as Record<string, unknown> | undefined
+
+  // Extract rate limit details from response
+  let rateLimitDetails: { retryAfter?: number; limit?: number; remaining?: number } | undefined
+
+  if (response.status === 429) {
+    // Try Retry-After header first
+    const retryAfterHeader = response.headers.get('Retry-After')
+    const retryAfter = retryAfterHeader
+      ? parseInt(retryAfterHeader, 10)
+      : (details?.retry_after as number | undefined)
+
+    rateLimitDetails = {
+      retryAfter: retryAfter ?? 60,
+      limit: (details?.limit as number | undefined) ?? 0,
+      remaining: (details?.remaining as number | undefined) ?? 0,
+    }
+  }
+
+  return new ApiError(code, message, response.status, rateLimitDetails)
 }
 
 /**
@@ -26,6 +89,7 @@ export class ApiError extends Error {
  * - Retries with fresh token on 401 response
  * - Redirects to login on session expiration
  * - Handles structured API error responses
+ * - Story 13.4: Enhanced error handling with rate limit and circuit breaker details
  */
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const supabase = createClient()
@@ -61,11 +125,7 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
 
       if (!retryResponse.ok) {
         const error = await retryResponse.json()
-        throw new ApiError(
-          error.error?.code || 'UNKNOWN_ERROR',
-          error.error?.message || 'Request failed',
-          retryResponse.status
-        )
+        throw createApiError(retryResponse, error)
       }
 
       return retryResponse.json()
@@ -80,14 +140,47 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
 
   if (!response.ok) {
     const error = await response.json()
-    throw new ApiError(
-      error.error?.code || 'UNKNOWN_ERROR',
-      error.error?.message || 'Request failed',
-      response.status
-    )
+    throw createApiError(response, error)
   }
 
   return response.json()
+}
+
+/**
+ * Get a user-friendly error message from an error.
+ * Story 13.4: Helper for displaying errors in UI
+ *
+ * @param error - The error to get a message for
+ * @returns User-friendly error message
+ */
+export function getErrorUserMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    // For rate limit errors, include the countdown
+    if (error.rateLimitDetails?.retryAfter) {
+      return `You're making requests too quickly. Please wait ${error.rateLimitDetails.retryAfter} seconds.`
+    }
+    return error.userMessage
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'An unexpected error occurred. Please try again.'
+}
+
+/**
+ * Check if an error is retryable.
+ * Story 13.4: Helper for retry logic
+ *
+ * @param error - The error to check
+ * @returns Whether the error can be retried
+ */
+export function canRetryError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.isRetryable
+  }
+  return false
 }
 
 /**

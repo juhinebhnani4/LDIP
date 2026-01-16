@@ -37,6 +37,8 @@ interface TimelineListProps {
   onEditEvent?: (event: TimelineEvent) => void;
   /** Callback when delete is clicked on a manual event */
   onDeleteEvent?: (event: TimelineEvent) => void;
+  /** Story 13.4: Callback when user clicks retry after error */
+  onRetry?: () => void;
   /** Optional className */
   className?: string;
 }
@@ -106,14 +108,23 @@ function EmptyState({ hasFiltersApplied }: { hasFiltersApplied?: boolean }) {
 
 /**
  * Error State Component
+ * Story 13.4: Enhanced with retry functionality
  */
-function ErrorState({ message }: { message?: string }) {
+function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   return (
     <Alert variant="destructive" className="my-4">
       <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>Error</AlertTitle>
-      <AlertDescription>
-        {message ?? 'Failed to load timeline data. Please try refreshing the page.'}
+      <AlertTitle>Error Loading Timeline</AlertTitle>
+      <AlertDescription className="flex flex-col gap-2">
+        <span>{message ?? 'Failed to load timeline data.'}</span>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="text-sm underline text-destructive hover:text-destructive/80 w-fit"
+          >
+            Try again
+          </button>
+        )}
       </AlertDescription>
     </Alert>
   );
@@ -154,6 +165,7 @@ export function TimelineList({
   hasFiltersApplied,
   onEditEvent,
   onDeleteEvent,
+  onRetry,
   className,
 }: TimelineListProps) {
   // Group events by year
@@ -172,7 +184,7 @@ export function TimelineList({
 
   // Handle error state
   if (isError) {
-    return <ErrorState message={errorMessage} />;
+    return <ErrorState message={errorMessage} onRetry={onRetry} />;
   }
 
   // Handle empty state

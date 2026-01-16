@@ -258,6 +258,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
             hasFiltersApplied={activeFilterCount > 0}
             onEditEvent={handleEditEvent}
             onDeleteEvent={handleDeleteEvent}
+            onRetry={refreshTimeline}
             className="mt-4"
           />
         );

@@ -11,9 +11,16 @@
  */
 
 import { useMemo } from 'react';
-import { CheckCircle2, Loader2, XCircle, File } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, File, RefreshCw, SkipForward } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/utils/upload-validation';
 import type { UploadProgress } from '@/types/upload';
@@ -25,6 +32,10 @@ interface UploadProgressViewProps {
   totalFiles: number;
   /** Optional className */
   className?: string;
+  /** Callback when user clicks retry on a failed file */
+  onRetryFile?: (fileName: string) => void;
+  /** Callback when user clicks skip on a failed file */
+  onSkipFile?: (fileName: string) => void;
 }
 
 /** Status icon component for file upload state */
@@ -62,8 +73,14 @@ function StatusIcon({ status }: { status: UploadProgress['status'] }) {
   }
 }
 
+interface FileProgressItemProps {
+  progress: UploadProgress;
+  onRetry?: (fileName: string) => void;
+  onSkip?: (fileName: string) => void;
+}
+
 /** Individual file progress item */
-function FileProgressItem({ progress }: { progress: UploadProgress }) {
+function FileProgressItem({ progress, onRetry, onSkip }: FileProgressItemProps) {
   const isComplete = progress.status === 'complete';
   const isError = progress.status === 'error';
   const isUploading = progress.status === 'uploading';
@@ -100,6 +117,47 @@ function FileProgressItem({ progress }: { progress: UploadProgress }) {
               {Math.round(progress.progressPct)}%
             </span>
           )}
+          {/* Story 13.4: Retry and Skip buttons for failed files */}
+          {isError && (
+            <div className="flex items-center gap-1">
+              {onRetry && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onRetry(progress.fileName)}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        aria-label={`Retry upload for ${progress.fileName}`}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Retry Processing</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {onSkip && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onSkip(progress.fileName)}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        aria-label={`Skip ${progress.fileName}`}
+                      >
+                        <SkipForward className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Skip Document</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -112,14 +170,23 @@ function FileProgressItem({ progress }: { progress: UploadProgress }) {
         />
       )}
 
-      {/* Error message */}
+      {/* Error message with truncation and expand on hover */}
       {isError && progress.errorMessage && (
-        <p
-          id={`error-${progress.fileName}`}
-          className="text-sm text-destructive ml-8"
-        >
-          {progress.errorMessage}
-        </p>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p
+                id={`error-${progress.fileName}`}
+                className="text-sm text-destructive ml-8 truncate cursor-help max-w-[300px]"
+              >
+                {progress.errorMessage}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[400px]">
+              <p className="text-sm">{progress.errorMessage}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
     </li>
   );
@@ -129,6 +196,8 @@ export function UploadProgressView({
   uploadProgress,
   totalFiles,
   className,
+  onRetryFile,
+  onSkipFile,
 }: UploadProgressViewProps) {
   // Calculate overall progress
   const { completedCount, overallProgressPct } = useMemo(() => {
@@ -199,7 +268,12 @@ export function UploadProgressView({
           aria-live="polite"
         >
           {uploadProgress.map((progress) => (
-            <FileProgressItem key={progress.fileName} progress={progress} />
+            <FileProgressItem
+              key={progress.fileName}
+              progress={progress}
+              onRetry={onRetryFile}
+              onSkip={onSkipFile}
+            />
           ))}
         </ul>
 

@@ -5,6 +5,7 @@ import {
   WorkspaceTabBar,
   WorkspaceContentArea,
 } from '@/components/features/matter';
+import { ServiceStatusBanner } from '@/components/features/status';
 
 interface MatterLayoutProps {
   children: ReactNode;
@@ -39,6 +40,9 @@ export default async function MatterLayout({ children, params }: MatterLayoutPro
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Service status banner - Story 13.4 (only shows when circuits are degraded) */}
+      <ServiceStatusBanner />
+
       {/* Workspace header - Story 10A.1 */}
       <WorkspaceHeader matterId={matterId} />
 

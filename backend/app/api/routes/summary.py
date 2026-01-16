@@ -242,7 +242,7 @@ async def get_matter_summary(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "summary_request_unexpected_error",
@@ -389,7 +389,7 @@ async def verify_summary_section(
             error=e.message,
             code=e.code,
         )
-        raise _handle_verification_service_error(e)
+        raise _handle_verification_service_error(e) from e
     except Exception as e:
         logger.error(
             "verify_section_unexpected_error",
@@ -500,7 +500,7 @@ async def add_summary_note(
             error=e.message,
             code=e.code,
         )
-        raise _handle_verification_service_error(e)
+        raise _handle_verification_service_error(e) from e
     except Exception as e:
         logger.error(
             "add_note_unexpected_error",
@@ -614,7 +614,7 @@ async def get_summary_verifications(
             error=e.message,
             code=e.code,
         )
-        raise _handle_verification_service_error(e)
+        raise _handle_verification_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_verifications_unexpected_error",
@@ -770,7 +770,7 @@ async def save_section_edit(
             error=e.message,
             code=e.code,
         )
-        raise _handle_edit_service_error(e)
+        raise _handle_edit_service_error(e) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -876,7 +876,7 @@ async def regenerate_section(
             error=e.message,
             code=e.code,
         )
-        raise _handle_edit_service_error(e)
+        raise _handle_edit_service_error(e) from e
     except SummaryServiceError as e:
         logger.error(
             "regenerate_section_generation_failed",
@@ -884,7 +884,7 @@ async def regenerate_section(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "regenerate_section_unexpected_error",

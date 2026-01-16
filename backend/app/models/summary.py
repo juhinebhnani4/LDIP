@@ -11,11 +11,9 @@ CRITICAL: Must match frontend types exactly for seamless API integration.
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field
-
 
 # =============================================================================
 # Story 14.1: Enums (Task 1.2)
@@ -126,7 +124,7 @@ class PartyInfo(BaseModel):
         description="Whether the party has been verified",
     )
     # Story 14.6: Citation data for CitationLink components
-    citation: "Citation | None" = Field(
+    citation: Citation | None = Field(
         None,
         description="Citation for party source (Story 14.6)",
     )
@@ -180,7 +178,7 @@ class SubjectMatter(BaseModel):
         alias="editedContent",
         description="User-edited content (if modified)",
     )
-    citations: list["Citation"] = Field(
+    citations: list[Citation] = Field(
         default_factory=list,
         description="Citation links for factual claims (Story 14.6)",
     )
@@ -226,7 +224,7 @@ class CurrentStatus(BaseModel):
         alias="editedContent",
         description="User-edited content (if modified)",
     )
-    citation: "Citation | None" = Field(
+    citation: Citation | None = Field(
         None,
         description="Citation for source reference (Story 14.6)",
     )

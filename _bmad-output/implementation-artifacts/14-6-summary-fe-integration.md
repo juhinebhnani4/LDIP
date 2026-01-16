@@ -62,115 +62,115 @@ so that **I can correct summaries and quickly verify source documents for accura
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Create backend endpoint for saving edited content** (AC: #7)
-  - [ ] 1.1 Add `SummaryEditCreate` Pydantic model to `backend/app/models/summary.py`:
+- [x] **Task 1: Create backend endpoint for saving edited content** (AC: #7)
+  - [x] 1.1 Add `SummaryEditCreate` Pydantic model to `backend/app/models/summary.py`:
     - `section_type`: SummarySectionTypeEnum
     - `section_id`: str (e.g., "main" or entity_id)
     - `content`: str (edited text)
-  - [ ] 1.2 Add `SummaryEditRecord` response model with `originalContent`, `editedContent`, `editedBy`, `editedAt`
-  - [ ] 1.3 Create database migration `supabase/migrations/YYYYMMDD_summary_edits.sql`:
+  - [x] 1.2 Add `SummaryEditRecord` response model with `originalContent`, `editedContent`, `editedBy`, `editedAt`
+  - [x] 1.3 Create database migration `supabase/migrations/YYYYMMDD_summary_edits.sql`:
     - `summary_edits` table with columns: id, matter_id, section_type, section_id, original_content, edited_content, edited_by, edited_at
     - RLS policy for matter isolation
     - Unique constraint on (matter_id, section_type, section_id)
-  - [ ] 1.4 Create `SummaryEditService` in `backend/app/services/summary_edit_service.py`:
+  - [x] 1.4 Create `SummaryEditService` in `backend/app/services/summary_edit_service.py`:
     - `save_edit(matter_id, section_type, section_id, content, original_content, user_id)`
     - `get_edit(matter_id, section_type, section_id)` - returns latest edit or None
-  - [ ] 1.5 Add `PUT /{matter_id}/summary/sections/{section_type}` endpoint to `backend/app/api/routes/summary.py`:
+  - [x] 1.5 Add `PUT /{matter_id}/summary/sections/{section_type}` endpoint to `backend/app/api/routes/summary.py`:
     - Require EDITOR role
     - Call `save_edit` service
     - Invalidate summary cache
 
-- [ ] **Task 2: Create backend endpoint for regenerating sections** (AC: #8)
-  - [ ] 2.1 Add `SummaryRegenerateRequest` model:
+- [x] **Task 2: Create backend endpoint for regenerating sections** (AC: #8)
+  - [x] 2.1 Add `SummaryRegenerateRequest` model:
     - `section_type`: SummarySectionTypeEnum
-  - [ ] 2.2 Add `regenerate_section(matter_id, section_type)` to `SummaryService`:
+  - [x] 2.2 Add `regenerate_section(matter_id, section_type)` to `SummaryService`:
     - Clear any cached content for this section
     - Re-run GPT-4 generation for specific section only
     - Return newly generated content
-  - [ ] 2.3 Add `POST /{matter_id}/summary/regenerate` endpoint:
+  - [x] 2.3 Add `POST /{matter_id}/summary/regenerate` endpoint:
     - Require EDITOR role
     - Call `regenerate_section`
     - Return new section content
 
-- [ ] **Task 3: Enhance Summary API to return citation data** (AC: #9)
-  - [ ] 3.1 Add `Citation` model to `backend/app/models/summary.py`:
+- [x] **Task 3: Enhance Summary API to return citation data** (AC: #9)
+  - [x] 3.1 Add `Citation` model to `backend/app/models/summary.py`:
     - `documentId`, `documentName`, `page`, `excerpt`
-  - [ ] 3.2 Update `SubjectMatter` model to include `citations: list[Citation]`
-  - [ ] 3.3 Update `CurrentStatus` model to include `citations: list[Citation]`
-  - [ ] 3.4 Update `PartyInfo` model to include `citation: Citation | None`
-  - [ ] 3.5 Update `SummaryService.generate_subject_matter()` to extract and return citations
-  - [ ] 3.6 Update `SummaryService.get_current_status()` to include citation data
-  - [ ] 3.7 Update `SummaryService.get_parties()` to include citation per party
+  - [x] 3.2 Update `SubjectMatter` model to include `citations: list[Citation]`
+  - [x] 3.3 Update `CurrentStatus` model to include `citations: list[Citation]`
+  - [x] 3.4 Update `PartyInfo` model to include `citation: Citation | None`
+  - [x] 3.5 Update `SummaryService.generate_subject_matter()` to extract and return citations
+  - [x] 3.6 Update `SummaryService.get_current_status()` to include citation data
+  - [x] 3.7 Update `SummaryService.get_parties()` to include citation per party
 
-- [ ] **Task 4: Create useSummaryEdit hook for frontend** (AC: #1, #2, #3)
-  - [ ] 4.1 Create `frontend/src/hooks/useSummaryEdit.ts`:
+- [x] **Task 4: Create useSummaryEdit hook for frontend** (AC: #1, #2, #3)
+  - [x] 4.1 Create `frontend/src/hooks/useSummaryEdit.ts`:
     - `saveEdit(sectionType, sectionId, content)` - calls PUT API
     - `regenerateSection(sectionType)` - calls POST regenerate API
     - Optimistic updates with rollback on error
     - Toast notifications for success/failure
-  - [ ] 4.2 Export from `frontend/src/hooks/index.ts`
+  - [x] 4.2 Export from `frontend/src/hooks/index.ts`
 
-- [ ] **Task 5: Integrate EditableSection into SubjectMatterSection** (AC: #1)
-  - [ ] 5.1 Import `EditableSection` component
-  - [ ] 5.2 Wrap description content with `EditableSection`
-  - [ ] 5.3 Connect `onSave` to `useSummaryEdit.saveEdit`
-  - [ ] 5.4 Connect `onRegenerate` to `useSummaryEdit.regenerateSection`
-  - [ ] 5.5 Pass `content` and `originalContent` props
-  - [ ] 5.6 Update component tests
+- [x] **Task 5: Integrate EditableSection into SubjectMatterSection** (AC: #1)
+  - [x] 5.1 Import `EditableSection` component
+  - [x] 5.2 Wrap description content with `EditableSection`
+  - [x] 5.3 Connect `onSave` to `useSummaryEdit.saveEdit`
+  - [x] 5.4 Connect `onRegenerate` to `useSummaryEdit.regenerateSection`
+  - [x] 5.5 Pass `content` and `originalContent` props
+  - [x] 5.6 Update component tests
 
-- [ ] **Task 6: Integrate EditableSection into CurrentStatusSection** (AC: #2)
-  - [ ] 6.1 Import `EditableSection` component
-  - [ ] 6.2 Wrap status description with `EditableSection`
-  - [ ] 6.3 Connect callbacks to `useSummaryEdit` hook
-  - [ ] 6.4 Update component tests
+- [x] **Task 6: Integrate EditableSection into CurrentStatusSection** (AC: #2)
+  - [x] 6.1 Import `EditableSection` component
+  - [x] 6.2 Wrap status description with `EditableSection`
+  - [x] 6.3 Connect callbacks to `useSummaryEdit` hook
+  - [x] 6.4 Update component tests
 
-- [ ] **Task 7: Integrate EditableSection into PartiesSection** (AC: #3)
-  - [ ] 7.1 Import `EditableSection` component
-  - [ ] 7.2 Wrap each party card name with `EditableSection` (optional - may keep read-only)
-  - [ ] 7.3 Connect callbacks to `useSummaryEdit` hook per party
-  - [ ] 7.4 Update component tests
+- [x] **Task 7: Integrate EditableSection into PartiesSection** (AC: #3)
+  - [x] 7.1 Import `EditableSection` component
+  - [x] 7.2 Wrap each party card name with `EditableSection` (optional - may keep read-only)
+  - [x] 7.3 Connect callbacks to `useSummaryEdit` hook per party
+  - [x] 7.4 Update component tests
 
-- [ ] **Task 8: Integrate CitationLink into SubjectMatterSection** (AC: #4)
-  - [ ] 8.1 Import `CitationLink` component
-  - [ ] 8.2 Replace source Link buttons with CitationLink components
-  - [ ] 8.3 Pass `documentName`, `pageNumber`, `excerpt` from citation data
-  - [ ] 8.4 Update component tests
+- [x] **Task 8: Integrate CitationLink into SubjectMatterSection** (AC: #4)
+  - [x] 8.1 Import `CitationLink` component
+  - [x] 8.2 Replace source Link buttons with CitationLink components
+  - [x] 8.3 Pass `documentName`, `pageNumber`, `excerpt` from citation data
+  - [x] 8.4 Update component tests
 
-- [ ] **Task 9: Integrate CitationLink into CurrentStatusSection** (AC: #5)
-  - [ ] 9.1 Import `CitationLink` component
-  - [ ] 9.2 Replace "View Full Order" link with CitationLink
-  - [ ] 9.3 Pass citation data from API response
-  - [ ] 9.4 Update component tests
+- [x] **Task 9: Integrate CitationLink into CurrentStatusSection** (AC: #5)
+  - [x] 9.1 Import `CitationLink` component
+  - [x] 9.2 Replace "View Full Order" link with CitationLink
+  - [x] 9.3 Pass citation data from API response
+  - [x] 9.4 Update component tests
 
-- [ ] **Task 10: Integrate CitationLink into PartiesSection** (AC: #6)
-  - [ ] 10.1 Import `CitationLink` component
-  - [ ] 10.2 Replace "View Source" links with CitationLink
-  - [ ] 10.3 Use party's citation data for navigation
-  - [ ] 10.4 Update component tests
+- [x] **Task 10: Integrate CitationLink into PartiesSection** (AC: #6)
+  - [x] 10.1 Import `CitationLink` component
+  - [x] 10.2 Replace "View Source" links with CitationLink
+  - [x] 10.3 Use party's citation data for navigation
+  - [x] 10.4 Update component tests
 
-- [ ] **Task 11: Write backend tests** (AC: #7, #8, #9)
-  - [ ] 11.1 Service tests in `backend/tests/services/test_summary_edit_service.py`:
+- [x] **Task 11: Write backend tests** (AC: #7, #8, #9)
+  - [x] 11.1 Service tests in `backend/tests/services/test_summary_edit_service.py`:
     - Test save_edit creates new record
     - Test save_edit updates existing record (upsert)
     - Test get_edit returns latest edit
-  - [ ] 11.2 API tests in `backend/tests/api/routes/test_summary.py`:
+  - [x] 11.2 API tests in `backend/tests/api/routes/test_summary.py`:
     - Test PUT /summary/sections/{section_type} saves edit
     - Test PUT /summary/sections requires editor role
     - Test POST /summary/regenerate regenerates section
     - Test GET /summary includes citation data
 
-- [ ] **Task 12: Write frontend tests** (AC: #1-#6)
-  - [ ] 12.1 Create `frontend/src/hooks/useSummaryEdit.test.ts`:
+- [x] **Task 12: Write frontend tests** (AC: #1-#6)
+  - [x] 12.1 Create `frontend/src/hooks/useSummaryEdit.test.ts`:
     - Test saveEdit calls PUT API
     - Test regenerateSection calls POST API
     - Test error handling and rollback
-  - [ ] 12.2 Update `SubjectMatterSection.test.tsx`:
+  - [x] 12.2 Update `SubjectMatterSection.test.tsx`:
     - Test EditableSection integration
     - Test CitationLink rendering
-  - [ ] 12.3 Update `CurrentStatusSection.test.tsx`:
+  - [x] 12.3 Update `CurrentStatusSection.test.tsx`:
     - Test EditableSection integration
     - Test CitationLink rendering
-  - [ ] 12.4 Update `PartiesSection.test.tsx`:
+  - [x] 12.4 Update `PartiesSection.test.tsx`:
     - Test CitationLink rendering per party
 
 ## Dev Notes

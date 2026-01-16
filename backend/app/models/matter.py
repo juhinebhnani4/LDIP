@@ -1,9 +1,13 @@
-"""Matter models for the role-per-matter authorization system."""
+"""Matter models for the role-per-matter authorization system.
+
+CRITICAL: All response models use camelCase aliases to match frontend TypeScript types.
+This ensures seamless API integration without manual field transformation.
+"""
 
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MatterRole(str, Enum):
@@ -31,13 +35,15 @@ class MatterStatus(str, Enum):
 class MatterMember(BaseModel):
     """A member of a matter with their role assignment."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(..., description="Membership record ID")
-    user_id: str = Field(..., description="User ID of the member")
+    user_id: str = Field(..., alias="userId", description="User ID of the member")
     email: str | None = Field(None, description="User email (populated from users table)")
-    full_name: str | None = Field(None, description="User's full name")
+    full_name: str | None = Field(None, alias="fullName", description="User's full name")
     role: MatterRole = Field(..., description="Role on this matter")
-    invited_by: str | None = Field(None, description="User ID who invited this member")
-    invited_at: datetime | None = Field(None, description="When the member was invited")
+    invited_by: str | None = Field(None, alias="invitedBy", description="User ID who invited this member")
+    invited_at: datetime | None = Field(None, alias="invitedAt", description="When the member was invited")
 
 
 class MatterBase(BaseModel):
@@ -64,13 +70,15 @@ class MatterUpdate(BaseModel):
 class Matter(MatterBase):
     """Complete matter model returned from API."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(..., description="Matter UUID")
     status: MatterStatus = Field(default=MatterStatus.ACTIVE, description="Matter status")
-    created_at: datetime = Field(..., description="When the matter was created")
-    updated_at: datetime = Field(..., description="When the matter was last updated")
-    deleted_at: datetime | None = Field(None, description="Soft delete timestamp (NULL = not deleted)")
+    created_at: datetime = Field(..., alias="createdAt", description="When the matter was created")
+    updated_at: datetime = Field(..., alias="updatedAt", description="When the matter was last updated")
+    deleted_at: datetime | None = Field(None, alias="deletedAt", description="Soft delete timestamp (NULL = not deleted)")
     role: MatterRole | None = Field(None, description="Current user's role on this matter")
-    member_count: int = Field(default=0, description="Number of members on this matter")
+    member_count: int = Field(default=0, alias="memberCount", description="Number of members on this matter")
 
 
 class MatterWithMembers(Matter):
@@ -108,10 +116,12 @@ class MatterWithMembersResponse(BaseModel):
 class MatterListMeta(BaseModel):
     """Pagination metadata for matter list."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     total: int = Field(..., description="Total number of matters")
     page: int = Field(default=1, description="Current page number")
-    per_page: int = Field(default=20, description="Items per page")
-    total_pages: int = Field(..., description="Total number of pages")
+    per_page: int = Field(default=20, alias="perPage", description="Items per page")
+    total_pages: int = Field(..., alias="totalPages", description="Total number of pages")
 
 
 class MatterListResponse(BaseModel):

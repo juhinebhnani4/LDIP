@@ -53,9 +53,9 @@ vi.mock('sonner', () => ({
 // The infinite loop occurs because Radix's compose-refs triggers setState in a loop
 vi.mock('@radix-ui/react-presence', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ReactModule = require('react');
+  const React = require('react');
   return {
-    Presence: ({ children, present }: { children: ReactModule.ReactNode; present: boolean }) => {
+    Presence: ({ children, present }: { children: React.ReactNode; present: boolean }) => {
       return present ? children : null;
     },
   };

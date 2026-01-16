@@ -61,7 +61,7 @@ describe('createMatterAndUpload', () => {
           documentId: `doc-${file.name}`,
           filename: file.name,
           storagePath: `/uploads/${file.name}`,
-          status: 'uploaded' as const,
+          status: 'pending' as const,
         },
       };
     });
@@ -153,7 +153,7 @@ describe('createMatterAndUpload', () => {
 
     vi.mocked(uploadFile)
       .mockResolvedValueOnce({
-        data: { documentId: 'doc-1', filename: 'document1.pdf', storagePath: '/uploads/document1.pdf', status: 'uploaded' as const },
+        data: { documentId: 'doc-1', filename: 'document1.pdf', storagePath: '/uploads/document1.pdf', status: 'pending' as const },
       })
       .mockRejectedValueOnce(new Error('Upload failed'));
 
@@ -185,7 +185,7 @@ describe('createMatterAndUpload', () => {
 
     vi.mocked(uploadFile)
       .mockResolvedValueOnce({
-        data: { documentId: 'doc-1', filename: 'document1.pdf', storagePath: '/uploads/document1.pdf', status: 'uploaded' as const },
+        data: { documentId: 'doc-1', filename: 'document1.pdf', storagePath: '/uploads/document1.pdf', status: 'pending' as const },
       })
       .mockRejectedValueOnce(new Error('Upload failed'));
 
@@ -227,7 +227,7 @@ describe('createMatterAndUpload', () => {
       if (options.abortSignal?.aborted) {
         throw new Error('Upload cancelled');
       }
-      return { data: { documentId: `doc-${uploadCount}`, filename: file.name, storagePath: `/uploads/${file.name}`, status: 'uploaded' as const } };
+      return { data: { documentId: `doc-${uploadCount}`, filename: file.name, storagePath: `/uploads/${file.name}`, status: 'pending' as const } };
     });
 
     const result = await createMatterAndUpload(
@@ -253,7 +253,7 @@ describe('uploadToExistingMatter', () => {
         documentId: 'doc-123',
         filename: 'document.pdf',
         storagePath: '/uploads/document.pdf',
-        status: 'uploaded' as const,
+        status: 'pending' as const,
       },
     });
   });

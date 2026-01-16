@@ -58,7 +58,12 @@ def _handle_service_error(error: MatterServiceError) -> HTTPException:
     )
 
 
-@router.post("", response_model=MatterResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=MatterResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def create_matter(
     request: Request,  # Required for rate limiter
@@ -85,7 +90,11 @@ async def create_matter(
         raise _handle_service_error(e) from e
 
 
-@router.get("", response_model=MatterListResponse)
+@router.get(
+    "",
+    response_model=MatterListResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def list_matters(
     request: Request,  # Required for rate limiter
@@ -122,7 +131,11 @@ async def list_matters(
     )
 
 
-@router.get("/{matter_id}", response_model=MatterWithMembersResponse)
+@router.get(
+    "/{matter_id}",
+    response_model=MatterWithMembersResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def get_matter(
     request: Request,  # Required for rate limiter
@@ -149,7 +162,11 @@ async def get_matter(
         raise _handle_service_error(e) from e
 
 
-@router.patch("/{matter_id}", response_model=MatterResponse)
+@router.patch(
+    "/{matter_id}",
+    response_model=MatterResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def update_matter(
     request: Request,  # Required for rate limiter
@@ -258,7 +275,11 @@ async def get_tab_stats(
 # Member management endpoints
 
 
-@router.get("/{matter_id}/members", response_model=MemberListResponse)
+@router.get(
+    "/{matter_id}/members",
+    response_model=MemberListResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def list_members(
     request: Request,  # Required for rate limiter
@@ -290,6 +311,7 @@ async def list_members(
 @router.post(
     "/{matter_id}/members",
     response_model=MemberResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(STANDARD_RATE_LIMIT)
@@ -331,7 +353,11 @@ async def invite_member(
         raise _handle_service_error(e) from e
 
 
-@router.patch("/{matter_id}/members/{user_id}", response_model=MemberResponse)
+@router.patch(
+    "/{matter_id}/members/{user_id}",
+    response_model=MemberResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def update_member_role(
     request: Request,  # Required for rate limiter

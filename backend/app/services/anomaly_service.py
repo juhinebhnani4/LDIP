@@ -143,7 +143,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to save anomalies: {e}",
                 code="ANOMALY_SAVE_FAILED",
-            )
+            ) from e
 
     def save_anomalies_sync(
         self,
@@ -256,7 +256,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to list anomalies: {e}",
                 code="ANOMALY_LIST_FAILED",
-            )
+            ) from e
 
     async def get_anomaly_by_id(
         self,
@@ -327,7 +327,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to get anomaly: {e}",
                 code="ANOMALY_GET_FAILED",
-            )
+            ) from e
 
     async def dismiss_anomaly(
         self,
@@ -380,7 +380,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to dismiss anomaly: {e}",
                 code="ANOMALY_DISMISS_FAILED",
-            )
+            ) from e
 
     async def verify_anomaly(
         self,
@@ -433,7 +433,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to verify anomaly: {e}",
                 code="ANOMALY_VERIFY_FAILED",
-            )
+            ) from e
 
     async def delete_anomalies_for_matter(
         self,
@@ -479,7 +479,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to delete anomalies: {e}",
                 code="ANOMALY_DELETE_FAILED",
-            )
+            ) from e
 
     def delete_anomalies_for_matter_sync(
         self,
@@ -570,7 +570,7 @@ class AnomalyService:
             raise AnomalyServiceError(
                 f"Failed to get anomaly summary: {e}",
                 code="ANOMALY_SUMMARY_FAILED",
-            )
+            ) from e
 
     async def count_anomalies_for_matter(
         self,

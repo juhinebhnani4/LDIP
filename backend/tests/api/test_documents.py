@@ -158,12 +158,14 @@ async def client(
     app.dependency_overrides[get_storage_service] = lambda: mock_storage_service
     app.dependency_overrides[get_document_service] = lambda: mock_document_service
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-    ) as ac:
-        yield ac
+    # Mock Celery task queuing to avoid Redis connection in tests
+    with patch("app.api.routes.documents._queue_ocr_task"):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as ac:
+            yield ac
 
     app.dependency_overrides.clear()
 

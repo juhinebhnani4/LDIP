@@ -24,7 +24,13 @@ import { createClient } from '@/lib/supabase/client';
 import { useUploadStore } from '@/stores/uploadStore';
 
 /** Backend API base URL */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = (() => {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (!url && process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_API_URL environment variable is required in production');
+  }
+  return url || 'http://localhost:8000';
+})();
 
 /** Upload API endpoint */
 const UPLOAD_ENDPOINT = `${API_BASE_URL}/api/documents/upload`;

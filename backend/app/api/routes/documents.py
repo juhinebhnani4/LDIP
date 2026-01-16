@@ -509,6 +509,17 @@ async def _extract_and_upload_zip(
                 if not filename:
                     continue
 
+                # Security: Validate filename against path traversal attacks
+                # Reject filenames containing path separators or parent references
+                if ".." in filename or "/" in filename or "\\" in filename:
+                    logger.warning(
+                        "zip_malicious_filename_rejected",
+                        matter_id=matter_id,
+                        original_path=pdf_path,
+                        filename=filename,
+                    )
+                    continue
+
                 # Upload to storage
                 storage_path, _ = storage_service.upload_file(
                     matter_id=matter_id,

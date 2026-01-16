@@ -254,7 +254,7 @@ development_status:
   # Epic 15: Infrastructure & Chunk State Management
   # Goal: Track OCR chunk processing state for visibility and failure recovery
   epic-15-chunk-infrastructure: in-progress  # First story created 2026-01-17
-  15-1-document-ocr-chunks-table: review  # Implementation complete 2026-01-17 - 22 tests passing
+  15-1-document-ocr-chunks-table: done  # Code review complete 2026-01-17 - 36 tests, fix migration deployed
   15-2-ocr-chunk-service: backlog              # CRUD service + heartbeat detection
   15-3-chunk-progress-job-tracking: backlog    # Integration with JobTrackingService
   15-4-chunk-cleanup-mechanism: backlog        # Cleanup temporary chunk data + orphan detection

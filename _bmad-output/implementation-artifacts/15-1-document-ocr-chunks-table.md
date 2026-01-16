@@ -1,6 +1,6 @@
 # Story 15.1: Create Document OCR Chunks Database Table
 
-Status: review
+Status: done
 
 ## Story
 
@@ -246,10 +246,28 @@ N/A - Migration-only story with no runtime debugging needed
 - 22 unit tests covering schema, constraints, RLS, cascading deletes, and path validation
 - Migration applied successfully to remote Supabase database
 
+### Code Review Fixes (2026-01-17)
+
+**HIGH Severity Fixes:**
+1. Added `NOT NULL` constraints to `created_at` and `updated_at` columns (AC #2 compliance)
+2. Added `WITH CHECK` clause to UPDATE RLS policy to prevent matter_id changes (security fix)
+3. Rewrote tests to include SQL validation tests that parse actual migration files
+
+**MEDIUM Severity Fixes:**
+4. Added `CHECK (chunk_index >= 0)` constraint for 0-indexed validation (AC #4)
+5. Removed placeholder `assert True` tests, replaced with real SQL parsing tests
+6. Added index comments for documentation (AC #5)
+
+**Test Improvements:**
+- Added `TestMigrationSQLValidation` class with 14 tests that parse migration SQL directly
+- Added `TestTimestampConstraints` class to verify NOT NULL fixes
+- Total test count increased from 22 to 36 tests
+
 ### File List
 
 **New Files:**
 - supabase/migrations/20260117100001_create_document_ocr_chunks_table.sql
+- supabase/migrations/20260117100002_fix_document_ocr_chunks_constraints.sql (code review fixes)
 - backend/scripts/setup_ocr_chunks_bucket.py
 - backend/tests/migrations/__init__.py
 - backend/tests/migrations/test_document_ocr_chunks.py
@@ -261,7 +279,8 @@ N/A - Migration-only story with no runtime debugging needed
 
 ### Migrations
 - [x] Run: `supabase db push` to apply migration (Applied 2026-01-17)
-- [ ] Verify: `SELECT * FROM public.document_ocr_chunks LIMIT 1;` (should work without error)
+- [x] Run: `supabase db push` to apply fix migration (Applied 2026-01-17)
+- [x] Verify: Table exists with all constraints
 
 ### Bucket Setup
 - [ ] Run: `python backend/scripts/setup_ocr_chunks_bucket.py` OR

@@ -1,21 +1,209 @@
 """Tests for document_ocr_chunks table migration.
 
 Tests verify:
-- Table schema and column types
+- Table schema and column types (via SQL parsing)
 - CHECK constraint enforcement
 - UNIQUE constraint enforcement
 - RLS policy behavior
 - Cascading delete behavior
 - Storage path validation functions
 
-Note: These tests use mocks for unit testing. Integration tests
-with live Supabase require the migration to be applied first.
+This module includes:
+1. SQL validation tests that parse the migration file directly
+2. Mock-based tests that document expected runtime behavior
 """
 
+import re
 import uuid
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+# Path to migration files (relative to backend directory)
+MIGRATIONS_DIR = Path(__file__).parent.parent.parent.parent / "supabase" / "migrations"
+MIGRATION_FILE = "20260117100001_create_document_ocr_chunks_table.sql"
+FIX_MIGRATION_FILE = "20260117100002_fix_document_ocr_chunks_constraints.sql"
+
+
+class TestMigrationSQLValidation:
+    """Tests that parse and validate the actual SQL migration file.
+
+    These tests verify the migration SQL contains the expected schema,
+    constraints, and policies without requiring a live database.
+    """
+
+    @pytest.fixture
+    def migration_sql(self) -> str:
+        """Load the main migration SQL file."""
+        migration_path = MIGRATIONS_DIR / MIGRATION_FILE
+        if not migration_path.exists():
+            pytest.skip(f"Migration file not found: {migration_path}")
+        return migration_path.read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def fix_migration_sql(self) -> str:
+        """Load the fix migration SQL file (if exists)."""
+        fix_path = MIGRATIONS_DIR / FIX_MIGRATION_FILE
+        if not fix_path.exists():
+            return ""
+        return fix_path.read_text(encoding="utf-8")
+
+    def test_table_creation_exists(self, migration_sql: str) -> None:
+        """Verify CREATE TABLE statement exists for document_ocr_chunks."""
+        assert "CREATE TABLE public.document_ocr_chunks" in migration_sql
+
+    def test_all_required_columns_present(self, migration_sql: str) -> None:
+        """Verify all 14 required columns are defined in the schema.
+
+        AC: #2 - Core columns present
+        AC: #3 - Result storage columns present
+        """
+        required_columns = [
+            "id uuid",
+            "matter_id uuid",
+            "document_id uuid",
+            "chunk_index integer",
+            "page_start integer",
+            "page_end integer",
+            "status text",
+            "error_message text",
+            "result_storage_path text",
+            "result_checksum text",
+            "processing_started_at timestamptz",
+            "processing_completed_at timestamptz",
+            "created_at timestamptz",
+            "updated_at timestamptz",
+        ]
+
+        for col in required_columns:
+            # Column definitions may have extra whitespace or NOT NULL
+            col_name = col.split()[0]
+            col_type = col.split()[1]
+            pattern = rf"{col_name}\s+{col_type}"
+            assert re.search(pattern, migration_sql, re.IGNORECASE), f"Column {col} not found"
+
+    def test_foreign_key_constraints_defined(self, migration_sql: str) -> None:
+        """Verify FK constraints with CASCADE delete.
+
+        AC: #4 - FK constraints with ON DELETE CASCADE
+        """
+        assert "REFERENCES public.matters(id) ON DELETE CASCADE" in migration_sql
+        assert "REFERENCES public.documents(id) ON DELETE CASCADE" in migration_sql
+
+    def test_unique_constraint_on_document_chunk(self, migration_sql: str) -> None:
+        """Verify UNIQUE constraint on (document_id, chunk_index).
+
+        AC: #4 - No duplicate chunks
+        """
+        assert "document_ocr_chunks_unique_doc_chunk" in migration_sql
+        assert "UNIQUE (document_id, chunk_index)" in migration_sql
+
+    def test_check_constraints_defined(self, migration_sql: str) -> None:
+        """Verify all CHECK constraints are defined.
+
+        AC: #4 - CHECK constraints
+        """
+        # Page order constraint
+        assert "document_ocr_chunks_check_page_order" in migration_sql
+        assert "page_start <= page_end" in migration_sql
+
+        # Page start minimum
+        assert "document_ocr_chunks_check_page_start" in migration_sql
+        assert "page_start >= 1" in migration_sql
+
+        # Status enum
+        assert "document_ocr_chunks_check_status" in migration_sql
+        assert "'pending'" in migration_sql
+        assert "'processing'" in migration_sql
+        assert "'completed'" in migration_sql
+        assert "'failed'" in migration_sql
+
+    def test_chunk_index_check_constraint(self, fix_migration_sql: str) -> None:
+        """Verify chunk_index >= 0 CHECK constraint exists (added in fix migration).
+
+        AC: #4 - chunk_index is 0-indexed, must be non-negative
+        """
+        if not fix_migration_sql:
+            pytest.skip("Fix migration not yet applied")
+        assert "document_ocr_chunks_check_chunk_index" in fix_migration_sql
+        assert "chunk_index >= 0" in fix_migration_sql
+
+    def test_indexes_created(self, migration_sql: str) -> None:
+        """Verify all required indexes are created.
+
+        AC: #5 - Indexes for query optimization
+        """
+        assert "idx_doc_ocr_chunks_document_id" in migration_sql
+        assert "idx_doc_ocr_chunks_matter_id" in migration_sql
+        assert "idx_doc_ocr_chunks_document_status" in migration_sql
+
+    def test_rls_enabled(self, migration_sql: str) -> None:
+        """Verify RLS is enabled on the table.
+
+        AC: #6 - RLS required
+        """
+        assert "ENABLE ROW LEVEL SECURITY" in migration_sql
+
+    def test_rls_policies_created(self, migration_sql: str) -> None:
+        """Verify all 4 RLS policies are created.
+
+        AC: #6 - 4-layer matter isolation
+        """
+        # SELECT policy
+        assert 'FOR SELECT' in migration_sql
+        assert 'Users can view chunks from their matters' in migration_sql
+
+        # INSERT policy
+        assert 'FOR INSERT' in migration_sql
+        assert 'Editors and Owners can insert chunks' in migration_sql
+
+        # UPDATE policy
+        assert 'FOR UPDATE' in migration_sql
+        assert 'Editors and Owners can update chunks' in migration_sql
+
+        # DELETE policy
+        assert 'FOR DELETE' in migration_sql
+        assert 'Only Owners can delete chunks' in migration_sql
+
+    def test_update_policy_has_with_check(self, fix_migration_sql: str) -> None:
+        """Verify UPDATE policy includes WITH CHECK clause (security fix).
+
+        Prevents users from changing matter_id to move chunks between matters.
+        """
+        if not fix_migration_sql:
+            pytest.skip("Fix migration not yet applied")
+        # The fix migration should recreate UPDATE policy with WITH CHECK
+        assert "WITH CHECK" in fix_migration_sql
+        assert "Editors and Owners can update chunks" in fix_migration_sql
+
+    def test_updated_at_trigger_exists(self, migration_sql: str) -> None:
+        """Verify trigger for auto-updating updated_at column."""
+        assert "set_document_ocr_chunks_updated_at" in migration_sql
+        assert "update_updated_at_column()" in migration_sql
+
+    def test_storage_helper_functions_created(self, migration_sql: str) -> None:
+        """Verify storage path helper functions are created.
+
+        AC: #7 - Storage bucket support
+        """
+        assert "get_matter_id_from_chunk_path" in migration_sql
+        assert "validate_ocr_chunk_path" in migration_sql
+
+    def test_storage_policies_created(self, migration_sql: str) -> None:
+        """Verify storage bucket RLS policies are created.
+
+        AC: #7 - Storage bucket policies
+        """
+        assert "Users can view ocr chunks from their matters" in migration_sql
+        assert "Editors and Owners can upload ocr chunks" in migration_sql
+        assert "Editors and Owners can update ocr chunks" in migration_sql
+        assert "Owners can delete ocr chunks" in migration_sql
+
+    def test_storage_policies_are_idempotent(self, migration_sql: str) -> None:
+        """Verify storage policies use DROP IF EXISTS for idempotency."""
+        drop_statements = re.findall(r"DROP POLICY IF EXISTS.*ocr chunk", migration_sql)
+        assert len(drop_statements) >= 4, "Should drop existing policies before creating"
 
 
 class TestDocumentOCRChunksSchema:
@@ -530,33 +718,27 @@ class TestIndexes:
         assert "idx_doc_ocr_chunks_document_status" in expected_indexes
 
 
-class TestMigrationIdempotency:
-    """Tests for migration idempotency.
+class TestTimestampConstraints:
+    """Tests for timestamp column constraints (added in fix migration)."""
 
-    AC: #1 - Migration can be run multiple times safely
-    """
+    @pytest.fixture
+    def fix_migration_sql(self) -> str:
+        """Load the fix migration SQL file."""
+        fix_path = MIGRATIONS_DIR / FIX_MIGRATION_FILE
+        if not fix_path.exists():
+            pytest.skip("Fix migration not found")
+        return fix_path.read_text(encoding="utf-8")
 
-    def test_create_table_idempotent_concept(self) -> None:
-        """Verify migration can handle re-runs.
+    def test_created_at_not_null_constraint(self, fix_migration_sql: str) -> None:
+        """Verify created_at has NOT NULL constraint.
 
-        Note: Actual idempotency is handled by Supabase migrations.
-        This test documents the expected behavior.
+        AC: #2 - created_at should always have a value
         """
-        # PostgreSQL migrations track applied migrations
-        # Re-running won't re-apply already-applied migrations
-        # The migration file uses CREATE TABLE (not IF NOT EXISTS)
-        # because Supabase tracks migration state
-        assert True  # Architecture documentation
+        assert "created_at SET NOT NULL" in fix_migration_sql
 
-    def test_storage_policies_drop_before_create(self) -> None:
-        """Verify storage policies use DROP IF EXISTS for idempotency."""
-        # The migration drops existing policies before creating new ones
-        # This allows re-running the migration safely
-        policy_names = [
-            "Users can view ocr chunks from their matters",
-            "Editors and Owners can upload ocr chunks",
-            "Editors and Owners can update ocr chunks",
-            "Owners can delete ocr chunks",
-        ]
+    def test_updated_at_not_null_constraint(self, fix_migration_sql: str) -> None:
+        """Verify updated_at has NOT NULL constraint.
 
-        assert len(policy_names) == 4
+        AC: #2 - updated_at should always have a value
+        """
+        assert "updated_at SET NOT NULL" in fix_migration_sql

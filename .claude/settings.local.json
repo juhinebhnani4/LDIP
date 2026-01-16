@@ -79,7 +79,10 @@
       "Bash(\"e:/Career coaching/100x/LDIP/backend/.venv/Scripts/python.exe\" -c \"\nfrom app.workers.celery import celery_app\nfrom app.workers.tasks import document_tasks, engine_tasks\nprint\\(''Tasks:'', [t for t in celery_app.tasks.keys\\(\\) if not t.startswith\\(''celery.''\\)]\\)\n\")",
       "Bash(docker exec:*)",
       "Bash(Get-Content \"C:\\\\Users\\\\Jyotsna\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\e--Career-coaching-100x-LDIP\\\\tasks\\\\b21a001.output\" -Tail 100)",
-      "Bash(Select-Object -First 80)"
+      "Bash(Select-Object -First 80)",
+      "Bash(tasklist:*)",
+      "Bash(docker ps:*)",
+      "Bash(rename:*)"
     ]
   }
 }

@@ -3,10 +3,15 @@
  *
  * @see Story 12.1 - Export Builder Modal with Section Selection
  * @see Story 12.2 - Export Inline Editing and Preview
+ * @see Story 12.3 - Export Verification Check and Format Generation
  */
 
 export { ExportBuilder } from './ExportBuilder';
 export type { ExportBuilderProps } from './ExportBuilder';
+
+// Story 12.3 additions
+export { ExportVerificationCheck } from './ExportVerificationCheck';
+export type { ExportVerificationCheckProps } from './ExportVerificationCheck';
 
 export { ExportSectionList } from './ExportSectionList';
 export type { ExportSectionListProps } from './ExportSectionList';

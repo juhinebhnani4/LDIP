@@ -25,6 +25,7 @@ from app.core.config import get_settings
 from app.models.verification import (
     ExportBlockingFinding,
     ExportEligibilityResult,
+    ExportWarningFinding,
     VerificationDecision,
 )
 
@@ -62,13 +63,16 @@ class ExportEligibilityService:
         """Initialize export eligibility service.
 
         Story 8-4: Task 8.1 - Service initialization.
+        Story 12-3: Added warning threshold for 70-90% confidence findings.
         """
         settings = get_settings()
         self._export_block_threshold = settings.verification_export_block_below
+        self._warning_upper_threshold = settings.verification_threshold_optional
 
         logger.info(
             "export_eligibility_service_initialized",
             export_block_threshold=self._export_block_threshold,
+            warning_upper_threshold=self._warning_upper_threshold,
         )
 
     async def check_export_eligibility(
@@ -79,21 +83,22 @@ class ExportEligibilityService:
         """Check if matter is eligible for export.
 
         Story 8-4: AC #5, Task 8.2 - Returns True/False + list of blocking findings.
+        Story 12-3: AC #2 - Also returns warning findings (70-90% confidence).
 
         Args:
             matter_id: Matter UUID to check.
             supabase: Supabase client.
 
         Returns:
-            ExportEligibilityResult with eligibility and blocking findings.
+            ExportEligibilityResult with eligibility, blocking, and warning findings.
         """
         start_time = time.perf_counter()
 
         try:
-            # Query for pending verifications at or below threshold
+            # Query for pending verifications at or below blocking threshold
             # Story 8-4: Uses <= to match verification_service.get_verification_requirement()
             # which returns REQUIRED for confidence <= 70%
-            result = supabase.table("finding_verifications").select(
+            blocking_result = supabase.table("finding_verifications").select(
                 "id, finding_id, finding_type, finding_summary, confidence_before"
             ).eq("matter_id", matter_id).eq(
                 "decision", VerificationDecision.PENDING.value
@@ -109,17 +114,46 @@ class ExportEligibilityService:
                     finding_summary=r["finding_summary"],
                     confidence=r["confidence_before"],
                 )
-                for r in result.data
+                for r in blocking_result.data
+            ]
+
+            # Story 12-3: Query for warning findings (70-90% confidence, pending)
+            warning_result = supabase.table("finding_verifications").select(
+                "id, finding_id, finding_type, finding_summary, confidence_before"
+            ).eq("matter_id", matter_id).eq(
+                "decision", VerificationDecision.PENDING.value
+            ).gt(
+                "confidence_before", self._export_block_threshold
+            ).lte(
+                "confidence_before", self._warning_upper_threshold
+            ).execute()
+
+            warning_findings = [
+                ExportWarningFinding(
+                    verification_id=r["id"],
+                    finding_id=r.get("finding_id"),
+                    finding_type=r["finding_type"],
+                    finding_summary=r["finding_summary"],
+                    confidence=r["confidence_before"],
+                )
+                for r in warning_result.data
             ]
 
             blocking_count = len(blocking_findings)
+            warning_count = len(warning_findings)
             eligible = blocking_count == 0
 
             elapsed_ms = (time.perf_counter() - start_time) * 1000
 
             # Generate message
             if eligible:
-                message = "All required verifications complete. Export is allowed."
+                if warning_count > 0:
+                    message = (
+                        f"Export allowed with {warning_count} warning(s). "
+                        f"Some findings (70-90% confidence) are suggested for verification."
+                    )
+                else:
+                    message = "All required verifications complete. Export is allowed."
             else:
                 message = (
                     f"Export blocked: {blocking_count} finding(s) with confidence "
@@ -131,6 +165,7 @@ class ExportEligibilityService:
                 matter_id=matter_id,
                 eligible=eligible,
                 blocking_count=blocking_count,
+                warning_count=warning_count,
                 elapsed_ms=round(elapsed_ms, 2),
             )
 
@@ -138,6 +173,8 @@ class ExportEligibilityService:
                 eligible=eligible,
                 blocking_findings=blocking_findings,
                 blocking_count=blocking_count,
+                warning_findings=warning_findings,
+                warning_count=warning_count,
                 message=message,
             )
 
@@ -152,6 +189,8 @@ class ExportEligibilityService:
                 eligible=False,
                 blocking_findings=[],
                 blocking_count=0,
+                warning_findings=[],
+                warning_count=0,
                 message=f"Export eligibility check failed: {e}. Export blocked for safety.",
             )
 

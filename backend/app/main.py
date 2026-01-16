@@ -21,6 +21,7 @@ from app.api.routes import (
     dashboard,
     documents,
     entities,
+    exports,
     health,
     jobs,
     matters,
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(anomalies.router, prefix="/api")
     app.include_router(contradiction.router, prefix="/api")
     app.include_router(verifications.router, prefix="/api")
+    app.include_router(exports.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(summary.router, prefix="/api")
     app.include_router(activity.router, prefix="/api")

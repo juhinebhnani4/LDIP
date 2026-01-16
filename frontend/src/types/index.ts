@@ -174,12 +174,16 @@ export type {
 
 export { HIGHLIGHT_COLORS, PDF_KEYBOARD_SHORTCUTS } from './pdf';
 
-// Verification types (Story 8-5: Verification Queue UI)
+// Verification types (Story 8-5: Verification Queue UI, Story 12-3: Export Eligibility)
 export type {
   ApproveVerificationRequest,
   BulkVerificationRequest,
   BulkVerificationResponse as FindingBulkVerificationResponse,
   ConfidenceTier,
+  ExportBlockingFinding,
+  ExportEligibility,
+  ExportEligibilityResponse,
+  ExportWarningFinding,
   FindingVerification,
   FlagVerificationRequest,
   RejectVerificationRequest,

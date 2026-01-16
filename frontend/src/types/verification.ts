@@ -235,3 +235,54 @@ export interface BulkVerificationRequest {
   decision: VerificationDecision;
   notes?: string;
 }
+
+// =============================================================================
+// Story 12-3: Export Eligibility Types (Task 1)
+// =============================================================================
+
+/**
+ * Finding that blocks export.
+ *
+ * Story 12-3: AC #1 - Details of finding blocking export.
+ */
+export interface ExportBlockingFinding {
+  verificationId: string;
+  findingId: string | null;
+  findingType: string;
+  findingSummary: string;
+  confidence: number;
+}
+
+/**
+ * Finding that shows warning but doesn't block export.
+ *
+ * Story 12-3: AC #2 - Findings with 70-90% confidence show warning.
+ */
+export interface ExportWarningFinding {
+  verificationId: string;
+  findingId: string | null;
+  findingType: string;
+  findingSummary: string;
+  confidence: number;
+}
+
+/**
+ * Result of export eligibility check.
+ *
+ * Story 12-3: AC #1, #2 - Export eligibility with blocking and warning findings.
+ */
+export interface ExportEligibility {
+  eligible: boolean;
+  blockingFindings: ExportBlockingFinding[];
+  blockingCount: number;
+  warningFindings: ExportWarningFinding[];
+  warningCount: number;
+  message: string;
+}
+
+/**
+ * Response for export eligibility endpoint.
+ */
+export interface ExportEligibilityResponse {
+  data: ExportEligibility;
+}

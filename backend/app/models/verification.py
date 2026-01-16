@@ -395,10 +395,24 @@ class ExportBlockingFinding(BaseModel):
     confidence: float = Field(..., ge=0, le=100, description="Confidence score")
 
 
+class ExportWarningFinding(BaseModel):
+    """Finding that shows warning but doesn't block export.
+
+    Story 12-3: AC #2 - Findings with 70-90% confidence show warning.
+    """
+
+    verification_id: str = Field(..., description="Verification UUID")
+    finding_id: str | None = Field(None, description="Finding UUID")
+    finding_type: str = Field(..., description="Finding type")
+    finding_summary: str = Field(..., description="Finding summary")
+    confidence: float = Field(..., ge=0, le=100, description="Confidence score")
+
+
 class ExportEligibilityResult(BaseModel):
     """Result of export eligibility check.
 
     Story 8-4: AC #5 - Export blocked if < 70% confidence findings unverified.
+    Story 12-3: AC #2 - Warnings for 70-90% confidence unverified findings.
     """
 
     eligible: bool = Field(..., description="True if export is allowed")
@@ -407,6 +421,11 @@ class ExportEligibilityResult(BaseModel):
         description="Findings blocking export (< 70% confidence, unverified)",
     )
     blocking_count: int = Field(0, ge=0, description="Number of blocking findings")
+    warning_findings: list[ExportWarningFinding] = Field(
+        default_factory=list,
+        description="Findings with warnings (70-90% confidence, unverified)",
+    )
+    warning_count: int = Field(0, ge=0, description="Number of warning findings")
     message: str = Field(
         "",
         description="Human-readable eligibility message",

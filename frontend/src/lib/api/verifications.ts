@@ -4,6 +4,7 @@
  * Provides typed API functions for verification operations.
  *
  * Story 8-5: Implement Verification Queue UI
+ * Story 12-3: Export Verification Check
  * Epic 8: Safety Layer (Guardrails, Policing, Verification)
  */
 
@@ -11,6 +12,7 @@ import { api } from './client';
 import type {
   ApproveVerificationRequest,
   BulkVerificationRequest,
+  ExportEligibility,
   FindingBulkVerificationResponse,
   FindingVerification,
   FindingVerificationListResponse,
@@ -280,6 +282,73 @@ export async function bulkUpdateVerifications(
 }
 
 // =============================================================================
+// Story 12-3: Export Eligibility Check (Task 1.2)
+// =============================================================================
+
+/**
+ * Check export eligibility for a matter.
+ *
+ * Returns whether export is allowed, along with blocking and warning findings.
+ * - Blocking findings (< 70% confidence): Must be verified before export
+ * - Warning findings (70-90% confidence): Can proceed with warnings
+ *
+ * @param matterId - Matter UUID.
+ * @returns Export eligibility result with blocking and warning findings.
+ *
+ * @example
+ * ```ts
+ * const eligibility = await checkExportEligibility('matter-123');
+ * if (!eligibility.eligible) {
+ *   console.log(`${eligibility.blockingCount} findings block export`);
+ * }
+ * ```
+ */
+export async function checkExportEligibility(matterId: string): Promise<ExportEligibility> {
+  // API returns snake_case, convert to camelCase
+  const response = await api.get<{
+    eligible: boolean;
+    blocking_findings: Array<{
+      verification_id: string;
+      finding_id: string | null;
+      finding_type: string;
+      finding_summary: string;
+      confidence: number;
+    }>;
+    blocking_count: number;
+    warning_findings: Array<{
+      verification_id: string;
+      finding_id: string | null;
+      finding_type: string;
+      finding_summary: string;
+      confidence: number;
+    }>;
+    warning_count: number;
+    message: string;
+  }>(`/api/matters/${matterId}/verifications/export-eligibility`);
+
+  return {
+    eligible: response.eligible,
+    blockingFindings: response.blocking_findings.map((f) => ({
+      verificationId: f.verification_id,
+      findingId: f.finding_id,
+      findingType: f.finding_type,
+      findingSummary: f.finding_summary,
+      confidence: f.confidence,
+    })),
+    blockingCount: response.blocking_count,
+    warningFindings: response.warning_findings.map((f) => ({
+      verificationId: f.verification_id,
+      findingId: f.finding_id,
+      findingType: f.finding_type,
+      findingSummary: f.finding_summary,
+      confidence: f.confidence,
+    })),
+    warningCount: response.warning_count,
+    message: response.message,
+  };
+}
+
+// =============================================================================
 // Story 8-5: Consolidated API Object
 // =============================================================================
 
@@ -294,4 +363,5 @@ export const verificationsApi = {
   reject: rejectVerification,
   flag: flagVerification,
   bulkUpdate: bulkUpdateVerifications,
+  checkExportEligibility,
 };

@@ -41,5 +41,6 @@ export {
 // Bounding box hooks (Story 11.7)
 export { useBoundingBoxes } from './useBoundingBoxes';
 
-// Export builder hooks (Story 12.1, 12.2)
+// Export builder hooks (Story 12.1, 12.2, 12.3)
 export { useExportBuilder } from './useExportBuilder';
+export { useExportGeneration } from './useExportGeneration';

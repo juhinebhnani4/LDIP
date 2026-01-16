@@ -197,7 +197,7 @@ development_status:
   epic-12: in-progress  # First story created 2026-01-16
   12-1-export-modal-section-selection: done  # Code review complete 2026-01-16
   12-2-inline-editing-preview: done  # Code review complete 2026-01-16 - 11 issues fixed
-  12-3-verification-check-format-generation: review  # Implementation complete 2026-01-16, 14 tests pass - Ready for code review
+  12-3-verification-check-format-generation: done  # Code review complete 2026-01-16 - 10 issues fixed, 29 tests total (14 BE + 15 FE)
   12-4-partner-executive-summary: backlog
   epic-12-retrospective: optional
 
@@ -227,7 +227,7 @@ development_status:
   14-6-summary-fe-integration: done  # EditableSection + CitationLink integration - Completed 2026-01-16
 
   # MEDIUM PRIORITY GAPS (Deferred but tracked)
-  14-7-anomaly-auto-trigger: review  # Implementation complete 2026-01-16 - 18 tests passing
+  14-7-anomaly-auto-trigger: done  # Code review complete 2026-01-16 - 7 issues fixed, 20 tests passing
   14-8-timeline-real-api: backlog           # Switch from mock to real API in useTimeline hooks (Story 10B.5)
 
   # FRONTEND-BACKEND WIRING GAPS (Added 2026-01-16 via Course Correction)

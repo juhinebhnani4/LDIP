@@ -171,7 +171,7 @@ export function TimelineEventDetail({
               {event.entities.map((entity, idx) => (
                 <span key={entity.entityId}>
                   <Link
-                    href={`/matters/${matterId}/entities?entity=${entity.entityId}`}
+                    href={`/matter/${matterId}/entities?entity=${entity.entityId}`}
                     className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
                   >
                     {entity.canonicalName}
@@ -205,7 +205,7 @@ export function TimelineEventDetail({
           {event.documentId && (
             <Button variant="outline" size="sm" asChild className="gap-1.5">
               <Link
-                href={`/matters/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
+                href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 View Source

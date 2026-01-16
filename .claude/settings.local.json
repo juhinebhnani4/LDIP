@@ -82,7 +82,22 @@
       "Bash(Select-Object -First 80)",
       "Bash(tasklist:*)",
       "Bash(docker ps:*)",
-      "Bash(rename:*)"
+      "Bash(rename:*)",
+      "Bash(taskkill:*)",
+      "Bash(redis-cli ping:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(.venv/Scripts/celery:*)",
+      "Skill(bmad:bmm:workflows:create-epics-and-stories)",
+      "Skill(bmad:bmm:workflows:create-epics-and-stories:*)",
+      "Bash(npx @kayvan/markdown-tree-parser:*)",
+      "Skill(bmad:bmm:agents:dev)",
+      "Skill(bmad:bmm:agents:dev:*)",
+      "Bash($env:SUPABASE_ACCESS_TOKEN=\"sbp_940181e1892fe74faab9a7035e8b8a4451d45fcb\")",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(git rev-parse:*)",
+      "Skill(bmad:bmm:workflows:workflow-init)",
+      "Skill(bmad:bmm:workflows:workflow-init:*)"
     ]
   }
 }

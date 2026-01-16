@@ -162,7 +162,7 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
           </div>
           <div className="flex gap-2 mt-4">
             <Button asChild variant="outline" size="sm" className="flex-1">
-              <Link href={`/matters/${matterId}/entities?entityId=${party.entityId}`}>
+              <Link href={`/matter/${matterId}/entities?entityId=${party.entityId}`}>
                 <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 View Entity
               </Link>
@@ -174,7 +174,7 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
               className="flex-1"
             >
               <Link
-                href={`/matters/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
+                href={`/matter/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
                 aria-label={`View source: ${party.sourceDocument}, page ${party.sourcePage}`}
               >
                 <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />

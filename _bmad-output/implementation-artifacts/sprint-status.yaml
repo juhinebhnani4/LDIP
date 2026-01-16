@@ -256,46 +256,46 @@ development_status:
   epic-15-chunk-infrastructure: in-progress  # First story created 2026-01-17
   15-1-document-ocr-chunks-table: done  # Code review complete 2026-01-17 - 36 tests, fix migration deployed
   15-2-ocr-chunk-service: done                 # CRUD service + heartbeat detection - 56 tests, code review fixes applied 2026-01-17
-  15-3-chunk-progress-job-tracking: backlog    # Integration with JobTrackingService
-  15-4-chunk-cleanup-mechanism: backlog        # Cleanup temporary chunk data + orphan detection
+  15-3-chunk-progress-job-tracking: ready-for-dev    # Integration with JobTrackingService
+  15-4-chunk-cleanup-mechanism: ready-for-dev        # Cleanup temporary chunk data + orphan detection
   epic-15-retrospective: optional
 
   # Epic 16: PDF Chunking & Parallel Processing
   # Goal: Split large PDFs and process chunks in parallel via Celery
   epic-16-pdf-chunking: backlog
-  16-1-pdf-page-count-routing: backlog         # Detect page count, route ≤30 sync, >30 chunked
-  16-2-pdf-chunker-service: backlog            # Split PDFs into 25-page chunks
-  16-3-ocr-result-merger: backlog              # Merge chunk results with page offset adjustment
-  16-4-parallel-chunk-celery: backlog          # Celery group() for parallel processing
-  16-5-individual-chunk-retry: backlog         # Retry failed chunks without reprocessing successful ones
+  16-1-pdf-page-count-routing: ready-for-dev         # Detect page count, route ≤30 sync, >30 chunked
+  16-2-pdf-chunker-service: ready-for-dev            # Split PDFs into 25-page chunks
+  16-3-ocr-result-merger: ready-for-dev              # Merge chunk results with page offset adjustment
+  16-4-parallel-chunk-celery: ready-for-dev          # Celery group() for parallel processing
+  16-5-individual-chunk-retry: ready-for-dev         # Retry failed chunks without reprocessing successful ones
   epic-16-retrospective: optional
 
   # Epic 17: Data Integrity & Reliability Hardening
   # Goal: Ensure data integrity, memory safety, and graceful failure handling
   epic-17-reliability: backlog
-  17-1-streaming-pdf-split: backlog            # Memory-safe split (max 50MB regardless of PDF size)
-  17-2-docai-circuit-breaker: backlog          # Circuit breaker for Document AI failures
-  17-3-chunk-timeout-rate-limiting: backlog    # Per-chunk timeout (60s), max 5 concurrent calls
-  17-4-idempotent-chunk-processing: backlog    # Delete before re-insert to prevent duplicates
-  17-5-batch-bbox-inserts: backlog             # Batch inserts of 500 to prevent timeouts
-  17-6-page-offset-validation: backlog         # Validate absolute page numbers before save
-  17-7-downstream-rag-trigger: backlog         # Trigger chunk re-linking after OCR completes
-  17-8-bbox-reference-validation: backlog      # Validate entity mention and citation bbox refs
+  17-1-streaming-pdf-split: ready-for-dev            # Memory-safe split (max 50MB regardless of PDF size)
+  17-2-docai-circuit-breaker: ready-for-dev          # Circuit breaker for Document AI failures
+  17-3-chunk-timeout-rate-limiting: ready-for-dev    # Per-chunk timeout (60s), max 5 concurrent calls
+  17-4-idempotent-chunk-processing: ready-for-dev    # Delete before re-insert to prevent duplicates
+  17-5-batch-bbox-inserts: ready-for-dev             # Batch inserts of 500 to prevent timeouts
+  17-6-page-offset-validation: ready-for-dev         # Validate absolute page numbers before save
+  17-7-downstream-rag-trigger: ready-for-dev         # Trigger chunk re-linking after OCR completes
+  17-8-bbox-reference-validation: ready-for-dev      # Validate entity mention and citation bbox refs
   epic-17-retrospective: optional
 
   # Epic 18: Testing & Validation
   # Goal: Comprehensive test coverage for large document processing
   epic-18-chunk-testing: backlog
-  18-1-pdfchunker-unit-tests: backlog          # Unit tests for split logic and edge cases
-  18-2-merger-unit-tests: backlog              # Unit tests for page offset calculations
-  18-3-property-based-tests: backlog           # Hypothesis tests for page offset correctness
-  18-4-integration-sample-docs: backlog        # Integration tests with 100, 200, 400+ page PDFs
-  18-5-chaos-worker-failures: backlog          # Chaos tests for worker failure recovery
-  18-6-performance-benchmarks: backlog         # 422 pages in <4 minutes benchmark
-  18-7-structured-logging: backlog             # Correlation ID and chunk-level logging
-  18-8-rag-pipeline-integration: backlog       # RAG pipeline tests for large documents
-  18-9-global-search-integration: backlog      # Global search tests for large documents
-  18-10-bbox-linking-performance: backlog      # Fuzzy match performance benchmarks
+  18-1-pdfchunker-unit-tests: ready-for-dev          # Unit tests for split logic and edge cases
+  18-2-merger-unit-tests: ready-for-dev              # Unit tests for page offset calculations
+  18-3-property-based-tests: ready-for-dev           # Hypothesis tests for page offset correctness
+  18-4-integration-sample-docs: ready-for-dev        # Integration tests with 100, 200, 400+ page PDFs
+  18-5-chaos-worker-failures: ready-for-dev          # Chaos tests for worker failure recovery
+  18-6-performance-benchmarks: ready-for-dev         # 422 pages in <4 minutes benchmark
+  18-7-structured-logging: ready-for-dev             # Correlation ID and chunk-level logging
+  18-8-rag-pipeline-integration: ready-for-dev       # RAG pipeline tests for large documents
+  18-9-global-search-integration: ready-for-dev      # Global search tests for large documents
+  18-10-bbox-linking-performance: ready-for-dev      # Fuzzy match performance benchmarks
   epic-18-retrospective: optional
 
 # =============================================================================

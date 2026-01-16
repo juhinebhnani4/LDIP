@@ -36,7 +36,7 @@ interface AttentionItemRowProps {
 function AttentionItemRow({ item, matterId }: AttentionItemRowProps) {
   return (
     <Link
-      href={`/matters/${matterId}/${item.targetTab}`}
+      href={`/matter/${matterId}/${item.targetTab}`}
       className="flex items-center justify-between w-full py-2 px-3 rounded-md hover:bg-destructive/10 transition-colors text-left group"
       aria-label={`${item.count} ${item.label}. Click to review in ${item.targetTab} tab.`}
     >
@@ -76,7 +76,7 @@ export function AttentionBanner({ items, className }: AttentionBannerProps) {
           size="sm"
           className="h-7 text-xs hover:bg-destructive/20"
         >
-          <Link href={`/matters/${matterId}/verification`}>Review All</Link>
+          <Link href={`/matter/${matterId}/verification`}>Review All</Link>
         </Button>
       </AlertTitle>
       <AlertDescription className="mt-2">

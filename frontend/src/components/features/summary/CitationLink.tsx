@@ -41,7 +41,7 @@ export function CitationLink({
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
 
-  const href = `/matters/${matterId}/documents?doc=${encodeURIComponent(documentName)}&page=${pageNumber}`;
+  const href = `/matter/${matterId}/documents?doc=${encodeURIComponent(documentName)}&page=${pageNumber}`;
 
   return (
     <TooltipProvider>

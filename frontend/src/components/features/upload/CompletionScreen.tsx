@@ -71,7 +71,7 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
     reset();
 
     // Redirect to workspace (or dashboard if no matterId)
-    const destination = matterId ? `/matters/${matterId}` : '/';
+    const destination = matterId ? `/matter/${matterId}` : '/';
     router.push(destination);
   }, [hasRedirected, onRedirect, reset, router, matterId]);
 

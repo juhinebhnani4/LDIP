@@ -118,9 +118,9 @@ export function GlobalSearch() {
 
     // Navigate based on type
     if (result.type === 'matter') {
-      window.location.href = `/matters/${result.matterId}`;
+      window.location.href = `/matter/${result.matterId}`;
     } else {
-      window.location.href = `/matters/${result.matterId}/documents/${result.id}`;
+      window.location.href = `/matter/${result.matterId}/documents/${result.id}`;
     }
   }, []);
 

@@ -129,7 +129,7 @@ export function SubjectMatterSection({
                 className="h-7 text-xs"
               >
                 <Link
-                  href={`/matters/${matterId}/documents?doc=${encodeURIComponent(source.documentName)}&pages=${encodeURIComponent(source.pageRange)}`}
+                  href={`/matter/${matterId}/documents?doc=${encodeURIComponent(source.documentName)}&pages=${encodeURIComponent(source.pageRange)}`}
                   aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
                 >
                   <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />

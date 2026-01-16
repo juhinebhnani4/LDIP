@@ -55,7 +55,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <Button asChild>
-            <Link href="/matter/new">
+            <Link href="/upload">
               <Plus className="size-4 mr-1" />
               New Matter
             </Link>

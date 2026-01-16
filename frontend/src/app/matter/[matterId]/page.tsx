@@ -15,5 +15,5 @@ export default async function MatterPage({ params }: MatterPageProps) {
   const { matterId } = await params;
 
   // Redirect to summary tab (default tab)
-  redirect(`/matters/${matterId}/summary`);
+  redirect(`/matter/${matterId}/summary`);
 }

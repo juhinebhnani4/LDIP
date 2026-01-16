@@ -138,7 +138,7 @@ export function CurrentStatusSection({
         </div>
         <Button asChild variant="ghost" size="sm">
           <Link
-            href={`/matters/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
+            href={`/matter/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
             aria-label={`View full order: ${currentStatus.sourceDocument}, page ${currentStatus.sourcePage}`}
           >
             <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />

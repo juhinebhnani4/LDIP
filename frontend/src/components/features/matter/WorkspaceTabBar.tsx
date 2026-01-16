@@ -167,7 +167,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
 
   // Generate href for each tab
   const getTabHref = useCallback(
-    (tabId: TabId) => `/matters/${matterId}/${tabId}`,
+    (tabId: TabId) => `/matter/${matterId}/${tabId}`,
     [matterId]
   );
 

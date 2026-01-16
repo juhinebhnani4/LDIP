@@ -1,8 +1,17 @@
 """Celery application configuration."""
 
+import os
 import ssl
+from pathlib import Path
 
 from celery import Celery
+from dotenv import load_dotenv
+
+# Load .env file to set GOOGLE_APPLICATION_CREDENTIALS before importing settings
+# This is needed because Google Cloud SDK reads directly from os.environ
+env_file = Path(__file__).parent.parent.parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
 
 from app.core.config import get_settings
 

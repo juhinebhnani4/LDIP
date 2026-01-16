@@ -90,9 +90,9 @@ class TestCalculateDocumentConfidence:
     ) -> None:
         """Should calculate average for single page."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {"page_number": 1, "confidence_score": 0.90},
-            {"page_number": 1, "confidence_score": 0.80},
-            {"page_number": 1, "confidence_score": 0.85},
+            {"page_number": 1, "confidence": 0.90},
+            {"page_number": 1, "confidence": 0.80},
+            {"page_number": 1, "confidence": 0.85},
         ]
 
         result = calculate_document_confidence("doc-id")
@@ -112,14 +112,14 @@ class TestCalculateDocumentConfidence:
         """Should calculate separate averages per page."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
             # Page 1: 90% average
-            {"page_number": 1, "confidence_score": 0.90},
-            {"page_number": 1, "confidence_score": 0.90},
+            {"page_number": 1, "confidence": 0.90},
+            {"page_number": 1, "confidence": 0.90},
             # Page 2: 70% average
-            {"page_number": 2, "confidence_score": 0.70},
-            {"page_number": 2, "confidence_score": 0.70},
+            {"page_number": 2, "confidence": 0.70},
+            {"page_number": 2, "confidence": 0.70},
             # Page 3: 50% average
-            {"page_number": 3, "confidence_score": 0.50},
-            {"page_number": 3, "confidence_score": 0.50},
+            {"page_number": 3, "confidence": 0.50},
+            {"page_number": 3, "confidence": 0.50},
         ]
 
         result = calculate_document_confidence("doc-id")
@@ -140,14 +140,14 @@ class TestCalculateDocumentConfidence:
         assert result.overall_confidence == pytest.approx(0.70, rel=1e-2)
         assert result.quality_status == "fair"
 
-    def test_null_confidence_scores_ignored(
+    def test_null_confidences_ignored(
         self, mock_supabase: MagicMock, mock_settings: MagicMock
     ) -> None:
         """Should ignore bounding boxes with null confidence scores."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {"page_number": 1, "confidence_score": 0.90},
-            {"page_number": 1, "confidence_score": None},  # Should be ignored
-            {"page_number": 1, "confidence_score": 0.80},
+            {"page_number": 1, "confidence": 0.90},
+            {"page_number": 1, "confidence": None},  # Should be ignored
+            {"page_number": 1, "confidence": 0.80},
         ]
 
         result = calculate_document_confidence("doc-id")
@@ -160,8 +160,8 @@ class TestCalculateDocumentConfidence:
     ) -> None:
         """Should return null confidence when all scores are null."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {"page_number": 1, "confidence_score": None},
-            {"page_number": 1, "confidence_score": None},
+            {"page_number": 1, "confidence": None},
+            {"page_number": 1, "confidence": None},
         ]
 
         result = calculate_document_confidence("doc-id")
@@ -222,8 +222,8 @@ class TestUpdateDocumentConfidence:
     ) -> None:
         """Should update document with calculated confidence metrics."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {"page_number": 1, "confidence_score": 0.90},
-            {"page_number": 2, "confidence_score": 0.80},
+            {"page_number": 1, "confidence": 0.90},
+            {"page_number": 2, "confidence": 0.80},
         ]
 
         result = update_document_confidence("doc-id")
@@ -242,7 +242,7 @@ class TestUpdateDocumentConfidence:
     ) -> None:
         """Should raise exception when update fails."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
-            {"page_number": 1, "confidence_score": 0.90},
+            {"page_number": 1, "confidence": 0.90},
         ]
         mock_supabase.table.return_value.update.return_value.eq.return_value.execute.side_effect = Exception(
             "Update failed"

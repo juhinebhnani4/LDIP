@@ -46,9 +46,10 @@ def calculate_document_confidence(document_id: str) -> OCRConfidenceResult:
 
     try:
         # Get all bounding boxes for document with confidence scores
+        # Note: column is named 'confidence' in DB (not 'confidence_score')
         response = (
             supabase.table("bounding_boxes")
-            .select("page_number, confidence_score")
+            .select("page_number, confidence")
             .eq("document_id", document_id)
             .execute()
         )
@@ -77,7 +78,7 @@ def calculate_document_confidence(document_id: str) -> OCRConfidenceResult:
     page_scores: dict[int, list[float]] = {}
     for bbox in response.data:
         page = bbox["page_number"]
-        conf = bbox.get("confidence_score")
+        conf = bbox.get("confidence")
         if conf is not None:
             if page not in page_scores:
                 page_scores[page] = []

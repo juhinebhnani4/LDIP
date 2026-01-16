@@ -340,7 +340,7 @@ class GlobalSearchService:
         seen_ids: set[str] = set()
 
         # Track matter IDs from matter results to avoid duplicates
-        matter_ids_in_results = {r.id for r in matter_results}
+        {r.id for r in matter_results}
 
         for _score, result_with_matter in scored_results:
             if result_with_matter.result.id in seen_ids:

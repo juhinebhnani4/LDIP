@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+// userEvent imported for potential interactive tests
 import { WorkspaceContentArea } from './WorkspaceContentArea';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';

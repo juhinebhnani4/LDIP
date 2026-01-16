@@ -110,11 +110,8 @@ describe('CitationsList', () => {
   it('shows loading state', () => {
     render(<CitationsList {...defaultProps} isLoading={true} />);
 
-    // Should show skeleton loaders
-    const skeletons = screen.getAllByRole('generic').filter(
-      el => el.className.includes('skeleton') || el.className.includes('Skeleton')
-    );
-    // The Skeleton component renders divs, we should see multiple
+    // Should show skeleton loaders - the Skeleton component renders divs
+    // We verify by checking that the actual citation text is NOT shown during loading
     expect(screen.queryByText('Securities Act, 1992')).not.toBeInTheDocument();
   });
 

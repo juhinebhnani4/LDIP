@@ -300,7 +300,7 @@ class TestMIGPipelineIntegration:
         mock_get_client.return_value = mock_client
 
         matter_a = str(uuid4())
-        matter_b = str(uuid4())
+        str(uuid4())
 
         # Mock: get entity with matter_id filter
         mock_select_response = MagicMock()

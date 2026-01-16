@@ -579,7 +579,6 @@ class TimelineService:
         # For auto-classification (is_manual=False), set verified=False
         # as it needs human review if confidence is low.
         # For manual classification, verified=True as human has confirmed.
-        verified = is_manual
 
         def _update():
             return (

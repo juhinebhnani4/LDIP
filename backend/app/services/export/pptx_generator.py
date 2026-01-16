@@ -271,7 +271,7 @@ class PptxGenerator:
 
         slides: list[dict] = []
         # One contradiction per slide (they need more space)
-        for i, contradiction in enumerate(contradictions[:10]):
+        for _i, contradiction in enumerate(contradictions[:10]):
             con_type = contradiction.get("contradiction_type", "contradiction")
             severity = contradiction.get("severity", "unknown")
             statement_a = contradiction.get("statement_a", "")

@@ -164,7 +164,7 @@ async def get_notifications(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "notifications_request_unexpected_error",
@@ -295,7 +295,7 @@ async def mark_notification_read(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "mark_notification_read_unexpected_error",
@@ -381,7 +381,7 @@ async def mark_all_notifications_read(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "mark_all_notifications_read_unexpected_error",

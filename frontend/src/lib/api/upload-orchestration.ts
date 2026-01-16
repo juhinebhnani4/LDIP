@@ -11,7 +11,7 @@
 
 import { api, ApiError } from '@/lib/api/client';
 import { uploadFile } from '@/lib/api/documents';
-import type { UploadResponse } from '@/types/document';
+// UploadResponse type used by uploadFile function
 import type { UploadProgress } from '@/types/upload';
 
 // =============================================================================
@@ -22,7 +22,7 @@ import type { UploadProgress } from '@/types/upload';
 interface CreateMatterResponse {
   data: {
     id: string;
-    name: string;
+    title: string;
     status: string;
     created_at: string;
     updated_at: string;
@@ -110,7 +110,7 @@ export async function createMatterAndUpload(
   let matterId: string;
   try {
     const response = await api.post<CreateMatterResponse>('/api/matters', {
-      name: matterName,
+      title: matterName,
     });
     matterId = response.data.id;
     onMatterCreated?.(matterId);

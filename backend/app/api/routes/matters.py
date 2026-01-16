@@ -82,7 +82,7 @@ async def create_matter(
         matter = matter_service.create_matter(user.id, data)
         return MatterResponse(data=matter)
     except MatterServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.get("", response_model=MatterListResponse)
@@ -146,7 +146,7 @@ async def get_matter(
         matter = matter_service.get_matter(matter_id, user.id)
         return MatterWithMembersResponse(data=matter)
     except MatterNotFoundError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.patch("/{matter_id}", response_model=MatterResponse)
@@ -179,7 +179,7 @@ async def update_matter(
         )
         return MatterResponse(data=matter)
     except MatterServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.delete("/{matter_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -204,7 +204,7 @@ async def delete_matter(
     try:
         matter_service.delete_matter(matter_id, membership.user_id)
     except MatterServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 # =============================================================================
@@ -252,7 +252,7 @@ async def get_tab_stats(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # Member management endpoints
@@ -284,7 +284,7 @@ async def list_members(
         members = matter_service.get_members(matter_id, membership.user_id)
         return MemberListResponse(data=members)
     except MatterServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.post(
@@ -328,7 +328,7 @@ async def invite_member(
         MemberAlreadyExistsError,
         UserNotFoundError,
     ) as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.patch("/{matter_id}/members/{user_id}", response_model=MemberResponse)
@@ -366,7 +366,7 @@ async def update_member_role(
         )
         return MemberResponse(data=member)
     except (MatterServiceError, CannotRemoveOwnerError) as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
 
 
 @router.delete("/{matter_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -397,4 +397,4 @@ async def remove_member(
             user_id,
         )
     except (MatterServiceError, CannotRemoveOwnerError) as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e

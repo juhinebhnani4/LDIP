@@ -42,7 +42,7 @@ def test_openai():
     try:
         from openai import OpenAI
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.models.list()
+        client.models.list()
         print("   [OK] OpenAI: Valid API key")
         return True
     except Exception as e:

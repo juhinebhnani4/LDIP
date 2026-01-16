@@ -140,10 +140,7 @@ class CitationStorageService:
                     act_name = citation.act_name
                     if canonical:
                         name, year = canonical
-                        if year:
-                            act_name = f"{name}, {year}"
-                        else:
-                            act_name = name
+                        act_name = f"{name}, {year}" if year else name
 
                     record = {
                         "matter_id": matter_id,

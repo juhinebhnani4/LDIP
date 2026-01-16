@@ -11,7 +11,7 @@ import { SuggestedQuestions } from './SuggestedQuestions';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData } from '@/hooks/useSSE';
-import { ApiError, canRetryError } from '@/lib/api/client';
+import { canRetryError } from '@/lib/api/client';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
 
 interface QAPanelProps {

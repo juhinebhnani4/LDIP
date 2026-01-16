@@ -78,7 +78,7 @@ class TestTriggerDateExtraction:
                     mock_result.id = "task-123"
                     mock_task.delay.return_value = mock_result
 
-                    response = sync_client.post(
+                    sync_client.post(
                         "/api/matters/matter-123/timeline/extract",
                         headers={"Authorization": "Bearer test-token"},
                     )
@@ -120,7 +120,7 @@ class TestListRawDates:
                 mock_service.return_value = service
 
                 # Test that endpoint accepts page and per_page params
-                response = sync_client.get(
+                sync_client.get(
                     "/api/matters/matter-123/timeline/raw-dates",
                     params={"page_num": 2, "per_page": 50},
                     headers={"Authorization": "Bearer test-token"},
@@ -187,7 +187,7 @@ class TestListTimelineEvents:
                 mock_service.return_value = service
 
                 # Test that endpoint accepts event_type filter
-                response = sync_client.get(
+                sync_client.get(
                     "/api/matters/matter-123/timeline",
                     params={"event_type": "raw_date"},
                     headers={"Authorization": "Bearer test-token"},
@@ -321,7 +321,7 @@ class TestListClassifiedEvents:
                 mock_service.return_value = service
 
                 # Test that endpoint accepts filters
-                response = sync_client.get(
+                sync_client.get(
                     "/api/matters/matter-123/timeline/events",
                     params={"event_type": "filing", "confidence_min": 0.8},
                     headers={"Authorization": "Bearer test-token"},
@@ -363,7 +363,7 @@ class TestListUnclassifiedEvents:
                 mock_service.return_value = service
 
                 # Test pagination params
-                response = sync_client.get(
+                sync_client.get(
                     "/api/matters/matter-123/timeline/unclassified",
                     params={"page": 2, "per_page": 50},
                     headers={"Authorization": "Bearer test-token"},
@@ -525,7 +525,7 @@ class TestManualEventEndpoints:
             mock_auth.return_value = lambda: mock_matter_membership
 
             # Missing event_date - should fail validation
-            response = sync_client.post(
+            sync_client.post(
                 "/api/matters/matter-123/timeline/events",
                 json={
                     "event_type": "hearing",
@@ -545,7 +545,7 @@ class TestManualEventEndpoints:
             mock_auth.return_value = lambda: mock_matter_membership
 
             # Invalid event_type should be rejected
-            response = sync_client.post(
+            sync_client.post(
                 "/api/matters/matter-123/timeline/events",
                 json={
                     "event_date": "2024-01-15",

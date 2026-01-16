@@ -243,7 +243,7 @@ class TestRateLimitStatus:
         assert "health" in tiers
 
         # Verify tier structure
-        for tier_name, tier_info in tiers.items():
+        for _tier_name, tier_info in tiers.items():
             assert "limit" in tier_info
             assert "window" in tier_info
             assert "description" in tier_info

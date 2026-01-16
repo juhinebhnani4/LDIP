@@ -122,7 +122,7 @@ async def get_dashboard_stats(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "dashboard_stats_unexpected_error",

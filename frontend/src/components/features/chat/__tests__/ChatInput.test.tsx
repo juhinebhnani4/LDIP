@@ -135,10 +135,8 @@ describe('ChatInput', () => {
   });
 
   it('does not submit when disabled', async () => {
-    const user = userEvent.setup();
     render(<ChatInput onSubmit={mockOnSubmit} disabled />);
 
-    const textarea = screen.getByTestId('chat-input-textarea');
     // Can't type when disabled, but test the button is disabled
     const submitButton = screen.getByTestId('chat-submit-button');
 

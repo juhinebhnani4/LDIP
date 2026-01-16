@@ -587,7 +587,7 @@ class EntityResolver:
         result.entities_processed = len(entities)
 
         # Process each type group
-        for entity_type, type_entities in entities_by_type.items():
+        for _entity_type, type_entities in entities_by_type.items():
             if len(type_entities) < 2:
                 continue
 
@@ -1136,9 +1136,7 @@ class EntityResolver:
         """Check if name components contain initials."""
         if comp.first_name and self._is_initial(comp.first_name):
             return True
-        if comp.middle_name and self._is_initial(comp.middle_name):
-            return True
-        return False
+        return bool(comp.middle_name and self._is_initial(comp.middle_name))
 
 
 # =============================================================================

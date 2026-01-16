@@ -75,7 +75,7 @@ class TestCreateMatter:
 
         # Create matter
         data = MatterCreate(title="Test Matter", description="Test description")
-        result = matter_service.create_matter(mock_user_id, data)
+        matter_service.create_matter(mock_user_id, data)
 
         # Since it's not async in real usage pattern, we need to handle this
         # Actually the service uses sync methods, so we can test directly
@@ -117,7 +117,7 @@ class TestGetUserRole:
             data=[{"role": "owner"}]
         )
 
-        result = matter_service.get_user_role("matter-id", mock_user_id)
+        matter_service.get_user_role("matter-id", mock_user_id)
 
         # Verify correct table was queried
         mock_db.table.assert_called_with("matter_attorneys")
@@ -315,7 +315,7 @@ class TestUpdateMatter:
 
         mock_db.table.side_effect = table_side_effect
 
-        result = matter_service.update_matter(
+        matter_service.update_matter(
             "matter-id",
             "editor-user-id",
             MatterUpdate(title="New Title"),

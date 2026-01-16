@@ -164,7 +164,7 @@ async def _validate_job_access(
     """
     try:
         job = await job_tracker.get_job(job_id)
-    except JobNotFoundError:
+    except JobNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -174,7 +174,7 @@ async def _validate_job_access(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
     if job is None:
         raise HTTPException(
@@ -254,7 +254,7 @@ async def list_matter_jobs(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -297,7 +297,7 @@ async def get_matter_job_stats(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -403,7 +403,7 @@ async def retry_job(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post(
@@ -469,7 +469,7 @@ async def skip_job(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post(
@@ -553,7 +553,7 @@ async def cancel_job(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -602,7 +602,7 @@ async def get_active_job_for_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================

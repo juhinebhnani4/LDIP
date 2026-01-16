@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useSummaryEdit } from './useSummaryEdit';
 import { api } from '@/lib/api/client';
 import { toast } from 'sonner';

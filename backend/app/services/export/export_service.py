@@ -149,7 +149,7 @@ class ExportService:
             )
 
             # Create export record
-            export_record = await self._create_export_record(
+            await self._create_export_record(
                 export_id=export_id,
                 matter_id=matter_id,
                 request=request,

@@ -12,6 +12,7 @@ Job Tracking Integration (Story 2c-3):
 """
 
 import asyncio
+import contextlib
 
 import structlog
 from celery.exceptions import MaxRetriesExceededError
@@ -820,10 +821,8 @@ def process_document(
         if retry_count >= MAX_RETRIES:
             _matter_id = matter_id
             if not _matter_id:
-                try:
+                with contextlib.suppress(Exception):
                     _, _matter_id = doc_service.get_document_for_processing(document_id)
-                except Exception:
-                    pass
             # Mark job as failed
             _mark_job_failed(job_id, str(e), error_code, _matter_id)
             return _handle_max_retries_exceeded(doc_service, document_id, e, _matter_id)
@@ -834,10 +833,8 @@ def process_document(
     except MaxRetriesExceededError as e:
         _matter_id = matter_id
         if not _matter_id:
-            try:
+            with contextlib.suppress(Exception):
                 _, _matter_id = doc_service.get_document_for_processing(document_id)
-            except Exception:
-                pass
         # Mark job as failed
         _mark_job_failed(
             job_id,
@@ -861,14 +858,12 @@ def process_document(
         # Mark job as failed
         _mark_job_failed(job_id, e.message, e.code, matter_id)
 
-        try:
+        with contextlib.suppress(DocumentServiceError):
             doc_service.update_ocr_status(
                 document_id=document_id,
                 status=DocumentStatus.OCR_FAILED,
                 ocr_error=f"{e.code}: {e.message}",
             )
-        except DocumentServiceError:
-            pass
 
         return {
             "status": "ocr_failed",
@@ -890,14 +885,12 @@ def process_document(
         # Mark job as failed
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
 
-        try:
+        with contextlib.suppress(DocumentServiceError):
             doc_service.update_ocr_status(
                 document_id=document_id,
                 status=DocumentStatus.OCR_FAILED,
                 ocr_error=f"Unexpected error: {e!s}",
             )
-        except DocumentServiceError:
-            pass
 
         return {
             "status": "ocr_failed",
@@ -2017,7 +2010,7 @@ def embed_chunks(
                     embeddings = await embedder.embed_batch(batch_texts, skip_empty=True)
 
                     # Update chunks with embeddings
-                    for j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings)):
+                    for _j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings, strict=False)):
                         if embedding is None:
                             failed_count += 1
                             if stage_progress:

@@ -316,7 +316,6 @@ class PDFGenerator:
             lines.append(line)
 
         # Calculate page layout
-        line_height = 12
         chars_per_page = 60  # Lines per page
         pages_needed = (len(lines) // chars_per_page) + 1
 

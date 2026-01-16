@@ -208,6 +208,8 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
   },
 
   // Cancel individual file upload
+  // Note: We only update the progress status, not the files array.
+  // Removing from files would trigger the upload effect to re-run and abort ALL uploads.
   cancelFileUpload: (fileName: string) => {
     const currentProgress = get().uploadProgress;
     const newProgress = new Map(currentProgress);
@@ -220,11 +222,12 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
       });
     }
 
-    // Remove from files list
-    const files = get().files;
-    const newFiles = files.filter((f) => f.name !== fileName);
+    // Also add to failed uploads for tracking
+    const currentFailed = get().failedUploads;
+    const newFailed = new Map(currentFailed);
+    newFailed.set(fileName, 'Upload cancelled by user');
 
-    set({ uploadProgress: newProgress, files: newFiles });
+    set({ uploadProgress: newProgress, failedUploads: newFailed });
   },
 }));
 

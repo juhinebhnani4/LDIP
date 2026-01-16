@@ -180,7 +180,7 @@ class EngineExecutor:
 
         # Process results, converting exceptions to error results
         processed_results: list[EngineExecutionResult] = []
-        for engine, result in zip(engines, results):
+        for engine, result in zip(engines, results, strict=False):
             if isinstance(result, Exception):
                 logger.error(
                     "parallel_group_exception",

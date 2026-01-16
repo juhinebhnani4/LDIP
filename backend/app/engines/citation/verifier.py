@@ -213,7 +213,7 @@ class CitationVerifier:
 
         try:
             # Step 1: Index the Act document (cached after first call)
-            index = await self.act_indexer.index_act_document(
+            await self.act_indexer.index_act_document(
                 document_id=act_document_id,
                 matter_id=citation.matter_id,
                 act_name=act_name,

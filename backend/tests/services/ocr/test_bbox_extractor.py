@@ -158,7 +158,7 @@ class TestExtractBoundingBoxes:
 
                 # Create 4 vertices for rectangle
                 vertices = []
-                for i, (x, y) in enumerate([(0.1, 0.2), (0.3, 0.2), (0.3, 0.4), (0.1, 0.4)]):
+                for _i, (x, y) in enumerate([(0.1, 0.2), (0.3, 0.2), (0.3, 0.4), (0.1, 0.4)]):
                     v = MagicMock()
                     v.x = x
                     v.y = y

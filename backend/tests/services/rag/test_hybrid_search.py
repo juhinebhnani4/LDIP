@@ -448,7 +448,6 @@ class TestRRFScoreCalculation:
         k = 60
         bm25_rank = 5
         bm25_weight = 1.0
-        semantic_weight = 1.0
 
         # Formula: 1/(k+bm25_rank)*bm25_weight + 0 (no semantic match)
         expected_score = 1.0 / (k + bm25_rank) * bm25_weight
@@ -461,7 +460,6 @@ class TestRRFScoreCalculation:
         # Given: k=60, semantic_rank=3, no bm25 rank
         k = 60
         semantic_rank = 3
-        bm25_weight = 1.0
         semantic_weight = 1.0
 
         # Formula: 0 + 1/(k+semantic_rank)*semantic_weight

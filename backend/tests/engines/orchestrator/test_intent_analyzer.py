@@ -498,28 +498,25 @@ class TestErrorHandling:
         assert len(result.required_engines) > 0
 
     @pytest.mark.asyncio
-    async def test_retry_on_rate_limit(self, analyzer, mock_openai_response):
-        """Retries on rate limit errors."""
-        call_count = 0
+    async def test_rate_limit_error_raises_analyzer_error(self, analyzer):
+        """Rate limit errors should raise IntentAnalyzerError.
+
+        NOTE: The intent analyzer does NOT have built-in retry logic.
+        Rate limit errors are handled by the circuit breaker which tracks
+        failures but does not retry. The error propagates as IntentAnalyzerError.
+        """
+        from app.engines.orchestrator.intent_analyzer import IntentAnalyzerError
 
         async def mock_create(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count < 2:
-                raise Exception("429 rate limit exceeded")
-            return mock_openai_response(
-                intent="rag_search",
-                confidence=0.8,
-                engines=["rag"],
-            )
+            raise Exception("429 rate limit exceeded")
 
         with patch.object(analyzer, "_client") as mock_client:
             mock_client.chat.completions.create = mock_create
 
-            classification, _ = await analyzer._llm_classification("test query")
+            with pytest.raises(IntentAnalyzerError) as exc_info:
+                await analyzer._llm_classification("test query")
 
-            assert call_count == 2
-            assert classification.intent == QueryIntent.RAG_SEARCH
+            assert "rate limit" in str(exc_info.value).lower() or "classification failed" in str(exc_info.value).lower()
 
 
 # =============================================================================

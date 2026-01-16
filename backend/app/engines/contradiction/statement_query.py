@@ -274,10 +274,7 @@ class ValueExtractor:
                 return False
             if month < 1 or month > 12:
                 return False
-            if day < 1 or day > 31:
-                return False
-
-            return True
+            return not (day < 1 or day > 31)
 
         except (ValueError, IndexError):
             return False

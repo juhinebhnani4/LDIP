@@ -32,7 +32,7 @@ interface ResizablePanelProps extends React.HTMLAttributes<HTMLDivElement> {
   maxSize?: number;
 }
 
-function ResizablePanel({ children, className, defaultSize, minSize, maxSize, ...props }: ResizablePanelProps) {
+function ResizablePanel({ children, className, defaultSize, minSize: _minSize, maxSize: _maxSize, ...props }: ResizablePanelProps) {
   return (
     <div
       data-testid="resizable-panel"

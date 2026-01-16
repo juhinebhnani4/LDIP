@@ -756,7 +756,7 @@ async def upload_document(
     except HTTPException:
         raise
     except (StorageError, DocumentServiceError) as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_upload_failed",
@@ -772,7 +772,7 @@ async def upload_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -838,7 +838,7 @@ async def list_documents(
         return DocumentListResponseWithPagination(data=documents, meta=meta)
 
     except DocumentServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_list_failed",
@@ -854,7 +854,7 @@ async def list_documents(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -916,7 +916,7 @@ async def bulk_update_documents(
     except HTTPException:
         raise
     except DocumentServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_bulk_update_failed",
@@ -932,7 +932,7 @@ async def bulk_update_documents(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -989,7 +989,7 @@ async def get_document(
 
         return DocumentDetailResponse(data=doc_with_url)
 
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         # Return 404 to prevent enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1000,11 +1000,11 @@ async def get_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except DocumentServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except StorageError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_get_failed",
@@ -1020,7 +1020,7 @@ async def get_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -1081,7 +1081,7 @@ async def delete_document(
 
     except HTTPException:
         raise
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -1091,9 +1091,9 @@ async def delete_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except DocumentServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_delete_failed",
@@ -1109,7 +1109,7 @@ async def delete_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.patch(
@@ -1155,7 +1155,7 @@ async def update_document(
 
     except HTTPException:
         raise
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -1165,9 +1165,9 @@ async def update_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except DocumentServiceError as e:
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "document_update_failed",
@@ -1183,7 +1183,7 @@ async def update_document(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -1211,7 +1211,7 @@ async def get_ocr_quality(
 
         return OCRQualityResponse(data=result)
 
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -1221,7 +1221,7 @@ async def get_ocr_quality(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except ConfidenceCalculatorError as e:
         logger.error(
             "ocr_quality_calculation_failed",
@@ -1237,7 +1237,7 @@ async def get_ocr_quality(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "ocr_quality_failed",
@@ -1253,7 +1253,7 @@ async def get_ocr_quality(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post(
@@ -1310,7 +1310,7 @@ async def request_manual_review(
 
     except HTTPException:
         raise
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -1320,7 +1320,7 @@ async def request_manual_review(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except HumanReviewServiceError as e:
         logger.error(
             "manual_review_request_failed",
@@ -1336,7 +1336,7 @@ async def request_manual_review(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "manual_review_request_failed",
@@ -1352,4 +1352,4 @@ async def request_manual_review(
                     "details": {},
                 }
             },
-        )
+        ) from e

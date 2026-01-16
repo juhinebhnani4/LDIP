@@ -25,13 +25,7 @@ const createMockEdgeProps = (
   ...overrides,
 });
 
-// Create a wrapper div for ReactFlow's EdgeLabelRenderer portal
-const createPortalContainer = () => {
-  const portalRoot = document.createElement('div');
-  portalRoot.className = 'react-flow__edgelabel-renderer';
-  document.body.appendChild(portalRoot);
-  return portalRoot;
-};
+// Note: Portal container creation function removed as ReactFlow handles portal setup internally
 
 const renderEntityEdge = (props: Partial<EntityEdgeProps> = {}) => {
   const edgeProps = createMockEdgeProps(props);

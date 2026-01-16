@@ -581,7 +581,7 @@ class TestRetryLogic:
         mock_model.generate_content_async = mock_generate
         extractor._model = mock_model
 
-        result = await extractor.extract_dates_from_text(
+        await extractor.extract_dates_from_text(
             text="Test text with date 15/01/2024.",
             document_id="doc-123",
             matter_id="matter-456",
@@ -609,7 +609,7 @@ class TestRetryLogic:
         mock_model.generate_content_async = mock_generate
         extractor._model = mock_model
 
-        result = await extractor.extract_dates_from_text(
+        await extractor.extract_dates_from_text(
             text="Test text.",
             document_id="doc-123",
             matter_id="matter-456",
@@ -686,7 +686,7 @@ class TestRetryLogic:
         mock_model.generate_content = mock_generate
         extractor._model = mock_model
 
-        result = extractor.extract_dates_sync(
+        extractor.extract_dates_sync(
             text="Test text.",
             document_id="doc-123",
             matter_id="matter-456",

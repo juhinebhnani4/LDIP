@@ -257,7 +257,7 @@ class TestListVerificationsAuthenticated:
             "app.api.routes.verifications._get_verification_service",
             return_value=mock_service,
         ):
-            response = await list_verifications(
+            await list_verifications(
                 matter_id="matter-123",
                 decision=VerificationDecision.PENDING,
                 limit=100,

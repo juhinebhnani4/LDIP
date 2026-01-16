@@ -170,7 +170,7 @@ async def global_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -188,4 +188,4 @@ async def global_search(
                     "details": {},
                 }
             },
-        )
+        ) from e

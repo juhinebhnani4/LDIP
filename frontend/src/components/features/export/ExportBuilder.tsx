@@ -121,8 +121,8 @@ export function ExportBuilder({
 
   // Unsaved changes dialog state
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  // pendingClose tracks if close was initiated - used by setPendingClose to reset state
-  const [_pendingClose, setPendingClose] = useState(false);
+  // pendingClose tracks if close was initiated - setter used to control dialog flow
+  const [, setPendingClose] = useState(false);
 
   // Fetch content counts from existing hooks
   const { summary, isLoading: summaryLoading, isError: summaryError } = useMatterSummary(matterId);

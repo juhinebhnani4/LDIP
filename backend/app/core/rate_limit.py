@@ -179,12 +179,11 @@ def _parse_retry_after(exception: RateLimitExceeded) -> int:
                 # Extract the number
                 parts = detail.split()
                 for i, part in enumerate(parts):
-                    if part.lower().startswith("second"):
-                        if i > 0:
-                            try:
-                                return int(parts[i - 1])
-                            except ValueError:
-                                pass
+                    if part.lower().startswith("second") and i > 0:
+                        try:
+                            return int(parts[i - 1])
+                        except ValueError:
+                            pass
                 return 1
     except Exception:
         pass
@@ -217,10 +216,9 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSO
             # Parse "Rate limit exceeded: 30 per 1 minute"
             parts = exc.detail.split()
             for i, part in enumerate(parts):
-                if part == "per":
-                    if i > 0:
-                        limit = int(parts[i - 1])
-                        break
+                if part == "per" and i > 0:
+                    limit = int(parts[i - 1])
+                    break
     except (ValueError, IndexError):
         pass
 

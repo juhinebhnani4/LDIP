@@ -65,7 +65,7 @@ def _verify_document_access(
     """
     try:
         doc = document_service.get_document(document_id)
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -75,7 +75,7 @@ def _verify_document_access(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
     # Verify user has access to the matter
     role = matter_service.get_user_role(doc.matter_id, user_id)
@@ -116,7 +116,7 @@ def _verify_chunk_access(
     """
     try:
         chunk = chunk_service.get_chunk(chunk_id)
-    except ChunkNotFoundError:
+    except ChunkNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -126,7 +126,7 @@ def _verify_chunk_access(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
     # Verify user has access to the matter
     role = matter_service.get_user_role(chunk.matter_id, user_id)
@@ -202,7 +202,7 @@ async def get_document_chunks(
         )
 
     except ChunkServiceError as e:
-        raise _handle_chunk_service_error(e)
+        raise _handle_chunk_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_document_chunks_failed",
@@ -218,7 +218,7 @@ async def get_document_chunks(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -274,7 +274,7 @@ async def get_chunk_context(
 
         return ChunkContextResponse(data=context)
 
-    except ChunkNotFoundError:
+    except ChunkNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -284,9 +284,9 @@ async def get_chunk_context(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except ChunkServiceError as e:
-        raise _handle_chunk_service_error(e)
+        raise _handle_chunk_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_chunk_context_failed",
@@ -302,7 +302,7 @@ async def get_chunk_context(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @chunks_router.get(
@@ -343,7 +343,7 @@ async def get_chunk_parent(
 
     except HTTPException:
         raise
-    except ChunkNotFoundError:
+    except ChunkNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -353,9 +353,9 @@ async def get_chunk_parent(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except ChunkServiceError as e:
-        raise _handle_chunk_service_error(e)
+        raise _handle_chunk_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_chunk_parent_failed",
@@ -371,7 +371,7 @@ async def get_chunk_parent(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @chunks_router.get(
@@ -420,7 +420,7 @@ async def get_chunk_children(
             ),
         )
 
-    except ChunkNotFoundError:
+    except ChunkNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -430,9 +430,9 @@ async def get_chunk_children(
                     "details": {},
                 }
             },
-        )
+        ) from e
     except ChunkServiceError as e:
-        raise _handle_chunk_service_error(e)
+        raise _handle_chunk_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_chunk_children_failed",
@@ -448,4 +448,4 @@ async def get_chunk_children(
                     "details": {},
                 }
             },
-        )
+        ) from e

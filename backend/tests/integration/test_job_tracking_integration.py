@@ -389,7 +389,7 @@ class TestPartialProgressIntegration:
 
             with (
                 patch("asyncio.new_event_loop") as mock_new_loop,
-                patch("asyncio.set_event_loop") as mock_set_loop,
+                patch("asyncio.set_event_loop"),
             ):
                 mock_event_loop = MagicMock()
                 mock_event_loop.run_until_complete.return_value = mock_job_with_metadata

@@ -14,6 +14,7 @@ Key concepts:
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -65,10 +66,8 @@ class StageProgress:
         """Create from dictionary."""
         started_at = None
         if data.get("started_at"):
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 started_at = datetime.fromisoformat(data["started_at"])
-            except (ValueError, TypeError):
-                pass
 
         return cls(
             stage_name=data.get("stage_name", ""),

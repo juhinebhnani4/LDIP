@@ -56,8 +56,8 @@ class TestRecursiveTextSplitter:
 
         if len(result) >= 2:
             # Check that some text from first chunk appears in second
-            first_words = set(result[0].split()[-3:])
-            second_words = set(result[1].split()[:5])
+            set(result[0].split()[-3:])
+            set(result[1].split()[:5])
             # Due to overlap, there should be some shared words
             # (This is a soft check as overlap depends on separators)
             assert len(result) > 1

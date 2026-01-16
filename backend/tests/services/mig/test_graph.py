@@ -273,7 +273,7 @@ class TestMIGGraphServiceSaveEntities:
         mock_mentions_insert.execute.return_value = MagicMock(data=[])
         mock_client.table.return_value.insert.return_value = mock_mentions_insert
 
-        service = MIGGraphService()
+        MIGGraphService()
 
         # Note: This test is simplified - full test would need more complex mocking
         # The actual method has multiple database calls that are difficult to mock

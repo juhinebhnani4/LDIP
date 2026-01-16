@@ -17,7 +17,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { toast } from 'sonner';
+// toast is mocked above via vi.mock('sonner')
 
 // Mock entities
 const mockEntities = [

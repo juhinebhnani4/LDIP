@@ -287,7 +287,7 @@ class TestChunkingWithMockedDatabase:
         result = chunker.chunk_document("doc-123", text)
 
         # Save using mock service
-        saved = await mock_chunk_service.save_chunks(
+        await mock_chunk_service.save_chunks(
             document_id="doc-123",
             matter_id="matter-456",
             parent_chunks=result.parent_chunks,

@@ -265,7 +265,7 @@ async def hybrid_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -283,7 +283,7 @@ async def hybrid_search(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post("/bm25", response_model=SingleModeSearchResponse)
@@ -349,7 +349,7 @@ async def bm25_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -367,7 +367,7 @@ async def bm25_search(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post("/semantic", response_model=SingleModeSearchResponse)
@@ -433,7 +433,7 @@ async def semantic_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -451,7 +451,7 @@ async def semantic_search(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post("/rerank", response_model=RerankedSearchResponse)
@@ -539,7 +539,7 @@ async def rerank_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -557,7 +557,7 @@ async def rerank_search(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.post("/alias-expanded", response_model=AliasExpandedSearchResponse)
@@ -735,7 +735,7 @@ async def alias_expanded_search(
             error=e.message,
             error_code=e.code,
         )
-        raise _handle_search_error(e)
+        raise _handle_search_error(e) from e
 
     except Exception as e:
         logger.error(
@@ -753,4 +753,4 @@ async def alias_expanded_search(
                     "details": {},
                 }
             },
-        )
+        ) from e

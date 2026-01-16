@@ -162,7 +162,7 @@ class TestChunkServiceGetParentChunk:
         # Mock get_chunk for the second call
         with patch.object(service, "get_chunk") as mock_get:
             mock_get.return_value = MagicMock(spec=Chunk)
-            result = service.get_parent_chunk(child_id)
+            service.get_parent_chunk(child_id)
             mock_get.assert_called_once_with(parent_id)
 
     def test_returns_none_when_no_parent(self) -> None:
@@ -299,7 +299,6 @@ class TestChunkServiceDeleteChunks:
         """Should delete child chunks before parents."""
         mock_client = MagicMock()
 
-        delete_calls = []
 
         def track_delete() -> MagicMock:
             mock_result = MagicMock()
@@ -310,7 +309,7 @@ class TestChunkServiceDeleteChunks:
         mock_client.table.return_value.delete.return_value.eq.return_value.execute = track_delete
 
         service = ChunkService(client=mock_client)
-        deleted = await service.delete_chunks_for_document("doc-1")
+        await service.delete_chunks_for_document("doc-1")
 
         # Should have made delete calls
         assert mock_client.table.return_value.delete.called

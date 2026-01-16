@@ -23,7 +23,7 @@ class TestEmbeddingServiceInit:
         """Should create OpenAI client with API key from settings."""
         mock_settings.return_value.openai_api_key = "test-api-key"
 
-        service = EmbeddingService()
+        EmbeddingService()
 
         mock_openai.assert_called_once_with(api_key="test-api-key")
 

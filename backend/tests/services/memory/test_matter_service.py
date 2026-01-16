@@ -109,7 +109,7 @@ class TestLogQuery:
         mock_repository: MagicMock,
     ) -> None:
         """Should log query with all optional fields."""
-        result = await service.log_query(
+        await service.log_query(
             matter_id=MATTER_ID,
             query_id="query-123",
             query_text="What is the timeline?",

@@ -308,7 +308,7 @@ async def list_raw_dates(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -390,7 +390,7 @@ async def get_raw_date(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -467,7 +467,7 @@ async def list_timeline_events(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -670,7 +670,7 @@ async def list_classified_events(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -738,7 +738,7 @@ async def list_unclassified_events(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.patch(
@@ -829,7 +829,7 @@ async def update_event_classification(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -1048,7 +1048,7 @@ async def get_timeline_with_entities(
         if event_type:
             try:
                 parsed_type = EventType(event_type)
-            except ValueError:
+            except ValueError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={
@@ -1058,7 +1058,7 @@ async def get_timeline_with_entities(
                             "details": {"valid_types": [t.value for t in EventType]},
                         }
                     },
-                )
+                ) from e
 
         # Build timeline
         timeline = await timeline_builder.build_timeline(
@@ -1137,7 +1137,7 @@ async def get_timeline_with_entities(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -1227,7 +1227,7 @@ async def get_timeline_statistics(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -1375,7 +1375,7 @@ async def get_entities_in_timeline(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -1516,7 +1516,7 @@ async def get_entity_timeline(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -1601,7 +1601,7 @@ async def create_manual_event(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.patch(
@@ -1697,7 +1697,7 @@ async def update_timeline_event(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.delete(
@@ -1785,7 +1785,7 @@ async def delete_manual_event(
                         "details": {"event_id": event_id},
                     }
                 },
-            )
+            ) from e
         logger.error(
             "manual_event_deletion_failed",
             matter_id=matter_id,
@@ -1801,7 +1801,7 @@ async def delete_manual_event(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.patch(
@@ -1897,4 +1897,4 @@ async def verify_timeline_event(
                     "details": {},
                 }
             },
-        )
+        ) from e

@@ -109,7 +109,7 @@ def _verify_document_access(
     """
     try:
         doc = document_service.get_document(document_id)
-    except DocumentNotFoundError:
+    except DocumentNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -119,7 +119,7 @@ def _verify_document_access(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
     # Verify user has access to the matter
     role = matter_service.get_user_role(doc.matter_id, user_id)
@@ -201,7 +201,7 @@ async def get_document_bounding_boxes(
         )
 
     except BoundingBoxServiceError as e:
-        raise _handle_bbox_service_error(e)
+        raise _handle_bbox_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_document_bounding_boxes_failed",
@@ -217,7 +217,7 @@ async def get_document_bounding_boxes(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 @router.get(
@@ -253,7 +253,7 @@ async def get_page_bounding_boxes(
         )
 
     except BoundingBoxServiceError as e:
-        raise _handle_bbox_service_error(e)
+        raise _handle_bbox_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_page_bounding_boxes_failed",
@@ -270,7 +270,7 @@ async def get_page_bounding_boxes(
                     "details": {},
                 }
             },
-        )
+        ) from e
 
 
 # =============================================================================
@@ -364,7 +364,7 @@ async def get_chunk_bounding_boxes(
     except HTTPException:
         raise
     except BoundingBoxServiceError as e:
-        raise _handle_bbox_service_error(e)
+        raise _handle_bbox_service_error(e) from e
     except Exception as e:
         logger.error(
             "get_chunk_bounding_boxes_failed",
@@ -380,4 +380,4 @@ async def get_chunk_bounding_boxes(
                     "details": {},
                 }
             },
-        )
+        ) from e

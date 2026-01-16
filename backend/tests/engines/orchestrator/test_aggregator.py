@@ -259,7 +259,7 @@ class TestSourceMerging:
         )
 
         # Should not have duplicate doc-123 entries
-        doc_ids = [s.document_id for s in result.sources]
+        [s.document_id for s in result.sources]
         # Check for proper handling - the implementation may allow duplicates
         # if chunk_ids are different
         assert len(result.sources) >= 1

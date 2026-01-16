@@ -4,7 +4,7 @@
  * @see Story 10C.3 - Citations Tab List and Act Discovery
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { CitationsHeader, CitationsViewMode, CitationsFilterState } from './CitationsHeader';

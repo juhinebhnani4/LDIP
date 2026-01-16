@@ -172,7 +172,8 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
    * Parse SSE line and extract event data.
    * Task 5.3: Parse newline-delimited JSON events.
    */
-  const parseSSELine = useCallback(
+  // Note: parseSSELine kept for potential future SSE format changes
+  const _parseSSELine = useCallback(
     (line: string): StreamEvent | null => {
       // Handle event type line
       if (line.startsWith('event:')) {

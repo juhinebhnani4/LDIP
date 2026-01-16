@@ -159,7 +159,7 @@ async def get_activities(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "activity_feed_unexpected_error",
@@ -284,7 +284,7 @@ async def mark_activity_read(
             error=e.message,
             code=e.code,
         )
-        raise _handle_service_error(e)
+        raise _handle_service_error(e) from e
     except Exception as e:
         logger.error(
             "mark_activity_read_unexpected_error",

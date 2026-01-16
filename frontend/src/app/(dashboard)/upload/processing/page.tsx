@@ -84,6 +84,8 @@ export default function ProcessingPage() {
   const processingStartedRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
   const isBackgroundedRef = useRef(false);
+  // Track if the component has mounted fully (to ignore Strict Mode's first unmount)
+  const hasMountedRef = useRef(false);
 
   // Track upload orchestration errors
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -221,23 +223,26 @@ export default function ProcessingPage() {
       }
     }
 
-    // Cleanup on unmount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cleanup effect - only runs on unmount
+  useEffect(() => {
+    // Mark as fully mounted after a small delay to survive Strict Mode's double-render
+    const mountTimeout = setTimeout(() => {
+      hasMountedRef.current = true;
+    }, 100);
+
     return () => {
-      if (cleanupRef.current) {
+      clearTimeout(mountTimeout);
+      // Only cleanup if:
+      // 1. Component has truly mounted (not Strict Mode's first unmount)
+      // 2. User is not backgrounding the upload
+      if (cleanupRef.current && hasMountedRef.current && !isBackgroundedRef.current) {
         cleanupRef.current();
       }
     };
-  }, [
-    files,
-    matterName,
-    clearProcessingState,
-    setMatterId,
-    setUploadProgress,
-    setProcessingStage,
-    setOverallProgress,
-    addLiveDiscovery,
-    addUploadedDocumentId,
-  ]);
+  }, []);
 
   // Detect processing completion and show completion screen
   useEffect(() => {

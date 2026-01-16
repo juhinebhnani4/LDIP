@@ -74,7 +74,7 @@ class TestSaveCitations:
         mock_client = MagicMock()
         mock_table = MagicMock()
         mock_insert = MagicMock()
-        mock_execute = MagicMock()
+        MagicMock()
 
         mock_client.table.return_value = mock_table
         mock_table.insert.return_value = mock_insert

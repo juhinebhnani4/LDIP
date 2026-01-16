@@ -134,6 +134,10 @@ async def get_current_user(
             session_id=payload.get("session_id"),
         )
 
+        # Bind user context to all subsequent logs in this request (Story 13.1)
+        # Note: Do not log full email to protect user privacy
+        structlog.contextvars.bind_contextvars(user_id=user.id)
+
         logger.debug(
             "jwt_validation_success",
             user_id=user.id,
@@ -154,7 +158,7 @@ async def get_current_user(
                 }
             },
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
     except jwt.InvalidAudienceError:
         logger.warning("jwt_validation_failed", reason="invalid_audience")
@@ -168,12 +172,15 @@ async def get_current_user(
                 }
             },
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
     except PyJWTError as e:
-        import sys
-        print(f"JWT ERROR (PyJWTError): {type(e).__name__}: {e}", file=sys.stderr)
-        logger.warning("jwt_validation_failed", reason="invalid_token", error=str(e), error_type=type(e).__name__)
+        logger.warning(
+            "jwt_validation_failed",
+            reason="invalid_token",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -184,11 +191,14 @@ async def get_current_user(
                 }
             },
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except Exception as e:
-        import sys
-        print(f"JWT ERROR (Other): {type(e).__name__}: {e}", file=sys.stderr)
-        logger.warning("jwt_validation_failed", reason="unexpected_error", error=str(e), error_type=type(e).__name__)
+        logger.warning(
+            "jwt_validation_failed",
+            reason="unexpected_error",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -199,7 +209,7 @@ async def get_current_user(
                 }
             },
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
 
 async def get_optional_user(

@@ -96,7 +96,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.append_to_matter_memory IS
+COMMENT ON FUNCTION public.append_to_matter_memory(uuid, text, text, jsonb, int) IS
 'Append item to JSONB array in matter memory with bounded size (default 500 entries).
 Oldest entries are removed when limit is exceeded (FIFO).
 Epic 7 Code Review Fix: Prevents unbounded array growth.';
@@ -163,6 +163,6 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.get_matter_memory_entries IS
+COMMENT ON FUNCTION public.get_matter_memory_entries(uuid, text, text, int) IS
 'Get last N entries from a JSONB array in matter memory efficiently (DB-side slicing).
 Epic 7 Code Review Fix: Avoids loading entire blob into application memory.';

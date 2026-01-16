@@ -34,7 +34,10 @@ CREATE INDEX idx_bboxes_document_page ON public.bounding_boxes(document_id, page
 CREATE INDEX idx_bboxes_matter_doc_page ON public.bounding_boxes(matter_id, document_id, page_number);
 
 -- Text search for finding specific text locations
-CREATE INDEX idx_bboxes_text ON public.bounding_boxes USING GIN (to_tsvector('english', text));
+-- Using 'simple' tokenizer for language-agnostic search (supports English, Hindi, Gujarati)
+-- 'simple' tokenizer: lowercases and splits on whitespace without language-specific stemming
+-- This allows searching for exact words in any language without stemming issues
+CREATE INDEX idx_bboxes_text ON public.bounding_boxes USING GIN (to_tsvector('simple', text));
 
 -- Comments
 COMMENT ON TABLE public.bounding_boxes IS 'OCR bounding boxes for text positioning and highlighting';

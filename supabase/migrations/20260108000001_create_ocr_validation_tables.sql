@@ -35,9 +35,11 @@ ON public.ocr_validation_log(bbox_id);
 -- Enable RLS on validation log
 ALTER TABLE public.ocr_validation_log ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Users can access validation logs for documents in their matters
-CREATE POLICY "Users access own matter validation logs"
-ON public.ocr_validation_log FOR ALL
+-- RLS Policy: Users can ONLY SELECT validation logs for documents in their matters
+-- CRITICAL: Audit logs are IMMUTABLE - no UPDATE or DELETE allowed for compliance
+-- This ensures 7-year retention requirements are met for legal audit trail
+CREATE POLICY "Users can view own matter validation logs"
+ON public.ocr_validation_log FOR SELECT
 USING (
   document_id IN (
     SELECT id FROM public.documents
@@ -47,6 +49,8 @@ USING (
     )
   )
 );
+
+-- No UPDATE or DELETE policies for users - audit logs are append-only for compliance
 
 -- Create ocr_human_review table for human review queue
 CREATE TABLE IF NOT EXISTS public.ocr_human_review (
@@ -93,7 +97,7 @@ GRANT ALL ON public.ocr_validation_log TO service_role;
 GRANT ALL ON public.ocr_human_review TO service_role;
 
 -- Comments for documentation
-COMMENT ON TABLE public.ocr_validation_log IS 'Audit trail for all OCR corrections (pattern, Gemini, and human)';
+COMMENT ON TABLE public.ocr_validation_log IS 'IMMUTABLE audit trail for all OCR corrections. SELECT-only for users, INSERT via service role. No UPDATE/DELETE allowed for 7-year compliance.';
 COMMENT ON TABLE public.ocr_human_review IS 'Queue for words requiring human review due to very low OCR confidence';
 COMMENT ON COLUMN public.documents.validation_status IS 'OCR validation status: pending, validated, or requires_human_review';
 COMMENT ON COLUMN public.ocr_validation_log.validation_type IS 'Type of validation: pattern (regex), gemini (LLM), or human';

@@ -138,9 +138,12 @@ Example response:
                     model=self.model_name,
                 )
             except Exception as e:
-                logger.error("gemini_init_failed", error=str(e))
+                # SECURITY: Sanitize error to prevent API key leakage in logs
+                error_type = type(e).__name__
+                # Only log error type, not message which may contain sensitive data
+                logger.error("gemini_init_failed", error_type=error_type)
                 raise GeminiConfigurationError(
-                    f"Failed to initialize Gemini: {e}"
+                    f"Failed to initialize Gemini: {error_type}"
                 ) from e
 
         return self._model

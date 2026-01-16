@@ -17,7 +17,7 @@ from app.api.deps import (
     MatterRole,
     require_matter_role,
 )
-from app.core.rate_limit import HUMAN_REVIEW_RATE_LIMIT, limiter
+from app.core.rate_limit import HUMAN_REVIEW_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
 from app.models.ocr_validation import (
@@ -216,7 +216,9 @@ async def get_validation_status(
     "/{document_id}/validation-log",
     response_model=ValidationLogResponse,
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_validation_log(
+    request: Request,  # Required for rate limiter
     document_id: str = Path(..., description="Document UUID"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -227,6 +229,8 @@ async def get_validation_log(
 
     Returns chronological list of all corrections made to the document,
     including the original text, corrected text, and correction type.
+
+    Rate limited to 120 requests/minute per user to prevent bulk data extraction.
     """
     client = get_service_client()
     if client is None:

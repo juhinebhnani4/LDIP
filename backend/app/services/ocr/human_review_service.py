@@ -202,17 +202,19 @@ class HumanReviewService:
     def get_reviews_by_document(
         self,
         document_id: str,
+        authorized_matter_id: str | None = None,
     ) -> list[HumanReviewItem]:
         """Get all review items for a document.
 
         Args:
             document_id: Document UUID.
+            authorized_matter_id: Matter ID the user is authorized for (CRITICAL for security).
 
         Returns:
             List of review items.
 
         Raises:
-            HumanReviewServiceError: If retrieval fails.
+            HumanReviewServiceError: If retrieval fails or document not in authorized matter.
         """
         if self.client is None:
             raise HumanReviewServiceError(
@@ -221,11 +223,18 @@ class HumanReviewService:
             )
 
         try:
-            result = self.client.table("ocr_human_review").select(
+            # Build query with document_id filter
+            query = self.client.table("ocr_human_review").select(
                 "*"
             ).eq(
                 "document_id", document_id
-            ).order(
+            )
+
+            # CRITICAL: Add matter_id filter for security isolation
+            if authorized_matter_id:
+                query = query.eq("matter_id", authorized_matter_id)
+
+            result = query.order(
                 "page_number"
             ).execute()
 

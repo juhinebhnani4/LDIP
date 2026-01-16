@@ -175,6 +175,9 @@ class PatternCorrector:
     API costs and improve accuracy.
     """
 
+    # Maximum text length to process (prevent ReDoS attacks with very long strings)
+    MAX_TEXT_LENGTH = 10000
+
     def __init__(self) -> None:
         """Initialize pattern corrector with compiled patterns."""
         self.patterns = [
@@ -195,6 +198,15 @@ class PatternCorrector:
             ValidationResult if correction was applied, None otherwise.
         """
         if not text:
+            return None
+
+        # SECURITY: Limit input length to prevent ReDoS attacks
+        if len(text) > self.MAX_TEXT_LENGTH:
+            logger.warning(
+                "pattern_corrector_text_too_long",
+                text_length=len(text),
+                max_length=self.MAX_TEXT_LENGTH,
+            )
             return None
 
         corrected = text

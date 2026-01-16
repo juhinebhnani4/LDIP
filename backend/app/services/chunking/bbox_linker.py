@@ -157,12 +157,22 @@ async def link_chunks_to_bboxes(
     if not chunks:
         return
 
-    # Get all bounding boxes for the document (ordered by reading order)
-    all_bboxes, total = bbox_service.get_bounding_boxes_for_document(
-        document_id=document_id,
-        page=None,
-        per_page=10000,  # Get all bboxes
-    )
+    # Get all bounding boxes for the document using pagination to avoid OOM
+    all_bboxes = []
+    bbox_page = 1
+    batch_size = 500
+
+    while True:
+        bboxes_batch, total = bbox_service.get_bounding_boxes_for_document(
+            document_id=document_id,
+            page=bbox_page,
+            per_page=batch_size,
+        )
+        all_bboxes.extend(bboxes_batch)
+
+        if len(all_bboxes) >= total or not bboxes_batch:
+            break
+        bbox_page += 1
 
     if not all_bboxes:
         logger.warning(

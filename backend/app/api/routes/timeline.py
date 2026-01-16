@@ -1267,12 +1267,24 @@ async def get_entities_in_timeline(
         EntitiesInTimelineResponse with entity event counts.
     """
     try:
-        # Get all entities for the matter
-        entities, total = await mig_service.get_entities_by_matter(
-            matter_id=matter_id,
-            page=1,
-            per_page=10000,  # Load all for counting
-        )
+        # Get all entities for the matter using pagination to avoid OOM
+        all_entities: list = []
+        entity_page = 1
+        batch_size = 500
+
+        while True:
+            entities_batch, total = await mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                page=entity_page,
+                per_page=batch_size,
+            )
+            all_entities.extend(entities_batch)
+
+            if len(all_entities) >= total or not entities_batch:
+                break
+            entity_page += 1
+
+        entities = all_entities
 
         if not entities:
             return EntitiesInTimelineResponse(

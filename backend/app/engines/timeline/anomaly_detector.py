@@ -6,7 +6,7 @@ events to help attorneys identify potential issues.
 Story 4-4: Timeline Anomaly Detection
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import structlog
 from rapidfuzz import fuzz
@@ -45,9 +45,16 @@ SEQUENCEABLE_TYPES: set[str] = {
 DUPLICATE_SIMILARITY_THRESHOLD = 85
 
 # Outlier thresholds
-OUTLIER_YEARS_FUTURE = 0  # Any future date is an outlier
+# Allow 2 years in future for scheduled hearings/deadlines
+OUTLIER_YEARS_FUTURE = 2  # Future dates beyond this are outliers
 OUTLIER_YEARS_PAST_WARNING = 10  # >10 years before earliest event
 OUTLIER_YEARS_PAST_CRITICAL = 30  # >30 years before earliest event
+
+# Event types that can legitimately have future dates
+FUTURE_ALLOWED_EVENT_TYPES: set[str] = {
+    EventType.HEARING.value,
+    EventType.DEADLINE.value,
+}
 
 
 # =============================================================================
@@ -293,8 +300,9 @@ class TimelineAnomalyDetector:
 
         Algorithm:
         1. Group events by date
-        2. Within each date, compare descriptions using text similarity
-        3. Flag pairs with high similarity as potential duplicates
+        2. Use token-set pre-filtering to reduce O(N²) comparisons
+        3. Only run expensive fuzzy matching on likely candidates
+        4. Flag pairs with high similarity as potential duplicates
 
         Args:
             events: List of timeline events.
@@ -320,11 +328,24 @@ class TimelineAnomalyDetector:
             if len(date_events) < 2:
                 continue
 
-            # Compare all pairs
-            for i in range(len(date_events)):
-                for j in range(i + 1, len(date_events)):
-                    event_a = date_events[i]
-                    event_b = date_events[j]
+            # Pre-compute token sets for O(N²) -> O(N) pre-filtering
+            # This avoids expensive fuzzy matching on obviously different descriptions
+            token_sets = []
+            for event in date_events:
+                # Create a set of significant words (3+ chars, lowercase)
+                tokens = {
+                    word.lower()
+                    for word in event.description.split()
+                    if len(word) >= 3
+                }
+                token_sets.append((event, tokens))
+
+            # Compare pairs using token overlap as pre-filter
+            for i in range(len(token_sets)):
+                event_a, tokens_a = token_sets[i]
+
+                for j in range(i + 1, len(token_sets)):
+                    event_b, tokens_b = token_sets[j]
 
                     # Skip if already checked this pair
                     pair_key = tuple(sorted([event_a.event_id, event_b.event_id]))
@@ -332,7 +353,15 @@ class TimelineAnomalyDetector:
                         continue
                     seen_pairs.add(pair_key)
 
-                    # Calculate description similarity
+                    # Pre-filter: require at least 30% token overlap before expensive comparison
+                    # This dramatically reduces comparisons for large date buckets
+                    if tokens_a and tokens_b:
+                        overlap = len(tokens_a & tokens_b)
+                        min_tokens = min(len(tokens_a), len(tokens_b))
+                        if min_tokens > 0 and (overlap / min_tokens) < 0.3:
+                            continue  # Skip expensive comparison
+
+                    # Calculate description similarity (expensive operation)
                     similarity = fuzz.ratio(
                         event_a.description.lower(),
                         event_b.description.lower(),
@@ -407,24 +436,49 @@ class TimelineAnomalyDetector:
             baseline_start = min(sorted_dates)
             baseline_end = max(sorted_dates)
 
+        # Calculate future threshold date
+        future_threshold = today + timedelta(days=int(OUTLIER_YEARS_FUTURE * 365.25))
+
         for event in events:
             # Check for future dates
             if event.event_date > today:
                 days_in_future = (event.event_date - today).days
+                years_in_future = days_in_future / 365.25
+
+                # Allow scheduled hearings/deadlines within the threshold
+                if (
+                    event.event_type.value in FUTURE_ALLOWED_EVENT_TYPES
+                    and event.event_date <= future_threshold
+                ):
+                    # This is a legitimate scheduled event, skip flagging
+                    continue
+
+                # Determine severity based on how far in the future
+                if years_in_future > OUTLIER_YEARS_FUTURE:
+                    severity = AnomalySeverity.HIGH
+                    explanation = (
+                        f"Event dated {event.event_date.isoformat()} is {days_in_future} days "
+                        f"({years_in_future:.1f} years) in the future. This is likely a data entry error or OCR misread. "
+                        f"Event type: {event.event_type.value}. Please verify the correct date."
+                    )
+                else:
+                    # Future but within threshold - warn for non-hearing/deadline events
+                    severity = AnomalySeverity.MEDIUM
+                    explanation = (
+                        f"Event dated {event.event_date.isoformat()} is {days_in_future} days "
+                        f"in the future. Event type: {event.event_type.value}. "
+                        f"If this is a scheduled hearing or deadline, this may be correct. Please verify."
+                    )
 
                 anomalies.append(
                     AnomalyCreate(
                         matter_id=matter_id,
                         anomaly_type=AnomalyType.OUTLIER,
-                        severity=AnomalySeverity.HIGH,
+                        severity=severity,
                         title=f"Future date: {event.event_date.isoformat()}",
-                        explanation=(
-                            f"Event dated {event.event_date.isoformat()} is {days_in_future} days "
-                            f"in the future. This is likely a data entry error or OCR misread. "
-                            f"Event type: {event.event_type.value}. Please verify the correct date."
-                        ),
+                        explanation=explanation,
                         event_ids=[event.event_id],
-                        confidence=0.99,
+                        confidence=0.95 if severity == AnomalySeverity.HIGH else 0.7,
                     )
                 )
                 continue

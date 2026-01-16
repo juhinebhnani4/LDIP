@@ -1195,14 +1195,26 @@ def link_entities_after_extraction(
                 "events_linked": 0,
             }
 
-        # Load entities
-        entities, _ = _run_async(
-            mig_service.get_entities_by_matter(
-                matter_id=matter_id,
-                page=1,
-                per_page=10000,
+        # Load entities using pagination to avoid OOM
+        all_entities = []
+        entity_page = 1
+        batch_size = 500
+
+        while True:
+            entities_batch, total = _run_async(
+                mig_service.get_entities_by_matter(
+                    matter_id=matter_id,
+                    page=entity_page,
+                    per_page=batch_size,
+                )
             )
-        )
+            all_entities.extend(entities_batch)
+
+            if len(all_entities) >= total or not entities_batch:
+                break
+            entity_page += 1
+
+        entities = all_entities
 
         if not entities:
             # No MIG entities, but still trigger anomaly detection for timeline events
@@ -1426,18 +1438,28 @@ def detect_timeline_anomalies(
             )
         )
 
-        # Build timeline to get all events
-        timeline = _run_async(
-            timeline_builder.build_timeline(
-                matter_id=matter_id,
-                include_entities=True,
-                include_raw_dates=False,  # Only classified events
-                page=1,
-                per_page=10000,  # Get all events
-            )
-        )
+        # Build timeline to get all events using pagination to avoid OOM
+        all_timeline_events = []
+        timeline_page = 1
+        batch_size = 500
 
-        events = timeline.events
+        while True:
+            timeline = _run_async(
+                timeline_builder.build_timeline(
+                    matter_id=matter_id,
+                    include_entities=True,
+                    include_raw_dates=False,  # Only classified events
+                    page=timeline_page,
+                    per_page=batch_size,
+                )
+            )
+            all_timeline_events.extend(timeline.events)
+
+            if timeline_page >= timeline.total_pages or not timeline.events:
+                break
+            timeline_page += 1
+
+        events = all_timeline_events
 
         if not events:
             logger.info(

@@ -13,6 +13,7 @@ is non-critical for document ingestion to continue.
 """
 
 import json
+import re
 import time
 from datetime import date
 from functools import lru_cache
@@ -352,6 +353,10 @@ class DateExtractor:
     def _split_into_chunks(self, text: str) -> list[str]:
         """Split text into overlapping chunks for processing.
 
+        Uses sentence-boundary-aware splitting to avoid cutting dates
+        from their context. Prioritizes sentence endings (.?!) and
+        falls back to other boundaries (newlines, semicolons).
+
         Args:
             text: Full text to split.
 
@@ -361,22 +366,60 @@ class DateExtractor:
         chunks = []
         chunk_size = MAX_TEXT_LENGTH - CHUNK_OVERLAP
 
+        # Pre-compute sentence boundaries for smarter splitting
+        # Match sentence endings: period/question/exclamation followed by space or newline
+        sentence_boundaries = [
+            m.end() for m in re.finditer(r'[.!?]\s+', text)
+        ]
+        # Also consider paragraph breaks as boundaries
+        paragraph_boundaries = [
+            m.end() for m in re.finditer(r'\n\s*\n', text)
+        ]
+        # Combine and sort all boundaries
+        all_boundaries = sorted(set(sentence_boundaries + paragraph_boundaries))
+
         start = 0
         while start < len(text):
             end = min(start + MAX_TEXT_LENGTH, len(text))
 
             # Try to break at sentence boundary
             if end < len(text):
-                # Look for sentence ending in last 500 chars
-                search_start = max(end - 500, start)
-                last_period = text.rfind(". ", search_start, end)
-                if last_period > search_start:
-                    end = last_period + 1
+                # Find the best boundary within the acceptable range
+                # Look for boundaries in the last 1000 chars (increased from 500)
+                search_start = max(end - 1000, start + chunk_size // 2)
+
+                # Find the latest boundary before our end point
+                best_boundary = None
+                for boundary in all_boundaries:
+                    if search_start <= boundary <= end:
+                        best_boundary = boundary
+
+                if best_boundary:
+                    end = best_boundary
+                else:
+                    # Fallback: try simple sentence ending patterns
+                    for pattern in ['. ', '.\n', '? ', '!\n', '; ', ';\n']:
+                        last_match = text.rfind(pattern, search_start, end)
+                        if last_match > search_start:
+                            end = last_match + len(pattern)
+                            break
 
             chunks.append(text[start:end])
 
-            # Next chunk starts with overlap
-            start = end - CHUNK_OVERLAP if end < len(text) else end
+            # Next chunk starts with overlap to catch boundary dates
+            # Increase overlap at sentence boundaries to preserve context
+            overlap = CHUNK_OVERLAP
+            if end < len(text):
+                # Find the start of the sentence containing the boundary
+                # Look back for sentence start to preserve context
+                overlap_start = max(end - overlap, start)
+                for pattern in ['. ', '.\n', '? ', '!\n']:
+                    sentence_start = text.rfind(pattern, overlap_start, end)
+                    if sentence_start > overlap_start:
+                        overlap = end - sentence_start - 2
+                        break
+
+            start = end - min(overlap, CHUNK_OVERLAP) if end < len(text) else end
 
         return chunks
 

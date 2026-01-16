@@ -218,15 +218,10 @@ class TimelineBuilder:
                 per_page=per_page,
             )
 
-        # Load entities if requested
+        # Load entities if requested - use pagination to avoid OOM
         entities_map: dict[str, EntityNode] = {}
         if include_entities:
-            entities, _ = await self.mig_service.get_entities_by_matter(
-                matter_id=matter_id,
-                page=1,
-                per_page=10000,
-            )
-            entities_map = {e.id: e for e in entities}
+            entities_map = await self._load_entities_paginated(matter_id)
 
         # Convert to TimelineEvent objects with entity enrichment
         timeline_events: list[TimelineEvent] = []
@@ -442,12 +437,25 @@ class TimelineBuilder:
         Returns:
             TimelineStatistics with aggregate information.
         """
-        # Get all events (first page with high limit for stats)
-        all_events = await self.timeline_service.get_timeline_for_matter(
-            matter_id=matter_id,
-            page=1,
-            per_page=10000,  # Get all for statistics
-        )
+        # Get events using pagination to avoid OOM
+        all_events_data = []
+        page = 1
+        batch_size = 500  # Process in manageable batches
+
+        while True:
+            events_response = await self.timeline_service.get_timeline_for_matter(
+                matter_id=matter_id,
+                page=page,
+                per_page=batch_size,
+            )
+            all_events_data.extend(events_response.data)
+
+            if page >= events_response.meta.total_pages:
+                break
+            page += 1
+
+        # Use the last response for total count
+        all_events = events_response
 
         events_by_type: dict[str, int] = {}
         all_entity_ids: set[str] = set()
@@ -456,7 +464,7 @@ class TimelineBuilder:
         date_range_start = None
         date_range_end = None
 
-        for event_item in all_events.data:
+        for event_item in all_events_data:
             # Count by type
             event_type = getattr(event_item, 'event_type', 'raw_date')
             events_by_type[event_type] = events_by_type.get(event_type, 0) + 1
@@ -474,8 +482,8 @@ class TimelineBuilder:
                 if full_event.is_manual:
                     verified_events += 1
 
-        if all_events.data:
-            dates = [e.event_date for e in all_events.data]
+        if all_events_data:
+            dates = [e.event_date for e in all_events_data]
             date_range_start = min(dates)
             date_range_end = max(dates)
 
@@ -493,6 +501,47 @@ class TimelineBuilder:
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    async def _load_entities_paginated(
+        self,
+        matter_id: str,
+        batch_size: int = 500,
+    ) -> dict[str, EntityNode]:
+        """Load all entities for a matter using pagination to avoid OOM.
+
+        Args:
+            matter_id: Matter UUID.
+            batch_size: Number of entities per page (default 500).
+
+        Returns:
+            Dict mapping entity_id to EntityNode.
+        """
+        entities_map: dict[str, EntityNode] = {}
+        page = 1
+
+        while True:
+            entities, total = await self.mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                page=page,
+                per_page=batch_size,
+            )
+
+            for entity in entities:
+                entities_map[entity.id] = entity
+
+            # Check if we've loaded all entities
+            if len(entities_map) >= total or not entities:
+                break
+            page += 1
+
+        logger.debug(
+            "entities_loaded_paginated",
+            matter_id=matter_id,
+            total_entities=len(entities_map),
+            pages_loaded=page,
+        )
+
+        return entities_map
 
     def _build_segments(
         self,

@@ -192,16 +192,33 @@ class StatementComparisonService:
             if statement_count > ASYNC_THRESHOLD:
                 raise TooManyStatementsError(statement_count, ASYNC_THRESHOLD)
 
-            # Get all statements for entity
-            statement_response = await self.statement_service.get_entity_statements(
-                entity_id=entity_id,
-                matter_id=matter_id,
-                include_aliases=include_aliases,
-                page=1,
-                per_page=1000,  # Get all for comparison
-            )
+            # Get all statements for entity using pagination to avoid OOM
+            all_statements_data = []
+            stmt_page = 1
+            batch_size = 200
+
+            while True:
+                statement_response = await self.statement_service.get_entity_statements(
+                    entity_id=entity_id,
+                    matter_id=matter_id,
+                    include_aliases=include_aliases,
+                    page=stmt_page,
+                    per_page=batch_size,
+                )
+
+                if statement_response.data.statements:
+                    all_statements_data.extend(statement_response.data.statements)
+
+                # Check if we've loaded all
+                if len(all_statements_data) >= statement_response.data.total_statements:
+                    break
+                if not statement_response.data.statements:
+                    break
+                stmt_page += 1
 
             entity_statements = statement_response.data
+            # Update statements list with all loaded data
+            entity_statements.statements = all_statements_data
 
             # Handle empty/single statement case
             if entity_statements.total_statements < 2:

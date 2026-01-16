@@ -289,12 +289,8 @@ class EventEntityLinker:
             )
             return []
 
-        # Step 2: Load all entities for the matter
-        entities, _ = await self.mig_service.get_entities_by_matter(
-            matter_id=matter_id,
-            page=1,
-            per_page=10000,  # Load all entities
-        )
+        # Step 2: Load all entities for the matter using pagination to avoid OOM
+        entities = await self._load_entities_paginated(matter_id)
 
         if not entities:
             logger.debug(
@@ -347,12 +343,8 @@ class EventEntityLinker:
         if not events:
             return {}
 
-        # Load all entities for the matter once
-        entities, _ = await self.mig_service.get_entities_by_matter(
-            matter_id=matter_id,
-            page=1,
-            per_page=10000,
-        )
+        # Load all entities for the matter once using pagination to avoid OOM
+        entities = await self._load_entities_paginated(matter_id)
 
         if not entities:
             logger.info(
@@ -440,6 +432,50 @@ class EventEntityLinker:
                 matched_entity_ids.add(match.entity_id)
 
         return list(matched_entity_ids)
+
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    async def _load_entities_paginated(
+        self,
+        matter_id: str,
+        batch_size: int = 500,
+    ) -> list[EntityNode]:
+        """Load all entities for a matter using pagination to avoid OOM.
+
+        Args:
+            matter_id: Matter UUID.
+            batch_size: Number of entities per page (default 500).
+
+        Returns:
+            List of EntityNode objects.
+        """
+        all_entities: list[EntityNode] = []
+        page = 1
+
+        while True:
+            entities, total = await self.mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                page=page,
+                per_page=batch_size,
+            )
+
+            all_entities.extend(entities)
+
+            # Check if we've loaded all entities
+            if len(all_entities) >= total or not entities:
+                break
+            page += 1
+
+        logger.debug(
+            "entities_loaded_paginated",
+            matter_id=matter_id,
+            total_entities=len(all_entities),
+            pages_loaded=page,
+        )
+
+        return all_entities
 
     # =========================================================================
     # Entity Mention Extraction

@@ -358,10 +358,10 @@ test('calls API on search input', async () => {
 
 ### Security Checklist
 
-- [ ] User ID extracted from auth token (not request body)
-- [ ] Matter access verified via matter_members table (RLS)
-- [ ] No matter_id exposed that user doesn't have access to
-- [ ] Search queries logged for audit (structlog)
+- [x] User ID extracted from auth token (not request body) - via `Depends(get_current_user)` in route
+- [x] Matter access verified via matter_attorneys table - service queries `matter_attorneys` for accessible matters
+- [x] No matter_id exposed that user doesn't have access to - only queries matters from `matter_attorneys` join
+- [x] Search queries logged for audit (structlog) - `global_search_request` and `global_search_response` log events
 
 ### References
 
@@ -398,8 +398,16 @@ N/A
    - Added error state with retry button
    - Added toast notification on error
 5. Created comprehensive tests:
-   - Backend: 13 tests covering auth, matter isolation, result formats, and error handling
+   - Backend API: 13 tests covering auth, matter isolation, result formats, and error handling
+   - Backend Service: 22 tests covering snippet extraction, RRF merge, matter matching
    - Frontend: 15 tests covering UI and API integration
+
+### Code Review Fixes (2026-01-16)
+
+1. **[CRITICAL FIX]** Document results now return `document_id` instead of `chunk_id` for correct navigation
+2. **[FIX]** Match snippets now center around query match (50-100 chars) instead of taking first 100 chars
+3. **[FIX]** Added service-level unit tests (`test_global_search_service.py` with 22 tests)
+4. **[FIX]** Security checklist verified and marked complete
 
 ### File List
 
@@ -407,7 +415,8 @@ N/A
 - `backend/app/models/global_search.py` - Pydantic models for global search
 - `backend/app/services/global_search_service.py` - Cross-matter search service
 - `backend/app/api/routes/global_search.py` - API endpoint
-- `backend/tests/api/test_global_search.py` - Backend tests (13 tests)
+- `backend/tests/api/test_global_search.py` - Backend API tests (13 tests)
+- `backend/tests/services/test_global_search_service.py` - Backend service tests (22 tests)
 - `frontend/src/lib/api/globalSearch.ts` - API client
 
 **Modified:**

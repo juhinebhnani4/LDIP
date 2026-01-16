@@ -247,6 +247,62 @@ class GlobalSearchService:
 
         return matched
 
+    def _extract_match_snippet(
+        self,
+        content: str,
+        query: str,
+        max_length: int = 100,
+    ) -> str:
+        """Extract a snippet of content around the query match.
+
+        Args:
+            content: Full content text.
+            query: Search query to find.
+            max_length: Maximum snippet length.
+
+        Returns:
+            Snippet of content centered around the first match,
+            or the beginning of content if no match found.
+        """
+        if not content:
+            return ""
+
+        content_lower = content.lower()
+        query_lower = query.lower()
+
+        # Try to find the query or any word from the query
+        match_pos = content_lower.find(query_lower)
+        if match_pos == -1:
+            # Try individual words from the query
+            for word in query_lower.split():
+                if len(word) >= 3:  # Skip short words
+                    match_pos = content_lower.find(word)
+                    if match_pos != -1:
+                        break
+
+        if match_pos == -1:
+            # No match found, return beginning
+            return content[:max_length] if len(content) > max_length else content
+
+        # Calculate snippet bounds centered on the match
+        half_length = max_length // 2
+        start = max(0, match_pos - half_length)
+        end = min(len(content), start + max_length)
+
+        # Adjust start if we're near the end
+        if end - start < max_length:
+            start = max(0, end - max_length)
+
+        snippet = content[start:end]
+
+        # Add ellipsis if truncated
+        if start > 0:
+            snippet = "..." + snippet[3:]
+        if end < len(content):
+            snippet = snippet[:-3] + "..."
+
+        return snippet
+
     def _merge_results_rrf(
         self,
         all_results: list[SearchResultWithMatter],
@@ -291,14 +347,12 @@ class GlobalSearchService:
                 continue
             seen_ids.add(result_with_matter.result.id)
 
-            # Extract title from content (first 50 chars or document name)
-            # For documents, we use chunk content as matchedContent
+            # Extract snippet around the query match (50-100 chars)
             content = result_with_matter.result.content
-            # Create a snippet around the match (50-100 chars)
-            snippet = content[:100] if len(content) > 100 else content
+            snippet = self._extract_match_snippet(content, query, max_length=100)
 
             document_results.append(GlobalSearchResultItem(
-                id=result_with_matter.result.id,
+                id=result_with_matter.result.document_id,  # Use document_id, not chunk id
                 type="document",
                 title=f"Document (Page {result_with_matter.result.page_number or 'N/A'})",
                 matter_id=result_with_matter.matter.id,

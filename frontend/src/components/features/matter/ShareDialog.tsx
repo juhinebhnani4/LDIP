@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Users, X, Loader2, Crown, UserCheck, Eye } from 'lucide-react';
+import { useUser } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,7 +27,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import type { MatterRole } from '@/types/matter';
+import type { MatterRole, MatterMember } from '@/types/matter';
+import { getMembers, inviteMember, removeMember } from '@/lib/api/matters';
+import { ApiError } from '@/lib/api/client';
 
 /** Collaborator roles available for invitation */
 const COLLABORATOR_ROLES = ['editor', 'viewer'] as const;
@@ -63,27 +66,18 @@ const ROLE_CONFIG = {
   },
 } as const;
 
-/** Mock collaborators for MVP - loaded on dialog open to simulate API fetch */
-const getMockCollaborators = (): Collaborator[] => [
-  {
-    id: '1',
-    email: 'john.smith@lawfirm.com',
-    name: 'John Smith',
-    role: 'owner',
-  },
-  {
-    id: '2',
-    email: 'jane.doe@lawfirm.com',
-    name: 'Jane Doe',
-    role: 'editor',
-  },
-  {
-    id: '3',
-    email: 'bob.wilson@lawfirm.com',
-    name: 'Bob Wilson',
-    role: 'viewer',
-  },
-];
+/**
+ * Map backend MatterMember to frontend Collaborator interface.
+ * CRITICAL: Use userId (not membership id) for DELETE operations.
+ */
+function mapMemberToCollaborator(member: MatterMember): Collaborator {
+  return {
+    id: member.userId, // CRITICAL: Use userId for DELETE endpoint
+    email: member.email ?? 'Unknown',
+    name: member.fullName ?? member.email?.split('@')[0] ?? 'Unknown',
+    role: member.role,
+  };
+}
 
 /** Email validation regex */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,6 +100,7 @@ interface ShareDialogProps {
  * @param matterId - Matter ID for API calls (used when fetching/inviting collaborators)
  */
 export function ShareDialog({ matterId }: ShareDialogProps) {
+  const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<CollaboratorRole>('editor');
@@ -114,8 +109,12 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
 
-  // For MVP, assume current user is the owner
-  const currentUserIsOwner = true;
+  // Determine if current user is the owner by checking their role in the members list
+  const currentUserIsOwner = useMemo(() => {
+    if (!user?.id || collaborators.length === 0) return false;
+    const currentUserMember = collaborators.find((c) => c.id === user.id);
+    return currentUserMember?.role === 'owner';
+  }, [user?.id, collaborators]);
 
   // Fetch collaborators when dialog opens
   useEffect(() => {
@@ -123,14 +122,8 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
       const fetchCollaborators = async () => {
         setIsLoadingCollaborators(true);
         try {
-          // TODO: Replace with actual API call when backend is ready
-          // GET /api/matters/${matterId}/members
-          void matterId; // Will be used in API call
-
-          // Simulate network delay
-          await new Promise((resolve) => setTimeout(resolve, 300));
-
-          setCollaborators(getMockCollaborators());
+          const members = await getMembers(matterId);
+          setCollaborators(members.map(mapMemberToCollaborator));
         } catch (error) {
           console.error('[ShareDialog] Failed to fetch collaborators:', {
             matterId,
@@ -172,35 +165,33 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
     const emailToInvite = email.trim();
 
     try {
-      // TODO: Replace with actual API call when backend is ready
-      // POST /api/matters/${matterId}/members
-      // Body: { email: string, role: string }
-      void matterId; // Will be used in API call
-
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Mock: Add new collaborator to list
-      const emailPrefix = emailToInvite.split('@')[0] ?? emailToInvite;
-      const newCollaborator: Collaborator = {
-        id: `temp-${Date.now()}`,
-        email: emailToInvite,
-        name: emailPrefix, // Use email prefix as name for mock
-        role: role,
-      };
+      const newMember = await inviteMember(matterId, emailToInvite, role);
+      const newCollaborator = mapMemberToCollaborator(newMember);
 
       setCollaborators((prev) => [...prev, newCollaborator]);
       setEmail('');
       setRole('editor');
       toast.success(`Invitation sent to ${emailToInvite}`);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[ShareDialog] Failed to invite collaborator:', {
         matterId,
         email: emailToInvite,
         role,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      toast.error('Failed to send invite. Please check the email and try again.');
+
+      // Handle specific API error codes
+      if (error instanceof ApiError) {
+        if (error.code === 'MEMBER_ALREADY_EXISTS') {
+          setEmailError('This email is already a collaborator');
+        } else if (error.code === 'USER_NOT_FOUND') {
+          setEmailError('User not found. They must have an account first.');
+        } else {
+          toast.error('Failed to send invite. Please try again.');
+        }
+      } else {
+        toast.error('Failed to send invite. Please try again.');
+      }
     } finally {
       setIsInviting(false);
     }
@@ -216,23 +207,23 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
     }
 
     try {
-      // TODO: Replace with actual API call when backend is ready
-      // DELETE /api/matters/${matterId}/members/${collaboratorId}
-      void matterId; // Will be used in API call
-
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
+      await removeMember(matterId, collaboratorId);
       setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
       toast.success(`Removed ${collaboratorToRemove.name} from this matter`);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[ShareDialog] Failed to remove collaborator:', {
         matterId,
         collaboratorId,
         collaboratorName: collaboratorToRemove.name,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      toast.error('Failed to remove collaborator. Please try again.');
+
+      // Handle specific API error codes
+      if (error instanceof ApiError && error.code === 'CANNOT_REMOVE_OWNER') {
+        toast.error('Cannot remove the owner');
+      } else {
+        toast.error('Failed to remove collaborator. Please try again.');
+      }
     }
   }, [collaborators, matterId]);
 

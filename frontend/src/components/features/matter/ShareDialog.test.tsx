@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ShareDialog } from './ShareDialog';
 import { toast } from 'sonner';
+import type { MatterMember } from '@/types/matter';
+
+// Mock Supabase client BEFORE importing components (required by api/client.ts)
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      refreshSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+    },
+  })),
+}));
 
 // Mock sonner toast with proper vitest types
 vi.mock('sonner', () => ({
@@ -13,12 +23,65 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Mock matters API
+vi.mock('@/lib/api/matters', () => ({
+  getMembers: vi.fn(),
+  inviteMember: vi.fn(),
+  removeMember: vi.fn(),
+}));
+
+// Mock useUser hook - current user is the owner (user-1)
+vi.mock('@/hooks', () => ({
+  useUser: () => ({ user: { id: 'user-1' }, loading: false, error: null }),
+}));
+
+// Import AFTER mocks are defined (vitest hoists vi.mock calls automatically, but for clarity)
+import { ShareDialog } from './ShareDialog';
+import { getMembers, inviteMember, removeMember } from '@/lib/api/matters';
+import { ApiError } from '@/lib/api/client';
+
 // Properly typed mock toast using vitest's Mock type
 const mockToast = toast as unknown as {
   success: Mock;
   error: Mock;
   info: Mock;
 };
+
+// Properly typed mock API functions
+const mockGetMembers = getMembers as Mock;
+const mockInviteMember = inviteMember as Mock;
+const mockRemoveMember = removeMember as Mock;
+
+// Mock member data matching backend MatterMember type
+const mockMembers: MatterMember[] = [
+  {
+    id: 'member-1',
+    userId: 'user-1',
+    email: 'john.smith@lawfirm.com',
+    fullName: 'John Smith',
+    role: 'owner',
+    invitedBy: null,
+    invitedAt: null,
+  },
+  {
+    id: 'member-2',
+    userId: 'user-2',
+    email: 'jane.doe@lawfirm.com',
+    fullName: 'Jane Doe',
+    role: 'editor',
+    invitedBy: 'user-1',
+    invitedAt: '2026-01-10T10:00:00Z',
+  },
+  {
+    id: 'member-3',
+    userId: 'user-3',
+    email: 'bob.wilson@lawfirm.com',
+    fullName: 'Bob Wilson',
+    role: 'viewer',
+    invitedBy: 'user-1',
+    invitedAt: '2026-01-11T10:00:00Z',
+  },
+];
 
 // Mock Tooltip provider
 vi.mock('@/components/ui/tooltip', () => ({
@@ -41,6 +104,23 @@ describe('ShareDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: getMembers returns mock data
+    mockGetMembers.mockResolvedValue(mockMembers);
+    // Default: inviteMember succeeds
+    mockInviteMember.mockImplementation(async (_matterId: string, email: string, role: string) => {
+      const emailPrefix = email.split('@')[0] ?? email;
+      return {
+        id: `member-new-${Date.now()}`,
+        userId: `user-new-${Date.now()}`,
+        email,
+        fullName: emailPrefix,
+        role,
+        invitedBy: 'user-1',
+        invitedAt: new Date().toISOString(),
+      } as MatterMember;
+    });
+    // Default: removeMember succeeds
+    mockRemoveMember.mockResolvedValue(undefined);
   });
 
   it('renders share button with correct aria-label', () => {
@@ -271,6 +351,12 @@ describe('ShareDialog', () => {
   });
 
   it('shows loading state while sending invite', async () => {
+    // Use a delayed mock to observe loading state
+    let resolveInvite: (value: MatterMember) => void;
+    mockInviteMember.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveInvite = resolve;
+    }));
+
     const user = userEvent.setup();
     render(<ShareDialog matterId={mockMatterId} />);
 
@@ -285,8 +371,19 @@ describe('ShareDialog', () => {
     const inviteButton = screen.getByRole('button', { name: /^invite$/i });
     await user.click(inviteButton);
 
-    // Should show loading text (briefly)
+    // Should show loading text while waiting
     expect(screen.getByText(/sending/i)).toBeInTheDocument();
+
+    // Resolve the invite to clean up
+    resolveInvite!({
+      id: 'member-new',
+      userId: 'user-new',
+      email: 'new.attorney@lawfirm.com',
+      fullName: 'new.attorney',
+      role: 'editor',
+      invitedBy: 'user-1',
+      invitedAt: new Date().toISOString(),
+    });
   });
 
   it('adds new collaborator to list after invite', async () => {
@@ -343,6 +440,157 @@ describe('ShareDialog', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Jane Doe')).not.toBeInTheDocument();
+    });
+  });
+
+  // API Error State Tests
+  it('shows error toast when fetch collaborators fails', async () => {
+    mockGetMembers.mockRejectedValueOnce(new Error('Network error'));
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Failed to load collaborators');
+    });
+  });
+
+  it('shows validation error when member already exists', async () => {
+    mockInviteMember.mockRejectedValueOnce(
+      new ApiError('MEMBER_ALREADY_EXISTS', 'User is already a member', 409)
+    );
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+
+    // Enter email and invite
+    const emailInput = screen.getByLabelText(/email address/i);
+    await user.type(emailInput, 'existing@lawfirm.com');
+
+    const inviteButton = screen.getByRole('button', { name: /^invite$/i });
+    await user.click(inviteButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('This email is already a collaborator')).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation error when user not found', async () => {
+    mockInviteMember.mockRejectedValueOnce(
+      new ApiError('USER_NOT_FOUND', 'User not found', 404)
+    );
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+
+    // Enter email and invite
+    const emailInput = screen.getByLabelText(/email address/i);
+    await user.type(emailInput, 'unknown@lawfirm.com');
+
+    const inviteButton = screen.getByRole('button', { name: /^invite$/i });
+    await user.click(inviteButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('User not found. They must have an account first.')).toBeInTheDocument();
+    });
+  });
+
+  it('shows error toast when remove fails with network error', async () => {
+    mockRemoveMember.mockRejectedValueOnce(new Error('Network error'));
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+    });
+
+    // Try to remove Jane Doe
+    const removeButton = screen.getByRole('button', { name: /remove jane doe/i });
+    await user.click(removeButton);
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Failed to remove collaborator. Please try again.');
+    });
+
+    // Jane Doe should still be in the list (not removed due to error)
+    expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+  });
+
+  it('calls getMembers API when dialog opens', async () => {
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    await waitFor(() => {
+      expect(mockGetMembers).toHaveBeenCalledWith(mockMatterId);
+    });
+  });
+
+  it('calls inviteMember API with correct parameters', async () => {
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+
+    // Enter email and invite
+    const emailInput = screen.getByLabelText(/email address/i);
+    await user.type(emailInput, 'new.attorney@lawfirm.com');
+
+    const inviteButton = screen.getByRole('button', { name: /^invite$/i });
+    await user.click(inviteButton);
+
+    await waitFor(() => {
+      expect(mockInviteMember).toHaveBeenCalledWith(mockMatterId, 'new.attorney@lawfirm.com', 'editor');
+    });
+  });
+
+  it('calls removeMember API with correct parameters', async () => {
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for collaborators to load
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+    });
+
+    // Remove Jane Doe
+    const removeButton = screen.getByRole('button', { name: /remove jane doe/i });
+    await user.click(removeButton);
+
+    await waitFor(() => {
+      // Should use userId (user-2), not membership id (member-2)
+      expect(mockRemoveMember).toHaveBeenCalledWith(mockMatterId, 'user-2');
     });
   });
 });

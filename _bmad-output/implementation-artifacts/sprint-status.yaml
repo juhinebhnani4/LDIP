@@ -203,7 +203,7 @@ development_status:
 
   # Epic 13: Observability & Production Hardening
   epic-13: in-progress  # First story created 2026-01-16
-  13-1-axiom-logging-integration: ready-for-dev  # Story file created 2026-01-16
+  13-1-axiom-logging-integration: review  # Implementation complete 2026-01-16 - 19 tests, Axiom integration + correlation ID middleware
   13-2-circuit-breakers-tenacity: backlog
   13-3-rate-limiting-slowapi: backlog
   13-4-graceful-degradation-error-states: backlog
@@ -232,7 +232,7 @@ development_status:
 
   # FRONTEND-BACKEND WIRING GAPS (Added 2026-01-16 via Course Correction)
   # FR Sources: Story 9.1 (notifications, search), Story 10A.1 (share), Story 10A.2 (tab stats)
-  14-9-share-dialog-api-wiring: backlog     # Wire ShareDialog to existing GET/POST/DELETE /api/matters/{id}/members (backend exists, ~1-2h)
+  14-9-share-dialog-api-wiring: done  # Completed 2026-01-16 - Wire ShareDialog to real member APIs, 25 tests passing
   14-10-notifications-backend-frontend: backlog  # Create notifications table + 3 endpoints + wire frontend (~4-6h)
   14-11-global-search-rag: backlog          # RAG-powered search across user's matters + wire frontend (~6-8h)
   14-12-tab-stats-api: backlog              # GET /api/matters/{id}/tab-stats aggregation + wire workspaceStore (~2-3h)

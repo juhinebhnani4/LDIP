@@ -33,6 +33,7 @@ from app.engines.summary.prompts import (
 from app.models.summary import (
     AttentionItem,
     AttentionItemType,
+    Citation,
     CurrentStatus,
     KeyIssue,
     KeyIssueVerificationStatus,
@@ -43,6 +44,10 @@ from app.models.summary import (
     SubjectMatter,
     SubjectMatterSource,
     SummarySectionTypeEnum,
+)
+from app.services.summary_edit_service import (
+    SummaryEditService,
+    get_summary_edit_service,
 )
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import SUMMARY_CACHE_TTL, summary_cache_key
@@ -379,6 +384,7 @@ class SummaryService:
         """Get parties from MIG (Matter Identity Graph).
 
         Story 14.1: AC #6 - Parties extracted from entity_mentions.
+        Story 14.6: AC #9 - Include citation data for CitationLink.
 
         Args:
             matter_id: Matter UUID.
@@ -394,7 +400,7 @@ class SummaryService:
                 .select(
                     "id, entity_id, document_id, page_number, "
                     "identity_nodes(id, canonical_name, entity_type, metadata), "
-                    "documents(name)"
+                    "documents(id, name)"
                 )
                 .eq("identity_nodes.matter_id", matter_id)
                 .limit(10)
@@ -430,19 +436,33 @@ class SummaryService:
                         break
 
                 doc_data = row.get("documents", {}) or {}
+                source_document = doc_data.get("name", "Unknown")
+                source_page = row.get("page_number") or 1
+                document_id = doc_data.get("id", "")
 
                 # Check if this party entity has been verified
                 # Party verification comes from finding_verifications table
                 is_verified = await self._check_party_verified(matter_id, entity_id)
+
+                # Story 14.6: Build citation for party source
+                citation = None
+                if document_id:
+                    citation = Citation(
+                        document_id=document_id,
+                        document_name=source_document,
+                        page=source_page,
+                        excerpt=None,
+                    )
 
                 parties.append(
                     PartyInfo(
                         entity_id=entity_id,
                         entity_name=entity_data.get("canonical_name", "Unknown"),
                         role=role,
-                        source_document=doc_data.get("name", "Unknown"),
-                        source_page=row.get("page_number") or 1,
+                        source_document=source_document,
+                        source_page=source_page,
                         is_verified=is_verified,
+                        citation=citation,
                     )
                 )
 
@@ -715,6 +735,7 @@ class SummaryService:
 
         Story 14.1: AC #3 - GPT-4 for executive summary generation.
         Story 14.4: AC #7 - Check real verification status.
+        Story 14.6: AC #9 - Include citations and edited content.
 
         Args:
             matter_id: Matter UUID.
@@ -767,10 +788,24 @@ class SummaryService:
                 "main",
             )
 
+            # Story 14.6: Check for user edits
+            edit_service = get_summary_edit_service()
+            edit = await edit_service.get_edit(
+                matter_id=matter_id,
+                section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+                section_id="main",
+            )
+            edited_content = edit.edited_content if edit else None
+
+            # Story 14.6: Build citations from chunks
+            citations = await self._build_citations_from_chunks(matter_id, chunks[:3])
+
             return SubjectMatter(
                 description=policed_description,
                 sources=sources,
                 is_verified=is_verified,
+                edited_content=edited_content,
+                citations=citations,
             )
 
         except Exception as e:
@@ -866,6 +901,7 @@ class SummaryService:
 
         Story 14.1: AC #2 - Current status with last order.
         Story 14.4: AC #7 - Check real verification status.
+        Story 14.6: AC #9 - Include citation and edited content.
 
         Args:
             matter_id: Matter UUID.
@@ -914,6 +950,9 @@ class SummaryService:
             if last_order_date == "Unknown":
                 last_order_date = datetime.now(UTC).isoformat()
 
+            source_document = parsed.get("sourceDocument", "Unknown")
+            source_page = parsed.get("sourcePage", 1)
+
             # Story 14.4: Check real verification status from summary_verifications
             is_verified = await self._check_section_verified(
                 matter_id,
@@ -921,12 +960,28 @@ class SummaryService:
                 "main",
             )
 
+            # Story 14.6: Check for user edits
+            edit_service = get_summary_edit_service()
+            edit = await edit_service.get_edit(
+                matter_id=matter_id,
+                section_type=SummarySectionTypeEnum.CURRENT_STATUS,
+                section_id="main",
+            )
+            edited_content = edit.edited_content if edit else None
+
+            # Story 14.6: Build citation for source document
+            citation = await self._build_citation_for_document(
+                matter_id, source_document, source_page
+            )
+
             return CurrentStatus(
                 last_order_date=last_order_date,
                 description=policed_description,
-                source_document=parsed.get("sourceDocument", "Unknown"),
-                source_page=parsed.get("sourcePage", 1),
+                source_document=source_document,
+                source_page=source_page,
                 is_verified=is_verified,
+                edited_content=edited_content,
+                citation=citation,
             )
 
         except Exception as e:
@@ -1022,6 +1077,120 @@ class SummaryService:
         except Exception as e:
             logger.warning("get_recent_events_failed", error=str(e))
             return []
+
+    # =========================================================================
+    # Story 14.6: Citation Helpers
+    # =========================================================================
+
+    async def _build_citations_from_chunks(
+        self,
+        matter_id: str,
+        chunks: list[dict],
+    ) -> list[Citation]:
+        """Build Citation objects from chunk data.
+
+        Story 14.6: AC #9 - Converts chunk metadata to Citation models.
+
+        Args:
+            matter_id: Matter UUID.
+            chunks: List of chunk dictionaries with content and metadata.
+
+        Returns:
+            List of Citation objects.
+        """
+        citations = []
+        for chunk in chunks:
+            document_name = chunk.get("document_name", "")
+            page_number = chunk.get("page_number", 1)
+            content = chunk.get("content", "")
+
+            # Look up document ID from documents table
+            document_id = await self._get_document_id_by_name(matter_id, document_name)
+            if document_id:
+                # Truncate excerpt to 200 chars
+                excerpt = content[:200] + "..." if len(content) > 200 else content
+
+                citations.append(
+                    Citation(
+                        document_id=document_id,
+                        document_name=document_name,
+                        page=page_number or 1,
+                        excerpt=excerpt,
+                    )
+                )
+
+        return citations
+
+    async def _build_citation_for_document(
+        self,
+        matter_id: str,
+        document_name: str,
+        page: int,
+    ) -> Citation | None:
+        """Build a single Citation object for a document reference.
+
+        Story 14.6: AC #9 - Converts document reference to Citation model.
+
+        Args:
+            matter_id: Matter UUID.
+            document_name: Name of the document.
+            page: Page number.
+
+        Returns:
+            Citation object or None if document not found.
+        """
+        if not document_name or document_name == "Unknown" or document_name == "N/A":
+            return None
+
+        document_id = await self._get_document_id_by_name(matter_id, document_name)
+        if not document_id:
+            return None
+
+        return Citation(
+            document_id=document_id,
+            document_name=document_name,
+            page=page,
+            excerpt=None,
+        )
+
+    async def _get_document_id_by_name(
+        self,
+        matter_id: str,
+        document_name: str,
+    ) -> str | None:
+        """Look up document ID by name.
+
+        Args:
+            matter_id: Matter UUID.
+            document_name: Document name to search for.
+
+        Returns:
+            Document UUID or None if not found.
+        """
+        if not document_name:
+            return None
+
+        try:
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .eq("name", document_name)
+                .limit(1)
+                .execute()
+            )
+
+            if result.data:
+                return result.data[0].get("id")
+            return None
+
+        except Exception as e:
+            logger.debug(
+                "get_document_id_by_name_failed",
+                document_name=document_name,
+                error=str(e),
+            )
+            return None
 
     # =========================================================================
     # Redis Caching (Task 2.8) - AC #4

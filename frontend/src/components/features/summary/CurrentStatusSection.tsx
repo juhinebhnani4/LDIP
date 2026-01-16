@@ -10,6 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InlineVerificationButtons } from './InlineVerificationButtons';
 import { VerificationBadge } from './VerificationBadge';
 import { SummaryNotesDialog } from './SummaryNotesDialog';
+import { EditableSection } from './EditableSection';
+import { CitationLink } from './CitationLink';
 import type { CurrentStatus, SummaryVerificationDecision } from '@/types/summary';
 
 /**
@@ -20,6 +22,7 @@ import type { CurrentStatus, SummaryVerificationDecision } from '@/types/summary
  *
  * Story 10B.1: Summary Tab Content (AC #1)
  * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
+ * Story 14.6: Integrated EditableSection and CitationLink (AC #2, #5)
  */
 
 interface CurrentStatusSectionProps {
@@ -33,6 +36,10 @@ interface CurrentStatusSectionProps {
   onFlag?: () => Promise<void>;
   /** Callback when note is saved */
   onSaveNote?: (note: string) => Promise<void>;
+  /** Callback when content is saved (Story 14.6) */
+  onSave?: (newContent: string) => Promise<void>;
+  /** Callback to regenerate content (Story 14.6) */
+  onRegenerate?: () => Promise<void>;
 }
 
 /**
@@ -61,6 +68,8 @@ export function CurrentStatusSection({
   onVerify,
   onFlag,
   onSaveNote,
+  onSave,
+  onRegenerate,
 }: CurrentStatusSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
@@ -70,6 +79,9 @@ export function CurrentStatusSection({
   const [verificationDecision, setVerificationDecision] = useState<SummaryVerificationDecision | undefined>(
     currentStatus.isVerified ? 'verified' : undefined
   );
+
+  // Story 14.6: Use edited content if available, otherwise use AI-generated
+  const displayContent = currentStatus.editedContent ?? currentStatus.description;
 
   const handleVerify = async () => {
     if (onVerify) {
@@ -90,6 +102,52 @@ export function CurrentStatusSection({
       await onSaveNote(note);
     }
   };
+
+  // Story 14.6: Handle save and regenerate
+  const handleSave = async (newContent: string) => {
+    if (onSave) {
+      await onSave(newContent);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (onRegenerate) {
+      await onRegenerate();
+    }
+  };
+
+  // Story 14.6: Content renderer with CitationLink
+  const renderContent = () => (
+    <>
+      <p className="text-sm leading-relaxed">{displayContent}</p>
+
+      {/* Source reference with CitationLink */}
+      <div className="mt-4 pt-4 border-t flex items-center justify-between flex-wrap gap-4">
+        <div className="text-sm text-muted-foreground">
+          Source:{' '}
+          {currentStatus.citation ? (
+            <CitationLink
+              documentName={currentStatus.citation.documentName}
+              pageNumber={currentStatus.citation.page}
+              excerpt={currentStatus.citation.excerpt}
+              displayText={`${currentStatus.sourceDocument}, p. ${currentStatus.sourcePage}`}
+            />
+          ) : (
+            <span>{currentStatus.sourceDocument}, p. {currentStatus.sourcePage}</span>
+          )}
+        </div>
+        <Button asChild variant="ghost" size="sm">
+          <Link
+            href={`/matters/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
+            aria-label={`View full order: ${currentStatus.sourceDocument}, page ${currentStatus.sourcePage}`}
+          >
+            <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+            View Full Order
+          </Link>
+        </Button>
+      </div>
+    </>
+  );
 
   return (
     <section className={className} aria-labelledby="current-status-heading">
@@ -122,23 +180,21 @@ export function CurrentStatusSection({
           </div>
         </CardHeader>
         <CardContent className="pt-2">
-          <p className="text-sm leading-relaxed">{currentStatus.description}</p>
-
-          {/* Source reference */}
-          <div className="mt-4 pt-4 border-t flex items-center justify-between flex-wrap gap-4">
-            <div className="text-sm text-muted-foreground">
-              Source: {currentStatus.sourceDocument}, p. {currentStatus.sourcePage}
-            </div>
-            <Button asChild variant="ghost" size="sm">
-              <Link
-                href={`/matters/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
-                aria-label={`View full order: ${currentStatus.sourceDocument}, page ${currentStatus.sourcePage}`}
-              >
-                <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                View Full Order
-              </Link>
-            </Button>
-          </div>
+          {/* Story 14.6: Wrap content in EditableSection if edit handlers provided */}
+          {onSave && onRegenerate ? (
+            <EditableSection
+              sectionType="current_status"
+              sectionId="main"
+              content={displayContent}
+              originalContent={currentStatus.description}
+              onSave={handleSave}
+              onRegenerate={handleRegenerate}
+            >
+              {renderContent()}
+            </EditableSection>
+          ) : (
+            renderContent()
+          )}
         </CardContent>
       </Card>
 

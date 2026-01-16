@@ -5,6 +5,7 @@
  *
  * Story 10B.1: Summary Tab Content
  * Story 10B.2: Summary Tab Verification and Edit
+ * Story 14.6: Summary Frontend Integration (Citation types)
  */
 
 /**
@@ -72,6 +73,22 @@ export interface SummaryEditHistory {
 }
 
 /**
+ * Citation reference for source verification
+ *
+ * Story 14.6: AC #9 - Citation data for navigation to PDF viewer.
+ */
+export interface Citation {
+  /** Document UUID */
+  documentId: string;
+  /** Display name of document */
+  documentName: string;
+  /** Page number */
+  page: number;
+  /** Optional text excerpt */
+  excerpt?: string;
+}
+
+/**
  * Type of attention item requiring user action
  */
 export type AttentionItemType = 'contradiction' | 'citation_issue' | 'timeline_gap';
@@ -97,6 +114,8 @@ export type PartyRole = 'petitioner' | 'respondent' | 'other';
 
 /**
  * Party information - key parties in the matter
+ *
+ * Story 14.6: Added citation for CitationLink integration.
  */
 export interface PartyInfo {
   /** Unique entity ID */
@@ -111,6 +130,8 @@ export interface PartyInfo {
   sourcePage: number;
   /** Whether the party has been verified */
   isVerified: boolean;
+  /** Citation for party source (Story 14.6) */
+  citation?: Citation;
 }
 
 /**
@@ -125,6 +146,8 @@ export interface SubjectMatterSource {
 
 /**
  * Subject matter - what the case is about
+ *
+ * Story 14.6: Added editedContent and citations for editing and CitationLink.
  */
 export interface SubjectMatter {
   /** AI-generated description */
@@ -133,10 +156,16 @@ export interface SubjectMatter {
   sources: SubjectMatterSource[];
   /** Whether subject matter has been verified */
   isVerified: boolean;
+  /** User-edited content if modified (Story 14.6) */
+  editedContent?: string;
+  /** Citation links for factual claims (Story 14.6) */
+  citations?: Citation[];
 }
 
 /**
  * Current status - latest order and proceedings
+ *
+ * Story 14.6: Added editedContent and citation for editing and CitationLink.
  */
 export interface CurrentStatus {
   /** Date of last order (ISO format) */
@@ -149,6 +178,10 @@ export interface CurrentStatus {
   sourcePage: number;
   /** Whether status has been verified */
   isVerified: boolean;
+  /** User-edited content if modified (Story 14.6) */
+  editedContent?: string;
+  /** Citation for source reference (Story 14.6) */
+  citation?: Citation;
 }
 
 /**

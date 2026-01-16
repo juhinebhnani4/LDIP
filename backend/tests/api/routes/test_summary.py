@@ -32,6 +32,7 @@ from app.models.summary import (
     PartyRole,
     SubjectMatter,
     SubjectMatterSource,
+    SummaryEditRecord,
 )
 
 
@@ -759,3 +760,265 @@ class TestVerificationModelSerialization:
         assert "sectionId" in json_data
         assert "createdBy" in json_data
         assert "createdAt" in json_data
+
+
+# =============================================================================
+# Story 14.6: Summary Edit API Tests
+# =============================================================================
+
+
+@pytest.fixture
+def mock_edit_record():
+    """Create mock edit record for testing."""
+    from app.models.summary import SummaryEditRecord, SummarySectionTypeEnum
+
+    return SummaryEditRecord(
+        id="edit-123",
+        matter_id="matter-123",
+        section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+        section_id="main",
+        original_content="Original AI-generated description.",
+        edited_content="User-edited description with corrections.",
+        edited_by="user-123",
+        edited_at=datetime.now(UTC).isoformat(),
+    )
+
+
+class TestSaveSectionEdit:
+    """Test PUT /summary/sections/{section_type} endpoint.
+
+    Story 14.6: AC #7 - Save edited content to backend.
+    """
+
+    @pytest.mark.asyncio
+    async def test_save_edit_success(self, mock_editor_access, mock_edit_record) -> None:
+        """Should successfully save section edit."""
+        from app.api.routes.summary import save_section_edit
+        from app.services.summary_edit_service import SummaryEditService
+        from app.services.summary_service import SummaryService
+        from app.models.summary import SummaryEditCreate
+
+        mock_edit_service = MagicMock(spec=SummaryEditService)
+        mock_edit_service.save_edit = AsyncMock(return_value=mock_edit_record)
+
+        mock_summary_service = MagicMock(spec=SummaryService)
+        mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
+
+        request = SummaryEditCreate(
+            section_id="main",
+            content="User-edited description with corrections.",
+            original_content="Original AI-generated description.",
+        )
+
+        response = await save_section_edit(
+            section_type="subject_matter",
+            access=mock_editor_access,
+            request=request,
+            edit_service=mock_edit_service,
+            summary_service=mock_summary_service,
+        )
+
+        assert response.data.edited_content == "User-edited description with corrections."
+        assert response.data.section_type.value == "subject_matter"
+        mock_edit_service.save_edit.assert_called_once()
+        mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
+
+    @pytest.mark.asyncio
+    async def test_save_edit_invalid_section_type(self, mock_editor_access) -> None:
+        """Should return 422 for invalid section type."""
+        from app.api.routes.summary import save_section_edit
+        from app.services.summary_edit_service import SummaryEditService
+        from app.services.summary_service import SummaryService
+        from app.models.summary import SummaryEditCreate
+        from fastapi import HTTPException
+
+        mock_edit_service = MagicMock(spec=SummaryEditService)
+        mock_summary_service = MagicMock(spec=SummaryService)
+
+        request = SummaryEditCreate(
+            section_id="main",
+            content="Test content",
+            original_content="Original content",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await save_section_edit(
+                section_type="invalid_type",
+                access=mock_editor_access,
+                request=request,
+                edit_service=mock_edit_service,
+                summary_service=mock_summary_service,
+            )
+
+        assert exc_info.value.status_code == 422
+        assert "INVALID_SECTION_TYPE" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_save_edit_all_section_types(self, mock_editor_access, mock_edit_record) -> None:
+        """Should accept all valid section types."""
+        from app.api.routes.summary import save_section_edit
+        from app.services.summary_edit_service import SummaryEditService
+        from app.services.summary_service import SummaryService
+        from app.models.summary import SummaryEditCreate, SummarySectionTypeEnum
+
+        valid_types = ["subject_matter", "current_status", "parties", "key_issue"]
+
+        for section_type in valid_types:
+            mock_edit_service = MagicMock(spec=SummaryEditService)
+            mock_edit_record_copy = SummaryEditRecord(
+                id="edit-123",
+                matter_id="matter-123",
+                section_type=SummarySectionTypeEnum(section_type),
+                section_id="main",
+                original_content="Original",
+                edited_content="Edited",
+                edited_by="user-123",
+                edited_at=datetime.now(UTC).isoformat(),
+            )
+            mock_edit_service.save_edit = AsyncMock(return_value=mock_edit_record_copy)
+
+            mock_summary_service = MagicMock(spec=SummaryService)
+            mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
+
+            request = SummaryEditCreate(
+                section_id="main",
+                content="Edited",
+                original_content="Original",
+            )
+
+            response = await save_section_edit(
+                section_type=section_type,
+                access=mock_editor_access,
+                request=request,
+                edit_service=mock_edit_service,
+                summary_service=mock_summary_service,
+            )
+
+            assert response.data.section_type.value == section_type
+
+
+class TestRegenerateSection:
+    """Test POST /summary/regenerate endpoint.
+
+    Story 14.6: AC #8 - Regenerate section using GPT-4.
+    """
+
+    @pytest.mark.asyncio
+    async def test_regenerate_success(self, mock_editor_access, mock_summary) -> None:
+        """Should successfully regenerate section."""
+        from app.api.routes.summary import regenerate_section
+        from app.services.summary_edit_service import SummaryEditService
+        from app.services.summary_service import SummaryService
+        from app.models.summary import SummaryRegenerateRequest, SummarySectionTypeEnum
+
+        mock_edit_service = MagicMock(spec=SummaryEditService)
+        mock_edit_service.delete_edit = AsyncMock(return_value=True)
+
+        mock_summary_service = MagicMock(spec=SummaryService)
+        mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
+        mock_summary_service.get_summary = AsyncMock(return_value=mock_summary)
+
+        request = SummaryRegenerateRequest(
+            section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+        )
+
+        response = await regenerate_section(
+            access=mock_editor_access,
+            request=request,
+            edit_service=mock_edit_service,
+            summary_service=mock_summary_service,
+        )
+
+        assert response.data.matter_id == "matter-123"
+        mock_edit_service.delete_edit.assert_called_once_with(
+            matter_id="matter-123",
+            section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
+            section_id="main",
+        )
+        mock_summary_service.invalidate_cache.assert_called_once()
+        mock_summary_service.get_summary.assert_called_once_with(
+            matter_id="matter-123",
+            force_refresh=True,
+        )
+
+
+class TestSummaryEditModelSerialization:
+    """Test edit model serialization for frontend compatibility.
+
+    Story 14.6: AC #7 - Ensure proper camelCase serialization.
+    """
+
+    def test_edit_record_serialization(self, mock_edit_record) -> None:
+        """SummaryEditRecord should serialize with camelCase."""
+        json_data = mock_edit_record.model_dump(by_alias=True)
+
+        assert "matterId" in json_data
+        assert "sectionType" in json_data
+        assert "sectionId" in json_data
+        assert "originalContent" in json_data
+        assert "editedContent" in json_data
+        assert "editedBy" in json_data
+        assert "editedAt" in json_data
+
+    def test_edit_create_deserialization(self) -> None:
+        """SummaryEditCreate should accept camelCase input."""
+        from app.models.summary import SummaryEditCreate
+
+        # Test with camelCase (from frontend)
+        data = {
+            "sectionId": "main",
+            "content": "Edited content",
+            "originalContent": "Original content",
+        }
+        edit = SummaryEditCreate(**data)
+        assert edit.section_id == "main"
+        assert edit.content == "Edited content"
+        assert edit.original_content == "Original content"
+
+    def test_regenerate_request_deserialization(self) -> None:
+        """SummaryRegenerateRequest should accept camelCase input."""
+        from app.models.summary import SummaryRegenerateRequest, SummarySectionTypeEnum
+
+        data = {"sectionType": "subject_matter"}
+        request = SummaryRegenerateRequest(**data)
+        assert request.section_type == SummarySectionTypeEnum.SUBJECT_MATTER
+
+
+class TestCitationModel:
+    """Test Citation model for frontend compatibility.
+
+    Story 14.6: AC #9 - Citation data in API response.
+    """
+
+    def test_citation_serialization(self) -> None:
+        """Citation model should serialize with camelCase."""
+        from app.models.summary import Citation
+
+        citation = Citation(
+            document_id="doc-123",
+            document_name="Test Document.pdf",
+            page=5,
+            excerpt="Sample text excerpt...",
+        )
+
+        json_data = citation.model_dump(by_alias=True)
+
+        assert "documentId" in json_data
+        assert "documentName" in json_data
+        assert "page" in json_data
+        assert "excerpt" in json_data
+        assert json_data["documentId"] == "doc-123"
+        assert json_data["page"] == 5
+
+    def test_citation_without_excerpt(self) -> None:
+        """Citation should allow optional excerpt."""
+        from app.models.summary import Citation
+
+        citation = Citation(
+            document_id="doc-123",
+            document_name="Test Document.pdf",
+            page=1,
+        )
+
+        json_data = citation.model_dump(by_alias=True)
+        assert json_data["excerpt"] is None

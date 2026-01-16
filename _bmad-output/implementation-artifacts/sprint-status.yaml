@@ -224,7 +224,7 @@ development_status:
   # HIGH PRIORITY GAPS (Affects UX)
   14-4-summary-verification-api: done  # Completed 2026-01-16 - 48 tests passing (23 API + 13 service + 12 frontend)
   14-5-dashboard-real-apis: review   # Activity Feed + Quick Stats APIs - Implementation complete 2026-01-16
-  14-6-summary-fe-integration: backlog      # EditableSection + CitationLink integration (Story 10B.2)
+  14-6-summary-fe-integration: done  # EditableSection + CitationLink integration - Completed 2026-01-16
 
   # MEDIUM PRIORITY GAPS (Deferred but tracked)
   14-7-anomaly-auto-trigger: backlog        # Pipeline integration - auto-detect after entity linking (Story 4.4)

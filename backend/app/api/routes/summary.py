@@ -2,12 +2,15 @@
 
 Story 14.1: Summary API Endpoint (Task 3)
 Story 14.4: Summary Verification API (Task 5)
+Story 14.6: Summary Edit API (Task 1, 2)
 
 Provides endpoints for:
 - GET /api/matters/{matter_id}/summary - Retrieve AI-generated executive summaries
 - POST /api/matters/{matter_id}/summary/verify - Record verification decisions
 - POST /api/matters/{matter_id}/summary/notes - Add notes to sections
 - GET /api/matters/{matter_id}/summary/verifications - List verification records
+- PUT /api/matters/{matter_id}/summary/sections/{section_type} - Save edited content
+- POST /api/matters/{matter_id}/summary/regenerate - Regenerate section with fresh AI
 
 CRITICAL: Uses matter access validation for Layer 4 security.
 """
@@ -22,12 +25,20 @@ from app.api.deps import (
 )
 from app.models.summary import (
     MatterSummaryResponse,
+    SummaryEditCreate,
+    SummaryEditResponse,
     SummaryNoteCreate,
     SummaryNoteResponse,
+    SummaryRegenerateRequest,
     SummarySectionTypeEnum,
     SummaryVerificationCreate,
     SummaryVerificationResponse,
     SummaryVerificationsListResponse,
+)
+from app.services.summary_edit_service import (
+    SummaryEditService,
+    SummaryEditServiceError,
+    get_summary_edit_service,
 )
 from app.services.summary_service import (
     SummaryService,
@@ -607,6 +618,276 @@ async def get_summary_verifications(
     except Exception as e:
         logger.error(
             "get_verifications_unexpected_error",
+            matter_id=access.matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "An unexpected error occurred",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Story 14.6: Summary Edit Endpoints (Task 1.5, Task 2.3)
+# =============================================================================
+
+
+def _handle_edit_service_error(error: SummaryEditServiceError) -> HTTPException:
+    """Convert edit service errors to HTTP exceptions."""
+    return HTTPException(
+        status_code=error.status_code,
+        detail={
+            "error": {
+                "code": error.code,
+                "message": error.message,
+                "details": {},
+            }
+        },
+    )
+
+
+@router.put(
+    "/{matter_id}/summary/sections/{section_type}",
+    response_model=SummaryEditResponse,
+    summary="Save Summary Section Edit",
+    description="""
+    Save edited content for a summary section.
+
+    This endpoint allows users to modify AI-generated summary content
+    while preserving the original for comparison and audit.
+
+    Supported section types:
+    - subject_matter: Main case description (use sectionId="main")
+    - current_status: Current proceedings (use sectionId="main")
+    - parties: Individual party info (use sectionId=entityId)
+    - key_issue: Individual issues (use sectionId=issueId)
+
+    Uses upsert pattern - creates new edit or updates existing.
+
+    Requires editor role or higher on the matter.
+    """,
+    responses={
+        200: {
+            "description": "Edit saved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": {
+                            "id": "uuid",
+                            "matterId": "uuid",
+                            "sectionType": "subject_matter",
+                            "sectionId": "main",
+                            "originalContent": "Original AI text...",
+                            "editedContent": "User edited text...",
+                            "editedBy": "user-uuid",
+                            "editedAt": "2026-01-16T10:00:00Z",
+                        }
+                    }
+                }
+            },
+        },
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (requires editor role)"},
+        404: {"description": "Matter not found or no access"},
+        422: {"description": "Invalid section type"},
+    },
+)
+async def save_section_edit(
+    section_type: str,
+    access: MatterAccessContext = Depends(
+        validate_matter_access(require_role=MatterRole.EDITOR)
+    ),
+    request: SummaryEditCreate = Body(...),
+    edit_service: SummaryEditService = Depends(get_summary_edit_service),
+    summary_service: SummaryService = Depends(get_summary_service),
+) -> SummaryEditResponse:
+    """Save edited content for a summary section.
+
+    Story 14.6: AC #7 - PUT /api/matters/{matter_id}/summary/sections/{section_type}
+
+    Args:
+        section_type: Section type from URL path.
+        access: Validated matter access context (enforces Layer 4 security).
+        request: Edit request with content and section details.
+        edit_service: Edit service instance.
+        summary_service: Summary service instance (for cache invalidation).
+
+    Returns:
+        SummaryEditResponse with saved edit data.
+
+    Raises:
+        HTTPException: On authentication, authorization, or operation errors.
+    """
+    try:
+        # Validate section type
+        try:
+            section_type_enum = SummarySectionTypeEnum(section_type)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": {
+                        "code": "INVALID_SECTION_TYPE",
+                        "message": f"Invalid section type: {section_type}. "
+                        f"Valid types: {[t.value for t in SummarySectionTypeEnum]}",
+                        "details": {},
+                    }
+                },
+            ) from e
+
+        logger.info(
+            "save_section_edit_request",
+            matter_id=access.matter_id,
+            user_id=access.user_id,
+            section_type=section_type,
+            section_id=request.section_id,
+        )
+
+        edit = await edit_service.save_edit(
+            matter_id=access.matter_id,
+            section_type=section_type_enum,
+            section_id=request.section_id,
+            content=request.content,
+            original_content=request.original_content,
+            user_id=access.user_id,
+        )
+
+        # Invalidate summary cache so next GET returns edited content
+        await summary_service.invalidate_cache(access.matter_id)
+
+        return SummaryEditResponse(data=edit)
+
+    except SummaryEditServiceError as e:
+        logger.error(
+            "save_section_edit_failed",
+            matter_id=access.matter_id,
+            error=e.message,
+            code=e.code,
+        )
+        raise _handle_edit_service_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "save_section_edit_unexpected_error",
+            matter_id=access.matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "An unexpected error occurred",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.post(
+    "/{matter_id}/summary/regenerate",
+    response_model=MatterSummaryResponse,
+    summary="Regenerate Summary Section",
+    description="""
+    Regenerate a specific summary section using GPT-4.
+
+    This endpoint:
+    1. Deletes any existing user edit for the section (revert to AI)
+    2. Invalidates cached summary
+    3. Regenerates the section with fresh AI analysis
+    4. Returns the updated summary
+
+    Use this when the user wants to discard their edits and get fresh AI content.
+
+    Requires editor role or higher on the matter.
+    """,
+    responses={
+        200: {
+            "description": "Section regenerated successfully",
+        },
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (requires editor role)"},
+        404: {"description": "Matter not found or no access"},
+    },
+)
+async def regenerate_section(
+    access: MatterAccessContext = Depends(
+        validate_matter_access(require_role=MatterRole.EDITOR)
+    ),
+    request: SummaryRegenerateRequest = Body(...),
+    edit_service: SummaryEditService = Depends(get_summary_edit_service),
+    summary_service: SummaryService = Depends(get_summary_service),
+) -> MatterSummaryResponse:
+    """Regenerate a specific summary section using GPT-4.
+
+    Story 14.6: AC #8 - POST /api/matters/{matter_id}/summary/regenerate
+
+    Args:
+        access: Validated matter access context (enforces Layer 4 security).
+        request: Regenerate request with section type.
+        edit_service: Edit service instance.
+        summary_service: Summary service instance.
+
+    Returns:
+        MatterSummaryResponse with regenerated summary.
+
+    Raises:
+        HTTPException: On authentication, authorization, or generation errors.
+    """
+    try:
+        logger.info(
+            "regenerate_section_request",
+            matter_id=access.matter_id,
+            user_id=access.user_id,
+            section_type=request.section_type.value,
+        )
+
+        # Delete existing edit for this section (revert to AI-generated)
+        # For subject_matter and current_status, use "main" as section_id
+        section_id = "main"
+        await edit_service.delete_edit(
+            matter_id=access.matter_id,
+            section_type=request.section_type,
+            section_id=section_id,
+        )
+
+        # Invalidate cache and force regeneration
+        await summary_service.invalidate_cache(access.matter_id)
+
+        # Get fresh summary (will regenerate)
+        summary = await summary_service.get_summary(
+            matter_id=access.matter_id,
+            force_refresh=True,
+        )
+
+        return MatterSummaryResponse(data=summary)
+
+    except SummaryEditServiceError as e:
+        logger.error(
+            "regenerate_section_failed",
+            matter_id=access.matter_id,
+            error=e.message,
+            code=e.code,
+        )
+        raise _handle_edit_service_error(e)
+    except SummaryServiceError as e:
+        logger.error(
+            "regenerate_section_generation_failed",
+            matter_id=access.matter_id,
+            error=e.message,
+            code=e.code,
+        )
+        raise _handle_service_error(e)
+    except Exception as e:
+        logger.error(
+            "regenerate_section_unexpected_error",
             matter_id=access.matter_id,
             error=str(e),
         )

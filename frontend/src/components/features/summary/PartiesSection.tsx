@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InlineVerificationButtons } from './InlineVerificationButtons';
 import { VerificationBadge } from './VerificationBadge';
 import { SummaryNotesDialog } from './SummaryNotesDialog';
+import { CitationLink } from './CitationLink';
 import type { PartyInfo, PartyRole, SummaryVerificationDecision } from '@/types/summary';
 
 /**
@@ -22,6 +23,7 @@ import type { PartyInfo, PartyRole, SummaryVerificationDecision } from '@/types/
  *
  * Story 10B.1: Summary Tab Content (AC #3)
  * Story 10B.2: Summary Tab Verification and Edit (AC #1, #2)
+ * Story 14.6: Integrated CitationLink (AC #3, #6)
  */
 
 interface PartiesSectionProps {
@@ -80,6 +82,8 @@ function getRoleBadgeVariant(role: PartyRole): 'default' | 'secondary' | 'outlin
 
 /**
  * Individual party card
+ *
+ * Story 14.6: Added CitationLink for source reference (AC #6)
  */
 function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -141,8 +145,18 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-medium text-base truncate">{party.entityName}</h3>
+              {/* Story 14.6: Use CitationLink if citation available */}
               <p className="text-sm text-muted-foreground mt-0.5">
-                {party.sourceDocument}, p. {party.sourcePage}
+                {party.citation ? (
+                  <CitationLink
+                    documentName={party.citation.documentName}
+                    pageNumber={party.citation.page}
+                    excerpt={party.citation.excerpt}
+                    displayText={`${party.sourceDocument}, p. ${party.sourcePage}`}
+                  />
+                ) : (
+                  <span>{party.sourceDocument}, p. {party.sourcePage}</span>
+                )}
               </p>
             </div>
           </div>

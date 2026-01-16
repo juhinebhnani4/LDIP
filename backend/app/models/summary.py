@@ -1,12 +1,15 @@
 """Summary models for Matter Executive Summary API.
 
 Story 14.1: Summary API Endpoint
+Story 14.6: Summary Frontend Integration (Citation models)
 
 Pydantic models matching the frontend TypeScript interface in types/summary.ts.
 These models define the structure for AI-generated executive summaries of matters.
 
 CRITICAL: Must match frontend types exactly for seamless API integration.
 """
+
+from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
@@ -89,6 +92,7 @@ class PartyInfo(BaseModel):
     """Party information - key parties in the matter.
 
     Story 14.1: AC #6 - Parties extracted from MIG.
+    Story 14.6: AC #9 - Include citation data for CitationLink.
     """
 
     entity_id: str = Field(
@@ -121,6 +125,11 @@ class PartyInfo(BaseModel):
         alias="isVerified",
         description="Whether the party has been verified",
     )
+    # Story 14.6: Citation data for CitationLink components
+    citation: "Citation | None" = Field(
+        None,
+        description="Citation for party source (Story 14.6)",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -149,6 +158,7 @@ class SubjectMatter(BaseModel):
     """Subject matter - what the case is about.
 
     Story 14.1: AC #3 - GPT-4 generated description.
+    Story 14.6: AC #9 - Include citation data for CitationLink.
     """
 
     description: str = Field(
@@ -164,6 +174,16 @@ class SubjectMatter(BaseModel):
         alias="isVerified",
         description="Whether subject matter has been verified",
     )
+    # Story 14.6: Citation data for CitationLink components
+    edited_content: str | None = Field(
+        None,
+        alias="editedContent",
+        description="User-edited content (if modified)",
+    )
+    citations: list["Citation"] = Field(
+        default_factory=list,
+        description="Citation links for factual claims (Story 14.6)",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -172,6 +192,7 @@ class CurrentStatus(BaseModel):
     """Current status - latest order and proceedings.
 
     Story 14.1: AC #2 - Current status of the matter.
+    Story 14.6: AC #9 - Include citation data for CitationLink.
     """
 
     last_order_date: str = Field(
@@ -198,6 +219,16 @@ class CurrentStatus(BaseModel):
         False,
         alias="isVerified",
         description="Whether status has been verified",
+    )
+    # Story 14.6: Citation data for CitationLink components
+    edited_content: str | None = Field(
+        None,
+        alias="editedContent",
+        description="User-edited content (if modified)",
+    )
+    citation: "Citation | None" = Field(
+        None,
+        description="Citation for source reference (Story 14.6)",
     )
 
     model_config = {"populate_by_name": True}
@@ -574,3 +605,135 @@ class SummaryNoteResponse(BaseModel):
     """
 
     data: SummaryNoteRecord
+
+
+# =============================================================================
+# Story 14.6: Summary Edit Models (Task 1.1, 1.2)
+# =============================================================================
+
+
+class Citation(BaseModel):
+    """Citation reference for source verification.
+
+    Story 14.6: AC #9 - Citation data for navigation to PDF viewer.
+    """
+
+    document_id: str = Field(
+        ...,
+        alias="documentId",
+        description="Document UUID",
+    )
+    document_name: str = Field(
+        ...,
+        alias="documentName",
+        description="Display name of document",
+    )
+    page: int = Field(
+        ...,
+        ge=1,
+        description="Page number",
+    )
+    excerpt: str | None = Field(
+        None,
+        description="Optional text excerpt",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryEditCreate(BaseModel):
+    """Request to save summary edit.
+
+    Story 14.6: AC #7 - PUT /summary/sections/{section_type} request body.
+    """
+
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Section ID ('main' for subject_matter/current_status, entity_id for parties)",
+    )
+    content: str = Field(
+        ...,
+        min_length=1,
+        description="Edited text content",
+    )
+    original_content: str = Field(
+        ...,
+        alias="originalContent",
+        description="Original AI-generated content",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryEditRecord(BaseModel):
+    """Summary edit record from database.
+
+    Story 14.6: AC #7 - Edit record response.
+    """
+
+    id: str = Field(
+        ...,
+        description="Edit record ID",
+    )
+    matter_id: str = Field(
+        ...,
+        alias="matterId",
+        description="Matter ID",
+    )
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Section type",
+    )
+    section_id: str = Field(
+        ...,
+        alias="sectionId",
+        description="Section ID",
+    )
+    original_content: str = Field(
+        ...,
+        alias="originalContent",
+        description="Original AI-generated content",
+    )
+    edited_content: str = Field(
+        ...,
+        alias="editedContent",
+        description="User-edited content",
+    )
+    edited_by: str = Field(
+        ...,
+        alias="editedBy",
+        description="User ID who edited",
+    )
+    edited_at: str = Field(
+        ...,
+        alias="editedAt",
+        description="Edit timestamp (ISO)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class SummaryEditResponse(BaseModel):
+    """API response for edit operation.
+
+    Story 14.6: AC #7 - Single edit response wrapper.
+    """
+
+    data: SummaryEditRecord
+
+
+class SummaryRegenerateRequest(BaseModel):
+    """Request to regenerate summary section.
+
+    Story 14.6: AC #8 - POST /summary/regenerate request body.
+    """
+
+    section_type: SummarySectionTypeEnum = Field(
+        ...,
+        alias="sectionType",
+        description="Section type to regenerate",
+    )
+
+    model_config = {"populate_by_name": True}

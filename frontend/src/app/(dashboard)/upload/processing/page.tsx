@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { useUploadWizardStore, selectIsProcessingComplete } from '@/stores/uploadWizardStore';
 import { useBackgroundProcessingStore } from '@/stores/backgroundProcessingStore';
 import { ProcessingScreen, CompletionScreen } from '@/components/features/upload';
@@ -25,6 +25,7 @@ import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
 import { createMatterAndUpload } from '@/lib/api/upload-orchestration';
 import { useProcessingStatus } from '@/hooks/useProcessingStatus';
 import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 /**
  * Feature flag to toggle between mock and real processing.
@@ -70,6 +71,9 @@ export default function ProcessingPage() {
   const addBackgroundMatter = useBackgroundProcessingStore(
     (state) => state.addBackgroundMatter
   );
+  const updateBackgroundMatter = useBackgroundProcessingStore(
+    (state) => state.updateBackgroundMatter
+  );
   const markComplete = useBackgroundProcessingStore((state) => state.markComplete);
 
   // Use derived selector for completion check
@@ -80,6 +84,9 @@ export default function ProcessingPage() {
   const processingStartedRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
   const isBackgroundedRef = useRef(false);
+
+  // Track upload orchestration errors
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Real API: Poll processing status when we have a matter ID and upload is complete
   const {
@@ -112,6 +119,11 @@ export default function ProcessingPage() {
     setProcessingStage,
     setOverallProgress,
   ]);
+
+  // Determine if there's an error to display
+  const displayError = uploadError ?? processingError?.message ?? null;
+  // Determine if there are partial failures (some jobs failed but processing completed)
+  const hasPartialFailures = !USE_MOCK_PROCESSING && realIsComplete && realHasFailed;
 
   // Compute completion state
   const isProcessingComplete = USE_MOCK_PROCESSING
@@ -177,14 +189,20 @@ export default function ProcessingPage() {
                   addUploadedDocumentId(documentId);
                 },
                 onFileError: (fileName, error) => {
-                  // Log error but continue with other files
-                  console.error(`Upload failed for ${fileName}: ${error}`);
+                  // Track error for display - continue with other files
+                  setUploadError(`Upload failed for ${fileName}: ${error}`);
                 },
-                onAllUploadsComplete: (successCount, _failedCount) => {
+                onAllUploadsComplete: (successCount, failedCount) => {
                   if (successCount > 0) {
                     // Transition to processing phase - polling will take over
                     setUploadPhaseComplete(true);
                     setProcessingStage('OCR');
+                    // Clear single-file error if some uploads succeeded
+                    if (failedCount > 0) {
+                      setUploadError(`${failedCount} file(s) failed to upload`);
+                    }
+                  } else if (failedCount > 0) {
+                    setUploadError('All file uploads failed');
                   }
                 },
               },
@@ -196,8 +214,8 @@ export default function ProcessingPage() {
               setUploadPhaseComplete(true);
             }
           } catch (err) {
-            console.error('Upload orchestration failed:', err);
-            // Could show error state here
+            const errorMessage = err instanceof Error ? err.message : 'Upload failed';
+            setUploadError(errorMessage);
           }
         })();
       }
@@ -259,10 +277,35 @@ export default function ProcessingPage() {
       setTimeout(() => {
         markComplete(matterId);
       }, estimatedTimeMs);
+    } else {
+      // Real mode: Start background polling for this matter
+      const pollInterval = setInterval(async () => {
+        try {
+          // Only need stats for progress calculation, jobs list not needed for background polling
+          const statsRes = await fetch(`/api/jobs/matters/${matterId}/stats`).then((r) => r.json());
+
+          const stats = statsRes;
+          const total = stats.queued + stats.processing + stats.completed + stats.failed;
+          const done = stats.completed + stats.failed;
+          const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+
+          // Update background matter progress
+          updateBackgroundMatter(matterId, { progressPct: progress });
+
+          // Check if complete (no queued or processing jobs)
+          if (stats.queued === 0 && stats.processing === 0 && total > 0) {
+            clearInterval(pollInterval);
+            markComplete(matterId);
+          }
+        } catch {
+          // Silently fail - will retry on next interval
+        }
+      }, 2000);
+
+      // Store cleanup function (won't be called since user is navigating away, but good practice)
+      cleanupRef.current = () => clearInterval(pollInterval);
     }
-    // Real mode: Background polling will continue via backgroundProcessingStore
-    // (Future enhancement: could add background polling for real matters)
-  }, [matterId, matterName, overallProgressPct, addBackgroundMatter, markComplete]);
+  }, [matterId, matterName, overallProgressPct, addBackgroundMatter, updateBackgroundMatter, markComplete]);
 
   // Show loading state while redirecting (files.length === 0)
   if (files.length === 0) {
@@ -278,10 +321,34 @@ export default function ProcessingPage() {
 
   // Show completion screen when processing is done (Stage 5)
   if (showCompletion) {
-    return <CompletionScreen />;
+    return (
+      <>
+        {hasPartialFailures && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md">
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                Some documents failed to process. You can still explore the successfully processed content.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        <CompletionScreen />
+      </>
+    );
   }
 
   return (
-    <ProcessingScreen onContinueInBackground={handleContinueInBackground} />
+    <>
+      {displayError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md">
+          <Alert variant="destructive">
+            <AlertTriangle className="size-4" />
+            <AlertDescription>{displayError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      <ProcessingScreen onContinueInBackground={handleContinueInBackground} />
+    </>
   );
 }

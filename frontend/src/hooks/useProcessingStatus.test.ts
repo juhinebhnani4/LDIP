@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useProcessingStatus } from './useProcessingStatus';
 
 // Mock the API client
@@ -281,7 +281,9 @@ describe('useProcessingStatus', () => {
 
     const initialCallCount = vi.mocked(api.get).mock.calls.length;
 
-    await result.current.refresh();
+    await act(async () => {
+      await result.current.refresh();
+    });
 
     expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(initialCallCount);
   });

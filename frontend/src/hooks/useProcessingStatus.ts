@@ -14,9 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, ApiError } from '@/lib/api/client';
 import {
-  mapBackendStageToUI,
   determineOverallStage,
-  isTerminalStatus,
   isActiveStatus,
 } from '@/lib/utils/stage-mapping';
 import type { ProcessingStage } from '@/types/upload';
@@ -119,9 +117,6 @@ export interface UseProcessingStatusOptions {
 
 /** Default polling interval during active processing (ms) */
 const DEFAULT_POLLING_INTERVAL = 1000;
-
-/** Slower polling when matter is mostly complete (ms) */
-const SLOW_POLLING_INTERVAL = 2000;
 
 // =============================================================================
 // Helper Functions

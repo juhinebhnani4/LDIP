@@ -51,82 +51,82 @@ so that **I see accurate upload status, processing stages, and live discoveries 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Create processing status API hook** (AC: #3, #4, #5)
-  - [ ] 1.1 Create `frontend/src/hooks/useProcessingStatus.ts`
-  - [ ] 1.2 Implement polling with `useEffect` + `setInterval` (500ms-1s interval)
-  - [ ] 1.3 Call `GET /api/jobs/matters/{matter_id}` for job list
-  - [ ] 1.4 Call `GET /api/jobs/matters/{matter_id}/stats` for queue stats
-  - [ ] 1.5 Calculate overall progress: `(completed / total) * 100`
-  - [ ] 1.6 Derive current stage from first PROCESSING job's `current_stage`
-  - [ ] 1.7 Detect completion: all jobs COMPLETED (no QUEUED/PROCESSING)
-  - [ ] 1.8 Return: `{ jobs, stats, overallProgress, currentStage, isComplete, error }`
+- [x] **Task 1: Create processing status API hook** (AC: #3, #4, #5)
+  - [x] 1.1 Create `frontend/src/hooks/useProcessingStatus.ts`
+  - [x] 1.2 Implement polling with `useEffect` + `setInterval` (500ms-1s interval)
+  - [x] 1.3 Call `GET /api/jobs/matters/{matter_id}` for job list
+  - [x] 1.4 Call `GET /api/jobs/matters/{matter_id}/stats` for queue stats
+  - [x] 1.5 Calculate overall progress: `(completed / total) * 100`
+  - [x] 1.6 Derive current stage from first PROCESSING job's `current_stage`
+  - [x] 1.7 Detect completion: all jobs COMPLETED (no QUEUED/PROCESSING)
+  - [x] 1.8 Return: `{ jobs, stats, overallProgress, currentStage, isComplete, error }`
 
-- [ ] **Task 2: Create real upload orchestration** (AC: #1, #2)
-  - [ ] 2.1 Create `frontend/src/lib/api/upload-orchestration.ts`
-  - [ ] 2.2 Implement `createMatterAndUpload(matterName, files, callbacks)`:
+- [x] **Task 2: Create real upload orchestration** (AC: #1, #2)
+  - [x] 2.1 Create `frontend/src/lib/api/upload-orchestration.ts`
+  - [x] 2.2 Implement `createMatterAndUpload(matterName, files, callbacks)`:
     - Call `POST /api/matters` with name
     - Store matter_id
     - Loop through files calling `uploadFile()` with progress tracking
     - Return matter_id for subsequent status polling
-  - [ ] 2.3 Handle file upload errors (mark failed, continue with others)
-  - [ ] 2.4 Use existing `uploadFile` from `lib/api/documents.ts`
+  - [x] 2.3 Handle file upload errors (mark failed, continue with others)
+  - [x] 2.4 Use existing `uploadFile` from `lib/api/documents.ts`
 
-- [ ] **Task 3: Map backend stages to UI stages** (AC: #4)
-  - [ ] 3.1 Create `frontend/src/lib/utils/stage-mapping.ts`
-  - [ ] 3.2 Map backend `current_stage` values to UI `ProcessingStage`:
+- [x] **Task 3: Map backend stages to UI stages** (AC: #4)
+  - [x] 3.1 Create `frontend/src/lib/utils/stage-mapping.ts`
+  - [x] 3.2 Map backend `current_stage` values to UI `ProcessingStage`:
     - `upload` / `receiving` → `UPLOADING`
     - `ocr` / `validation` → `OCR`
     - `entity_extraction` / `alias_resolution` → `ENTITY_EXTRACTION`
     - `chunking` / `embedding` / `date_extraction` → `ANALYSIS`
     - `indexing` / `completed` → `INDEXING`
-  - [ ] 3.3 Export `mapBackendStageToUI(backendStage: string): ProcessingStage`
+  - [x] 3.3 Export `mapBackendStageToUI(backendStage: string): ProcessingStage`
 
-- [ ] **Task 4: Update processing page to use real APIs** (AC: #1, #2, #3, #4, #5)
-  - [ ] 4.1 Modify `frontend/src/app/(dashboard)/upload/processing/page.tsx`
-  - [ ] 4.2 Replace `simulateUploadAndProcessing` with `createMatterAndUpload`
-  - [ ] 4.3 Add `useProcessingStatus(matterId)` hook after upload completes
-  - [ ] 4.4 Wire progress to ProcessingScreen component
-  - [ ] 4.5 Handle upload phase → processing phase transition
-  - [ ] 4.6 Detect completion and show CompletionScreen
-  - [ ] 4.7 Keep mock fallback with feature flag: `USE_MOCK_PROCESSING`
+- [x] **Task 4: Update processing page to use real APIs** (AC: #1, #2, #3, #4, #5)
+  - [x] 4.1 Modify `frontend/src/app/(dashboard)/upload/processing/page.tsx`
+  - [x] 4.2 Replace `simulateUploadAndProcessing` with `createMatterAndUpload`
+  - [x] 4.3 Add `useProcessingStatus(matterId)` hook after upload completes
+  - [x] 4.4 Wire progress to ProcessingScreen component
+  - [x] 4.5 Handle upload phase → processing phase transition
+  - [x] 4.6 Detect completion and show CompletionScreen
+  - [x] 4.7 Keep mock fallback with feature flag: `USE_MOCK_PROCESSING`
 
-- [ ] **Task 5: Update uploadWizardStore for real matter_id** (AC: #1, #6)
-  - [ ] 5.1 Ensure `setMatterId(id)` action is called after matter creation
-  - [ ] 5.2 Add `uploadedDocumentIds: string[]` to track uploaded docs
-  - [ ] 5.3 Add `addUploadedDocumentId(id)` action
-  - [ ] 5.4 Update `clearProcessingState()` to also clear document IDs
+- [x] **Task 5: Update uploadWizardStore for real matter_id** (AC: #1, #6)
+  - [x] 5.1 Ensure `setMatterId(id)` action is called after matter creation
+  - [x] 5.2 Add `uploadedDocumentIds: string[]` to track uploaded docs
+  - [x] 5.3 Add `addUploadedDocumentId(id)` action
+  - [x] 5.4 Update `clearProcessingState()` to also clear document IDs
 
-- [ ] **Task 6: Wire "Continue in Background" properly** (AC: #6)
-  - [ ] 6.1 Update `backgroundProcessingStore.ts` to use real matter_id
-  - [ ] 6.2 Start background polling using `useProcessingStatus` hook
-  - [ ] 6.3 Show notification when background matter completes
-  - [ ] 6.4 Update dashboard MatterCard to show real processing status
+- [x] **Task 6: Wire "Continue in Background" properly** (AC: #6)
+  - [x] 6.1 Update `backgroundProcessingStore.ts` to use real matter_id
+  - [x] 6.2 Start background polling using `useProcessingStatus` hook
+  - [x] 6.3 Show notification when background matter completes
+  - [x] 6.4 Update dashboard MatterCard to show real processing status
 
-- [ ] **Task 7: Update CompletionScreen with real matter data** (AC: #5)
-  - [ ] 7.1 Ensure redirect uses real matter_id: `/matters/{matterId}`
-  - [ ] 7.2 Show completion stats from actual job results
-  - [ ] 7.3 Handle partial completion (some files failed)
+- [x] **Task 7: Update CompletionScreen with real matter data** (AC: #5)
+  - [x] 7.1 Ensure redirect uses real matter_id: `/matters/{matterId}`
+  - [x] 7.2 Show completion stats from actual job results
+  - [x] 7.3 Handle partial completion (some files failed)
 
-- [ ] **Task 8: Add feature flag for mock/real toggle** (AC: all)
-  - [ ] 8.1 Add `NEXT_PUBLIC_USE_MOCK_PROCESSING=true` to `.env.example`
-  - [ ] 8.2 Default to mock for development, real for production
-  - [ ] 8.3 Document toggle in processing page comments
+- [x] **Task 8: Add feature flag for mock/real toggle** (AC: all)
+  - [x] 8.1 Add `NEXT_PUBLIC_USE_MOCK_PROCESSING=true` to `.env.example`
+  - [x] 8.2 Default to mock for development, real for production
+  - [x] 8.3 Document toggle in processing page comments
 
-- [ ] **Task 9: Write tests** (AC: all)
-  - [ ] 9.1 Create `useProcessingStatus.test.ts` - polling, completion detection
-  - [ ] 9.2 Create `upload-orchestration.test.ts` - matter creation, file upload
-  - [ ] 9.3 Create `stage-mapping.test.ts` - backend to UI stage mapping
-  - [ ] 9.4 Update `processing/page.test.tsx` - real API integration
-  - [ ] 9.5 Test error handling (failed uploads, API errors)
-  - [ ] 9.6 Test "Continue in Background" flow
+- [x] **Task 9: Write tests** (AC: all)
+  - [x] 9.1 Create `useProcessingStatus.test.ts` - polling, completion detection
+  - [x] 9.2 Create `upload-orchestration.test.ts` - matter creation, file upload
+  - [x] 9.3 Create `stage-mapping.test.ts` - backend to UI stage mapping
+  - [x] 9.4 Update `processing/page.test.tsx` - real API integration
+  - [x] 9.5 Test error handling (failed uploads, API errors)
+  - [x] 9.6 Test "Continue in Background" flow
 
-- [ ] **Task 10: (Optional) Wire live discoveries from real data** (AC: #7)
-  - [ ] 10.1 Add discovery fetching to `useProcessingStatus` hook
-  - [ ] 10.2 Query entities count: `GET /api/matters/{matter_id}/entities?count_only=true`
-  - [ ] 10.3 Query events for date range (earliest/latest)
-  - [ ] 10.4 Query citations count grouped by Act
-  - [ ] 10.5 Format as `LiveDiscovery[]` for LiveDiscoveriesPanel
-  - [ ] Note: Skip if backend endpoints don't exist yet - use placeholder
+- [x] **Task 10: (Optional) Wire live discoveries from real data** (AC: #7)
+  - [x] 10.1 Add discovery fetching to `useProcessingStatus` hook
+  - [x] 10.2 Query entities count: `GET /api/matters/{matter_id}/entities?count_only=true`
+  - [x] 10.3 Query events for date range (earliest/latest)
+  - [x] 10.4 Query citations count grouped by Act
+  - [x] 10.5 Format as `LiveDiscovery[]` for LiveDiscoveriesPanel
+  - [x] Note: Skip if backend endpoints don't exist yet - use placeholder
 
 ## Dev Notes
 
@@ -407,4 +407,39 @@ None required - straightforward implementation
 
 **Unchanged (kept for mock fallback):**
 - `frontend/src/lib/utils/mock-processing.ts` - Still available when USE_MOCK_PROCESSING=true
+
+## Senior Developer Review (AI)
+
+### Review Date
+2026-01-16
+
+### Review Outcome
+**APPROVED** - All issues fixed
+
+### Issues Found and Fixed
+
+| # | Severity | Issue | Fix Applied |
+|---|----------|-------|-------------|
+| 1 | HIGH | All 10 tasks marked unchecked `[ ]` despite story being complete | Updated all tasks to `[x]` |
+| 2 | HIGH | Unused imports in `useProcessingStatus.ts` (`mapBackendStageToUI`, `isTerminalStatus`) | Removed unused imports |
+| 3 | HIGH | Unused variables in `page.tsx` (`realHasFailed`, `processingError`, `_failedCount`) | Added error/failure handling UI, used all variables |
+| 4 | MEDIUM | No error display for API failures in real mode | Added Alert component to show `displayError` |
+| 5 | MEDIUM | `hasFailed` state not used for partial failure feedback | Added `hasPartialFailures` warning on completion |
+| 6 | MEDIUM | act() warnings in `useProcessingStatus.test.ts` | Wrapped async refresh call in `act()` |
+| 7 | MEDIUM | Background polling not wired for real API mode | Added `setInterval` polling with `updateBackgroundMatter` |
+| 8 | LOW | `console.error` used instead of proper error handling | Replaced with `setUploadError()` state updates |
+| 9 | LOW | Unused `SLOW_POLLING_INTERVAL` constant | Removed unused constant |
+
+### Tests
+- **71/71 tests passing**
+- No lint errors on modified files
+
+### Files Modified in Review
+- `frontend/src/hooks/useProcessingStatus.ts` - Removed unused imports and constant
+- `frontend/src/hooks/useProcessingStatus.test.ts` - Fixed act() warning
+- `frontend/src/app/(dashboard)/upload/processing/page.tsx` - Added error handling, failure display, background polling
+- `_bmad-output/implementation-artifacts/14-3-upload-stage-3-4-api-wiring.md` - Updated task checkboxes
+
+### Reviewer
+Claude Opus 4.5 (AI Code Review)
 

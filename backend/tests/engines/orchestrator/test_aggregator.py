@@ -12,9 +12,10 @@ Tests cover:
 
 import pytest
 
+from app.core.config import get_settings
 from app.engines.orchestrator.aggregator import (
-    ENGINE_CONFIDENCE_WEIGHTS,
     ResultAggregator,
+    _get_engine_confidence_weights,
     get_result_aggregator,
 )
 from app.models.orchestrator import (
@@ -338,9 +339,10 @@ class TestConfidenceCalculation:
         assert result.confidence == 0.0
 
     def test_confidence_weights_exist(self):
-        """All engine types should have confidence weights."""
+        """All engine types should have confidence weights in config."""
+        weights = _get_engine_confidence_weights()
         for engine in EngineType:
-            assert engine in ENGINE_CONFIDENCE_WEIGHTS
+            assert engine in weights
 
 
 # =============================================================================

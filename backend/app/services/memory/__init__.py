@@ -82,11 +82,13 @@ from app.services.memory.redis_keys import (
     validate_key_access,
 )
 from app.services.memory.session import (
-    MAX_SESSION_MESSAGES,
     SessionMemoryService,
     get_session_memory_service,
     reset_session_memory_service,
 )
+
+# NOTE: MAX_SESSION_MESSAGES moved to app.core.config.session_max_messages
+# for runtime configurability (Epic 7 code review fix)
 
 __all__ = [
     # Redis key utilities
@@ -108,7 +110,7 @@ __all__ = [
     "get_redis_client",
     "reset_redis_client",
     # Session memory service (Story 7-1, 7-2)
-    "MAX_SESSION_MESSAGES",
+    # NOTE: MAX_SESSION_MESSAGES moved to app.core.config.session_max_messages
     "SessionMemoryService",
     "get_session_memory_service",
     "reset_session_memory_service",

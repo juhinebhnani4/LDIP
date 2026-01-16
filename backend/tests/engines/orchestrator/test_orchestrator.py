@@ -134,6 +134,7 @@ class TestFullPipeline:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="What citations are in this case?",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert result.matter_id == "matter-123"
@@ -147,6 +148,7 @@ class TestFullPipeline:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="What is the timeline of events?",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert EngineType.TIMELINE in result.successful_engines
@@ -157,6 +159,7 @@ class TestFullPipeline:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="Tell me about the citations and timeline",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         # Should use multiple engines
@@ -170,6 +173,7 @@ class TestFullPipeline:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="What happened in the case?",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert EngineType.RAG in result.successful_engines
@@ -189,6 +193,7 @@ class TestMatterIsolation:
         result = await orchestrator.process_query(
             matter_id="secure-matter-abc",
             query="What citations?",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert result.matter_id == "secure-matter-abc"
@@ -223,6 +228,7 @@ class TestMatterIsolation:
         await orchestrator.process_query(
             matter_id="test-matter-xyz",
             query="Test query",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert captured_matter_id == "test-matter-xyz"
@@ -258,6 +264,7 @@ class TestMatterIsolation:
         await orchestrator.process_query(
             matter_id="analyzer-test-matter",
             query="Test query",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert captured_matter_id == "analyzer-test-matter"
@@ -295,6 +302,7 @@ class TestErrorHandling:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="What citations?",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         assert len(result.failed_engines) > 0
@@ -329,6 +337,7 @@ class TestErrorHandling:
         result = await orchestrator.process_query(
             matter_id="matter-123",
             query="Tell me about citations and timeline",
+            user_id="test-user-123",  # Required for NFR24 audit compliance
         )
 
         # Should have some successful and some failed
@@ -492,20 +501,24 @@ class TestAuditLoggingIntegration:
         mock_history_store.append_query.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_audit_logging_skipped_without_user_id(
-        self, orchestrator_with_audit, mock_audit_logger, mock_history_store
+    async def test_user_id_is_required_for_nfr24_compliance(
+        self, orchestrator_with_audit
     ):
-        """Audit logging should be skipped when user_id is not provided."""
-        await orchestrator_with_audit.process_query(
-            matter_id="matter-123",
-            query="What citations?",
-            # No user_id provided
+        """user_id is now REQUIRED for NFR24 audit compliance (no longer optional).
+
+        Story 6-3 Fix: user_id was previously optional, allowing queries to bypass
+        the audit trail. Now it's required to ensure all queries are logged.
+        """
+        import inspect
+
+        # Verify that user_id is a required parameter (no default value)
+        sig = inspect.signature(orchestrator_with_audit.process_query)
+        user_id_param = sig.parameters.get("user_id")
+
+        assert user_id_param is not None, "user_id parameter should exist"
+        assert user_id_param.default is inspect.Parameter.empty, (
+            "user_id should be REQUIRED (no default value) for NFR24 audit compliance"
         )
-
-        await asyncio.sleep(0.1)
-
-        mock_audit_logger.log_query.assert_not_called()
-        mock_history_store.append_query.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_audit_failure_does_not_fail_query(

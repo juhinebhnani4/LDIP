@@ -14,9 +14,6 @@ to the appropriate analysis engines (Citation, Timeline, Contradiction, RAG).
 # Story 6-1: Intent Analysis
 from app.engines.orchestrator.adapters import (
     ADAPTER_REGISTRY,
-    RAG_RERANK_TOP_N,
-    RAG_SEARCH_LIMIT,
-    TIMELINE_DEFAULT_PAGE_SIZE,
     CitationEngineAdapter,
     ContradictionEngineAdapter,
     EngineAdapter,
@@ -26,7 +23,6 @@ from app.engines.orchestrator.adapters import (
     get_cached_adapter,
 )
 from app.engines.orchestrator.aggregator import (
-    ENGINE_CONFIDENCE_WEIGHTS,
     ResultAggregator,
     get_result_aggregator,
 )
@@ -97,14 +93,12 @@ __all__ = [
     "EngineExecutor",
     "get_engine_executor",
     # Story 6-2: Result Aggregator
-    "ENGINE_CONFIDENCE_WEIGHTS",
     "ResultAggregator",
     "get_result_aggregator",
     # Story 6-2: Engine Adapters
+    # NOTE: RAG_SEARCH_LIMIT, RAG_RERANK_TOP_N, TIMELINE_DEFAULT_PAGE_SIZE,
+    # ENGINE_CONFIDENCE_WEIGHTS moved to app.core.config for runtime configurability
     "ADAPTER_REGISTRY",
-    "RAG_RERANK_TOP_N",
-    "RAG_SEARCH_LIMIT",
-    "TIMELINE_DEFAULT_PAGE_SIZE",
     "CitationEngineAdapter",
     "ContradictionEngineAdapter",
     "EngineAdapter",

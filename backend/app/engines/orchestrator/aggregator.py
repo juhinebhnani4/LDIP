@@ -39,14 +39,22 @@ logger = structlog.get_logger(__name__)
 # Engine Weights for Confidence Calculation
 # =============================================================================
 
-# Weights for calculating overall confidence
-# Higher weight = more influence on final confidence
-ENGINE_CONFIDENCE_WEIGHTS: dict[EngineType, float] = {
-    EngineType.CITATION: 1.0,
-    EngineType.TIMELINE: 1.0,
-    EngineType.CONTRADICTION: 1.2,  # Slightly higher - contradiction finding is important
-    EngineType.RAG: 0.8,  # Slightly lower - general search is less precise
-}
+
+def _get_engine_confidence_weights() -> dict[EngineType, float]:
+    """Get engine confidence weights from settings.
+
+    Story 6-2: Configurable weights for runtime tuning without code deployment.
+
+    Returns:
+        Dict mapping engine types to confidence weights.
+    """
+    settings = get_settings()
+    return {
+        EngineType.CITATION: settings.orchestrator_weight_citation,
+        EngineType.TIMELINE: settings.orchestrator_weight_timeline,
+        EngineType.CONTRADICTION: settings.orchestrator_weight_contradiction,
+        EngineType.RAG: settings.orchestrator_weight_rag,
+    }
 
 
 # =============================================================================
@@ -408,6 +416,7 @@ class ResultAggregator:
         """Calculate weighted average confidence from engine results.
 
         Task 4.4: Weight each engine's confidence by its importance.
+        Weights are configurable via environment variables for runtime tuning.
 
         Args:
             results: Successful engine results.
@@ -420,10 +429,11 @@ class ResultAggregator:
 
         total_weight = 0.0
         weighted_sum = 0.0
+        weights = _get_engine_confidence_weights()
 
         for result in results:
             if result.confidence is not None:
-                weight = ENGINE_CONFIDENCE_WEIGHTS.get(result.engine, 1.0)
+                weight = weights.get(result.engine, 1.0)
                 weighted_sum += result.confidence * weight
                 total_weight += weight
 

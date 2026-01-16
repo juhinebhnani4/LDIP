@@ -15,24 +15,13 @@ from typing import Any
 
 import structlog
 
+from app.core.config import get_settings
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
 )
 
 logger = structlog.get_logger(__name__)
-
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-# RAG search configuration
-RAG_SEARCH_LIMIT = 20  # Number of candidates to retrieve before reranking
-RAG_RERANK_TOP_N = 5  # Number of results to return after reranking
-
-# Timeline builder configuration
-TIMELINE_DEFAULT_PAGE_SIZE = 50  # Default number of timeline events per page
 
 
 # =============================================================================
@@ -288,11 +277,12 @@ class TimelineEngineAdapter(EngineAdapter):
 
         try:
             builder = self._get_builder()
+            settings = get_settings()
             timeline = await builder.build_timeline(
                 matter_id=matter_id,
                 include_entities=True,
                 page=1,
-                per_page=TIMELINE_DEFAULT_PAGE_SIZE,
+                per_page=settings.timeline_default_page_size,
             )
 
             # Convert timeline to dict format
@@ -530,11 +520,12 @@ class RAGEngineAdapter(EngineAdapter):
 
         try:
             search = self._get_search()
+            settings = get_settings()
             results = await search.search_with_rerank(
                 matter_id=matter_id,
                 query=query,
-                limit=RAG_SEARCH_LIMIT,
-                top_n=RAG_RERANK_TOP_N,
+                limit=settings.rag_search_limit,
+                top_n=settings.rag_rerank_top_n,
             )
 
             # Convert search results to dict format

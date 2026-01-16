@@ -15,11 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.config import get_settings
 from app.engines.orchestrator.adapters import (
     ADAPTER_REGISTRY,
-    RAG_RERANK_TOP_N,
-    RAG_SEARCH_LIMIT,
-    TIMELINE_DEFAULT_PAGE_SIZE,
     CitationEngineAdapter,
     ContradictionEngineAdapter,
     EngineAdapter,
@@ -258,11 +256,12 @@ class TestTimelineEngineAdapter:
 
         assert result.success
         assert result.engine == EngineType.TIMELINE
+        settings = get_settings()
         mock_timeline_builder.build_timeline.assert_called_once_with(
             matter_id="matter-456",
             include_entities=True,
             page=1,
-            per_page=TIMELINE_DEFAULT_PAGE_SIZE,
+            per_page=settings.timeline_default_page_size,
         )
 
     @pytest.mark.asyncio
@@ -384,11 +383,12 @@ class TestRAGEngineAdapter:
 
         assert result.success
         assert result.engine == EngineType.RAG
+        settings = get_settings()
         mock_hybrid_search.search_with_rerank.assert_called_once_with(
             matter_id="matter-789",
             query="Search for something",
-            limit=RAG_SEARCH_LIMIT,
-            top_n=RAG_RERANK_TOP_N,
+            limit=settings.rag_search_limit,
+            top_n=settings.rag_rerank_top_n,
         )
 
     @pytest.mark.asyncio
@@ -512,28 +512,32 @@ class TestMatterIsolation:
 
 
 # =============================================================================
-# Unit Tests: Constants
+# Unit Tests: Config Settings
 # =============================================================================
 
 
-class TestConstants:
-    """Tests for adapter constants."""
+class TestConfigSettings:
+    """Tests for adapter config settings (from app.core.config)."""
 
     def test_rag_search_limit_is_positive(self):
-        """RAG_SEARCH_LIMIT should be a positive integer."""
-        assert isinstance(RAG_SEARCH_LIMIT, int)
-        assert RAG_SEARCH_LIMIT > 0
+        """rag_search_limit should be a positive integer."""
+        settings = get_settings()
+        assert isinstance(settings.rag_search_limit, int)
+        assert settings.rag_search_limit > 0
 
     def test_rag_rerank_top_n_is_positive(self):
-        """RAG_RERANK_TOP_N should be a positive integer."""
-        assert isinstance(RAG_RERANK_TOP_N, int)
-        assert RAG_RERANK_TOP_N > 0
+        """rag_rerank_top_n should be a positive integer."""
+        settings = get_settings()
+        assert isinstance(settings.rag_rerank_top_n, int)
+        assert settings.rag_rerank_top_n > 0
 
     def test_rag_rerank_top_n_less_than_limit(self):
-        """RAG_RERANK_TOP_N should be <= RAG_SEARCH_LIMIT."""
-        assert RAG_RERANK_TOP_N <= RAG_SEARCH_LIMIT
+        """rag_rerank_top_n should be <= rag_search_limit."""
+        settings = get_settings()
+        assert settings.rag_rerank_top_n <= settings.rag_search_limit
 
     def test_timeline_page_size_is_positive(self):
-        """TIMELINE_DEFAULT_PAGE_SIZE should be a positive integer."""
-        assert isinstance(TIMELINE_DEFAULT_PAGE_SIZE, int)
-        assert TIMELINE_DEFAULT_PAGE_SIZE > 0
+        """timeline_default_page_size should be a positive integer."""
+        settings = get_settings()
+        assert isinstance(settings.timeline_default_page_size, int)
+        assert settings.timeline_default_page_size > 0

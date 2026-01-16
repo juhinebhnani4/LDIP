@@ -114,6 +114,26 @@ class Settings(BaseSettings):
     rate_limit_health: int = 300   # health/monitoring endpoints (high frequency)
     rate_limit_export: int = 20    # export generation (CPU-intensive)
 
+    # Engine Orchestrator Configuration (Story 6-2)
+    # Engine confidence weights for overall score calculation (higher = more influence)
+    orchestrator_weight_citation: float = 1.0   # Citation engine weight
+    orchestrator_weight_timeline: float = 1.0   # Timeline engine weight
+    orchestrator_weight_contradiction: float = 1.2  # Contradiction engine (slightly higher)
+    orchestrator_weight_rag: float = 0.8        # RAG engine (slightly lower - general search)
+
+    # RAG adapter configuration
+    rag_search_limit: int = 20     # Candidates to retrieve before reranking
+    rag_rerank_top_n: int = 5      # Results to return after reranking
+    timeline_default_page_size: int = 50  # Default timeline events per page
+
+    # Memory System Configuration (Story 7 - Epic 7 Code Review Fixes)
+    session_max_messages: int = 20          # Max messages in sliding window (session.py)
+    session_max_entities: int = 50          # Max entities tracked for pronoun resolution
+    archived_session_max_messages: int = 10 # Max messages stored in archived session
+    query_history_max_entries: int = 500    # Max query history entries per matter (JSONB limit)
+    query_history_default_limit: int = 100  # Default entries returned from get_query_history
+    archived_session_query_limit: int = 10  # Default archived sessions to return
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

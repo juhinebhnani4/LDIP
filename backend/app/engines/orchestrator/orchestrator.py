@@ -118,7 +118,7 @@ class QueryOrchestrator:
         self,
         matter_id: str,
         query: str,
-        user_id: str | None = None,
+        user_id: str,
         context: dict[str, Any] | None = None,
     ) -> OrchestratorResult:
         """Process user query through full orchestration pipeline.
@@ -127,10 +127,13 @@ class QueryOrchestrator:
         Story 6-3: Add audit logging (non-blocking).
         Story 8-2: Add safety check BEFORE intent analysis (Task 6.3).
 
+        CRITICAL: user_id is REQUIRED for NFR24 audit compliance.
+        All queries must be logged with user attribution.
+
         Args:
             matter_id: Matter UUID for isolation.
             query: User's natural language query.
-            user_id: User ID for audit trail (Story 6-3). Optional for backward compat.
+            user_id: User ID for audit trail (Story 6-3). REQUIRED for NFR24.
             context: Optional conversation context.
 
         Returns:
@@ -159,16 +162,16 @@ class QueryOrchestrator:
             )
 
             # Log to audit trail (non-blocking) - Story 8-2 Task 6.5
-            if user_id:
-                task = asyncio.create_task(
-                    self._log_blocked_query_audit(
-                        matter_id=matter_id,
-                        user_id=user_id,
-                        query=query,
-                        safety_result=safety_result,
-                    )
+            # NFR24: Always log audit - user_id is required
+            task = asyncio.create_task(
+                self._log_blocked_query_audit(
+                    matter_id=matter_id,
+                    user_id=user_id,
+                    query=query,
+                    safety_result=safety_result,
                 )
-                task.add_done_callback(self._handle_audit_task_exception)
+            )
+            task.add_done_callback(self._handle_audit_task_exception)
 
             # M4 Fix: Explicitly set success=False for blocked queries
             return OrchestratorResult(
@@ -227,17 +230,17 @@ class QueryOrchestrator:
 
         # Step 4: Audit logging (non-blocking, fire-and-forget)
         # Story 6-3: AC #5 - audit failures should not fail the query
-        if user_id:
-            task = asyncio.create_task(
-                self._log_query_audit(
-                    matter_id=matter_id,
-                    user_id=user_id,
-                    result=result,
-                    intent_result=intent_result,
-                )
+        # NFR24: Always log audit - user_id is required
+        task = asyncio.create_task(
+            self._log_query_audit(
+                matter_id=matter_id,
+                user_id=user_id,
+                result=result,
+                intent_result=intent_result,
             )
-            # Add callback to handle any exceptions that slip through
-            task.add_done_callback(self._handle_audit_task_exception)
+        )
+        # Add callback to handle any exceptions that slip through
+        task.add_done_callback(self._handle_audit_task_exception)
 
         return result
 
@@ -308,7 +311,7 @@ class QueryOrchestrator:
         """Log blocked query to audit trail (non-blocking).
 
         Story 8-2: Task 6.5 - Audit logging for blocked queries.
-        H3 Fix: Now persists to database via history store.
+        Persists audit entry to database via history store for NFR24 compliance.
         This method should never raise exceptions.
 
         Args:
@@ -318,7 +321,7 @@ class QueryOrchestrator:
             safety_result: Safety check result with blocking details.
         """
         try:
-            # H3 Fix: Create audit entry and persist to database
+            # Create audit entry and persist to database for NFR24 compliance
             audit_entry = self._audit_logger.log_blocked_query(
                 matter_id=matter_id,
                 user_id=user_id,

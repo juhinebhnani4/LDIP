@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentType(str, Enum):
@@ -55,9 +55,12 @@ class DocumentStatus(str, Enum):
 class DocumentBase(BaseModel):
     """Base document properties."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     filename: str = Field(..., min_length=1, max_length=255, description="Original filename")
     document_type: DocumentType = Field(
         default=DocumentType.CASE_FILE,
+        alias="documentType",
         description="Document classification type"
     )
 
@@ -65,91 +68,106 @@ class DocumentBase(BaseModel):
 class DocumentCreate(DocumentBase):
     """Internal model for creating a document record."""
 
-    matter_id: str = Field(..., description="Matter UUID this document belongs to")
-    storage_path: str = Field(..., description="Supabase Storage path")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
+    matter_id: str = Field(..., alias="matterId", description="Matter UUID this document belongs to")
+    storage_path: str = Field(..., alias="storagePath", description="Supabase Storage path")
+    file_size: int = Field(..., ge=0, alias="fileSize", description="File size in bytes")
     is_reference_material: bool = Field(
         default=False,
+        alias="isReferenceMaterial",
         description="True for Acts and reference docs"
     )
-    uploaded_by: str = Field(..., description="User UUID who uploaded the document")
+    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded the document")
 
 
 class Document(DocumentBase):
     """Complete document model returned from API."""
 
     id: str = Field(..., description="Document UUID")
-    matter_id: str = Field(..., description="Matter UUID")
-    storage_path: str = Field(..., description="Supabase Storage path")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
-    page_count: int | None = Field(None, description="Number of pages (null until OCR)")
+    matter_id: str = Field(..., alias="matterId", description="Matter UUID")
+    storage_path: str = Field(..., alias="storagePath", description="Supabase Storage path")
+    file_size: int = Field(..., ge=0, alias="fileSize", description="File size in bytes")
+    page_count: int | None = Field(None, alias="pageCount", description="Number of pages (null until OCR)")
     is_reference_material: bool = Field(
         default=False,
+        alias="isReferenceMaterial",
         description="True for Acts and reference docs"
     )
-    uploaded_by: str = Field(..., description="User UUID who uploaded")
-    uploaded_at: datetime = Field(..., description="Upload timestamp")
+    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded")
+    uploaded_at: datetime = Field(..., alias="uploadedAt", description="Upload timestamp")
     status: DocumentStatus = Field(
         default=DocumentStatus.PENDING,
         description="Processing status"
     )
     processing_started_at: datetime | None = Field(
         None,
+        alias="processingStartedAt",
         description="When OCR processing started"
     )
     processing_completed_at: datetime | None = Field(
         None,
+        alias="processingCompletedAt",
         description="When OCR processing completed"
     )
     # OCR result fields
     extracted_text: str | None = Field(
         None,
+        alias="extractedText",
         description="Full OCR-extracted text content"
     )
     ocr_confidence: float | None = Field(
         None, ge=0, le=1,
+        alias="ocrConfidence",
         description="Average OCR confidence score (0-1)"
     )
     ocr_quality_score: float | None = Field(
         None, ge=0, le=1,
+        alias="ocrQualityScore",
         description="Document AI image quality score (0-1)"
     )
     ocr_confidence_per_page: list[float] | None = Field(
         None,
+        alias="ocrConfidencePerPage",
         description="Per-page OCR confidence scores (0-1)"
     )
     ocr_quality_status: str | None = Field(
         None,
+        alias="ocrQualityStatus",
         description="OCR quality level: 'good' (>85%), 'fair' (70-85%), 'poor' (<70%)"
     )
     ocr_error: str | None = Field(
         None,
+        alias="ocrError",
         description="Error details if OCR processing failed"
     )
     ocr_retry_count: int = Field(
         default=0,
+        alias="ocrRetryCount",
         description="Number of OCR retry attempts"
     )
     validation_status: str | None = Field(
         None,
+        alias="validationStatus",
         description="OCR validation status: 'pending', 'validated', 'requires_human_review'"
     )
     deleted_at: datetime | None = Field(
         None,
+        alias="deletedAt",
         description="Soft delete timestamp (NULL = not deleted)"
     )
-    created_at: datetime = Field(..., description="Record creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
+    created_at: datetime = Field(..., alias="createdAt", description="Record creation timestamp")
+    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
 
 
 class UploadedDocument(BaseModel):
     """Simplified document model for upload response."""
 
-    document_id: str = Field(..., description="Document UUID")
+    model_config = ConfigDict(populate_by_name=True)
+
+    document_id: str = Field(..., alias="documentId", description="Document UUID")
     filename: str = Field(..., description="Original filename")
-    storage_path: str = Field(..., description="Supabase Storage path")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
-    document_type: DocumentType = Field(..., description="Document classification")
+    storage_path: str = Field(..., alias="storagePath", description="Supabase Storage path")
+    file_size: int = Field(..., ge=0, alias="fileSize", description="File size in bytes")
+    document_type: DocumentType = Field(..., alias="documentType", description="Document classification")
     status: DocumentStatus = Field(
         default=DocumentStatus.PENDING,
         description="Processing status"
@@ -182,30 +200,36 @@ class BulkUploadResponse(BaseModel):
 class PaginationMeta(BaseModel):
     """Pagination metadata for list responses."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     total: int = Field(..., description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
-    per_page: int = Field(..., ge=1, le=100, description="Items per page")
-    total_pages: int = Field(..., ge=0, description="Total number of pages")
+    per_page: int = Field(..., ge=1, le=100, alias="perPage", description="Items per page")
+    total_pages: int = Field(..., ge=0, alias="totalPages", description="Total number of pages")
 
 
 class DocumentListItem(BaseModel):
     """Document item for list responses (subset of full Document)."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(..., description="Document UUID")
-    matter_id: str = Field(..., description="Matter UUID")
+    matter_id: str = Field(..., alias="matterId", description="Matter UUID")
     filename: str = Field(..., description="Original filename")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
-    document_type: DocumentType = Field(..., description="Document classification")
-    is_reference_material: bool = Field(..., description="True for Acts and reference docs")
+    file_size: int = Field(..., ge=0, alias="fileSize", description="File size in bytes")
+    document_type: DocumentType = Field(..., alias="documentType", description="Document classification")
+    is_reference_material: bool = Field(..., alias="isReferenceMaterial", description="True for Acts and reference docs")
     status: DocumentStatus = Field(..., description="Processing status")
-    uploaded_at: datetime = Field(..., description="Upload timestamp")
-    uploaded_by: str = Field(..., description="User UUID who uploaded")
+    uploaded_at: datetime = Field(..., alias="uploadedAt", description="Upload timestamp")
+    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded")
     ocr_confidence: float | None = Field(
         None, ge=0, le=1,
+        alias="ocrConfidence",
         description="Average OCR confidence score (0-1)"
     )
     ocr_quality_status: str | None = Field(
         None,
+        alias="ocrQualityStatus",
         description="OCR quality level: 'good', 'fair', or 'poor'"
     )
 
@@ -226,12 +250,16 @@ class DocumentDetailResponse(BaseModel):
 class DocumentUpdate(BaseModel):
     """Model for updating document metadata."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     document_type: DocumentType | None = Field(
         None,
+        alias="documentType",
         description="New document classification type"
     )
     is_reference_material: bool | None = Field(
         None,
+        alias="isReferenceMaterial",
         description="Override reference material flag (auto-set for acts)"
     )
     filename: str | None = Field(
@@ -245,13 +273,17 @@ class DocumentUpdate(BaseModel):
 class BulkDocumentUpdate(BaseModel):
     """Model for bulk document type assignment."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     document_ids: list[str] = Field(
         ...,
         min_length=1,
+        alias="documentIds",
         description="List of document UUIDs to update"
     )
     document_type: DocumentType = Field(
         ...,
+        alias="documentType",
         description="Document type to assign to all documents"
     )
 

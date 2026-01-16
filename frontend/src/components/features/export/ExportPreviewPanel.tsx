@@ -74,7 +74,8 @@ const SECTION_LABELS: Record<ExportSectionId, string> = {
  * ExportPreviewPanel renders a document-like preview of selected sections.
  */
 export function ExportPreviewPanel({
-  matterId,
+  // matterId is passed for future use when fetching data directly in this component
+  matterId: _matterId,
   selectedSectionIds,
   sectionEdits,
   editingSection,
@@ -93,8 +94,8 @@ export function ExportPreviewPanel({
   citations,
   citationsLoading,
 }: ExportPreviewPanelProps) {
-  // Check if data is loading for any section
-  const isLoading = summaryLoading || timelineLoading || entitiesLoading || citationsLoading;
+  // Suppress unused variable - matterId reserved for future direct data fetching
+  void _matterId;
 
   // Memoize section data mapping
   const sectionData = useMemo(() => {

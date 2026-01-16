@@ -11,7 +11,8 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +26,10 @@ export interface SortableSectionProps {
   onToggle: (sectionId: ExportSectionId) => void;
   /** Whether the section is being dragged */
   isDragging?: boolean;
+  /** Handler for edit button click (Story 12.2) */
+  onEdit?: (sectionId: ExportSectionId) => void;
+  /** Whether edit button should be shown */
+  showEditButton?: boolean;
 }
 
 /**
@@ -59,6 +64,8 @@ export function SortableSection({
   section,
   onToggle,
   isDragging = false,
+  onEdit,
+  showEditButton = false,
 }: SortableSectionProps) {
   const {
     attributes,
@@ -133,6 +140,20 @@ export function SortableSection({
           formatCount(section.count, section.id)
         )}
       </div>
+
+      {/* Edit button (Story 12.2) */}
+      {showEditButton && onEdit && section.enabled && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 shrink-0"
+          onClick={() => onEdit(section.id)}
+          aria-label={`Edit ${section.label}`}
+          data-testid={`edit-section-${section.id}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
 }

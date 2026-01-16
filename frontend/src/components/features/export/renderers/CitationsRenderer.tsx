@@ -86,9 +86,9 @@ export function CitationsRenderer({
                   <p className="text-muted-foreground">
                     Section {citation.sectionNumber}
                   </p>
-                  {citation.extractedText && (
+                  {citation.rawCitationText && (
                     <p className="mt-1 text-gray-600 dark:text-gray-400 italic text-xs line-clamp-2">
-                      &quot;{citation.extractedText}&quot;
+                      &quot;{citation.rawCitationText}&quot;
                     </p>
                   )}
                 </div>

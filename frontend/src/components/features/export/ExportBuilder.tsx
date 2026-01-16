@@ -121,7 +121,8 @@ export function ExportBuilder({
 
   // Unsaved changes dialog state
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [pendingClose, setPendingClose] = useState(false);
+  // pendingClose tracks if close was initiated - used by setPendingClose to reset state
+  const [_pendingClose, setPendingClose] = useState(false);
 
   // Fetch content counts from existing hooks
   const { summary, isLoading: summaryLoading, isError: summaryError } = useMatterSummary(matterId);
@@ -254,9 +255,6 @@ export function ExportBuilder({
     resetSectionEdits();
     toast.info('All edits have been reset');
   };
-
-  // Suppress unused variable warning - pendingClose is used for dialog state tracking
-  void pendingClose;
 
   const FormatIcon = FORMAT_CONFIG[format].icon;
 

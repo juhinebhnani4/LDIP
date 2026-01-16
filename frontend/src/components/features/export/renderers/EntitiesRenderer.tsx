@@ -93,8 +93,8 @@ export function EntitiesRenderer({
                   <p className="font-medium">{entity.canonicalName}</p>
                   <p className="text-xs text-muted-foreground capitalize">
                     {entity.entityType.toLowerCase().replace('_', ' ')}
-                    {entity.aliases && entity.aliases.length > 0 && (
-                      <span> · Also known as: {entity.aliases.slice(0, 2).join(', ')}</span>
+                    {entity.metadata?.aliasesFound && entity.metadata.aliasesFound.length > 0 && (
+                      <span> · Also known as: {entity.metadata.aliasesFound.slice(0, 2).join(', ')}</span>
                     )}
                   </p>
                 </div>

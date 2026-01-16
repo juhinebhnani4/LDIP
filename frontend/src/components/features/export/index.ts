@@ -21,6 +21,9 @@ export type { ExportPreviewPanelProps } from './ExportPreviewPanel';
 export { ExportSectionPreview } from './ExportSectionPreview';
 export type { ExportSectionPreviewProps } from './ExportSectionPreview';
 
+export { EditableSectionContent } from './EditableSectionContent';
+export type { EditableSectionContentProps } from './EditableSectionContent';
+
 // Re-export hook for convenience
 export { useExportBuilder } from '@/hooks/useExportBuilder';
 export type {

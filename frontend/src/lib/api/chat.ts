@@ -48,7 +48,7 @@ interface BackendArchivedResponse {
 
 /**
  * Transform backend message format to frontend format.
- * Handles snake_case to camelCase conversion.
+ * Handles both snake_case and camelCase for backward compatibility.
  */
 function transformMessage(backendMessage: BackendSessionMessage): ChatMessage {
   let messageId = backendMessage.id;
@@ -59,31 +59,40 @@ function transformMessage(backendMessage: BackendSessionMessage): ChatMessage {
     }
   }
 
+  // Handle both snake_case and camelCase source refs
+  const msg = backendMessage as unknown as Record<string, unknown>;
+  const sourceRefs = backendMessage.source_refs ?? msg.sourceRefs as typeof backendMessage.source_refs;
+
   return {
     id: messageId,
     role: backendMessage.role,
     content: backendMessage.content,
     timestamp: backendMessage.timestamp,
-    sources: backendMessage.source_refs?.map((ref) => ({
-      documentId: ref.document_id,
-      documentName: ref.document_name,
-      page: ref.page,
-      bboxIds: ref.bbox_ids,
-    })),
+    sources: sourceRefs?.map((ref) => {
+      const r = ref as unknown as Record<string, unknown>;
+      return {
+        documentId: (r.documentId as string) ?? ref.document_id,
+        documentName: (r.documentName as string) ?? ref.document_name,
+        page: ref.page,
+        bboxIds: (r.bboxIds as string[]) ?? ref.bbox_ids,
+      };
+    }),
   };
 }
 
 /**
  * Transform backend session context to frontend format.
+ * Handles both snake_case and camelCase for backward compatibility.
  */
 function transformSessionContext(backend: BackendSessionContext): SessionContext {
+  const b = backend as unknown as Record<string, unknown>;
   return {
-    sessionId: backend.session_id,
-    matterId: backend.matter_id,
-    userId: backend.user_id,
+    sessionId: (b.sessionId ?? b.session_id) as string,
+    matterId: (b.matterId ?? b.matter_id) as string,
+    userId: (b.userId ?? b.user_id) as string,
     messages: backend.messages.map(transformMessage),
     entities: backend.entities,
-    hasArchived: backend.has_archived,
+    hasArchived: (b.hasArchived ?? b.has_archived) as boolean,
   };
 }
 

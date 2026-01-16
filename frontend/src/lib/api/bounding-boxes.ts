@@ -14,39 +14,41 @@ import type {
 
 /**
  * Transform backend bounding box response to frontend format.
- * Maps snake_case from backend to camelCase for frontend.
+ * Handles both snake_case and camelCase for backward compatibility.
  * Uses safe type coercion to handle unexpected data types.
  */
 function transformBoundingBox(bbox: Record<string, unknown>): BoundingBox {
   return {
     id: String(bbox.id ?? ''),
-    documentId: String(bbox.document_id ?? ''),
-    pageNumber: Number(bbox.page_number ?? 0),
+    documentId: String(bbox.documentId ?? bbox.document_id ?? ''),
+    pageNumber: Number(bbox.pageNumber ?? bbox.page_number ?? 0),
     x: Number(bbox.x ?? 0),
     y: Number(bbox.y ?? 0),
     width: Number(bbox.width ?? 0),
     height: Number(bbox.height ?? 0),
     text: String(bbox.text ?? ''),
-    confidence: bbox.confidence != null ? Number(bbox.confidence) : null,
-    readingOrderIndex: bbox.reading_order_index != null ? Number(bbox.reading_order_index) : null,
+    confidence: (bbox.confidence != null) ? Number(bbox.confidence) : null,
+    readingOrderIndex: (bbox.readingOrderIndex ?? bbox.reading_order_index) != null ? Number(bbox.readingOrderIndex ?? bbox.reading_order_index) : null,
   }
 }
 
 /**
  * Transform backend list response to frontend format.
+ * Handles both snake_case and camelCase for backward compatibility.
  */
 function transformListResponse(response: {
   data: Record<string, unknown>[]
-  meta?: { total: number; page: number; per_page: number; total_pages: number }
+  meta?: Record<string, unknown>
 }): BoundingBoxListResponse {
+  const m = response.meta;
   return {
     data: response.data.map(transformBoundingBox),
-    meta: response.meta
+    meta: m
       ? {
-          total: response.meta.total,
-          page: response.meta.page,
-          perPage: response.meta.per_page,
-          totalPages: response.meta.total_pages,
+          total: (m.total ?? 0) as number,
+          page: (m.page ?? 1) as number,
+          perPage: ((m.perPage ?? m.per_page) ?? 20) as number,
+          totalPages: ((m.totalPages ?? m.total_pages) ?? 0) as number,
         }
       : undefined,
   }

@@ -157,7 +157,7 @@ describe('EngineTrace', () => {
   it('displays singular "engine" when only one trace', () => {
     render(
       <EngineTrace
-        traces={[mockTraces[0]]}
+        traces={[mockTraces[0]!]}
         totalTimeMs={150}
       />
     );

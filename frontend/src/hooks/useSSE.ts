@@ -244,42 +244,43 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
         }
 
         case 'complete': {
-          // Transform snake_case to camelCase
+          // Transform API response to camelCase (handles both snake_case and camelCase)
           const rawData = eventData as Record<string, unknown>;
           const completeData: CompleteData = {
             response: (rawData.response as string) ?? '',
             sources: ((rawData.sources as Array<Record<string, unknown>>) ?? []).map(
               (s) => ({
-                documentId: (s.document_id as string) ?? '',
-                documentName: s.document_name as string | undefined,
+                documentId: ((s.documentId ?? s.document_id) as string) ?? '',
+                documentName: (s.documentName ?? s.document_name) as string | undefined,
                 page: s.page as number | undefined,
-                chunkId: s.chunk_id as string | undefined,
+                chunkId: (s.chunkId ?? s.chunk_id) as string | undefined,
                 confidence: s.confidence as number | undefined,
               })
             ),
             engineTraces: (
-              (rawData.engine_traces as Array<Record<string, unknown>>) ?? []
+              ((rawData.engineTraces ?? rawData.engine_traces) as Array<Record<string, unknown>>) ?? []
             ).map((t) => ({
               engine: (t.engine as string) ?? '',
-              executionTimeMs: (t.execution_time_ms as number) ?? 0,
-              findingsCount: (t.findings_count as number) ?? 0,
+              executionTimeMs: ((t.executionTimeMs ?? t.execution_time_ms) as number) ?? 0,
+              findingsCount: ((t.findingsCount ?? t.findings_count) as number) ?? 0,
               success: (t.success as boolean) ?? false,
               error: t.error as string | undefined,
             })),
-            totalTimeMs: (rawData.total_time_ms as number) ?? 0,
+            totalTimeMs: ((rawData.totalTimeMs ?? rawData.total_time_ms) as number) ?? 0,
             confidence: (rawData.confidence as number) ?? 0,
-            messageId: rawData.message_id as string | undefined,
+            messageId: (rawData.messageId ?? rawData.message_id) as string | undefined,
           };
           optionsRef.current.onComplete?.(completeData);
           break;
         }
 
         case 'error': {
+          // Transform API response to camelCase (handles both snake_case and camelCase)
           const rawData = eventData as Record<string, unknown>;
           const errorData: ErrorData = {
             error: (rawData.error as string) ?? 'Unknown error',
             code: (rawData.code as string) ?? 'UNKNOWN_ERROR',
-            suggestedRewrite: rawData.suggested_rewrite as string | undefined,
+            suggestedRewrite: (rawData.suggestedRewrite ?? rawData.suggested_rewrite) as string | undefined,
           };
           const err = new Error(errorData.error);
           setError(err);

@@ -13,19 +13,23 @@ import { useState, useCallback, useRef } from 'react';
 import type { SplitViewBoundingBox } from '@/types/citation';
 
 /**
- * Bounding box data as returned by the API (percentage 0-100 format)
+ * Bounding box data as returned by the API (percentage 0-100 format).
+ * Supports both snake_case and camelCase for backward compatibility.
  */
 interface ApiBoundingBoxData {
   id: string;
-  document_id: string;
-  page_number: number;
+  document_id?: string;
+  documentId?: string;
+  page_number?: number;
+  pageNumber?: number;
   x: number; // 0-100 (percentage)
   y: number; // 0-100 (percentage)
   width: number; // 0-100 (percentage)
   height: number; // 0-100 (percentage)
   text: string;
   confidence: number | null;
-  reading_order_index: number | null;
+  reading_order_index?: number | null;
+  readingOrderIndex?: number | null;
 }
 
 /**
@@ -55,7 +59,8 @@ interface UseBoundingBoxesReturn {
 }
 
 /**
- * Normalize bounding box coordinates from API format (0-100) to canvas format (0-1)
+ * Normalize bounding box coordinates from API format (0-100) to canvas format (0-1).
+ * Handles both snake_case and camelCase for backward compatibility.
  */
 function normalizeBbox(bbox: ApiBoundingBoxData): SplitViewBoundingBox {
   return {
@@ -66,6 +71,13 @@ function normalizeBbox(bbox: ApiBoundingBoxData): SplitViewBoundingBox {
     height: bbox.height / 100,
     text: bbox.text,
   };
+}
+
+/**
+ * Get page number from bbox data, handling both snake_case and camelCase.
+ */
+function getPageNumber(bbox: ApiBoundingBoxData): number | undefined {
+  return bbox.pageNumber ?? bbox.page_number;
 }
 
 /**
@@ -139,7 +151,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
         const normalized = data.map(normalizeBbox);
 
         // Get page number from first bbox (all bboxes from same chunk should be on same page)
-        const pageNumber = data.length > 0 && data[0] ? data[0].page_number : null;
+        const pageNumber = data.length > 0 && data[0] ? getPageNumber(data[0]) ?? null : null;
 
         // Cache the result
         cacheRef.current.set(cacheKey, { bboxes: normalized, pageNumber });

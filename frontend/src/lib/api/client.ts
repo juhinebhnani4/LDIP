@@ -93,9 +93,16 @@ function createApiError(response: Response, errorBody: Record<string, unknown>):
  */
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const supabase = createClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+
+  // First try getSession() - this works when cookies are accessible
+  let { data: { session } } = await supabase.auth.getSession()
+
+  // If no session from getSession(), try refreshSession() which can recover from cookies
+  // This handles the case where browser storage is empty but cookies exist (incognito, new tabs)
+  if (!session) {
+    const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
+    session = refreshedSession
+  }
 
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
@@ -110,7 +117,7 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   })
 
   // Handle 401 - try refresh and retry once
-  if (response.status === 401 && session) {
+  if (response.status === 401) {
     const {
       data: { session: newSession },
     } = await supabase.auth.refreshSession()
@@ -325,32 +332,33 @@ function toSnakeCaseManualEventUpdate(
 }
 
 /**
- * Convert snake_case response to camelCase
+ * Convert API response to camelCase.
+ * Handles both snake_case and camelCase responses for backward compatibility.
  */
 function fromSnakeCaseManualEvent(response: Record<string, unknown>): ManualEventResponse {
   return {
     id: response.id as string,
-    eventDate: response.event_date as string,
-    eventDatePrecision: response.event_date_precision as TimelineEvent['eventDatePrecision'],
-    eventDateText: (response.event_date_text as string | null) ?? null,
-    eventType: response.event_type as TimelineEvent['eventType'],
+    eventDate: (response.eventDate ?? response.event_date) as string,
+    eventDatePrecision: (response.eventDatePrecision ?? response.event_date_precision) as TimelineEvent['eventDatePrecision'],
+    eventDateText: ((response.eventDateText ?? response.event_date_text) as string | null) ?? null,
+    eventType: (response.eventType ?? response.event_type) as TimelineEvent['eventType'],
     description: response.description as string,
-    documentId: (response.document_id as string | null) ?? null,
-    sourcePage: (response.source_page as number | null) ?? null,
+    documentId: ((response.documentId ?? response.document_id) as string | null) ?? null,
+    sourcePage: ((response.sourcePage ?? response.source_page) as number | null) ?? null,
     confidence: response.confidence as number,
     entities: Array.isArray(response.entities)
       ? response.entities.map((e: Record<string, unknown>) => ({
-          entityId: e.entity_id as string,
-          canonicalName: e.canonical_name as string,
-          entityType: e.entity_type as string,
-          role: (e.role as string | null) ?? null,
+          entityId: (e.entityId ?? e.entity_id) as string,
+          canonicalName: (e.canonicalName ?? e.canonical_name) as string,
+          entityType: (e.entityType ?? e.entity_type) as string,
+          role: ((e.role) as string | null) ?? null,
         }))
       : [],
-    isAmbiguous: (response.is_ambiguous as boolean) ?? false,
-    isVerified: (response.is_verified as boolean) ?? false,
+    isAmbiguous: ((response.isAmbiguous ?? response.is_ambiguous) as boolean) ?? false,
+    isVerified: ((response.isVerified ?? response.is_verified) as boolean) ?? false,
     isManual: true,
-    createdBy: response.created_by as string,
-    createdAt: response.created_at as string,
+    createdBy: (response.createdBy ?? response.created_by) as string,
+    createdAt: (response.createdAt ?? response.created_at) as string,
   }
 }
 

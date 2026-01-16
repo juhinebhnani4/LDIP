@@ -557,7 +557,7 @@ describe('DocumentList', () => {
 
       // Click an action button to verify dropdown opens
       const actionButtons = screen.getAllByRole('button', { name: /actions for/i });
-      await user.click(actionButtons[0]);
+      await user.click(actionButtons[0]!);
 
       // Should show the View option in dropdown
       expect(screen.getByRole('menuitem', { name: /view/i })).toBeInTheDocument();

@@ -93,8 +93,8 @@ describe('notifications API', () => {
 
       expect(result.notifications).toHaveLength(2);
       expect(result.unreadCount).toBe(2);
-      expect(result.notifications[0].id).toBe('notif-1');
-      expect(result.notifications[0].isRead).toBe(false);
+      expect(result.notifications[0]!.id).toBe('notif-1');
+      expect(result.notifications[0]!.isRead).toBe(false);
     });
 
     test('returns empty array when no notifications', async () => {

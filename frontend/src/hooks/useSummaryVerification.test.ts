@@ -289,8 +289,8 @@ describe('useSummaryVerification', () => {
       const key = 'parties:entity-123';
       const notes = result.current.notes.get(key);
       expect(notes).toHaveLength(1);
-      expect(notes![0].text).toBe('Need to verify this party');
-      expect(notes![0].id).toBe('n1'); // Server-provided ID
+      expect(notes![0]!.text).toBe('Need to verify this party');
+      expect(notes![0]!.id).toBe('n1'); // Server-provided ID
       expect(onSuccess).toHaveBeenCalled();
     });
 

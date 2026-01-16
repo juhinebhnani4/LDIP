@@ -152,7 +152,7 @@ describe('ActionableError', () => {
       await user.click(screen.getByRole('button', { name: /request access/i }))
 
       expect(onContactSupport).toHaveBeenCalledTimes(1)
-      const context = onContactSupport.mock.calls[0][0] as ErrorContext
+      const context = onContactSupport.mock.calls[0]![0] as ErrorContext
       expect(context.errorCode).toBe('INSUFFICIENT_PERMISSIONS')
       expect(context.matterId).toBe('matter-123')
     })

@@ -123,21 +123,22 @@ const DEFAULT_POLLING_INTERVAL = 1000;
 // =============================================================================
 
 /**
- * Convert snake_case job to camelCase
+ * Convert job to camelCase (handles both snake_case and camelCase for backward compatibility)
  */
 function normalizeJob(job: JobListResponse['jobs'][0]): ProcessingJob {
+  const j = job as unknown as Record<string, unknown>;
   return {
     id: job.id,
-    matterId: job.matter_id,
-    documentId: job.document_id,
-    status: job.status.toUpperCase() as JobStatus,
-    jobType: job.job_type,
-    currentStage: job.current_stage,
-    progressPct: job.progress_pct,
-    errorMessage: job.error_message,
-    createdAt: job.created_at,
-    startedAt: job.started_at,
-    completedAt: job.completed_at,
+    matterId: ((j.matterId ?? j.matter_id) as string),
+    documentId: ((j.documentId ?? j.document_id) as string | null),
+    status: (job.status ?? '').toUpperCase() as JobStatus,
+    jobType: ((j.jobType ?? j.job_type) as string),
+    currentStage: ((j.currentStage ?? j.current_stage) as string | null),
+    progressPct: ((j.progressPct ?? j.progress_pct) as number),
+    errorMessage: ((j.errorMessage ?? j.error_message) as string | null),
+    createdAt: ((j.createdAt ?? j.created_at) as string),
+    startedAt: ((j.startedAt ?? j.started_at) as string | null),
+    completedAt: ((j.completedAt ?? j.completed_at) as string | null),
   };
 }
 

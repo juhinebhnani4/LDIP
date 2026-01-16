@@ -25,19 +25,19 @@ import {
  * validated server-side against the user's access permissions.
  */
 
-/** Convert snake_case API response to camelCase */
+/** Convert API response to camelCase. Handles both snake_case and camelCase for backward compatibility. */
 function transformSearchResult(data: Record<string, unknown>): SearchResult {
   return {
     id: data.id as string,
-    documentId: data.document_id as string,
+    documentId: (data.documentId ?? data.document_id) as string,
     content: data.content as string,
-    pageNumber: data.page_number as number | null,
-    chunkType: data.chunk_type as 'parent' | 'child',
-    tokenCount: data.token_count as number,
-    bm25Rank: data.bm25_rank as number | null,
-    semanticRank: data.semantic_rank as number | null,
-    rrfScore: data.rrf_score as number,
-    relevanceScore: (data.relevance_score as number | null) ?? null,
+    pageNumber: (data.pageNumber ?? data.page_number) as number | null,
+    chunkType: (data.chunkType ?? data.chunk_type) as 'parent' | 'child',
+    tokenCount: (data.tokenCount ?? data.token_count) as number,
+    bm25Rank: (data.bm25Rank ?? data.bm25_rank) as number | null,
+    semanticRank: (data.semanticRank ?? data.semantic_rank) as number | null,
+    rrfScore: (data.rrfScore ?? data.rrf_score) as number,
+    relevanceScore: ((data.relevanceScore ?? data.relevance_score) as number | null) ?? null,
   }
 }
 
@@ -49,56 +49,59 @@ function transformRerankedResult(data: Record<string, unknown>): RerankedSearchR
   }
 }
 
-/** Transform hybrid search response */
+/** Transform hybrid search response. Handles both snake_case and camelCase for backward compatibility. */
 function transformSearchResponse(data: {
   data: Record<string, unknown>[]
   meta: Record<string, unknown>
 }): SearchResponse {
+  const m = data.meta;
   return {
     data: data.data.map(transformSearchResult),
     meta: {
-      query: data.meta.query as string,
-      matterId: data.meta.matter_id as string,
-      totalCandidates: data.meta.total_candidates as number,
-      bm25Weight: data.meta.bm25_weight as number,
-      semanticWeight: data.meta.semantic_weight as number,
-      rerankUsed: (data.meta.rerank_used as boolean | null) ?? null,
-      fallbackReason: (data.meta.fallback_reason as string | null) ?? null,
+      query: m.query as string,
+      matterId: (m.matterId ?? m.matter_id) as string,
+      totalCandidates: (m.totalCandidates ?? m.total_candidates) as number,
+      bm25Weight: (m.bm25Weight ?? m.bm25_weight) as number,
+      semanticWeight: (m.semanticWeight ?? m.semantic_weight) as number,
+      rerankUsed: ((m.rerankUsed ?? m.rerank_used) as boolean | null) ?? null,
+      fallbackReason: ((m.fallbackReason ?? m.fallback_reason) as string | null) ?? null,
     },
   }
 }
 
-/** Transform reranked search response */
+/** Transform reranked search response. Handles both snake_case and camelCase for backward compatibility. */
 function transformRerankedResponse(data: {
   data: Record<string, unknown>[]
   meta: Record<string, unknown>
 }): RerankedSearchResponse {
+  const m = data.meta;
   return {
     data: data.data.map(transformRerankedResult),
     meta: {
-      query: data.meta.query as string,
-      matterId: data.meta.matter_id as string,
-      totalCandidates: data.meta.total_candidates as number,
-      bm25Weight: data.meta.bm25_weight as number,
-      semanticWeight: data.meta.semantic_weight as number,
-      rerankUsed: data.meta.rerank_used as boolean,
-      fallbackReason: (data.meta.fallback_reason as string | null) ?? null,
+      query: m.query as string,
+      matterId: (m.matterId ?? m.matter_id) as string,
+      totalCandidates: (m.totalCandidates ?? m.total_candidates) as number,
+      bm25Weight: (m.bm25Weight ?? m.bm25_weight) as number,
+      semanticWeight: (m.semanticWeight ?? m.semantic_weight) as number,
+      rerankUsed: (m.rerankUsed ?? m.rerank_used) as boolean,
+      fallbackReason: ((m.fallbackReason ?? m.fallback_reason) as string | null) ?? null,
     },
   }
 }
 
-/** Transform single-mode search response */
+/** Transform single-mode search response. Handles both snake_case and camelCase for backward compatibility. */
 function transformSingleModeResponse(data: {
   data: Record<string, unknown>[]
   meta: Record<string, unknown>
 }): SingleModeSearchResponse {
+  const m = data.meta;
   return {
     data: data.data.map(transformSearchResult),
     meta: {
-      query: data.meta.query as string,
-      matterId: data.meta.matter_id as string,
-      resultCount: data.meta.result_count as number,
-      searchType: data.meta.search_type as 'bm25' | 'semantic',
+      query: m.query as string,
+      matterId: (m.matterId ?? m.matter_id) as string,
+      resultCount: (m.resultCount ?? m.result_count) as number,
+      searchType: (m.searchType ?? m.search_type) as 'bm25' | 'semantic',
     },
   }
 }

@@ -106,10 +106,10 @@ describe('timelineEventApi', () => {
 
       // Verify the request was made to the correct URL
       expect(capturedRequests).toHaveLength(1);
-      expect(capturedRequests[0].method).toBe('POST');
-      expect(capturedRequests[0].url).toBe(`/api/matters/${matterId}/timeline/events`);
+      expect(capturedRequests[0]!.method).toBe('POST');
+      expect(capturedRequests[0]!.url).toBe(`/api/matters/${matterId}/timeline/events`);
       // Should NOT contain /api/v1/
-      expect(capturedRequests[0].url).not.toContain('/api/v1/');
+      expect(capturedRequests[0]!.url).not.toContain('/api/v1/');
     });
 
     it('update uses /api/matters/ prefix (not /api/v1/matters/)', async () => {
@@ -121,9 +121,9 @@ describe('timelineEventApi', () => {
       });
 
       expect(capturedRequests).toHaveLength(1);
-      expect(capturedRequests[0].method).toBe('PATCH');
-      expect(capturedRequests[0].url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}`);
-      expect(capturedRequests[0].url).not.toContain('/api/v1/');
+      expect(capturedRequests[0]!.method).toBe('PATCH');
+      expect(capturedRequests[0]!.url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}`);
+      expect(capturedRequests[0]!.url).not.toContain('/api/v1/');
     });
 
     it('delete uses /api/matters/ prefix (not /api/v1/matters/)', async () => {
@@ -133,9 +133,9 @@ describe('timelineEventApi', () => {
       await timelineEventApi.delete(matterId, eventId);
 
       expect(capturedRequests).toHaveLength(1);
-      expect(capturedRequests[0].method).toBe('DELETE');
-      expect(capturedRequests[0].url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}`);
-      expect(capturedRequests[0].url).not.toContain('/api/v1/');
+      expect(capturedRequests[0]!.method).toBe('DELETE');
+      expect(capturedRequests[0]!.url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}`);
+      expect(capturedRequests[0]!.url).not.toContain('/api/v1/');
     });
 
     it('setVerified uses /api/matters/ prefix (not /api/v1/matters/)', async () => {
@@ -145,9 +145,9 @@ describe('timelineEventApi', () => {
       await timelineEventApi.setVerified(matterId, eventId, true);
 
       expect(capturedRequests).toHaveLength(1);
-      expect(capturedRequests[0].method).toBe('PATCH');
-      expect(capturedRequests[0].url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}/verify`);
-      expect(capturedRequests[0].url).not.toContain('/api/v1/');
+      expect(capturedRequests[0]!.method).toBe('PATCH');
+      expect(capturedRequests[0]!.url).toBe(`/api/matters/${matterId}/timeline/events/${eventId}/verify`);
+      expect(capturedRequests[0]!.url).not.toContain('/api/v1/');
     });
   });
 
@@ -163,7 +163,7 @@ describe('timelineEventApi', () => {
         sourcePage: 5,
       });
 
-      expect(capturedRequests[0].body).toEqual({
+      expect(capturedRequests[0]!.body).toEqual({
         event_date: '2024-01-15',
         event_type: 'filing',
         title: 'Test event',
@@ -182,7 +182,7 @@ describe('timelineEventApi', () => {
         entityIds: ['entity-3'],
       });
 
-      expect(capturedRequests[0].body).toEqual({
+      expect(capturedRequests[0]!.body).toEqual({
         event_date: '2024-02-20',
         event_type: 'hearing',
         description: 'Updated description',
@@ -193,7 +193,7 @@ describe('timelineEventApi', () => {
     it('setVerified sends is_verified in snake_case', async () => {
       await timelineEventApi.setVerified('matter-1', 'evt-1', true);
 
-      expect(capturedRequests[0].body).toEqual({
+      expect(capturedRequests[0]!.body).toEqual({
         is_verified: true,
       });
     });

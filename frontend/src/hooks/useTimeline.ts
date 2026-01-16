@@ -18,34 +18,35 @@ import type {
 } from '@/types/timeline';
 
 /**
- * Convert snake_case API response to camelCase frontend types
+ * Convert API response to camelCase frontend types.
+ * Handles both snake_case and camelCase responses for backward compatibility.
  */
 function transformEvent(event: Record<string, unknown>): TimelineEvent {
   return {
     id: event.id as string,
-    eventDate: event.event_date as string,
-    eventDatePrecision: event.event_date_precision as TimelineEvent['eventDatePrecision'],
-    eventDateText: (event.event_date_text as string | null) ?? null,
-    eventType: event.event_type as TimelineEvent['eventType'],
+    eventDate: (event.eventDate ?? event.event_date) as string,
+    eventDatePrecision: (event.eventDatePrecision ?? event.event_date_precision) as TimelineEvent['eventDatePrecision'],
+    eventDateText: ((event.eventDateText ?? event.event_date_text) as string | null) ?? null,
+    eventType: (event.eventType ?? event.event_type) as TimelineEvent['eventType'],
     description: event.description as string,
-    documentId: (event.document_id as string | null) ?? null,
-    sourcePage: (event.source_page as number | null) ?? null,
+    documentId: ((event.documentId ?? event.document_id) as string | null) ?? null,
+    sourcePage: ((event.sourcePage ?? event.source_page) as number | null) ?? null,
     confidence: event.confidence as number,
     entities: Array.isArray(event.entities)
       ? event.entities.map((e: Record<string, unknown>) => ({
-          entityId: e.entity_id as string,
-          canonicalName: e.canonical_name as string,
-          entityType: e.entity_type as string,
-          role: (e.role as string | null) ?? null,
+          entityId: (e.entityId ?? e.entity_id) as string,
+          canonicalName: (e.canonicalName ?? e.canonical_name) as string,
+          entityType: (e.entityType ?? e.entity_type) as string,
+          role: ((e.role) as string | null) ?? null,
         }))
       : [],
-    isAmbiguous: (event.is_ambiguous as boolean) ?? false,
-    isVerified: (event.is_verified as boolean) ?? false,
-    crossReferences: event.cross_references as string[] | undefined,
-    hasContradiction: event.has_contradiction as boolean | undefined,
-    contradictionDetails: event.contradiction_details as string | undefined,
-    isManual: event.is_manual as boolean | undefined,
-    createdBy: event.created_by as string | undefined,
+    isAmbiguous: ((event.isAmbiguous ?? event.is_ambiguous) as boolean) ?? false,
+    isVerified: ((event.isVerified ?? event.is_verified) as boolean) ?? false,
+    crossReferences: (event.crossReferences ?? event.cross_references) as string[] | undefined,
+    hasContradiction: (event.hasContradiction ?? event.has_contradiction) as boolean | undefined,
+    contradictionDetails: (event.contradictionDetails ?? event.contradiction_details) as string | undefined,
+    isManual: (event.isManual ?? event.is_manual) as boolean | undefined,
+    createdBy: (event.createdBy ?? event.created_by) as string | undefined,
   };
 }
 
@@ -101,24 +102,24 @@ function applyFilters(
 }
 
 /**
- * Real fetcher for production - transforms snake_case to camelCase
- * Uses the API client for proper auth handling
+ * Real fetcher for production - transforms API response to camelCase.
+ * Handles both snake_case and camelCase responses for backward compatibility.
  */
 async function fetcher(url: string): Promise<TimelineResponse> {
   const { api } = await import('@/lib/api/client');
   const response = await api.get<{
     data: Record<string, unknown>[];
-    meta: { total: number; page: number; per_page: number; total_pages: number };
+    meta: Record<string, unknown>;
   }>(url);
 
-  // Transform snake_case API response to camelCase
+  // Transform API response to camelCase (handles both snake_case and camelCase)
   return {
     data: response.data.map(transformEvent),
     meta: {
-      total: response.meta.total,
-      page: response.meta.page,
-      perPage: response.meta.per_page,
-      totalPages: response.meta.total_pages,
+      total: (response.meta.total ?? 0) as number,
+      page: (response.meta.page ?? 1) as number,
+      perPage: ((response.meta.perPage ?? response.meta.per_page) ?? 20) as number,
+      totalPages: ((response.meta.totalPages ?? response.meta.total_pages) ?? 0) as number,
     },
   };
 }

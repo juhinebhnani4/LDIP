@@ -501,6 +501,29 @@ describe('ExportBuilder', () => {
         expect(screen.getByTestId('sortable-section-key-findings')).toBeInTheDocument();
       });
     });
+
+    it('sections are displayed in correct initial order', async () => {
+      render(
+        <ExportBuilder
+          matterId={mockMatterId}
+          format="pdf"
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />
+      );
+
+      await waitFor(() => {
+        const sections = screen.getAllByTestId(/sortable-section-/);
+        expect(sections).toHaveLength(6);
+        // Verify initial order: executive-summary, timeline, entities, citations, contradictions, key-findings
+        expect(sections[0]).toHaveAttribute('data-testid', 'sortable-section-executive-summary');
+        expect(sections[1]).toHaveAttribute('data-testid', 'sortable-section-timeline');
+        expect(sections[2]).toHaveAttribute('data-testid', 'sortable-section-entities');
+        expect(sections[3]).toHaveAttribute('data-testid', 'sortable-section-citations');
+        expect(sections[4]).toHaveAttribute('data-testid', 'sortable-section-contradictions');
+        expect(sections[5]).toHaveAttribute('data-testid', 'sortable-section-key-findings');
+      });
+    });
   });
 
   describe('Accessibility', () => {

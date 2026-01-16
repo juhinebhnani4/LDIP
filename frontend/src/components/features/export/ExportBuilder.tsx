@@ -86,18 +86,22 @@ export function ExportBuilder({
   } = useExportBuilder({ initialFormat: format });
 
   // Fetch content counts from existing hooks
-  const { summary, isLoading: summaryLoading } = useMatterSummary(matterId);
-  const { events, isLoading: timelineLoading } = useTimeline(matterId);
-  const { total: entitiesTotal, isLoading: entitiesLoading } = useEntities(matterId);
-  const { stats: citationStats, isLoading: citationsLoading } = useCitationStats(matterId);
+  const { summary, isLoading: summaryLoading, isError: summaryError } = useMatterSummary(matterId);
+  const { events, isLoading: timelineLoading, isError: timelineError } = useTimeline(matterId);
+  const { total: entitiesTotal, isLoading: entitiesLoading, error: entitiesError } = useEntities(matterId);
+  const { stats: citationStats, isLoading: citationsLoading, error: citationsError } = useCitationStats(matterId);
 
   // Update section counts when data is loaded
-  // Note: updateSectionCount and setSectionLoading are stable (wrapped in useCallback with [])
+  // updateSectionCount and setSectionLoading are stable (useCallback with [] deps)
   useEffect(() => {
     // Executive Summary - count key sections based on MatterSummary type
     if (summaryLoading) {
       setSectionLoading('executive-summary', true);
       setSectionLoading('key-findings', true);
+    } else if (summaryError) {
+      // On error, show 0 count (section still selectable)
+      updateSectionCount('executive-summary', 0);
+      updateSectionCount('key-findings', 0);
     } else if (summary) {
       // Count non-empty sections in summary
       // MatterSummary has: parties, subjectMatter, currentStatus, keyIssues
@@ -112,54 +116,52 @@ export function ExportBuilder({
       const findingsCount = summary.keyIssues?.length ?? 0;
       updateSectionCount('key-findings', findingsCount);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary, summaryLoading]);
+  }, [summary, summaryLoading, summaryError, updateSectionCount, setSectionLoading]);
 
   useEffect(() => {
     // Timeline events count
     if (timelineLoading) {
       setSectionLoading('timeline', true);
+    } else if (timelineError) {
+      updateSectionCount('timeline', 0);
     } else {
       updateSectionCount('timeline', events.length);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, timelineLoading]);
+  }, [events, timelineLoading, timelineError, updateSectionCount, setSectionLoading]);
 
   useEffect(() => {
     // Entities count
     if (entitiesLoading) {
       setSectionLoading('entities', true);
+    } else if (entitiesError) {
+      updateSectionCount('entities', 0);
     } else {
       updateSectionCount('entities', entitiesTotal);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entitiesTotal, entitiesLoading]);
+  }, [entitiesTotal, entitiesLoading, entitiesError, updateSectionCount, setSectionLoading]);
 
   useEffect(() => {
     // Citations count
     if (citationsLoading) {
       setSectionLoading('citations', true);
+    } else if (citationsError) {
+      updateSectionCount('citations', 0);
     } else if (citationStats) {
       updateSectionCount('citations', citationStats.totalCitations);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [citationStats, citationsLoading]);
+  }, [citationStats, citationsLoading, citationsError, updateSectionCount, setSectionLoading]);
 
-  // Contradictions - set to 0 for now as API returns placeholder
-  // Will be updated when contradictions API is fully implemented
+  // Contradictions - Phase 2 placeholder, set to 0
   useEffect(() => {
-    // For now, show 0 until contradictions tab is implemented
     updateSectionCount('contradictions', 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [updateSectionCount]);
 
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
       reset();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, reset]);
 
   const handleContinue = () => {
     // TODO(Epic-12): Navigate to export generation with selected sections

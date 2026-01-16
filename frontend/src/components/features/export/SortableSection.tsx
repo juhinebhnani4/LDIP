@@ -34,7 +34,7 @@ function formatCount(count: number | undefined, sectionId: ExportSectionId): str
   if (count === undefined) return '';
 
   const labels: Record<ExportSectionId, { singular: string; plural: string }> = {
-    'executive-summary': { singular: 'section', plural: 'sections' },
+    'executive-summary': { singular: 'part', plural: 'parts' },
     timeline: { singular: 'event', plural: 'events' },
     entities: { singular: 'entity', plural: 'entities' },
     citations: { singular: 'citation', plural: 'citations' },

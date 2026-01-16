@@ -12,3 +12,10 @@ export type { ExportSectionListProps } from './ExportSectionList';
 
 export { SortableSection } from './SortableSection';
 export type { SortableSectionProps } from './SortableSection';
+
+// Re-export hook for convenience
+export { useExportBuilder } from '@/hooks/useExportBuilder';
+export type {
+  UseExportBuilderOptions,
+  UseExportBuilderReturn,
+} from '@/hooks/useExportBuilder';

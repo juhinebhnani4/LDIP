@@ -48,7 +48,7 @@ export interface UseExportBuilderReturn {
   /** Get IDs of selected sections in order */
   selectedSectionIds: ExportSectionId[];
   /** Reset to default state */
-  reset: (format?: ExportFormat) => void;
+  reset: () => void;
 }
 
 /**

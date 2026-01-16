@@ -16,13 +16,14 @@ CRITICAL: Uses matter access validation for Layer 4 security.
 """
 
 import structlog
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from app.api.deps import (
     MatterAccessContext,
     MatterRole,
     validate_matter_access,
 )
+from app.core.rate_limit import READONLY_RATE_LIMIT, STANDARD_RATE_LIMIT, limiter
 from app.models.summary import (
     MatterSummaryResponse,
     SummaryEditCreate,
@@ -194,7 +195,9 @@ def _handle_service_error(error: SummaryServiceError) -> HTTPException:
         },
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_matter_summary(
+    request: Request,  # Required for rate limiter
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.VIEWER)
     ),
@@ -332,7 +335,9 @@ def _handle_verification_service_error(
         },
     },
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def verify_summary_section(
+    http_request: Request,  # Required for rate limiter
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
@@ -450,7 +455,9 @@ async def verify_summary_section(
         },
     },
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def add_summary_note(
+    http_request: Request,  # Required for rate limiter
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
@@ -561,7 +568,9 @@ async def add_summary_note(
         },
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_summary_verifications(
+    request: Request,  # Required for rate limiter
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.VIEWER)
     ),
@@ -698,7 +707,9 @@ def _handle_edit_service_error(error: SummaryEditServiceError) -> HTTPException:
         422: {"description": "Invalid section type"},
     },
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def save_section_edit(
+    http_request: Request,  # Required for rate limiter
     section_type: str,
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
@@ -817,7 +828,9 @@ async def save_section_edit(
         404: {"description": "Matter not found or no access"},
     },
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def regenerate_section(
+    http_request: Request,  # Required for rate limiter
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),

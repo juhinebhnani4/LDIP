@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Gemini Configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-3-flash"
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
@@ -101,6 +101,18 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    # Axiom Logging (Story 13.1)
+    axiom_token: str = ""  # AXIOM_TOKEN env var
+    axiom_dataset: str = "ldip-logs"  # AXIOM_DATASET env var
+
+    # Rate Limiting (Story 13.3)
+    rate_limit_default: int = 100  # requests per minute (standard CRUD endpoints)
+    rate_limit_critical: int = 30  # LLM/chat/export endpoints (expensive)
+    rate_limit_search: int = 60    # search endpoints (vector operations)
+    rate_limit_readonly: int = 120  # read-only dashboard/stats endpoints
+    rate_limit_health: int = 300   # health/monitoring endpoints (high frequency)
+    rate_limit_export: int = 20    # export generation (CPU-intensive)
 
     @property
     def is_configured(self) -> bool:

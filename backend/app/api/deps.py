@@ -27,6 +27,7 @@ from app.models.matter import MatterRole
 from app.services.audit_service import AuditService, get_audit_service
 from app.services.matter_service import MatterService
 from app.services.supabase.client import get_supabase_client
+from app.services.tab_stats_service import TabStatsService, get_tab_stats_service
 
 logger = structlog.get_logger(__name__)
 
@@ -207,9 +208,26 @@ def require_matter_role(
                 },
             )
 
+        # Bind matter_id to log context for distributed tracing (Story 13.1)
+        structlog.contextvars.bind_contextvars(matter_id=matter_id)
+
         return MatterMembership(matter_id=matter_id, user_id=user.id, role=role)
 
     return matter_role_checker
+
+
+def _bind_user_id_to_request(request: Request, user_id: str) -> None:
+    """Bind user_id to request.state for rate limiting.
+
+    Story 13.3: Rate limiter uses request.state.user_id for per-user limits.
+    This helper is called from auth dependencies to enable user-based rate limiting.
+
+    Args:
+        request: FastAPI Request object.
+        user_id: Authenticated user's ID.
+    """
+    if hasattr(request, "state"):
+        request.state.user_id = user_id
 
 
 def require_matter_role_from_form(
@@ -283,6 +301,9 @@ def require_matter_role_from_form(
                     }
                 },
             )
+
+        # Bind matter_id to log context for distributed tracing (Story 13.1)
+        structlog.contextvars.bind_contextvars(matter_id=matter_id)
 
         return MatterMembership(matter_id=matter_id, user_id=user.id, role=role)
 
@@ -468,6 +489,12 @@ def validate_matter_access(
                     },
                 )
 
+        # Bind matter_id to log context for distributed tracing (Story 13.1)
+        structlog.contextvars.bind_contextvars(matter_id=matter_id)
+
+        # Bind user_id to request.state for rate limiting (Story 13.3)
+        _bind_user_id_to_request(request, user.id)
+
         # Log successful access for audit
         logger.info(
             "matter_access_granted",
@@ -571,6 +598,17 @@ async def log_matter_access(
         )
 
 
+def get_tab_stats_service_dep() -> TabStatsService:
+    """Get tab stats service instance.
+
+    Story 14.12: Tab Stats API - Dependency for tab-stats endpoint.
+
+    Returns:
+        TabStatsService instance.
+    """
+    return get_tab_stats_service()
+
+
 # Re-export commonly used dependencies for convenience
 __all__ = [
     "get_db",
@@ -582,6 +620,7 @@ __all__ = [
     "require_matter_role_from_form",
     "get_matter_service",
     "get_audit_service_dep",
+    "get_tab_stats_service_dep",
     "MatterMembership",
     "MatterAccessContext",
     "validate_matter_access",
@@ -592,4 +631,5 @@ __all__ = [
     "AuthenticatedUser",
     "MatterRole",
     "AuditService",
+    "TabStatsService",
 ]

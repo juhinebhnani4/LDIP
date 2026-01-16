@@ -3,14 +3,16 @@
 from math import ceil
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.deps import (
     AuthenticatedUser,
     MatterMembership,
     MatterRole,
+    TabStatsService,
     get_current_user,
     get_matter_service,
+    get_tab_stats_service_dep,
     require_matter_role,
 )
 from app.models.matter import (
@@ -26,6 +28,8 @@ from app.models.matter import (
     MemberListResponse,
     MemberResponse,
 )
+from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
+from app.models.tab_stats import TabStatsResponse
 from app.services.matter_service import (
     CannotRemoveOwnerError,
     MatterNotFoundError,
@@ -34,6 +38,7 @@ from app.services.matter_service import (
     MemberAlreadyExistsError,
     UserNotFoundError,
 )
+from app.services.tab_stats_service import TabStatsServiceError
 
 router = APIRouter(prefix="/matters", tags=["matters"])
 logger = structlog.get_logger(__name__)
@@ -54,7 +59,9 @@ def _handle_service_error(error: MatterServiceError) -> HTTPException:
 
 
 @router.post("", response_model=MatterResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def create_matter(
+    request: Request,  # Required for rate limiter
     data: MatterCreate,
     user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
@@ -79,7 +86,9 @@ async def create_matter(
 
 
 @router.get("", response_model=MatterListResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def list_matters(
+    request: Request,  # Required for rate limiter
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     status_filter: MatterStatus | None = Query(None, alias="status", description="Filter by status"),
@@ -114,7 +123,9 @@ async def list_matters(
 
 
 @router.get("/{matter_id}", response_model=MatterWithMembersResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def get_matter(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
@@ -139,7 +150,9 @@ async def get_matter(
 
 
 @router.patch("/{matter_id}", response_model=MatterResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def update_matter(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     data: MatterUpdate,
     membership: MatterMembership = Depends(
@@ -170,7 +183,9 @@ async def update_matter(
 
 
 @router.delete("/{matter_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def delete_matter(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER])
@@ -192,11 +207,61 @@ async def delete_matter(
         raise _handle_service_error(e)
 
 
+# =============================================================================
+# Story 14.12: Tab Stats Endpoint
+# =============================================================================
+
+
+@router.get("/{matter_id}/tab-stats", response_model=TabStatsResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def get_tab_stats(
+    request: Request,  # Required for rate limiter
+    matter_id: str,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    tab_stats_service: TabStatsService = Depends(get_tab_stats_service_dep),
+) -> TabStatsResponse:
+    """Get tab statistics for workspace tab bar.
+
+    Story 14.12: Tab Stats API
+
+    Returns aggregated counts and processing status for all workspace tabs:
+    - summary, timeline, entities, citations, contradictions, verification, documents
+
+    Requires any role on the matter (OWNER, EDITOR, VIEWER).
+
+    Args:
+        matter_id: Matter ID.
+        membership: User's matter membership (validated by dependency).
+        tab_stats_service: Tab stats service.
+
+    Returns:
+        TabStatsResponse with counts and processing status for all tabs.
+    """
+    try:
+        data = await tab_stats_service.get_tab_stats(matter_id)
+        return TabStatsResponse(data=data)
+    except TabStatsServiceError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        )
+
+
 # Member management endpoints
 
 
 @router.get("/{matter_id}/members", response_model=MemberListResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def list_members(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
@@ -227,7 +292,9 @@ async def list_members(
     response_model=MemberResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def invite_member(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     data: MatterInvite,
     membership: MatterMembership = Depends(
@@ -265,7 +332,9 @@ async def invite_member(
 
 
 @router.patch("/{matter_id}/members/{user_id}", response_model=MemberResponse)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def update_member_role(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     user_id: str,
     data: MatterMemberUpdate,
@@ -301,7 +370,9 @@ async def update_member_role(
 
 
 @router.delete("/{matter_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def remove_member(
+    request: Request,  # Required for rate limiter
     matter_id: str,
     user_id: str,
     membership: MatterMembership = Depends(

@@ -10,8 +10,9 @@ CRITICAL: Activities are per-user (not per-matter). User isolation via RLS.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
+from app.core.rate_limit import READONLY_RATE_LIMIT, STANDARD_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.activity import (
     ActivityListMeta,
@@ -99,7 +100,9 @@ def _handle_service_error(error: ActivityServiceError) -> HTTPException:
         },
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_activities(
+    request: Request,  # Required for rate limiter
     limit: int = Query(
         10,
         ge=1,
@@ -223,7 +226,9 @@ async def get_activities(
         },
     },
 )
+@limiter.limit(STANDARD_RATE_LIMIT)
 async def mark_activity_read(
+    request: Request,  # Required for rate limiter
     activity_id: str = Path(..., description="Activity ID to mark as read"),
     user: AuthenticatedUser = Depends(get_current_user),
     activity_service: ActivityService = Depends(get_activity_service),

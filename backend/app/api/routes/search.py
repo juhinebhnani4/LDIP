@@ -11,13 +11,14 @@ All endpoints enforce 4-layer matter isolation via the API layer.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.deps import (
     MatterMembership,
     MatterRole,
     require_matter_role,
 )
+from app.core.rate_limit import SEARCH_RATE_LIMIT, limiter
 from app.models.rerank import (
     RerankedSearchMeta,
     RerankedSearchResponse,
@@ -108,8 +109,10 @@ def _reranked_result_to_item(result) -> RerankedSearchResultItem:
 
 
 @router.post("", response_model=SearchResponse)
+@limiter.limit(SEARCH_RATE_LIMIT)
 async def hybrid_search(
-    request: SearchRequest,
+    request: Request,  # Required for rate limiter
+    body: SearchRequest,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -139,29 +142,29 @@ async def hybrid_search(
         "hybrid_search_request",
         matter_id=membership.matter_id,
         user_id=membership.user_id,
-        query_len=len(request.query),
-        limit=request.limit,
-        bm25_weight=request.bm25_weight,
-        semantic_weight=request.semantic_weight,
-        rerank=request.rerank,
-        rerank_top_n=request.rerank_top_n if request.rerank else None,
+        query_len=len(body.query),
+        limit=body.limit,
+        bm25_weight=body.bm25_weight,
+        semantic_weight=body.semantic_weight,
+        rerank=body.rerank,
+        rerank_top_n=body.rerank_top_n if body.rerank else None,
     )
 
     try:
         search_service = get_hybrid_search_service()
 
         weights = SearchWeights(
-            bm25=request.bm25_weight,
-            semantic=request.semantic_weight,
+            bm25=body.bm25_weight,
+            semantic=body.semantic_weight,
         )
 
         # Use rerank pipeline if requested
-        if request.rerank:
+        if body.rerank:
             result = await search_service.search_with_rerank(
-                query=request.query,
+                query=body.query,
                 matter_id=membership.matter_id,
-                hybrid_limit=request.limit,
-                rerank_top_n=request.rerank_top_n,
+                hybrid_limit=body.limit,
+                rerank_top_n=body.rerank_top_n,
                 weights=weights,
             )
 
@@ -185,9 +188,9 @@ async def hybrid_search(
 
         # Standard hybrid search (no reranking)
         result = await search_service.search(
-            query=request.query,
+            query=body.query,
             matter_id=membership.matter_id,
-            limit=request.limit,
+            limit=body.limit,
             weights=weights,
         )
 
@@ -235,8 +238,10 @@ async def hybrid_search(
 
 
 @router.post("/bm25", response_model=SingleModeSearchResponse)
+@limiter.limit(SEARCH_RATE_LIMIT)
 async def bm25_search(
-    request: BM25SearchRequest,
+    request: Request,  # Required for rate limiter
+    body: BM25SearchRequest,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -259,17 +264,17 @@ async def bm25_search(
         "bm25_search_request",
         matter_id=membership.matter_id,
         user_id=membership.user_id,
-        query_len=len(request.query),
-        limit=request.limit,
+        query_len=len(body.query),
+        limit=body.limit,
     )
 
     try:
         search_service = get_hybrid_search_service()
 
         results = await search_service.bm25_search(
-            query=request.query,
+            query=body.query,
             matter_id=membership.matter_id,
-            limit=request.limit,
+            limit=body.limit,
         )
 
         items = [_result_to_item(r) for r in results]
@@ -277,7 +282,7 @@ async def bm25_search(
         return SingleModeSearchResponse(
             data=items,
             meta=SingleModeSearchMeta(
-                query=request.query,
+                query=body.query,
                 matter_id=membership.matter_id,
                 result_count=len(items),
                 search_type="bm25",
@@ -313,8 +318,10 @@ async def bm25_search(
 
 
 @router.post("/semantic", response_model=SingleModeSearchResponse)
+@limiter.limit(SEARCH_RATE_LIMIT)
 async def semantic_search(
-    request: SemanticSearchRequest,
+    request: Request,  # Required for rate limiter
+    body: SemanticSearchRequest,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -337,17 +344,17 @@ async def semantic_search(
         "semantic_search_request",
         matter_id=membership.matter_id,
         user_id=membership.user_id,
-        query_len=len(request.query),
-        limit=request.limit,
+        query_len=len(body.query),
+        limit=body.limit,
     )
 
     try:
         search_service = get_hybrid_search_service()
 
         results = await search_service.semantic_search(
-            query=request.query,
+            query=body.query,
             matter_id=membership.matter_id,
-            limit=request.limit,
+            limit=body.limit,
         )
 
         items = [_result_to_item(r) for r in results]
@@ -355,7 +362,7 @@ async def semantic_search(
         return SingleModeSearchResponse(
             data=items,
             meta=SingleModeSearchMeta(
-                query=request.query,
+                query=body.query,
                 matter_id=membership.matter_id,
                 result_count=len(items),
                 search_type="semantic",
@@ -391,8 +398,10 @@ async def semantic_search(
 
 
 @router.post("/rerank", response_model=RerankedSearchResponse)
+@limiter.limit(SEARCH_RATE_LIMIT)
 async def rerank_search(
-    request: RerankRequest,
+    request: Request,  # Required for rate limiter
+    body: RerankRequest,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -424,26 +433,26 @@ async def rerank_search(
         "rerank_search_request",
         matter_id=membership.matter_id,
         user_id=membership.user_id,
-        query_len=len(request.query),
-        limit=request.limit,
-        top_n=request.top_n,
-        bm25_weight=request.bm25_weight,
-        semantic_weight=request.semantic_weight,
+        query_len=len(body.query),
+        limit=body.limit,
+        top_n=body.top_n,
+        bm25_weight=body.bm25_weight,
+        semantic_weight=body.semantic_weight,
     )
 
     try:
         search_service = get_hybrid_search_service()
 
         weights = SearchWeights(
-            bm25=request.bm25_weight,
-            semantic=request.semantic_weight,
+            bm25=body.bm25_weight,
+            semantic=body.semantic_weight,
         )
 
         result = await search_service.search_with_rerank(
-            query=request.query,
+            query=body.query,
             matter_id=membership.matter_id,
-            hybrid_limit=request.limit,
-            rerank_top_n=request.top_n,
+            hybrid_limit=body.limit,
+            rerank_top_n=body.top_n,
             weights=weights,
         )
 
@@ -491,8 +500,10 @@ async def rerank_search(
 
 
 @router.post("/alias-expanded", response_model=AliasExpandedSearchResponse)
+@limiter.limit(SEARCH_RATE_LIMIT)
 async def alias_expanded_search(
-    request: AliasExpandedSearchRequest,
+    request: Request,  # Required for rate limiter
+    body: AliasExpandedSearchRequest,
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -524,10 +535,10 @@ async def alias_expanded_search(
         "alias_expanded_search_request",
         matter_id=membership.matter_id,
         user_id=membership.user_id,
-        query_len=len(request.query),
-        limit=request.limit,
-        expand_aliases=request.expand_aliases,
-        rerank=request.rerank,
+        query_len=len(body.query),
+        limit=body.limit,
+        expand_aliases=body.expand_aliases,
+        rerank=body.rerank,
     )
 
     try:
@@ -537,16 +548,16 @@ async def alias_expanded_search(
         # Track expansion metadata
         aliases_found: list[str] = []
         entities_matched: list[str] = []
-        expanded_query = request.query
+        expanded_query = body.query
 
         # Expand aliases if enabled
-        if request.expand_aliases:
+        if body.expand_aliases:
             # Get all entities for this matter
             entities = await mig_service.get_entities(matter_id=membership.matter_id)
 
             if entities:
                 # Find entity names that appear in the query
-                query_lower = request.query.lower()
+                query_lower = body.query.lower()
 
                 for entity in entities:
                     canonical_lower = entity.canonical_name.lower()
@@ -591,17 +602,17 @@ async def alias_expanded_search(
                             )
 
         weights = SearchWeights(
-            bm25=request.bm25_weight,
-            semantic=request.semantic_weight,
+            bm25=body.bm25_weight,
+            semantic=body.semantic_weight,
         )
 
         # Execute search (with expanded query for BM25, original for semantic)
-        if request.rerank:
+        if body.rerank:
             result = await search_service.search_with_rerank(
                 query=expanded_query,
                 matter_id=membership.matter_id,
-                hybrid_limit=request.limit,
-                rerank_top_n=request.rerank_top_n,
+                hybrid_limit=body.limit,
+                rerank_top_n=body.rerank_top_n,
                 weights=weights,
             )
 
@@ -613,8 +624,8 @@ async def alias_expanded_search(
             return AliasExpandedSearchResponse(
                 data=items,
                 meta=AliasExpandedSearchMeta(
-                    query=request.query,
-                    expanded_query=expanded_query if expanded_query != request.query else None,
+                    query=body.query,
+                    expanded_query=expanded_query if expanded_query != body.query else None,
                     matter_id=membership.matter_id,
                     total_candidates=result.total_candidates,
                     bm25_weight=result.weights.bm25,
@@ -630,7 +641,7 @@ async def alias_expanded_search(
         result = await search_service.search(
             query=expanded_query,
             matter_id=membership.matter_id,
-            limit=request.limit,
+            limit=body.limit,
             weights=weights,
         )
 
@@ -639,8 +650,8 @@ async def alias_expanded_search(
         return AliasExpandedSearchResponse(
             data=items,
             meta=AliasExpandedSearchMeta(
-                query=request.query,
-                expanded_query=expanded_query if expanded_query != request.query else None,
+                query=body.query,
+                expanded_query=expanded_query if expanded_query != body.query else None,
                 matter_id=membership.matter_id,
                 total_candidates=result.total_candidates,
                 bm25_weight=result.weights.bm25,

@@ -9,8 +9,9 @@ CRITICAL: Stats are per-user - aggregated across all matters user has access to.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.core.rate_limit import READONLY_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.activity import DashboardStatsResponse
 from app.models.auth import AuthenticatedUser
@@ -84,7 +85,9 @@ def _handle_service_error(error: DashboardStatsServiceError) -> HTTPException:
         },
     },
 )
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_dashboard_stats(
+    request: Request,  # Required for rate limiter
     user: AuthenticatedUser = Depends(get_current_user),
     stats_service: DashboardStatsService = Depends(get_dashboard_stats_service),
 ) -> DashboardStatsResponse:

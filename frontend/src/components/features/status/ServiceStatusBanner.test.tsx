@@ -1,17 +1,18 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { vi, type Mock } from 'vitest'
 import { ServiceStatusBanner } from './ServiceStatusBanner'
 import * as useServiceHealthModule from '@/hooks/useServiceHealth'
 
 // Mock the useServiceHealth hook
-jest.mock('@/hooks/useServiceHealth', () => ({
-  useServiceHealth: jest.fn(),
+vi.mock('@/hooks/useServiceHealth', () => ({
+  useServiceHealth: vi.fn(),
 }))
 
-const mockUseServiceHealth = useServiceHealthModule.useServiceHealth as jest.Mock
+const mockUseServiceHealth = useServiceHealthModule.useServiceHealth as Mock
 
 describe('ServiceStatusBanner', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('does not render when no circuits are open', () => {

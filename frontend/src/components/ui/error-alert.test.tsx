@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { vi } from 'vitest'
 import { ErrorAlert } from './error-alert'
 import { ApiError } from '@/lib/api/client'
 
@@ -32,7 +33,7 @@ describe('ErrorAlert', () => {
 
   it('shows retry button for retryable errors', () => {
     const error = new ApiError('RATE_LIMIT_EXCEEDED', 'Rate limit exceeded', 429)
-    const onRetry = jest.fn()
+    const onRetry = vi.fn()
 
     render(<ErrorAlert error={error} onRetry={onRetry} />)
 
@@ -45,7 +46,7 @@ describe('ErrorAlert', () => {
 
   it('hides retry button for non-retryable errors', () => {
     const error = new ApiError('UNAUTHORIZED', 'Not authorized', 401)
-    const onRetry = jest.fn()
+    const onRetry = vi.fn()
 
     render(<ErrorAlert error={error} onRetry={onRetry} />)
 
@@ -55,7 +56,7 @@ describe('ErrorAlert', () => {
   })
 
   it('shows dismiss button when onDismiss is provided', () => {
-    const onDismiss = jest.fn()
+    const onDismiss = vi.fn()
 
     render(<ErrorAlert error="Test error" onDismiss={onDismiss} />)
 

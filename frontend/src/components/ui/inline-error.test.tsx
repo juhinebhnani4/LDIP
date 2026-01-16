@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { vi } from 'vitest'
 import { InlineError } from './inline-error'
 
 describe('InlineError', () => {
@@ -30,7 +31,7 @@ describe('InlineError', () => {
   })
 
   it('shows retry button when onRetry is provided', () => {
-    const onRetry = jest.fn()
+    const onRetry = vi.fn()
 
     render(<InlineError message="Error" onRetry={onRetry} />)
 

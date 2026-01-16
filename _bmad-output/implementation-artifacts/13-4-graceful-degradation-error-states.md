@@ -1,6 +1,6 @@
 # Story 13.4: Implement Graceful Degradation and Error States
 
-Status: dev-complete
+Status: review-complete
 
 ## Story
 

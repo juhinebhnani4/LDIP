@@ -42,10 +42,11 @@ export function LoadingSpinner({ message, size = 'md', className }: LoadingSpinn
         className={cn('animate-spin text-muted-foreground', styles.spinner)}
         aria-hidden="true"
       />
-      {message && (
+      {message ? (
         <p className={cn('text-muted-foreground', styles.text)}>{message}</p>
+      ) : (
+        <span className="sr-only">Loading...</span>
       )}
-      <span className="sr-only">{message ?? 'Loading...'}</span>
     </div>
   )
 }

@@ -91,6 +91,7 @@ def _get_contradiction_list_service() -> ContradictionListService:
 @router.get(
     "",
     response_model=ContradictionsListResponse,
+    response_model_by_alias=True,
     responses={
         404: {"model": ContradictionListErrorResponse, "description": "Matter not found"},
         500: {"model": ContradictionListErrorResponse, "description": "Internal error"},
@@ -277,6 +278,7 @@ async def get_all_contradictions(
 @router.get(
     "/entities/{entity_id}/statements",
     response_model=EntityStatementsResponse,
+    response_model_by_alias=True,
     responses={
         404: {"model": ContradictionErrorResponse, "description": "Entity not found"},
         500: {"model": ContradictionErrorResponse, "description": "Internal error"},
@@ -437,6 +439,7 @@ async def get_entity_statements(
 @router.post(
     "/entities/{entity_id}/compare",
     response_model=EntityComparisonsResponse,
+    response_model_by_alias=True,
     responses={
         404: {"model": ContradictionErrorResponse, "description": "Entity not found"},
         422: {"model": ContradictionErrorResponse, "description": "Too many statements for sync processing"},

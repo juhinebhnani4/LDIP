@@ -259,7 +259,7 @@ class TestMarkNotificationRead:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
         assert "error" in data["detail"]
-        assert data["detail"]["error"]["code"] == "NOT_FOUND"
+        assert data["error"]["code"] == "NOT_FOUND"
 
 
 # =============================================================================

@@ -50,7 +50,7 @@ def _handle_search_error(error: GlobalSearchServiceError) -> HTTPException:
     )
 
 
-@router.get("", response_model=GlobalSearchResponse)
+@router.get("", response_model=GlobalSearchResponse, response_model_by_alias=True)
 async def global_search(
     q: str = Query(
         ...,

@@ -106,6 +106,7 @@ def _get_cache_service() -> TimelineCacheService:
 @router.post(
     "/extract",
     response_model=DateExtractionJobResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         202: {"description": "Date extraction job queued"},
@@ -231,6 +232,7 @@ async def trigger_date_extraction(
 @router.get(
     "/raw-dates",
     response_model=RawDatesListResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of extracted dates"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -319,6 +321,7 @@ async def list_raw_dates(
 @router.get(
     "/raw-dates/{event_id}",
     response_model=RawDateDetailResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Raw date details"},
         404: {"model": TimelineErrorResponse, "description": "Event not found"},
@@ -401,6 +404,7 @@ async def get_raw_date(
 @router.get(
     "",
     response_model=RawDatesListResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Timeline events"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -478,6 +482,7 @@ async def list_timeline_events(
 @router.post(
     "/classify",
     response_model=ClassificationJobResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         202: {"description": "Classification job queued"},
@@ -596,6 +601,7 @@ async def trigger_event_classification(
 @router.get(
     "/events",
     response_model=ClassifiedEventsListResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of classified events"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -676,6 +682,7 @@ async def list_classified_events(
 @router.get(
     "/unclassified",
     response_model=UnclassifiedEventsResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of unclassified events needing review"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -744,6 +751,7 @@ async def list_unclassified_events(
 @router.patch(
     "/events/{event_id}",
     response_model=ManualClassificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Event classification updated"},
         404: {"model": TimelineErrorResponse, "description": "Event not found"},
@@ -840,6 +848,7 @@ async def update_event_classification(
 @router.post(
     "/link-entities",
     response_model=EntityLinkingJobResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         202: {"description": "Entity linking job queued"},
@@ -950,6 +959,7 @@ async def trigger_entity_linking(
 @router.get(
     "/full",
     response_model=TimelineWithEntitiesResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Timeline with entity information"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -1143,6 +1153,7 @@ async def get_timeline_with_entities(
 @router.get(
     "/stats",
     response_model=TimelineStatisticsResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Timeline statistics"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -1233,6 +1244,7 @@ async def get_timeline_statistics(
 @router.get(
     "/entities",
     response_model=EntitiesInTimelineResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Entities involved in timeline"},
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
@@ -1381,6 +1393,7 @@ async def get_entities_in_timeline(
 @router.get(
     "/entity/{entity_id}",
     response_model=TimelineWithEntitiesResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Events for specific entity"},
         404: {"model": TimelineErrorResponse, "description": "Entity not found"},
@@ -1527,6 +1540,7 @@ async def get_entity_timeline(
 @router.post(
     "/events",
     response_model=ManualEventCreateResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
     responses={
         201: {"description": "Manual event created"},
@@ -1607,6 +1621,7 @@ async def create_manual_event(
 @router.patch(
     "/events/{event_id}",
     response_model=ManualEventUpdateResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Event updated"},
         400: {"model": TimelineErrorResponse, "description": "Invalid request"},
@@ -1703,6 +1718,7 @@ async def update_timeline_event(
 @router.delete(
     "/events/{event_id}",
     response_model=ManualEventDeleteResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Event deleted"},
         400: {"model": TimelineErrorResponse, "description": "Cannot delete auto-extracted event"},
@@ -1807,6 +1823,7 @@ async def delete_manual_event(
 @router.patch(
     "/events/{event_id}/verify",
     response_model=ManualEventUpdateResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Event verification updated"},
         403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},

@@ -153,7 +153,7 @@ def _reranked_result_to_item(result) -> RerankedSearchResultItem:
     )
 
 
-@router.post("", response_model=SearchResponse)
+@router.post("", response_model=SearchResponse, response_model_by_alias=True)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def hybrid_search(
     request: Request,  # Required for rate limiter
@@ -286,7 +286,7 @@ async def hybrid_search(
         ) from e
 
 
-@router.post("/bm25", response_model=SingleModeSearchResponse)
+@router.post("/bm25", response_model=SingleModeSearchResponse, response_model_by_alias=True)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def bm25_search(
     request: Request,  # Required for rate limiter
@@ -370,7 +370,7 @@ async def bm25_search(
         ) from e
 
 
-@router.post("/semantic", response_model=SingleModeSearchResponse)
+@router.post("/semantic", response_model=SingleModeSearchResponse, response_model_by_alias=True)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def semantic_search(
     request: Request,  # Required for rate limiter
@@ -454,7 +454,7 @@ async def semantic_search(
         ) from e
 
 
-@router.post("/rerank", response_model=RerankedSearchResponse)
+@router.post("/rerank", response_model=RerankedSearchResponse, response_model_by_alias=True)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def rerank_search(
     request: Request,  # Required for rate limiter
@@ -560,7 +560,7 @@ async def rerank_search(
         ) from e
 
 
-@router.post("/alias-expanded", response_model=AliasExpandedSearchResponse)
+@router.post("/alias-expanded", response_model=AliasExpandedSearchResponse, response_model_by_alias=True)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def alias_expanded_search(
     request: Request,  # Required for rate limiter

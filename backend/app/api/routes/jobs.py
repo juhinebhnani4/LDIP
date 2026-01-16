@@ -203,6 +203,7 @@ async def _validate_job_access(
 @router.get(
     "/matters/{matter_id}",
     response_model=JobListResponse,
+    response_model_by_alias=True,
     summary="List processing jobs for a matter",
     description="Get all processing jobs for a matter with optional status filtering.",
 )
@@ -260,6 +261,7 @@ async def list_matter_jobs(
 @router.get(
     "/matters/{matter_id}/stats",
     response_model=JobQueueStats,
+    response_model_by_alias=True,
     summary="Get job queue statistics for a matter",
     description="Get counts of jobs by status for a matter.",
 )
@@ -303,6 +305,7 @@ async def get_matter_job_stats(
 @router.get(
     "/{job_id}",
     response_model=ProcessingJobResponse,
+    response_model_by_alias=True,
     summary="Get job details",
     description="Get detailed information about a specific job.",
 )
@@ -331,6 +334,7 @@ async def get_job(
 @router.post(
     "/{job_id}/retry",
     response_model=JobRetryResponse,
+    response_model_by_alias=True,
     summary="Retry a failed job",
     description="Retry a failed job. Only jobs with status FAILED can be retried.",
 )
@@ -409,6 +413,7 @@ async def retry_job(
 @router.post(
     "/{job_id}/skip",
     response_model=JobSkipResponse,
+    response_model_by_alias=True,
     summary="Skip a failed job",
     description="Mark a failed job as skipped. The document will remain in its current state.",
 )
@@ -475,6 +480,7 @@ async def skip_job(
 @router.post(
     "/{job_id}/cancel",
     response_model=JobCancelResponse,
+    response_model_by_alias=True,
     summary="Cancel a pending or processing job",
     description="Cancel a job that is QUEUED or PROCESSING.",
 )
@@ -564,6 +570,7 @@ async def cancel_job(
 @router.get(
     "/documents/{document_id}/active",
     response_model=ProcessingJobResponse | None,
+    response_model_by_alias=True,
     summary="Get active job for a document",
     description="Get the currently active (QUEUED or PROCESSING) job for a document.",
 )
@@ -620,6 +627,7 @@ def _get_recovery_service() -> JobRecoveryService:
 @router.get(
     "/recovery/stats",
     response_model=RecoveryStatsResponse,
+    response_model_by_alias=True,
     summary="Get job recovery statistics",
     description="Get information about stale jobs and recovery configuration.",
 )
@@ -665,6 +673,7 @@ async def get_recovery_stats(
 @router.post(
     "/recovery/run",
     response_model=RecoverStaleJobsResponse,
+    response_model_by_alias=True,
     summary="Recover all stale jobs",
     description="Find and recover all jobs stuck in PROCESSING state.",
 )
@@ -709,6 +718,7 @@ async def recover_stale_jobs(
 @router.post(
     "/recovery/{job_id}",
     response_model=RecoveryResult,
+    response_model_by_alias=True,
     summary="Recover a specific stale job",
     description="Attempt to recover a specific job stuck in PROCESSING state.",
 )

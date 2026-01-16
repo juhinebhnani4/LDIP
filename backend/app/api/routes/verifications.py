@@ -76,6 +76,7 @@ def _get_export_service() -> ExportEligibilityService:
 @router.get(
     "/stats",
     response_model=VerificationStatsResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Verification statistics for matter"},
         404: {"description": "Matter not found"},
@@ -134,6 +135,7 @@ async def get_verification_stats(
 @router.get(
     "/pending",
     response_model=VerificationQueueResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Pending verification queue"},
         404: {"description": "Matter not found"},
@@ -198,6 +200,7 @@ async def get_pending_verifications(
 @router.get(
     "/export-eligibility",
     response_model=ExportEligibilityResult,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Export eligibility check result"},
         404: {"description": "Matter not found"},
@@ -239,6 +242,7 @@ async def check_export_eligibility(
 @router.get(
     "",
     response_model=VerificationListResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of verification records"},
         404: {"description": "Matter not found"},
@@ -304,6 +308,7 @@ async def list_verifications(
 @router.post(
     "/bulk",
     response_model=BulkVerificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Bulk verification results"},
         400: {"description": "Invalid request"},
@@ -383,6 +388,7 @@ async def bulk_update_verifications(
 @router.get(
     "/{verification_id}",
     response_model=VerificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Verification record"},
         404: {"description": "Verification not found"},
@@ -446,6 +452,7 @@ async def get_verification(
 @router.post(
     "/{verification_id}/approve",
     response_model=VerificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Verification approved"},
         404: {"description": "Verification not found"},
@@ -527,6 +534,7 @@ async def approve_verification(
 @router.post(
     "/{verification_id}/reject",
     response_model=VerificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Verification rejected"},
         400: {"description": "Notes required for rejection"},
@@ -610,6 +618,7 @@ async def reject_verification(
 @router.post(
     "/{verification_id}/flag",
     response_model=VerificationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Verification flagged"},
         404: {"description": "Verification not found"},

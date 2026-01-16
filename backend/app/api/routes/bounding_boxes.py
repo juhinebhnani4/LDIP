@@ -160,6 +160,7 @@ def _handle_bbox_service_error(error: BoundingBoxServiceError) -> HTTPException:
 @router.get(
     "/{document_id}/bounding-boxes",
     response_model=BoundingBoxListResponse,
+    response_model_by_alias=True,
 )
 async def get_document_bounding_boxes(
     document_id: str = Path(..., description="Document UUID"),
@@ -223,6 +224,7 @@ async def get_document_bounding_boxes(
 @router.get(
     "/{document_id}/pages/{page_number}/bounding-boxes",
     response_model=BoundingBoxPageResponse,
+    response_model_by_alias=True,
 )
 async def get_page_bounding_boxes(
     document_id: str = Path(..., description="Document UUID"),

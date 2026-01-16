@@ -4,10 +4,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
     activity,
@@ -137,6 +140,100 @@ def create_app() -> FastAPI:
     # Configure rate limiting with custom 429 handler (Story 13.3)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+    # Global exception handlers for consistent error responses (P3.2)
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
+        """Handle HTTP exceptions with structured error response."""
+        correlation_id = getattr(request.state, "correlation_id", None)
+
+        # If detail is already structured (from AppException), use it
+        if isinstance(exc.detail, dict) and "error" in exc.detail:
+            content = exc.detail
+            if correlation_id:
+                content["error"]["details"] = content["error"].get("details", {})
+                content["error"]["details"]["correlationId"] = correlation_id
+        else:
+            # Wrap unstructured detail in standard format
+            content = {
+                "error": {
+                    "code": f"HTTP_{exc.status_code}",
+                    "message": str(exc.detail) if exc.detail else "An error occurred",
+                    "details": {"correlationId": correlation_id} if correlation_id else {},
+                }
+            }
+
+        return JSONResponse(status_code=exc.status_code, content=content)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Handle Pydantic validation errors with field-level details."""
+        correlation_id = getattr(request.state, "correlation_id", None)
+
+        # Extract field-level errors
+        field_errors = []
+        for error in exc.errors():
+            field_path = ".".join(str(loc) for loc in error["loc"])
+            field_errors.append({
+                "field": field_path,
+                "message": error["msg"],
+                "type": error["type"],
+            })
+
+        content = {
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": {
+                    "fields": field_errors,
+                },
+            }
+        }
+        if correlation_id:
+            content["error"]["details"]["correlationId"] = correlation_id
+
+        logger.warning(
+            "validation_error",
+            correlation_id=correlation_id,
+            path=str(request.url.path),
+            errors=field_errors,
+        )
+
+        return JSONResponse(status_code=422, content=content)
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        """Catch-all handler for unhandled exceptions."""
+        correlation_id = getattr(request.state, "correlation_id", None)
+
+        # Log full traceback for debugging
+        logger.exception(
+            "unhandled_exception",
+            correlation_id=correlation_id,
+            path=str(request.url.path),
+            method=request.method,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+
+        # Return generic error to client (don't expose internals)
+        content = {
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "details": {},
+            }
+        }
+        if correlation_id:
+            content["error"]["details"]["correlationId"] = correlation_id
+
+        return JSONResponse(status_code=500, content=content)
 
     # Include routers
     app.include_router(health.router, prefix="/api")

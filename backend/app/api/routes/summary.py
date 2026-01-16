@@ -73,6 +73,7 @@ def _handle_service_error(error: SummaryServiceError) -> HTTPException:
 @router.get(
     "/{matter_id}/summary",
     response_model=MatterSummaryResponse,
+    response_model_by_alias=True,
     summary="Get Matter Summary",
     description="""
     Get AI-generated executive summary for a matter.
@@ -288,6 +289,7 @@ def _handle_verification_service_error(
 @router.post(
     "/{matter_id}/summary/verify",
     response_model=SummaryVerificationResponse,
+    response_model_by_alias=True,
     summary="Verify Summary Section",
     description="""
     Record a verification decision for a summary section.
@@ -416,6 +418,7 @@ async def verify_summary_section(
 @router.post(
     "/{matter_id}/summary/notes",
     response_model=SummaryNoteResponse,
+    response_model_by_alias=True,
     summary="Add Note to Summary Section",
     description="""
     Add a note to a summary section.
@@ -529,6 +532,7 @@ async def add_summary_note(
 @router.get(
     "/{matter_id}/summary/verifications",
     response_model=SummaryVerificationsListResponse,
+    response_model_by_alias=True,
     summary="List Summary Verifications",
     description="""
     Get all verification decisions for a matter.
@@ -664,6 +668,7 @@ def _handle_edit_service_error(error: SummaryEditServiceError) -> HTTPException:
 @router.put(
     "/{matter_id}/summary/sections/{section_type}",
     response_model=SummaryEditResponse,
+    response_model_by_alias=True,
     summary="Save Summary Section Edit",
     description="""
     Save edited content for a summary section.
@@ -805,6 +810,7 @@ async def save_section_edit(
 @router.post(
     "/{matter_id}/summary/regenerate",
     response_model=MatterSummaryResponse,
+    response_model_by_alias=True,
     summary="Regenerate Summary Section",
     description="""
     Regenerate a specific summary section using GPT-4.

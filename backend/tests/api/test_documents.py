@@ -314,7 +314,7 @@ class TestUploadDocument:
 
         assert response.status_code == 400
         data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_FILE_TYPE"
+        assert data["error"]["code"] == "INVALID_FILE_TYPE"
 
 
 class TestUploadZip:
@@ -379,7 +379,7 @@ class TestUploadZip:
 
         assert response.status_code == 400
         data = response.json()
-        assert data["detail"]["error"]["code"] == "NO_PDFS_IN_ZIP"
+        assert data["error"]["code"] == "NO_PDFS_IN_ZIP"
 
     @pytest.mark.asyncio
     async def test_upload_invalid_zip_returns_400(
@@ -400,7 +400,7 @@ class TestUploadZip:
 
         assert response.status_code == 400
         data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_ZIP"
+        assert data["error"]["code"] == "INVALID_ZIP"
 
 
 class TestDocumentTypes:
@@ -682,7 +682,7 @@ class TestGetDocument:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "DOCUMENT_NOT_FOUND"
+        assert data["error"]["code"] == "DOCUMENT_NOT_FOUND"
 
 
 class TestUpdateDocument:

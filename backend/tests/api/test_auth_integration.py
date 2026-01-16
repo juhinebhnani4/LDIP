@@ -129,8 +129,8 @@ class TestUnauthenticatedRequests:
 
         assert response.status_code == 401
         data = response.json()
-        assert data["detail"]["error"]["code"] == "UNAUTHORIZED"
-        assert "Missing authentication token" in data["detail"]["error"]["message"]
+        assert data["error"]["code"] == "UNAUTHORIZED"
+        assert "Missing authentication token" in data["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_protected_endpoint_with_expired_token(
@@ -144,7 +144,7 @@ class TestUnauthenticatedRequests:
 
         assert response.status_code == 401
         data = response.json()
-        assert data["detail"]["error"]["code"] == "TOKEN_EXPIRED"
+        assert data["error"]["code"] == "TOKEN_EXPIRED"
 
     @pytest.mark.asyncio
     async def test_protected_endpoint_with_invalid_token(
@@ -158,7 +158,7 @@ class TestUnauthenticatedRequests:
 
         assert response.status_code == 401
         data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_TOKEN"
+        assert data["error"]["code"] == "INVALID_TOKEN"
 
     @pytest.mark.asyncio
     async def test_protected_endpoint_with_wrong_signature(
@@ -181,7 +181,7 @@ class TestUnauthenticatedRequests:
 
         assert response.status_code == 401
         data = response.json()
-        assert data["detail"]["error"]["code"] == "INVALID_TOKEN"
+        assert data["error"]["code"] == "INVALID_TOKEN"
 
 
 class TestPublicEndpoints:

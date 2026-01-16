@@ -261,7 +261,8 @@ class TestMarkActivityRead:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "NOT_FOUND"
+            # New standardized error format (P3.2)
+            assert data["error"]["code"] == "NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 

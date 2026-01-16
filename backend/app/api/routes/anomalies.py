@@ -60,6 +60,7 @@ def _get_timeline_service() -> TimelineService:
 @router.get(
     "/summary",
     response_model=AnomalySummaryResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Anomaly summary counts"},
         404: {"model": AnomalyErrorResponse, "description": "Matter not found"},
@@ -95,6 +96,7 @@ async def get_anomaly_summary(
 @router.get(
     "",
     response_model=AnomaliesListResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of anomalies"},
         404: {"model": AnomalyErrorResponse, "description": "Matter not found"},
@@ -167,6 +169,7 @@ async def list_anomalies(
 @router.get(
     "/{anomaly_id}",
     response_model=AnomalyDetailResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Anomaly details"},
         404: {"model": AnomalyErrorResponse, "description": "Anomaly not found"},
@@ -219,6 +222,7 @@ async def get_anomaly(
 @router.post(
     "/detect",
     response_model=AnomalyDetectionJobResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_202_ACCEPTED,
     responses={
         202: {"description": "Anomaly detection job queued"},
@@ -309,6 +313,7 @@ async def trigger_anomaly_detection(
 @router.patch(
     "/{anomaly_id}/dismiss",
     response_model=AnomalyUpdateResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Anomaly dismissed"},
         404: {"model": AnomalyErrorResponse, "description": "Anomaly not found"},
@@ -372,6 +377,7 @@ async def dismiss_anomaly(
 @router.patch(
     "/{anomaly_id}/verify",
     response_model=AnomalyUpdateResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Anomaly verified"},
         404: {"model": AnomalyErrorResponse, "description": "Anomaly not found"},

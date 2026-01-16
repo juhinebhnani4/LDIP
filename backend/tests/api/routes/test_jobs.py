@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.models.job import (
+    JobQueueStats,
     JobStageHistory,
     JobStatus,
     JobType,
@@ -178,7 +179,7 @@ class TestGetJobEndpoint:
 
                 assert response.status_code == 404
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "JOB_NOT_FOUND"
+                assert data["error"]["code"] == "JOB_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -258,7 +259,7 @@ class TestRetryJobEndpoint:
 
                 assert response.status_code == 400
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert data["error"]["code"] == "INVALID_JOB_STATUS"
         finally:
             app.dependency_overrides.clear()
 
@@ -332,7 +333,7 @@ class TestSkipJobEndpoint:
 
                 assert response.status_code == 400
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert data["error"]["code"] == "INVALID_JOB_STATUS"
         finally:
             app.dependency_overrides.clear()
 
@@ -442,7 +443,7 @@ class TestCancelJobEndpoint:
 
                 assert response.status_code == 400
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "INVALID_JOB_STATUS"
+                assert data["error"]["code"] == "INVALID_JOB_STATUS"
         finally:
             app.dependency_overrides.clear()
 
@@ -501,15 +502,15 @@ class TestGetMatterJobStatsEndpoint:
         from app.api.deps import get_matter_service
 
         matter_id = str(uuid4())
-        mock_stats = {
-            "queued": 2,
-            "processing": 1,
-            "completed": 10,
-            "failed": 1,
-            "cancelled": 0,
-            "skipped": 0,
-            "avg_processing_time_ms": 45000,
-        }
+        mock_stats = JobQueueStats(
+            queued=2,
+            processing=1,
+            completed=10,
+            failed=1,
+            cancelled=0,
+            skipped=0,
+            avg_processing_time_ms=45000,
+        )
 
         mock_tracker = AsyncMock()
         mock_tracker.get_queue_stats = AsyncMock(return_value=mock_stats)

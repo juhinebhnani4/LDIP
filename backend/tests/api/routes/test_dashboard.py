@@ -170,6 +170,6 @@ class TestGetDashboardStats:
 
             assert response.status_code == 500
             data = response.json()
-            assert data["detail"]["error"]["code"] == "DB_ERROR"
+            assert data["error"]["code"] == "DB_ERROR"
         finally:
             app.dependency_overrides.clear()

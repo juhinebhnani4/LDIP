@@ -1,6 +1,5 @@
 """Celery application configuration."""
 
-import os
 import ssl
 from pathlib import Path
 

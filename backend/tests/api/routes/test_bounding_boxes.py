@@ -200,7 +200,7 @@ class TestGetDocumentBoundingBoxes:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "DOCUMENT_NOT_FOUND"
+        assert data["error"]["code"] == "DOCUMENT_NOT_FOUND"
 
 
 class TestGetPageBoundingBoxes:
@@ -374,4 +374,4 @@ class TestGetChunkBoundingBoxes:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "CHUNK_NOT_FOUND"
+        assert data["error"]["code"] == "CHUNK_NOT_FOUND"

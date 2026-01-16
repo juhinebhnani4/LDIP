@@ -6,7 +6,6 @@ Provides synchronous Redis-based distributed locks for Celery tasks.
 Uses the same Redis instance as the Celery broker.
 """
 
-import os
 from functools import lru_cache
 
 import redis

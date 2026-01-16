@@ -643,6 +643,7 @@ async def _extract_and_upload_zip(
 @router.post(
     "/upload",
     response_model=DocumentResponse | BulkUploadResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
 )
 async def upload_document(
@@ -865,6 +866,7 @@ async def list_documents(
 @router.patch(
     "/bulk",
     response_model=BulkUpdateResponse,
+    response_model_by_alias=True,
 )
 async def bulk_update_documents(
     update: BulkDocumentUpdate,
@@ -943,6 +945,7 @@ async def bulk_update_documents(
 @router.get(
     "/{document_id}",
     response_model=DocumentDetailResponse,
+    response_model_by_alias=True,
 )
 async def get_document(
     document_id: str = Path(..., description="Document UUID"),
@@ -1042,6 +1045,7 @@ class DocumentDeleteResponse(BaseModel):
 @router.delete(
     "/{document_id}",
     response_model=DocumentDeleteResponse,
+    response_model_by_alias=True,
 )
 async def delete_document(
     document_id: str = Path(..., description="Document UUID"),
@@ -1115,6 +1119,7 @@ async def delete_document(
 @router.patch(
     "/{document_id}",
     response_model=DocumentDetailResponse,
+    response_model_by_alias=True,
 )
 async def update_document(
     document_id: str = Path(..., description="Document UUID"),
@@ -1189,6 +1194,7 @@ async def update_document(
 @router.get(
     "/{document_id}/ocr-quality",
     response_model=OCRQualityResponse,
+    response_model_by_alias=True,
 )
 async def get_ocr_quality(
     document_id: str = Path(..., description="Document UUID"),
@@ -1259,6 +1265,7 @@ async def get_ocr_quality(
 @router.post(
     "/{document_id}/request-manual-review",
     response_model=ManualReviewResponse,
+    response_model_by_alias=True,
 )
 async def request_manual_review(
     document_id: str = Path(..., description="Document UUID"),

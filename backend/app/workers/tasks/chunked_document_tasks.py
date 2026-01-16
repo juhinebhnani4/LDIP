@@ -15,28 +15,16 @@ import structlog
 from celery import group
 
 from app.models.document import DocumentStatus
-from app.models.job import JobStatus
 from app.models.ocr_chunk import ChunkStatus
-from app.services.bounding_box_service import (
-    BoundingBoxService,
-    get_bounding_box_service,
-)
-from app.services.chunk_cleanup_service import (
-    ChunkCleanupService,
-    get_chunk_cleanup_service,
-)
-from app.services.distributed_lock import ChunkLock, acquire_chunk_lock
+from app.services.bounding_box_service import get_bounding_box_service
+from app.services.chunk_cleanup_service import get_chunk_cleanup_service
+from app.services.distributed_lock import acquire_chunk_lock
 from app.services.document_service import (
     DocumentService,
     get_document_service,
 )
-from app.services.job_tracking import (
-    ChunkProgressTracker,
-    JobTrackingService,
-    get_chunk_progress_tracker,
-    get_job_tracking_service,
-)
-from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
+from app.services.job_tracking import get_chunk_progress_tracker
+from app.services.ocr import OCRProcessor, get_ocr_processor
 from app.services.ocr_chunk_service import (
     OCRChunkService,
     get_ocr_chunk_service,
@@ -44,26 +32,14 @@ from app.services.ocr_chunk_service import (
 from app.services.ocr_result_merger import (
     ChunkOCRResult,
     MergeValidationError,
-    OCRResultMerger,
     get_ocr_result_merger,
 )
 from app.services.pdf_chunker import (
     PDFChunker,
-    PDFChunkerError,
     get_pdf_chunker,
 )
-from app.services.pdf_router import (
-    PDFRouter,
-    PDFRouterError,
-    get_pdf_router,
-)
-from app.services.pubsub_service import (
-    broadcast_document_status,
-    broadcast_job_progress,
-    broadcast_job_status_change,
-)
+from app.services.pubsub_service import broadcast_document_status
 from app.services.storage_service import (
-    StorageError,
     StorageService,
     get_storage_service,
 )
@@ -127,7 +103,7 @@ def process_document_chunked(
         Processing result dict with status and statistics.
     """
     # Initialize services
-    storage = storage_service or get_storage_service()
+    # Note: storage_service kept for testing DI but used via get_storage_service() in sub-tasks
     chunks_svc = chunk_service or get_ocr_chunk_service()
     docs_svc = doc_service or get_document_service()
     progress_tracker = get_chunk_progress_tracker()

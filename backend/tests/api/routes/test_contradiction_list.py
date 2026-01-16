@@ -835,7 +835,7 @@ class TestContradictionListErrorHandling:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
+        assert data["error"]["code"] == "MATTER_NOT_FOUND"
 
     @pytest.mark.anyio
     async def test_service_error_returns_500(self) -> None:
@@ -878,7 +878,7 @@ class TestContradictionListErrorHandling:
         assert response.status_code == 500
 
         data = response.json()
-        assert data["detail"]["error"]["code"] == "QUERY_FAILED"
+        assert data["error"]["code"] == "QUERY_FAILED"
 
     @pytest.mark.anyio
     async def test_unexpected_error_returns_500(self) -> None:
@@ -917,7 +917,7 @@ class TestContradictionListErrorHandling:
         assert response.status_code == 500
 
         data = response.json()
-        assert data["detail"]["error"]["code"] == "INTERNAL_ERROR"
+        assert data["error"]["code"] == "INTERNAL_ERROR"
 
 
 # =============================================================================

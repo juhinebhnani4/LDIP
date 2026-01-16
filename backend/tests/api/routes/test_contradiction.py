@@ -210,7 +210,7 @@ class TestGetEntityStatements:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+        assert data["error"]["code"] == "ENTITY_NOT_FOUND"
 
     @pytest.mark.anyio
     async def test_get_entity_statements_with_query_params(
@@ -659,7 +659,7 @@ class TestCompareEntityStatements:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+        assert data["error"]["code"] == "ENTITY_NOT_FOUND"
 
     @pytest.mark.anyio
     async def test_compare_entity_statements_too_many(self) -> None:
@@ -696,8 +696,8 @@ class TestCompareEntityStatements:
 
         assert response.status_code == 422
         data = response.json()
-        assert data["detail"]["error"]["code"] == "TOO_MANY_STATEMENTS"
-        assert data["detail"]["error"]["details"]["statementCount"] == 150
+        assert data["error"]["code"] == "TOO_MANY_STATEMENTS"
+        assert data["error"]["details"]["statementCount"] == 150
 
     @pytest.mark.anyio
     async def test_compare_entity_statements_with_params(

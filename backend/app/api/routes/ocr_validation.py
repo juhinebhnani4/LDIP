@@ -101,6 +101,7 @@ class HumanReviewStatsResponse(BaseModel):
 @router.get(
     "/{document_id}/validation-status",
     response_model=ValidationStatusResponse,
+    response_model_by_alias=True,
 )
 async def get_validation_status(
     document_id: str = Path(..., description="Document UUID"),
@@ -215,6 +216,7 @@ async def get_validation_status(
 @router.get(
     "/{document_id}/validation-log",
     response_model=ValidationLogResponse,
+    response_model_by_alias=True,
 )
 @limiter.limit(READONLY_RATE_LIMIT)
 async def get_validation_log(

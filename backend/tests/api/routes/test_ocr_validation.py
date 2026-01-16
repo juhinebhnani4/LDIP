@@ -110,7 +110,7 @@ class TestGetValidationStatus:
         response = test_client.get("/api/documents/doc-missing/validation-status")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["detail"]["error"]["code"] == "DOCUMENT_NOT_FOUND"
+        assert response.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
 
     @patch("app.api.routes.ocr_validation.get_service_client")
     def test_returns_503_when_database_unavailable(
@@ -124,7 +124,7 @@ class TestGetValidationStatus:
         response = test_client.get("/api/documents/doc-123/validation-status")
 
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        assert response.json()["detail"]["error"]["code"] == "DATABASE_UNAVAILABLE"
+        assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
 
 
 @pytest.mark.skip(reason="These tests require proper database mocking - endpoint functionality tested via integration tests")

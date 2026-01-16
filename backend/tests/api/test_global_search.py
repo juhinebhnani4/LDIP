@@ -399,7 +399,7 @@ class TestGlobalSearchErrorHandling:
 
             assert response.status_code == 503
             data = response.json()
-            assert data["detail"]["error"]["code"] == "DATABASE_NOT_CONFIGURED"
+            assert data["error"]["code"] == "DATABASE_NOT_CONFIGURED"
         finally:
             app.dependency_overrides.clear()
 
@@ -427,7 +427,7 @@ class TestGlobalSearchErrorHandling:
 
             assert response.status_code == 500
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SEARCH_FAILED"
+            assert data["error"]["code"] == "SEARCH_FAILED"
         finally:
             app.dependency_overrides.clear()
 

@@ -280,7 +280,7 @@ class TestGetCitationEndpoint:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "CITATION_NOT_FOUND"
+            assert data["error"]["code"] == "CITATION_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -515,7 +515,7 @@ class TestMarkActUploadedEndpoint:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "ACT_NOT_FOUND"
+            assert data["error"]["code"] == "ACT_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -802,7 +802,7 @@ class TestVerifySingleCitationEndpoint:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "CITATION_NOT_FOUND"
+            assert data["error"]["code"] == "CITATION_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 

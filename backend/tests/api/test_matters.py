@@ -268,7 +268,7 @@ class TestGetMatter:
 
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
+        assert data["error"]["code"] == "MATTER_NOT_FOUND"
 
 
 class TestUpdateMatter:

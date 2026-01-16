@@ -107,6 +107,7 @@ def _get_export_service() -> ExportService:
 @router.post(
     "",
     response_model=ExportGenerationResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Export generation started/completed"},
         400: {"description": "Invalid request"},
@@ -207,6 +208,7 @@ async def generate_export(
 @router.get(
     "/{export_id}",
     response_model=ExportResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Export record"},
         404: {"description": "Export not found"},
@@ -292,6 +294,7 @@ async def get_export(
 
 @router.get(
     "",
+    response_model_by_alias=True,
     responses={
         200: {"description": "List of export records"},
         404: {"description": "Matter not found"},
@@ -355,6 +358,7 @@ async def list_exports(
 @router.post(
     "/executive-summary",
     response_model=ExecutiveSummaryResponse,
+    response_model_by_alias=True,
     responses={
         200: {"description": "Executive summary generated successfully"},
         400: {"description": "Generation failed"},

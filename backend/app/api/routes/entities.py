@@ -120,7 +120,7 @@ def _get_correction_service() -> CorrectionLearningService:
 # =============================================================================
 
 
-@router.get("", response_model=EntitiesListResponse)
+@router.get("", response_model=EntitiesListResponse, response_model_by_alias=True)
 async def list_entities(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_type: EntityType | None = Query(
@@ -222,7 +222,7 @@ async def list_entities(
 # =============================================================================
 
 
-@router.get("/{entity_id}", response_model=EntityResponse)
+@router.get("/{entity_id}", response_model=EntityResponse, response_model_by_alias=True)
 async def get_entity(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -341,7 +341,7 @@ async def get_entity(
 # =============================================================================
 
 
-@router.get("/{entity_id}/mentions", response_model=EntityMentionsResponse)
+@router.get("/{entity_id}/mentions", response_model=EntityMentionsResponse, response_model_by_alias=True)
 async def get_entity_mentions(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -459,7 +459,7 @@ async def get_entity_mentions(
 # =============================================================================
 
 
-@router.get("/{entity_id}/aliases", response_model=AliasesListResponse)
+@router.get("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
 async def get_entity_aliases(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -535,7 +535,7 @@ async def get_entity_aliases(
         ) from e
 
 
-@router.post("/{entity_id}/aliases", response_model=AliasesListResponse)
+@router.post("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
 async def add_entity_alias(
     request: AddAliasRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -676,7 +676,7 @@ async def add_entity_alias(
         ) from e
 
 
-@router.delete("/{entity_id}/aliases", response_model=AliasesListResponse)
+@router.delete("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
 async def remove_entity_alias(
     request: RemoveAliasRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -816,7 +816,7 @@ async def remove_entity_alias(
         ) from e
 
 
-@router.post("/merge", response_model=MergeResultResponse)
+@router.post("/merge", response_model=MergeResultResponse, response_model_by_alias=True)
 async def merge_entities(
     request: MergeEntitiesRequest,
     matter_id: str = Path(..., description="Matter UUID"),

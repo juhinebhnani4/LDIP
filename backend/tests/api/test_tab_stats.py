@@ -251,7 +251,7 @@ class TestGetTabStats:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
+            assert data["error"]["code"] == "MATTER_NOT_FOUND"
 
         finally:
             app.dependency_overrides.clear()
@@ -290,7 +290,7 @@ class TestGetTabStats:
 
             assert response.status_code == 500
             data = response.json()
-            assert data["detail"]["error"]["code"] == "DB_ERROR"
+            assert data["error"]["code"] == "DB_ERROR"
 
         finally:
             app.dependency_overrides.clear()

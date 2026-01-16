@@ -11,7 +11,6 @@ from functools import lru_cache
 
 import structlog
 
-from app.models.ocr_chunk import ChunkStatus
 from app.services.ocr_chunk_service import (
     OCRChunkService,
     get_ocr_chunk_service,

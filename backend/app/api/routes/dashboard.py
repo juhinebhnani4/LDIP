@@ -42,6 +42,7 @@ def _handle_service_error(error: DashboardStatsServiceError) -> HTTPException:
 @router.get(
     "/stats",
     response_model=DashboardStatsResponse,
+    response_model_by_alias=True,
     summary="Get Dashboard Statistics",
     description="""
     Get aggregated dashboard statistics for the authenticated user.

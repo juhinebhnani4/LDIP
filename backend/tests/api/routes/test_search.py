@@ -355,7 +355,7 @@ class TestSearchErrorHandling:
 
                 assert response.status_code == 400
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "INVALID_PARAMETER"
+                assert data["error"]["code"] == "INVALID_PARAMETER"
         finally:
             app.dependency_overrides.clear()
 
@@ -393,7 +393,7 @@ class TestSearchErrorHandling:
 
                 assert response.status_code == 503
                 data = response.json()
-                assert data["detail"]["error"]["code"] == "DATABASE_NOT_CONFIGURED"
+                assert data["error"]["code"] == "DATABASE_NOT_CONFIGURED"
         finally:
             app.dependency_overrides.clear()
 
@@ -427,7 +427,7 @@ class TestSearchMatterIsolation:
             # Returns 404 to hide matter existence (security best practice)
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
+            assert data["error"]["code"] == "MATTER_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 

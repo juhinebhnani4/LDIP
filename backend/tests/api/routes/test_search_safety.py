@@ -162,9 +162,9 @@ class TestSearchSafetyHybrid:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
-            assert "violation_type" in data["detail"]["error"]["details"]
-            assert data["detail"]["error"]["details"]["violation_type"] == "legal_advice_request"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
+            assert "violation_type" in data["error"]["details"]
+            assert data["error"]["details"]["violation_type"] == "legal_advice_request"
         finally:
             app.dependency_overrides.clear()
 
@@ -191,8 +191,8 @@ class TestSearchSafetyHybrid:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
-            assert data["detail"]["error"]["details"]["violation_type"] == "implicit_conclusion_request"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
+            assert data["error"]["details"]["violation_type"] == "implicit_conclusion_request"
         finally:
             app.dependency_overrides.clear()
 
@@ -265,7 +265,7 @@ class TestSearchSafetyBM25:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
         finally:
             app.dependency_overrides.clear()
 
@@ -296,7 +296,7 @@ class TestSearchSafetySemantic:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
         finally:
             app.dependency_overrides.clear()
 
@@ -327,7 +327,7 @@ class TestSearchSafetyRerank:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
         finally:
             app.dependency_overrides.clear()
 
@@ -358,7 +358,7 @@ class TestSearchSafetyAliasExpanded:
 
             assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error"]["code"] == "SAFETY_VIOLATION"
+            assert data["error"]["code"] == "SAFETY_VIOLATION"
         finally:
             app.dependency_overrides.clear()
 
@@ -389,7 +389,7 @@ class TestSearchSafetyResponseFormat:
 
             assert response.status_code == 400
             data = response.json()
-            details = data["detail"]["error"]["details"]
+            details = data["error"]["details"]
             assert "suggested_rewrite" in details
             assert details["suggested_rewrite"] == "What does the document say about..."
         finally:
@@ -418,7 +418,7 @@ class TestSearchSafetyResponseFormat:
 
             assert response.status_code == 400
             data = response.json()
-            details = data["detail"]["error"]["details"]
+            details = data["error"]["details"]
             assert details["violation_type"] == "implicit_conclusion_request"
         finally:
             app.dependency_overrides.clear()

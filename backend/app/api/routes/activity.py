@@ -47,6 +47,7 @@ def _handle_service_error(error: ActivityServiceError) -> HTTPException:
 @router.get(
     "",
     response_model=ActivityListResponse,
+    response_model_by_alias=True,
     summary="Get Activity Feed",
     description="""
     Get recent activities for the authenticated user.
@@ -181,6 +182,7 @@ async def get_activities(
 @router.patch(
     "/{activity_id}/read",
     response_model=ActivityResponse,
+    response_model_by_alias=True,
     summary="Mark Activity as Read",
     description="""
     Mark a single activity as read.

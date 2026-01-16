@@ -167,6 +167,7 @@ def _handle_chunk_service_error(error: ChunkServiceError) -> HTTPException:
 @router.get(
     "/{document_id}/chunks",
     response_model=ChunkListResponse,
+    response_model_by_alias=True,
 )
 async def get_document_chunks(
     document_id: str = Path(..., description="Document UUID"),

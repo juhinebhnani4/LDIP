@@ -127,7 +127,7 @@ def _get_discovery_service():
 # =============================================================================
 
 
-@router.get("", response_model=CitationsListResponse)
+@router.get("", response_model=CitationsListResponse, response_model_by_alias=True)
 async def list_citations(
     matter_id: str = Path(..., description="Matter UUID"),
     act_name: str | None = Query(None, description="Filter by Act name"),
@@ -250,7 +250,7 @@ async def list_citations(
 # =============================================================================
 
 
-@router.get("/stats", response_model=CitationStatsResponse)
+@router.get("/stats", response_model=CitationStatsResponse, response_model_by_alias=True)
 async def get_citation_stats(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -329,7 +329,7 @@ async def get_citation_stats(
 # =============================================================================
 
 
-@router.get("/{citation_id}", response_model=CitationResponse)
+@router.get("/{citation_id}", response_model=CitationResponse, response_model_by_alias=True)
 async def get_citation(
     matter_id: str = Path(..., description="Matter UUID"),
     citation_id: str = Path(..., description="Citation UUID"),
@@ -417,7 +417,7 @@ async def get_citation(
 # =============================================================================
 
 
-@router.get("/summary/by-act", response_model=CitationSummaryResponse)
+@router.get("/summary/by-act", response_model=CitationSummaryResponse, response_model_by_alias=True)
 async def get_citation_summary(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -489,7 +489,7 @@ async def get_citation_summary(
 # =============================================================================
 
 
-@router.get("/acts/discovery", response_model=ActDiscoveryResponse)
+@router.get("/acts/discovery", response_model=ActDiscoveryResponse, response_model_by_alias=True)
 async def get_act_discovery_report(
     matter_id: str = Path(..., description="Matter UUID"),
     include_available: bool = Query(
@@ -561,7 +561,7 @@ async def get_act_discovery_report(
 # =============================================================================
 
 
-@router.post("/acts/mark-uploaded", response_model=ActResolutionResponse)
+@router.post("/acts/mark-uploaded", response_model=ActResolutionResponse, response_model_by_alias=True)
 async def mark_act_uploaded(
     request: MarkActUploadedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -645,7 +645,7 @@ async def mark_act_uploaded(
         ) from e
 
 
-@router.post("/acts/mark-skipped", response_model=ActResolutionResponse)
+@router.post("/acts/mark-skipped", response_model=ActResolutionResponse, response_model_by_alias=True)
 async def mark_act_skipped(
     request: MarkActSkippedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -761,7 +761,7 @@ class VerifyCitationRequest(BaseModel):
     )
 
 
-@router.post("/verify", response_model=BatchVerificationResponse)
+@router.post("/verify", response_model=BatchVerificationResponse, response_model_by_alias=True)
 async def verify_citations_batch(
     request: VerifyActRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -843,7 +843,7 @@ async def verify_citations_batch(
         ) from e
 
 
-@router.post("/{citation_id}/verify", response_model=BatchVerificationResponse)
+@router.post("/{citation_id}/verify", response_model=BatchVerificationResponse, response_model_by_alias=True)
 async def verify_single_citation_endpoint(
     request: VerifyCitationRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -953,7 +953,7 @@ class VerificationDetailsResponse(BaseModel):
     )
 
 
-@router.get("/{citation_id}/verification")
+@router.get("/{citation_id}/verification", response_model_by_alias=True)
 async def get_verification_details(
     matter_id: str = Path(..., description="Matter UUID"),
     citation_id: str = Path(..., description="Citation UUID"),
@@ -1042,7 +1042,7 @@ async def get_verification_details(
 # =============================================================================
 
 
-@router.post("/acts/mark-uploaded-verify", response_model=ActResolutionResponse)
+@router.post("/acts/mark-uploaded-verify", response_model=ActResolutionResponse, response_model_by_alias=True)
 async def mark_act_uploaded_and_verify(
     request: MarkActUploadedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1182,7 +1182,7 @@ class SplitViewResponseModel(BaseModel):
     data: SplitViewDataModel
 
 
-@router.get("/{citation_id}/split-view", response_model=SplitViewResponseModel)
+@router.get("/{citation_id}/split-view", response_model=SplitViewResponseModel, response_model_by_alias=True)
 async def get_citation_split_view(
     matter_id: str = Path(..., description="Matter UUID"),
     citation_id: str = Path(..., description="Citation UUID"),

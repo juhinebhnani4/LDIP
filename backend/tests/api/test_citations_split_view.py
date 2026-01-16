@@ -233,7 +233,7 @@ class TestCitationSplitViewEndpoint:
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["error"]["code"] == "CITATION_NOT_FOUND"
+        assert response.json()["error"]["code"] == "CITATION_NOT_FOUND"
 
     @pytest.mark.asyncio
     async def test_split_view_returns_null_target_when_act_unavailable(

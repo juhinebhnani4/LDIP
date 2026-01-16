@@ -217,7 +217,7 @@ class TestListEntitiesEndpoint:
             # Returns 404 to hide matter existence (security best practice)
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "MATTER_NOT_FOUND"
+            assert data["error"]["code"] == "MATTER_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -270,9 +270,9 @@ class TestGetEntityEndpoint:
             data = response.json()
             assert "data" in data
             assert data["data"]["id"] == entity_id
-            assert data["data"]["canonical_name"] == "Nirav Jobalia"
+            assert data["data"]["canonicalName"] == "Nirav Jobalia"
             assert "relationships" in data["data"]
-            assert "recent_mentions" in data["data"]
+            assert "recentMentions" in data["data"]
         finally:
             app.dependency_overrides.clear()
 
@@ -311,7 +311,7 @@ class TestGetEntityEndpoint:
 
             assert response.status_code == 404
             data = response.json()
-            assert data["detail"]["error"]["code"] == "ENTITY_NOT_FOUND"
+            assert data["error"]["code"] == "ENTITY_NOT_FOUND"
         finally:
             app.dependency_overrides.clear()
 
@@ -367,7 +367,7 @@ class TestGetEntityMentionsEndpoint:
             assert "meta" in data
             assert len(data["data"]) == 2
             assert data["meta"]["total"] == 2
-            assert data["data"][0]["mention_text"] == "Mr. Jobalia"
+            assert data["data"][0]["mentionText"] == "Mr. Jobalia"
         finally:
             app.dependency_overrides.clear()
 

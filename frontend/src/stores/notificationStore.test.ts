@@ -1,6 +1,61 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotificationStore, selectUnreadNotifications, selectHighPriorityUnread } from './notificationStore';
-import type { NotificationType, NotificationPriority } from '@/types/notification';
+import type { NotificationType, NotificationPriority, Notification } from '@/types/notification';
+import * as notificationsApi from '@/lib/api/notifications';
+
+/**
+ * Story 14.10: Updated to mock real API calls instead of relying on mock data.
+ */
+
+// Mock the notifications API module
+vi.mock('@/lib/api/notifications', () => ({
+  getNotifications: vi.fn(),
+  markNotificationRead: vi.fn(),
+  markAllNotificationsRead: vi.fn(),
+}));
+
+// Mock toast to prevent errors
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+  },
+}));
+
+const mockNotifications: Notification[] = [
+  {
+    id: 'notif-1',
+    type: 'success',
+    title: 'Processing Complete',
+    message: 'Document has been processed.',
+    matterId: 'matter-123',
+    matterTitle: 'Smith vs. Jones',
+    isRead: false,
+    createdAt: '2026-01-16T10:00:00Z',
+    priority: 'medium',
+  },
+  {
+    id: 'notif-2',
+    type: 'warning',
+    title: 'Verification Needed',
+    message: '3 citations need review.',
+    matterId: 'matter-456',
+    matterTitle: 'Acme Case',
+    isRead: false,
+    createdAt: '2026-01-16T09:30:00Z',
+    priority: 'high',
+  },
+  {
+    id: 'notif-3',
+    type: 'info',
+    title: 'System Update',
+    message: 'System maintenance completed.',
+    matterId: null,
+    matterTitle: null,
+    isRead: true,
+    createdAt: '2026-01-16T09:00:00Z',
+    priority: 'low',
+  },
+];
 
 describe('notificationStore', () => {
   beforeEach(() => {
@@ -11,10 +66,24 @@ describe('notificationStore', () => {
       isLoading: false,
       error: null,
     });
+
+    // Story 14.10: Set up API mocks with default successful responses
+    vi.mocked(notificationsApi.getNotifications).mockResolvedValue({
+      notifications: mockNotifications,
+      unreadCount: 2, // notif-1 and notif-2 are unread
+    });
+
+    vi.mocked(notificationsApi.markNotificationRead).mockImplementation(async (id: string) => {
+      const notification = mockNotifications.find((n) => n.id === id);
+      if (!notification) throw new Error('Notification not found');
+      return { ...notification, isRead: true };
+    });
+
+    vi.mocked(notificationsApi.markAllNotificationsRead).mockResolvedValue(2);
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('fetchNotifications', () => {
@@ -46,10 +115,27 @@ describe('notificationStore', () => {
 
       expect(useNotificationStore.getState().error).toBeNull();
     });
+
+    it('calls getNotifications API', async () => {
+      await useNotificationStore.getState().fetchNotifications();
+
+      expect(notificationsApi.getNotifications).toHaveBeenCalledWith({ limit: 20 });
+    });
+
+    it('sets error state on API failure', async () => {
+      vi.mocked(notificationsApi.getNotifications).mockRejectedValueOnce(
+        new Error('Network error')
+      );
+
+      await useNotificationStore.getState().fetchNotifications();
+
+      expect(useNotificationStore.getState().error).toBe('Network error');
+      expect(useNotificationStore.getState().isLoading).toBe(false);
+    });
   });
 
   describe('markAsRead', () => {
-    it('marks a specific notification as read', async () => {
+    it('marks a specific notification as read (optimistic update)', async () => {
       await useNotificationStore.getState().fetchNotifications();
 
       const initialState = useNotificationStore.getState();
@@ -57,12 +143,16 @@ describe('notificationStore', () => {
       expect(unreadNotification).toBeDefined();
 
       if (unreadNotification) {
-        useNotificationStore.getState().markAsRead(unreadNotification.id);
+        // Story 14.10: markAsRead is async with optimistic update
+        await useNotificationStore.getState().markAsRead(unreadNotification.id);
 
         const updatedNotification = useNotificationStore
           .getState()
           .notifications.find((n) => n.id === unreadNotification.id);
         expect(updatedNotification?.isRead).toBe(true);
+
+        // Verify API was called
+        expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith(unreadNotification.id);
       }
     });
 
@@ -75,7 +165,7 @@ describe('notificationStore', () => {
         .notifications.find((n) => !n.isRead);
 
       if (unreadNotification) {
-        useNotificationStore.getState().markAsRead(unreadNotification.id);
+        await useNotificationStore.getState().markAsRead(unreadNotification.id);
 
         expect(useNotificationStore.getState().unreadCount).toBe(initialUnreadCount - 1);
       }
@@ -91,8 +181,34 @@ describe('notificationStore', () => {
       if (readNotification) {
         const initialUnreadCount = useNotificationStore.getState().unreadCount;
 
-        useNotificationStore.getState().markAsRead(readNotification.id);
+        await useNotificationStore.getState().markAsRead(readNotification.id);
 
+        expect(useNotificationStore.getState().unreadCount).toBe(initialUnreadCount);
+      }
+    });
+
+    it('reverts on API error', async () => {
+      await useNotificationStore.getState().fetchNotifications();
+
+      const unreadNotification = useNotificationStore
+        .getState()
+        .notifications.find((n) => !n.isRead);
+
+      if (unreadNotification) {
+        // Mock API failure
+        vi.mocked(notificationsApi.markNotificationRead).mockRejectedValueOnce(
+          new Error('API error')
+        );
+
+        const initialUnreadCount = useNotificationStore.getState().unreadCount;
+
+        await useNotificationStore.getState().markAsRead(unreadNotification.id);
+
+        // Should revert to original state
+        const notification = useNotificationStore
+          .getState()
+          .notifications.find((n) => n.id === unreadNotification.id);
+        expect(notification?.isRead).toBe(false);
         expect(useNotificationStore.getState().unreadCount).toBe(initialUnreadCount);
       }
     });
@@ -102,21 +218,44 @@ describe('notificationStore', () => {
     it('marks all notifications as read', async () => {
       await useNotificationStore.getState().fetchNotifications();
 
-      useNotificationStore.getState().markAllAsRead();
+      await useNotificationStore.getState().markAllAsRead();
 
       const allRead = useNotificationStore
         .getState()
         .notifications.every((n) => n.isRead);
       expect(allRead).toBe(true);
+
+      // Verify API was called
+      expect(notificationsApi.markAllNotificationsRead).toHaveBeenCalled();
     });
 
     it('sets unread count to 0', async () => {
       await useNotificationStore.getState().fetchNotifications();
       expect(useNotificationStore.getState().unreadCount).toBeGreaterThan(0);
 
-      useNotificationStore.getState().markAllAsRead();
+      await useNotificationStore.getState().markAllAsRead();
 
       expect(useNotificationStore.getState().unreadCount).toBe(0);
+    });
+
+    it('reverts on API error', async () => {
+      await useNotificationStore.getState().fetchNotifications();
+
+      // Mock API failure
+      vi.mocked(notificationsApi.markAllNotificationsRead).mockRejectedValueOnce(
+        new Error('API error')
+      );
+
+      const initialNotifications = useNotificationStore.getState().notifications;
+      const initialUnreadCount = useNotificationStore.getState().unreadCount;
+
+      await useNotificationStore.getState().markAllAsRead();
+
+      // Should revert to original state
+      expect(useNotificationStore.getState().unreadCount).toBe(initialUnreadCount);
+      expect(
+        useNotificationStore.getState().notifications.filter((n) => !n.isRead).length
+      ).toBe(initialNotifications.filter((n) => !n.isRead).length);
     });
   });
 

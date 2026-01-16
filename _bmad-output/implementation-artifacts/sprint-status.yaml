@@ -233,7 +233,7 @@ development_status:
   # FRONTEND-BACKEND WIRING GAPS (Added 2026-01-16 via Course Correction)
   # FR Sources: Story 9.1 (notifications, search), Story 10A.1 (share), Story 10A.2 (tab stats)
   14-9-share-dialog-api-wiring: done  # Completed 2026-01-16 - Wire ShareDialog to real member APIs, 25 tests passing
-  14-10-notifications-backend-frontend: review  # Implementation complete 2026-01-16 - 23 tests (11 BE + 12 FE), ready for code review
+  14-10-notifications-backend-frontend: done  # Code review complete 2026-01-16 - 46 tests (11 BE + 35 FE after fixes), notificationStore tests fixed
   14-11-global-search-rag: backlog          # RAG-powered search across user's matters + wire frontend (~6-8h)
   14-12-tab-stats-api: backlog              # GET /api/matters/{id}/tab-stats aggregation + wire workspaceStore (~2-3h)
 

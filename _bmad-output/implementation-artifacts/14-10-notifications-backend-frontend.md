@@ -1,6 +1,6 @@
 # Story 14.10: Notifications Backend & Frontend Wiring
 
-Status: review
+Status: done
 
 ## Story
 
@@ -438,7 +438,41 @@ N/A - Implementation completed successfully
   - POST /api/notifications/read-all (2 tests)
   - Response format (2 tests)
 
-- **Frontend**: 12 tests passing
-  - getNotifications (6 tests)
-  - markNotificationRead (3 tests)
-  - markAllNotificationsRead (3 tests)
+- **Frontend**: 35 tests passing (after code review fixes)
+  - notifications.test.ts: 12 tests (API client tests)
+  - notificationStore.test.ts: 23 tests (store tests with API mocks)
+
+## Senior Developer Review (AI)
+
+### Review Date
+2026-01-16
+
+### Review Outcome
+**Approved with Fixes Applied**
+
+### Issues Found and Fixed
+
+1. **CRITICAL - Task 7.5 Incomplete**: `notificationStore.test.ts` was NOT updated to mock API calls
+   - **Fix Applied**: Added `vi.mock('@/lib/api/notifications')` with mock implementations
+   - **Fix Applied**: Added mock data matching backend response format
+   - **Fix Applied**: Updated all async tests to properly await API calls
+   - **Tests Added**: API call verification, error revert behavior tests
+
+### Files Modified in Review
+- `frontend/src/stores/notificationStore.test.ts` - Added API mocks and improved test coverage
+
+### Test Results After Fixes
+- Backend: 11 tests passing
+- Frontend notifications.test.ts: 12 tests passing
+- Frontend notificationStore.test.ts: 23 tests passing (was 5 failing before fix)
+- **Total: 46 tests passing**
+
+### Verification
+All Acceptance Criteria verified as implemented:
+- AC #1: ✅ Notifications table migration exists with RLS
+- AC #2: ✅ GET /api/notifications endpoint with limit/unread_only params
+- AC #3: ✅ PATCH /api/notifications/{id}/read with ownership check
+- AC #4: ✅ POST /api/notifications/read-all returns count
+- AC #5: ✅ Frontend store wired to real API with optimistic updates
+- AC #6: ✅ Activity service creates notifications (except matter_opened)
+- AC #7: ✅ Tests added for all endpoints (fixed during review)

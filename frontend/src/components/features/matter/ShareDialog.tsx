@@ -108,6 +108,7 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
   const [isLoadingCollaborators, setIsLoadingCollaborators] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   // Determine if current user is the owner by checking their role in the members list
   const currentUserIsOwner = useMemo(() => {
@@ -116,28 +117,27 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
     return currentUserMember?.role === 'owner';
   }, [user?.id, collaborators]);
 
-  // Fetch collaborators when dialog opens
-  useEffect(() => {
-    if (isOpen && collaborators.length === 0) {
-      const fetchCollaborators = async () => {
-        setIsLoadingCollaborators(true);
-        try {
-          const members = await getMembers(matterId);
-          setCollaborators(members.map(mapMemberToCollaborator));
-        } catch (error) {
-          console.error('[ShareDialog] Failed to fetch collaborators:', {
-            matterId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-          toast.error('Failed to load collaborators');
-        } finally {
-          setIsLoadingCollaborators(false);
-        }
-      };
+  // Fetch collaborators function - extracted for retry capability
+  const fetchCollaborators = useCallback(async () => {
+    setIsLoadingCollaborators(true);
+    setFetchError(false);
+    try {
+      const members = await getMembers(matterId);
+      setCollaborators(members.map(mapMemberToCollaborator));
+    } catch {
+      setFetchError(true);
+      toast.error('Failed to load collaborators');
+    } finally {
+      setIsLoadingCollaborators(false);
+    }
+  }, [matterId]);
 
+  // Fetch collaborators when dialog opens (always re-fetch to get latest state)
+  useEffect(() => {
+    if (isOpen) {
       fetchCollaborators();
     }
-  }, [isOpen, matterId, collaborators.length]);
+  }, [isOpen, fetchCollaborators]);
 
   const validateEmail = useCallback((emailToValidate: string): boolean => {
     if (!emailToValidate.trim()) {
@@ -173,13 +173,6 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
       setRole('editor');
       toast.success(`Invitation sent to ${emailToInvite}`);
     } catch (error: unknown) {
-      console.error('[ShareDialog] Failed to invite collaborator:', {
-        matterId,
-        email: emailToInvite,
-        role,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-
       // Handle specific API error codes
       if (error instanceof ApiError) {
         if (error.code === 'MEMBER_ALREADY_EXISTS') {
@@ -211,13 +204,6 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
       setCollaborators((prev) => prev.filter((c) => c.id !== collaboratorId));
       toast.success(`Removed ${collaboratorToRemove.name} from this matter`);
     } catch (error: unknown) {
-      console.error('[ShareDialog] Failed to remove collaborator:', {
-        matterId,
-        collaboratorId,
-        collaboratorName: collaboratorToRemove.name,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-
       // Handle specific API error codes
       if (error instanceof ApiError && error.code === 'CANNOT_REMOVE_OWNER') {
         toast.error('Cannot remove the owner');
@@ -351,6 +337,16 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
                   </div>
                 ))}
               </>
+            ) : fetchError ? (
+              // Error state with retry button
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Failed to load collaborators
+                </p>
+                <Button variant="outline" size="sm" onClick={fetchCollaborators}>
+                  Try again
+                </Button>
+              </div>
             ) : collaborators.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No collaborators yet. Invite someone to get started.

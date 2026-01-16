@@ -43,7 +43,8 @@ interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
   showCloseButton?: boolean;
 }
 
-function DialogContent({ children, className, showCloseButton, ...props }: DialogContentProps) {
+function DialogContent({ children, className, ...props }: DialogContentProps) {
+  // showCloseButton is accepted but not used in mock (consumed via ...props spread)
   const { open } = React.useContext(DialogContext);
   if (!open) return null;
   return (

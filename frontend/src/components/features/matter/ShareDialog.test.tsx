@@ -70,7 +70,7 @@ const mockMembers: MatterMember[] = [
     fullName: 'Jane Doe',
     role: 'editor',
     invitedBy: 'user-1',
-    invitedAt: '2026-01-10T10:00:00Z',
+    invitedAt: '2025-01-10T10:00:00Z',
   },
   {
     id: 'member-3',
@@ -79,7 +79,7 @@ const mockMembers: MatterMember[] = [
     fullName: 'Bob Wilson',
     role: 'viewer',
     invitedBy: 'user-1',
-    invitedAt: '2026-01-11T10:00:00Z',
+    invitedAt: '2025-01-11T10:00:00Z',
   },
 ];
 
@@ -104,7 +104,7 @@ describe('ShareDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: getMembers returns mock data
+    // Default: getMembers returns mock data (called on every dialog open)
     mockGetMembers.mockResolvedValue(mockMembers);
     // Default: inviteMember succeeds
     mockInviteMember.mockImplementation(async (_matterId: string, email: string, role: string) => {
@@ -116,7 +116,7 @@ describe('ShareDialog', () => {
         fullName: emailPrefix,
         role,
         invitedBy: 'user-1',
-        invitedAt: new Date().toISOString(),
+        invitedAt: '2025-01-15T10:00:00Z',
       } as MatterMember;
     });
     // Default: removeMember succeeds
@@ -374,7 +374,7 @@ describe('ShareDialog', () => {
     // Should show loading text while waiting
     expect(screen.getByText(/sending/i)).toBeInTheDocument();
 
-    // Resolve the invite to clean up
+    // Resolve the invite and wait for state updates to complete
     resolveInvite!({
       id: 'member-new',
       userId: 'user-new',
@@ -382,7 +382,12 @@ describe('ShareDialog', () => {
       fullName: 'new.attorney',
       role: 'editor',
       invitedBy: 'user-1',
-      invitedAt: new Date().toISOString(),
+      invitedAt: '2025-01-15T10:00:00Z',
+    });
+
+    // Wait for state updates to complete to avoid act() warnings
+    await waitFor(() => {
+      expect(screen.queryByText(/sending/i)).not.toBeInTheDocument();
     });
   });
 
@@ -455,6 +460,36 @@ describe('ShareDialog', () => {
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith('Failed to load collaborators');
     });
+  });
+
+  it('shows retry button when fetch fails and retries on click', async () => {
+    // First call fails, second succeeds
+    mockGetMembers
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce(mockMembers);
+
+    const user = userEvent.setup();
+    render(<ShareDialog matterId={mockMatterId} />);
+
+    const shareButton = screen.getByRole('button', { name: /share matter/i });
+    await user.click(shareButton);
+
+    // Wait for error state with retry button
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load collaborators')).toBeInTheDocument();
+    });
+
+    const retryButton = screen.getByRole('button', { name: /try again/i });
+    expect(retryButton).toBeInTheDocument();
+
+    // Click retry
+    await user.click(retryButton);
+
+    // Should now show collaborators
+    await waitFor(() => {
+      expect(screen.getByText('John Smith')).toBeInTheDocument();
+    });
+    expect(mockGetMembers).toHaveBeenCalledTimes(2);
   });
 
   it('shows validation error when member already exists', async () => {

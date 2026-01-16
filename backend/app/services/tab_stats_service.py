@@ -45,6 +45,11 @@ JOB_TYPE_TO_TAB: dict[str, str] = {
     JobType.DOCUMENT_PROCESSING.value: "documents",
     JobType.CHUNKING.value: "documents",
     JobType.EMBEDDING.value: "documents",
+    # TODO: Add mappings when these JobTypes are added to job.py:
+    # - "CITATION_EXTRACTION": "citations"
+    # - "CONTRADICTION_DETECTION": "contradictions"
+    # - "VERIFICATION_PROCESSING": "verification"
+    # - "SUMMARY_GENERATION": "summary"
 }
 """Maps job_type to workspace tab for processing status derivation."""
 
@@ -359,8 +364,8 @@ class TabStatsService:
 
             count = count_result.count or 0
 
-            # Get issue count - flagged or low confidence
-            # Using two queries since Supabase doesn't support OR directly in Python client
+            # Get issue count - flagged OR low confidence (mutually exclusive queries)
+            # Query 1: Flagged findings (any confidence level)
             flagged_result = await asyncio.to_thread(
                 lambda: self.supabase.table("finding_verifications")
                 .select("id", count="exact")
@@ -369,6 +374,8 @@ class TabStatsService:
                 .execute()
             )
 
+            # Query 2: Low confidence pending findings (decision IS NULL and confidence < 70)
+            # These are mutually exclusive from flagged since flagged has decision='flagged'
             low_confidence_result = await asyncio.to_thread(
                 lambda: self.supabase.table("finding_verifications")
                 .select("id", count="exact")
@@ -381,7 +388,7 @@ class TabStatsService:
             flagged_count = flagged_result.count or 0
             low_confidence_count = low_confidence_result.count or 0
 
-            # Combine unique issues (flagged + low confidence pending)
+            # These are mutually exclusive: flagged has decision='flagged', low_confidence has decision=null
             issue_count = flagged_count + low_confidence_count
 
             return TabStats(count=count, issue_count=issue_count)

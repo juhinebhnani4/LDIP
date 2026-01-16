@@ -1,6 +1,6 @@
 # Story 14.12: Tab Stats API
 
-Status: completed
+Status: done
 
 ## Story
 
@@ -299,4 +299,37 @@ N/A
 - backend/app/api/routes/matters.py (added GET /{matter_id}/tab-stats endpoint)
 - frontend/src/stores/workspaceStore.ts (wired to real API)
 - frontend/src/stores/workspaceStore.test.ts (mocked API calls)
+
+---
+
+## Senior Developer Review (AI)
+
+**Review Date:** 2026-01-16
+**Reviewer:** Claude Opus 4.5 (Code Review Workflow)
+
+### Issues Found & Fixed
+
+| Severity | Issue | Fix Applied |
+|----------|-------|-------------|
+| CRITICAL | Backend tests failing - mocked `get_user_role` returned `MagicMock(value="owner")` instead of actual `MatterRole.OWNER` enum, causing role comparison to fail | Fixed mock return types to use actual `MatterRole` enums |
+| CRITICAL | Backend tests hitting Redis rate limiter (no Redis running) | Added `disable_rate_limiting` fixture to disable rate limiter in tests |
+| CRITICAL | Tests used wrong dependency override (`get_tab_stats_service` vs `get_tab_stats_service_dep`) | Fixed import and override to use `get_tab_stats_service_dep` from deps.py |
+| MEDIUM | Verification issue count could double-count (flagged AND low confidence) | Clarified comments - queries are mutually exclusive (flagged has decision='flagged', low_confidence has decision=null) |
+| MEDIUM | Missing job type mappings for citations, contradictions, verification, summary tabs | Added TODO comments documenting future mappings when JobTypes are added |
+| LOW | Outdated comment "mock for MVP" in workspaceStore.ts | Updated to "Fetch tab stats from real API (Story 14.12)" |
+
+### Test Results After Fixes
+
+- **Backend:** 8/8 tests passing
+- **Frontend:** 38/38 tests passing
+
+### Files Modified During Review
+
+- `backend/tests/api/test_tab_stats.py` (test fixes)
+- `backend/app/services/tab_stats_service.py` (clarified comments, added TODO)
+- `frontend/src/stores/workspaceStore.ts` (comment update)
+
+### Review Outcome
+
+**APPROVED** - All issues fixed, all tests passing.
 

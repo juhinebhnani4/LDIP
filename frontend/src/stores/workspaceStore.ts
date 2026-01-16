@@ -80,7 +80,7 @@ interface WorkspaceActions {
   /** Set all tab processing statuses at once */
   setAllTabProcessingStatus: (statuses: Partial<Record<TabId, TabProcessingStatus>>) => void;
 
-  /** Fetch tab stats from API (mock for MVP) */
+  /** Fetch tab stats from real API (Story 14.12) */
   fetchTabStats: (matterId: string) => Promise<void>;
 
   /** Reset workspace state */

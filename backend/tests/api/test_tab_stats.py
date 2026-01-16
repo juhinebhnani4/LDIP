@@ -15,18 +15,29 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Settings, get_settings
+from app.core.rate_limit import limiter
 from app.main import app
+from app.models.matter import MatterRole
 from app.models.tab_stats import (
     TabCountsData,
     TabProcessingStatusData,
     TabStats,
     TabStatsData,
 )
+from app.api.deps import get_tab_stats_service_dep
 from app.services.tab_stats_service import (
     TabStatsService,
     TabStatsServiceError,
-    get_tab_stats_service,
 )
+
+
+# Disable rate limiting for tests
+@pytest.fixture(autouse=True)
+def disable_rate_limiting():
+    """Disable rate limiting for all tests in this module."""
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
 
 
 # Test JWT secret
@@ -100,14 +111,14 @@ class TestGetTabStats:
         mock_service = AsyncMock(spec=TabStatsService)
         mock_service.get_tab_stats.return_value = mock_stats
 
-        # Mock matter membership check
+        # Mock matter membership check - return actual MatterRole enum
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="owner")
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:
@@ -170,12 +181,12 @@ class TestGetTabStats:
         mock_service.get_tab_stats.return_value = mock_stats
 
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="viewer")
+        mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:
@@ -260,12 +271,12 @@ class TestGetTabStats:
         )
 
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="owner")
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:
@@ -297,12 +308,12 @@ class TestGetTabStats:
         mock_service.get_tab_stats.return_value = mock_stats
 
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="viewer")
+        mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:
@@ -332,12 +343,12 @@ class TestGetTabStats:
         mock_service.get_tab_stats.return_value = mock_stats
 
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="editor")
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:
@@ -387,12 +398,12 @@ class TestGetTabStats:
         mock_service.get_tab_stats.return_value = mock_stats
 
         mock_matter_service = MagicMock()
-        mock_matter_service.get_user_role.return_value = MagicMock(value="owner")
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
 
         from app.api.deps import get_matter_service
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_tab_stats_service] = lambda: mock_service
+        app.dependency_overrides[get_tab_stats_service_dep] = lambda: mock_service
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
 
         try:

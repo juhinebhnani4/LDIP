@@ -41,6 +41,7 @@ class PipelineTask(str, Enum):
     EXTRACT_ENTITIES = "extract_entities"
     RESOLVE_ALIASES = "resolve_aliases"
     EXTRACT_CITATIONS = "extract_citations"
+    LINK_BBOXES = "link_chunks_to_bboxes"  # Decoupled bbox linking
 
     # Engine tasks
     EXTRACT_DATES = "extract_dates_from_document"
@@ -63,6 +64,7 @@ TASK_MAPPING = {
     PipelineTask.EXTRACT_ENTITIES: "app.workers.tasks.document_tasks.extract_entities",
     PipelineTask.RESOLVE_ALIASES: "app.workers.tasks.document_tasks.resolve_aliases",
     PipelineTask.EXTRACT_CITATIONS: "app.workers.tasks.document_tasks.extract_citations",
+    PipelineTask.LINK_BBOXES: "app.workers.tasks.document_tasks.link_chunks_to_bboxes_task",
     PipelineTask.EXTRACT_DATES: "app.workers.tasks.engine_tasks.extract_dates_from_document",
     PipelineTask.CLASSIFY_EVENTS: "app.workers.tasks.engine_tasks.classify_events_for_document",
     PipelineTask.LINK_ENTITIES: "app.workers.tasks.engine_tasks.link_entities_after_extraction",

@@ -1768,6 +1768,7 @@ def chunk_document(
     chunk_service: ChunkService | None = None,
     bounding_box_service: BoundingBoxService | None = None,
     force: bool = False,
+    skip_bbox_linking: bool = False,
 ) -> dict[str, str | int | float | None]:
     """Chunk a document into parent-child hierarchy for RAG.
 
@@ -1782,6 +1783,8 @@ def chunk_document(
         chunk_service: Optional ChunkService instance (for testing).
         bounding_box_service: Optional BoundingBoxService instance (for testing).
         force: If True, skip status validation and run regardless of prev_result.
+        skip_bbox_linking: If True, skip bbox linking (saves chunks faster,
+            bbox highlighting can be done later via link_chunks_to_bboxes_task).
 
     Returns:
         Task result with chunking summary.
@@ -1894,12 +1897,23 @@ def chunk_document(
         chunker = ParentChildChunker()
         result = chunker.chunk_document(doc_id, doc.extracted_text)
 
-        # Link chunks to bounding boxes
+        # Prepare all chunks for saving
         all_chunks = result.parent_chunks + result.child_chunks
 
         # Run async operations in sync context
         async def _save_chunks_async():
-            await link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
+            # Link chunks to bounding boxes (can be slow for large documents)
+            # Skip if requested - bbox linking can be done later via background task
+            if not skip_bbox_linking:
+                await link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
+            else:
+                logger.info(
+                    "chunk_document_bbox_linking_skipped",
+                    document_id=doc_id,
+                    chunk_count=len(all_chunks),
+                    reason="skip_bbox_linking=True",
+                )
+
             return await chunks_service.save_chunks(
                 document_id=doc_id,
                 matter_id=matter_id,
@@ -2009,6 +2023,136 @@ def chunk_document(
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
         }
+
+
+# =============================================================================
+# Bbox Linking Task (Decoupled from Chunking)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.link_chunks_to_bboxes_task",
+    bind=True,
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def link_chunks_to_bboxes_task(
+    self,  # type: ignore[no-untyped-def]
+    document_id: str,
+    chunk_service: ChunkService | None = None,
+    bounding_box_service: BoundingBoxService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Link existing chunks to bounding boxes for a document.
+
+    This task can be run independently after chunking to enable bbox
+    highlighting in the UI. It's useful when chunk_document was called
+    with skip_bbox_linking=True for faster initial processing.
+
+    Args:
+        document_id: Document UUID.
+        chunk_service: Optional ChunkService instance (for testing).
+        bounding_box_service: Optional BoundingBoxService instance (for testing).
+
+    Returns:
+        Task result with linking summary.
+    """
+    logger.info(
+        "link_chunks_to_bboxes_task_started",
+        document_id=document_id,
+        retry_count=self.request.retries,
+    )
+
+    # Use injected services or get defaults
+    chunks_service = chunk_service or get_chunk_service()
+    bbox_service = bounding_box_service or get_bounding_box_service()
+
+    try:
+        # Get all chunks for this document (parent + child)
+        async def _get_and_link_chunks():
+            from app.services.supabase.client import get_service_client
+
+            client = get_service_client()
+
+            # Get all chunks for this document
+            result = (
+                client.table("chunks")
+                .select("id, content, char_start, char_end, parent_id, document_id")
+                .eq("document_id", document_id)
+                .execute()
+            )
+
+            if not result.data:
+                return 0
+
+            # Convert to chunk-like objects for link_chunks_to_bboxes
+            from dataclasses import dataclass
+
+            @dataclass
+            class ChunkData:
+                id: str
+                content: str
+                char_start: int
+                char_end: int
+                parent_id: str | None
+
+            chunks = [
+                ChunkData(
+                    id=row["id"],
+                    content=row["content"],
+                    char_start=row["char_start"],
+                    char_end=row["char_end"],
+                    parent_id=row.get("parent_id"),
+                )
+                for row in result.data
+            ]
+
+            # Link chunks to bounding boxes
+            await link_chunks_to_bboxes(chunks, document_id, bbox_service)
+
+            return len(chunks)
+
+        linked_count = asyncio.run(_get_and_link_chunks())
+
+        logger.info(
+            "link_chunks_to_bboxes_task_completed",
+            document_id=document_id,
+            linked_count=linked_count,
+        )
+
+        return {
+            "status": "bbox_linking_complete",
+            "document_id": document_id,
+            "linked_count": linked_count,
+        }
+
+    except Exception as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "link_chunks_to_bboxes_task_error",
+            document_id=document_id,
+            retry_count=retry_count,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+
+        if retry_count >= 2:
+            logger.error(
+                "link_chunks_to_bboxes_task_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            return {
+                "status": "bbox_linking_failed",
+                "document_id": document_id,
+                "error_code": "BBOX_LINKING_FAILED",
+                "error_message": str(e),
+            }
+
+        raise
 
 
 # =============================================================================

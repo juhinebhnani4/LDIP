@@ -59,13 +59,19 @@
 - [ ] Split raw text into windows for batch processing
 - [ ] This allows entity extraction before chunking completes
 
-### 2.3 Decouple Bbox Linking from Chunking
+### 2.3 Decouple Bbox Linking from Chunking ✅ DONE
 **Priority**: MEDIUM | **Effort**: Low
 **File**: `app/workers/tasks/document_tasks.py`
 
-- [ ] Make bbox linking optional/async
-- [ ] Save chunks first, then link bboxes in background
-- [ ] User can search immediately, bbox highlighting comes later
+- [x] Make bbox linking optional/async
+- [x] Save chunks first, then link bboxes in background
+- [x] User can search immediately, bbox highlighting comes later
+
+**Implemented**:
+- Added `skip_bbox_linking: bool = False` parameter to `chunk_document` task
+- Created new `link_chunks_to_bboxes_task` Celery task that can run independently
+- Added `LINK_BBOXES` to admin API's `PipelineTask` enum for manual triggering
+- When `skip_bbox_linking=True`, chunks are saved immediately, bbox linking can be done later via background task or manual trigger
 
 ---
 
@@ -113,16 +119,17 @@
 
 **Already Implemented**: All three tasks are registered in `celery.py` beat_schedule (lines 81-97).
 
-### 4.2 Add Heartbeat Calls During Long Operations
+### 4.2 Add Heartbeat Calls During Long Operations ✅ DONE
 **Priority**: MEDIUM | **Effort**: Low
 **File**: `app/workers/tasks/chunked_document_tasks.py`
 
-- [ ] Call `update_heartbeat()` after each major step in `process_single_chunk`:
-  - After status update to PROCESSING
-  - After PDF download
-  - After page extraction
-  - After OCR call
-  - After bbox save
+- [x] Call `update_heartbeat()` after each major step in `process_single_chunk`:
+  - After status update to PROCESSING (line 546)
+  - After PDF download (line 560)
+  - Before OCR call (line 578)
+  - After OCR completes (line 587)
+
+**Already Implemented**: Heartbeat calls are in place at key points in `process_single_chunk`. The `OCRChunkService.update_heartbeat()` method updates `processing_started_at` timestamp.
 
 ### 4.3 Implement Stale Detection Threshold Config
 **Priority**: LOW | **Effort**: Low

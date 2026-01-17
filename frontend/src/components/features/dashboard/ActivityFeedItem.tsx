@@ -30,7 +30,7 @@ interface ActivityFeedItemProps {
 }
 
 /** Activity icon component that renders the correct icon based on type */
-function ActivityIcon({ type, className }: { type: ActivityType; className?: string }) {
+export function ActivityIcon({ type, className }: { type: ActivityType; className?: string }) {
   const config = ACTIVITY_ICONS[type];
   const iconClassName = cn('size-4', config.colorClass, className);
 

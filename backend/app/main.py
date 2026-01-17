@@ -33,6 +33,7 @@ from app.api.routes import (
     search,
     summary,
     timeline,
+    users,
     verifications,
 )
 from app.core.config import get_settings
@@ -261,6 +262,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(notifications.router, prefix="/api")
     app.include_router(global_search.router, prefix="/api")
+    app.include_router(users.router)
 
     return app
 

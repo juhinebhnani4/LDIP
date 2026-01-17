@@ -19,6 +19,10 @@ export { MatterFilters } from './MatterFilters';
 
 // Story 9-3: Activity Feed and Quick Stats
 export { ActivityFeed, ActivityFeedSkeleton } from './ActivityFeed';
-export { ActivityFeedItem, ActivityFeedItemSkeleton } from './ActivityFeedItem';
+export { ActivityFeedItem, ActivityFeedItemSkeleton, ActivityIcon } from './ActivityFeedItem';
 export { QuickStats, QuickStatsSkeleton } from './QuickStats';
 export { SidebarErrorBoundary } from './SidebarErrorBoundary';
+
+// Story 14-15: Mobile Activity Feed
+export { MobileQuickStats } from './MobileQuickStats';
+export { MobileActivityFeed } from './MobileActivityFeed';

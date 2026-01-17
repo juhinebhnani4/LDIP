@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { SWRConfig } from "swr"
 import type { ReactNode } from "react"
+import { FeatureTour } from "@/components/features/help"
 
 interface ProvidersProps {
   children: ReactNode
@@ -44,6 +45,7 @@ export function Providers({ children }: ProvidersProps) {
       <SWRConfig value={swrConfig}>
         <TooltipProvider>
           {children}
+          <FeatureTour />
         </TooltipProvider>
       </SWRConfig>
     </ThemeProvider>

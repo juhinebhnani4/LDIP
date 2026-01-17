@@ -19,16 +19,23 @@ vi.mock('./GlobalSearch', () => ({
   GlobalSearch: () => <div data-testid="global-search">Search</div>,
 }));
 
+vi.mock('@/components/features/help', () => ({
+  HelpButton: (props: { 'data-tour'?: string }) => (
+    <button data-testid="help-button" data-tour={props['data-tour']} aria-label="Help">
+      Help
+    </button>
+  ),
+}));
+
 describe('DashboardHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders the LDIP logo', () => {
+  it('renders the jaanch logo', () => {
     render(<DashboardHeader />);
 
-    expect(screen.getByText('LDIP')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /ldip home/i })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: /jaanch\.ai home/i })).toHaveAttribute('href', '/');
   });
 
   it('renders all header components', () => {
@@ -42,19 +49,16 @@ describe('DashboardHeader', () => {
   it('renders help button with correct aria-label', () => {
     render(<DashboardHeader />);
 
-    const helpButton = screen.getByRole('button', { name: /help/i });
+    const helpButton = screen.getByTestId('help-button');
     expect(helpButton).toBeInTheDocument();
+    expect(helpButton).toHaveAttribute('aria-label', 'Help');
   });
 
-  it('opens help link in new tab when help button clicked', () => {
-    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-
+  it('renders help button with data-tour attribute', () => {
     render(<DashboardHeader />);
 
-    const helpButton = screen.getByRole('button', { name: /help/i });
-    helpButton.click();
-
-    expect(windowOpenSpy).toHaveBeenCalledWith('https://help.ldip.app', '_blank');
+    const helpButton = screen.getByTestId('help-button');
+    expect(helpButton).toHaveAttribute('data-tour', 'help-button');
   });
 
   it('passes user data to UserProfileDropdown', () => {

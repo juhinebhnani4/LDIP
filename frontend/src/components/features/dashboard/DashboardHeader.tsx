@@ -1,12 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { HelpCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { JaanchLogo } from '@/components/ui/jaanch-logo';
 import { NotificationsDropdown } from './NotificationsDropdown';
 import { UserProfileDropdown } from './UserProfileDropdown';
 import { GlobalSearch } from './GlobalSearch';
+import { HelpButton } from '@/components/features/help';
 
 /**
  * Dashboard Header Component
@@ -30,11 +29,6 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ user }: DashboardHeaderProps) {
-  const handleHelpClick = () => {
-    // Opens external help documentation in new tab with security attributes
-    window.open('https://help.jaanch.ai', '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center gap-4 px-4 sm:px-6">
@@ -60,14 +54,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
           <NotificationsDropdown />
 
           {/* Help button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleHelpClick}
-            aria-label="Help"
-          >
-            <HelpCircle className="h-5 w-5" />
-          </Button>
+          <HelpButton data-tour="help-button" />
 
           {/* User Profile Dropdown */}
           <UserProfileDropdown initialUser={user} />

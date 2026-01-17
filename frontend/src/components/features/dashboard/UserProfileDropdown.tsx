@@ -96,8 +96,12 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
   };
 
   const handleHelp = () => {
-    // TODO: Open help modal or navigate to help page
-    window.open('https://help.jaanch.ai', '_blank');
+    // Dispatch a keyboard event to trigger the help panel
+    const event = new KeyboardEvent('keydown', {
+      key: '?',
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
   };
 
   return (

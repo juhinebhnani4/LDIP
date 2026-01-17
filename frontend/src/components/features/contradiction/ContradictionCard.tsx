@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatementSection } from './StatementSection';
+import { HelpTooltipInline } from '@/components/features/help';
 import type {
   ContradictionItem,
   ContradictionType,
@@ -140,8 +141,12 @@ export function ContradictionCard({
               {severityStyle.label} Severity
             </Badge>
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="flex items-center text-xs text-muted-foreground">
             {Math.round(contradiction.confidence * 100)}% confidence
+            <HelpTooltipInline
+              content="Confidence indicates how certain the AI is about this contradiction. Higher scores (90%+) are more reliable."
+              learnMoreId="confidence-scores"
+            />
           </div>
         </div>
 

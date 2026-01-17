@@ -200,6 +200,7 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
       role="feed"
       aria-label="Matter cards"
       aria-busy={isLoading}
+      data-tour="matter-cards"
     >
       <NewMatterCard />
       {sortedMatters.map((matter) => (

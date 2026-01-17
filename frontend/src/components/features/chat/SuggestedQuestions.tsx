@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { JaanchIcon } from '@/components/ui/jaanch-logo';
 import { cn } from '@/lib/utils';
+import { HelpTooltipInline } from '@/components/features/help';
 
 /**
  * Default suggested questions for empty conversation state
@@ -47,9 +48,13 @@ export function SuggestedQuestions({
       <p className="mb-6 max-w-xs text-sm text-muted-foreground">
         Ask questions about your matter. The AI will analyze documents and
         provide answers with citations.
+        <HelpTooltipInline
+          content="Questions use hybrid search combining semantic understanding with keyword matching for accurate results."
+          learnMoreId="hybrid-search"
+        />
       </p>
 
-      <div className="w-full max-w-sm space-y-2">
+      <div className="w-full max-w-sm space-y-2 px-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Try asking
         </p>
@@ -59,12 +64,12 @@ export function SuggestedQuestions({
               key={question}
               variant="outline"
               size="sm"
-              className="h-auto justify-start px-3 py-2 text-left text-sm font-normal"
+              className="h-auto justify-start px-3 py-2 text-left text-sm font-normal w-full overflow-hidden"
               onClick={() => onQuestionClick(question)}
               role="listitem"
               aria-label={`Ask: ${question}`}
             >
-              {question}
+              <span className="truncate">{question}</span>
             </Button>
           ))}
         </div>

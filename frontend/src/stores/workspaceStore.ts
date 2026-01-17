@@ -62,6 +62,9 @@ interface WorkspaceState {
 
   /** Error message if tab stats fetch fails */
   tabStatsError: string | null;
+
+  /** Timestamp of last successful tab stats fetch (for stale check) */
+  lastTabStatsFetchTime: number | null;
 }
 
 interface WorkspaceActions {
@@ -89,12 +92,16 @@ interface WorkspaceActions {
 
 type WorkspaceStore = WorkspaceState & WorkspaceActions;
 
+/** Stale time in milliseconds - data older than this will be refetched */
+const STALE_TIME_MS = 60_000; // 60 seconds for tab stats
+
 const initialState: WorkspaceState = {
   currentMatterId: null,
   tabCounts: {},
   tabProcessingStatus: {},
   isLoadingTabStats: false,
   tabStatsError: null,
+  lastTabStatsFetchTime: null,
 };
 
 export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
@@ -125,27 +132,44 @@ export const useWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   },
 
   fetchTabStats: async (matterId: string) => {
-    // Skip if already loaded for this matter
-    const { currentMatterId, isLoadingTabStats } = get();
-    if (currentMatterId === matterId && !isLoadingTabStats) {
-      // Check if we already have data
-      const { tabCounts } = get();
-      if (Object.keys(tabCounts).length > 0) {
+    const { currentMatterId, isLoadingTabStats, lastTabStatsFetchTime, tabCounts } = get();
+
+    // Skip if already loading (prevent duplicate requests)
+    if (isLoadingTabStats) {
+      return;
+    }
+
+    // Skip if data is fresh for the same matter
+    if (currentMatterId === matterId && Object.keys(tabCounts).length > 0) {
+      const isFresh = lastTabStatsFetchTime && Date.now() - lastTabStatsFetchTime < STALE_TIME_MS;
+      if (isFresh) {
         return;
       }
     }
 
-    set({ isLoadingTabStats: true, tabStatsError: null, currentMatterId: matterId });
+    // If switching matters, clear old data first
+    if (currentMatterId !== matterId) {
+      set({
+        isLoadingTabStats: true,
+        tabStatsError: null,
+        currentMatterId: matterId,
+        tabCounts: {},
+        tabProcessingStatus: {},
+      });
+    } else {
+      set({ isLoadingTabStats: true, tabStatsError: null });
+    }
 
     try {
       // Story 14.12: Call real API endpoint
       const response = await fetchTabStatsApi(matterId);
-      const { tabCounts, tabProcessingStatus } = transformTabStatsResponse(response);
+      const { tabCounts: newTabCounts, tabProcessingStatus } = transformTabStatsResponse(response);
 
       set({
-        tabCounts,
+        tabCounts: newTabCounts,
         tabProcessingStatus,
         isLoadingTabStats: false,
+        lastTabStatsFetchTime: Date.now(),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch tab stats';

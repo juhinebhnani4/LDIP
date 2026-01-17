@@ -41,6 +41,9 @@ function transformMatterToCardData(matter: Matter): MatterCardData {
   };
 }
 
+/** Stale time in milliseconds - data older than this will be refetched */
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 interface MatterState {
   /** All matters loaded from API */
   matters: MatterCardData[];
@@ -62,11 +65,17 @@ interface MatterState {
 
   /** Current view mode (grid/list) */
   viewMode: MatterViewMode;
+
+  /** Timestamp of last successful fetch (for stale check) */
+  lastFetchTime: number | null;
 }
 
 interface MatterActions {
-  /** Fetch matters from API (or use mock data for now) */
+  /** Fetch matters from API (skips if data is fresh) */
   fetchMatters: () => Promise<void>;
+
+  /** Force refresh matters from API (ignores stale check) */
+  forceRefreshMatters: () => Promise<void>;
 
   /** Fetch a single matter by ID for workspace (Story 10A.1) */
   fetchMatter: (matterId: string) => Promise<void>;
@@ -91,6 +100,9 @@ interface MatterActions {
 
   /** Set error state */
   setError: (error: string | null) => void;
+
+  /** Invalidate cache to force next fetch to reload */
+  invalidateCache: () => void;
 }
 
 type MatterStore = MatterState & MatterActions;
@@ -111,25 +123,76 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
   sortBy: 'recent',
   filterBy: 'all',
   viewMode: 'grid', // Will be overwritten by initializeViewMode
+  lastFetchTime: null,
 
   // Actions
   fetchMatters: async () => {
+    const { matters, lastFetchTime, isLoading } = get();
+
+    // Skip if already loading (prevent duplicate requests)
+    if (isLoading) {
+      return;
+    }
+
+    // Skip if data is fresh (not stale)
+    const isFresh = lastFetchTime && Date.now() - lastFetchTime < STALE_TIME_MS;
+    if (matters.length > 0 && isFresh) {
+      return;
+    }
+
     set({ isLoading: true, error: null });
     try {
       // Fetch from real backend API
       const { matters: apiMatters } = await mattersApi.list();
 
       // Transform to MatterCardData (add default values for fields backend doesn't provide yet)
-      const matters = apiMatters.map(transformMatterToCardData);
+      const transformedMatters = apiMatters.map(transformMatterToCardData);
 
       set({
-        matters,
+        matters: transformedMatters,
         isLoading: false,
+        lastFetchTime: Date.now(),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch matters';
       set({ error: message, isLoading: false });
     }
+  },
+
+  /**
+   * Force refresh matters from API, ignoring stale check.
+   * Use this when you know data has changed (e.g., after background processing).
+   */
+  forceRefreshMatters: async () => {
+    const { isLoading } = get();
+
+    // Skip if already loading
+    if (isLoading) {
+      return;
+    }
+
+    set({ isLoading: true, error: null });
+    try {
+      const { matters: apiMatters } = await mattersApi.list();
+      const transformedMatters = apiMatters.map(transformMatterToCardData);
+
+      set({
+        matters: transformedMatters,
+        isLoading: false,
+        lastFetchTime: Date.now(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch matters';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  /**
+   * Invalidate cache to force next fetchMatters() to reload.
+   * Useful when you want to trigger a refresh on next component mount.
+   */
+  invalidateCache: () => {
+    set({ lastFetchTime: null });
   },
 
   /**

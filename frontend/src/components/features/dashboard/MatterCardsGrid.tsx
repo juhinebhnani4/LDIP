@@ -140,8 +140,8 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   // Refetch matters when background processing completes (Story 9-6)
   useEffect(() => {
     if (completedBackgroundMatters.length > 0) {
-      // Refetch matters to get updated status
-      useMatterStore.getState().fetchMatters();
+      // Force refresh matters to get updated status (ignores stale check)
+      useMatterStore.getState().forceRefreshMatters();
 
       // Clean up completed matters from background store after a delay
       // This allows the notification to be seen before cleanup

@@ -3,13 +3,14 @@
 /**
  * Documents Hook
  *
- * Custom hook for fetching documents for a matter.
+ * SWR-based hook for fetching documents for a matter.
  * Provides loading, error state, and refresh functionality.
  *
  * Story 10D.3: Documents Tab File List
+ * Performance Fix: Converted from useState/useEffect to SWR to prevent infinite re-renders
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import useSWR from 'swr';
 import { fetchDocuments } from '@/lib/api/documents';
 import type { DocumentListItem, DocumentFilters, DocumentSort } from '@/types/document';
 
@@ -48,7 +49,31 @@ interface UseDocumentsReturn {
 }
 
 /**
+ * Build a stable cache key from options.
+ * Serializes objects to ensure stable string comparison.
+ */
+function buildCacheKey(
+  matterId: string,
+  page: number,
+  perPage: number,
+  filters?: DocumentFilters,
+  sort?: DocumentSort
+): string[] {
+  return [
+    'documents',
+    matterId,
+    String(page),
+    String(perPage),
+    filters ? JSON.stringify(filters) : '',
+    sort ? `${sort.column}-${sort.order}` : 'uploaded_at-desc',
+  ];
+}
+
+/**
  * Hook for fetching documents for a matter.
+ *
+ * Uses SWR for efficient caching and deduplication.
+ * Automatically polls when documents are processing.
  *
  * @param matterId - Matter ID
  * @param options - Configuration options
@@ -66,90 +91,55 @@ export function useDocuments(
   const {
     page = 1,
     perPage = 100,
-    filters = {},
+    filters,
     sort = { column: 'uploaded_at', order: 'desc' },
     enablePolling = true,
   } = options;
 
-  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
+  // Build stable cache key
+  const cacheKey = matterId
+    ? buildCacheKey(matterId, page, perPage, filters, sort)
+    : null;
 
-  // Track mounted state to prevent state updates after unmount
-  const isMountedRef = useRef(true);
-
-  // Check if any documents are processing
-  const hasProcessing = documents.some(
-    (d) => d.status === 'processing' || d.status === 'pending'
-  );
-
-  // Fetch documents from API
-  const fetchDocs = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
+  const { data, error, isLoading, mutate } = useSWR(
+    cacheKey,
+    async () => {
       const response = await fetchDocuments(matterId, {
         page,
         perPage,
         filters,
         sort,
       });
-
-      // Only update state if component is still mounted
-      if (isMountedRef.current) {
-        setDocuments(response.data);
-        setTotalCount(response.meta.total);
-      }
-    } catch (err) {
-      // Only update state if component is still mounted
-      if (isMountedRef.current) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to load documents';
-        setError(message);
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      return response;
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000, // 5 seconds deduplication
+      // SWR handles polling natively - much more efficient than setInterval
+      refreshInterval: (latestData) => {
+        if (!enablePolling) return 0;
+        // Poll if any documents are processing
+        const hasProcessingDocs = latestData?.data?.some(
+          (d) => d.status === 'processing' || d.status === 'pending'
+        );
+        return hasProcessingDocs ? PROCESSING_POLL_INTERVAL_MS : 0;
+      },
     }
-  }, [matterId, page, perPage, filters, sort]);
+  );
 
-  // Initialize and fetch on mount/matterId change
-  useEffect(() => {
-    isMountedRef.current = true;
-    fetchDocs();
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchDocs]);
-
-  // Set up polling when documents are processing
-  useEffect(() => {
-    if (!enablePolling || !hasProcessing) {
-      return;
-    }
-
-    const intervalId = setInterval(() => {
-      // Don't poll if currently loading
-      if (!isLoading && isMountedRef.current) {
-        fetchDocs();
-      }
-    }, PROCESSING_POLL_INTERVAL_MS);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [enablePolling, hasProcessing, isLoading, fetchDocs]);
+  // Check if any documents are processing
+  const hasProcessing = (data?.data ?? []).some(
+    (d) => d.status === 'processing' || d.status === 'pending'
+  );
 
   return {
-    documents,
+    documents: data?.data ?? [],
     isLoading,
-    error,
-    refresh: fetchDocs,
-    totalCount,
+    error: error instanceof Error ? error.message : error ? String(error) : null,
+    refresh: async () => {
+      await mutate();
+    },
+    totalCount: data?.meta?.total ?? 0,
     hasProcessing,
   };
 }

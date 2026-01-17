@@ -5,6 +5,30 @@ import { getErrorMessage, isRetryableError, getErrorCodeFromStatus } from '@/lib
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// =============================================================================
+// Singleton Supabase Client (Performance Fix)
+// =============================================================================
+// Creating a new Supabase client on every API call causes:
+// 1. Extra memory allocation
+// 2. Repeated auth.getSession() calls
+// 3. Potential race conditions with session refresh
+//
+// Solution: Cache the client instance and reuse it.
+// =============================================================================
+
+let cachedSupabaseClient: ReturnType<typeof createClient> | null = null
+
+/**
+ * Get or create a singleton Supabase client for API calls.
+ * This prevents creating a new client instance on every request.
+ */
+function getSupabaseClient(): ReturnType<typeof createClient> {
+  if (!cachedSupabaseClient) {
+    cachedSupabaseClient = createClient()
+  }
+  return cachedSupabaseClient
+}
+
 /** Rate limit details from API response */
 export interface RateLimitDetails {
   /** Seconds to wait before retrying */
@@ -92,7 +116,7 @@ function createApiError(response: Response, errorBody: Record<string, unknown>):
  * - Story 13.4: Enhanced error handling with rate limit and circuit breaker details
  */
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
 
   // First try getSession() - this works when cookies are accessible
   let { data: { session } } = await supabase.auth.getSession()

@@ -77,6 +77,24 @@ celery_app.conf.update(
             "args": [24],  # 24 hour retention period
             "options": {"queue": "low"},  # Low priority queue
         },
+        # Story 19.1: Stale chunk recovery - runs every 60 seconds
+        "recover-stale-chunks": {
+            "task": "app.workers.tasks.maintenance_tasks.recover_stale_chunks",
+            "schedule": 60,  # Every minute
+            "options": {"queue": "low"},
+        },
+        # Story 19.2: Auto-merge trigger - runs every 2 minutes
+        "trigger-pending-merges": {
+            "task": "app.workers.tasks.maintenance_tasks.trigger_pending_merges",
+            "schedule": 120,  # Every 2 minutes
+            "options": {"queue": "low"},
+        },
+        # Story 19.3: SKIPPED large document recovery - runs every hour
+        "recover-skipped-large-documents": {
+            "task": "app.workers.tasks.maintenance_tasks.recover_skipped_large_documents",
+            "schedule": 3600,  # Every hour
+            "options": {"queue": "low"},
+        },
     },
 )
 

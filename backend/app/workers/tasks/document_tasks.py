@@ -100,6 +100,9 @@ from app.services.storage_service import (
     get_storage_service,
 )
 from app.services.summary_service import get_summary_service
+from app.services.pdf_chunker import get_pdf_chunker, CHUNK_THRESHOLD
+from app.services.pdf_router import CHUNK_SIZE
+from app.services.ocr_chunk_service import get_ocr_chunk_service
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -133,6 +136,108 @@ def _validate_pdf_content(content: bytes, document_id: str) -> None:
             code="INVALID_PDF_FORMAT",
             is_retryable=False,
         )
+
+
+def _get_pdf_page_count(pdf_content: bytes, document_id: str) -> int:
+    """Get page count from PDF without loading full content into memory.
+
+    Story 16.1: Page count detection for routing large documents.
+
+    Args:
+        pdf_content: PDF file bytes.
+        document_id: Document ID for logging.
+
+    Returns:
+        Number of pages in the PDF.
+
+    Raises:
+        OCRServiceError: If PDF cannot be parsed.
+    """
+    from io import BytesIO
+    import pypdf
+
+    try:
+        reader = pypdf.PdfReader(BytesIO(pdf_content))
+        page_count = len(reader.pages)
+
+        logger.info(
+            "pdf_page_count_detected",
+            document_id=document_id,
+            page_count=page_count,
+            requires_chunking=page_count > CHUNK_THRESHOLD,
+        )
+
+        return page_count
+
+    except pypdf.errors.PdfReadError as e:
+        logger.error(
+            "pdf_page_count_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise OCRServiceError(
+            message=f"Failed to read PDF page count: {e}",
+            code="PDF_PARSE_ERROR",
+            is_retryable=False,
+        ) from e
+
+
+async def _create_chunk_records(
+    document_id: str,
+    matter_id: str,
+    page_count: int,
+    chunk_size: int = CHUNK_SIZE,
+) -> list:
+    """Create chunk records in database for parallel processing.
+
+    Story 16.1: Create chunk tracking records before dispatching.
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID.
+        page_count: Total pages in document.
+        chunk_size: Pages per chunk (default from CHUNK_SIZE config).
+
+    Returns:
+        List of created chunk records.
+    """
+    chunk_service = get_ocr_chunk_service()
+    chunks = []
+
+    page_start = 1
+    chunk_index = 0
+
+    while page_start <= page_count:
+        page_end = min(page_start + chunk_size - 1, page_count)
+
+        chunk = await chunk_service.create_chunk(
+            document_id=document_id,
+            matter_id=matter_id,
+            chunk_index=chunk_index,
+            page_start=page_start,
+            page_end=page_end,
+        )
+        chunks.append(chunk)
+
+        logger.debug(
+            "chunk_record_created",
+            document_id=document_id,
+            chunk_index=chunk_index,
+            page_start=page_start,
+            page_end=page_end,
+        )
+
+        page_start = page_end + 1
+        chunk_index += 1
+
+    logger.info(
+        "chunk_records_created",
+        document_id=document_id,
+        chunk_count=len(chunks),
+        page_count=page_count,
+    )
+
+    return chunks
 
 
 # =============================================================================
@@ -703,11 +808,56 @@ def process_document(
         # Validate PDF format before sending to OCR
         _validate_pdf_content(pdf_content, document_id)
 
-        # Process with OCR
+        # Story 16.1: Detect page count and route to chunked processing if >30 pages
+        page_count = _get_pdf_page_count(pdf_content, document_id)
+
+        if page_count > CHUNK_THRESHOLD:
+            # Large document - route to chunked parallel processing
+            logger.info(
+                "routing_to_chunked_processing",
+                document_id=document_id,
+                page_count=page_count,
+                threshold=CHUNK_THRESHOLD,
+            )
+
+            # Create chunk records in database
+            _run_async(_create_chunk_records(
+                document_id=document_id,
+                matter_id=matter_id,
+                page_count=page_count,
+            ))
+
+            # Import here to avoid circular dependency
+            from app.workers.tasks.chunked_document_tasks import process_document_chunked
+
+            # Dispatch to chunked processing task
+            process_document_chunked.delay(
+                document_id=document_id,
+                matter_id=matter_id,
+                job_id=job_id,
+            )
+
+            logger.info(
+                "chunked_processing_dispatched",
+                document_id=document_id,
+                page_count=page_count,
+                job_id=job_id,
+            )
+
+            return {
+                "status": "chunked_processing_dispatched",
+                "document_id": document_id,
+                "page_count": page_count,
+                "job_id": job_id,
+                "message": f"Document with {page_count} pages routed to chunked processing",
+            }
+
+        # Small document (≤30 pages) - process with sync Document AI call
         logger.info(
             "document_ocr_processing",
             document_id=document_id,
             content_size=len(pdf_content),
+            page_count=page_count,
         )
         ocr_result = ocr.process_document(
             pdf_content=pdf_content,
@@ -1617,6 +1767,7 @@ def chunk_document(
     document_service: DocumentService | None = None,
     chunk_service: ChunkService | None = None,
     bounding_box_service: BoundingBoxService | None = None,
+    force: bool = False,
 ) -> dict[str, str | int | float | None]:
     """Chunk a document into parent-child hierarchy for RAG.
 
@@ -1630,6 +1781,7 @@ def chunk_document(
         document_service: Optional DocumentService instance (for testing).
         chunk_service: Optional ChunkService instance (for testing).
         bounding_box_service: Optional BoundingBoxService instance (for testing).
+        force: If True, skip status validation and run regardless of prev_result.
 
     Returns:
         Task result with chunking summary.
@@ -1654,28 +1806,56 @@ def chunk_document(
             "job_id": job_id,
         }
 
-    # Skip if previous task wasn't successful
-    if prev_result:
+    # Log force mode usage for audit trail
+    if force:
+        logger.info(
+            "chunk_document_force_mode",
+            document_id=doc_id,
+            job_id=job_id,
+            reason="Bypassing status validation",
+        )
+
+    # Skip if previous task explicitly failed (unless force=True)
+    if prev_result and not force:
         prev_status = prev_result.get("status")
+        # Expanded valid statuses - allow chunking after OCR complete
+        # (most common case for parallel pipeline)
         valid_statuses = (
             "confidence_calculated",
             "confidence_skipped",
             "validated",
             "validated_with_warnings",
             "validation_skipped",
+            "ocr_complete",  # Most common status after OCR
         )
-        if prev_status not in valid_statuses:
+        # Only skip on explicit failure statuses
+        failed_statuses = (
+            "failed",
+            "error",
+            "ocr_failed",
+            "validation_failed",
+        )
+        if prev_status in failed_statuses:
             logger.info(
                 "chunk_document_skipped",
                 document_id=doc_id,
                 prev_status=prev_status,
+                reason="Previous task failed",
             )
             return {
                 "status": "chunking_skipped",
                 "document_id": doc_id,
                 "job_id": job_id,
-                "reason": f"Previous task status: {prev_status}",
+                "reason": f"Previous task failed with status: {prev_status}",
             }
+        # Log if running with unexpected status (but proceed anyway)
+        if prev_status and prev_status not in valid_statuses:
+            logger.warning(
+                "chunk_document_unexpected_status",
+                document_id=doc_id,
+                prev_status=prev_status,
+                action="proceeding_anyway",
+            )
 
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
@@ -1854,6 +2034,7 @@ def embed_chunks(
     document_id: str | None = None,
     document_service: DocumentService | None = None,
     embedding_service: EmbeddingService | None = None,
+    force: bool = False,
 ) -> dict[str, str | int | float | None]:
     """Generate embeddings for document chunks.
 
@@ -1866,6 +2047,7 @@ def embed_chunks(
         document_id: Document UUID (optional, can be in prev_result).
         document_service: Optional DocumentService instance (for testing).
         embedding_service: Optional EmbeddingService instance (for testing).
+        force: If True, skip status validation and run regardless of prev_result.
 
     Returns:
         Task result with embedding summary.
@@ -1889,23 +2071,52 @@ def embed_chunks(
             "error_message": "No document_id provided",
         }
 
-    # Skip if previous task wasn't successful
-    if prev_result:
+    # Log force mode usage for audit trail
+    if force:
+        logger.info(
+            "embed_chunks_force_mode",
+            document_id=doc_id,
+            reason="Bypassing status validation",
+        )
+
+    # Skip if previous task explicitly failed (unless force=True)
+    if prev_result and not force:
         prev_status = prev_result.get("status")
+        # Expanded valid statuses - allow embedding after chunking
+        # or searchable (for re-embedding)
         valid_statuses = (
             "chunking_complete",
+            "searchable",
+            "ocr_complete",  # Allow if chunks exist
         )
-        if prev_status not in valid_statuses:
+        # Only skip on explicit failure statuses
+        failed_statuses = (
+            "failed",
+            "error",
+            "ocr_failed",
+            "chunking_failed",
+            "chunking_skipped",
+        )
+        if prev_status in failed_statuses:
             logger.info(
                 "embed_chunks_skipped",
                 document_id=doc_id,
                 prev_status=prev_status,
+                reason="Previous task failed",
             )
             return {
                 "status": "embedding_skipped",
                 "document_id": doc_id,
-                "reason": f"Previous task status: {prev_status}",
+                "reason": f"Previous task failed with status: {prev_status}",
             }
+        # Log if running with unexpected status (but proceed anyway)
+        if prev_status and prev_status not in valid_statuses:
+            logger.warning(
+                "embed_chunks_unexpected_status",
+                document_id=doc_id,
+                prev_status=prev_status,
+                action="proceeding_anyway",
+            )
 
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
@@ -2199,6 +2410,7 @@ def extract_entities(
     document_service: DocumentService | None = None,
     mig_extractor: MIGEntityExtractor | None = None,
     mig_graph_service: MIGGraphService | None = None,
+    force: bool = False,
 ) -> dict[str, str | int | float | None]:
     """Extract entities from document chunks using Gemini.
 
@@ -2213,6 +2425,7 @@ def extract_entities(
         document_service: Optional DocumentService instance (for testing).
         mig_extractor: Optional MIGEntityExtractor instance (for testing).
         mig_graph_service: Optional MIGGraphService instance (for testing).
+        force: If True, skip status validation and run regardless of prev_result.
 
     Returns:
         Task result with entity extraction summary.
@@ -2236,24 +2449,60 @@ def extract_entities(
             "error_message": "No document_id provided",
         }
 
-    # Skip if previous task wasn't successful
-    if prev_result:
+    # Log force mode usage for audit trail
+    if force:
+        logger.info(
+            "extract_entities_force_mode",
+            document_id=doc_id,
+            reason="Bypassing status validation",
+        )
+
+    # Skip if previous task explicitly failed (unless force=True)
+    if prev_result and not force:
         prev_status = prev_result.get("status")
+        # Expanded valid statuses - allow entity extraction to run after
+        # OCR completes, chunking, or embedding (parallel pipeline support)
         valid_statuses = (
             "searchable",
             "embedding_complete",
+            "ocr_complete",
+            "chunking_complete",
+            "validated",
+            "validated_with_warnings",
+            "validation_skipped",
+            "confidence_calculated",
+            "confidence_skipped",
         )
-        if prev_status not in valid_statuses:
+        # Only skip on explicit failure statuses
+        failed_statuses = (
+            "failed",
+            "error",
+            "ocr_failed",
+            "validation_failed",
+            "chunking_failed",
+            "embedding_failed",
+            "entity_extraction_failed",
+        )
+        if prev_status in failed_statuses:
             logger.info(
                 "extract_entities_skipped",
                 document_id=doc_id,
                 prev_status=prev_status,
+                reason="Previous task failed",
             )
             return {
                 "status": "entity_extraction_skipped",
                 "document_id": doc_id,
-                "reason": f"Previous task status: {prev_status}",
+                "reason": f"Previous task failed with status: {prev_status}",
             }
+        # Log if running with unexpected status (but proceed anyway)
+        if prev_status and prev_status not in valid_statuses:
+            logger.warning(
+                "extract_entities_unexpected_status",
+                document_id=doc_id,
+                prev_status=prev_status,
+                action="proceeding_anyway",
+            )
 
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()

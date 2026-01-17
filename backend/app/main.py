@@ -63,6 +63,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             message="Supabase credentials not set. Some features will be unavailable.",
         )
 
+    # Validate Gemini configuration (required for entity extraction)
+    if not settings.is_gemini_configured:
+        logger.warning(
+            "gemini_not_configured",
+            message="GEMINI_API_KEY not set. Entity extraction will be unavailable.",
+            hint="Set GEMINI_API_KEY in .env file",
+        )
+    else:
+        logger.info(
+            "gemini_configured",
+            model=settings.gemini_model,
+        )
+
+    # Validate OpenAI configuration (required for embeddings and LLM)
+    if not settings.is_openai_configured:
+        logger.warning(
+            "openai_not_configured",
+            message="OPENAI_API_KEY not set. Embeddings and chat will be unavailable.",
+            hint="Set OPENAI_API_KEY in .env file",
+        )
+
     yield
 
     # Shutdown

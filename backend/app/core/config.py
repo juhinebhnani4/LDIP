@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Gemini Configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3-flash"
+    gemini_model: str = "gemini-2.0-flash"  # Valid models: gemini-2.0-flash, gemini-1.5-pro
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
@@ -148,6 +148,16 @@ class Settings(BaseSettings):
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""
         return bool(self.supabase_url and self.supabase_key)
+
+    @property
+    def is_gemini_configured(self) -> bool:
+        """Check if Gemini API is configured for entity extraction."""
+        return bool(self.gemini_api_key)
+
+    @property
+    def is_openai_configured(self) -> bool:
+        """Check if OpenAI API is configured for embeddings and LLM."""
+        return bool(self.openai_api_key)
 
 
 @lru_cache

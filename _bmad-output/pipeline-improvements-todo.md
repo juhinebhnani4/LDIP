@@ -146,12 +146,21 @@
 
 **Already Implemented**: Heartbeat calls are in place at key points in `process_single_chunk`. The `OCRChunkService.update_heartbeat()` method updates `processing_started_at` timestamp.
 
-### 4.3 Implement Stale Detection Threshold Config
+### 4.3 Implement Stale Detection Threshold Config ✅ DONE
 **Priority**: LOW | **Effort**: Low
 **File**: `app/core/config.py`
 
-- [ ] Add `CHUNK_STALE_THRESHOLD_SECONDS = 90` (configurable)
-- [ ] Add `JOB_STALE_THRESHOLD_SECONDS = 300` (configurable)
+- [x] Add `CHUNK_STALE_THRESHOLD_SECONDS = 90` (configurable)
+- [x] Add `JOB_STALE_THRESHOLD_SECONDS = 300` (configurable)
+
+**Implemented**:
+- Added `chunk_stale_threshold_seconds` (default 90s) to config
+- Added `chunk_recovery_enabled` master switch
+- Added `chunk_max_recovery_retries` (default 3)
+- Updated `ocr_chunk_service.detect_stale_chunks()` to use config
+- Updated `chunk_recovery_service` to use config for max retries
+- Updated `health.py` pipeline endpoint to use config threshold
+- Note: Job stale timeout already existed as `job_stale_timeout_minutes`
 
 ---
 

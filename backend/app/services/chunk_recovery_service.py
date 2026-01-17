@@ -11,6 +11,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.config import get_settings
 from app.models.ocr_chunk import ChunkStatus, DocumentOCRChunk
 from app.services.ocr_chunk_service import (
     OCRChunkService,
@@ -18,9 +19,6 @@ from app.services.ocr_chunk_service import (
 )
 
 logger = structlog.get_logger(__name__)
-
-# Configuration
-MAX_CHUNK_RECOVERY_ATTEMPTS = 3
 
 
 class ChunkRecoveryService:
@@ -71,12 +69,16 @@ class ChunkRecoveryService:
             # Parse recovery attempts from error_message (simple metadata)
             recovery_attempts = self._get_recovery_attempts(current_chunk)
 
-            if recovery_attempts >= MAX_CHUNK_RECOVERY_ATTEMPTS:
+            # Get max retries from config (Story 4.3)
+            settings = get_settings()
+            max_recovery_attempts = settings.chunk_max_recovery_retries
+
+            if recovery_attempts >= max_recovery_attempts:
                 # Mark as failed
                 await self.chunk_service.update_status(
                     chunk.id,
                     ChunkStatus.FAILED,
-                    error_message=f"Max recovery attempts ({MAX_CHUNK_RECOVERY_ATTEMPTS}) exceeded - worker_timeout",
+                    error_message=f"Max recovery attempts ({max_recovery_attempts}) exceeded - worker_timeout",
                 )
                 logger.warning(
                     "chunk_max_recovery_exceeded",

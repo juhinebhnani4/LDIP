@@ -18,6 +18,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.config import get_settings
 from app.models.ocr_chunk import (
     VALID_STATUS_TRANSITIONS,
     ChunkProgress,
@@ -29,8 +30,10 @@ from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)
 
-# Threshold for detecting stale chunks (workers that died without updating status)
-STALE_CHUNK_THRESHOLD_SECONDS = 90
+
+def _get_stale_threshold_seconds() -> int:
+    """Get stale chunk threshold from config (Story 4.3)."""
+    return get_settings().chunk_stale_threshold_seconds
 
 
 # =============================================================================
@@ -353,6 +356,7 @@ class OCRChunkService:
             return (
                 self.client.table("document_ocr_chunks")
                 .update({
+                    "status": ChunkStatus.COMPLETED.value,
                     "result_storage_path": result_storage_path,
                     "result_checksum": result_checksum,
                 })
@@ -520,12 +524,13 @@ class OCRChunkService:
         """Find chunks stuck in 'processing' for too long.
 
         Chunks in 'processing' status with processing_started_at older than
-        STALE_CHUNK_THRESHOLD_SECONDS are considered stale (worker died).
+        the configurable threshold (default 90s) are considered stale (worker died).
 
         Returns:
             List of stale DocumentOCRChunk records.
         """
-        threshold = datetime.now(UTC) - timedelta(seconds=STALE_CHUNK_THRESHOLD_SECONDS)
+        stale_threshold = _get_stale_threshold_seconds()
+        threshold = datetime.now(UTC) - timedelta(seconds=stale_threshold)
 
         def _query():
             return (
@@ -728,6 +733,71 @@ class OCRChunkService:
             completed=counts["completed"],
             failed=counts["failed"],
         )
+
+    async def find_documents_ready_for_merge(self) -> list[dict]:
+        """Find documents where all chunks are completed but document not finalized.
+
+        Story 19.2: Auto-merge trigger for orphaned completed chunks.
+
+        Returns documents where:
+        - All chunks have status 'completed' (no pending/processing/failed)
+        - At least one chunk exists
+
+        Returns:
+            List of dicts with document_id, matter_id, chunk_count.
+        """
+        def _query():
+            return (
+                self.client.table("document_ocr_chunks")
+                .select("document_id, matter_id, status")
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
+
+        # Aggregate by document
+        doc_status: dict[str, dict] = {}
+        for row in (response.data or []):
+            doc_id = row["document_id"]
+            if doc_id not in doc_status:
+                doc_status[doc_id] = {
+                    "document_id": doc_id,
+                    "matter_id": row["matter_id"],
+                    "total": 0,
+                    "completed": 0,
+                    "pending": 0,
+                    "processing": 0,
+                    "failed": 0,
+                }
+            doc_status[doc_id]["total"] += 1
+            status = row.get("status", "").lower()
+            if status in doc_status[doc_id]:
+                doc_status[doc_id][status] += 1
+
+        # Filter to only documents where all chunks are completed
+        ready_docs = []
+        for doc_id, info in doc_status.items():
+            if (
+                info["total"] > 0
+                and info["completed"] == info["total"]
+                and info["pending"] == 0
+                and info["processing"] == 0
+                and info["failed"] == 0
+            ):
+                ready_docs.append({
+                    "document_id": info["document_id"],
+                    "matter_id": info["matter_id"],
+                    "chunk_count": info["total"],
+                })
+
+        if ready_docs:
+            logger.info(
+                "documents_ready_for_merge",
+                count=len(ready_docs),
+                document_ids=[d["document_id"] for d in ready_docs],
+            )
+
+        return ready_docs
 
     # =========================================================================
     # Cleanup Operations (Story 15.4)

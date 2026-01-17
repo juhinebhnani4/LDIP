@@ -391,8 +391,10 @@ async def get_pipeline_health(
             )
             processing_status["stuck_jobs_count"] = stuck_resp.count or 0
 
-            # Count stale OCR chunks (processing > 90s)
-            chunk_threshold = datetime.now(timezone.utc) - timedelta(seconds=90)
+            # Count stale OCR chunks (processing > configurable threshold)
+            chunk_threshold = datetime.now(timezone.utc) - timedelta(
+                seconds=settings.chunk_stale_threshold_seconds
+            )
             stale_chunks_resp = (
                 client.table("ocr_chunks")
                 .select("id", count="exact")

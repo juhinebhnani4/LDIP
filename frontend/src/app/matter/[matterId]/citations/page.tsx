@@ -1,36 +1,29 @@
-import { Quote } from 'lucide-react';
+import { CitationsContent } from '@/components/features/citation';
 
 interface CitationsPageProps {
   params: Promise<{ matterId: string }>;
 }
 
 /**
- * Citations Tab Placeholder Page
+ * Citations Tab Page
  *
- * Will show Act discovery results with split view for citation highlighting.
+ * Displays Act discovery results with split view for source document display
+ * and citation highlighting.
  *
- * Story 10A.2: Tab Bar Navigation (placeholder)
- * Implementation: Epic 10C
+ * Story 10A.2: Tab Bar Navigation
+ * Story 10C.5: Citations Tab UI Completion
  */
 export default async function CitationsPage({ params }: CitationsPageProps) {
   const { matterId } = await params;
 
   return (
-    <div className="container py-8" id="tabpanel-citations" role="tabpanel" aria-labelledby="tab-citations">
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <Quote className="h-16 w-16 text-muted-foreground mb-4" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold mb-2">Citations</h1>
-        <p className="text-muted-foreground max-w-md">
-          The Citations tab will show Act discovery results with a split view
-          for source document display and citation highlighting.
-        </p>
-        <p className="text-sm text-muted-foreground mt-4">
-          Coming in Epic 10C
-        </p>
-        <p className="text-xs text-muted-foreground/70 mt-2">
-          Matter ID: {matterId}
-        </p>
-      </div>
+    <div
+      className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-6 overflow-x-hidden"
+      id="tabpanel-citations"
+      role="tabpanel"
+      aria-labelledby="tab-citations"
+    >
+      <CitationsContent matterId={matterId} />
     </div>
   );
 }

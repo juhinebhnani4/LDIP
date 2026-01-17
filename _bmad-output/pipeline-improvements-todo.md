@@ -245,21 +245,36 @@ Proposed:
   - `timeline` - after date extraction
   - `citations` - after citation extraction
 
-### 7.2 Add Feature Flags to Document Response
+### 7.2 Add Feature Flags to Document Response ✅ DONE
 **Priority**: MEDIUM | **Effort**: Low
 **File**: `app/api/routes/documents.py`
 
-- [ ] Add to document response:
+- [x] Add to document response:
   ```json
   {
     "features": {
       "search": true,
       "semantic_search": false,
       "entities": true,
-      "timeline": false
+      "timeline": false,
+      "citations": false,
+      "bboxHighlighting": false
     }
   }
   ```
+
+**Implemented**:
+- Created `DocumentFeatures` model in `app/models/document.py` with 6 feature flags
+- Created `DocumentWithFeatures` model extending `Document` to include features
+- Updated `DocumentDetailResponse` to use `DocumentWithFeatures`
+- Added `_get_document_features()` helper function that queries database for:
+  - `search`: Checks if `document_chunks` exist
+  - `semantic_search`: Checks if chunks have embeddings (non-null)
+  - `entities`: Checks if `identity_nodes` exist
+  - `timeline`: Checks if `timeline_events` exist
+  - `citations`: Checks if `citations` exist
+  - `bbox_highlighting`: Checks if `chunk_bounding_boxes` exist
+- Updated `get_document` and `update_document` endpoints to include features
 
 ---
 

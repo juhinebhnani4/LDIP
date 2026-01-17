@@ -43,10 +43,12 @@ from app.models.document import (
     BulkUploadResponse,
     Document,
     DocumentDetailResponse,
+    DocumentFeatures,
     DocumentListResponseWithPagination,
     DocumentResponse,
     DocumentType,
     DocumentUpdate,
+    DocumentWithFeatures,
     UploadedDocument,
 )
 from app.models.ocr_confidence import OCRQualityResponse
@@ -81,6 +83,116 @@ from app.workers.tasks.document_tasks import (
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+# =============================================================================
+# Feature Availability Helper (Story 7.2)
+# =============================================================================
+
+
+async def _get_document_features(document_id: str) -> DocumentFeatures:
+    """Query database to determine feature availability for a document.
+
+    Story 7.2: Progressive UI updates - indicates which features are available
+    based on pipeline completion status.
+
+    Args:
+        document_id: Document UUID to check features for.
+
+    Returns:
+        DocumentFeatures with availability flags for each feature.
+    """
+    from app.services.supabase.client import get_service_client
+
+    features = DocumentFeatures()
+
+    try:
+        client = get_service_client()
+
+        # Check if chunks exist (search available)
+        chunks_resp = (
+            client.table("document_chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        features.search = (chunks_resp.count or 0) > 0
+
+        # Check if any chunks have embeddings (semantic search available)
+        if features.search:
+            embeddings_resp = (
+                client.table("document_chunks")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .not_.is_("embedding", "null")
+                .limit(1)
+                .execute()
+            )
+            features.semantic_search = (embeddings_resp.count or 0) > 0
+
+        # Check if entities exist (entity data available)
+        entities_resp = (
+            client.table("identity_nodes")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        features.entities = (entities_resp.count or 0) > 0
+
+        # Check if timeline events exist (timeline available)
+        timeline_resp = (
+            client.table("timeline_events")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        features.timeline = (timeline_resp.count or 0) > 0
+
+        # Check if citations exist (citations available)
+        citations_resp = (
+            client.table("citations")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        features.citations = (citations_resp.count or 0) > 0
+
+        # Check if bbox links exist (bbox highlighting available)
+        bbox_resp = (
+            client.table("chunk_bounding_boxes")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        features.bbox_highlighting = (bbox_resp.count or 0) > 0
+
+        logger.debug(
+            "document_features_checked",
+            document_id=document_id,
+            search=features.search,
+            semantic_search=features.semantic_search,
+            entities=features.entities,
+            timeline=features.timeline,
+            citations=features.citations,
+            bbox_highlighting=features.bbox_highlighting,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "document_features_check_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        # Return default features (all False) on error
+
+    return features
+
+
 logger = structlog.get_logger(__name__)
 
 
@@ -953,9 +1065,10 @@ async def get_document(
     document_service: DocumentService = Depends(get_document_service),
     storage_service: StorageService = Depends(get_storage_service),
 ) -> DocumentDetailResponse:
-    """Get document details with signed URL.
+    """Get document details with signed URL and feature availability.
 
-    Returns full document metadata including a signed URL for file access.
+    Returns full document metadata including a signed URL for file access
+    and feature flags indicating which pipeline stages have completed.
     User must have access to the document's matter.
     """
     try:
@@ -965,8 +1078,11 @@ async def get_document(
         # Generate signed URL for storage access (valid for 1 hour)
         signed_url = storage_service.get_signed_url(doc.storage_path, expires_in=3600)
 
-        # Create response with signed URL in storage_path field
-        doc_with_url = Document(
+        # Query feature availability (Story 7.2)
+        features = await _get_document_features(document_id)
+
+        # Create response with signed URL and features
+        doc_with_features = DocumentWithFeatures(
             id=doc.id,
             matter_id=doc.matter_id,
             filename=doc.filename,
@@ -988,9 +1104,10 @@ async def get_document(
             ocr_error=doc.ocr_error,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
+            features=features,
         )
 
-        return DocumentDetailResponse(data=doc_with_url)
+        return DocumentDetailResponse(data=doc_with_features)
 
     except DocumentNotFoundError as e:
         # Return 404 to prevent enumeration
@@ -1058,18 +1175,18 @@ async def delete_document(
     Sets deleted_at timestamp on the document. The document will be
     permanently deleted after 30 days.
 
-    Requires OWNER role on the matter.
+    Requires OWNER or EDITOR role on the matter.
     """
     try:
         # Get document first to get matter_id for access verification
         doc = document_service.get_document(document_id)
 
-        # Verify user has OWNER role on the document's matter
+        # Verify user has OWNER or EDITOR role on the document's matter
         _verify_matter_access(
             matter_id=doc.matter_id,
             user_id=current_user.id,
             matter_service=matter_service,
-            allowed_roles=[MatterRole.OWNER],
+            allowed_roles=[MatterRole.OWNER, MatterRole.EDITOR],
         )
 
         # Perform soft delete
@@ -1156,7 +1273,36 @@ async def update_document(
             filename=update.filename,
         )
 
-        return DocumentDetailResponse(data=updated_doc)
+        # Query feature availability (Story 7.2)
+        features = await _get_document_features(document_id)
+
+        # Create response with features
+        doc_with_features = DocumentWithFeatures(
+            id=updated_doc.id,
+            matter_id=updated_doc.matter_id,
+            filename=updated_doc.filename,
+            storage_path=updated_doc.storage_path,
+            file_size=updated_doc.file_size,
+            page_count=updated_doc.page_count,
+            document_type=updated_doc.document_type,
+            is_reference_material=updated_doc.is_reference_material,
+            uploaded_by=updated_doc.uploaded_by,
+            uploaded_at=updated_doc.uploaded_at,
+            status=updated_doc.status,
+            processing_started_at=updated_doc.processing_started_at,
+            processing_completed_at=updated_doc.processing_completed_at,
+            extracted_text=updated_doc.extracted_text,
+            ocr_confidence=updated_doc.ocr_confidence,
+            ocr_quality_score=updated_doc.ocr_quality_score,
+            ocr_confidence_per_page=updated_doc.ocr_confidence_per_page,
+            ocr_quality_status=updated_doc.ocr_quality_status,
+            ocr_error=updated_doc.ocr_error,
+            created_at=updated_doc.created_at,
+            updated_at=updated_doc.updated_at,
+            features=features,
+        )
+
+        return DocumentDetailResponse(data=doc_with_features)
 
     except HTTPException:
         raise

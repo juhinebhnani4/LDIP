@@ -158,6 +158,56 @@ class Document(DocumentBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
 
 
+class DocumentFeatures(BaseModel):
+    """Feature availability flags for a document.
+
+    Story 7.2: Progressive UI updates - indicates which features
+    are available based on pipeline completion status.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    search: bool = Field(
+        default=False,
+        description="Text search available (chunks created)"
+    )
+    semantic_search: bool = Field(
+        default=False,
+        alias="semanticSearch",
+        description="Vector search available (embeddings generated)"
+    )
+    entities: bool = Field(
+        default=False,
+        description="Entity data available (extraction completed)"
+    )
+    timeline: bool = Field(
+        default=False,
+        description="Timeline events available (date extraction completed)"
+    )
+    citations: bool = Field(
+        default=False,
+        description="Citation data available (citation extraction completed)"
+    )
+    bbox_highlighting: bool = Field(
+        default=False,
+        alias="bboxHighlighting",
+        description="Bounding box highlighting available for search results"
+    )
+
+
+class DocumentWithFeatures(Document):
+    """Document with feature availability flags.
+
+    Extends Document to include features dict showing which
+    pipeline stages have completed for this document.
+    """
+
+    features: DocumentFeatures = Field(
+        default_factory=DocumentFeatures,
+        description="Feature availability based on pipeline status"
+    )
+
+
 class UploadedDocument(BaseModel):
     """Simplified document model for upload response."""
 
@@ -242,9 +292,9 @@ class DocumentListResponseWithPagination(BaseModel):
 
 
 class DocumentDetailResponse(BaseModel):
-    """API response for document detail with signed URL."""
+    """API response for document detail with signed URL and feature flags."""
 
-    data: Document
+    data: DocumentWithFeatures
 
 
 class DocumentUpdate(BaseModel):

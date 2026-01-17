@@ -36,6 +36,7 @@ from app.api.routes import (
     users,
     verifications,
 )
+from app.api.routes.admin import pipeline as admin_pipeline
 from app.core.config import get_settings
 from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
@@ -284,6 +285,9 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router, prefix="/api")
     app.include_router(global_search.router, prefix="/api")
     app.include_router(users.router)
+
+    # Admin routes (require admin access)
+    app.include_router(admin_pipeline.router, prefix="/api")
 
     return app
 

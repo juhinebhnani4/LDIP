@@ -305,3 +305,135 @@ async def get_rate_limits_status(
     )
 
     return {"data": status}
+
+
+# =============================================================================
+# Pipeline Health Status Endpoint (Story 19 - Pipeline Improvements)
+# =============================================================================
+
+
+@router.get("/pipeline")
+async def get_pipeline_health(
+    settings: Settings = Depends(get_settings),
+    db: Any = Depends(get_db),
+) -> dict[str, Any]:
+    """Get pipeline health status including LLM configurations and stuck jobs.
+
+    Returns configuration status for LLM services (Gemini, OpenAI) and
+    counts of stuck processing jobs/chunks.
+
+    Returns:
+        Pipeline health status with configuration and stuck job counts.
+
+    Example response:
+        {
+            "data": {
+                "config": {
+                    "gemini_configured": true,
+                    "gemini_model": "gemini-2.0-flash",
+                    "openai_configured": true,
+                    "cohere_configured": true,
+                    "documentai_configured": true
+                },
+                "processing": {
+                    "stale_chunks_count": 0,
+                    "pending_merges_count": 0,
+                    "stuck_jobs_count": 2,
+                    "processing_jobs_count": 5
+                },
+                "status": "healthy"
+            }
+        }
+    """
+    from datetime import datetime, timedelta, timezone
+
+    # Configuration status
+    config_status = {
+        "gemini_configured": settings.is_gemini_configured,
+        "gemini_model": settings.gemini_model if settings.is_gemini_configured else None,
+        "openai_configured": settings.is_openai_configured,
+        "cohere_configured": bool(settings.cohere_api_key),
+        "documentai_configured": bool(
+            settings.google_cloud_project_id and settings.google_document_ai_processor_id
+        ),
+    }
+
+    # Processing status - get counts from database
+    processing_status = {
+        "stale_chunks_count": 0,
+        "pending_merges_count": 0,
+        "stuck_jobs_count": 0,
+        "processing_jobs_count": 0,
+    }
+
+    if db:
+        try:
+            from app.services.supabase.client import get_service_client
+            client = get_service_client()
+
+            # Count processing jobs
+            jobs_resp = (
+                client.table("processing_jobs")
+                .select("id", count="exact")
+                .eq("status", "PROCESSING")
+                .execute()
+            )
+            processing_status["processing_jobs_count"] = jobs_resp.count or 0
+
+            # Count stuck jobs (processing > 30 min)
+            stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
+            stuck_resp = (
+                client.table("processing_jobs")
+                .select("id", count="exact")
+                .eq("status", "PROCESSING")
+                .lt("updated_at", stuck_threshold.isoformat())
+                .execute()
+            )
+            processing_status["stuck_jobs_count"] = stuck_resp.count or 0
+
+            # Count stale OCR chunks (processing > 90s)
+            chunk_threshold = datetime.now(timezone.utc) - timedelta(seconds=90)
+            stale_chunks_resp = (
+                client.table("ocr_chunks")
+                .select("id", count="exact")
+                .eq("status", "processing")
+                .lt("updated_at", chunk_threshold.isoformat())
+                .execute()
+            )
+            processing_status["stale_chunks_count"] = stale_chunks_resp.count or 0
+
+            # Count pending merges (all chunks completed but document not finalized)
+            # This is a simplified check - could be more sophisticated
+            pending_merges_resp = (
+                client.rpc(
+                    "count_pending_merges",
+                    {},
+                ).execute()
+            )
+            if pending_merges_resp.data:
+                processing_status["pending_merges_count"] = pending_merges_resp.data or 0
+
+        except Exception as e:
+            logger.warning("pipeline_health_db_error", error=str(e))
+
+    # Determine overall status
+    overall_status = "healthy"
+    if not config_status["gemini_configured"] or not config_status["openai_configured"]:
+        overall_status = "degraded"
+    if processing_status["stuck_jobs_count"] > 0 or processing_status["stale_chunks_count"] > 0:
+        overall_status = "warning"
+
+    logger.debug(
+        "pipeline_health_checked",
+        config=config_status,
+        processing=processing_status,
+        status=overall_status,
+    )
+
+    return {
+        "data": {
+            "config": config_status,
+            "processing": processing_status,
+            "status": overall_status,
+        }
+    }

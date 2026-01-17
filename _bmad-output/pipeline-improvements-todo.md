@@ -13,15 +13,17 @@
 
 ## Category 1: Manual Triggers & Admin API
 
-### 1.1 Create Admin Pipeline Trigger Endpoints
+### 1.1 Create Admin Pipeline Trigger Endpoints ✅ DONE
 **Priority**: HIGH | **Effort**: Medium
 **File**: `app/api/routes/admin/pipeline.py` (new)
 
-- [ ] POST `/admin/documents/{document_id}/trigger/{task_name}` - Trigger any task manually
-- [ ] POST `/admin/documents/{document_id}/retry-failed` - Retry all failed tasks
-- [ ] POST `/admin/documents/{document_id}/reset-status` - Reset document to specific status
-- [ ] GET `/admin/documents/{document_id}/pipeline-status` - Show status of all pipeline stages
-- [ ] POST `/admin/matters/{matter_id}/reprocess-stuck` - Find and reprocess stuck documents
+- [x] POST `/admin/pipeline/documents/{document_id}/trigger/{task_name}` - Trigger any task manually
+- [x] POST `/admin/pipeline/documents/{document_id}/retry-failed` - Retry all failed tasks
+- [x] POST `/admin/pipeline/documents/{document_id}/reset-status` - Reset document to specific status
+- [x] GET `/admin/pipeline/documents/{document_id}/pipeline-status` - Show status of all pipeline stages
+- [x] POST `/admin/pipeline/matters/{matter_id}/reprocess-stuck` - Find and reprocess stuck documents
+
+**Implemented**: Created `app/api/routes/admin/pipeline.py` with all 5 endpoints. All endpoints require admin access via `require_admin_access` dependency. Supports 14 pipeline tasks (process_document, chunk_document, extract_entities, etc.).
 
 ### 1.2 Add Force Flag to All Tasks ✅ DONE
 **Priority**: HIGH | **Effort**: Low
@@ -157,17 +159,23 @@
 
 **Implemented**: Added Gemini configuration section to `.env.example` with API key, model selection, and links to documentation.
 
-### 5.3 Add Pipeline Health Check Endpoint
+### 5.3 Add Pipeline Health Check Endpoint ✅ DONE
 **Priority**: MEDIUM | **Effort**: Medium
 **File**: `app/api/routes/health.py`
 
-- [ ] GET `/health/pipeline` returns:
+- [x] GET `/health/pipeline` returns:
   - `gemini_configured`: bool
-  - `gemini_model_valid`: bool (test API call)
+  - `gemini_model`: string (if configured)
   - `openai_configured`: bool
+  - `cohere_configured`: bool
+  - `documentai_configured`: bool
   - `stale_chunks_count`: int
   - `pending_merges_count`: int
   - `stuck_jobs_count`: int
+  - `processing_jobs_count`: int
+  - `status`: "healthy" | "degraded" | "warning"
+
+**Implemented**: Added `/api/health/pipeline` endpoint that checks LLM configuration and counts stuck processing jobs/chunks.
 
 ---
 

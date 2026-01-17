@@ -59,13 +59,20 @@
 - Uses `force=True` for extract_entities to skip status validation
 - Returns dict with triggered/failed task lists for monitoring
 
-### 2.2 Make Entity Extraction Work on Raw Text
+### 2.2 Make Entity Extraction Work on Raw Text ✅ DONE
 **Priority**: MEDIUM | **Effort**: Medium
 **File**: `app/workers/tasks/document_tasks.py`
 
-- [ ] Add fallback: if no chunks exist, extract from `extracted_text` directly
-- [ ] Split raw text into windows for batch processing
-- [ ] This allows entity extraction before chunking completes
+- [x] Add fallback: if no chunks exist, extract from `extracted_text` directly
+- [x] Split raw text into windows for batch processing
+- [x] This allows entity extraction before chunking completes
+
+**Implemented**:
+- When no chunks found, falls back to document's `extracted_text`
+- Splits raw text into 8000-char windows (~2000 tokens) with 500-char overlap
+- Each window processed like a chunk for entity extraction
+- Returns `used_raw_text_fallback: true` in result when fallback is used
+- Enables parallel entity extraction with chunking (runs before chunks are created)
 
 ### 2.3 Decouple Bbox Linking from Chunking ✅ DONE
 **Priority**: MEDIUM | **Effort**: Low

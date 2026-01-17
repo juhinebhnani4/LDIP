@@ -2689,18 +2689,68 @@ def extract_entities(
 
         chunks = response.data or []
 
+        # Story 2.2: Fallback to raw extracted_text if no chunks available
+        # This allows entity extraction to run in parallel with chunking
+        use_raw_text_fallback = False
+        raw_text_windows: list[dict] = []
+
         if not chunks:
             logger.info(
-                "extract_entities_no_chunks",
+                "extract_entities_no_chunks_trying_raw_text",
                 document_id=doc_id,
             )
-            return {
-                "status": "entity_extraction_complete",
-                "document_id": doc_id,
-                "entities_extracted": 0,
-                "reason": "No chunks found for entity extraction",
-                "job_id": job_id,
-            }
+
+            # Get document's extracted_text as fallback
+            doc = doc_service.get_document(doc_id)
+            if doc and doc.extracted_text and len(doc.extracted_text.strip()) > 0:
+                # Split raw text into windows for batch processing
+                raw_text = doc.extracted_text
+                window_size = 8000  # ~2000 tokens, safe for most LLMs
+                overlap = 500  # Small overlap to avoid cutting entities
+
+                for i in range(0, len(raw_text), window_size - overlap):
+                    window_text = raw_text[i : i + window_size]
+                    if window_text.strip():
+                        raw_text_windows.append({
+                            "id": f"raw_window_{i}",
+                            "content": window_text,
+                            "chunk_type": "raw_window",
+                            "page_number": None,
+                        })
+
+                if raw_text_windows:
+                    use_raw_text_fallback = True
+                    chunks = raw_text_windows
+                    logger.info(
+                        "extract_entities_using_raw_text_fallback",
+                        document_id=doc_id,
+                        window_count=len(raw_text_windows),
+                        text_length=len(raw_text),
+                    )
+                else:
+                    logger.info(
+                        "extract_entities_no_text_available",
+                        document_id=doc_id,
+                    )
+                    return {
+                        "status": "entity_extraction_complete",
+                        "document_id": doc_id,
+                        "entities_extracted": 0,
+                        "reason": "No chunks or text found for entity extraction",
+                        "job_id": job_id,
+                    }
+            else:
+                logger.info(
+                    "extract_entities_no_chunks_or_text",
+                    document_id=doc_id,
+                )
+                return {
+                    "status": "entity_extraction_complete",
+                    "document_id": doc_id,
+                    "entities_extracted": 0,
+                    "reason": "No chunks or extracted text available",
+                    "job_id": job_id,
+                }
 
         # Initialize partial progress tracker (Story 2c-3)
         progress_tracker = create_progress_tracker(job_id, matter_id)
@@ -2836,6 +2886,7 @@ def extract_entities(
             chunks_processed=len(chunks),
             failed_chunks=failed_chunks,
             skipped_chunks=skipped_chunks,
+            used_raw_text_fallback=use_raw_text_fallback,
         )
 
         return {
@@ -2847,6 +2898,7 @@ def extract_entities(
             "failed_chunks": failed_chunks,
             "skipped_chunks": skipped_chunks,
             "job_id": job_id,
+            "used_raw_text_fallback": use_raw_text_fallback,
         }
 
     except MIGExtractorError as e:

@@ -91,7 +91,6 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
   };
 
   const handleSettings = () => {
-    // TODO: Navigate to settings page when implemented
     router.push('/settings');
   };
 

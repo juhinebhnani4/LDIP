@@ -9,8 +9,8 @@
  * Task 5: Create ProfileSection component
  */
 
-import { useState } from 'react';
-import { User, Mail, Save, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { User, Mail, Save, Loader2, Camera } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,9 @@ export function ProfileSection() {
   const [fullName, setFullName] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize form when profile loads
   if (profile && !hasChanges && fullName === '') {
@@ -49,6 +52,54 @@ export function ProfileSection() {
     setFullName(value);
     setHasChanges(value !== (profile?.fullName ?? ''));
     setSaveSuccess(false);
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image must be less than 2MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setAvatarPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload avatar
+    setIsUploadingAvatar(true);
+    try {
+      // Convert to base64 data URL for storage
+      // In production, this would upload to a storage service
+      const dataUrl = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.readAsDataURL(file);
+      });
+
+      await updateProfile({ avatarUrl: dataUrl });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      setAvatarPreview(null);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const handleSave = async () => {
@@ -92,15 +143,41 @@ export function ProfileSection() {
       <CardContent className="space-y-6">
         {/* Avatar */}
         <div className="flex items-center gap-4">
-          <Avatar className="size-16">
-            <AvatarImage src={profile?.avatarUrl ?? undefined} alt={profile?.fullName ?? 'User'} />
-            <AvatarFallback className="text-lg">
-              {getInitials(profile?.fullName ?? null, profile?.email ?? '')}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar className="size-16">
+              <AvatarImage
+                src={avatarPreview ?? profile?.avatarUrl ?? undefined}
+                alt={profile?.fullName ?? 'User'}
+              />
+              <AvatarFallback className="text-lg">
+                {getInitials(profile?.fullName ?? null, profile?.email ?? '')}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              onClick={handleAvatarClick}
+              disabled={isUploadingAvatar}
+              className="absolute -bottom-1 -right-1 flex items-center justify-center size-7 rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
+              aria-label="Change avatar"
+            >
+              {isUploadingAvatar ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Camera className="size-3.5" />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="hidden"
+              aria-label="Upload avatar image"
+            />
+          </div>
           <div>
             <p className="text-sm font-medium">{profile?.fullName || 'No name set'}</p>
             <p className="text-sm text-muted-foreground">{profile?.email}</p>
+            <p className="text-xs text-muted-foreground mt-1">Click the camera icon to change your photo</p>
           </div>
         </div>
 

@@ -180,14 +180,82 @@ async def update_user_preferences(
 @router.get("/me/profile", response_model=UserProfile)
 async def get_user_profile(
     current_user: AuthenticatedUser = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_client),
 ) -> UserProfile:
     """Get current user's profile information."""
+    user_id = current_user.id
+
+    # Fetch user from Supabase Auth to get metadata
+    try:
+        result = supabase.auth.admin.get_user_by_id(user_id)
+        if result.user:
+            metadata = result.user.user_metadata or {}
+            return UserProfile(
+                id=result.user.id,
+                email=result.user.email or "",
+                full_name=metadata.get("full_name"),
+                avatar_url=metadata.get("avatar_url"),
+            )
+    except Exception:
+        # Fall back to basic info if admin API fails
+        pass
+
     return UserProfile(
         id=current_user.id,
         email=current_user.email or "",
-        full_name=None,  # User metadata not available in AuthenticatedUser
-        avatar_url=None,  # User metadata not available in AuthenticatedUser
+        full_name=None,
+        avatar_url=None,
     )
+
+
+@router.post("/me/sign-out-all")
+async def sign_out_all_devices(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_client),
+) -> dict:
+    """
+    Sign out user from all devices.
+
+    Invalidates all active sessions for the current user.
+    """
+    user_id = current_user.id
+
+    try:
+        # Sign out user from all sessions via Supabase Admin API
+        supabase.auth.admin.sign_out(user_id, scope="global")
+        return {"message": "Successfully signed out from all devices"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sign out from all devices: {str(e)}",
+        )
+
+
+@router.delete("/me")
+async def delete_account(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_client),
+) -> dict:
+    """
+    Delete user account and all associated data.
+
+    This action is irreversible.
+    """
+    user_id = current_user.id
+
+    try:
+        # Delete user preferences first
+        supabase.table("user_preferences").delete().eq("user_id", user_id).execute()
+
+        # Delete the user from Supabase Auth
+        supabase.auth.admin.delete_user(user_id)
+
+        return {"message": "Account deleted successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete account: {str(e)}",
+        )
 
 
 @router.patch("/me/profile", response_model=UserProfile)
@@ -212,7 +280,7 @@ async def update_user_profile(
 
     if not metadata_update:
         # No updates
-        return await get_user_profile(current_user)
+        return await get_user_profile(current_user, supabase)
 
     # Update user metadata via Supabase Admin API
     # Note: This requires service role key for admin operations

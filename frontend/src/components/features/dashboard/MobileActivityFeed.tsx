@@ -10,10 +10,10 @@
  * Task 2: Create MobileActivityFeed variant
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useShallow } from 'zustand/react/shallow';
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useActivityStore } from '@/stores/activityStore';
 import { ActivityIcon } from './ActivityFeedItem';
@@ -24,6 +24,80 @@ import type { Activity } from '@/types/activity';
 interface MobileActivityFeedProps {
   /** Maximum number of items to display */
   maxItems?: number;
+  /** Enable pull-to-refresh on mobile */
+  enablePullToRefresh?: boolean;
+}
+
+// Pull-to-refresh hook
+function usePullToRefresh(
+  onRefresh: () => Promise<void>,
+  enabled: boolean = true
+) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startYRef = useRef(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+
+  const THRESHOLD = 80; // Pull distance to trigger refresh
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (!enabled || isRefreshing) return;
+    startYRef.current = e.touches[0]?.clientY ?? 0;
+  }, [enabled, isRefreshing]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!enabled || isRefreshing) return;
+
+    const currentY = e.touches[0]?.clientY ?? 0;
+    const diff = currentY - startYRef.current;
+
+    // Only allow pull-to-refresh when at top of scroll
+    if (containerRef.current && containerRef.current.scrollTop <= 0 && diff > 0) {
+      setIsPulling(true);
+      setPullDistance(Math.min(diff, THRESHOLD * 1.5));
+      e.preventDefault();
+    }
+  }, [enabled, isRefreshing]);
+
+  const handleTouchEnd = useCallback(async () => {
+    if (!enabled || isRefreshing) return;
+
+    if (pullDistance >= THRESHOLD) {
+      setIsRefreshing(true);
+
+      // Haptic feedback if supported
+      if ('vibrate' in navigator) {
+        navigator.vibrate(10);
+      }
+
+      try {
+        await onRefresh();
+      } finally {
+        setIsRefreshing(false);
+      }
+    }
+
+    setIsPulling(false);
+    setPullDistance(0);
+  }, [enabled, isRefreshing, pullDistance, onRefresh]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !enabled) return;
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [enabled, handleTouchStart, handleTouchMove, handleTouchEnd]);
+
+  return { containerRef, isPulling, isRefreshing, pullDistance };
 }
 
 interface MobileActivityItemProps {
@@ -81,7 +155,7 @@ function MobileActivityItemSkeleton() {
   );
 }
 
-export function MobileActivityFeed({ maxItems = 5 }: MobileActivityFeedProps) {
+export function MobileActivityFeed({ maxItems = 5, enablePullToRefresh = true }: MobileActivityFeedProps) {
   const activities = useActivityStore(
     useShallow((state) => state.activities.slice(0, maxItems))
   );
@@ -92,6 +166,16 @@ export function MobileActivityFeed({ maxItems = 5 }: MobileActivityFeedProps) {
 
   // Memoize activities array to prevent re-renders
   const displayActivities = useMemo(() => activities, [activities]);
+
+  // Pull-to-refresh functionality
+  const handlePullRefresh = useCallback(async () => {
+    await fetchActivities();
+  }, [fetchActivities]);
+
+  const { containerRef, isPulling, isRefreshing, pullDistance } = usePullToRefresh(
+    handlePullRefresh,
+    enablePullToRefresh
+  );
 
   useEffect(() => {
     fetchActivities();
@@ -141,19 +225,40 @@ export function MobileActivityFeed({ maxItems = 5 }: MobileActivityFeedProps) {
   }
 
   return (
-    <div className="space-y-1">
-      {displayActivities.map((activity) => (
-        <MobileActivityItem key={activity.id} activity={activity} />
-      ))}
-
-      {displayActivities.length >= maxItems && (
-        <Button variant="ghost" size="sm" className="w-full mt-2" asChild>
-          <Link href="/activity">
-            View All
-            <ArrowRight className="size-4 ml-1" />
-          </Link>
-        </Button>
+    <div ref={containerRef} className="relative">
+      {/* Pull-to-refresh indicator */}
+      {(isPulling || isRefreshing) && (
+        <div
+          className="flex items-center justify-center py-2 transition-all overflow-hidden"
+          style={{ height: isRefreshing ? 40 : Math.min(pullDistance, 60) }}
+        >
+          {isRefreshing ? (
+            <Loader2 className="size-5 animate-spin text-primary" />
+          ) : (
+            <RefreshCw
+              className={cn(
+                'size-5 text-muted-foreground transition-transform',
+                pullDistance >= 80 && 'text-primary rotate-180'
+              )}
+            />
+          )}
+        </div>
       )}
+
+      <div className="space-y-1">
+        {displayActivities.map((activity) => (
+          <MobileActivityItem key={activity.id} activity={activity} />
+        ))}
+
+        {displayActivities.length >= maxItems && (
+          <Button variant="ghost" size="sm" className="w-full mt-2" asChild>
+            <Link href="/activity">
+              View All
+              <ArrowRight className="size-4 ml-1" />
+            </Link>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

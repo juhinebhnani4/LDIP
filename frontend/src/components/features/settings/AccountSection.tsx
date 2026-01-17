@@ -11,9 +11,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Key, LogOut, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Key, LogOut, Trash2, Loader2, Monitor } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,12 +28,19 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { createClient } from '@/lib/supabase/client';
+import { api } from '@/lib/api/client';
 
 export function AccountSection() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSigningOutAll, setIsSigningOutAll] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [signOutAllSuccess, setSignOutAllSuccess] = useState(false);
+
+  const CONFIRMATION_TEXT = 'DELETE';
 
   const handleChangePassword = async () => {
     const supabase = createClient();
@@ -56,25 +65,59 @@ export function AccountSection() {
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
+      await fetch('/auth/logout', { method: 'POST' });
       router.push('/login');
     } catch {
       setIsSigningOut(false);
     }
   };
 
+  const handleSignOutAll = async () => {
+    setIsSigningOutAll(true);
+    setSignOutAllSuccess(false);
+    try {
+      await api.post('/api/users/me/sign-out-all', {});
+      setSignOutAllSuccess(true);
+
+      // Sign out locally after 2 seconds
+      setTimeout(async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        router.push('/login');
+      }, 2000);
+    } catch {
+      alert('Failed to sign out from all devices. Please try again.');
+      setIsSigningOutAll(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== CONFIRMATION_TEXT) {
+      return;
+    }
+
     setIsDeleting(true);
     setDeleteError(null);
 
     try {
-      // Note: Account deletion would require a backend endpoint
-      // For now, just sign out and show message
+      // Call backend to delete account
+      await api.delete('/api/users/me');
+
+      // Sign out after deletion
       const supabase = createClient();
       await supabase.auth.signOut();
       router.push('/login?deleted=true');
-    } catch {
+    } catch (error) {
       setDeleteError('Failed to delete account. Please contact support.');
       setIsDeleting(false);
+    }
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setDeleteConfirmation('');
+      setDeleteError(null);
     }
   };
 
@@ -128,6 +171,33 @@ export function AccountSection() {
           </Button>
         </div>
 
+        {/* Sign Out All Devices */}
+        <div className="flex items-center justify-between py-2 border-t pt-4">
+          <div className="flex items-center gap-3">
+            <Monitor className="size-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Sign Out All Devices</p>
+              <p className="text-sm text-muted-foreground">
+                Sign out from all logged in devices
+              </p>
+              {signOutAllSuccess && (
+                <p className="text-sm text-green-600 mt-1">
+                  Successfully signed out all devices. Redirecting...
+                </p>
+              )}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSignOutAll}
+            disabled={isSigningOutAll}
+          >
+            {isSigningOutAll && <Loader2 className="size-4 mr-2 animate-spin" />}
+            Sign Out All
+          </Button>
+        </div>
+
         {/* Delete Account */}
         <div className="flex items-center justify-between py-2 border-t pt-4">
           <div className="flex items-center gap-3">
@@ -140,7 +210,7 @@ export function AccountSection() {
             </div>
           </div>
 
-          <AlertDialog>
+          <AlertDialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">
                 Delete Account
@@ -148,13 +218,27 @@ export function AccountSection() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Account?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This action cannot be undone. This will permanently delete your
                   account and remove all your data from our servers, including
                   all matters, documents, and analysis results.
                 </AlertDialogDescription>
               </AlertDialogHeader>
+
+              <div className="space-y-2 py-2">
+                <Label htmlFor="delete-confirmation" className="text-sm">
+                  Type <span className="font-mono font-bold">{CONFIRMATION_TEXT}</span> to confirm
+                </Label>
+                <Input
+                  id="delete-confirmation"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder={CONFIRMATION_TEXT}
+                  className="font-mono"
+                />
+              </div>
+
               {deleteError && (
                 <p className="text-sm text-destructive">{deleteError}</p>
               )}
@@ -163,10 +247,11 @@ export function AccountSection() {
                 <AlertDialogAction
                   onClick={handleDeleteAccount}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={isDeleting}
+                  disabled={isDeleting || deleteConfirmation !== CONFIRMATION_TEXT}
+                  aria-label="Confirm delete"
                 >
                   {isDeleting && <Loader2 className="size-4 mr-2 animate-spin" />}
-                  Delete Account
+                  Confirm Delete
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

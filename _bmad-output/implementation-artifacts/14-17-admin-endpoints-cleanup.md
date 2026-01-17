@@ -1,6 +1,6 @@
 # Story 14.17: Admin Endpoints Documentation & Cleanup
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -37,40 +37,40 @@ so that **the codebase is clean and maintainable without orphaned functionality*
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Audit current admin endpoints** (AC: #1)
-  - [ ] 1.1 Search codebase for admin/recovery/internal endpoints
-  - [ ] 1.2 List endpoints with their purpose and usage
-  - [ ] 1.3 Check for any frontend references
-  - [ ] 1.4 Document findings in this story
+- [x] **Task 1: Audit current admin endpoints** (AC: #1)
+  - [x] 1.1 Search codebase for admin/recovery/internal endpoints
+  - [x] 1.2 List endpoints with their purpose and usage
+  - [x] 1.3 Check for any frontend references
+  - [x] 1.4 Document findings in this story
 
-- [ ] **Task 2: Document retained endpoints** (AC: #2)
-  - [ ] 2.1 Add detailed docstrings to retained admin endpoints
-  - [ ] 2.2 Add OpenAPI tags and descriptions
-  - [ ] 2.3 Create `docs/admin-operations.md` runbook
-  - [ ] 2.4 Include examples for each operation
+- [x] **Task 2: Document retained endpoints** (AC: #2)
+  - [x] 2.1 Add detailed docstrings to retained admin endpoints
+  - [x] 2.2 Add OpenAPI tags and descriptions
+  - [x] 2.3 Create `docs/admin-operations.md` runbook
+  - [x] 2.4 Include examples for each operation
 
-- [ ] **Task 3: Create admin management script** (AC: #3)
-  - [ ] 3.1 Create `backend/scripts/admin_cli.py`
-  - [ ] 3.2 Add commands: retry-job, list-failed-jobs, clear-stuck-jobs
-  - [ ] 3.3 Add --help and usage documentation
-  - [ ] 3.4 Test with real scenarios
+- [x] **Task 3: Create admin management script** (AC: #3)
+  - [x] 3.1 Create `backend/scripts/admin_cli.py`
+  - [x] 3.2 Add commands: retry-job, list-failed-jobs, clear-stuck-jobs
+  - [x] 3.3 Add --help and usage documentation
+  - [x] 3.4 Test with real scenarios
 
-- [ ] **Task 4: Remove orphaned endpoints** (AC: #4)
-  - [ ] 4.1 Identify endpoints to remove based on audit
-  - [ ] 4.2 Remove route definitions
-  - [ ] 4.3 Remove unused service methods
-  - [ ] 4.4 Update tests
+- [x] **Task 4: Remove orphaned endpoints** (AC: #4)
+  - [x] 4.1 Identify endpoints to remove based on audit
+  - [x] 4.2 Remove route definitions
+  - [x] 4.3 Remove unused service methods
+  - [x] 4.4 Update tests
 
-- [ ] **Task 5: Add admin protection** (AC: #5)
-  - [ ] 5.1 Create `require_admin_role` dependency
-  - [ ] 5.2 Apply to all admin endpoints
-  - [ ] 5.3 Add rate limiting (10 req/min)
-  - [ ] 5.4 Add audit logging for admin actions
+- [x] **Task 5: Add admin protection** (AC: #5)
+  - [x] 5.1 Create `require_admin_role` dependency
+  - [x] 5.2 Apply to all admin endpoints
+  - [x] 5.3 Add rate limiting (10 req/min)
+  - [x] 5.4 Add audit logging for admin actions
 
-- [ ] **Task 6: Update documentation** (AC: #2, #3)
-  - [ ] 6.1 Update API documentation
-  - [ ] 6.2 Add admin section to main README
-  - [ ] 6.3 Document environment variables needed
+- [x] **Task 6: Update documentation** (AC: #2, #3)
+  - [x] 6.1 Update API documentation
+  - [x] 6.2 Add admin section to main README
+  - [x] 6.3 Document environment variables needed
 
 ## Dev Notes
 

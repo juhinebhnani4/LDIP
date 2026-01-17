@@ -78,8 +78,34 @@ function NotificationToggleSkeleton() {
 export function NotificationSection() {
   const { preferences, isLoading, updatePreferences, isUpdating, updateError } = useUserPreferences();
 
+  const requestNotificationPermission = async (): Promise<boolean> => {
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission === 'denied') {
+      return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  };
+
   const handleToggle = async (key: 'emailNotificationsProcessing' | 'emailNotificationsVerification' | 'browserNotifications', value: boolean) => {
     try {
+      // For browser notifications, request permission first
+      if (key === 'browserNotifications' && value) {
+        const hasPermission = await requestNotificationPermission();
+        if (!hasPermission) {
+          // Don't enable if permission not granted
+          return;
+        }
+      }
+
       await updatePreferences({ [key]: value });
     } catch {
       // Error handled by hook

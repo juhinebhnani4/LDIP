@@ -1,6 +1,6 @@
 # Story 14.16: Anomalies UI Integration
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -38,57 +38,57 @@ so that **I can identify suspicious date patterns and sequence issues in my case
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Create useAnomalies hook** (AC: #5)
-  - [ ] 1.1 Create `frontend/src/hooks/useAnomalies.ts`
-  - [ ] 1.2 Fetch from GET /api/matters/{matterId}/anomalies
-  - [ ] 1.3 Support filtering parameters
-  - [ ] 1.4 Export TypeScript interfaces
+- [x] **Task 1: Create useAnomalies hook** (AC: #5)
+  - [x] 1.1 Create `frontend/src/hooks/useAnomalies.ts`
+  - [x] 1.2 Fetch from GET /api/matters/{matterId}/anomalies
+  - [x] 1.3 Support filtering parameters
+  - [x] 1.4 Export TypeScript interfaces
 
-- [ ] **Task 2: Create AnomalyIndicator component** (AC: #1)
-  - [ ] 2.1 Create `frontend/src/components/features/timeline/AnomalyIndicator.tsx`
-  - [ ] 2.2 Warning icon with color based on severity
-  - [ ] 2.3 Tooltip showing anomaly type and brief description
-  - [ ] 2.4 Click handler to open detail panel
+- [x] **Task 2: Create AnomalyIndicator component** (AC: #1)
+  - [x] 2.1 Create `frontend/src/components/features/timeline/AnomalyIndicator.tsx`
+  - [x] 2.2 Warning icon with color based on severity
+  - [x] 2.3 Tooltip showing anomaly type and brief description
+  - [x] 2.4 Click handler to open detail panel
 
-- [ ] **Task 3: Integrate anomalies into TimelineEventCard** (AC: #1)
-  - [ ] 3.1 Modify TimelineEventCard to accept anomaly prop
-  - [ ] 3.2 Display AnomalyIndicator when event has anomaly
-  - [ ] 3.3 Add visual styling for anomalous events (border, background)
+- [x] **Task 3: Integrate anomalies into TimelineEventCard** (AC: #1)
+  - [x] 3.1 Modify TimelineEventCard to accept anomaly prop
+  - [x] 3.2 Display AnomalyIndicator when event has anomaly
+  - [x] 3.3 Add visual styling for anomalous events (border, background)
 
-- [ ] **Task 4: Create AnomalyDetailPanel component** (AC: #3)
-  - [ ] 4.1 Create `frontend/src/components/features/timeline/AnomalyDetailPanel.tsx`
-  - [ ] 4.2 Slide-over or modal panel design
-  - [ ] 4.3 Display anomaly type, severity, explanation
-  - [ ] 4.4 Display affected events with document links
-  - [ ] 4.5 Close button and keyboard escape
+- [x] **Task 4: Create AnomalyDetailPanel component** (AC: #3)
+  - [x] 4.1 Create `frontend/src/components/features/timeline/AnomalyDetailPanel.tsx`
+  - [x] 4.2 Slide-over or modal panel design
+  - [x] 4.3 Display anomaly type, severity, explanation
+  - [x] 4.4 Display affected events with document links
+  - [x] 4.5 Close button and keyboard escape
 
-- [ ] **Task 5: Add anomaly count to Timeline tab** (AC: #2)
-  - [ ] 5.1 Modify WorkspaceTabBar to show badge on Timeline tab
-  - [ ] 5.2 Fetch anomaly count from API or use tab-stats
-  - [ ] 5.3 Badge shows count (e.g., "3") or warning icon
+- [x] **Task 5: Add anomaly count to Timeline tab** (AC: #2)
+  - [x] 5.1 Modify WorkspaceTabBar to show badge on Timeline tab
+  - [x] 5.2 Fetch anomaly count from API or use tab-stats
+  - [x] 5.3 Badge shows count (e.g., "3") or warning icon
 
-- [ ] **Task 6: Create AnomaliesBanner component** (AC: #2)
-  - [ ] 6.1 Create `frontend/src/components/features/timeline/AnomaliesBanner.tsx`
-  - [ ] 6.2 Alert banner at top of Timeline tab when anomalies exist
-  - [ ] 6.3 "X anomalies detected" with "Review" button
-  - [ ] 6.4 Dismissible (per session)
+- [x] **Task 6: Create AnomaliesBanner component** (AC: #2)
+  - [x] 6.1 Create `frontend/src/components/features/timeline/AnomaliesBanner.tsx`
+  - [x] 6.2 Alert banner at top of Timeline tab when anomalies exist
+  - [x] 6.3 "X anomalies detected" with "Review" button
+  - [x] 6.4 Dismissible (per session)
 
-- [ ] **Task 7: Add anomaly filter to TimelineFilters** (AC: #4)
-  - [ ] 7.1 Add "Show anomalies only" toggle/checkbox
-  - [ ] 7.2 Filter events to only those with anomalies
-  - [ ] 7.3 Update URL query params
-  - [ ] 7.4 Works across all timeline view modes
+- [x] **Task 7: Add anomaly filter to TimelineFilters** (AC: #4)
+  - [x] 7.1 Add "Show anomalies only" toggle/checkbox
+  - [x] 7.2 Filter events to only those with anomalies
+  - [x] 7.3 Update URL query params
+  - [x] 7.4 Works across all timeline view modes
 
-- [ ] **Task 8: Update timeline data fetching** (AC: #1, #5)
-  - [ ] 8.1 Modify useTimeline to include anomaly data
-  - [ ] 8.2 Or create separate useEventAnomalies for join
-  - [ ] 8.3 Map anomalies to events by event_id
+- [x] **Task 8: Update timeline data fetching** (AC: #1, #5)
+  - [x] 8.1 Modify useTimeline to include anomaly data
+  - [x] 8.2 Or create separate useEventAnomalies for join
+  - [x] 8.3 Map anomalies to events by event_id
 
-- [ ] **Task 9: Write tests** (AC: all)
-  - [ ] 9.1 Test AnomalyIndicator renders with severity colors
-  - [ ] 9.2 Test AnomalyDetailPanel displays all fields
-  - [ ] 9.3 Test filter toggles correctly
-  - [ ] 9.4 Test anomaly count badge updates
+- [x] **Task 9: Write tests** (AC: all)
+  - [x] 9.1 Test AnomalyIndicator renders with severity colors
+  - [x] 9.2 Test AnomalyDetailPanel displays all fields
+  - [x] 9.3 Test filter toggles correctly
+  - [x] 9.4 Test anomaly count badge updates
 
 ## Dev Notes
 

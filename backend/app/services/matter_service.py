@@ -193,11 +193,13 @@ class MatterService:
         """
         logger.debug("getting_user_matters", user_id=user_id, page=page)
 
-        # Build query - RLS handles access filtering
+        # SECURITY FIX: Must explicitly filter by user_id since we use service role key
+        # which bypasses RLS. The !inner join with eq filter ensures only matters
+        # where this user has membership are returned.
         query = self.db.table("matters").select(
             "*, matter_attorneys!inner(role, user_id)",
             count="exact"
-        ).is_("deleted_at", "null")
+        ).eq("matter_attorneys.user_id", user_id).is_("deleted_at", "null")
 
         if status_filter:
             query = query.eq("status", status_filter.value)
@@ -247,7 +249,28 @@ class MatterService:
         """
         logger.debug("getting_matter", matter_id=matter_id, user_id=user_id)
 
-        # RLS handles access check
+        try:
+            # SECURITY FIX: First verify user has access to this matter
+            # Since we use service role key (bypasses RLS), we must explicitly check membership
+            membership_check = self.db.table("matter_attorneys").select(
+                "role"
+            ).eq("matter_id", matter_id).eq("user_id", user_id).execute()
+
+            if not membership_check.data:
+                # User is not a member of this matter - deny access
+                logger.warning("access_denied_no_membership", matter_id=matter_id, user_id=user_id)
+                raise MatterNotFoundError(matter_id)
+        except MatterNotFoundError:
+            raise
+        except Exception as e:
+            logger.error("membership_check_failed", matter_id=matter_id, user_id=user_id, error=str(e))
+            raise MatterServiceError(
+                code="DATABASE_ERROR",
+                message="Failed to verify matter access",
+                status_code=500,
+            ) from e
+
+        # User is a member, now fetch the full matter with all members
         result = self.db.table("matters").select(
             "*, matter_attorneys(id, user_id, role, invited_by, invited_at)"
         ).eq("id", matter_id).is_("deleted_at", "null").execute()

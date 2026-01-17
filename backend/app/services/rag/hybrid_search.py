@@ -272,6 +272,16 @@ class HybridSearchService:
             # Generate query embedding for semantic search
             query_embedding = await self.embedder.embed_text(query)
 
+            # Handle embedding service failure (returns None when circuit is open or API fails)
+            if query_embedding is None:
+                logger.warning(
+                    "embedding_service_unavailable_falling_back_to_bm25",
+                    matter_id=matter_id,
+                    query_len=len(query),
+                )
+                # Fall back to BM25-only search when embeddings unavailable
+                return await self.bm25_search(query, matter_id, limit=limit)
+
             # Execute hybrid search via RPC
             supabase = get_supabase_client()
             if supabase is None:
@@ -482,6 +492,19 @@ class HybridSearchService:
         try:
             # Generate query embedding
             query_embedding = await self.embedder.embed_text(query)
+
+            # Handle embedding service failure
+            if query_embedding is None:
+                logger.warning(
+                    "semantic_search_embedding_unavailable",
+                    matter_id=matter_id,
+                    query_len=len(query),
+                )
+                raise HybridSearchServiceError(
+                    message="Semantic search unavailable - embedding service is not responding",
+                    code="EMBEDDING_SERVICE_UNAVAILABLE",
+                    is_retryable=True,
+                )
 
             supabase = get_supabase_client()
             if supabase is None:

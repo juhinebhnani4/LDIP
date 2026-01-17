@@ -18,6 +18,9 @@
 -- Drop the overly permissive policy
 DROP POLICY IF EXISTS "Users access own matter validation logs" ON public.ocr_validation_log;
 
+-- Drop existing policies if they exist (idempotent)
+DROP POLICY IF EXISTS "Users can view own matter validation logs" ON public.ocr_validation_log;
+
 -- Create separate policies for SELECT and INSERT only
 -- SELECT: Users can view validation logs for their matters
 CREATE POLICY "Users can view own matter validation logs"

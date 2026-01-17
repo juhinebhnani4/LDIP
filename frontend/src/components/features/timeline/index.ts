@@ -52,6 +52,11 @@ export { EditEventDialog } from './EditEventDialog';
 // Delete event confirmation component (Story 10B.5)
 export { DeleteEventConfirmation } from './DeleteEventConfirmation';
 
+// Anomaly components (Story 14.16)
+export { AnomalyIndicator, AnomalyBadge } from './AnomalyIndicator';
+export { AnomalyDetailPanel } from './AnomalyDetailPanel';
+export { AnomaliesBanner, AnomaliesIndicatorBadge } from './AnomaliesBanner';
+
 // Timeline utilities (Story 10B.4)
 export {
   calculateTimelineScale,

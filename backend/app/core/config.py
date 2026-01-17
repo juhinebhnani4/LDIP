@@ -140,6 +140,10 @@ class Settings(BaseSettings):
     job_max_recovery_retries: int = 3       # Max times a stale job can be auto-recovered
     job_recovery_enabled: bool = True       # Master switch for automatic job recovery
 
+    # Admin Configuration (Story 14.17)
+    admin_emails: str = ""  # Comma-separated list of admin emails (ADMIN_EMAILS env var)
+    rate_limit_admin: int = 10  # Admin operations rate limit (per minute)
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

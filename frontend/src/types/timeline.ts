@@ -237,6 +237,8 @@ export interface TimelineFilterState {
   };
   /** Verification status filter */
   verificationStatus: 'all' | 'verified' | 'unverified';
+  /** Show only events with anomalies (Story 14.16) */
+  showAnomaliesOnly: boolean;
 }
 
 /**
@@ -247,6 +249,7 @@ export const DEFAULT_TIMELINE_FILTERS: TimelineFilterState = {
   entityIds: [],
   dateRange: { start: null, end: null },
   verificationStatus: 'all',
+  showAnomaliesOnly: false,
 };
 
 /**
@@ -258,7 +261,8 @@ export function hasActiveFilters(filters: TimelineFilterState): boolean {
     filters.entityIds.length > 0 ||
     filters.dateRange.start !== null ||
     filters.dateRange.end !== null ||
-    filters.verificationStatus !== 'all'
+    filters.verificationStatus !== 'all' ||
+    filters.showAnomaliesOnly
   );
 }
 
@@ -271,6 +275,7 @@ export function countActiveFilters(filters: TimelineFilterState): number {
   if (filters.entityIds.length > 0) count++;
   if (filters.dateRange.start !== null || filters.dateRange.end !== null) count++;
   if (filters.verificationStatus !== 'all') count++;
+  if (filters.showAnomaliesOnly) count++;
   return count;
 }
 

@@ -35,7 +35,9 @@ import {
   EVENT_TYPE_LABELS,
   EVENT_TYPE_COLORS,
 } from './eventTypeIcons';
+import { AnomalyIndicator } from './AnomalyIndicator';
 import type { TimelineEvent } from '@/types/timeline';
+import type { AnomalyListItem } from '@/hooks/useAnomalies';
 
 /**
  * Timeline Event Card Component
@@ -48,15 +50,21 @@ import type { TimelineEvent } from '@/types/timeline';
  * - Source document link
  * - Verification status
  * - Contradiction flag
+ * - Anomaly indicator (Story 14.16)
  * - Edit/Delete actions (for manual events)
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #2)
  * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #6, #7, #8)
+ * Story 14.16: Anomalies UI Integration (AC #1)
  */
 
 interface TimelineEventCardProps {
   /** Event data */
   event: TimelineEvent;
+  /** Anomalies affecting this event (Story 14.16) */
+  anomalies?: AnomalyListItem[];
+  /** Callback when anomaly indicator is clicked */
+  onAnomalyClick?: (anomaly: AnomalyListItem) => void;
   /** Callback when edit is clicked */
   onEdit?: (event: TimelineEvent) => void;
   /** Callback when delete is clicked (only for manual events) */
@@ -93,6 +101,8 @@ function formatEventDate(
 
 export function TimelineEventCard({
   event,
+  anomalies = [],
+  onAnomalyClick,
   onEdit,
   onDelete,
   className,
@@ -107,10 +117,15 @@ export function TimelineEventCard({
 
   const formattedDate = formatEventDate(event.eventDate, event.eventDatePrecision);
   const isManual = event.isManual === true;
+  const hasAnomalies = anomalies.length > 0;
 
   return (
     <Card
-      className={cn('relative', className)}
+      className={cn(
+        'relative',
+        hasAnomalies && 'border-orange-200 dark:border-orange-800',
+        className
+      )}
       data-testid={`timeline-event-${event.id}`}
     >
       <CardContent className="pt-4">
@@ -220,6 +235,15 @@ export function TimelineEventCard({
                 This event was manually added by {event.createdBy ?? 'a user'}
               </TooltipContent>
             </Tooltip>
+          )}
+
+          {/* Anomaly Indicator (Story 14.16) */}
+          {hasAnomalies && (
+            <AnomalyIndicator
+              anomalies={anomalies}
+              onClick={onAnomalyClick}
+              size="sm"
+            />
           )}
         </div>
 

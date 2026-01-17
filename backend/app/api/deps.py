@@ -609,6 +609,87 @@ def get_tab_stats_service_dep() -> TabStatsService:
     return get_tab_stats_service()
 
 
+# =============================================================================
+# Admin Access Control (Story 14.17)
+# =============================================================================
+
+
+async def require_admin_access(
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> AuthenticatedUser:
+    """Require user to have admin access.
+
+    Admin access is granted to users whose email is in the ADMIN_EMAILS
+    environment variable (comma-separated list) or who have the 'admin' role.
+
+    Story 14.17: Admin Endpoints Documentation & Cleanup
+
+    Args:
+        request: FastAPI request for rate limiting binding.
+        user: Authenticated user.
+
+    Returns:
+        Authenticated user if admin access is granted.
+
+    Raises:
+        HTTPException: 403 Forbidden if user is not an admin.
+
+    Example:
+        @router.post("/admin/recover-jobs")
+        async def recover_jobs(
+            admin: AuthenticatedUser = Depends(require_admin_access)
+        ):
+            # Only admins can reach this
+            ...
+    """
+    settings = get_settings()
+
+    # Check if user is in admin email list
+    admin_emails = (
+        settings.admin_emails.split(",") if hasattr(settings, "admin_emails") and settings.admin_emails else []
+    )
+    admin_emails = [e.strip().lower() for e in admin_emails if e.strip()]
+
+    is_admin = (
+        user.email.lower() in admin_emails
+        or user.role == "admin"
+    )
+
+    if not is_admin:
+        logger.warning(
+            "admin_access_denied",
+            user_id=user.id,
+            user_email=user.email,
+            user_role=user.role,
+            path=request.url.path,
+            ip_address=request.client.host if request.client else None,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "ADMIN_REQUIRED",
+                    "message": "Admin access required for this operation",
+                    "details": {},
+                }
+            },
+        )
+
+    # Log admin access for audit
+    logger.info(
+        "admin_access_granted",
+        user_id=user.id,
+        user_email=user.email,
+        path=request.url.path,
+    )
+
+    # Bind user_id to request.state for rate limiting
+    _bind_user_id_to_request(request, user.id)
+
+    return user
+
+
 # Re-export commonly used dependencies for convenience
 __all__ = [
     "get_db",
@@ -632,4 +713,5 @@ __all__ = [
     "MatterRole",
     "AuditService",
     "TabStatsService",
+    "require_admin_access",
 ]

@@ -19,6 +19,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +68,8 @@ interface TimelineFilterBarProps {
   onFiltersChange: (filters: TimelineFilterState) => void;
   /** Available entities for actor filter */
   entities: EntityOption[];
+  /** Count of unreviewed anomalies (to show badge) */
+  anomalyCount?: number;
   /** Additional CSS classes */
   className?: string;
 }
@@ -478,6 +481,7 @@ export function TimelineFilterBar({
   filters,
   onFiltersChange,
   entities,
+  anomalyCount = 0,
   className,
 }: TimelineFilterBarProps) {
   const activeFilterCount = useMemo(
@@ -520,6 +524,10 @@ export function TimelineFilterBar({
     [filters, onFiltersChange]
   );
 
+  const handleAnomaliesToggle = useCallback(() => {
+    onFiltersChange({ ...filters, showAnomaliesOnly: !filters.showAnomaliesOnly });
+  }, [filters, onFiltersChange]);
+
   return (
     <div
       className={cn(
@@ -554,6 +562,35 @@ export function TimelineFilterBar({
         status={filters.verificationStatus}
         onChange={handleVerificationStatusChange}
       />
+
+      {/* Anomalies Filter (Story 14.16) */}
+      {anomalyCount > 0 && (
+        <Button
+          variant={filters.showAnomaliesOnly ? 'secondary' : 'outline'}
+          size="sm"
+          className={cn(
+            'h-8 border-dashed gap-1',
+            filters.showAnomaliesOnly && 'border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+          )}
+          onClick={handleAnomaliesToggle}
+          aria-pressed={filters.showAnomaliesOnly}
+          aria-label="Filter to show only events with anomalies"
+        >
+          <AlertTriangle className={cn('h-4 w-4', filters.showAnomaliesOnly && 'text-orange-600')} />
+          Anomalies
+          <Badge
+            variant="secondary"
+            className={cn(
+              'ml-1 rounded-sm px-1 font-normal',
+              filters.showAnomaliesOnly
+                ? 'bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200'
+                : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+            )}
+          >
+            {anomalyCount}
+          </Badge>
+        </Button>
+      )}
 
       {/* Clear Filters Button */}
       {activeFilterCount > 0 && (

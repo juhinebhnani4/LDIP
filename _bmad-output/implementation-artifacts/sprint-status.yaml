@@ -242,6 +242,19 @@ development_status:
   # - useSSE hook tests (Story 11.3)
   # - Documents component tests (Story 10D.3)
 
+  # UI COMPLETION GAPS (Added 2026-01-17 via API Audit)
+  # SOURCE: Frontend-Backend API audit revealed placeholder pages and missing features
+  # HIGH PRIORITY
+  14-13-contradictions-ui-completion: ready-for-dev  # Wire Contradictions tab to existing backend API
+  10c-5-citations-page-completion: ready-for-dev     # Wire Citations tab to existing backend API
+  # MEDIUM PRIORITY
+  14-14-settings-page-implementation: ready-for-dev  # User preferences, notifications, account settings
+  14-15-mobile-activity-feed: ready-for-dev          # Make Activity Feed responsive for mobile/tablet
+  14-16-anomalies-ui-integration: done               # Completed 2026-01-17 - useAnomalies hook, AnomalyIndicator, AnomaliesBanner, TimelineFilterBar integration, 43 tests
+  # LOW PRIORITY
+  14-17-admin-endpoints-cleanup: done                # Completed 2026-01-17 - Admin role protection, CLI script, documentation, rate limiting config
+  14-18-in-app-help-system: ready-for-dev            # Contextual help, tooltips, feature tour
+
   epic-14-retrospective: optional
 
   # =============================================================================
@@ -253,11 +266,11 @@ development_status:
 
   # Epic 15: Infrastructure & Chunk State Management
   # Goal: Track OCR chunk processing state for visibility and failure recovery
-  epic-15-chunk-infrastructure: in-progress  # First story created 2026-01-17
+  epic-15-chunk-infrastructure: done  # All stories completed 2026-01-17
   15-1-document-ocr-chunks-table: done  # Code review complete 2026-01-17 - 36 tests, fix migration deployed
   15-2-ocr-chunk-service: done                 # CRUD service + heartbeat detection - 56 tests, code review fixes applied 2026-01-17
-  15-3-chunk-progress-job-tracking: ready-for-dev    # Integration with JobTrackingService
-  15-4-chunk-cleanup-mechanism: ready-for-dev        # Cleanup temporary chunk data + orphan detection
+  15-3-chunk-progress-job-tracking: done    # Integration with JobTrackingService - Story completed 2026-01-17
+  15-4-chunk-cleanup-mechanism: done        # Cleanup temporary chunk data + orphan detection - Story completed 2026-01-17
   epic-15-retrospective: optional
 
   # Epic 16: PDF Chunking & Parallel Processing

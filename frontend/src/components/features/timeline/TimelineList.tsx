@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { TimelineEventCard, TimelineEventCardSkeleton } from './TimelineEventCard';
 import { TimelineConnector } from './TimelineConnector';
 import type { TimelineEvent } from '@/types/timeline';
+import type { AnomalyListItem } from '@/hooks/useAnomalies';
 
 /**
  * Timeline List Component
@@ -17,9 +18,11 @@ import type { TimelineEvent } from '@/types/timeline';
  * - Connector lines between events
  * - Empty, loading, and error states
  * - Edit/delete actions for manual events
+ * - Anomaly indicators (Story 14.16)
  *
  * Story 10B.3: Timeline Tab Vertical List View (AC #1, #3)
  * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #6, #7, #8)
+ * Story 14.16: Anomalies UI Integration (AC #1)
  */
 
 interface TimelineListProps {
@@ -39,6 +42,10 @@ interface TimelineListProps {
   onDeleteEvent?: (event: TimelineEvent) => void;
   /** Story 13.4: Callback when user clicks retry after error */
   onRetry?: () => void;
+  /** Story 14.16: Get anomalies for a specific event */
+  getAnomaliesForEvent?: (eventId: string) => AnomalyListItem[];
+  /** Story 14.16: Callback when anomaly indicator is clicked */
+  onAnomalyClick?: (anomaly: AnomalyListItem) => void;
   /** Optional className */
   className?: string;
 }
@@ -166,6 +173,8 @@ export function TimelineList({
   onEditEvent,
   onDeleteEvent,
   onRetry,
+  getAnomaliesForEvent,
+  onAnomalyClick,
   className,
 }: TimelineListProps) {
   // Group events by year
@@ -236,6 +245,8 @@ export function TimelineList({
                   {/* Event card */}
                   <TimelineEventCard
                     event={event}
+                    anomalies={getAnomaliesForEvent?.(event.id)}
+                    onAnomalyClick={onAnomalyClick}
                     onEdit={onEditEvent}
                     onDelete={onDeleteEvent}
                   />

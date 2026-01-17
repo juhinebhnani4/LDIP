@@ -297,6 +297,7 @@ describe('TimelineFilterBar', () => {
         entityIds: ['entity-1'],
         dateRange: { start: '2024-01-01', end: null },
         verificationStatus: 'verified',
+        showAnomaliesOnly: false,
       };
       render(
         <TimelineFilterBar
@@ -317,6 +318,7 @@ describe('TimelineFilterBar', () => {
         entityIds: ['entity-1', 'entity-2'],
         dateRange: { start: '2024-01-01', end: '2024-12-31' },
         verificationStatus: 'all',
+        showAnomaliesOnly: false,
       };
       render(<TimelineFilterBar {...defaultProps} filters={filtersWithMultiple} />);
 

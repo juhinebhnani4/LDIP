@@ -1,14 +1,22 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineStats } from '@/hooks/useTimelineStats';
+import {
+  useAnomaliesByEvent,
+  useAnomalySummary,
+  useAnomalyMutations,
+  type AnomalyListItem,
+} from '@/hooks/useAnomalies';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineList } from './TimelineList';
 import { TimelineHorizontal } from './TimelineHorizontal';
 import { TimelineMultiTrack } from './TimelineMultiTrack';
 import { TimelineFilterBar } from './TimelineFilterBar';
+import { AnomaliesBanner } from './AnomaliesBanner';
+import { AnomalyDetailPanel } from './AnomalyDetailPanel';
 import { AddEventDialog } from './AddEventDialog';
 import { EditEventDialog } from './EditEventDialog';
 import { DeleteEventConfirmation } from './DeleteEventConfirmation';
@@ -45,6 +53,7 @@ const FILTER_DEBOUNCE_MS = 300;
  * Story 10B.3: Timeline Tab Vertical List View (AC #1, #2, #3)
  * Story 10B.4: Timeline Tab Alternative Views (AC #1, #2, #3)
  * Story 10B.5: Timeline Filtering and Manual Event Addition (AC #1-#8)
+ * Story 14.16: Anomalies UI Integration (AC #1, #2, #3, #4)
  */
 
 interface TimelineContentProps {
@@ -91,6 +100,10 @@ export function TimelineContent({ className }: TimelineContentProps) {
   const [eventToEdit, setEventToEdit] = useState<TimelineEvent | null>(null);
   const [eventToDelete, setEventToDelete] = useState<TimelineEvent | null>(null);
 
+  // Anomaly state (Story 14.16)
+  const [anomalyPanelOpen, setAnomalyPanelOpen] = useState(false);
+  const [selectedAnomaly, setSelectedAnomaly] = useState<AnomalyListItem | null>(null);
+
   // Fetch timeline data with filters
   const {
     events,
@@ -122,6 +135,15 @@ export function TimelineContent({ className }: TimelineContentProps) {
     id: doc.id,
     name: doc.filename,
   })) ?? [];
+
+  // Fetch anomaly data (Story 14.16)
+  const { getAnomaliesForEvent } = useAnomaliesByEvent(matterId);
+  const { summary: anomalySummary, mutate: refreshAnomalySummary } = useAnomalySummary(matterId);
+  const {
+    dismiss: dismissAnomaly,
+    verify: verifyAnomaly,
+    isLoading: anomalyMutationLoading,
+  } = useAnomalyMutations(matterId);
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: TimelineViewMode) => {
@@ -219,13 +241,61 @@ export function TimelineContent({ className }: TimelineContentProps) {
     [matterId, deleteEvent, refreshTimeline, refreshStats]
   );
 
+  // Handle anomaly click (Story 14.16)
+  const handleAnomalyClick = useCallback((anomaly: AnomalyListItem) => {
+    setSelectedAnomaly(anomaly);
+    setAnomalyPanelOpen(true);
+  }, []);
+
+  // Handle anomaly panel close
+  const handleAnomalyPanelClose = useCallback(() => {
+    setAnomalyPanelOpen(false);
+    setSelectedAnomaly(null);
+  }, []);
+
+  // Handle anomaly dismiss
+  const handleAnomalyDismiss = useCallback(
+    async (anomalyId: string) => {
+      await dismissAnomaly(anomalyId);
+      await refreshAnomalySummary();
+      handleAnomalyPanelClose();
+    },
+    [dismissAnomaly, refreshAnomalySummary, handleAnomalyPanelClose]
+  );
+
+  // Handle anomaly verify
+  const handleAnomalyVerify = useCallback(
+    async (anomalyId: string) => {
+      await verifyAnomaly(anomalyId);
+      await refreshAnomalySummary();
+      handleAnomalyPanelClose();
+    },
+    [verifyAnomaly, refreshAnomalySummary, handleAnomalyPanelClose]
+  );
+
+  // Handle anomalies banner click
+  const handleAnomaliesBannerClick = useCallback(() => {
+    // Enable show anomalies only filter
+    setFilters((prev) => ({ ...prev, showAnomaliesOnly: true }));
+  }, []);
+
   // Calculate active filter count for display
   const activeFilterCount = countActiveFilters(filters);
 
+  // Apply anomaly filter if enabled (Story 14.16)
+  const displayEvents = useMemo(() => {
+    if (!filters.showAnomaliesOnly) {
+      return filteredEvents;
+    }
+    // Filter to only show events that have anomalies
+    return filteredEvents.filter((event) => {
+      const eventAnomalies = getAnomaliesForEvent(event.id);
+      return eventAnomalies.length > 0;
+    });
+  }, [filteredEvents, filters.showAnomaliesOnly, getAnomaliesForEvent]);
+
   // Render the appropriate view based on mode
   const renderTimelineView = () => {
-    // Use filtered events for display
-    const displayEvents = filteredEvents;
 
     switch (viewMode) {
       case 'horizontal':
@@ -259,6 +329,8 @@ export function TimelineContent({ className }: TimelineContentProps) {
             onEditEvent={handleEditEvent}
             onDeleteEvent={handleDeleteEvent}
             onRetry={refreshTimeline}
+            getAnomaliesForEvent={getAnomaliesForEvent}
+            onAnomalyClick={handleAnomalyClick}
             className="mt-4"
           />
         );
@@ -281,18 +353,26 @@ export function TimelineContent({ className }: TimelineContentProps) {
         isLoading={statsLoading}
       />
 
+      {/* Anomalies Banner (Story 14.16) */}
+      <AnomaliesBanner
+        summary={anomalySummary}
+        onShowAnomalies={handleAnomaliesBannerClick}
+        className="mt-4"
+      />
+
       {/* Filter bar */}
       <TimelineFilterBar
         filters={filters}
         onFiltersChange={setFilters}
         entities={uniqueEntities}
+        anomalyCount={anomalySummary?.unreviewed ?? 0}
         className="mt-4"
       />
 
       {/* Filter results message */}
       {activeFilterCount > 0 && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Showing {filteredEvents.length} of {events.length} events
+          Showing {displayEvents.length} of {events.length} events
         </p>
       )}
 
@@ -323,6 +403,16 @@ export function TimelineContent({ className }: TimelineContentProps) {
         onOpenChange={setDeleteDialogOpen}
         event={eventToDelete}
         onConfirm={handleDeleteEventConfirm}
+      />
+
+      {/* Anomaly Detail Panel (Story 14.16) */}
+      <AnomalyDetailPanel
+        isOpen={anomalyPanelOpen}
+        onClose={handleAnomalyPanelClose}
+        anomaly={selectedAnomaly}
+        onDismiss={handleAnomalyDismiss}
+        onVerify={handleAnomalyVerify}
+        isLoading={anomalyMutationLoading}
       />
     </div>
   );

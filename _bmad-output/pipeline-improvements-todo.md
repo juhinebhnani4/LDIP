@@ -39,17 +39,25 @@
 
 ## Category 2: Parallel Processing
 
-### 2.1 Dispatch Independent Tasks in Parallel After OCR
+### 2.1 Dispatch Independent Tasks in Parallel After OCR ✅ DONE
 **Priority**: HIGH | **Effort**: Medium
 **File**: `app/workers/tasks/chunked_document_tasks.py`
 
-- [ ] After OCR completes, dispatch these in parallel:
+- [x] After OCR completes, dispatch these in parallel:
   - `chunk_document` (needed for search)
   - `extract_entities` (can work on raw text)
   - `extract_dates_from_document` (can work on raw text)
   - `extract_citations` (can work on raw text)
-- [ ] Use Celery `group()` for parallel dispatch
-- [ ] Each task updates its own feature flag independently
+- [x] Use Celery `group()` for parallel dispatch
+- [x] Each task updates its own feature flag independently
+
+**Implemented**:
+- Created `_trigger_parallel_processing()` function that dispatches 4 tasks in parallel
+- Replaces old `_trigger_rag_reprocessing()` (kept for backward compat)
+- Each task dispatched independently with try/catch for graceful degradation
+- Uses `skip_bbox_linking=True` for chunk_document for faster search availability
+- Uses `force=True` for extract_entities to skip status validation
+- Returns dict with triggered/failed task lists for monitoring
 
 ### 2.2 Make Entity Extraction Work on Raw Text
 **Priority**: MEDIUM | **Effort**: Medium

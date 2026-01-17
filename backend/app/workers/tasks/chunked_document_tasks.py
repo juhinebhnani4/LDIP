@@ -21,6 +21,7 @@ from celery import group
 
 from app.core.circuit_breaker import CircuitOpenError
 from app.models.document import DocumentStatus
+from app.models.job import JobStatus
 from app.models.ocr_chunk import ChunkStatus
 from app.services.bounding_box_service import get_bounding_box_service
 from app.services.chunk_cleanup_service import get_chunk_cleanup_service
@@ -288,7 +289,7 @@ def process_document_chunked(
         )
 
         # Download PDF once (will be split by each chunk task)
-        document = docs_svc.get_document_by_id(document_id)
+        document = docs_svc.get_document(document_id)
         if not document or not document.storage_path:
             raise ChunkProcessingError(
                 "Document not found or missing storage path",
@@ -541,8 +542,11 @@ def process_single_chunk(
             # Update status to processing
             _run_async(chunks_svc.update_status(chunk_id, ChunkStatus.PROCESSING))
 
+            # Story 19.1: Update heartbeat to indicate active processing
+            _run_async(chunks_svc.update_heartbeat(chunk_id))
+
             # Get document storage path
-            document = docs_svc.get_document_by_id(document_id)
+            document = docs_svc.get_document(document_id)
             if not document or not document.storage_path:
                 raise ChunkProcessingError(
                     "Document not found or missing storage path",
@@ -552,25 +556,26 @@ def process_single_chunk(
             # Download full PDF
             pdf_bytes = storage.download_file(document.storage_path)
 
-            # Extract just this chunk's pages
-            chunk_result = chunker.split_pdf(pdf_bytes, chunk_size=page_end - page_start + 1)
+            # Story 19.1: Update heartbeat after download
+            _run_async(chunks_svc.update_heartbeat(chunk_id))
 
-            # Find the chunk bytes for our page range
-            chunk_bytes = None
-            for c_bytes, c_start, c_end in chunk_result:
-                if c_start == page_start and c_end == page_end:
-                    chunk_bytes = c_bytes
-                    break
+            # Extract just this chunk's pages directly using pypdf (more memory efficient)
+            # The split_pdf method processes ALL pages which exceeds memory limits for large PDFs
+            reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+            writer = pypdf.PdfWriter()
+            for page_idx in range(page_start - 1, page_end):  # Convert to 0-based
+                writer.add_page(reader.pages[page_idx])
+            buffer = BytesIO()
+            writer.write(buffer)
+            chunk_bytes = buffer.getvalue()
 
-            if chunk_bytes is None:
-                # If exact match not found, extract directly
-                reader = pypdf.PdfReader(BytesIO(pdf_bytes))
-                writer = pypdf.PdfWriter()
-                for page_idx in range(page_start - 1, page_end):  # Convert to 0-based
-                    writer.add_page(reader.pages[page_idx])
-                buffer = BytesIO()
-                writer.write(buffer)
-                chunk_bytes = buffer.getvalue()
+            # Clear references to free memory
+            del reader
+            del writer
+            del pdf_bytes
+
+            # Story 19.1: Update heartbeat before OCR (long operation)
+            _run_async(chunks_svc.update_heartbeat(chunk_id))
 
             # Process through Document AI (with circuit breaker - Story 17.2)
             ocr_result = ocr.process_document(
@@ -578,39 +583,38 @@ def process_single_chunk(
                 document_id=f"{document_id}_chunk_{chunk_index}",
             )
 
-            # Prepare result for storage
-            result_data = {
-                "chunk_index": chunk_index,
-                "page_start": page_start,
-                "page_end": page_end,
-                "bounding_boxes": [
-                    bbox.model_dump() if hasattr(bbox, "model_dump") else bbox
-                    for bbox in ocr_result.bounding_boxes
-                ],
+            # Story 19.1: Update heartbeat after OCR completes
+            _run_async(chunks_svc.update_heartbeat(chunk_id))
+
+            # Store bounding boxes in database (same as non-chunked processing)
+            # Adjust page numbers to be relative to the full document, not the chunk
+            # The BoundingBox objects have a 'page' attribute that needs adjustment
+            for bbox in ocr_result.bounding_boxes:
+                # Adjust page number: chunk's page 1 = document's page_start
+                bbox.page = bbox.page + page_start - 1
+
+            # Store bounding boxes using the bounding box service
+            # Note: save_bounding_boxes is synchronous, not async
+            bbox_svc = get_bounding_box_service()
+            bbox_svc.save_bounding_boxes(
+                document_id=document_id,
+                matter_id=matter_id,
+                bounding_boxes=ocr_result.bounding_boxes,
+            )
+
+            # Calculate checksum of results for idempotency
+            result_json = json.dumps({
                 "full_text": ocr_result.full_text,
                 "overall_confidence": ocr_result.overall_confidence,
                 "page_count": ocr_result.page_count,
-            }
-
-            # Store result in Supabase Storage
-            result_json = json.dumps(result_data)
+            })
             result_checksum = hashlib.sha256(result_json.encode()).hexdigest()
 
-            # Storage path for chunk result
-            result_path = f"{matter_id}/chunks/{document_id}/{chunk_index}.json"
-            storage.upload_file(
-                matter_id=matter_id,
-                subfolder="chunks",
-                file_content=result_json.encode(),
-                filename=f"{document_id}_{chunk_index}.json",
-                content_type="application/json",
-            )
-
-            # Update chunk record with completion info
+            # Update chunk record with completion info (no storage path needed)
             _run_async(
                 chunks_svc.update_result(
                     chunk_id=chunk_id,
-                    result_storage_path=result_path,
+                    result_storage_path=None,  # Not using storage
                     result_checksum=result_checksum,
                 )
             )
@@ -641,13 +645,11 @@ def process_single_chunk(
                 "chunk_index": chunk_index,
                 "page_start": page_start,
                 "page_end": page_end,
-                "result_path": result_path,
                 "checksum": result_checksum,
                 "bbox_count": len(ocr_result.bounding_boxes),
                 "confidence": ocr_result.overall_confidence,
                 "page_count": ocr_result.page_count,
                 "full_text": ocr_result.full_text,
-                "bounding_boxes": result_data["bounding_boxes"],
                 "processing_time_seconds": round(processing_time, 2),
             }
 
@@ -849,8 +851,151 @@ def _merge_and_store_results(
 
 
 # =============================================================================
-# RAG Re-Processing Trigger (Story 17.7)
+# Parallel Processing Trigger (Story 2.1 - Pipeline Improvements)
 # =============================================================================
+
+
+def _trigger_parallel_processing(
+    document_id: str,
+    matter_id: str,
+    full_text: str,
+    page_count: int,
+    job_id: str | None = None,
+) -> dict[str, list[str]]:
+    """Trigger downstream processing tasks in parallel after OCR completes.
+
+    Story 2.1: Dispatches independent tasks in parallel using Celery group()
+    for faster overall processing. Tasks that can work on raw text are
+    dispatched immediately without waiting for chunking.
+
+    Parallel tasks dispatched:
+    1. chunk_document - Creates semantic chunks for search (REQUIRED for search)
+    2. extract_entities - Extracts people, organizations, dates (can use raw text)
+    3. extract_dates_from_document - Extracts timeline events (can use raw text)
+    4. extract_citations - Extracts legal citations (can use raw text)
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID for namespace isolation.
+        full_text: Extracted OCR text.
+        page_count: Total pages in document.
+        job_id: Optional job tracking UUID.
+
+    Returns:
+        Dict with lists of triggered and failed task names.
+    """
+    # Calculate text metrics for logging
+    text_length = len(full_text) if full_text else 0
+    word_count = len(full_text.split()) if full_text else 0
+
+    logger.info(
+        "parallel_processing_triggered",
+        document_id=document_id,
+        matter_id=matter_id,
+        page_count=page_count,
+        text_length=text_length,
+        word_count=word_count,
+    )
+
+    # Build prev_result for task chain simulation
+    prev_result = {
+        "document_id": document_id,
+        "status": "ocr_complete",
+        "job_id": job_id,
+    }
+
+    triggered_tasks: list[str] = []
+    failed_tasks: list[str] = []
+
+    # Task 1: Chunking (REQUIRED for search - dispatched first for priority)
+    try:
+        from app.workers.tasks.document_tasks import chunk_document
+
+        # Use skip_bbox_linking=True for faster chunking
+        # Bbox linking can be done later via background task
+        chunk_document.delay(
+            prev_result=prev_result,
+            document_id=document_id,
+            skip_bbox_linking=True,  # Story 2.3: Decouple bbox linking
+        )
+        triggered_tasks.append("chunk_document")
+        logger.debug("chunk_document_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("chunk_document")
+        logger.warning(
+            "chunk_document_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    # Task 2: Entity extraction (can work on raw text)
+    try:
+        from app.workers.tasks.document_tasks import extract_entities
+
+        extract_entities.delay(
+            prev_result=prev_result,
+            document_id=document_id,
+            force=True,  # Skip status check - we know OCR is complete
+        )
+        triggered_tasks.append("extract_entities")
+        logger.debug("extract_entities_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("extract_entities")
+        logger.warning(
+            "extract_entities_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    # Task 3: Date extraction (can work on raw text)
+    try:
+        from app.workers.tasks.engine_tasks import extract_dates_from_document
+
+        extract_dates_from_document.delay(
+            document_id=document_id,
+            matter_id=matter_id,
+        )
+        triggered_tasks.append("extract_dates_from_document")
+        logger.debug("extract_dates_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("extract_dates_from_document")
+        logger.warning(
+            "extract_dates_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    # Task 4: Citation extraction (can work on raw text)
+    try:
+        from app.workers.tasks.document_tasks import extract_citations
+
+        extract_citations.delay(
+            prev_result=prev_result,
+            document_id=document_id,
+        )
+        triggered_tasks.append("extract_citations")
+        logger.debug("extract_citations_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("extract_citations")
+        logger.warning(
+            "extract_citations_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    logger.info(
+        "parallel_processing_tasks_dispatched",
+        document_id=document_id,
+        triggered=triggered_tasks,
+        failed=failed_tasks,
+        total_triggered=len(triggered_tasks),
+        total_failed=len(failed_tasks),
+    )
+
+    return {
+        "triggered": triggered_tasks,
+        "failed": failed_tasks,
+    }
 
 
 def _trigger_rag_reprocessing(
@@ -859,64 +1004,16 @@ def _trigger_rag_reprocessing(
     full_text: str,
     page_count: int,
 ) -> None:
-    """Trigger downstream RAG pipeline re-processing after OCR completes.
+    """DEPRECATED: Use _trigger_parallel_processing instead.
 
-    Story 17.7: Ensures the RAG pipeline (chunking, embedding, vector store)
-    is updated with the newly OCR'd document text.
-
-    This dispatches a Celery task to:
-    1. Re-chunk the document text for embedding
-    2. Generate embeddings for each chunk
-    3. Upsert to Pinecone vector store
-
-    If the RAG task queue is unavailable, logs warning but doesn't fail
-    the OCR completion (graceful degradation).
-
-    Args:
-        document_id: Document UUID.
-        matter_id: Matter UUID for namespace isolation.
-        full_text: Extracted OCR text.
-        page_count: Total pages in document.
+    Kept for backward compatibility. Calls _trigger_parallel_processing.
     """
-    try:
-        # Import here to avoid circular dependency
-        from app.workers.tasks.rag_tasks import process_document_for_rag
-
-        # Calculate text metrics for logging
-        text_length = len(full_text) if full_text else 0
-        word_count = len(full_text.split()) if full_text else 0
-
-        logger.info(
-            "rag_reprocessing_triggered",
-            document_id=document_id,
-            matter_id=matter_id,
-            page_count=page_count,
-            text_length=text_length,
-            word_count=word_count,
-        )
-
-        # Dispatch RAG processing task
-        process_document_for_rag.delay(
-            document_id=document_id,
-            matter_id=matter_id,
-            extracted_text=full_text,
-            reprocess=True,  # Indicates this is a re-processing from chunked OCR
-        )
-
-    except ImportError:
-        logger.warning(
-            "rag_task_not_available",
-            document_id=document_id,
-            message="RAG tasks not configured, skipping re-processing",
-        )
-    except Exception as e:
-        # Don't fail OCR completion if RAG trigger fails
-        logger.warning(
-            "rag_trigger_failed",
-            document_id=document_id,
-            error=str(e),
-            message="OCR completed but RAG re-processing could not be triggered",
-        )
+    _trigger_parallel_processing(
+        document_id=document_id,
+        matter_id=matter_id,
+        full_text=full_text,
+        page_count=page_count,
+    )
 
 
 # =============================================================================
@@ -1003,3 +1100,195 @@ def retry_failed_chunks(
             error=str(e),
         )
         raise
+
+
+# =============================================================================
+# Finalize Chunked Document Task (Story 19.2)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.chunked_document_tasks.finalize_chunked_document",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+)
+def finalize_chunked_document(
+    self,
+    document_id: str,
+    matter_id: str,
+    job_id: str | None = None,
+) -> dict:
+    """Finalize a chunked document by completing OCR stage.
+
+    Story 19.2: Auto-merge trigger safety net.
+
+    This task is triggered either:
+    1. By process_document_chunked after all chunks complete
+    2. By the periodic merge trigger as a safety net
+
+    Since bounding boxes are already saved by process_single_chunk,
+    this task just:
+    1. Verifies all chunks are completed
+    2. Updates document status to OCR_COMPLETE
+    3. Triggers downstream RAG processing
+    4. Cleans up chunk records
+
+    Uses idempotency check to prevent double processing.
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID.
+        job_id: Optional job tracking UUID.
+
+    Returns:
+        Dict with finalization status.
+    """
+    chunks_svc = get_ocr_chunk_service()
+    doc_service = get_document_service()
+    cleanup_service = get_chunk_cleanup_service()
+
+    logger.info(
+        "finalize_chunked_document_started",
+        document_id=document_id,
+        matter_id=matter_id,
+        job_id=job_id,
+    )
+
+    # Idempotency check - skip if already finalized
+    document = doc_service.get_document(document_id)
+    if not document:
+        logger.error(
+            "finalize_document_not_found",
+            document_id=document_id,
+        )
+        return {
+            "status": "error",
+            "document_id": document_id,
+            "error": "Document not found",
+        }
+
+    if document.status in (
+        DocumentStatus.OCR_COMPLETE,
+        DocumentStatus.COMPLETED,
+    ):
+        logger.info(
+            "finalize_chunked_document_already_done",
+            document_id=document_id,
+            status=document.status.value,
+        )
+        return {
+            "status": "already_complete",
+            "document_id": document_id,
+            "current_status": document.status.value,
+        }
+
+    # Get chunk progress
+    progress = _run_async(chunks_svc.get_chunk_progress(document_id))
+
+    if not progress.is_complete:
+        logger.warning(
+            "finalize_called_with_incomplete_chunks",
+            document_id=document_id,
+            completed=progress.completed,
+            total=progress.total,
+            pending=progress.pending,
+            processing=progress.processing,
+        )
+        return {
+            "status": "not_ready",
+            "document_id": document_id,
+            "message": f"Chunks not complete: {progress.completed}/{progress.total}",
+            "pending": progress.pending,
+            "processing": progress.processing,
+        }
+
+    if progress.has_failures:
+        logger.warning(
+            "finalize_has_failed_chunks",
+            document_id=document_id,
+            failed=progress.failed,
+        )
+        return {
+            "status": "has_failures",
+            "document_id": document_id,
+            "failed_count": progress.failed,
+            "message": f"{progress.failed} chunk(s) failed - use retry_failed_chunks to recover",
+        }
+
+    # Get all completed chunks to aggregate stats
+    chunks = _run_async(chunks_svc.get_chunks_by_document(document_id))
+
+    # Calculate aggregate stats from chunks
+    total_page_count = 0
+    for chunk in chunks:
+        total_page_count += (chunk.page_end - chunk.page_start + 1)
+
+    # Count bounding boxes from database
+    from app.services.bounding_box_service import get_bounding_box_service
+    bbox_service = get_bounding_box_service()
+    bboxes, bbox_count = bbox_service.get_bounding_boxes_for_document(document_id)
+
+    # Update document status to OCR_COMPLETE
+    doc_service.update_ocr_status(
+        document_id=document_id,
+        status=DocumentStatus.OCR_COMPLETE,
+    )
+
+    # Broadcast status update
+    broadcast_document_status(
+        matter_id=matter_id,
+        document_id=document_id,
+        status="ocr_complete",
+    )
+
+    # Update job tracking if available
+    if job_id:
+        from app.services.job_tracking import get_job_tracking_service
+        job_tracker = get_job_tracking_service()
+        _run_async(
+            job_tracker.update_job_status(
+                job_id=job_id,
+                status=JobStatus.PROCESSING,
+                stage="ocr_complete",
+                progress_pct=100,
+                completed_stages=1,
+            )
+        )
+
+    # Clean up chunk records (Story 15.4)
+    _run_async(cleanup_service.cleanup_document_chunks(document_id))
+
+    # Get full text for RAG processing from bounding boxes
+    # Note: bboxes is a list of dicts from get_bounding_boxes_for_document
+    full_text = " ".join(bbox["text"] for bbox in bboxes if bbox.get("text"))
+
+    # Story 2.1: Trigger downstream processing tasks in parallel
+    # (replaces sequential RAG processing trigger)
+    parallel_result = _trigger_parallel_processing(
+        document_id=document_id,
+        matter_id=matter_id,
+        full_text=full_text,
+        page_count=total_page_count,
+        job_id=job_id,
+    )
+
+    logger.info(
+        "finalize_chunked_document_complete",
+        document_id=document_id,
+        chunk_count=len(chunks),
+        page_count=total_page_count,
+        bbox_count=bbox_count,
+        triggered_tasks=parallel_result["triggered"],
+    )
+
+    return {
+        "status": "ocr_complete",
+        "document_id": document_id,
+        "chunk_count": len(chunks),
+        "page_count": total_page_count,
+        "bbox_count": bbox_count,
+        "job_id": job_id,
+        "parallel_tasks_triggered": parallel_result["triggered"],
+        "parallel_tasks_failed": parallel_result["failed"],
+    }

@@ -617,8 +617,10 @@ async def alias_expanded_search(
 
         # Expand aliases if enabled
         if body.expand_aliases:
-            # Get all entities for this matter
-            entities = await mig_service.get_entities(matter_id=membership.matter_id)
+            # Get all entities for this matter (returns tuple of entities, total_count)
+            entities, _total = await mig_service.get_entities_by_matter(
+                matter_id=membership.matter_id, per_page=1000
+            )
 
             if entities:
                 # Find entity names that appear in the query

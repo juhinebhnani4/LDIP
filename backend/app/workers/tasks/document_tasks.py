@@ -47,6 +47,7 @@ from app.services.document_service import (
     DocumentServiceError,
     get_document_service,
 )
+from app.core.config import get_settings
 from app.services.job_tracking import (
     JobTrackingService,
     create_progress_tracker,
@@ -85,7 +86,9 @@ from app.services.ocr.validation_extractor import (
     get_validation_extractor,
 )
 from app.services.pubsub_service import (
+    FeatureType,
     broadcast_document_status,
+    broadcast_feature_ready,
     broadcast_job_progress,
     broadcast_job_status_change,
 )
@@ -1935,6 +1938,14 @@ def chunk_document(
             child_chunks=len(result.child_chunks),
         )
 
+        # Story 7.1: Broadcast search feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=doc_id,
+            feature=FeatureType.SEARCH,
+            metadata={"chunk_count": saved_count},
+        )
+
         logger.info(
             "chunk_document_task_completed",
             document_id=doc_id,
@@ -2112,15 +2123,34 @@ def link_chunks_to_bboxes_task(
             # Link chunks to bounding boxes
             await link_chunks_to_bboxes(chunks, document_id, bbox_service)
 
-            return len(chunks)
+            # Get matter_id for feature broadcast
+            doc_result = (
+                client.table("documents")
+                .select("matter_id")
+                .eq("id", document_id)
+                .limit(1)
+                .execute()
+            )
+            matter_id = doc_result.data[0]["matter_id"] if doc_result.data else None
 
-        linked_count = asyncio.run(_get_and_link_chunks())
+            return len(chunks), matter_id
+
+        linked_count, matter_id = asyncio.run(_get_and_link_chunks())
 
         logger.info(
             "link_chunks_to_bboxes_task_completed",
             document_id=document_id,
             linked_count=linked_count,
         )
+
+        # Story 7.1: Broadcast bbox highlighting feature availability
+        if matter_id:
+            broadcast_feature_ready(
+                matter_id=matter_id,
+                document_id=document_id,
+                feature=FeatureType.BBOX_HIGHLIGHTING,
+                metadata={"linked_count": linked_count},
+            )
 
         return {
             "status": "bbox_linking_complete",
@@ -2457,6 +2487,14 @@ def embed_chunks(
             failed_count=failed_count,
         )
 
+        # Story 7.1: Broadcast semantic search feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=doc_id,
+            feature=FeatureType.SEMANTIC_SEARCH,
+            metadata={"embedded_count": embedded_count},
+        )
+
         logger.info(
             "embed_chunks_task_completed",
             document_id=doc_id,
@@ -2534,8 +2572,11 @@ def embed_chunks(
 # Entity Extraction Task (MIG)
 # =============================================================================
 
-ENTITY_EXTRACTION_BATCH_SIZE = 10  # Chunks per Gemini API call
-ENTITY_EXTRACTION_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
+# Entity extraction config defaults (can be overridden by settings)
+ENTITY_EXTRACTION_BATCH_SIZE = 10  # Chunks per parallel batch
+ENTITY_EXTRACTION_MEGA_BATCH_SIZE = 5  # Chunks per mega-batch API call
+ENTITY_EXTRACTION_CONCURRENT_LIMIT = 5  # Max concurrent API calls
+ENTITY_EXTRACTION_RATE_LIMIT_DELAY = 0.3  # Seconds between batches
 
 
 @celery_app.task(
@@ -2778,24 +2819,92 @@ def extract_entities(
         failed_chunks = 0
         skipped_chunks = 0
 
-        # Process all batches in a single async context
+        # Get config for extraction strategy
+        settings = get_settings()
+        use_mega_batch = settings.entity_extraction_use_batch
+        mega_batch_size = settings.entity_extraction_batch_size
+        concurrent_limit = settings.entity_extraction_concurrent_limit
+        rate_delay = settings.entity_extraction_rate_delay
+
+        logger.info(
+            "extract_entities_strategy",
+            document_id=doc_id,
+            use_mega_batch=use_mega_batch,
+            mega_batch_size=mega_batch_size,
+            concurrent_limit=concurrent_limit,
+            chunk_count=len(chunks),
+        )
+
+        # Process all batches in a single async context with PARALLEL extraction
         async def _extract_entities_async():
             nonlocal total_entities, total_relationships, failed_chunks, skipped_chunks
 
-            for i in range(0, len(chunks), ENTITY_EXTRACTION_BATCH_SIZE):
-                batch = chunks[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
+            # Semaphore to limit concurrent API calls (avoid rate limits)
+            semaphore = asyncio.Semaphore(concurrent_limit)
 
-                for chunk in batch:
-                    chunk_id = chunk["id"]
+            async def _process_mega_batch(mega_batch: list[dict]) -> tuple[int, int, int]:
+                """Process multiple chunks in a single API call (mega-batch).
 
-                    # Skip already-processed chunks (partial progress)
-                    if chunk_id in already_processed:
-                        skipped_chunks += 1
-                        continue
-
+                Returns:
+                    Tuple of (entities_count, relationships_count, failed_count).
+                """
+                async with semaphore:
                     try:
-                        # Extract entities from chunk
-                        extraction_result = extractor.extract_entities_sync(
+                        # MEGA-BATCH: Extract from multiple chunks in one call
+                        extraction_results = await extractor.extract_entities_batch(
+                            chunks=mega_batch,
+                            document_id=doc_id,
+                            matter_id=matter_id,
+                        )
+
+                        batch_entities = 0
+                        batch_relationships = 0
+                        batch_failed = 0
+
+                        # Process each result and save to database
+                        for chunk, result in zip(mega_batch, extraction_results, strict=False):
+                            chunk_id = chunk["id"]
+
+                            if result.entities:
+                                saved = await graph_service.save_entities(
+                                    matter_id=matter_id,
+                                    extraction_result=result,
+                                )
+                                batch_entities += len(saved)
+
+                            if result.relationships:
+                                batch_relationships += len(result.relationships)
+
+                            # Track progress
+                            if stage_progress:
+                                stage_progress.mark_processed(chunk_id)
+
+                        return (batch_entities, batch_relationships, batch_failed)
+
+                    except Exception as e:
+                        logger.warning(
+                            "extract_entities_mega_batch_error",
+                            document_id=doc_id,
+                            batch_size=len(mega_batch),
+                            error=str(e),
+                        )
+                        # Mark all chunks in batch as failed
+                        for chunk in mega_batch:
+                            if stage_progress:
+                                stage_progress.mark_failed(chunk["id"], str(e))
+                        return (0, 0, len(mega_batch))
+
+            async def _process_single_chunk(chunk: dict) -> tuple[int, int, bool]:
+                """Process a single chunk (fallback when mega-batch disabled).
+
+                Returns:
+                    Tuple of (entities_count, relationships_count, success).
+                """
+                chunk_id = chunk["id"]
+
+                async with semaphore:
+                    try:
+                        extraction_result = await extractor.extract_entities(
                             text=chunk["content"],
                             document_id=doc_id,
                             matter_id=matter_id,
@@ -2803,64 +2912,122 @@ def extract_entities(
                             page_number=chunk.get("page_number"),
                         )
 
+                        entities_count = 0
+                        relationships_count = 0
+
                         if extraction_result.entities:
-                            # Save entities to database
                             saved_entities = await graph_service.save_entities(
                                 matter_id=matter_id,
                                 extraction_result=extraction_result,
                             )
-                            total_entities += len(saved_entities)
+                            entities_count = len(saved_entities)
 
                         if extraction_result.relationships:
-                            # Note: Relationships require entity resolution (Story 2C.2)
-                            # For now, just count them
-                            total_relationships += len(extraction_result.relationships)
+                            relationships_count = len(extraction_result.relationships)
 
-                        # Track partial progress
                         if stage_progress:
                             stage_progress.mark_processed(chunk_id)
+
+                        return (entities_count, relationships_count, True)
 
                     except MIGExtractorError as e:
                         if stage_progress:
                             stage_progress.mark_failed(chunk_id, str(e))
-
                         if e.is_retryable:
-                            # Save progress before retry
                             if progress_tracker and stage_progress:
                                 progress_tracker.save_progress(stage_progress, force=True)
-                            raise  # Let Celery retry
-                        logger.warning(
-                            "extract_entities_chunk_failed",
-                            document_id=doc_id,
-                            chunk_id=chunk_id,
-                            error=str(e),
-                        )
-                        failed_chunks += 1
+                            raise
+                        return (0, 0, False)
                     except Exception as e:
-                        logger.warning(
-                            "extract_entities_chunk_error",
-                            document_id=doc_id,
-                            chunk_id=chunk_id,
-                            error=str(e),
-                        )
-                        failed_chunks += 1
                         if stage_progress:
                             stage_progress.mark_failed(chunk_id, str(e))
+                        return (0, 0, False)
 
-                # Persist partial progress periodically
-                if progress_tracker and stage_progress:
-                    progress_tracker.save_progress(stage_progress)
+            # Filter out already-processed chunks
+            chunks_to_process = [c for c in chunks if c["id"] not in already_processed]
+            skipped_chunks = len(chunks) - len(chunks_to_process)
 
-                # Rate limit delay between batches
-                if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks):
-                    await asyncio.sleep(ENTITY_EXTRACTION_RATE_LIMIT_DELAY)
+            if use_mega_batch:
+                # MEGA-BATCH MODE: Process chunks in groups, each group = 1 API call
+                # Example: 657 chunks / 5 per batch = 132 API calls (instead of 657)
+                for i in range(0, len(chunks_to_process), ENTITY_EXTRACTION_BATCH_SIZE):
+                    outer_batch = chunks_to_process[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
 
-                logger.debug(
-                    "extract_entities_batch_complete",
-                    document_id=doc_id,
-                    batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
-                    total_batches=(len(chunks) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
-                )
+                    # Split into mega-batches for parallel API calls
+                    mega_batches = [
+                        outer_batch[j : j + mega_batch_size]
+                        for j in range(0, len(outer_batch), mega_batch_size)
+                    ]
+
+                    # Process mega-batches in parallel (limited by semaphore)
+                    results = await asyncio.gather(
+                        *[_process_mega_batch(mb) for mb in mega_batches],
+                        return_exceptions=True,
+                    )
+
+                    for result in results:
+                        if isinstance(result, Exception):
+                            failed_chunks += mega_batch_size
+                            logger.warning(
+                                "extract_entities_mega_batch_exception",
+                                document_id=doc_id,
+                                error=str(result),
+                            )
+                        else:
+                            entities, relationships, failed = result
+                            total_entities += entities
+                            total_relationships += relationships
+                            failed_chunks += failed
+
+                    # Persist progress periodically
+                    if progress_tracker and stage_progress:
+                        progress_tracker.save_progress(stage_progress)
+
+                    # Rate limit between outer batches
+                    if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks_to_process):
+                        await asyncio.sleep(rate_delay)
+
+                    logger.debug(
+                        "extract_entities_batch_complete",
+                        document_id=doc_id,
+                        batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
+                        total_batches=(len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
+                        mode="mega_batch",
+                        api_calls=len(mega_batches),
+                    )
+            else:
+                # PARALLEL MODE: Individual API calls per chunk (faster with semaphore)
+                for i in range(0, len(chunks_to_process), ENTITY_EXTRACTION_BATCH_SIZE):
+                    batch = chunks_to_process[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
+
+                    results = await asyncio.gather(
+                        *[_process_single_chunk(chunk) for chunk in batch],
+                        return_exceptions=True,
+                    )
+
+                    for result in results:
+                        if isinstance(result, Exception):
+                            failed_chunks += 1
+                        else:
+                            entities, relationships, success = result
+                            total_entities += entities
+                            total_relationships += relationships
+                            if not success:
+                                failed_chunks += 1
+
+                    if progress_tracker and stage_progress:
+                        progress_tracker.save_progress(stage_progress)
+
+                    if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks_to_process):
+                        await asyncio.sleep(rate_delay)
+
+                    logger.debug(
+                        "extract_entities_batch_complete",
+                        document_id=doc_id,
+                        batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
+                        total_batches=(len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
+                        mode="parallel",
+                    )
 
         try:
             asyncio.run(_extract_entities_async())
@@ -2876,6 +3043,14 @@ def extract_entities(
             status="entities_extracted",
             entities_extracted=total_entities,
             relationships_found=total_relationships,
+        )
+
+        # Story 7.1: Broadcast entities feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=doc_id,
+            feature=FeatureType.ENTITIES,
+            metadata={"entities_count": total_entities},
         )
 
         logger.info(
@@ -3071,8 +3246,10 @@ def resolve_aliases(
 
         # Run async operations in single context
         async def _resolve_aliases_async():
-            # Get all entities for this matter
-            entities = await graph_service.get_entities(matter_id=matter_id)
+            # Get all entities for this matter (returns tuple of entities, total_count)
+            entities, _total = await graph_service.get_entities_by_matter(
+                matter_id=matter_id, per_page=1000  # Get all entities for alias resolution
+            )
 
             if not entities:
                 return None, 0  # No entities to resolve
@@ -3547,6 +3724,17 @@ def extract_citations(
             metadata={
                 "citations_extracted": total_citations,
                 "unique_acts_found": len(total_unique_acts),
+            },
+        )
+
+        # Story 7.1: Broadcast citations feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=doc_id,
+            feature=FeatureType.CITATIONS,
+            metadata={
+                "citations_count": total_citations,
+                "unique_acts": len(total_unique_acts),
             },
         )
 

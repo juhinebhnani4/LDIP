@@ -42,9 +42,9 @@ Find references to Indian Acts, Codes, and Statutes including:
 
 Return a JSON object with this exact structure:
 ```json
-{
+{{
   "citations": [
-    {
+    {{
       "act_name": "Full Act name as extracted (e.g., 'Negotiable Instruments Act' or 'NI Act')",
       "section": "Section number (e.g., '138')",
       "subsection": "Subsection if present (e.g., '(1)') or null",
@@ -52,9 +52,9 @@ Return a JSON object with this exact structure:
       "raw_text": "Exact text as it appears in the document",
       "quoted_text": "If any text is quoted from the Act, include it here, or null",
       "confidence": 85
-    }
+    }}
   ]
-}
+}}
 ```
 
 ## Important Rules
@@ -77,9 +77,9 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
 ## Example Output
 
 ```json
-{
+{{
   "citations": [
-    {
+    {{
       "act_name": "Negotiable Instruments Act, 1881",
       "section": "138",
       "subsection": null,
@@ -87,8 +87,8 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
       "raw_text": "Section 138 of the Negotiable Instruments Act, 1881",
       "quoted_text": null,
       "confidence": 95
-    },
-    {
+    }},
+    {{
       "act_name": "NI Act",
       "section": "138",
       "subsection": null,
@@ -96,8 +96,8 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
       "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
       "quoted_text": null,
       "confidence": 90
-    },
-    {
+    }},
+    {{
       "act_name": "NI Act",
       "section": "139",
       "subsection": null,
@@ -105,8 +105,8 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
       "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
       "quoted_text": null,
       "confidence": 90
-    },
-    {
+    }},
+    {{
       "act_name": "NI Act",
       "section": "141",
       "subsection": null,
@@ -114,8 +114,8 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
       "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
       "quoted_text": null,
       "confidence": 90
-    },
-    {
+    }},
+    {{
       "act_name": "Code of Criminal Procedure, 1973",
       "section": "200",
       "subsection": null,
@@ -123,9 +123,9 @@ Further reliance was placed on Section 200 of the Code of Criminal Procedure, 19
       "raw_text": "Section 200 of the Code of Criminal Procedure, 1973",
       "quoted_text": null,
       "confidence": 95
-    }
+    }}
   ]
-}
+}}
 ```
 
 Now extract ALL citations from the following text:
@@ -158,12 +158,12 @@ Determine if the quoted text from the case file accurately represents what the A
 ## Output Format
 Return a JSON object:
 ```json
-{
+{{
   "verification_status": "verified" | "mismatch" | "section_not_found",
   "confidence": 85,
   "match_details": "Brief explanation of the match or mismatch",
   "actual_text": "The actual text from the Act section (if different from quoted)"
-}
+}}
 ```
 
 ## Verification Rules

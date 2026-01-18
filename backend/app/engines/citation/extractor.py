@@ -42,7 +42,7 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES: Final[int] = 3
 INITIAL_RETRY_DELAY: Final[float] = 1.0
 MAX_RETRY_DELAY: Final[float] = 30.0
-MAX_TEXT_LENGTH: Final[int] = 30000  # Max characters per extraction chunk
+MAX_TEXT_LENGTH: Final[int] = 5000  # Max characters per extraction chunk (reduced from 30000 to avoid Gemini output truncation)
 CHUNK_OVERLAP: Final[int] = 500  # Overlap between chunks to avoid missing citations at boundaries
 
 # Regex patterns for common citation formats
@@ -166,9 +166,16 @@ class CitationExtractor:
 
                 self._genai = genai
                 genai.configure(api_key=self.api_key)
+
+                # Configure generation with higher max_output_tokens to avoid truncation
+                generation_config = genai.GenerationConfig(
+                    max_output_tokens=8192,  # Increased from default to avoid JSON truncation
+                    temperature=0.1,  # Low temperature for consistent extraction
+                )
                 self._model = genai.GenerativeModel(
                     self.model_name,
                     system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
+                    generation_config=generation_config,
                 )
                 logger.info(
                     "citation_extractor_initialized",
@@ -643,12 +650,26 @@ class CitationExtractor:
 
             for raw in raw_citations:
                 try:
+                    # Handle null values from Gemini response
+                    section = raw.get("section") or ""
+                    act_name = raw.get("act_name") or ""
+                    raw_text = raw.get("raw_text") or ""
+
+                    # Skip if no section - Act mentions without section refs are not citations
+                    if not section:
+                        logger.debug(
+                            "citation_skipped_no_section",
+                            act_name=act_name,
+                            raw_text=raw_text[:80] if raw_text else "",
+                        )
+                        continue
+
                     citation = ExtractedCitation(
-                        act_name=raw.get("act_name", ""),
-                        section=raw.get("section", ""),
+                        act_name=act_name,
+                        section=section,
                         subsection=raw.get("subsection"),
                         clause=raw.get("clause"),
-                        raw_text=raw.get("raw_text", ""),
+                        raw_text=raw_text,
                         quoted_text=raw.get("quoted_text"),
                         confidence=float(raw.get("confidence", 80.0)),
                     )

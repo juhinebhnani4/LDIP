@@ -31,6 +31,7 @@ from app.services.chunk_service import get_chunk_service
 from app.services.document_service import get_document_service
 from app.services.job_tracking import get_job_tracking_service
 from app.services.mig.graph import get_mig_graph_service
+from app.services.pubsub_service import FeatureType, broadcast_feature_ready
 from app.services.timeline_cache import get_timeline_cache_service
 from app.services.timeline_service import get_timeline_service
 from app.workers.celery import celery_app
@@ -190,11 +191,9 @@ def extract_dates_from_document(
             )
 
         # Load document chunks to get text
-        chunks = _run_async(
-            chunk_service.get_chunks_by_document(
-                document_id=document_id,
-                matter_id=matter_id,
-            )
+        # ChunkService.get_chunks_for_document is synchronous, returns (chunks, parent_count, child_count)
+        chunks, _, _ = chunk_service.get_chunks_for_document(
+            document_id=document_id,
         )
 
         if not chunks:
@@ -221,12 +220,13 @@ def extract_dates_from_document(
 
         # Combine chunk content for extraction
         # Using parent chunks if available, otherwise all chunks
-        parent_chunks = [c for c in chunks if c.get("parent_chunk_id") is None]
+        # ChunkWithContent is a Pydantic model, access attributes directly
+        parent_chunks = [c for c in chunks if c.parent_chunk_id is None]
         chunks_to_process = parent_chunks if parent_chunks else chunks
 
         # Extract text from chunks
         full_text = "\n\n".join(
-            chunk.get("content", "") for chunk in chunks_to_process
+            chunk.content for chunk in chunks_to_process
         )
 
         if job_id:
@@ -285,6 +285,17 @@ def extract_dates_from_document(
             dates_found=len(extraction_result.dates),
             events_created=len(event_ids),
             processing_time_ms=extraction_result.processing_time_ms,
+        )
+
+        # Story 7.1: Broadcast timeline feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=document_id,
+            feature=FeatureType.TIMELINE,
+            metadata={
+                "dates_found": len(extraction_result.dates),
+                "events_created": len(event_ids),
+            },
         )
 
         result = {

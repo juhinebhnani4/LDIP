@@ -17,12 +17,19 @@ This is intentional because:
 CRITICAL: All services using these clients MUST validate matter_id
 ownership before performing operations. See HumanReviewService for
 the pattern of validating item.matter_id matches authorized matter.
+
+CONNECTION STABILITY:
+Uses HTTP/1.1 instead of HTTP/2 to avoid connection multiplexing issues
+with Supabase/Cloudflare that cause ConnectionTerminated errors.
+Includes retry transport with exponential backoff for resilience.
 """
 
 from functools import lru_cache
 
+import httpx
 import structlog
 from supabase import Client, create_client
+from supabase.lib.client_options import SyncClientOptions
 
 from app.core.config import get_settings
 
@@ -30,6 +37,31 @@ logger = structlog.get_logger(__name__)
 
 # Global client instance (lazy initialized)
 _supabase_client: Client | None = None
+
+# HTTP client configuration for connection stability
+_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+
+
+def _create_http_client() -> httpx.Client:
+    """Create configured httpx client with HTTP/1.1 and retry transport.
+
+    Uses HTTP/1.1 to avoid connection multiplexing issues with Supabase/Cloudflare
+    that cause ConnectionTerminated and RemoteProtocolError exceptions.
+
+    Returns:
+        Configured httpx.Client with retries and connection pooling.
+    """
+    transport = httpx.HTTPTransport(
+        retries=3,  # Retry on connection errors
+        http2=False,  # Force HTTP/1.1 to avoid multiplexing issues
+    )
+    return httpx.Client(
+        transport=transport,
+        timeout=_HTTP_TIMEOUT,
+        limits=_HTTP_LIMITS,
+        http2=False,  # Explicit HTTP/1.1
+    )
 
 
 def _create_supabase_client() -> Client | None:
@@ -57,11 +89,21 @@ def _create_supabase_client() -> Client | None:
         return None
 
     try:
+        # Create custom httpx client with HTTP/1.1 for connection stability
+        http_client = _create_http_client()
+        options = SyncClientOptions(httpx_client=http_client)
+
         client = create_client(
             supabase_url=settings.supabase_url,
             supabase_key=key,
+            options=options,
         )
-        logger.info("supabase_client_created", using_service_key=bool(settings.supabase_service_key))
+        logger.info(
+            "supabase_client_created",
+            using_service_key=bool(settings.supabase_service_key),
+            http_version="1.1",
+            retries=3,
+        )
         return client
     except Exception as e:
         logger.error("supabase_client_creation_failed", error=str(e))
@@ -103,11 +145,16 @@ def get_service_client() -> Client | None:
         return None
 
     try:
+        # Create custom httpx client with HTTP/1.1 for connection stability
+        http_client = _create_http_client()
+        options = SyncClientOptions(httpx_client=http_client)
+
         client = create_client(
             supabase_url=settings.supabase_url,
             supabase_key=settings.supabase_service_key,
+            options=options,
         )
-        logger.info("supabase_service_client_created")
+        logger.info("supabase_service_client_created", http_version="1.1", retries=3)
         return client
     except Exception as e:
         logger.error("supabase_service_client_creation_failed", error=str(e))

@@ -5,6 +5,9 @@ import { getErrorMessage, isRetryableError, getErrorCodeFromStatus } from '@/lib
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Debug mode for API calls - enable to see detailed logging
+const DEBUG_API = process.env.NODE_ENV === 'development'
+
 // =============================================================================
 // Singleton Supabase Client (Performance Fix)
 // =============================================================================
@@ -128,17 +131,30 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     session = refreshedSession
   }
 
+  if (DEBUG_API) {
+    console.log(`[API] ${options.method || 'GET'} ${endpoint}`, {
+      hasSession: !!session,
+      userId: session?.user?.id,
+    })
+  }
+
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
 
   if (session?.access_token) {
     headers.set('Authorization', `Bearer ${session.access_token}`)
+  } else if (DEBUG_API) {
+    console.warn('[API] No auth token available - request will be unauthenticated')
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   })
+
+  if (DEBUG_API) {
+    console.log(`[API] Response: ${response.status} ${response.statusText}`, endpoint)
+  }
 
   // Handle 401 - try refresh and retry once
   if (response.status === 401) {
@@ -171,10 +187,17 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
 
   if (!response.ok) {
     const error = await response.json()
+    if (DEBUG_API) {
+      console.error(`[API] Error ${response.status}:`, error, endpoint)
+    }
     throw createApiError(response, error)
   }
 
-  return response.json()
+  const data = await response.json()
+  if (DEBUG_API && Array.isArray(data?.data)) {
+    console.log(`[API] Received ${data.data.length} items`, endpoint)
+  }
+  return data
 }
 
 /**

@@ -1014,7 +1014,7 @@ class SummaryService:
             # Get most recent chunks from the matter
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("chunks")
-                .select("id, content, page_number, document_id, documents(name)")
+                .select("id, content, page_number, document_id, documents(filename)")
                 .eq("matter_id", matter_id)
                 .order("created_at", desc=True)
                 .limit(limit)
@@ -1026,7 +1026,7 @@ class SummaryService:
                 doc_data = row.get("documents", {}) or {}
                 chunks.append({
                     "content": row.get("content", ""),
-                    "document_name": doc_data.get("name", "Unknown"),
+                    "document_name": doc_data.get("filename", "Unknown"),
                     "page_number": row.get("page_number"),
                 })
 
@@ -1173,7 +1173,7 @@ class SummaryService:
                 lambda: self.supabase.table("documents")
                 .select("id")
                 .eq("matter_id", matter_id)
-                .eq("name", document_name)
+                .eq("filename", document_name)
                 .limit(1)
                 .execute()
             )

@@ -159,6 +159,9 @@ export function ExportBuilder({
     }
   }, [summary, summaryLoading, summaryError, updateSectionCount, setSectionLoading]);
 
+  // Memoize event count to prevent infinite loops from unstable array references
+  const eventsCount = events?.length ?? 0;
+
   useEffect(() => {
     // Timeline events count
     if (timelineLoading) {
@@ -166,20 +169,23 @@ export function ExportBuilder({
     } else if (timelineError) {
       updateSectionCount('timeline', 0);
     } else {
-      updateSectionCount('timeline', events.length);
+      updateSectionCount('timeline', eventsCount);
     }
-  }, [events, timelineLoading, timelineError, updateSectionCount, setSectionLoading]);
+  }, [eventsCount, timelineLoading, timelineError, updateSectionCount, setSectionLoading]);
 
   useEffect(() => {
-    // Entities count
+    // Entities count - entitiesTotal is already a primitive from the hook
     if (entitiesLoading) {
       setSectionLoading('entities', true);
     } else if (entitiesError) {
       updateSectionCount('entities', 0);
     } else {
-      updateSectionCount('entities', entitiesTotal);
+      updateSectionCount('entities', entitiesTotal ?? 0);
     }
   }, [entitiesTotal, entitiesLoading, entitiesError, updateSectionCount, setSectionLoading]);
+
+  // Memoize citation count to prevent infinite loops from unstable object references
+  const citationsCount = citationStats?.totalCitations ?? 0;
 
   useEffect(() => {
     // Citations count
@@ -187,10 +193,10 @@ export function ExportBuilder({
       setSectionLoading('citations', true);
     } else if (citationsError) {
       updateSectionCount('citations', 0);
-    } else if (citationStats) {
-      updateSectionCount('citations', citationStats.totalCitations);
+    } else {
+      updateSectionCount('citations', citationsCount);
     }
-  }, [citationStats, citationsLoading, citationsError, updateSectionCount, setSectionLoading]);
+  }, [citationsCount, citationsLoading, citationsError, updateSectionCount, setSectionLoading]);
 
   // Contradictions - Phase 2 placeholder, set to 0
   useEffect(() => {

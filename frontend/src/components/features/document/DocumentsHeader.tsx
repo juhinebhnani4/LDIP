@@ -110,11 +110,11 @@ export function DocumentsHeader({
 
       {/* Processing banner - AC #2 */}
       {processingCount > 0 && (
-        <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-900">
+        <Alert className="bg-primary/5 border-primary/20 dark:bg-primary/10 dark:border-primary/30">
           <div className="flex items-center gap-3">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary dark:text-primary/80" aria-hidden="true" />
             <div className="flex-1">
-              <AlertDescription className="text-blue-700 dark:text-blue-300">
+              <AlertDescription className="text-primary dark:text-primary/90">
                 Processing NEW DOCUMENTS: {processingCount} {processingCount === 1 ? 'file' : 'files'} ({100 - processingPercent}% complete)
               </AlertDescription>
               <Progress

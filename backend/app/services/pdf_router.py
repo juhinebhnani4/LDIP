@@ -2,8 +2,8 @@
 
 Story 16.1: Implement PDF Page Count Detection and Routing
 
-Determines whether a PDF should use sync processing (<=30 pages)
-or chunked parallel processing (>30 pages).
+Determines whether a PDF should use sync processing (<=15 pages)
+or chunked parallel processing (>15 pages).
 """
 
 from functools import lru_cache
@@ -17,9 +17,9 @@ from app.models.ocr_chunk import ChunkSpec
 logger = structlog.get_logger(__name__)
 
 # Routing thresholds
-PAGE_COUNT_THRESHOLD = 30  # Documents > 30 pages use chunked processing
+PAGE_COUNT_THRESHOLD = 15  # Documents > 15 pages use chunked processing (Document AI limit)
 MAX_PAGE_COUNT = 10000  # Security limit
-CHUNK_SIZE = 25  # Pages per chunk
+CHUNK_SIZE = 15  # Pages per chunk (Document AI limit: 15 for non-imageless, 30 for imageless)
 
 
 class PDFRouterError(Exception):
@@ -41,8 +41,8 @@ class MaliciousPDFError(PDFRouterError):
 class PDFRouter:
     """Service for PDF page count detection and routing decisions.
 
-    Determines whether a PDF should use sync processing (<=30 pages)
-    or chunked parallel processing (>30 pages).
+    Determines whether a PDF should use sync processing (<=15 pages)
+    or chunked parallel processing (>15 pages).
 
     Example:
         >>> router = PDFRouter()
@@ -188,7 +188,7 @@ class PDFRouter:
             page_count: Number of pages in PDF.
 
         Returns:
-            True if PDF should be chunked (>30 pages), False for sync processing.
+            True if PDF should be chunked (>15 pages), False for sync processing.
         """
         return page_count > PAGE_COUNT_THRESHOLD
 

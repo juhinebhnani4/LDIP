@@ -137,19 +137,19 @@ export function QuickStats({ className }: QuickStatsProps) {
               icon={Folder}
               label="Active Matters"
               value={stats.activeMatters}
-              iconColorClass="text-blue-500"
+              iconColorClass="text-primary"
             />
             <StatItem
               icon={FileCheck}
               label="Verified Findings"
               value={stats.verifiedFindings}
-              iconColorClass="text-green-500"
+              iconColorClass="text-[var(--success)]"
             />
             <StatItem
               icon={Timer}
               label="Pending Reviews"
               value={stats.pendingReviews}
-              iconColorClass="text-orange-500"
+              iconColorClass="text-[var(--warning)]"
             />
           </>
         )}

@@ -119,6 +119,8 @@ class MIGGraphService:
         Handles deduplication: if entity with same canonical_name+type exists
         in matter, increments mention_count instead of creating duplicate.
 
+        Story 6.2: Optimized with batch operations to reduce DB round trips.
+
         Args:
             matter_id: Matter UUID for isolation.
             extraction_result: Extraction result from Gemini.
@@ -129,65 +131,308 @@ class MIGGraphService:
         if not extraction_result.entities:
             return []
 
+        # Story 6.2: Use batch operations for better performance
+        return await self._save_entities_batch(
+            matter_id=matter_id,
+            extraction_result=extraction_result,
+        )
+
+    async def _save_entities_batch(
+        self,
+        matter_id: str,
+        extraction_result: EntityExtractionResult,
+    ) -> list[EntityNode]:
+        """Batch save entities with optimized DB operations.
+
+        Story 6.2: Reduces DB round trips from N*3 to ~3 by batching:
+        1. Single query to find all existing entities
+        2. Batch insert for new entities
+        3. Batch update for existing entity mention counts
+        4. Batch insert for all mentions
+
+        Args:
+            matter_id: Matter UUID for isolation.
+            extraction_result: Extraction result from Gemini.
+
+        Returns:
+            List of created/updated EntityNode objects.
+        """
+        entities = extraction_result.entities
+        if not entities:
+            return []
+
         saved_nodes: list[EntityNode] = []
 
-        for extracted in extraction_result.entities:
-            try:
-                # Check if entity already exists (deduplication)
-                existing = await self._find_existing_entity(
-                    matter_id=matter_id,
-                    canonical_name=extracted.canonical_name,
-                    entity_type=extracted.type,
-                )
+        # Step 1: Batch lookup existing entities
+        lookup_keys = [
+            (e.canonical_name.lower(), e.type.value)
+            for e in entities
+        ]
+        existing_map = await self._batch_find_existing_entities(
+            matter_id=matter_id,
+            lookup_keys=lookup_keys,
+        )
 
-                if existing:
-                    # Update existing entity
-                    updated = await self._update_entity_mention_count(
-                        entity_id=existing["id"],
-                        matter_id=matter_id,
-                        additional_mentions=len(extracted.mentions) or 1,
-                    )
-                    if updated:
-                        saved_nodes.append(self._db_row_to_entity_node(updated))
+        # Step 2: Separate into new vs existing
+        new_entities: list[ExtractedEntity] = []
+        existing_entities: list[tuple[ExtractedEntity, dict]] = []
 
-                        # Save mentions for existing entity
-                        await self._save_entity_mentions(
-                            entity_id=existing["id"],
-                            extracted=extracted,
-                            extraction_result=extraction_result,
-                        )
-                else:
-                    # Create new entity
-                    node = await self._create_entity_node(
-                        matter_id=matter_id,
-                        extracted=extracted,
-                    )
-                    if node:
-                        saved_nodes.append(node)
+        for extracted in entities:
+            key = (extracted.canonical_name.lower(), extracted.type.value)
+            if key in existing_map:
+                existing_entities.append((extracted, existing_map[key]))
+            else:
+                new_entities.append(extracted)
 
-                        # Save mentions for new entity
-                        await self._save_entity_mentions(
-                            entity_id=node.id,
-                            extracted=extracted,
-                            extraction_result=extraction_result,
-                        )
+        # Step 3: Batch insert new entities
+        if new_entities:
+            created = await self._batch_create_entities(
+                matter_id=matter_id,
+                entities=new_entities,
+            )
+            saved_nodes.extend(created)
 
-            except Exception as e:
-                logger.warning(
-                    "mig_save_entity_failed",
-                    entity_name=extracted.canonical_name,
-                    error=str(e),
-                )
-                continue
+            # Build entity_id map for mentions
+            new_entity_map = {
+                (node.canonical_name.lower(), node.entity_type.value): node.id
+                for node in created
+            }
+        else:
+            new_entity_map = {}
+
+        # Step 4: Batch update mention counts for existing entities
+        if existing_entities:
+            updated = await self._batch_update_mention_counts(
+                matter_id=matter_id,
+                updates=[
+                    (row["id"], len(extracted.mentions) or 1)
+                    for extracted, row in existing_entities
+                ],
+            )
+            saved_nodes.extend(updated)
+
+        # Step 5: Batch insert all mentions
+        all_mentions = []
+        for extracted in entities:
+            key = (extracted.canonical_name.lower(), extracted.type.value)
+
+            # Determine entity_id
+            if key in existing_map:
+                entity_id = existing_map[key]["id"]
+            elif key in new_entity_map:
+                entity_id = new_entity_map[key]
+            else:
+                continue  # Entity creation failed
+
+            # Collect mentions
+            for mention in extracted.mentions:
+                all_mentions.append({
+                    "entity_id": entity_id,
+                    "document_id": extraction_result.source_document_id,
+                    "chunk_id": extraction_result.source_chunk_id,
+                    "page_number": extraction_result.page_number,
+                    "mention_text": mention.text,
+                    "context": mention.context,
+                    "confidence": extracted.confidence,
+                    "bbox_ids": [],
+                })
+
+        if all_mentions:
+            await self._batch_insert_mentions(all_mentions)
 
         logger.info(
-            "mig_entities_saved",
+            "mig_entities_saved_batch",
             matter_id=matter_id,
-            input_count=len(extraction_result.entities),
+            input_count=len(entities),
+            new_count=len(new_entities),
+            updated_count=len(existing_entities),
             saved_count=len(saved_nodes),
+            mentions_count=len(all_mentions),
         )
 
         return saved_nodes
+
+    async def _batch_find_existing_entities(
+        self,
+        matter_id: str,
+        lookup_keys: list[tuple[str, str]],
+    ) -> dict[tuple[str, str], dict]:
+        """Batch find existing entities by canonical_name and type.
+
+        Story 6.2: Single query instead of N queries.
+
+        Args:
+            matter_id: Matter UUID.
+            lookup_keys: List of (canonical_name_lower, entity_type) tuples.
+
+        Returns:
+            Dict mapping (name_lower, type) -> entity row.
+        """
+        if not lookup_keys:
+            return {}
+
+        # Extract unique entity types
+        entity_types = list(set(t for _, t in lookup_keys))
+
+        def _query():
+            return (
+                self.client.table("identity_nodes")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .in_("entity_type", entity_types)
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
+
+        if not response.data:
+            return {}
+
+        # Build lookup map
+        result: dict[tuple[str, str], dict] = {}
+        lookup_set = set(lookup_keys)
+
+        for row in response.data:
+            key = (row["canonical_name"].lower(), row["entity_type"])
+            if key in lookup_set:
+                result[key] = row
+
+        return result
+
+    async def _batch_create_entities(
+        self,
+        matter_id: str,
+        entities: list[ExtractedEntity],
+    ) -> list[EntityNode]:
+        """Batch create new entity nodes.
+
+        Story 6.2: Single insert for all new entities.
+
+        Args:
+            matter_id: Matter UUID.
+            entities: List of entities to create.
+
+        Returns:
+            List of created EntityNode objects.
+        """
+        if not entities:
+            return []
+
+        rows_to_insert = []
+        for extracted in entities:
+            metadata = {
+                "roles": extracted.roles,
+                "aliases_found": [
+                    m.text for m in extracted.mentions
+                    if m.text != extracted.canonical_name
+                ],
+                "first_extraction_confidence": extracted.confidence,
+            }
+            rows_to_insert.append({
+                "matter_id": matter_id,
+                "canonical_name": extracted.canonical_name,
+                "entity_type": extracted.type.value,
+                "metadata": metadata,
+                "mention_count": len(extracted.mentions) or 1,
+            })
+
+        def _insert():
+            return (
+                self.client.table("identity_nodes")
+                .insert(rows_to_insert)
+                .execute()
+            )
+
+        try:
+            response = await asyncio.to_thread(_insert)
+
+            if response.data:
+                return [self._db_row_to_entity_node(row) for row in response.data]
+        except Exception as e:
+            logger.warning(
+                "mig_batch_create_failed",
+                matter_id=matter_id,
+                count=len(entities),
+                error=str(e),
+            )
+
+        return []
+
+    async def _batch_update_mention_counts(
+        self,
+        matter_id: str,
+        updates: list[tuple[str, int]],
+    ) -> list[EntityNode]:
+        """Batch update mention counts for existing entities.
+
+        Story 6.2: Uses individual updates but in parallel.
+        Note: Supabase doesn't support bulk UPDATE with different values,
+        so we use asyncio.gather for concurrent updates.
+
+        Args:
+            matter_id: Matter UUID.
+            updates: List of (entity_id, additional_mentions) tuples.
+
+        Returns:
+            List of updated EntityNode objects.
+        """
+        if not updates:
+            return []
+
+        async def _update_one(entity_id: str, additional: int) -> EntityNode | None:
+            try:
+                updated = await self._update_entity_mention_count(
+                    entity_id=entity_id,
+                    matter_id=matter_id,
+                    additional_mentions=additional,
+                )
+                if updated:
+                    return self._db_row_to_entity_node(updated)
+            except Exception as e:
+                logger.warning(
+                    "mig_batch_update_one_failed",
+                    entity_id=entity_id,
+                    error=str(e),
+                )
+            return None
+
+        # Run updates concurrently
+        results = await asyncio.gather(
+            *[_update_one(eid, add) for eid, add in updates],
+            return_exceptions=True,
+        )
+
+        return [r for r in results if isinstance(r, EntityNode)]
+
+    async def _batch_insert_mentions(
+        self,
+        mentions: list[dict],
+    ) -> None:
+        """Batch insert entity mentions.
+
+        Story 6.2: Single insert for all mentions.
+
+        Args:
+            mentions: List of mention dicts to insert.
+        """
+        if not mentions:
+            return
+
+        def _insert():
+            return (
+                self.client.table("entity_mentions")
+                .insert(mentions)
+                .execute()
+            )
+
+        try:
+            await asyncio.to_thread(_insert)
+        except Exception as e:
+            logger.warning(
+                "mig_batch_insert_mentions_failed",
+                count=len(mentions),
+                error=str(e),
+            )
 
     async def _find_existing_entity(
         self,

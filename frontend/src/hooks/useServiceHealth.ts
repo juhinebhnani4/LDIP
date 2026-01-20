@@ -63,7 +63,7 @@ const DEFAULT_POLL_INTERVAL = 30000 // 30 seconds
  * Story 13.4: Graceful Degradation and Error States (AC #3)
  *
  * Features:
- * - Polls /health/circuits every 30 seconds by default
+ * - Polls /api/health/circuits every 30 seconds by default
  * - Only polls when document is visible (saves resources)
  * - Returns affected features for UI display
  * - Supports manual refresh
@@ -78,7 +78,7 @@ export function useServiceHealth(pollIntervalMs: number = DEFAULT_POLL_INTERVAL)
   const fetchCircuits = useCallback(async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/health/circuits`)
+      const response = await fetch(`${apiUrl}/api/health/circuits`)
 
       if (!response.ok) {
         throw new Error(`Failed to fetch circuit status: ${response.status}`)

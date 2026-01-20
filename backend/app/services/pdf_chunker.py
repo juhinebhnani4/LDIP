@@ -30,7 +30,7 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Configuration
-DEFAULT_CHUNK_SIZE = 25  # Pages per chunk (Document AI limit is 30)
+DEFAULT_CHUNK_SIZE = 15  # Pages per chunk (Document AI limit: 15 non-imageless, 30 imageless)
 CHUNK_THRESHOLD = 30  # Documents > 30 pages use chunking
 SPLIT_TIMEOUT_SECONDS = 30  # Max time for split operation
 

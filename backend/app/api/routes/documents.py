@@ -79,6 +79,7 @@ from app.workers.tasks.document_tasks import (
     embed_chunks,
     extract_entities,
     process_document,
+    resolve_aliases,
     validate_ocr,
 )
 
@@ -441,6 +442,9 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
     3. calculate_confidence: Calculate and store OCR quality metrics
     4. chunk_document: Create parent-child chunks for RAG
     5. embed_chunks: Generate OpenAI embeddings for semantic search
+    6. extract_entities: Extract entities for Matter Identity Graph
+    7. resolve_aliases: Resolve entity aliases and create links
+       -> Dispatches extract_citations and extract_dates_from_document in parallel
 
     After completion, documents are fully searchable via hybrid search.
 
@@ -456,10 +460,14 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
 
     queue_name = "high" if is_small_document else "default"
 
-    # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding -> Entity Extraction
-    # Each task receives the result from the previous task as first argument
-    # Full pipeline makes documents searchable via hybrid search (BM25 + semantic)
-    # and populates the Matter Identity Graph (MIG) with extracted entities
+    # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding ->
+    # Entity Extraction -> Alias Resolution
+    # Each task receives the result from the previous task as first argument.
+    # After resolve_aliases completes, it dispatches extract_citations and
+    # extract_dates_from_document in parallel (see resolve_aliases task).
+    # Full pipeline makes documents searchable via hybrid search (BM25 + semantic),
+    # populates the Matter Identity Graph (MIG) with extracted entities,
+    # extracts Act citations, and builds the timeline with extracted dates.
     task_chain = chain(
         process_document.s(document_id),
         validate_ocr.s(),
@@ -467,6 +475,7 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
         chunk_document.s(),
         embed_chunks.s(),
         extract_entities.s(),
+        resolve_aliases.s(),
     )
 
     # Apply the chain to the appropriate queue
@@ -477,7 +486,7 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,
-        stages="ocr->validation->confidence->chunking->embedding->entity_extraction",
+        stages="ocr->validation->confidence->chunking->embedding->entity_extraction->alias_resolution->citations+dates",
     )
 
 

@@ -135,7 +135,7 @@ export function WorkspaceContentArea({
       <PDFSplitView>
         <ResizablePanelGroup direction="horizontal" className="flex-1">
           <ResizablePanel defaultSize={100 - rightWidth} minSize={40}>
-            <div className="h-full overflow-auto">{children}</div>
+            <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           </ResizablePanel>
           <ResizableHandle withHandle aria-label="Resize Q&A panel" />
           <ResizablePanel
@@ -161,7 +161,7 @@ export function WorkspaceContentArea({
       <PDFSplitView>
         <ResizablePanelGroup direction="vertical" className="flex-1">
           <ResizablePanel defaultSize={100 - bottomHeight} minSize={40}>
-            <div className="h-full overflow-auto">{children}</div>
+            <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           </ResizablePanel>
           <ResizableHandle withHandle aria-label="Resize Q&A panel" />
           <ResizablePanel
@@ -186,7 +186,7 @@ export function WorkspaceContentArea({
     return (
       <PDFSplitView>
         <div className="relative flex-1">
-          <div className="h-full overflow-auto">{children}</div>
+          <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           <FloatingQAPanel
             matterId={matterId}
             userId={userId}
@@ -201,7 +201,7 @@ export function WorkspaceContentArea({
   return (
     <PDFSplitView>
       <div className="relative flex-1">
-        <div className="h-full overflow-auto">{children}</div>
+        <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
         <QAPanelExpandButton />
       </div>
     </PDFSplitView>

@@ -39,7 +39,8 @@ export function DocumentActionMenu({
   disabled = false,
 }: DocumentActionMenuProps) {
   const isAct = document.documentType === 'act';
-  const canDelete = userRole === 'owner';
+  // Allow delete for both owner and editor roles
+  const canDelete = userRole === 'owner' || userRole === 'editor';
   const canEdit = userRole === 'owner' || userRole === 'editor';
 
   return (

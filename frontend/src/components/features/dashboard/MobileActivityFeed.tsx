@@ -102,9 +102,10 @@ function usePullToRefresh(
 
 interface MobileActivityItemProps {
   activity: Activity;
+  onActivityClick?: (activity: Activity) => void;
 }
 
-function MobileActivityItem({ activity }: MobileActivityItemProps) {
+function MobileActivityItem({ activity, onActivityClick }: MobileActivityItemProps) {
   const getActivityLink = (act: Activity): string => {
     const base = `/matter/${act.matterId}`;
     switch (act.type) {
@@ -122,9 +123,16 @@ function MobileActivityItem({ activity }: MobileActivityItemProps) {
     }
   };
 
+  const handleClick = () => {
+    if (onActivityClick && !activity.isRead) {
+      onActivityClick(activity);
+    }
+  };
+
   return (
     <Link
       href={getActivityLink(activity)}
+      onClick={handleClick}
       className={cn(
         'flex items-start gap-3 py-2.5 px-3 rounded-md transition-colors',
         'hover:bg-muted/50 active:bg-muted',
@@ -185,14 +193,12 @@ export function MobileActivityFeed({ maxItems = 5, enablePullToRefresh = true }:
     fetchActivities();
   };
 
-  // Mark activities as read when viewed
-  useEffect(() => {
-    displayActivities.forEach((activity) => {
-      if (!activity.isRead) {
-        markActivityRead(activity.id);
-      }
-    });
-  }, [displayActivities, markActivityRead]);
+  // Handle activity click - mark as read (same pattern as desktop ActivityFeed)
+  const handleActivityClick = (activity: Activity) => {
+    if (!activity.isRead) {
+      markActivityRead(activity.id);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -247,7 +253,11 @@ export function MobileActivityFeed({ maxItems = 5, enablePullToRefresh = true }:
 
       <div className="space-y-1">
         {displayActivities.map((activity) => (
-          <MobileActivityItem key={activity.id} activity={activity} />
+          <MobileActivityItem
+            key={activity.id}
+            activity={activity}
+            onActivityClick={handleActivityClick}
+          />
         ))}
 
         {displayActivities.length >= maxItems && (

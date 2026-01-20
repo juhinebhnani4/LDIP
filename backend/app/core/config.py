@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     chunk_child_overlap: int = 75       # 50-100 tokens (~14%) for child chunks
     chunk_min_size: int = 100           # Minimum viable chunk size
 
+    # Entity Extraction Performance Configuration
+    entity_extraction_use_batch: bool = True        # Use mega-batch extraction (5 chunks/call)
+    entity_extraction_batch_size: int = 5           # Chunks per mega-batch API call
+    entity_extraction_concurrent_limit: int = 5     # Max concurrent API calls
+    entity_extraction_rate_delay: float = 0.3       # Delay between batches (seconds)
+
     # Citation Verification Configuration (Story 3-3)
     verification_batch_size: int = 10               # Citations to verify in parallel
     verification_rate_limit_delay: float = 0.5      # Delay between API calls (seconds)

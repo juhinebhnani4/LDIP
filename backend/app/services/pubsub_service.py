@@ -684,3 +684,133 @@ def broadcast_verification_complete(
             act_name=act_name,
             error=str(e),
         )
+
+
+# =============================================================================
+# Feature Availability Broadcasting (Story 7.1)
+# =============================================================================
+
+# Channel pattern for feature updates: features:{matter_id}:document:{document_id}
+FEATURE_CHANNEL_PATTERN = "features:{matter_id}:document:{document_id}"
+
+
+class FeatureType:
+    """Feature types for progressive UI updates.
+
+    Story 7.1: Features that become available as processing completes.
+    """
+
+    SEARCH = "search"  # After chunking completes
+    SEMANTIC_SEARCH = "semantic_search"  # After embedding completes
+    ENTITIES = "entities"  # After entity extraction completes
+    TIMELINE = "timeline"  # After date extraction completes
+    CITATIONS = "citations"  # After citation extraction completes
+    BBOX_HIGHLIGHTING = "bbox_highlighting"  # After bbox linking completes
+
+
+def broadcast_feature_ready(
+    matter_id: str,
+    document_id: str,
+    feature: str,
+    metadata: dict | None = None,
+) -> None:
+    """Broadcast that a document feature is now available.
+
+    Story 7.1: Enables progressive UI updates where the frontend
+    can show features as they become available, rather than waiting
+    for full processing to complete.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        document_id: Document UUID.
+        feature: Feature name (use FeatureType constants).
+        metadata: Optional metadata about the feature (e.g., counts).
+    """
+    try:
+        service = get_pubsub_service()
+        channel = FEATURE_CHANNEL_PATTERN.format(
+            matter_id=matter_id,
+            document_id=document_id,
+        )
+
+        message = {
+            "event": "feature_ready",
+            "matter_id": matter_id,
+            "document_id": document_id,
+            "feature": feature,
+            "ready": True,
+        }
+
+        if metadata:
+            message["metadata"] = metadata
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.info(
+            "feature_ready_broadcast",
+            matter_id=matter_id,
+            document_id=document_id,
+            feature=feature,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_feature_ready_failed",
+            matter_id=matter_id,
+            document_id=document_id,
+            feature=feature,
+            error=str(e),
+        )
+
+
+def broadcast_features_batch(
+    matter_id: str,
+    document_id: str,
+    features: dict[str, bool],
+) -> None:
+    """Broadcast multiple feature availability states at once.
+
+    Story 7.1: Allows sending all feature states in a single message
+    for initial document load or bulk updates.
+
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        document_id: Document UUID.
+        features: Dict of feature_name -> is_available.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = FEATURE_CHANNEL_PATTERN.format(
+            matter_id=matter_id,
+            document_id=document_id,
+        )
+
+        message = {
+            "event": "features_update",
+            "matter_id": matter_id,
+            "document_id": document_id,
+            "features": features,
+        }
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "features_batch_broadcast",
+            matter_id=matter_id,
+            document_id=document_id,
+            features=features,
+        )
+
+    except Exception as e:
+        # Never fail because of pub/sub issues
+        logger.warning(
+            "broadcast_features_batch_failed",
+            matter_id=matter_id,
+            document_id=document_id,
+            error=str(e),
+        )

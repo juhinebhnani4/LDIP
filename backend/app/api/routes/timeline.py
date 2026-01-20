@@ -1016,13 +1016,14 @@ async def get_timeline_with_entities(
             )
             if cached:
                 # Convert cached timeline to response
+                # Handle both enum and string types for backwards compatibility
                 items = [
                     TimelineEventWithEntities(
                         id=e.event_id,
                         event_date=e.event_date,
                         event_date_precision=e.event_date_precision,
                         event_date_text=e.event_date_text,
-                        event_type=e.event_type.value,
+                        event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
                         description=e.description,
                         document_id=e.document_id,
                         source_page=e.source_page,
@@ -1031,7 +1032,7 @@ async def get_timeline_with_entities(
                             EntityReference(
                                 entity_id=ent.entity_id,
                                 canonical_name=ent.canonical_name,
-                                entity_type=ent.entity_type.value,
+                                entity_type=ent.entity_type.value if hasattr(ent.entity_type, 'value') else ent.entity_type,
                                 role=ent.role,
                             )
                             for ent in e.entities
@@ -1086,13 +1087,14 @@ async def get_timeline_with_entities(
             await cache_service.set_timeline(matter_id, timeline)
 
         # Convert to response
+        # Handle both enum and string types for safety
         items = [
             TimelineEventWithEntities(
                 id=e.event_id,
                 event_date=e.event_date,
                 event_date_precision=e.event_date_precision,
                 event_date_text=e.event_date_text,
-                event_type=e.event_type.value,
+                event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
                 description=e.description,
                 document_id=e.document_id,
                 source_page=e.source_page,
@@ -1101,7 +1103,7 @@ async def get_timeline_with_entities(
                     EntityReference(
                         entity_id=ent.entity_id,
                         canonical_name=ent.canonical_name,
-                        entity_type=ent.entity_type.value,
+                        entity_type=ent.entity_type.value if hasattr(ent.entity_type, 'value') else ent.entity_type,
                         role=ent.role,
                     )
                     for ent in e.entities

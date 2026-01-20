@@ -16,7 +16,7 @@ export default async function EntitiesPage({ params }: EntitiesPageProps) {
 
   return (
     <div
-      className="container py-6 h-[calc(100vh-12rem)]"
+      className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-10rem)] overflow-x-hidden"
       id="tabpanel-entities"
       role="tabpanel"
       aria-labelledby="tab-entities"

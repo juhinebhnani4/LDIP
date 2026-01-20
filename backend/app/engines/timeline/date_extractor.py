@@ -41,7 +41,7 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-MAX_TEXT_LENGTH = 30000  # Max characters per extraction request
+MAX_TEXT_LENGTH = 5000  # Max characters per extraction request (reduced from 30000 to avoid Gemini output truncation)
 CHUNK_OVERLAP = 500  # Characters to overlap between chunks for boundary dates
 
 
@@ -126,9 +126,15 @@ class DateExtractor:
 
                 self._genai = genai
                 genai.configure(api_key=self.api_key)
+                # Configure generation with higher max_output_tokens to avoid truncation
+                generation_config = genai.GenerationConfig(
+                    max_output_tokens=8192,  # Increased from default to avoid truncation
+                    temperature=0.1,  # Low temperature for consistent extraction
+                )
                 self._model = genai.GenerativeModel(
                     self.model_name,
                     system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                    generation_config=generation_config,
                 )
                 logger.info(
                     "date_extractor_initialized",

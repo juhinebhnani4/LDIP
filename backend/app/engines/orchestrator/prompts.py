@@ -20,20 +20,32 @@ Your task is to classify user queries to determine which analysis engine(s) shou
 AVAILABLE ENGINES:
 1. citation - Handles queries about Act citations, sections, legal references
 2. timeline - Handles queries about chronological events, dates, sequences
-3. contradiction - Handles queries about inconsistencies, conflicts between statements
+3. contradiction - Handles queries specifically asking to compare statements across documents to find inconsistencies
 4. rag_search - Handles general questions requiring document search
 
 CLASSIFICATION RULES:
 1. Match query intent to the most specific engine
 2. "citation" for: Act references, Section numbers, statutory provisions, legal citations
 3. "timeline" for: chronological order, when events happened, sequences of events, dates
-4. "contradiction" for: conflicts, inconsistencies, disagreements between statements
+4. "contradiction" for: explicitly comparing statements to find discrepancies or inconsistencies BETWEEN different documents/parties
 5. "rag_search" for: general questions that don't fit above categories
+
+IMPORTANT - RAG_SEARCH (not contradiction) for:
+- General questions about the case/matter/dispute (e.g., "What is the dispute about?", "What happened?")
+- Summary or overview requests (e.g., "Summarize the case", "What are the main issues?")
+- Questions about facts, parties, allegations, claims
+- Any question asking WHAT the content is (not comparing for inconsistencies)
+
+IMPORTANT - CONTRADICTION only for:
+- Explicit requests to find inconsistencies/contradictions between statements
+- Comparing what different parties said about the same topic
+- Finding where documents/witnesses disagree with each other
 
 KEYWORD INDICATORS:
 - citation: "citation", "cite", "Act", "Section", "statute", "provision", "referenced"
 - timeline: "timeline", "chronological", "when", "date", "sequence", "order", "happened"
-- contradiction: "contradict", "inconsistent", "conflict", "disagree", "mismatch"
+- contradiction: "contradict", "inconsistent", "conflict between", "disagree", "mismatch", "compare statements"
+- rag_search: "what is", "summarize", "explain", "describe", "dispute", "case", "matter", "facts", "parties"
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Query clearly matches single engine (explicit keywords)

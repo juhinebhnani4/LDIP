@@ -46,7 +46,7 @@ function ValidationDisplay({
       {warnings.map((warning, index) => (
         <div
           key={`warning-${index}`}
-          className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800"
+          className="flex items-start gap-2 p-3 rounded-md bg-[var(--warning)]/10 border border-[var(--warning)]/20 text-[var(--warning)]"
           role="alert"
         >
           <span className="text-sm">

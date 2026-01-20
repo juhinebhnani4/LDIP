@@ -139,3 +139,32 @@ ENTITY_EXTRACTION_USER_PROMPT = """Extract all entities and relationships from t
 ---
 
 Return ONLY valid JSON with entities and relationships arrays."""
+
+
+# =============================================================================
+# Batch Extraction Prompt (Multiple Chunks in One Call)
+# =============================================================================
+
+BATCH_ENTITY_EXTRACTION_PROMPT = """Extract all entities and relationships from these document sections.
+Each section has a unique ID. Return entities organized by section_id.
+
+{sections}
+
+OUTPUT FORMAT (JSON):
+{{
+  "sections": [
+    {{
+      "section_id": "chunk_123",
+      "entities": [...],
+      "relationships": [...]
+    }}
+  ]
+}}
+
+RULES:
+1. Process each section independently
+2. Use the same entity extraction rules as single documents
+3. Return section_id exactly as provided
+4. If a section has no entities, return empty arrays
+
+Return ONLY valid JSON, no markdown."""

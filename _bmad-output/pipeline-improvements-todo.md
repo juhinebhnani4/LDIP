@@ -212,38 +212,62 @@
 
 ## Category 6: Performance Optimizations
 
-### 6.1 Optimize Bbox Linking (O(n²) → O(n))
+### 6.1 Optimize Bbox Linking (O(n²) → O(n)) ✅ DONE
 **Priority**: MEDIUM | **Effort**: High
 **File**: `app/services/chunking/bbox_linker.py`
 
-Current: Each chunk scans all 29K bboxes
-Proposed:
-- [ ] Pre-index bboxes by page number
-- [ ] Match chunks only against bboxes on same page
-- [ ] Use text similarity index for faster matching
+**Implemented**:
+- [x] Created `BboxPageIndex` class that pre-indexes bboxes by page number
+- [x] Added `estimate_pages_for_chunk()` to identify candidate pages (typically 1-3) using quick fuzzy match
+- [x] Added `get_bboxes_for_pages()` to retrieve only relevant bboxes
+- [x] Added `_link_chunk_with_page_index()` for optimized O(n) linking
+- [x] Modified `link_chunks_to_bboxes()` to use page index by default (controllable via `use_optimized` flag)
+- [x] Added performance logging (load_time, link_time, avg_per_chunk_ms)
 
-### 6.2 Batch Entity Saves
+**Optimization Details**:
+- Before: Each chunk scanned all 29K bboxes → O(n * m) where n=chunks, m=bboxes
+- After: Each chunk scans only bboxes on 1-3 candidate pages → O(n * p) where p≈100-500 bboxes/page
+- Coarse-then-fine search: Initial search with larger step size, then refine around best match
+- All 45 chunking tests pass
+
+### 6.2 Batch Entity Saves ✅ DONE
 **Priority**: LOW | **Effort**: Medium
-**File**: `app/services/mig/graph_service.py`
+**File**: `app/services/mig/graph.py`
 
-- [ ] Collect entities from batch, dedupe, then bulk insert
-- [ ] Reduces DB round trips from N to 1 per batch
+**Implemented**:
+- [x] Added `_save_entities_batch()` method that batches all DB operations
+- [x] Added `_batch_find_existing_entities()` - single query to find all existing entities
+- [x] Added `_batch_create_entities()` - single insert for all new entities
+- [x] Added `_batch_update_mention_counts()` - concurrent updates using asyncio.gather
+- [x] Added `_batch_insert_mentions()` - single insert for all mentions
+
+**Optimization Details**:
+- Before: N entities = N queries (find) + N inserts/updates + N*M mention inserts
+- After: N entities = 1 query (find all) + 1 batch insert (new) + concurrent updates + 1 batch mention insert
+- All 16 MIG graph tests pass
 
 ---
 
 ## Category 7: Progressive UI Updates
 
-### 7.1 Broadcast Feature Availability
+### 7.1 Broadcast Feature Availability ✅ DONE
 **Priority**: MEDIUM | **Effort**: Medium
-**File**: `app/services/realtime/broadcast.py`
+**File**: `app/services/pubsub_service.py`
 
-- [ ] New event type: `feature_ready`
-- [ ] Broadcast when each feature becomes available:
-  - `search` - after chunking
-  - `semantic_search` - after embedding
-  - `entities` - after entity extraction
-  - `timeline` - after date extraction
-  - `citations` - after citation extraction
+**Implemented**:
+- [x] Added `FeatureType` class with constants: SEARCH, SEMANTIC_SEARCH, ENTITIES, TIMELINE, CITATIONS, BBOX_HIGHLIGHTING
+- [x] Added `broadcast_feature_ready()` function for single feature broadcasts
+- [x] Added `broadcast_features_batch()` function for bulk feature state updates
+- [x] Added feature broadcasts to all relevant task completion points:
+  - `search` - after chunking completes (document_tasks.py)
+  - `semantic_search` - after embedding completes (document_tasks.py)
+  - `entities` - after entity extraction completes (document_tasks.py)
+  - `timeline` - after date extraction completes (engine_tasks.py)
+  - `citations` - after citation extraction completes (document_tasks.py)
+  - `bbox_highlighting` - after bbox linking completes (document_tasks.py)
+
+**Channel Pattern**: `features:{matter_id}:document:{document_id}`
+**Event Types**: `feature_ready` (single), `features_update` (batch)
 
 ### 7.2 Add Feature Flags to Document Response ✅ DONE
 **Priority**: MEDIUM | **Effort**: Low

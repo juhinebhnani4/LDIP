@@ -290,11 +290,12 @@ class DocumentService:
 
         try:
             # Build query with filters
+            # Note: Service role key bypasses RLS, so we must explicitly filter soft-deleted documents
             query = self.client.table("documents").select(
                 "id, matter_id, filename, file_size, document_type, "
                 "is_reference_material, status, uploaded_at, uploaded_by",
                 count="exact"
-            ).eq("matter_id", matter_id)
+            ).eq("matter_id", matter_id).is_("deleted_at", "null")
 
             # Apply optional filters
             if document_type is not None:

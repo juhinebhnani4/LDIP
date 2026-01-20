@@ -3131,6 +3131,90 @@ def extract_entities(
 
 
 # =============================================================================
+# Downstream Task Dispatch Helper
+# =============================================================================
+
+
+def _dispatch_downstream_tasks(
+    document_id: str,
+    matter_id: str,
+    job_id: str | None = None,
+) -> dict[str, list[str]]:
+    """Dispatch downstream tasks after alias resolution completes.
+
+    Triggers citation extraction and date extraction in parallel.
+    These tasks can run independently on the document text.
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID for namespace isolation.
+        job_id: Optional job tracking UUID.
+
+    Returns:
+        Dict with lists of triggered and failed task names.
+    """
+    from app.workers.celery import celery_app
+    from app.workers.tasks.engine_tasks import extract_dates_from_document
+
+    triggered_tasks: list[str] = []
+    failed_tasks: list[str] = []
+
+    # Build prev_result for task chain simulation
+    prev_result = {
+        "document_id": document_id,
+        "status": "aliases_resolved",
+        "job_id": job_id,
+    }
+
+    # Task 1: Citation extraction (use send_task to avoid forward reference)
+    try:
+        celery_app.send_task(
+            "app.workers.tasks.document_tasks.extract_citations",
+            kwargs={
+                "prev_result": prev_result,
+                "document_id": document_id,
+            },
+        )
+        triggered_tasks.append("extract_citations")
+        logger.debug("extract_citations_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("extract_citations")
+        logger.warning(
+            "extract_citations_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    # Task 2: Date extraction
+    try:
+        extract_dates_from_document.delay(
+            document_id=document_id,
+            matter_id=matter_id,
+        )
+        triggered_tasks.append("extract_dates_from_document")
+        logger.debug("extract_dates_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("extract_dates_from_document")
+        logger.warning(
+            "extract_dates_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    logger.info(
+        "downstream_tasks_dispatched",
+        document_id=document_id,
+        triggered=triggered_tasks,
+        failed=failed_tasks,
+    )
+
+    return {
+        "triggered": triggered_tasks,
+        "failed": failed_tasks,
+    }
+
+
+# =============================================================================
 # Alias Resolution Task (Story 2c-2)
 # =============================================================================
 
@@ -3375,6 +3459,14 @@ def resolve_aliases(
             skipped=resolution_result.skipped_low_confidence,
         )
 
+        # Dispatch downstream tasks in parallel (citations and dates)
+        # These tasks can run independently after alias resolution
+        downstream_triggered = _dispatch_downstream_tasks(
+            document_id=doc_id,
+            matter_id=matter_id,
+            job_id=job_id,
+        )
+
         return {
             "status": "aliases_resolved",
             "document_id": doc_id,
@@ -3385,6 +3477,7 @@ def resolve_aliases(
             "medium_confidence_links": resolution_result.medium_confidence_links,
             "skipped_low_confidence": resolution_result.skipped_low_confidence,
             "job_id": job_id,
+            "downstream_tasks": downstream_triggered,
         }
 
     except AliasResolutionError as e:

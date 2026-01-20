@@ -73,7 +73,7 @@ export function EntitiesContent({
     isLoading: entitiesLoading,
     error: entitiesError,
     mutate: mutateEntities,
-  } = useEntities(matterId, { perPage: 500 });
+  } = useEntities(matterId, { perPage: 100 });
 
   const { edges, isLoading: edgesLoading } = useEntityRelationships(matterId, entities);
 

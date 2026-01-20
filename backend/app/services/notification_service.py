@@ -126,6 +126,14 @@ class NotificationService:
             limit = min(max(1, limit), 50)
 
             # Build query with matter join for matter_title
+            # DEBUG: Log the query attempt
+            logger.info(
+                "notifications_query_starting",
+                user_id=user_id,
+                limit=limit,
+                unread_only=unread_only,
+            )
+
             query = (
                 self.supabase.table("notifications")
                 .select("*, matters!left(title)")
@@ -179,9 +187,15 @@ class NotificationService:
                 "get_notifications_failed",
                 user_id=user_id,
                 error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,  # Include full traceback
             )
-            # Return empty list on error to be graceful
-            return [], 0
+            # Re-raise to let API return proper error - don't swallow silently
+            raise NotificationServiceError(
+                f"Failed to get notifications: {e}",
+                code="QUERY_FAILED",
+                status_code=500,
+            )
 
     # =========================================================================
     # Task 3.3: Get Unread Count (AC #2)

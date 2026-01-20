@@ -524,8 +524,8 @@ class RAGEngineAdapter(EngineAdapter):
             results = await search.search_with_rerank(
                 matter_id=matter_id,
                 query=query,
-                limit=settings.rag_search_limit,
-                top_n=settings.rag_rerank_top_n,
+                hybrid_limit=settings.rag_search_limit,
+                rerank_top_n=settings.rag_rerank_top_n,
             )
 
             # Convert search results to dict format

@@ -96,7 +96,7 @@ function StatusBadge({ status }: { status: MatterCardData['processingStatus'] })
       );
     case 'ready':
       return (
-        <Badge variant="default" className="gap-1 bg-green-600" aria-label="Ready status">
+        <Badge variant="default" className="gap-1 bg-[var(--success)]" aria-label="Ready status">
           <CheckCircle2 className="size-3" />
           Ready
         </Badge>
@@ -175,10 +175,10 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
           className={cn(
             'flex-1 rounded-md border p-2 text-center',
             matter.verificationPercent >= 90
-              ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950'
+              ? 'border-[var(--success)]/30 bg-[var(--success)]/10 dark:border-[var(--success)]/40 dark:bg-[var(--success)]/20'
               : matter.verificationPercent >= 70
-                ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950'
-                : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
+                ? 'border-[var(--warning)]/30 bg-[var(--warning)]/10 dark:border-[var(--warning)]/40 dark:bg-[var(--warning)]/20'
+                : 'border-destructive/30 bg-destructive/10 dark:border-destructive/40 dark:bg-destructive/20'
           )}
         >
           <div className="text-lg font-bold">{matter.verificationPercent}%</div>
@@ -193,8 +193,8 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
           className={cn(
             'flex-1 rounded-md border p-2 text-center',
             matter.issueCount === 0
-              ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950'
-              : 'border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950'
+              ? 'border-[var(--success)]/30 bg-[var(--success)]/10 dark:border-[var(--success)]/40 dark:bg-[var(--success)]/20'
+              : 'border-[var(--warning)]/30 bg-[var(--warning)]/10 dark:border-[var(--warning)]/40 dark:bg-[var(--warning)]/20'
           )}
         >
           <div className="text-lg font-bold">{matter.issueCount}</div>

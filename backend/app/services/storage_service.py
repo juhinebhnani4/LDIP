@@ -20,7 +20,7 @@ from app.services.supabase.client import get_service_client
 logger = structlog.get_logger(__name__)
 
 # Valid storage subfolders
-VALID_SUBFOLDERS = {"uploads", "acts", "exports"}
+VALID_SUBFOLDERS = {"uploads", "acts", "exports", "chunks"}
 
 # Default signed URL expiration (1 hour)
 DEFAULT_SIGNED_URL_EXPIRES = 3600

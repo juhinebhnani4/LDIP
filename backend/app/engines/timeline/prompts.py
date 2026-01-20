@@ -39,14 +39,16 @@ OUTPUT FORMAT (JSON):
       "date_text": "Exact text as appears in document",
       "extracted_date": "YYYY-MM-DD format (use first day of month/year if partial)",
       "date_precision": "day|month|year|approximate",
-      "context_before": "Up to 200 words before the date",
-      "context_after": "Up to 200 words after the date",
+      "context_before": "Up to 50 words before the date",
+      "context_after": "Up to 50 words after the date",
       "is_ambiguous": true/false,
       "ambiguity_reason": "Reason if ambiguous, null otherwise",
       "confidence": 0.0-1.0
     }
   ]
 }
+
+IMPORTANT: Keep total output under 4000 tokens. If many dates found, prioritize keeping all dates but reduce context length.
 
 AMBIGUITY RULES (for DD/MM vs MM/DD):
 1. If BOTH numbers are <= 12, check context:
@@ -66,10 +68,11 @@ CONFIDENCE SCORING:
 - Below 0.50: Should not extract - too uncertain
 
 CONTEXT EXTRACTION:
-- Extract up to 200 words BEFORE the date (preserve sentence boundaries where possible)
-- Extract up to 200 words AFTER the date (preserve sentence boundaries where possible)
+- Extract up to 50 words BEFORE the date (preserve sentence boundaries where possible)
+- Extract up to 50 words AFTER the date (preserve sentence boundaries where possible)
 - If date appears at document start/end, extract as much context as available
 - Context should help understand WHAT the date refers to (filing, hearing, incident, etc.)
+- Keep context concise to avoid output truncation
 
 INDIAN LEGAL DATE PATTERNS:
 - "dated this 5th day of January, 2024" -> 2024-01-05, precision: day

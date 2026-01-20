@@ -463,7 +463,7 @@ export function DocumentList({
       {documents.length === 0 ? (
         <DocumentListEmpty />
       ) : (
-        <div className="border rounded-lg">
+        <div className="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

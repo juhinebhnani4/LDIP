@@ -64,9 +64,11 @@ class JobRecoveryService:
         try:
             # Find PROCESSING jobs - we'll filter staleness in code
             # because we need to check heartbeat_at OR updated_at
+            # Note: heartbeat_at column may not exist in all deployments,
+            # so we exclude it from the query and rely on updated_at fallback
             response = self.supabase.table("processing_jobs").select(
                 "id, matter_id, document_id, job_type, status, created_at, updated_at, "
-                "heartbeat_at, current_stage, retry_count, metadata"
+                "current_stage, retry_count, metadata"
             ).eq(
                 "status", JobStatus.PROCESSING.value
             ).execute()
@@ -75,19 +77,15 @@ class JobRecoveryService:
             stale_jobs = []
 
             for job in all_processing_jobs:
-                # Use heartbeat_at if available, otherwise fall back to updated_at
-                heartbeat_at = job.get("heartbeat_at")
+                # Use updated_at for staleness check
+                # (heartbeat_at column removed from query for compatibility)
                 updated_at = job.get("updated_at")
+                if not updated_at:
+                    continue
 
-                # Determine which timestamp to use for staleness check
-                if heartbeat_at:
-                    last_activity = datetime.fromisoformat(
-                        heartbeat_at.replace("Z", "+00:00")
-                    )
-                else:
-                    last_activity = datetime.fromisoformat(
-                        updated_at.replace("Z", "+00:00")
-                    )
+                last_activity = datetime.fromisoformat(
+                    updated_at.replace("Z", "+00:00")
+                )
 
                 # Check if job is stale
                 if last_activity < cutoff_time:
@@ -99,7 +97,6 @@ class JobRecoveryService:
                     count=len(stale_jobs),
                     timeout_minutes=timeout,
                     job_ids=[j["id"] for j in stale_jobs],
-                    used_heartbeat=[bool(j.get("heartbeat_at")) for j in stale_jobs],
                 )
 
             return stale_jobs
@@ -353,6 +350,195 @@ class JobRecoveryService:
         except Exception as e:
             logger.error("get_recovery_stats_failed", error=str(e))
             return {"error": str(e)}
+
+    async def recover_with_chunked_processing(self, job: dict) -> dict:
+        """Recover a job that failed due to page limit by using chunked processing.
+
+        Story 19.3: Auto-convert SKIPPED jobs to chunked processing.
+
+        Creates chunk records and dispatches chunked processing task for
+        documents that exceeded the page limit.
+
+        Args:
+            job: The job record with document_id.
+
+        Returns:
+            Dict with recovery result including success flag and details.
+        """
+        from io import BytesIO
+
+        import pypdf
+
+        job_id = job.get("id")
+        document_id = job.get("document_id")
+        matter_id = job.get("matter_id")
+
+        if not document_id:
+            return {
+                "success": False,
+                "error": "No document_id in job",
+                "job_id": job_id,
+            }
+
+        try:
+            # Get document details
+            doc_response = self.supabase.table("documents").select(
+                "id, storage_path, filename"
+            ).eq("id", document_id).limit(1).execute()
+
+            if not doc_response.data:
+                return {
+                    "success": False,
+                    "error": "Document not found",
+                    "job_id": job_id,
+                }
+
+            document = doc_response.data[0]
+            storage_path = document.get("storage_path")
+
+            if not storage_path:
+                return {
+                    "success": False,
+                    "error": "Document missing storage path",
+                    "job_id": job_id,
+                }
+
+            # Get page count from the PDF
+            from app.services.storage_service import get_storage_service
+            storage_service = get_storage_service()
+            pdf_bytes = storage_service.download_file(storage_path)
+            reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+            page_count = len(reader.pages)
+            del reader
+            del pdf_bytes
+
+            # Create chunk records
+            from app.services.pdf_router import CHUNK_SIZE
+            chunks = await self._create_chunk_records_for_document(
+                document_id=document_id,
+                matter_id=matter_id,
+                page_count=page_count,
+                chunk_size=CHUNK_SIZE,
+            )
+
+            # Update job status and metadata
+            metadata = job.get("metadata") or {}
+            metadata["converted_to_chunked"] = True
+            metadata["page_count"] = page_count
+            metadata["chunk_count"] = len(chunks)
+            metadata["converted_at"] = datetime.now(UTC).isoformat()
+
+            self.supabase.table("processing_jobs").update({
+                "status": JobStatus.QUEUED.value,
+                "updated_at": datetime.now(UTC).isoformat(),
+                "metadata": metadata,
+                "error_message": None,
+                "error_code": None,
+            }).eq("id", job_id).execute()
+
+            # Reset document status
+            self.supabase.table("documents").update({
+                "status": DocumentStatus.PROCESSING.value,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }).eq("id", document_id).execute()
+
+            # Dispatch chunked processing
+            from app.workers.tasks.chunked_document_tasks import process_document_chunked
+
+            process_document_chunked.apply_async(
+                kwargs={
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "job_id": job_id,
+                },
+                countdown=5,
+            )
+
+            logger.info(
+                "job_converted_to_chunked",
+                job_id=job_id,
+                document_id=document_id,
+                page_count=page_count,
+                chunk_count=len(chunks),
+            )
+
+            return {
+                "success": True,
+                "job_id": job_id,
+                "document_id": document_id,
+                "action": "converted_to_chunked",
+                "page_count": page_count,
+                "chunk_count": len(chunks),
+            }
+
+        except Exception as e:
+            logger.error(
+                "chunked_recovery_failed",
+                job_id=job_id,
+                document_id=document_id,
+                error=str(e),
+            )
+            return {
+                "success": False,
+                "error": str(e),
+                "job_id": job_id,
+            }
+
+    async def _create_chunk_records_for_document(
+        self,
+        document_id: str,
+        matter_id: str,
+        page_count: int,
+        chunk_size: int = 15,
+    ) -> list[dict]:
+        """Create chunk records for parallel processing.
+
+        Args:
+            document_id: Document UUID.
+            matter_id: Matter UUID.
+            page_count: Total pages in document.
+            chunk_size: Pages per chunk.
+
+        Returns:
+            List of created chunk records.
+        """
+        from app.models.ocr_chunk import ChunkSpec
+        from app.services.ocr_chunk_service import get_ocr_chunk_service
+
+        chunk_service = get_ocr_chunk_service()
+
+        # Build chunk specs
+        specs = []
+        page_start = 1
+        chunk_index = 0
+
+        while page_start <= page_count:
+            page_end = min(page_start + chunk_size - 1, page_count)
+
+            specs.append(ChunkSpec(
+                chunk_index=chunk_index,
+                page_start=page_start,
+                page_end=page_end,
+            ))
+
+            page_start = page_end + 1
+            chunk_index += 1
+
+        # Create chunks in database
+        chunks = await chunk_service.create_chunks_for_document(
+            document_id=document_id,
+            matter_id=matter_id,
+            chunk_specs=specs,
+        )
+
+        logger.info(
+            "chunk_records_created_for_recovery",
+            document_id=document_id,
+            chunk_count=len(chunks),
+            page_count=page_count,
+        )
+
+        return [{"id": c.id, "chunk_index": c.chunk_index} for c in chunks]
 
 
 def get_job_recovery_service(supabase: Client) -> JobRecoveryService:

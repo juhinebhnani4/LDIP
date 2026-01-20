@@ -12,6 +12,9 @@ Story 17.2: Circuit Breaker for Document AI
 import time
 from functools import lru_cache
 
+from io import BytesIO
+
+import pypdf
 import structlog
 from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import documentai_v1 as documentai
@@ -142,6 +145,90 @@ class OCRProcessor:
             f"processors/{self.processor_id}"
         )
 
+    def _split_pdf(self, pdf_content: bytes, chunk_size: int = 15) -> list[bytes]:
+        """Split a large PDF into smaller chunks.
+        
+        Args:
+            pdf_content: Original PDF bytes.
+            chunk_size: Maximum pages per chunk.
+            
+        Returns:
+            List of PDF bytes for each chunk.
+        """
+        reader = pypdf.PdfReader(BytesIO(pdf_content))
+        total_pages = len(reader.pages)
+        chunks = []
+        
+        for start in range(0, total_pages, chunk_size):
+            writer = pypdf.PdfWriter()
+            end = min(start + chunk_size, total_pages)
+            for i in range(start, end):
+                writer.add_page(reader.pages[i])
+                
+            out_stream = BytesIO()
+            writer.write(out_stream)
+            chunks.append(out_stream.getvalue())
+            
+        return chunks
+
+    def _merge_ocr_results(self, results: list[OCRResult], chunk_size: int = 15) -> OCRResult:
+        """Merge multiple OCR results into one.
+        
+        Args:
+            results: List of OCRResult objects from chunks.
+            chunk_size: Page count per chunk (to calculate offsets).
+            
+        Returns:
+            Combined OCRResult.
+        """
+        if not results:
+            raise OCRProcessingError("No results to merge")
+            
+        base = results[0]
+        merged = OCRResult(
+            document_id=base.document_id,
+            pages=[],
+            bounding_boxes=[],
+            full_text="",
+            overall_confidence=0.0,
+            processing_time_ms=0,
+            page_count=0
+        )
+        
+        total_conf = 0.0
+        conf_count = 0
+        current_page_offset = 0
+        
+        for res in results:
+            # 1. Merge pages with offset
+            for page in res.pages:
+                page.page_number += current_page_offset
+                merged.pages.append(page)
+                
+            # 2. Merge bounding boxes with offset
+            for bbox in res.bounding_boxes:
+                bbox.page += current_page_offset
+                merged.bounding_boxes.append(bbox)
+                
+            # 3. Concatenate text
+            merged.full_text += res.full_text + "\n"
+            
+            # 4. Aggregate stats
+            if res.overall_confidence:
+                total_conf += res.overall_confidence * len(res.pages) # Weight by pages
+                conf_count += len(res.pages)
+                
+            merged.processing_time_ms = (merged.processing_time_ms or 0) + (res.processing_time_ms or 0)
+            merged.page_count += res.page_count
+            
+            # Update offset based on actual pages in this chunk (could be < chunk_size)
+            current_page_offset += res.page_count
+
+        if conf_count > 0:
+            merged.overall_confidence = total_conf / conf_count
+            
+        return merged
+
     def process_document(
         self,
         pdf_content: bytes,
@@ -173,6 +260,43 @@ class OCRProcessor:
             OCRCircuitOpenError: If Document AI circuit breaker is open.
         """
         start_time = time.time()
+
+        # Story 16.1: Handle large documents by splitting
+        # Document AI Online Processing limit is 15 pages
+        try:
+            reader = pypdf.PdfReader(BytesIO(pdf_content))
+            page_count = len(reader.pages)
+            if page_count > 15:
+                logger.info(
+                    "splitting_large_document",
+                    document_id=document_id,
+                    page_count=page_count,
+                    chunk_limit=15
+                )
+                chunks = self._split_pdf(pdf_content, 15)
+                results = []
+                for i, chunk in enumerate(chunks):
+                    logger.info(
+                        "processing_chunk",
+                        document_id=document_id,
+                        chunk_index=i,
+                        total_chunks=len(chunks)
+                    )
+                    # Recursive call for each chunk
+                    results.append(self.process_document(
+                        chunk, 
+                        document_id, 
+                        enable_image_quality_scores
+                    ))
+                
+                return self._merge_ocr_results(results)
+        except Exception as e:
+            # If splitting fails, log and attempt direct processing
+            logger.warning(
+                "pdf_split_failed",
+                document_id=document_id,
+                error=str(e)
+            )
 
         logger.info(
             "ocr_processing_started",

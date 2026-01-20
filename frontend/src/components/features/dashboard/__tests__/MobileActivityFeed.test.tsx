@@ -38,8 +38,8 @@ vi.mock('@/stores/activityStore', () => ({
 
 // Mock next/link
 vi.mock('next/link', () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({ children, href, onClick }: { children: React.ReactNode; href: string; onClick?: () => void }) => (
+    <a href={href} onClick={onClick}>{children}</a>
   ),
 }));
 
@@ -73,12 +73,14 @@ describe('MobileActivityFeed', () => {
     expect(mockFetchActivities).toHaveBeenCalled();
   });
 
-  it('marks unread activities as read', async () => {
+  it('marks unread activities as read on click', () => {
     render(<MobileActivityFeed />);
 
-    await waitFor(() => {
-      expect(mockMarkActivityRead).toHaveBeenCalledWith('1');
-    });
+    // Click the first unread activity
+    const firstActivityLink = screen.getByText('Document processed').closest('a')!;
+    fireEvent.click(firstActivityLink);
+
+    expect(mockMarkActivityRead).toHaveBeenCalledWith('1');
   });
 
   it('respects maxItems prop', () => {

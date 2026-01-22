@@ -1,0 +1,248 @@
+{
+  "$schema": "./schemas/garbage_patterns.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-01-22",
+  "description": "Patterns to detect garbage act name extractions (sentence fragments, legal language, etc.)",
+  "patterns": [
+    {
+      "pattern": "\\.\\s+[A-Z]",
+      "flags": ["IGNORECASE"],
+      "description": "Period followed by capital (new sentence)",
+      "category": "sentence_fragment"
+    },
+    {
+      "pattern": "\\.\\s+[a-z]",
+      "flags": [],
+      "description": "Period followed by lowercase (sentence continues)",
+      "category": "sentence_fragment"
+    },
+    {
+      "pattern": "\\s+accordingly\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal continuation phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+Respondent\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+Petitioner\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+Hon'ble\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Court reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+Court\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Court reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "TRUE\\s+COPY",
+      "flags": ["IGNORECASE"],
+      "description": "Document marking",
+      "category": "document_marker"
+    },
+    {
+      "pattern": "NOTARY",
+      "flags": ["IGNORECASE"],
+      "description": "Notary marking",
+      "category": "document_marker"
+    },
+    {
+      "pattern": "\\s+u/s\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Section reference in name",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+directed\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal directive language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+ordered\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Court order language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+held\\s+that\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Judgment language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+submitted\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Argument language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+contended\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Argument language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+argued\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Argument language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+prayed\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Prayer/relief language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+filed\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Filing language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+appeal\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Appeal reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+petition\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Petition reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "By\\s+not\\s+marking",
+      "flags": ["IGNORECASE"],
+      "description": "Common garbage - evidence marking",
+      "category": "sentence_fragment"
+    },
+    {
+      "pattern": "into\\s+Investor",
+      "flags": ["IGNORECASE"],
+      "description": "Common garbage - investor reference",
+      "category": "sentence_fragment"
+    },
+    {
+      "pattern": "who\\s+has\\s+been",
+      "flags": ["IGNORECASE"],
+      "description": "Common garbage - relative clause",
+      "category": "sentence_fragment"
+    },
+    {
+      "pattern": "provides\\s+for",
+      "flags": ["IGNORECASE"],
+      "description": "Legal explanation phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "even\\s+covers",
+      "flags": ["IGNORECASE"],
+      "description": "Legal explanation phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "gives\\s+the",
+      "flags": ["IGNORECASE"],
+      "description": "Legal explanation phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "to\\s+cancel",
+      "flags": ["IGNORECASE"],
+      "description": "Legal action phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "such\\s+attachment",
+      "flags": ["IGNORECASE"],
+      "description": "Legal attachment reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "the\\s+said\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal reference phrase",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\d+\\s*lacs?\\s*",
+      "flags": ["IGNORECASE"],
+      "description": "Currency amount (lacs)",
+      "category": "currency"
+    },
+    {
+      "pattern": "\\d+\\s*crores?\\s*",
+      "flags": ["IGNORECASE"],
+      "description": "Currency amount (crores)",
+      "category": "currency"
+    },
+    {
+      "pattern": "Rs\\.?\\s*\\d+",
+      "flags": ["IGNORECASE"],
+      "description": "Rupee amount",
+      "category": "currency"
+    },
+    {
+      "pattern": "INR\\s*\\d+",
+      "flags": ["IGNORECASE"],
+      "description": "INR amount",
+      "category": "currency"
+    },
+    {
+      "pattern": "\\s+plaintiff\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+defendant\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+appellant\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+complainant\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+accused\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal party reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+versus\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Case citation marker",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+v\\.?s?\\.?\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Case citation marker (vs)",
+      "category": "legal_language"
+    }
+  ]
+}

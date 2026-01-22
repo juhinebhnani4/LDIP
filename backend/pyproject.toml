@@ -37,6 +37,9 @@ dependencies = [
     "python-multipart>=0.0.21",
     "pypdf>=5.1.0",
     "sse-starlette>=2.0.0",
+    # India Code Integration (Act Validation feature)
+    "beautifulsoup4>=4.12.0",
+    "httpx>=0.27.0",
     # Table Extraction (Feature 1)
     "docling>=2.0.0",
     "docling-core>=2.0.0",

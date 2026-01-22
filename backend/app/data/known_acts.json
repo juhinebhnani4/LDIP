@@ -1,0 +1,416 @@
+{
+  "$schema": "./schemas/known_acts.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-01-22",
+  "description": "Known Central Acts with India Code document IDs for auto-fetching PDFs",
+  "acts": [
+    {
+      "normalized_name": "indian_penal_code_1860",
+      "canonical_name": "Indian Penal Code, 1860",
+      "india_code_doc_id": "1507",
+      "india_code_filename": "186045.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "notes": "Replaced by BNS 2023 but still applicable for offences before 2024"
+    },
+    {
+      "normalized_name": "bharatiya_nyaya_sanhita_2023",
+      "canonical_name": "Bharatiya Nyaya Sanhita, 2023",
+      "india_code_doc_id": "20062",
+      "india_code_filename": "a202345.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "replaces": "indian_penal_code_1860"
+    },
+    {
+      "normalized_name": "code_of_criminal_procedure_1973",
+      "canonical_name": "Code of Criminal Procedure, 1973",
+      "india_code_doc_id": "1517",
+      "india_code_filename": "197302.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "notes": "Replaced by BNSS 2023 but still applicable for cases before 2024"
+    },
+    {
+      "normalized_name": "bharatiya_nagarik_suraksha_sanhita_2023",
+      "canonical_name": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+      "india_code_doc_id": "20061",
+      "india_code_filename": "a202346.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "replaces": "code_of_criminal_procedure_1973"
+    },
+    {
+      "normalized_name": "indian_evidence_act_1872",
+      "canonical_name": "Indian Evidence Act, 1872",
+      "india_code_doc_id": "1470",
+      "india_code_filename": "18721.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "notes": "Replaced by BSA 2023 but still applicable for cases before 2024"
+    },
+    {
+      "normalized_name": "bharatiya_sakshya_adhiniyam_2023",
+      "canonical_name": "Bharatiya Sakshya Adhiniyam, 2023",
+      "india_code_doc_id": "20063",
+      "india_code_filename": "aa202347.pdf",
+      "category": "criminal",
+      "is_active": true,
+      "replaces": "indian_evidence_act_1872"
+    },
+    {
+      "normalized_name": "code_of_civil_procedure_1908",
+      "canonical_name": "Code of Civil Procedure, 1908",
+      "india_code_doc_id": "1463",
+      "india_code_filename": "19085.pdf",
+      "category": "civil",
+      "is_active": true
+    },
+    {
+      "normalized_name": "negotiable_instruments_act_1881",
+      "canonical_name": "Negotiable Instruments Act, 1881",
+      "india_code_doc_id": "1456",
+      "india_code_filename": "188126.pdf",
+      "category": "commercial",
+      "is_active": true
+    },
+    {
+      "normalized_name": "indian_contract_act_1872",
+      "canonical_name": "Indian Contract Act, 1872",
+      "india_code_doc_id": "1421",
+      "india_code_filename": "18729.pdf",
+      "category": "commercial",
+      "is_active": true
+    },
+    {
+      "normalized_name": "transfer_of_property_act_1882",
+      "canonical_name": "Transfer of Property Act, 1882",
+      "india_code_doc_id": "1425",
+      "india_code_filename": "18824.pdf",
+      "category": "property",
+      "is_active": true
+    },
+    {
+      "normalized_name": "specific_relief_act_1963",
+      "canonical_name": "Specific Relief Act, 1963",
+      "india_code_doc_id": "1483",
+      "india_code_filename": "196347.pdf",
+      "category": "civil",
+      "is_active": true
+    },
+    {
+      "normalized_name": "limitation_act_1963",
+      "canonical_name": "Limitation Act, 1963",
+      "india_code_doc_id": "1496",
+      "india_code_filename": "196336.pdf",
+      "category": "civil",
+      "is_active": true
+    },
+    {
+      "normalized_name": "arbitration_and_conciliation_act_1996",
+      "canonical_name": "Arbitration and Conciliation Act, 1996",
+      "india_code_doc_id": "1899",
+      "india_code_filename": "199626.pdf",
+      "category": "commercial",
+      "is_active": true
+    },
+    {
+      "normalized_name": "securitisation_and_reconstruction_of_financial_assets_and_enforcement_of_security_interest_act_2002",
+      "canonical_name": "Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act, 2002",
+      "india_code_doc_id": "1893",
+      "india_code_filename": "200254.pdf",
+      "category": "banking",
+      "is_active": true
+    },
+    {
+      "normalized_name": "reserve_bank_of_india_act_1934",
+      "canonical_name": "Reserve Bank of India Act, 1934",
+      "india_code_doc_id": "1379",
+      "india_code_filename": "19342.pdf",
+      "category": "banking",
+      "is_active": true
+    },
+    {
+      "normalized_name": "banking_regulation_act_1949",
+      "canonical_name": "Banking Regulation Act, 1949",
+      "india_code_doc_id": "1402",
+      "india_code_filename": "194910.pdf",
+      "category": "banking",
+      "is_active": true
+    },
+    {
+      "normalized_name": "insolvency_and_bankruptcy_code_2016",
+      "canonical_name": "Insolvency and Bankruptcy Code, 2016",
+      "india_code_doc_id": "15440",
+      "india_code_filename": "201631.pdf",
+      "category": "corporate",
+      "is_active": true
+    },
+    {
+      "normalized_name": "prevention_of_money_laundering_act_2002",
+      "canonical_name": "Prevention of Money Laundering Act, 2002",
+      "india_code_doc_id": "1866",
+      "india_code_filename": "200215.pdf",
+      "category": "criminal",
+      "is_active": true
+    },
+    {
+      "normalized_name": "companies_act_2013",
+      "canonical_name": "Companies Act, 2013",
+      "india_code_doc_id": "7347",
+      "india_code_filename": "a2013-18.pdf",
+      "category": "corporate",
+      "is_active": true
+    },
+    {
+      "normalized_name": "companies_act_1956",
+      "canonical_name": "Companies Act, 1956",
+      "india_code_doc_id": "1428",
+      "india_code_filename": "19561.pdf",
+      "category": "corporate",
+      "is_active": true,
+      "notes": "Repealed but applicable for older matters"
+    },
+    {
+      "normalized_name": "limited_liability_partnership_act_2008",
+      "canonical_name": "Limited Liability Partnership Act, 2008",
+      "india_code_doc_id": "7319",
+      "india_code_filename": "20086.pdf",
+      "category": "corporate",
+      "is_active": true
+    },
+    {
+      "normalized_name": "securities_and_exchange_board_of_india_act_1992",
+      "canonical_name": "Securities and Exchange Board of India Act, 1992",
+      "india_code_doc_id": "1764",
+      "india_code_filename": "199215.pdf",
+      "category": "corporate",
+      "is_active": true
+    },
+    {
+      "normalized_name": "income_tax_act_1961",
+      "canonical_name": "Income Tax Act, 1961",
+      "india_code_doc_id": "2435",
+      "india_code_filename": "a1961-43.pdf",
+      "category": "taxation",
+      "is_active": true
+    },
+    {
+      "normalized_name": "central_goods_and_services_tax_act_2017",
+      "canonical_name": "Central Goods and Services Tax Act, 2017",
+      "india_code_doc_id": "15755",
+      "india_code_filename": "201712.pdf",
+      "category": "taxation",
+      "is_active": true
+    },
+    {
+      "normalized_name": "customs_act_1962",
+      "canonical_name": "Customs Act, 1962",
+      "india_code_doc_id": "2431",
+      "india_code_filename": "a1962-52.pdf",
+      "category": "taxation",
+      "is_active": true
+    },
+    {
+      "normalized_name": "foreign_exchange_management_act_1999",
+      "canonical_name": "Foreign Exchange Management Act, 1999",
+      "india_code_doc_id": "1901",
+      "india_code_filename": "199942.pdf",
+      "category": "banking",
+      "is_active": true
+    },
+    {
+      "normalized_name": "information_technology_act_2000",
+      "canonical_name": "Information Technology Act, 2000",
+      "india_code_doc_id": "13116",
+      "india_code_filename": "it_act_2000_updated.pdf",
+      "category": "technology",
+      "is_active": true
+    },
+    {
+      "normalized_name": "digital_personal_data_protection_act_2023",
+      "canonical_name": "Digital Personal Data Protection Act, 2023",
+      "india_code_doc_id": "22037",
+      "india_code_filename": "a2023-22.pdf",
+      "category": "technology",
+      "is_active": true
+    },
+    {
+      "normalized_name": "constitution_of_india_1950",
+      "canonical_name": "Constitution of India, 1950",
+      "india_code_doc_id": "1001",
+      "india_code_filename": "coi-.pdf",
+      "category": "constitutional",
+      "is_active": true
+    },
+    {
+      "normalized_name": "right_to_information_act_2005",
+      "canonical_name": "Right to Information Act, 2005",
+      "india_code_doc_id": "1890",
+      "india_code_filename": "200522.pdf",
+      "category": "administrative",
+      "is_active": true
+    },
+    {
+      "normalized_name": "consumer_protection_act_2019",
+      "canonical_name": "Consumer Protection Act, 2019",
+      "india_code_doc_id": "15964",
+      "india_code_filename": "201935.pdf",
+      "category": "consumer",
+      "is_active": true
+    },
+    {
+      "normalized_name": "consumer_protection_act_1986",
+      "canonical_name": "Consumer Protection Act, 1986",
+      "india_code_doc_id": "1642",
+      "india_code_filename": "198668.pdf",
+      "category": "consumer",
+      "is_active": true,
+      "notes": "Repealed but applicable for older matters"
+    },
+    {
+      "normalized_name": "motor_vehicles_act_1988",
+      "canonical_name": "Motor Vehicles Act, 1988",
+      "india_code_doc_id": "1720",
+      "india_code_filename": "198859.pdf",
+      "category": "transport",
+      "is_active": true
+    },
+    {
+      "normalized_name": "special_court_trial_of_offences_relating_to_transactions_in_securities_act_1992",
+      "canonical_name": "Special Court (Trial of Offences Relating to Transactions in Securities) Act, 1992",
+      "india_code_doc_id": "1749",
+      "india_code_filename": "199227.pdf",
+      "category": "securities",
+      "is_active": true
+    },
+    {
+      "normalized_name": "environment_protection_act_1986",
+      "canonical_name": "Environment (Protection) Act, 1986",
+      "india_code_doc_id": "1608",
+      "india_code_filename": "198629.pdf",
+      "category": "environmental",
+      "is_active": true
+    },
+    {
+      "normalized_name": "wildlife_protection_act_1972",
+      "canonical_name": "Wildlife (Protection) Act, 1972",
+      "india_code_doc_id": "1544",
+      "india_code_filename": "197253.pdf",
+      "category": "environmental",
+      "is_active": true
+    },
+    {
+      "normalized_name": "hindu_marriage_act_1955",
+      "canonical_name": "Hindu Marriage Act, 1955",
+      "india_code_doc_id": "1406",
+      "india_code_filename": "195525.pdf",
+      "category": "family",
+      "is_active": true
+    },
+    {
+      "normalized_name": "hindu_succession_act_1956",
+      "canonical_name": "Hindu Succession Act, 1956",
+      "india_code_doc_id": "1419",
+      "india_code_filename": "195630.pdf",
+      "category": "family",
+      "is_active": true
+    },
+    {
+      "normalized_name": "special_marriage_act_1954",
+      "canonical_name": "Special Marriage Act, 1954",
+      "india_code_doc_id": "1404",
+      "india_code_filename": "195443.pdf",
+      "category": "family",
+      "is_active": true
+    },
+    {
+      "normalized_name": "protection_of_women_from_domestic_violence_act_2005",
+      "canonical_name": "Protection of Women from Domestic Violence Act, 2005",
+      "india_code_doc_id": "1940",
+      "india_code_filename": "200543.pdf",
+      "category": "family",
+      "is_active": true
+    },
+    {
+      "normalized_name": "protection_of_children_from_sexual_offences_act_2012",
+      "canonical_name": "Protection of Children from Sexual Offences Act, 2012",
+      "india_code_doc_id": "7355",
+      "india_code_filename": "a2012-32.pdf",
+      "category": "criminal",
+      "is_active": true
+    },
+    {
+      "normalized_name": "industrial_disputes_act_1947",
+      "canonical_name": "Industrial Disputes Act, 1947",
+      "india_code_doc_id": "1378",
+      "india_code_filename": "194714.pdf",
+      "category": "labour",
+      "is_active": true
+    },
+    {
+      "normalized_name": "factories_act_1948",
+      "canonical_name": "Factories Act, 1948",
+      "india_code_doc_id": "1380",
+      "india_code_filename": "194863.pdf",
+      "category": "labour",
+      "is_active": true
+    },
+    {
+      "normalized_name": "prevention_of_corruption_act_1988",
+      "canonical_name": "Prevention of Corruption Act, 1988",
+      "india_code_doc_id": "1683",
+      "india_code_filename": "198849.pdf",
+      "category": "criminal",
+      "is_active": true
+    },
+    {
+      "normalized_name": "narcotic_drugs_and_psychotropic_substances_act_1985",
+      "canonical_name": "Narcotic Drugs and Psychotropic Substances Act, 1985",
+      "india_code_doc_id": "1613",
+      "india_code_filename": "198561.pdf",
+      "category": "criminal",
+      "is_active": true
+    },
+    {
+      "normalized_name": "unlawful_activities_prevention_act_1967",
+      "canonical_name": "Unlawful Activities (Prevention) Act, 1967",
+      "india_code_doc_id": "1535",
+      "india_code_filename": "196737.pdf",
+      "category": "criminal",
+      "is_active": true
+    },
+    {
+      "normalized_name": "sale_of_goods_act_1930",
+      "canonical_name": "Sale of Goods Act, 1930",
+      "india_code_doc_id": "1373",
+      "india_code_filename": "193030.pdf",
+      "category": "commercial",
+      "is_active": true
+    },
+    {
+      "normalized_name": "indian_stamp_act_1899",
+      "canonical_name": "Indian Stamp Act, 1899",
+      "india_code_doc_id": "1450",
+      "india_code_filename": "18992.pdf",
+      "category": "property",
+      "is_active": true
+    },
+    {
+      "normalized_name": "registration_act_1908",
+      "canonical_name": "Registration Act, 1908",
+      "india_code_doc_id": "1461",
+      "india_code_filename": "190816.pdf",
+      "category": "property",
+      "is_active": true
+    },
+    {
+      "normalized_name": "indian_succession_act_1925",
+      "canonical_name": "Indian Succession Act, 1925",
+      "india_code_doc_id": "1364",
+      "india_code_filename": "192539.pdf",
+      "category": "family",
+      "is_active": true
+    }
+  ]
+}

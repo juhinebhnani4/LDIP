@@ -11,8 +11,13 @@ Part of Act Validation and Auto-Fetching feature.
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Final
 
+from app.core.config import get_settings
+from app.core.data_loader import (
+    get_garbage_patterns,
+    get_valid_act_keywords,
+    get_valid_act_suffixes,
+)
 from app.core.logging import get_logger
 from app.engines.citation.abbreviations import (
     ACT_ABBREVIATIONS,
@@ -25,7 +30,7 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
-# Constants
+# Enums
 # =============================================================================
 
 
@@ -46,84 +51,6 @@ class ValidationSource(str, Enum):
     INDIA_CODE = "india_code"  # Found on India Code
     GARBAGE_DETECTION = "garbage_detection"  # Detected as garbage
     MANUAL = "manual"  # Manual validation
-
-
-# Minimum act name length (characters)
-MIN_ACT_NAME_LENGTH: Final[int] = 5
-
-# Maximum act name length (characters)
-MAX_ACT_NAME_LENGTH: Final[int] = 150
-
-# Valid act suffixes (must end with one of these)
-VALID_ACT_SUFFIXES: Final[tuple[str, ...]] = (
-    "act",
-    "code",
-    "rules",
-    "regulations",
-    "ordinance",
-    "order",
-    "bill",
-    "amendment",
-    "notification",
-)
-
-# Patterns that indicate garbage extraction (sentence fragments)
-GARBAGE_PATTERNS: Final[list[re.Pattern]] = [
-    re.compile(r"\.\s+[A-Z]", re.IGNORECASE),  # Period followed by capital
-    re.compile(r"\.\s+[a-z]"),  # Period followed by lowercase
-    re.compile(r"\s+accordingly\s+", re.IGNORECASE),  # Legal continuation
-    re.compile(r"\s+Respondent\s+", re.IGNORECASE),  # Legal party reference
-    re.compile(r"\s+Petitioner\s+", re.IGNORECASE),  # Legal party reference
-    re.compile(r"\s+Hon'ble\s+", re.IGNORECASE),  # Court reference
-    re.compile(r"\s+Court\s+", re.IGNORECASE),  # Court reference
-    re.compile(r"TRUE\s+COPY", re.IGNORECASE),  # Document marking
-    re.compile(r"NOTARY", re.IGNORECASE),  # Notary marking
-    re.compile(r"\s+u/s\s+", re.IGNORECASE),  # Section reference in name
-    re.compile(r"\s+directed\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+ordered\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+held\s+that\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+submitted\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+contended\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+argued\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+prayed\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+filed\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+appeal\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\s+petition\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"By\s+not\s+marking", re.IGNORECASE),  # Common garbage
-    re.compile(r"into\s+Investor", re.IGNORECASE),  # Common garbage
-    re.compile(r"who\s+has\s+been", re.IGNORECASE),  # Common garbage
-    re.compile(r"provides\s+for", re.IGNORECASE),  # Legal explanation
-    re.compile(r"even\s+covers", re.IGNORECASE),  # Legal explanation
-    re.compile(r"gives\s+the", re.IGNORECASE),  # Legal explanation
-    re.compile(r"to\s+cancel", re.IGNORECASE),  # Legal language
-    re.compile(r"such\s+attachment", re.IGNORECASE),  # Legal language
-    re.compile(r"the\s+said\s+", re.IGNORECASE),  # Legal language
-    re.compile(r"\d+\s*lacs\s*", re.IGNORECASE),  # Currency amounts
-    re.compile(r"\d+\s*crores?\s*", re.IGNORECASE),  # Currency amounts
-    re.compile(r"Rs\.?\s*\d+", re.IGNORECASE),  # Currency references
-    re.compile(r"INR\s*\d+", re.IGNORECASE),  # Currency references
-]
-
-# Keywords that suggest a valid act name
-VALID_ACT_KEYWORDS: Final[set[str]] = {
-    "act",
-    "code",
-    "rules",
-    "regulations",
-    "ordinance",
-    "amendment",
-    "indian",
-    "central",
-    "state",
-    "prevention",
-    "protection",
-    "enforcement",
-    "regulation",
-    "development",
-    "welfare",
-    "management",
-    "control",
-}
 
 
 # =============================================================================
@@ -160,6 +87,9 @@ class ActValidationService:
     2. Validation against known acts (abbreviations.py)
     3. Normalization and canonicalization of act names
 
+    Configuration is loaded from settings (config.py).
+    Patterns and rules are loaded from JSON data files.
+
     Example usage:
         service = ActValidationService()
         result = service.validate("the Torts Act. By not marking copies...")
@@ -170,6 +100,12 @@ class ActValidationService:
     def __init__(self):
         """Initialize the validation service."""
         self._known_act_names: set[str] = self._build_known_acts_set()
+        self._settings = get_settings()
+
+        # Load patterns from JSON (or use defaults)
+        self._garbage_patterns: list[tuple[re.Pattern, str]] | None = None
+        self._valid_suffixes: tuple[str, ...] | None = None
+        self._valid_keywords: set[str] | None = None
 
     def _build_known_acts_set(self) -> set[str]:
         """Build a set of known act names for quick lookup."""
@@ -178,6 +114,53 @@ class ActValidationService:
             known.add(key.lower())
             known.add(name.lower())
         return known
+
+    def _get_garbage_patterns(self) -> list[tuple[re.Pattern, str]]:
+        """Get garbage patterns, loading from JSON if needed."""
+        if self._garbage_patterns is None:
+            patterns = get_garbage_patterns()
+            if patterns:
+                self._garbage_patterns = patterns
+            else:
+                # Fallback to basic built-in patterns
+                self._garbage_patterns = [
+                    (re.compile(r"\.\s+[A-Z]", re.IGNORECASE), "Period followed by capital"),
+                    (re.compile(r"\.\s+[a-z]"), "Period followed by lowercase"),
+                    (re.compile(r"\s+accordingly\s+", re.IGNORECASE), "Legal continuation"),
+                    (re.compile(r"\s+Respondent\s+", re.IGNORECASE), "Legal party reference"),
+                    (re.compile(r"\s+Petitioner\s+", re.IGNORECASE), "Legal party reference"),
+                ]
+        return self._garbage_patterns
+
+    def _get_valid_suffixes(self) -> tuple[str, ...]:
+        """Get valid act suffixes, loading from JSON if needed."""
+        if self._valid_suffixes is None:
+            suffixes = get_valid_act_suffixes()
+            if suffixes:
+                self._valid_suffixes = suffixes
+            else:
+                # Fallback to basic built-in suffixes
+                self._valid_suffixes = (
+                    "act", "code", "rules", "regulations", "ordinance",
+                    "order", "bill", "amendment", "notification",
+                )
+        return self._valid_suffixes
+
+    def _get_valid_keywords(self) -> set[str]:
+        """Get valid act keywords, loading from JSON if needed."""
+        if self._valid_keywords is None:
+            keywords = get_valid_act_keywords()
+            if keywords:
+                self._valid_keywords = keywords
+            else:
+                # Fallback to basic built-in keywords
+                self._valid_keywords = {
+                    "act", "code", "rules", "regulations", "ordinance",
+                    "amendment", "indian", "central", "state", "prevention",
+                    "protection", "enforcement", "regulation", "development",
+                    "welfare", "management", "control",
+                }
+        return self._valid_keywords
 
     def validate(self, act_name: str) -> ActValidationResult:
         """Validate an act name.
@@ -194,6 +177,8 @@ class ActValidationService:
         Returns:
             ActValidationResult with validation status and metadata.
         """
+        settings = self._settings
+
         if not act_name or not act_name.strip():
             return ActValidationResult(
                 act_name_original=act_name or "",
@@ -222,20 +207,22 @@ class ActValidationService:
         # Step 4: Normalize the name
         normalized = normalize_act_name(cleaned)
 
-        # Step 5: Determine validation status
+        # Step 5: Determine validation status using configurable confidence
         if is_garbage and not is_known:
             status = ValidationStatus.INVALID
             source = ValidationSource.GARBAGE_DETECTION
-            confidence = min(0.5 + len(garbage_patterns) * 0.1, 0.99)
+            base_confidence = settings.validation_garbage_base_confidence
+            increment = settings.validation_garbage_increment
+            confidence = min(base_confidence + len(garbage_patterns) * increment, 0.99)
         elif is_known:
             status = ValidationStatus.VALID
             source = ValidationSource.ABBREVIATIONS
-            confidence = 0.95
+            confidence = settings.validation_known_act_confidence
         else:
             # Unknown - needs further validation (India Code lookup)
             status = ValidationStatus.UNKNOWN
             source = ValidationSource.GARBAGE_DETECTION
-            confidence = 0.5
+            confidence = settings.validation_unknown_act_confidence
 
         # Extract canonical name and year
         canonical_name = None
@@ -267,16 +254,16 @@ class ActValidationService:
             List of pattern descriptions that matched.
         """
         matched = []
-        for pattern in GARBAGE_PATTERNS:
+        for pattern, description in self._get_garbage_patterns():
             if pattern.search(act_name):
-                matched.append(pattern.pattern)
+                matched.append(description)
         return matched
 
     def _is_structurally_garbage(self, act_name: str) -> bool:
         """Check if act name is structurally invalid.
 
         Checks:
-        - Length limits
+        - Length limits (from config)
         - Must end with valid suffix (act, code, rules, etc.)
         - Must contain valid keywords
 
@@ -286,11 +273,13 @@ class ActValidationService:
         Returns:
             True if structurally invalid (garbage).
         """
-        # Check length
-        if len(act_name) < MIN_ACT_NAME_LENGTH:
+        settings = self._settings
+
+        # Check length using configurable limits
+        if len(act_name) < settings.act_name_min_length:
             return True
 
-        if len(act_name) > MAX_ACT_NAME_LENGTH:
+        if len(act_name) > settings.act_name_max_length:
             return True
 
         # Normalize for checking
@@ -300,8 +289,9 @@ class ActValidationService:
         lower_name_no_year = re.sub(r",?\s*\d{4}\s*$", "", lower_name).strip()
 
         # Must end with valid suffix
+        valid_suffixes = self._get_valid_suffixes()
         has_valid_suffix = any(
-            lower_name_no_year.endswith(suffix) for suffix in VALID_ACT_SUFFIXES
+            lower_name_no_year.endswith(suffix) for suffix in valid_suffixes
         )
 
         if not has_valid_suffix:
@@ -312,8 +302,9 @@ class ActValidationService:
             return True
 
         # Must contain at least one valid keyword
+        valid_keywords = self._get_valid_keywords()
         words = set(re.findall(r"\w+", lower_name))
-        has_valid_keyword = bool(words & VALID_ACT_KEYWORDS)
+        has_valid_keyword = bool(words & valid_keywords)
 
         if not has_valid_keyword:
             # Exception: Short act names that are abbreviations
@@ -410,3 +401,12 @@ def is_garbage_act_name(act_name: str) -> bool:
         True if garbage, False otherwise.
     """
     return get_validation_service().is_likely_garbage(act_name)
+
+
+def is_validation_enabled() -> bool:
+    """Check if act validation is enabled.
+
+    Returns:
+        True if enabled, False otherwise.
+    """
+    return get_settings().act_validation_enabled

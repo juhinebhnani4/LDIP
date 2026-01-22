@@ -23,13 +23,15 @@ from urllib.parse import quote, urljoin
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.config import get_settings
+from app.core.data_loader import get_known_acts, get_known_act_info
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 # =============================================================================
-# Constants
+# Constants (non-configurable)
 # =============================================================================
 
 # Base URL for India Code
@@ -37,11 +39,6 @@ BASE_URL: Final[str] = "https://www.indiacode.nic.in"
 
 # Central Acts handle ID
 CENTRAL_ACTS_HANDLE: Final[str] = "123456789/1362"
-
-# Rate limiting
-REQUEST_DELAY_SECONDS: Final[float] = 2.0  # Delay between requests
-MAX_REQUESTS_PER_MINUTE: Final[int] = 5
-REQUEST_TIMEOUT_SECONDS: Final[float] = 30.0
 
 # HTTP headers to mimic browser
 DEFAULT_HEADERS: Final[dict[str, str]] = {
@@ -51,84 +48,6 @@ DEFAULT_HEADERS: Final[dict[str, str]] = {
     "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
-}
-
-# Common Act ID mappings (pre-populated for frequently used acts)
-# Format: normalized_name -> (doc_id, filename)
-KNOWN_ACT_IDS: Final[dict[str, tuple[str, str]]] = {
-    # Criminal Law
-    "indian_penal_code_1860": ("1507", "186045.pdf"),
-    "bharatiya_nyaya_sanhita_2023": ("20062", "a202345.pdf"),
-    "code_of_criminal_procedure_1973": ("1517", "197302.pdf"),
-    "bharatiya_nagarik_suraksha_sanhita_2023": ("20061", "a202346.pdf"),
-    "indian_evidence_act_1872": ("1470", "18721.pdf"),
-    "bharatiya_sakshya_adhiniyam_2023": ("20063", "aa202347.pdf"),
-
-    # Civil and Commercial Law
-    "code_of_civil_procedure_1908": ("1463", "19085.pdf"),
-    "negotiable_instruments_act_1881": ("1456", "188126.pdf"),
-    "indian_contract_act_1872": ("1421", "18729.pdf"),
-    "transfer_of_property_act_1882": ("1425", "18824.pdf"),
-    "specific_relief_act_1963": ("1483", "196347.pdf"),
-    "limitation_act_1963": ("1496", "196336.pdf"),
-    "arbitration_and_conciliation_act_1996": ("1899", "199626.pdf"),
-
-    # Banking and Finance
-    "securitisation_and_reconstruction_of_financial_assets_and_enforcement_of_security_interest_act_2002": ("1893", "200254.pdf"),
-    "reserve_bank_of_india_act_1934": ("1379", "19342.pdf"),
-    "banking_regulation_act_1949": ("1402", "194910.pdf"),
-    "insolvency_and_bankruptcy_code_2016": ("15440", "201631.pdf"),
-    "prevention_of_money_laundering_act_2002": ("1866", "200215.pdf"),
-
-    # Corporate Law
-    "companies_act_2013": ("7347", "a2013-18.pdf"),
-    "companies_act_1956": ("1428", "19561.pdf"),
-    "limited_liability_partnership_act_2008": ("7319", "20086.pdf"),
-    "securities_and_exchange_board_of_india_act_1992": ("1764", "199215.pdf"),
-
-    # Taxation
-    "income_tax_act_1961": ("2435", "a1961-43.pdf"),
-    "central_goods_and_services_tax_act_2017": ("15755", "201712.pdf"),
-    "customs_act_1962": ("2431", "a1962-52.pdf"),
-    "foreign_exchange_management_act_1999": ("1901", "199942.pdf"),
-
-    # Information Technology
-    "information_technology_act_2000": ("13116", "it_act_2000_updated.pdf"),
-    "digital_personal_data_protection_act_2023": ("22037", "a2023-22.pdf"),
-
-    # Constitution and Administrative
-    "constitution_of_india_1950": ("1001", "coi-.pdf"),
-    "right_to_information_act_2005": ("1890", "200522.pdf"),
-    "consumer_protection_act_2019": ("15964", "201935.pdf"),
-    "consumer_protection_act_1986": ("1642", "198668.pdf"),
-
-    # Motor Vehicles
-    "motor_vehicles_act_1988": ("1720", "198859.pdf"),
-
-    # Special Courts
-    "special_court_trial_of_offences_relating_to_transactions_in_securities_act_1992": ("1749", "199227.pdf"),
-
-    # Environmental
-    "environment_protection_act_1986": ("1608", "198629.pdf"),
-    "wildlife_protection_act_1972": ("1544", "197253.pdf"),
-
-    # Family Law
-    "hindu_marriage_act_1955": ("1406", "195525.pdf"),
-    "hindu_succession_act_1956": ("1419", "195630.pdf"),
-    "special_marriage_act_1954": ("1404", "195443.pdf"),
-    "protection_of_women_from_domestic_violence_act_2005": ("1940", "200543.pdf"),
-
-    # POCSO and Child Protection
-    "protection_of_children_from_sexual_offences_act_2012": ("7355", "a2012-32.pdf"),
-
-    # Labour
-    "industrial_disputes_act_1947": ("1378", "194714.pdf"),
-    "factories_act_1948": ("1380", "194863.pdf"),
-
-    # Prevention Acts
-    "prevention_of_corruption_act_1988": ("1683", "198849.pdf"),
-    "narcotic_drugs_and_psychotropic_substances_act_1985": ("1613", "198561.pdf"),
-    "unlawful_activities_prevention_act_1967": ("1535", "196737.pdf"),
 }
 
 
@@ -174,6 +93,7 @@ class IndiaCodeClient:
     3. Get direct PDF URLs
 
     The client implements rate limiting to avoid overwhelming the server.
+    Configuration is loaded from settings (config.py).
 
     Example usage:
         async with IndiaCodeClient() as client:
@@ -183,21 +103,32 @@ class IndiaCodeClient:
                 print(f"Downloaded {len(pdf.pdf_bytes)} bytes")
     """
 
-    def __init__(self, request_delay: float = REQUEST_DELAY_SECONDS):
+    def __init__(self, request_delay: float | None = None):
         """Initialize the India Code client.
 
         Args:
             request_delay: Delay between requests in seconds.
+                          If None, uses value from settings.
         """
-        self.request_delay = request_delay
+        settings = get_settings()
+        self.request_delay = request_delay if request_delay is not None else settings.india_code_request_delay
+        self.request_timeout = settings.india_code_request_timeout
+        self.enabled = settings.india_code_enabled
         self._client: httpx.AsyncClient | None = None
         self._last_request_time: float = 0
+        self._known_acts: dict[str, tuple[str, str]] | None = None
+
+    def _get_known_acts(self) -> dict[str, tuple[str, str]]:
+        """Get known acts mapping, loading from JSON if needed."""
+        if self._known_acts is None:
+            self._known_acts = get_known_acts()
+        return self._known_acts
 
     async def __aenter__(self):
         """Async context manager entry."""
         self._client = httpx.AsyncClient(
             headers=DEFAULT_HEADERS,
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            timeout=self.request_timeout,
             follow_redirects=True,
         )
         return self
@@ -223,13 +154,13 @@ class IndiaCodeClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 headers=DEFAULT_HEADERS,
-                timeout=REQUEST_TIMEOUT_SECONDS,
+                timeout=self.request_timeout,
                 follow_redirects=True,
             )
         return self._client
 
     def get_known_pdf_url(self, normalized_act_name: str) -> str | None:
-        """Get PDF URL for a known act from pre-populated mappings.
+        """Get PDF URL for a known act from JSON mappings.
 
         Args:
             normalized_act_name: Normalized act name (e.g., "negotiable_instruments_act_1881")
@@ -237,8 +168,9 @@ class IndiaCodeClient:
         Returns:
             Direct PDF URL if known, None otherwise.
         """
-        if normalized_act_name in KNOWN_ACT_IDS:
-            doc_id, filename = KNOWN_ACT_IDS[normalized_act_name]
+        known_acts = self._get_known_acts()
+        if normalized_act_name in known_acts:
+            doc_id, filename = known_acts[normalized_act_name]
             return f"{BASE_URL}/bitstream/123456789/{doc_id}/1/{filename}"
         return None
 
@@ -251,8 +183,9 @@ class IndiaCodeClient:
         Returns:
             Document ID if known, None otherwise.
         """
-        if normalized_act_name in KNOWN_ACT_IDS:
-            return KNOWN_ACT_IDS[normalized_act_name][0]
+        known_acts = self._get_known_acts()
+        if normalized_act_name in known_acts:
+            return known_acts[normalized_act_name][0]
         return None
 
     async def search_act(
@@ -270,6 +203,10 @@ class IndiaCodeClient:
         Returns:
             List of search results, sorted by relevance.
         """
+        if not self.enabled:
+            logger.warning("India Code integration is disabled")
+            return []
+
         client = self._get_client()
         await self._rate_limit()
 
@@ -364,6 +301,10 @@ class IndiaCodeClient:
         Returns:
             Direct PDF URL if found, None otherwise.
         """
+        if not self.enabled:
+            logger.warning("India Code integration is disabled")
+            return None
+
         client = self._get_client()
         await self._rate_limit()
 
@@ -426,6 +367,17 @@ class IndiaCodeClient:
         Returns:
             Download result with PDF bytes if successful.
         """
+        if not self.enabled:
+            logger.warning("India Code integration is disabled")
+            return IndiaCodeDownloadResult(
+                success=False,
+                doc_id=doc_id,
+                pdf_bytes=None,
+                pdf_url="",
+                error_message="India Code integration is disabled",
+                file_size=0,
+            )
+
         client = self._get_client()
 
         # Get bitstream URL if not provided
@@ -496,9 +448,9 @@ class IndiaCodeClient:
     async def download_known_act(
         self, normalized_act_name: str
     ) -> IndiaCodeDownloadResult | None:
-        """Download a PDF for a known act using pre-populated mappings.
+        """Download a PDF for a known act using JSON mappings.
 
-        This method uses the KNOWN_ACT_IDS mapping to directly download
+        This method uses the known_acts.json mapping to directly download
         without needing to search first.
 
         Args:
@@ -507,10 +459,11 @@ class IndiaCodeClient:
         Returns:
             Download result if act is known, None otherwise.
         """
-        if normalized_act_name not in KNOWN_ACT_IDS:
+        known_acts = self._get_known_acts()
+        if normalized_act_name not in known_acts:
             return None
 
-        doc_id, filename = KNOWN_ACT_IDS[normalized_act_name]
+        doc_id, filename = known_acts[normalized_act_name]
         bitstream_url = f"{BASE_URL}/bitstream/123456789/{doc_id}/1/{filename}"
 
         return await self.download_pdf(doc_id, bitstream_url)
@@ -519,6 +472,15 @@ class IndiaCodeClient:
 # =============================================================================
 # Module-level convenience functions
 # =============================================================================
+
+
+def is_india_code_enabled() -> bool:
+    """Check if India Code integration is enabled.
+
+    Returns:
+        True if enabled, False otherwise.
+    """
+    return get_settings().india_code_enabled
 
 
 async def search_india_code(
@@ -557,7 +519,7 @@ async def download_act_pdf(doc_id: str) -> IndiaCodeDownloadResult:
 def get_known_act_url(normalized_name: str) -> str | None:
     """Get PDF URL for a known act.
 
-    Convenience function that checks pre-populated mappings.
+    Convenience function that checks JSON mappings.
 
     Args:
         normalized_name: Normalized act name.

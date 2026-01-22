@@ -13,15 +13,14 @@ Part of Act Validation and Auto-Fetching feature.
 import structlog
 from supabase import Client
 
+from app.core.config import get_settings
 from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 
-# Global storage prefix for cached acts
-GLOBAL_ACTS_PREFIX = "global/acts"
-
-# Default signed URL expiration (24 hours for cached acts)
-CACHED_ACT_URL_EXPIRES = 86400
+# Get settings for URL expiry (default to 24 hours if not configured)
+_settings = get_settings()
+CACHED_ACT_URL_EXPIRES = getattr(_settings, 'act_cache_url_expiry_seconds', 86400)
 
 
 class ActCacheError(Exception):
@@ -55,6 +54,7 @@ class ActCacheService:
         """
         self.client = client or get_service_client()
         self.bucket = "documents"
+        self._settings = get_settings()
 
     def _get_storage_path(self, normalized_name: str) -> str:
         """Get storage path for a cached Act.
@@ -65,7 +65,8 @@ class ActCacheService:
         Returns:
             Storage path (e.g., "global/acts/negotiable_instruments_act_1881.pdf")
         """
-        return f"{GLOBAL_ACTS_PREFIX}/{normalized_name}.pdf"
+        prefix = self._settings.act_cache_storage_prefix
+        return f"{prefix}/{normalized_name}.pdf"
 
     def is_cached(self, normalized_name: str) -> bool:
         """Check if an Act PDF is already cached.
@@ -84,8 +85,9 @@ class ActCacheService:
         try:
             # Try to get file info - if it exists, it's cached
             # We use list with prefix to check existence
+            prefix = self._settings.act_cache_storage_prefix
             result = self.client.storage.from_(self.bucket).list(
-                path=f"{GLOBAL_ACTS_PREFIX}/",
+                path=f"{prefix}/",
                 options={"search": f"{normalized_name}.pdf"}
             )
 
@@ -204,7 +206,7 @@ class ActCacheService:
     def get_signed_url(
         self,
         normalized_name: str,
-        expires_in: int = CACHED_ACT_URL_EXPIRES,
+        expires_in: int | None = None,
     ) -> str | None:
         """Get a signed URL for a cached Act PDF.
 
@@ -219,6 +221,10 @@ class ActCacheService:
             return None
 
         storage_path = self._get_storage_path(normalized_name)
+
+        # Use config default if not specified
+        if expires_in is None:
+            expires_in = self._settings.act_cache_url_expiry_seconds
 
         try:
             response = self.client.storage.from_(self.bucket).create_signed_url(
@@ -277,9 +283,10 @@ class ActCacheService:
         if self.client is None:
             return []
 
+        prefix = self._settings.act_cache_storage_prefix
         try:
             result = self.client.storage.from_(self.bucket).list(
-                path=f"{GLOBAL_ACTS_PREFIX}/",
+                path=f"{prefix}/",
             )
 
             cached = []
@@ -308,9 +315,10 @@ class ActCacheService:
         if self.client is None:
             return {"total_cached": 0, "total_size_bytes": 0}
 
+        prefix = self._settings.act_cache_storage_prefix
         try:
             result = self.client.storage.from_(self.bucket).list(
-                path=f"{GLOBAL_ACTS_PREFIX}/",
+                path=f"{prefix}/",
             )
 
             total_cached = 0

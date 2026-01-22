@@ -12,31 +12,21 @@ import asyncio
 from typing import Any
 
 import structlog
-from celery import shared_task
 
+from app.core.config import get_settings
 from app.engines.citation.abbreviations import normalize_act_name
-from app.engines.citation.india_code import IndiaCodeClient, KNOWN_ACT_IDS
+from app.engines.citation.india_code import IndiaCodeClient, is_india_code_enabled
 from app.engines.citation.validation import (
     ActValidationService,
     ValidationSource,
     ValidationStatus,
+    is_validation_enabled,
 )
 from app.services.act_cache_service import get_act_cache_service
 from app.services.supabase.client import get_service_client
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
-
-
-# =============================================================================
-# Rate limiting configuration
-# =============================================================================
-
-# Max acts to validate per task invocation
-MAX_ACTS_PER_TASK = 50
-
-# Max acts to auto-fetch per task invocation (rate limited)
-MAX_FETCH_PER_TASK = 5
 
 
 # =============================================================================
@@ -203,7 +193,14 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
     Returns:
         Dict with validation results summary.
     """
+    # Check feature flag
+    if not is_validation_enabled():
+        logger.info("validate_acts_disabled", matter_id=matter_id)
+        return {"error": "Act validation is disabled", "validated": 0}
+
     logger.info("validate_acts_starting", matter_id=matter_id)
+
+    settings = get_settings()
 
     client = get_service_client()
     if not client:
@@ -212,8 +209,8 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
 
     validation_service = ActValidationService()
 
-    # Get unvalidated acts
-    acts = _get_unvalidated_acts(client, matter_id, limit=MAX_ACTS_PER_TASK)
+    # Get unvalidated acts using configurable limit
+    acts = _get_unvalidated_acts(client, matter_id, limit=settings.validation_max_acts_per_task)
     logger.info("validate_acts_found", matter_id=matter_id, count=len(acts))
 
     results = {
@@ -304,8 +301,9 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
             )
             results["errors"] += 1
 
-    # Trigger auto-fetch for valid acts
-    if results["valid"] > 0:
+    # Trigger auto-fetch for valid acts if enabled
+    settings = get_settings()
+    if results["valid"] > 0 and settings.india_code_auto_fetch_enabled:
         fetch_acts_from_india_code.delay()
 
     logger.info("validate_acts_complete", **results)
@@ -331,6 +329,16 @@ def fetch_acts_from_india_code(self) -> dict:
     Returns:
         Dict with fetch results summary.
     """
+    # Check feature flags
+    settings = get_settings()
+    if not is_india_code_enabled():
+        logger.info("fetch_acts_disabled_india_code")
+        return {"error": "India Code integration is disabled", "fetched": 0}
+
+    if not settings.india_code_auto_fetch_enabled:
+        logger.info("fetch_acts_disabled_auto_fetch")
+        return {"error": "Auto-fetch is disabled", "fetched": 0}
+
     logger.info("fetch_acts_starting")
 
     client = get_service_client()
@@ -339,8 +347,8 @@ def fetch_acts_from_india_code(self) -> dict:
 
     cache_service = get_act_cache_service()
 
-    # Get acts needing fetch
-    acts = _get_acts_needing_fetch(client, limit=MAX_FETCH_PER_TASK)
+    # Get acts needing fetch using configurable limit
+    acts = _get_acts_needing_fetch(client, limit=settings.validation_max_fetch_per_task)
     logger.info("fetch_acts_found", count=len(acts))
 
     results = {

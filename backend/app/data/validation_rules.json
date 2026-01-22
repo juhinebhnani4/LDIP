@@ -1,0 +1,111 @@
+{
+  "$schema": "./schemas/validation_rules.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-01-22",
+  "description": "Validation rules for act name detection and filtering",
+  "valid_suffixes": [
+    "act",
+    "code",
+    "rules",
+    "regulations",
+    "ordinance",
+    "order",
+    "bill",
+    "amendment",
+    "notification",
+    "sanhita",
+    "adhiniyam"
+  ],
+  "valid_keywords": [
+    "act",
+    "code",
+    "rules",
+    "regulations",
+    "ordinance",
+    "amendment",
+    "indian",
+    "central",
+    "state",
+    "prevention",
+    "protection",
+    "enforcement",
+    "regulation",
+    "development",
+    "welfare",
+    "management",
+    "control",
+    "bharatiya",
+    "sanhita",
+    "adhiniyam",
+    "suraksha",
+    "nyaya",
+    "sakshya",
+    "nagarik"
+  ],
+  "truncation_patterns": [
+    {
+      "pattern": "\\.\\s+[A-Z]",
+      "description": "Period followed by capital letter (new sentence)"
+    },
+    {
+      "pattern": "\\.\\s+[a-z]",
+      "description": "Period followed by lowercase (sentence continues)"
+    },
+    {
+      "pattern": "\\.\\s*$",
+      "description": "Trailing period"
+    },
+    {
+      "pattern": "\\s+and\\s+accordingly",
+      "description": "Common continuation phrase"
+    },
+    {
+      "pattern": "\\s+from\\s+Respondent",
+      "description": "Legal document continuation"
+    },
+    {
+      "pattern": "\\s+into\\s+Investor",
+      "description": "Legal document continuation"
+    },
+    {
+      "pattern": "\\s+such\\s+attachment",
+      "description": "Legal language continuation"
+    },
+    {
+      "pattern": "\\s+then\\s+it\\s+can",
+      "description": "Legal language continuation"
+    },
+    {
+      "pattern": "\\s+the\\s+said\\s+attachment",
+      "description": "Legal language continuation"
+    },
+    {
+      "pattern": "\\s+in\\s+terms\\s+of",
+      "description": "Legal language continuation"
+    },
+    {
+      "pattern": "\\s+read\\s+with\\s+",
+      "description": "Cross-reference (should be captured separately)"
+    },
+    {
+      "pattern": "\\s+provides\\s+for",
+      "description": "Legal explanation"
+    },
+    {
+      "pattern": "\\s+even\\s+covers",
+      "description": "Legal explanation"
+    },
+    {
+      "pattern": "\\s+gives\\s+the",
+      "description": "Legal explanation"
+    },
+    {
+      "pattern": "\\s+to\\s+cancel",
+      "description": "Legal action"
+    },
+    {
+      "pattern": "\\s+who\\s+has\\s+been",
+      "description": "Relative clause"
+    }
+  ]
+}

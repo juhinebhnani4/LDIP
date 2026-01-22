@@ -167,6 +167,43 @@ class Settings(BaseSettings):
     # Inspector Mode Configuration (RAG Production Gaps - Feature 3)
     inspector_enabled: bool = True  # Enable search inspector endpoints
 
+    # ==========================================================================
+    # India Code Integration (Act Validation and Auto-Fetching)
+    # ==========================================================================
+
+    # Feature flags
+    india_code_enabled: bool = True                    # Master switch for India Code integration
+    india_code_auto_fetch_enabled: bool = True         # Auto-fetch PDFs from India Code
+    act_validation_enabled: bool = True                # Enable garbage detection/validation
+
+    # Rate limiting for India Code requests
+    india_code_request_delay: float = 2.0              # Seconds between requests
+    india_code_max_requests_per_minute: int = 5        # Rate limit (be polite to gov site)
+    india_code_request_timeout: float = 30.0           # HTTP timeout for India Code requests
+
+    # Validation task configuration
+    validation_max_acts_per_task: int = 50             # Max acts to validate per Celery task
+    validation_max_fetch_per_task: int = 5             # Max acts to fetch per Celery task
+    validation_task_retry_delay: int = 60              # Seconds between task retries
+    validation_task_max_retries: int = 3               # Max retry attempts for tasks
+
+    # Act name validation thresholds
+    act_name_min_length: int = 5                       # Minimum valid act name length
+    act_name_max_length: int = 150                     # Maximum valid act name length
+    validation_garbage_base_confidence: float = 0.5    # Base confidence for garbage detection
+    validation_garbage_increment: float = 0.1          # Confidence increment per pattern match
+    validation_known_act_confidence: float = 0.95      # Confidence for known acts
+    validation_unknown_act_confidence: float = 0.5     # Confidence for unknown acts
+
+    # Act cache settings
+    act_cache_url_expiry_seconds: int = 86400          # Signed URL expiration (24 hours)
+    act_cache_storage_prefix: str = "global/acts"      # Storage path prefix for cached acts
+
+    # Circuit breaker (for resilience)
+    india_code_circuit_breaker_enabled: bool = True    # Enable circuit breaker pattern
+    india_code_circuit_breaker_threshold: int = 5      # Failures before circuit opens
+    india_code_circuit_breaker_timeout: int = 300      # Seconds before trying again
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

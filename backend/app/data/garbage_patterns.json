@@ -243,6 +243,186 @@
       "flags": ["IGNORECASE"],
       "description": "Case citation marker (vs)",
       "category": "legal_language"
+    },
+    {
+      "pattern": "^the\\s+Act$",
+      "flags": ["IGNORECASE"],
+      "description": "Generic 'the Act' reference",
+      "category": "generic_reference"
+    },
+    {
+      "pattern": "^(the\\s+)?Act$",
+      "flags": ["IGNORECASE"],
+      "description": "Generic 'Act' alone",
+      "category": "generic_reference"
+    },
+    {
+      "pattern": "^(the\\s+)?Ordinance$",
+      "flags": ["IGNORECASE"],
+      "description": "Generic 'Ordinance' alone",
+      "category": "generic_reference"
+    },
+    {
+      "pattern": "^(the\\s+)?Code$",
+      "flags": ["IGNORECASE"],
+      "description": "Generic 'Code' alone",
+      "category": "generic_reference"
+    },
+    {
+      "pattern": "in\\s+terms\\s+of",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - in terms of",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "laid\\s+down\\s+by",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - laid down by",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "as\\s+per\\s+the",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - as per the",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "under\\s+which",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - under which",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+Special\\s+Statute\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - special statute reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\(Listing$",
+      "flags": [],
+      "description": "Truncated - ends with open parenthesis",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+transact$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends mid-word 'transact'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+the$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'the'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+a$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'a'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+an$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'an'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+is$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'is'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "\\s+by$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'by'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "^A\\s+of\\s+the",
+      "flags": ["IGNORECASE"],
+      "description": "Malformed - starts with 'A of the'",
+      "category": "malformed"
+    },
+    {
+      "pattern": "^NOTA\\s+OF",
+      "flags": ["IGNORECASE"],
+      "description": "OCR error - NOTA instead of proper text",
+      "category": "ocr_error"
+    },
+    {
+      "pattern": "overriding\\s+nature",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - overriding nature",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "provisions\\s+of$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'provisions of'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "property\\s+is$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends mid-sentence",
+      "category": "truncated"
+    },
+    {
+      "pattern": "simultaneous\\s+and\\s+automatic",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - procedural language",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "notified\\s+person",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - notified person reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "relevant\\s+extract",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - relevant extract",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "relating\\s+to\\s+the\\s+properties",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - property reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "entered\\s+into\\s+fraudulently",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - fraud reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "defeating\\s+the\\s+provisions",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - defeating provisions",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "in\\s+his\\s+opinion",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - opinion reference",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "Custodian\\s+",
+      "flags": ["IGNORECASE"],
+      "description": "Legal reference - Custodian",
+      "category": "legal_language"
+    },
+    {
+      "pattern": "\\s+satisfied\\s+that",
+      "flags": ["IGNORECASE"],
+      "description": "Legal phrase - satisfied that",
+      "category": "legal_language"
     }
   ]
 }

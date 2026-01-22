@@ -196,19 +196,36 @@ class ActValidationService:
         # Step 1: Clean the act name
         cleaned = clean_act_name(act_name)
 
-        # Step 2: Check for garbage patterns
+        # Step 2: Check for garbage patterns (on original AND cleaned name)
         garbage_patterns = self._detect_garbage_patterns(act_name)
+        # Also check garbage patterns on cleaned name (catches post-truncation garbage)
+        cleaned_garbage = self._detect_garbage_patterns(cleaned)
+        garbage_patterns.extend([p for p in cleaned_garbage if p not in garbage_patterns])
+
+        # Step 2b: Check if cleaned result is a generic term (always invalid)
+        is_generic_term = self._is_generic_term(cleaned)
+        if is_generic_term:
+            garbage_patterns.append("Generic term after cleaning")
+
         is_garbage = len(garbage_patterns) > 0 or self._is_structurally_garbage(cleaned)
 
-        # Step 3: Check if it's a known act
-        canonical_result = get_canonical_name(cleaned)
-        is_known = canonical_result is not None
+        # Step 3: Check if it's a known act (but not for generic terms)
+        canonical_result = None
+        is_known = False
+        if not is_generic_term:
+            canonical_result = get_canonical_name(cleaned)
+            is_known = canonical_result is not None
 
         # Step 4: Normalize the name
         normalized = normalize_act_name(cleaned)
 
         # Step 5: Determine validation status using configurable confidence
-        if is_garbage and not is_known:
+        # Generic terms are ALWAYS invalid, even if they match abbreviations
+        if is_generic_term:
+            status = ValidationStatus.INVALID
+            source = ValidationSource.GARBAGE_DETECTION
+            confidence = 0.95  # High confidence for generic terms
+        elif is_garbage and not is_known:
             status = ValidationStatus.INVALID
             source = ValidationSource.GARBAGE_DETECTION
             base_confidence = settings.validation_garbage_base_confidence
@@ -244,6 +261,40 @@ class ActValidationService:
             is_known_act=is_known,
         )
 
+    def _is_generic_term(self, act_name: str) -> bool:
+        """Check if act name is a generic term that should always be invalid.
+
+        These are terms that are too vague to be useful, even if they match
+        in the abbreviations dictionary via fuzzy matching.
+
+        Args:
+            act_name: The cleaned act name.
+
+        Returns:
+            True if it's a generic term that should be invalid.
+        """
+        if not act_name:
+            return True
+
+        lower = act_name.lower().strip()
+        # Remove year suffix
+        lower = re.sub(r",?\s*\d{4}\s*$", "", lower).strip()
+
+        # List of generic terms that are too vague
+        generic_terms = {
+            # Single word suffixes
+            "act", "the act", "code", "the code", "ordinance", "the ordinance",
+            "rules", "the rules", "regulations", "the regulations",
+            "bill", "the bill", "amendment", "the amendment",
+            "notification", "the notification",
+            # Hindi equivalents
+            "adhiniyam", "sanhita", "niyam",
+            # Other vague terms
+            "of india", "india",
+        }
+
+        return lower in generic_terms
+
     def _detect_garbage_patterns(self, act_name: str) -> list[str]:
         """Detect garbage patterns in an act name.
 
@@ -264,6 +315,8 @@ class ActValidationService:
 
         Checks:
         - Length limits (from config)
+        - Minimum word count (at least 2 meaningful words)
+        - Generic terms like "the Act" or "Ordinance" alone
         - Must end with valid suffix (act, code, rules, etc.)
         - Must contain valid keywords
 
@@ -288,6 +341,23 @@ class ActValidationService:
         # Remove year suffix for checking
         lower_name_no_year = re.sub(r",?\s*\d{4}\s*$", "", lower_name).strip()
 
+        # Check for generic terms that are too vague
+        generic_terms = {
+            "the act", "act", "the code", "code", "the ordinance", "ordinance",
+            "the rules", "rules", "the regulations", "regulations",
+            "the bill", "bill", "the amendment", "amendment",
+        }
+        if lower_name_no_year in generic_terms:
+            return True
+
+        # Check minimum word count (at least 2 meaningful words excluding articles)
+        words = [w for w in re.findall(r"\w+", lower_name_no_year) if w not in ("the", "of", "and", "for", "to", "in", "on", "a", "an")]
+        if len(words) < 2:
+            # Exception: Known abbreviations like "IPC", "CrPC"
+            if lower_name_no_year in self._known_act_names:
+                return False
+            return True
+
         # Must end with valid suffix
         valid_suffixes = self._get_valid_suffixes()
         has_valid_suffix = any(
@@ -303,8 +373,8 @@ class ActValidationService:
 
         # Must contain at least one valid keyword
         valid_keywords = self._get_valid_keywords()
-        words = set(re.findall(r"\w+", lower_name))
-        has_valid_keyword = bool(words & valid_keywords)
+        words_set = set(re.findall(r"\w+", lower_name))
+        has_valid_keyword = bool(words_set & valid_keywords)
 
         if not has_valid_keyword:
             # Exception: Short act names that are abbreviations

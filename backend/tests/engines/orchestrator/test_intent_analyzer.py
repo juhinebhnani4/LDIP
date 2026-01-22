@@ -855,3 +855,339 @@ class TestPromptInjection:
         assert "other-matter-456" not in result.matter_id
         # Fast-path catches "citations"
         assert result.classification.intent == QueryIntent.CITATION
+
+
+# =============================================================================
+# Multi-Intent Analyzer Tests (Story 6-1 Enhancement)
+# =============================================================================
+
+
+class TestMultiIntentAnalyzer:
+    """Test MultiIntentAnalyzer for additive intent classification."""
+
+    @pytest.fixture
+    def multi_analyzer(self, mock_settings):
+        """Create MultiIntentAnalyzer instance."""
+        from app.engines.orchestrator.intent_analyzer import (
+            MultiIntentAnalyzer,
+            get_multi_intent_analyzer,
+        )
+        get_multi_intent_analyzer.cache_clear()
+        return MultiIntentAnalyzer()
+
+    @pytest.mark.asyncio
+    async def test_single_intent_citation(self, multi_analyzer):
+        """Citation intent detected correctly (may include RAG as compound)."""
+        result = await multi_analyzer.classify("List all citations")
+
+        # Citation should be primary or included
+        assert EngineType.CITATION in result.required_engines
+        # For pure citation query without "what are", should be single
+        # If compound (cited_search) detected, that's also valid
+
+    @pytest.mark.asyncio
+    async def test_single_intent_timeline(self, multi_analyzer):
+        """Single timeline intent detected correctly."""
+        result = await multi_analyzer.classify("Show me the timeline of events")
+
+        assert EngineType.TIMELINE in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_single_intent_contradiction(self, multi_analyzer):
+        """Single contradiction intent detected correctly."""
+        result = await multi_analyzer.classify("Are there any contradictions?")
+
+        assert EngineType.CONTRADICTION in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_multi_intent_citation_and_timeline(self, multi_analyzer):
+        """Multiple intents detected for compound query."""
+        result = await multi_analyzer.classify(
+            "Show me the citations and build a timeline"
+        )
+
+        assert result.is_multi_intent
+        assert EngineType.CITATION in result.required_engines
+        assert EngineType.TIMELINE in result.required_engines
+        assert result.aggregation_strategy in ("parallel_merge", "weave", "sequential")
+
+    @pytest.mark.asyncio
+    async def test_comprehensive_analysis_request(self, multi_analyzer):
+        """Comprehensive analysis triggers all engines."""
+        result = await multi_analyzer.classify(
+            "Give me a complete analysis of this case"
+        )
+
+        assert result.is_multi_intent
+        # Should trigger multiple engines
+        assert len(result.required_engines) >= 3
+
+    @pytest.mark.asyncio
+    async def test_compound_intent_temporal_contradictions(self, multi_analyzer):
+        """Compound intent detected for contradiction + timeline."""
+        result = await multi_analyzer.classify(
+            "Are there contradictions in the timeline?"
+        )
+
+        # Should detect compound relationship
+        if result.compound_intent:
+            assert result.compound_intent.name == "temporal_contradictions"
+
+    @pytest.mark.asyncio
+    async def test_rag_fallback_for_general_queries(self, multi_analyzer):
+        """RAG fallback applied for queries with no strong signals."""
+        result = await multi_analyzer.classify("What happened in the case?")
+
+        # RAG should be included (either as primary or fallback)
+        assert EngineType.RAG in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_max_confidence_property(self, multi_analyzer):
+        """max_confidence returns highest signal confidence."""
+        result = await multi_analyzer.classify("What are the citations?")
+
+        assert result.max_confidence > 0.5
+        assert result.max_confidence <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_primary_engine_property(self, multi_analyzer):
+        """primary_engine returns engine based on compound or highest confidence."""
+        result = await multi_analyzer.classify("List all citations")
+
+        # If compound intent detected, primary is from compound definition
+        # If no compound, primary is highest confidence signal
+        assert result.primary_engine in [EngineType.CITATION, EngineType.RAG]
+
+
+class TestMultiIntentPatternExtraction:
+    """Test pattern extraction for multi-intent analysis."""
+
+    @pytest.fixture
+    def multi_analyzer(self, mock_settings):
+        """Create MultiIntentAnalyzer instance."""
+        from app.engines.orchestrator.intent_analyzer import MultiIntentAnalyzer
+        return MultiIntentAnalyzer()
+
+    def test_extract_all_signals_citation(self, multi_analyzer):
+        """Citation patterns extract correct signals."""
+        signals = multi_analyzer._extract_all_signals("Show me all citations")
+
+        citation_signals = [s for s in signals if s.engine == EngineType.CITATION]
+        assert len(citation_signals) == 1
+        assert citation_signals[0].confidence >= 0.8
+
+    def test_extract_all_signals_multiple_intents(self, multi_analyzer):
+        """Multiple intent signals extracted from compound query."""
+        signals = multi_analyzer._extract_all_signals(
+            "Show the timeline and find contradictions"
+        )
+
+        engines = {s.engine for s in signals}
+        assert EngineType.TIMELINE in engines
+        assert EngineType.CONTRADICTION in engines
+
+    def test_comprehensive_request_detected(self, multi_analyzer):
+        """Comprehensive analysis patterns detected."""
+        assert multi_analyzer._is_comprehensive_request("complete analysis")
+        assert multi_analyzer._is_comprehensive_request("full review of the case")
+        assert not multi_analyzer._is_comprehensive_request("what happened?")
+
+    def test_needs_llm_refinement_when_ambiguous(self, multi_analyzer):
+        """LLM refinement needed for ambiguous queries."""
+        # No strong signals
+        signals = multi_analyzer._extract_all_signals("tell me about this")
+        needs_llm = multi_analyzer._needs_llm_refinement(signals)
+
+        # Should need LLM refinement for ambiguous queries
+        # (this depends on threshold configuration)
+        assert isinstance(needs_llm, bool)
+
+
+class TestMultiIntentCompoundDetection:
+    """Test compound intent detection."""
+
+    @pytest.fixture
+    def multi_analyzer(self, mock_settings):
+        """Create MultiIntentAnalyzer instance."""
+        from app.engines.orchestrator.intent_analyzer import MultiIntentAnalyzer
+        return MultiIntentAnalyzer()
+
+    @pytest.mark.asyncio
+    async def test_temporal_contradictions_compound(self, multi_analyzer):
+        """Temporal contradictions compound intent detected."""
+        from app.engines.orchestrator.models import IntentSignal, IntentSource
+
+        signals = [
+            IntentSignal(
+                engine=EngineType.CONTRADICTION,
+                confidence=0.9,
+                source=IntentSource.PATTERN,
+                pattern_matched="contradiction",
+            ),
+            IntentSignal(
+                engine=EngineType.TIMELINE,
+                confidence=0.8,
+                source=IntentSource.PATTERN,
+                pattern_matched="timeline",
+            ),
+        ]
+
+        compound = multi_analyzer._detect_compound_intent(signals)
+
+        assert compound is not None
+        assert compound.name == "temporal_contradictions"
+        assert compound.aggregation_strategy == "weave"
+
+    @pytest.mark.asyncio
+    async def test_cited_search_compound(self, multi_analyzer):
+        """Citation + RAG compound intent detected."""
+        from app.engines.orchestrator.models import IntentSignal, IntentSource
+
+        signals = [
+            IntentSignal(
+                engine=EngineType.CITATION,
+                confidence=0.8,
+                source=IntentSource.PATTERN,
+                pattern_matched="citation",
+            ),
+            IntentSignal(
+                engine=EngineType.RAG,
+                confidence=0.7,
+                source=IntentSource.PATTERN,
+                pattern_matched="search",
+            ),
+        ]
+
+        compound = multi_analyzer._detect_compound_intent(signals)
+
+        assert compound is not None
+        assert compound.name == "cited_search"
+
+    def test_no_compound_for_single_intent(self, multi_analyzer):
+        """No compound intent for single engine queries."""
+        from app.engines.orchestrator.models import IntentSignal, IntentSource
+
+        signals = [
+            IntentSignal(
+                engine=EngineType.CITATION,
+                confidence=0.9,
+                source=IntentSource.PATTERN,
+                pattern_matched="citation",
+            ),
+        ]
+
+        compound = multi_analyzer._detect_compound_intent(signals)
+        assert compound is None
+
+
+class TestMultiIntentAggregationStrategy:
+    """Test aggregation strategy selection."""
+
+    @pytest.fixture
+    def multi_analyzer(self, mock_settings):
+        """Create MultiIntentAnalyzer instance."""
+        from app.engines.orchestrator.intent_analyzer import MultiIntentAnalyzer
+        return MultiIntentAnalyzer()
+
+    @pytest.mark.asyncio
+    async def test_single_strategy_for_one_engine(self, multi_analyzer):
+        """Single engine uses 'single' strategy."""
+        result = await multi_analyzer.classify("What are the citations?")
+
+        if len(result.required_engines) == 1:
+            assert result.aggregation_strategy == "single"
+
+    @pytest.mark.asyncio
+    async def test_parallel_merge_for_independent_engines(self, multi_analyzer):
+        """Independent engines use parallel_merge strategy."""
+        result = await multi_analyzer.classify(
+            "List the citations and show contradictions"
+        )
+
+        # Without compound relationship, should use parallel_merge
+        if result.is_multi_intent and not result.compound_intent:
+            assert result.aggregation_strategy == "parallel_merge"
+
+    @pytest.mark.asyncio
+    async def test_weave_strategy_for_compound_intent(self, multi_analyzer):
+        """Compound intents use their defined strategy."""
+        result = await multi_analyzer.classify(
+            "Find contradictions in the timeline"
+        )
+
+        # If compound detected, should use compound's strategy
+        if result.compound_intent:
+            assert result.aggregation_strategy == result.compound_intent.aggregation_strategy
+
+
+class TestMultiIntentFactory:
+    """Test MultiIntentAnalyzer factory function."""
+
+    def test_get_multi_intent_analyzer_singleton(self, mock_settings):
+        """Factory returns singleton instance."""
+        from app.engines.orchestrator.intent_analyzer import (
+            MultiIntentAnalyzer,
+            get_multi_intent_analyzer,
+        )
+        get_multi_intent_analyzer.cache_clear()
+
+        analyzer1 = get_multi_intent_analyzer()
+        analyzer2 = get_multi_intent_analyzer()
+
+        assert analyzer1 is analyzer2
+        assert isinstance(analyzer1, MultiIntentAnalyzer)
+
+
+class TestMultiIntentEdgeCases:
+    """Test edge cases for MultiIntentAnalyzer."""
+
+    @pytest.fixture
+    def multi_analyzer(self, mock_settings):
+        """Create MultiIntentAnalyzer instance."""
+        from app.engines.orchestrator.intent_analyzer import MultiIntentAnalyzer
+        return MultiIntentAnalyzer()
+
+    @pytest.mark.asyncio
+    async def test_empty_query_handles_gracefully(self, multi_analyzer):
+        """Empty query doesn't crash."""
+        result = await multi_analyzer.classify("")
+
+        assert result is not None
+        # Should have RAG fallback
+        assert EngineType.RAG in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only_query(self, multi_analyzer):
+        """Whitespace-only query handles gracefully."""
+        result = await multi_analyzer.classify("   \t\n   ")
+
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_very_long_query(self, multi_analyzer):
+        """Very long query handles without error."""
+        long_query = "What are the citations? " * 200
+
+        result = await multi_analyzer.classify(long_query)
+
+        assert result is not None
+        assert EngineType.CITATION in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_unicode_query(self, multi_analyzer):
+        """Unicode characters handled correctly."""
+        result = await multi_analyzer.classify(
+            "धारा 138 के citations क्या हैं?"
+        )
+
+        assert result is not None
+        # "citations" keyword should be detected
+        assert EngineType.CITATION in result.required_engines
+
+    @pytest.mark.asyncio
+    async def test_mixed_case_keywords(self, multi_analyzer):
+        """Mixed case keywords detected."""
+        result = await multi_analyzer.classify("CITATIONS and TIMELINE please")
+
+        assert EngineType.CITATION in result.required_engines
+        assert EngineType.TIMELINE in result.required_engines

@@ -257,6 +257,7 @@ class TestMatterIsolation:
         orchestrator = QueryOrchestrator(
             intent_analyzer=analyzer,
             executor=mock_executor,
+            use_multi_intent=False,  # Use legacy analyzer for this test
         )
 
         await orchestrator.process_query(

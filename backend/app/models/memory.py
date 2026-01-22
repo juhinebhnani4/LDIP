@@ -41,6 +41,21 @@ FindingType = Literal[
 ]
 
 
+class SourceRef(BaseModel):
+    """Source reference for an assistant message.
+
+    Links to document and page where information was found.
+    """
+
+    document_id: str = Field(description="Document UUID")
+    document_name: str = Field(default="Unknown Document", description="Document filename")
+    page: int | None = Field(default=None, description="Page number (1-indexed)")
+    bbox_ids: list[str] = Field(
+        default_factory=list,
+        description="Bounding box IDs for highlighting",
+    )
+
+
 class SessionMessage(BaseModel):
     """A single message in the session conversation.
 
@@ -54,6 +69,10 @@ class SessionMessage(BaseModel):
     entity_refs: list[str] = Field(
         default_factory=list,
         description="Entity IDs mentioned in this message",
+    )
+    source_refs: list[SourceRef] = Field(
+        default_factory=list,
+        description="Source references for assistant messages",
     )
 
 

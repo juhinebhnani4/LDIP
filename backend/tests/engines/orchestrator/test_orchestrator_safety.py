@@ -81,6 +81,7 @@ def orchestrator(
             aggregator=mock_aggregator,
             audit_logger=mock_audit_logger,
             history_store=mock_history_store,
+            use_multi_intent=False,  # Use legacy analyzer for testing
         )
 
 
@@ -258,6 +259,7 @@ class TestSafeQueryProceeds:
                 aggregator=mock_aggregator,
                 audit_logger=mock_audit_logger,
                 history_store=mock_history_store,
+                use_multi_intent=False,  # Use legacy analyzer for this test
             )
 
             result = await orchestrator.process_query(

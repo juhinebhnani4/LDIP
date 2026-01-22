@@ -20,6 +20,7 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.engines.orchestrator.models import CompoundIntent
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
@@ -31,6 +32,22 @@ from app.services.safety.language_police import (
     get_language_police,
 )
 from app.services.verification import get_verification_service
+
+# Section titles for parallel_merge strategy
+ENGINE_SECTION_TITLES: dict[EngineType, str] = {
+    EngineType.RAG: "Summary",
+    EngineType.TIMELINE: "Timeline",
+    EngineType.CITATION: "Citations Found",
+    EngineType.CONTRADICTION: "Contradictions Identified",
+}
+
+# Engine order for parallel_merge (RAG first for context)
+ENGINE_ORDER: list[EngineType] = [
+    EngineType.RAG,
+    EngineType.TIMELINE,
+    EngineType.CITATION,
+    EngineType.CONTRADICTION,
+]
 
 logger = structlog.get_logger(__name__)
 
@@ -140,29 +157,46 @@ class ResultAggregator:
         query: str,
         results: list[EngineExecutionResult],
         wall_clock_time_ms: int,
+        aggregation_strategy: str = "single",
+        primary_engine: EngineType | None = None,
+        compound_intent: CompoundIntent | None = None,
     ) -> OrchestratorResult:
-        """Combine engine results with language policing (async).
+        """Combine engine results with strategy-based aggregation and language policing.
 
         Story 8-3: Task 7.3 - Async aggregation with policing.
+        Story 6-1 Enhancement: Strategy-based aggregation for multi-intent.
 
-        This is the recommended method that applies language policing
-        to sanitize the unified response before returning.
+        This is the recommended method that applies:
+        1. Strategy-based aggregation for multi-intent queries
+        2. Language policing to sanitize the unified response
+
+        Aggregation Strategies:
+        - "single": Pass-through for single engine
+        - "parallel_merge": Section-based combination (clean sections, no weaving)
+        - "weave": Narrative integration with inline references
+        - "sequential": Time-ordered structure
 
         Args:
             matter_id: Matter UUID.
             query: Original user query.
             results: Results from all engine executions.
             wall_clock_time_ms: Actual wall clock time.
+            aggregation_strategy: How to combine results (default: "single").
+            primary_engine: Lead engine for weave strategy.
+            compound_intent: Detected compound intent for context.
 
         Returns:
-            OrchestratorResult with sanitized unified response.
+            OrchestratorResult with aggregated and sanitized unified response.
         """
-        # First, do standard aggregation
-        orchestrator_result = self._aggregate_results_internal(
+        # First, do strategy-based aggregation
+        orchestrator_result = await self._aggregate_with_strategy(
             matter_id=matter_id,
             query=query,
             results=results,
             wall_clock_time_ms=wall_clock_time_ms,
+            aggregation_strategy=aggregation_strategy,
+            primary_engine=primary_engine,
+            compound_intent=compound_intent,
         )
 
         # Apply language policing if enabled
@@ -170,6 +204,507 @@ class ResultAggregator:
             orchestrator_result = await self._apply_language_policing(orchestrator_result)
 
         return orchestrator_result
+
+    async def _aggregate_with_strategy(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+        aggregation_strategy: str,
+        primary_engine: EngineType | None,
+        compound_intent: CompoundIntent | None,
+    ) -> OrchestratorResult:
+        """Apply strategy-based aggregation.
+
+        Story 6-1 Enhancement: Strategy-based result combination.
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original user query.
+            results: Results from all engine executions.
+            wall_clock_time_ms: Actual wall clock time.
+            aggregation_strategy: How to combine results.
+            primary_engine: Lead engine for weave strategy.
+            compound_intent: Detected compound intent.
+
+        Returns:
+            OrchestratorResult with strategy-appropriate unified response.
+        """
+        match aggregation_strategy:
+            case "single":
+                return self._aggregate_results_internal(
+                    matter_id=matter_id,
+                    query=query,
+                    results=results,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                )
+            case "parallel_merge":
+                return self._aggregate_parallel_merge(
+                    matter_id=matter_id,
+                    query=query,
+                    results=results,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                )
+            case "weave":
+                return await self._aggregate_weave(
+                    matter_id=matter_id,
+                    query=query,
+                    results=results,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                    primary_engine=primary_engine,
+                    compound_intent=compound_intent,
+                )
+            case "sequential":
+                return self._aggregate_sequential(
+                    matter_id=matter_id,
+                    query=query,
+                    results=results,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                    primary_engine=primary_engine,
+                )
+            case _:
+                # Default to parallel_merge for multi-result, single otherwise
+                if len([r for r in results if r.success]) > 1:
+                    return self._aggregate_parallel_merge(
+                        matter_id=matter_id,
+                        query=query,
+                        results=results,
+                        wall_clock_time_ms=wall_clock_time_ms,
+                    )
+                return self._aggregate_results_internal(
+                    matter_id=matter_id,
+                    query=query,
+                    results=results,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                )
+
+    def _aggregate_parallel_merge(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+    ) -> OrchestratorResult:
+        """Section-based combination - clean sections, no weaving.
+
+        Story 6-1 Enhancement: Parallel merge strategy.
+
+        Creates distinct sections for each engine with headers,
+        ordered by ENGINE_ORDER (RAG first for context).
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original query.
+            results: Engine results.
+            wall_clock_time_ms: Wall clock time.
+
+        Returns:
+            OrchestratorResult with sectioned unified response.
+        """
+        successful = [r for r in results if r.success]
+        failed = [r for r in results if not r.success]
+
+        logger.info(
+            "aggregate_parallel_merge",
+            matter_id=matter_id,
+            successful=[r.engine.value for r in successful],
+        )
+
+        sections: list[str] = []
+
+        # Order engines by ENGINE_ORDER, include all successful
+        for engine_type in ENGINE_ORDER:
+            result = next(
+                (r for r in successful if r.engine == engine_type),
+                None,
+            )
+            if result and result.data:
+                section_content = self._extract_section_content(result)
+                if section_content:
+                    section_title = ENGINE_SECTION_TITLES.get(
+                        engine_type, engine_type.value.title()
+                    )
+                    sections.append(f"## {section_title}\n\n{section_content}")
+
+        unified_response = "\n\n".join(sections)
+
+        # Add warning about failed engines if any
+        if failed:
+            failed_engines = ", ".join(r.engine.value for r in failed)
+            unified_response += f"\n\n**Note:** Some engines encountered errors ({failed_engines}). Results may be incomplete."
+
+        # Merge sources and calculate confidence
+        all_sources = self._merge_sources(successful)
+        overall_confidence = self._calculate_overall_confidence(successful)
+        total_execution_time_ms = sum(r.execution_time_ms for r in results)
+        verification_metadata = self._calculate_verification_metadata(successful)
+
+        return OrchestratorResult(
+            matter_id=matter_id,
+            query=query,
+            successful_engines=[r.engine for r in successful],
+            failed_engines=[r.engine for r in failed],
+            unified_response=unified_response,
+            sources=all_sources,
+            confidence=overall_confidence,
+            engine_results=results,
+            total_execution_time_ms=total_execution_time_ms,
+            wall_clock_time_ms=wall_clock_time_ms,
+            verification_metadata=verification_metadata,
+        )
+
+    async def _aggregate_weave(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+        primary_engine: EngineType | None,
+        compound_intent: CompoundIntent | None,
+    ) -> OrchestratorResult:
+        """Narrative integration with inline references from supporting engines.
+
+        Story 6-1 Enhancement: Weave strategy for compound intents.
+
+        Uses primary engine result as narrative backbone and weaves
+        in data from supporting engines as inline references.
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original query.
+            results: Engine results.
+            wall_clock_time_ms: Wall clock time.
+            primary_engine: Lead engine for narrative backbone.
+            compound_intent: Compound intent for context.
+
+        Returns:
+            OrchestratorResult with woven narrative response.
+        """
+        successful = [r for r in results if r.success]
+        failed = [r for r in results if not r.success]
+
+        logger.info(
+            "aggregate_weave",
+            matter_id=matter_id,
+            primary_engine=primary_engine.value if primary_engine else None,
+            compound_intent=compound_intent.name if compound_intent else None,
+        )
+
+        # Find primary engine result
+        primary_result = next(
+            (r for r in successful if r.engine == primary_engine),
+            None,
+        ) if primary_engine else None
+
+        if not primary_result:
+            # Fallback to parallel_merge if primary missing
+            logger.warning(
+                "weave_primary_missing",
+                primary_engine=primary_engine.value if primary_engine else None,
+                fallback="parallel_merge",
+            )
+            return self._aggregate_parallel_merge(
+                matter_id=matter_id,
+                query=query,
+                results=results,
+                wall_clock_time_ms=wall_clock_time_ms,
+            )
+
+        # Get primary content as narrative backbone
+        primary_content = self._extract_section_content(primary_result)
+
+        # Collect supporting data for weaving
+        supporting_data: dict[EngineType, EngineExecutionResult] = {}
+        for result in successful:
+            if result.engine != primary_engine:
+                supporting_data[result.engine] = result
+
+        # Weave supporting data into narrative
+        woven_response = self._weave_narrative(
+            primary_text=primary_content,
+            supporting_data=supporting_data,
+            compound_intent=compound_intent,
+        )
+
+        # Add failed engine warning
+        if failed:
+            failed_engines = ", ".join(r.engine.value for r in failed)
+            woven_response += f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+
+        # Merge sources and calculate confidence
+        all_sources = self._merge_sources(successful)
+        overall_confidence = self._calculate_overall_confidence(successful)
+        total_execution_time_ms = sum(r.execution_time_ms for r in results)
+        verification_metadata = self._calculate_verification_metadata(successful)
+
+        return OrchestratorResult(
+            matter_id=matter_id,
+            query=query,
+            successful_engines=[r.engine for r in successful],
+            failed_engines=[r.engine for r in failed],
+            unified_response=woven_response,
+            sources=all_sources,
+            confidence=overall_confidence,
+            engine_results=results,
+            total_execution_time_ms=total_execution_time_ms,
+            wall_clock_time_ms=wall_clock_time_ms,
+            verification_metadata=verification_metadata,
+        )
+
+    def _aggregate_sequential(
+        self,
+        matter_id: str,
+        query: str,
+        results: list[EngineExecutionResult],
+        wall_clock_time_ms: int,
+        primary_engine: EngineType | None,
+    ) -> OrchestratorResult:
+        """Time-ordered structure with content woven per phase.
+
+        Story 6-1 Enhancement: Sequential strategy for chronological intents.
+
+        Uses timeline events as structure, weaves other content per time period.
+        If no timeline, falls back to parallel_merge.
+
+        Args:
+            matter_id: Matter UUID.
+            query: Original query.
+            results: Engine results.
+            wall_clock_time_ms: Wall clock time.
+            primary_engine: Primary engine (usually RAG for sequential).
+
+        Returns:
+            OrchestratorResult with time-ordered response.
+        """
+        successful = [r for r in results if r.success]
+        failed = [r for r in results if not r.success]
+
+        # Check for timeline result
+        timeline_result = next(
+            (r for r in successful if r.engine == EngineType.TIMELINE),
+            None,
+        )
+
+        if not timeline_result or not timeline_result.data:
+            # No timeline data - fall back to parallel_merge
+            return self._aggregate_parallel_merge(
+                matter_id=matter_id,
+                query=query,
+                results=results,
+                wall_clock_time_ms=wall_clock_time_ms,
+            )
+
+        logger.info(
+            "aggregate_sequential",
+            matter_id=matter_id,
+            has_timeline=True,
+        )
+
+        # Build chronological response
+        events = timeline_result.data.get("events", [])
+        sections: list[str] = []
+
+        # Add summary if RAG result exists
+        rag_result = next(
+            (r for r in successful if r.engine == EngineType.RAG),
+            None,
+        )
+        if rag_result and rag_result.data:
+            rag_content = self._extract_section_content(rag_result)
+            if rag_content:
+                sections.append(f"## Overview\n\n{rag_content}")
+
+        # Add timeline section
+        if events:
+            timeline_content = "## Timeline of Events\n\n"
+            for event in events[:10]:  # Limit to 10 events
+                date = event.get("event_date", "Unknown date")
+                description = event.get("description", "")
+                timeline_content += f"**{date}**: {description}\n\n"
+            sections.append(timeline_content)
+
+        # Add other engine results as additional sections
+        for engine_type in [EngineType.CITATION, EngineType.CONTRADICTION]:
+            result = next(
+                (r for r in successful if r.engine == engine_type),
+                None,
+            )
+            if result and result.data:
+                section_content = self._extract_section_content(result)
+                if section_content:
+                    section_title = ENGINE_SECTION_TITLES.get(
+                        engine_type, engine_type.value.title()
+                    )
+                    sections.append(f"## {section_title}\n\n{section_content}")
+
+        unified_response = "\n\n".join(sections)
+
+        if failed:
+            failed_engines = ", ".join(r.engine.value for r in failed)
+            unified_response += f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+
+        # Merge sources and calculate confidence
+        all_sources = self._merge_sources(successful)
+        overall_confidence = self._calculate_overall_confidence(successful)
+        total_execution_time_ms = sum(r.execution_time_ms for r in results)
+        verification_metadata = self._calculate_verification_metadata(successful)
+
+        return OrchestratorResult(
+            matter_id=matter_id,
+            query=query,
+            successful_engines=[r.engine for r in successful],
+            failed_engines=[r.engine for r in failed],
+            unified_response=unified_response,
+            sources=all_sources,
+            confidence=overall_confidence,
+            engine_results=results,
+            total_execution_time_ms=total_execution_time_ms,
+            wall_clock_time_ms=wall_clock_time_ms,
+            verification_metadata=verification_metadata,
+        )
+
+    def _extract_section_content(
+        self,
+        result: EngineExecutionResult,
+    ) -> str:
+        """Extract formatted content for a section from engine result.
+
+        Story 6-1 Enhancement: Helper for strategy-based aggregation.
+
+        Args:
+            result: Engine execution result.
+
+        Returns:
+            Formatted content string.
+        """
+        data = result.data or {}
+
+        if result.engine == EngineType.RAG:
+            # Check for synthesized answer first
+            answer = data.get("answer")
+            if answer:
+                return answer
+
+            # Fallback to raw chunks
+            results_list = data.get("results", [])
+            if not results_list:
+                return ""
+
+            previews = "\n".join(
+                f"- {r.get('content', '')[:200]}..."
+                for r in results_list[:5]
+            )
+            return f"Found {len(results_list)} relevant passage(s):\n\n{previews}"
+
+        elif result.engine == EngineType.TIMELINE:
+            events = data.get("events", [])
+            if not events:
+                return "No timeline events found."
+
+            date_range = data.get("date_range", {})
+            start = date_range.get("start", "unknown")
+            end = date_range.get("end", "unknown")
+
+            event_list = "\n".join(
+                f"- **{e.get('event_date')}**: {e.get('description', '')[:150]}"
+                for e in events[:5]
+            )
+            return f"Events spanning {start} to {end}:\n\n{event_list}"
+
+        elif result.engine == EngineType.CITATION:
+            total_citations = data.get("total_citations", 0)
+            if total_citations == 0:
+                return "No Act citations found."
+
+            acts = data.get("acts", [])
+            acts_list = "\n".join(
+                f"- **{a['act_name']}**: {a['citation_count']} citation(s)"
+                for a in acts[:5]
+            )
+            return f"Found {total_citations} citation(s):\n\n{acts_list}"
+
+        elif result.engine == EngineType.CONTRADICTION:
+            if not data.get("analysis_ready"):
+                return data.get("message", "Analysis not available.")
+
+            total_statements = data.get("total_statements", 0)
+            return f"Analyzed {total_statements} statement(s) for contradictions."
+
+        return ""
+
+    def _weave_narrative(
+        self,
+        primary_text: str,
+        supporting_data: dict[EngineType, EngineExecutionResult],
+        compound_intent: CompoundIntent | None,
+    ) -> str:
+        """Weave supporting engine data into primary narrative.
+
+        Story 6-1 Enhancement: Narrative weaving for compound intents.
+
+        Args:
+            primary_text: Primary engine content (narrative backbone).
+            supporting_data: Supporting engine results.
+            compound_intent: Compound intent for context.
+
+        Returns:
+            Woven narrative with inline references.
+        """
+        woven = primary_text
+
+        # For comprehensive analysis, add distinct sections
+        if compound_intent and compound_intent.name == "comprehensive_analysis":
+            sections = [woven]
+
+            for engine, result in supporting_data.items():
+                section_content = self._extract_section_content(result)
+                if section_content:
+                    section_title = ENGINE_SECTION_TITLES.get(
+                        engine, engine.value.title()
+                    )
+                    sections.append(f"\n\n## {section_title}\n\n{section_content}")
+
+            return "".join(sections)
+
+        # For other compound intents, add supporting data as notes
+        supplementary_notes: list[str] = []
+
+        if EngineType.TIMELINE in supporting_data:
+            timeline_result = supporting_data[EngineType.TIMELINE]
+            if timeline_result.data:
+                events = timeline_result.data.get("events", [])[:3]
+                if events:
+                    event_list = ", ".join(
+                        f"{e.get('event_date')}" for e in events
+                    )
+                    supplementary_notes.append(
+                        f"**Key dates referenced:** {event_list}"
+                    )
+
+        if EngineType.CITATION in supporting_data:
+            citation_result = supporting_data[EngineType.CITATION]
+            if citation_result.data:
+                total = citation_result.data.get("total_citations", 0)
+                if total > 0:
+                    acts = citation_result.data.get("acts", [])[:3]
+                    act_list = ", ".join(a.get("act_name", "") for a in acts)
+                    supplementary_notes.append(
+                        f"**Acts cited:** {act_list} ({total} total citations)"
+                    )
+
+        if EngineType.CONTRADICTION in supporting_data:
+            contradiction_result = supporting_data[EngineType.CONTRADICTION]
+            if contradiction_result.data and contradiction_result.data.get("analysis_ready"):
+                total = contradiction_result.data.get("total_statements", 0)
+                supplementary_notes.append(
+                    f"**Statements analyzed:** {total} for potential contradictions"
+                )
+
+        if supplementary_notes:
+            woven += "\n\n---\n\n" + "\n\n".join(supplementary_notes)
+
+        return woven
 
     async def _apply_language_policing(
         self, result: OrchestratorResult
@@ -361,11 +896,20 @@ class ResultAggregator:
         data = result.data or {}
 
         if result.engine == EngineType.RAG:
-            # RAG results have explicit search results
+            # RAG results have explicit search results with document names
             for item in data.get("results", []):
+                doc_name = item.get("document_name")
+                # DEBUG: Log document_name extraction
+                logger.debug(
+                    "rag_source_extraction",
+                    document_id=item.get("document_id", "")[:8],
+                    document_name=doc_name,
+                    has_doc_name=doc_name is not None,
+                )
                 sources.append(
                     SourceReference(
                         document_id=item.get("document_id", ""),
+                        document_name=doc_name,
                         chunk_id=item.get("chunk_id"),
                         page_number=item.get("page_number"),
                         text_preview=item.get("content", "")[:200],
@@ -553,6 +1097,12 @@ class ResultAggregator:
             )
 
         elif result.engine == EngineType.RAG:
+            # Check for synthesized answer (new RAG pipeline)
+            answer = data.get("answer")
+            if answer:
+                return answer
+
+            # Fallback for old format (raw chunks only)
             results_list = data.get("results", [])
             total_candidates = data.get("total_candidates", 0)
 
@@ -693,3 +1243,4 @@ def get_result_aggregator() -> ResultAggregator:
         ResultAggregator instance.
     """
     return ResultAggregator()
+

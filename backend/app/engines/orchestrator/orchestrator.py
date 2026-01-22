@@ -32,15 +32,24 @@ from app.engines.orchestrator.audit_logger import (
     get_query_audit_logger,
 )
 from app.engines.orchestrator.executor import EngineExecutor, get_engine_executor
-from app.engines.orchestrator.intent_analyzer import IntentAnalyzer, get_intent_analyzer
+from app.engines.orchestrator.intent_analyzer import (
+    IntentAnalyzer,
+    MultiIntentAnalyzer,
+    get_intent_analyzer,
+    get_multi_intent_analyzer,
+)
+from app.engines.orchestrator.models import MultiIntentClassification
 from app.engines.orchestrator.planner import ExecutionPlanner, get_execution_planner
 from app.engines.orchestrator.query_history import (
     QueryHistoryStore,
     get_query_history_store,
 )
 from app.models.orchestrator import (
+    EngineType,
     IntentAnalysisResult,
+    IntentClassification,
     OrchestratorResult,
+    QueryIntent,
 )
 from app.models.safety import SafetyCheckResult
 from app.services.safety import SafetyGuard, get_safety_guard
@@ -83,36 +92,46 @@ class QueryOrchestrator:
         self,
         safety_guard: SafetyGuard | None = None,
         intent_analyzer: IntentAnalyzer | None = None,
+        multi_intent_analyzer: MultiIntentAnalyzer | None = None,
         planner: ExecutionPlanner | None = None,
         executor: EngineExecutor | None = None,
         aggregator: ResultAggregator | None = None,
         audit_logger: QueryAuditLogger | None = None,
         history_store: QueryHistoryStore | None = None,
+        use_multi_intent: bool = True,
     ) -> None:
         """Initialize query orchestrator.
 
         Task 6.3: Wire up all components.
         Story 6-3: Add audit logging components.
         Story 8-2: Add safety guard (Task 6.2).
+        Story 6-1 Enhancement: Multi-intent classification support.
 
         Args:
             safety_guard: Optional custom safety guard (Story 8-2).
-            intent_analyzer: Optional custom intent analyzer.
+            intent_analyzer: Optional custom intent analyzer (legacy).
+            multi_intent_analyzer: Optional custom multi-intent analyzer (new).
             planner: Optional custom execution planner.
             executor: Optional custom engine executor.
             aggregator: Optional custom result aggregator.
             audit_logger: Optional custom audit logger (Story 6-3).
             history_store: Optional custom history store (Story 6-3).
+            use_multi_intent: If True, use new multi-intent classifier (default True).
         """
         self._safety_guard = safety_guard or get_safety_guard()
         self._intent_analyzer = intent_analyzer or get_intent_analyzer()
+        self._multi_intent_analyzer = multi_intent_analyzer or get_multi_intent_analyzer()
         self._planner = planner or get_execution_planner()
         self._executor = executor or get_engine_executor()
         self._aggregator = aggregator or get_result_aggregator()
         self._audit_logger = audit_logger or get_query_audit_logger()
         self._history_store = history_store or get_query_history_store()
+        self._use_multi_intent = use_multi_intent
 
-        logger.info("query_orchestrator_initialized")
+        logger.info(
+            "query_orchestrator_initialized",
+            use_multi_intent=use_multi_intent,
+        )
 
     async def process_query(
         self,
@@ -185,21 +204,47 @@ class QueryOrchestrator:
             )
 
         # Step 1: Analyze intent and determine required engines
-        intent_result = await self._intent_analyzer.analyze_intent(
-            matter_id=matter_id,
-            query=query,
-        )
+        # Story 6-1 Enhancement: Support multi-intent classification
+        multi_classification: MultiIntentClassification | None = None
+        intent_result: IntentAnalysisResult | None = None
 
-        engines = intent_result.classification.required_engines
+        if self._use_multi_intent:
+            # New multi-intent classification path
+            multi_classification = await self._multi_intent_analyzer.classify(query)
+            engines = list(multi_classification.required_engines)
 
-        logger.info(
-            "process_query_intent_analyzed",
-            matter_id=matter_id,
-            intent=intent_result.classification.intent.value,
-            confidence=intent_result.classification.confidence,
-            required_engines=[e.value for e in engines],
-            fast_path_used=intent_result.fast_path_used,
-        )
+            # Create legacy IntentAnalysisResult for backward compatibility (audit logging)
+            intent_result = self._create_legacy_intent_result(
+                matter_id=matter_id,
+                query=query,
+                multi_classification=multi_classification,
+            )
+
+            logger.info(
+                "process_query_multi_intent_analyzed",
+                matter_id=matter_id,
+                is_multi_intent=multi_classification.is_multi_intent,
+                required_engines=[e.value for e in engines],
+                aggregation_strategy=multi_classification.aggregation_strategy,
+                compound_intent=multi_classification.compound_intent.name if multi_classification.compound_intent else None,
+                llm_was_used=multi_classification.llm_was_used,
+            )
+        else:
+            # Legacy single-intent path
+            intent_result = await self._intent_analyzer.analyze_intent(
+                matter_id=matter_id,
+                query=query,
+            )
+            engines = intent_result.classification.required_engines
+
+            logger.info(
+                "process_query_intent_analyzed",
+                matter_id=matter_id,
+                intent=intent_result.classification.intent.value,
+                confidence=intent_result.classification.confidence,
+                required_engines=[e.value for e in engines],
+                fast_path_used=intent_result.fast_path_used,
+            )
 
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(
@@ -213,12 +258,20 @@ class QueryOrchestrator:
         wall_clock_time_ms = int((time.time() - start_time) * 1000)
 
         # Story 8-3 Code Review Fix: Use async version to apply language policing
-        result = await self._aggregator.aggregate_results_async(
-            matter_id=matter_id,
-            query=query,
-            results=engine_results,
-            wall_clock_time_ms=wall_clock_time_ms,
-        )
+        # Story 6-1 Enhancement: Pass aggregation strategy for multi-intent
+        aggregation_kwargs: dict[str, Any] = {
+            "matter_id": matter_id,
+            "query": query,
+            "results": engine_results,
+            "wall_clock_time_ms": wall_clock_time_ms,
+        }
+
+        if multi_classification:
+            aggregation_kwargs["aggregation_strategy"] = multi_classification.aggregation_strategy
+            aggregation_kwargs["primary_engine"] = multi_classification.primary_engine
+            aggregation_kwargs["compound_intent"] = multi_classification.compound_intent
+
+        result = await self._aggregator.aggregate_results_async(**aggregation_kwargs)
 
         logger.info(
             "process_query_complete",
@@ -366,6 +419,55 @@ class QueryOrchestrator:
             query=query,
         )
 
+    def _create_legacy_intent_result(
+        self,
+        matter_id: str,
+        query: str,
+        multi_classification: MultiIntentClassification,
+    ) -> IntentAnalysisResult:
+        """Create legacy IntentAnalysisResult from MultiIntentClassification.
+
+        Story 6-1 Enhancement: Backward compatibility for audit logging.
+
+        Args:
+            matter_id: Matter UUID.
+            query: User's query.
+            multi_classification: New multi-intent classification.
+
+        Returns:
+            Legacy IntentAnalysisResult for audit logging.
+        """
+        from app.models.orchestrator import IntentAnalysisCost
+
+        # Determine primary intent from classification
+        primary_engine = multi_classification.primary_engine
+        intent_map = {
+            EngineType.CITATION: QueryIntent.CITATION,
+            EngineType.TIMELINE: QueryIntent.TIMELINE,
+            EngineType.CONTRADICTION: QueryIntent.CONTRADICTION,
+            EngineType.RAG: QueryIntent.RAG_SEARCH,
+        }
+        primary_intent = intent_map.get(primary_engine, QueryIntent.RAG_SEARCH)
+
+        # If multi-intent, use MULTI_ENGINE intent
+        if multi_classification.is_multi_intent:
+            primary_intent = QueryIntent.MULTI_ENGINE
+
+        classification = IntentClassification(
+            intent=primary_intent,
+            confidence=multi_classification.max_confidence,
+            required_engines=list(multi_classification.required_engines),
+            reasoning=multi_classification.reasoning,
+        )
+
+        return IntentAnalysisResult(
+            matter_id=matter_id,
+            query=query,
+            classification=classification,
+            fast_path_used=not multi_classification.llm_was_used,
+            cost=IntentAnalysisCost(llm_call_made=multi_classification.llm_was_used),
+        )
+
     @property
     def safety_guard(self) -> SafetyGuard:
         """Get the safety guard instance (Story 8-2)."""
@@ -373,8 +475,13 @@ class QueryOrchestrator:
 
     @property
     def intent_analyzer(self) -> IntentAnalyzer:
-        """Get the intent analyzer instance."""
+        """Get the intent analyzer instance (legacy)."""
         return self._intent_analyzer
+
+    @property
+    def multi_intent_analyzer(self) -> MultiIntentAnalyzer:
+        """Get the multi-intent analyzer instance (Story 6-1 Enhancement)."""
+        return self._multi_intent_analyzer
 
     @property
     def planner(self) -> ExecutionPlanner:

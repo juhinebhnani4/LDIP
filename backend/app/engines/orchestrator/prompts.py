@@ -177,3 +177,86 @@ def validate_intent_response(parsed: dict) -> list[str]:
         errors.append("reasoning must be a string")
 
     return errors
+
+
+# =============================================================================
+# Multi-Intent Classification Prompt (Story 6-1 Enhancement)
+# =============================================================================
+
+MULTI_INTENT_CLASSIFICATION_PROMPT = """You are a legal query intent classifier. Analyze the user's query and identify ALL relevant intents.
+
+## Available Intents (select ALL that apply):
+- RAG: General questions about facts, parties, case summary, document content
+- CITATION: Questions about legal citations, acts, sections, statutes referenced
+- TIMELINE: Questions about chronology, dates, sequence of events, when things happened
+- CONTRADICTION: Questions about inconsistencies, conflicts, disagreements between parties
+
+## Query to Classify:
+"{query}"
+
+## Initial Pattern Matches:
+{initial_signals}
+
+## Instructions:
+1. Consider if the user wants MULTIPLE types of information
+2. Phrases like "and", "also", "as well as" suggest multi-intent
+3. Return confidence 0.0-1.0 for EACH intent (not just the top one)
+4. If intents are RELATED (e.g., "contradictions in the timeline"), note this
+
+## Response Format (JSON):
+{{
+  "intents": [
+    {{"engine": "RAG", "confidence": 0.8, "reason": "User wants case summary"}},
+    {{"engine": "TIMELINE", "confidence": 0.9, "reason": "User explicitly asked for timeline"}}
+  ],
+  "relationship": "temporal_contradictions" | "cited_search" | "chronological_summary" | "contradiction_summary" | null,
+  "reasoning": "Overall explanation of classification"
+}}
+
+IMPORTANT:
+- Return ALL intents with confidence > 0.5, not just the highest one
+- Engine values must be: RAG, CITATION, TIMELINE, or CONTRADICTION
+- If query mentions multiple distinct topics, include ALL relevant engines
+"""
+
+
+# =============================================================================
+# Multi-Intent Response Schema
+# =============================================================================
+
+MULTI_INTENT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "engine": {
+                        "type": "string",
+                        "enum": ["RAG", "CITATION", "TIMELINE", "CONTRADICTION"],
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
+                    "reason": {"type": "string"},
+                },
+                "required": ["engine", "confidence"],
+            },
+        },
+        "relationship": {
+            "type": ["string", "null"],
+            "enum": [
+                "temporal_contradictions",
+                "cited_search",
+                "chronological_summary",
+                "contradiction_summary",
+                None,
+            ],
+        },
+        "reasoning": {"type": "string"},
+    },
+    "required": ["intents", "reasoning"],
+}

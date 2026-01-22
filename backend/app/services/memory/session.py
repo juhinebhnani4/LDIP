@@ -324,6 +324,7 @@ class SessionMemoryService:
         role: str,
         content: str,
         entity_refs: list[str] | None = None,
+        source_refs: list[dict] | None = None,
     ) -> SessionContext:
         """Add a message to session history with sliding window (AC #2, #3).
 
@@ -333,6 +334,7 @@ class SessionMemoryService:
             role: Message role ('user' or 'assistant').
             content: Message content.
             entity_refs: Optional entity IDs mentioned.
+            source_refs: Optional source references (for assistant messages).
 
         Returns:
             Updated SessionContext.
@@ -340,6 +342,8 @@ class SessionMemoryService:
         Raises:
             RuntimeError: If Redis operation fails.
         """
+        from app.models.memory import SourceRef
+
         await self._ensure_client()
 
         # Get or create session (extend_ttl=False to avoid duplicate timestamp update)
@@ -348,6 +352,19 @@ class SessionMemoryService:
         )
         # Note: auto_create=True guarantees non-None return
 
+        # Convert source_refs dicts to SourceRef models
+        source_ref_models = []
+        if source_refs:
+            for ref in source_refs:
+                source_ref_models.append(
+                    SourceRef(
+                        document_id=ref.get("document_id", ""),
+                        document_name=ref.get("document_name", "Unknown Document"),
+                        page=ref.get("page"),
+                        bbox_ids=ref.get("bbox_ids", []),
+                    )
+                )
+
         # Create message with current timestamp
         now = datetime.now(UTC).isoformat()
         message = SessionMessage(
@@ -355,6 +372,7 @@ class SessionMemoryService:
             content=content,
             timestamp=now,
             entity_refs=entity_refs or [],
+            source_refs=source_ref_models,
         )
 
         # Add to messages list

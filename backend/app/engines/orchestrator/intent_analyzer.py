@@ -29,6 +29,14 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.engines.orchestrator.models import (
+    HIGH_CONFIDENCE_THRESHOLD,
+    INCLUSION_THRESHOLD,
+    CompoundIntent,
+    IntentSignal,
+    IntentSource,
+    MultiIntentClassification,
+)
 from app.engines.orchestrator.prompts import (
     INTENT_CLASSIFICATION_SYSTEM_PROMPT,
     format_intent_prompt,
@@ -554,3 +562,485 @@ def get_intent_analyzer() -> IntentAnalyzer:
         IntentAnalyzer instance.
     """
     return IntentAnalyzer()
+
+
+# =============================================================================
+# Multi-Intent Pattern Registry (Extracts ALL matches)
+# =============================================================================
+
+# Intent patterns with confidence weights - extracts ALL matches, not first match
+INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
+    EngineType.CITATION: [
+        (re.compile(r"\b(cite|citation|citations?)\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bsection\s+\d+", re.IGNORECASE), 0.9),
+        (re.compile(r"\bacts?\s+(of\s+)?\d{4}\b", re.IGNORECASE), 0.85),
+        (re.compile(r"\b(statute|statutory|provisions?)\b", re.IGNORECASE), 0.8),
+        (re.compile(r"\blegal\s+reference", re.IGNORECASE), 0.7),
+    ],
+    EngineType.TIMELINE: [
+        (re.compile(r"\btimeline\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bchronolog(y|ical|ically)?\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bsequence\s+(of\s+)?events?\b", re.IGNORECASE), 0.85),
+        (re.compile(r"\bwhen\s+(did|was)\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\b(dates?|order\s+of)\b", re.IGNORECASE), 0.6),
+    ],
+    EngineType.CONTRADICTION: [
+        (re.compile(r"\bcontradictions?\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\binconsisten(t|cy|cies)\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bconflicts?\b", re.IGNORECASE), 0.8),
+        (re.compile(r"\b(differ|dispute|discrepanc)", re.IGNORECASE), 0.7),
+        (re.compile(r"\bdisagree", re.IGNORECASE), 0.7),
+    ],
+    EngineType.RAG: [
+        (re.compile(r"\b(summarize|summary)\b", re.IGNORECASE), 0.8),
+        (re.compile(r"\bwhat\s+(is|are|was|were)\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\bexplain\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\btell\s+me\s+about\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\b(search|find|look\s+for)\b", re.IGNORECASE), 0.6),
+    ],
+}
+
+# Comprehensive analysis patterns - triggers ALL engines
+COMPREHENSIVE_PATTERNS = [
+    re.compile(r"\b(complete|full|comprehensive)\s+(analysis|review|report)", re.IGNORECASE),
+    re.compile(r"\b(all|everything)\s+(about|regarding)", re.IGNORECASE),
+    re.compile(r"(summarize|summary).+(citation|timeline|contradiction)", re.IGNORECASE),
+    re.compile(r"\band\b.+\band\b.+\band\b", re.IGNORECASE),  # Multiple "and" conjunctions
+]
+
+
+# =============================================================================
+# Compound Intent Definitions
+# =============================================================================
+
+# Compound intent definitions - semantic relationships between intents
+COMPOUND_INTENTS: dict[frozenset[EngineType], CompoundIntent] = {
+    frozenset({EngineType.CONTRADICTION, EngineType.TIMELINE}): CompoundIntent(
+        name="temporal_contradictions",
+        primary_engine=EngineType.CONTRADICTION,
+        supporting_engines=[EngineType.TIMELINE],
+        aggregation_strategy="weave",
+    ),
+    frozenset({EngineType.CITATION, EngineType.RAG}): CompoundIntent(
+        name="cited_search",
+        primary_engine=EngineType.RAG,
+        supporting_engines=[EngineType.CITATION],
+        aggregation_strategy="weave",
+    ),
+    frozenset({EngineType.TIMELINE, EngineType.RAG}): CompoundIntent(
+        name="chronological_summary",
+        primary_engine=EngineType.RAG,
+        supporting_engines=[EngineType.TIMELINE],
+        aggregation_strategy="sequential",
+    ),
+    frozenset({EngineType.CONTRADICTION, EngineType.RAG}): CompoundIntent(
+        name="contradiction_summary",
+        primary_engine=EngineType.CONTRADICTION,
+        supporting_engines=[EngineType.RAG],
+        aggregation_strategy="weave",
+    ),
+}
+
+
+# =============================================================================
+# Multi-Intent Analyzer (Redesigned)
+# =============================================================================
+
+
+class MultiIntentAnalyzer:
+    """Redesigned intent analyzer supporting multi-intent classification.
+
+    Story 6-1 Enhancement: Multi-Intent Classification Redesign
+
+    Key differences from IntentAnalyzer:
+    1. Extracts ALL matching intent signals (not first-match)
+    2. Detects comprehensive analysis requests
+    3. Identifies compound intents (semantic relationships)
+    4. Uses LLM refinement only when needed (ambiguous cases)
+    5. Always includes RAG fallback for low-confidence queries
+
+    Example:
+        >>> analyzer = MultiIntentAnalyzer()
+        >>> result = await analyzer.classify(
+        ...     "Give me a complete analysis: summarize, list citations, timeline"
+        ... )
+        >>> result.is_multi_intent
+        True
+        >>> len(result.required_engines)
+        4
+    """
+
+    def __init__(self, llm_client=None) -> None:
+        """Initialize multi-intent analyzer.
+
+        Args:
+            llm_client: Optional OpenAI client for LLM refinement.
+                        If None, will create when needed.
+        """
+        self._llm = llm_client
+        self._client = None
+        settings = get_settings()
+        self.api_key = settings.openai_api_key
+        self.model_name = settings.openai_intent_model
+
+    @property
+    def client(self):
+        """Get or create OpenAI client for LLM refinement."""
+        if self._llm is not None:
+            return self._llm
+        if self._client is None:
+            if not self.api_key:
+                return None  # LLM refinement unavailable
+            try:
+                from openai import AsyncOpenAI
+                self._client = AsyncOpenAI(api_key=self.api_key)
+            except Exception as e:
+                logger.warning("multi_intent_llm_init_failed", error=str(e))
+                return None
+        return self._client
+
+    async def classify(self, query: str) -> MultiIntentClassification:
+        """Main entry point for query classification.
+
+        Flow:
+        1. Extract all intent signals from patterns
+        2. Check for comprehensive analysis request
+        3. Determine if LLM refinement needed
+        4. Detect compound intents
+        5. Apply RAG fallback for ambiguous queries
+
+        Args:
+            query: User's natural language query.
+
+        Returns:
+            MultiIntentClassification with all detected signals.
+        """
+        query = query.strip()
+        start_time = time.time()
+
+        logger.info(
+            "multi_intent_classify_start",
+            query_length=len(query),
+        )
+
+        # Stage 1: Extract all intent signals from patterns
+        signals = self._extract_all_signals(query)
+
+        # Stage 1b: Check for comprehensive analysis request
+        if self._is_comprehensive_request(query):
+            result = self._build_comprehensive_classification(query)
+            processing_time = int((time.time() - start_time) * 1000)
+            logger.info(
+                "multi_intent_comprehensive_detected",
+                engines=[e.value for e in result.required_engines],
+                processing_time_ms=processing_time,
+            )
+            return result
+
+        # Stage 2: Determine if LLM refinement needed
+        needs_llm = self._needs_llm_refinement(signals)
+
+        if needs_llm and self.client:
+            signals = await self._llm_refine_signals(query, signals)
+
+        # Stage 3: Detect compound intents
+        compound = self._detect_compound_intent(signals)
+
+        # Stage 4: Ensure RAG fallback for ambiguous queries
+        signals = self._apply_rag_fallback(signals)
+
+        result = MultiIntentClassification(
+            signals=signals,
+            compound_intent=compound,
+            reasoning=self._build_reasoning(signals, compound),
+            llm_was_used=needs_llm and self.client is not None,
+        )
+
+        processing_time = int((time.time() - start_time) * 1000)
+        logger.info(
+            "multi_intent_classify_complete",
+            is_multi_intent=result.is_multi_intent,
+            engines=[e.value for e in result.required_engines],
+            compound_intent=compound.name if compound else None,
+            aggregation_strategy=result.aggregation_strategy,
+            processing_time_ms=processing_time,
+        )
+
+        return result
+
+    def _extract_all_signals(self, query: str) -> list[IntentSignal]:
+        """Extract ALL matching intent signals, not just first match.
+
+        Args:
+            query: User's query.
+
+        Returns:
+            List of all detected IntentSignals with confidence scores.
+        """
+        signals: list[IntentSignal] = []
+
+        for engine, patterns in INTENT_PATTERNS.items():
+            best_confidence = 0.0
+            best_pattern: str | None = None
+
+            for pattern, confidence in patterns:
+                if pattern.search(query) and confidence > best_confidence:
+                    best_confidence = confidence
+                    best_pattern = pattern.pattern
+
+            if best_confidence > 0:
+                signals.append(
+                    IntentSignal(
+                        engine=engine,
+                        confidence=best_confidence,
+                        source=IntentSource.PATTERN,
+                        pattern_matched=best_pattern,
+                    )
+                )
+
+        return signals
+
+    def _is_comprehensive_request(self, query: str) -> bool:
+        """Check if user wants all engines.
+
+        Args:
+            query: User's query.
+
+        Returns:
+            True if comprehensive analysis is requested.
+        """
+        return any(p.search(query) for p in COMPREHENSIVE_PATTERNS)
+
+    def _build_comprehensive_classification(
+        self, query: str
+    ) -> MultiIntentClassification:
+        """Return classification requesting ALL engines.
+
+        Args:
+            query: User's query.
+
+        Returns:
+            MultiIntentClassification with all four engines activated.
+        """
+        signals = [
+            IntentSignal(EngineType.RAG, 0.9, IntentSource.COMPREHENSIVE),
+            IntentSignal(EngineType.CITATION, 0.85, IntentSource.COMPREHENSIVE),
+            IntentSignal(EngineType.TIMELINE, 0.85, IntentSource.COMPREHENSIVE),
+            IntentSignal(EngineType.CONTRADICTION, 0.85, IntentSource.COMPREHENSIVE),
+        ]
+        return MultiIntentClassification(
+            signals=signals,
+            compound_intent=CompoundIntent(
+                name="comprehensive_analysis",
+                primary_engine=EngineType.RAG,
+                supporting_engines=[
+                    EngineType.CITATION,
+                    EngineType.TIMELINE,
+                    EngineType.CONTRADICTION,
+                ],
+                aggregation_strategy="weave",
+            ),
+            reasoning="User requested comprehensive analysis - all engines activated",
+            llm_was_used=False,
+        )
+
+    def _needs_llm_refinement(self, signals: list[IntentSignal]) -> bool:
+        """Determine if LLM should refine classification.
+
+        LLM refinement is needed when:
+        - No signals detected (uncertain)
+        - Multiple high-confidence signals (ambiguous)
+        - No high-confidence signals (uncertain)
+
+        Args:
+            signals: Detected intent signals.
+
+        Returns:
+            True if LLM refinement is recommended.
+        """
+        if not signals:
+            return True
+
+        high_confidence_count = sum(
+            1 for s in signals if s.confidence >= HIGH_CONFIDENCE_THRESHOLD
+        )
+
+        # LLM needed if: multiple high-confidence OR no high-confidence
+        return high_confidence_count > 1 or high_confidence_count == 0
+
+    async def _llm_refine_signals(
+        self, query: str, initial_signals: list[IntentSignal]
+    ) -> list[IntentSignal]:
+        """Use LLM to refine/validate intent signals.
+
+        Args:
+            query: User's query.
+            initial_signals: Signals from pattern matching.
+
+        Returns:
+            Refined list of intent signals.
+        """
+        if not self.client:
+            return initial_signals
+
+        try:
+            from app.engines.orchestrator.prompts import (
+                MULTI_INTENT_CLASSIFICATION_PROMPT,
+            )
+
+            # Format initial signals for context
+            signals_str = ", ".join(
+                f"{s.engine.value}={s.confidence:.2f}" for s in initial_signals
+            )
+            if not signals_str:
+                signals_str = "None detected"
+
+            prompt = MULTI_INTENT_CLASSIFICATION_PROMPT.format(
+                query=query,
+                initial_signals=signals_str,
+            )
+
+            response = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+            )
+
+            response_text = response.choices[0].message.content or ""
+            return self._parse_llm_response(response_text, initial_signals)
+
+        except Exception as e:
+            logger.warning(
+                "multi_intent_llm_refine_failed",
+                error=str(e),
+                fallback="using pattern signals",
+            )
+            return initial_signals
+
+    def _parse_llm_response(
+        self, response_text: str, fallback_signals: list[IntentSignal]
+    ) -> list[IntentSignal]:
+        """Parse LLM response into intent signals.
+
+        Args:
+            response_text: JSON response from LLM.
+            fallback_signals: Signals to use if parsing fails.
+
+        Returns:
+            List of intent signals from LLM or fallback.
+        """
+        try:
+            parsed = json.loads(response_text)
+            intents = parsed.get("intents", [])
+
+            signals: list[IntentSignal] = []
+            for intent_data in intents:
+                engine_str = intent_data.get("engine", "").lower().replace("rag_search", "rag")
+                try:
+                    engine = EngineType(engine_str)
+                    confidence = float(intent_data.get("confidence", 0.5))
+                    signals.append(
+                        IntentSignal(
+                            engine=engine,
+                            confidence=confidence,
+                            source=IntentSource.LLM,
+                        )
+                    )
+                except (ValueError, KeyError):
+                    continue
+
+            return signals if signals else fallback_signals
+
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(
+                "multi_intent_llm_parse_failed",
+                error=str(e),
+            )
+            return fallback_signals
+
+    def _detect_compound_intent(
+        self, signals: list[IntentSignal]
+    ) -> CompoundIntent | None:
+        """Check if signals form a known compound intent.
+
+        Args:
+            signals: Detected intent signals.
+
+        Returns:
+            CompoundIntent if detected, None otherwise.
+        """
+        active_engines = frozenset(
+            s.engine for s in signals if s.confidence >= INCLUSION_THRESHOLD
+        )
+
+        for engine_combo, compound in COMPOUND_INTENTS.items():
+            if engine_combo <= active_engines:
+                return compound
+
+        return None
+
+    def _apply_rag_fallback(self, signals: list[IntentSignal]) -> list[IntentSignal]:
+        """Add RAG as fallback if no high-confidence signal.
+
+        Args:
+            signals: Current intent signals.
+
+        Returns:
+            Signals with RAG fallback if needed.
+        """
+        max_conf = max((s.confidence for s in signals), default=0)
+
+        if max_conf < HIGH_CONFIDENCE_THRESHOLD:
+            has_rag = any(s.engine == EngineType.RAG for s in signals)
+            if not has_rag:
+                signals.append(
+                    IntentSignal(
+                        engine=EngineType.RAG,
+                        confidence=0.6,
+                        source=IntentSource.FALLBACK,
+                    )
+                )
+
+        return signals
+
+    def _build_reasoning(
+        self, signals: list[IntentSignal], compound: CompoundIntent | None
+    ) -> str:
+        """Build human-readable reasoning for classification.
+
+        Args:
+            signals: Detected intent signals.
+            compound: Detected compound intent.
+
+        Returns:
+            Reasoning string.
+        """
+        parts = []
+
+        for s in sorted(signals, key=lambda x: -x.confidence):
+            parts.append(f"{s.engine.value}: {s.confidence:.0%} ({s.source.value})")
+
+        reasoning = f"Intent signals: {', '.join(parts)}"
+
+        if compound:
+            reasoning += f" | Compound intent: {compound.name}"
+
+        return reasoning
+
+
+# =============================================================================
+# Multi-Intent Service Factory
+# =============================================================================
+
+
+@lru_cache(maxsize=1)
+def get_multi_intent_analyzer() -> MultiIntentAnalyzer:
+    """Get singleton multi-intent analyzer instance.
+
+    Returns:
+        MultiIntentAnalyzer instance.
+    """
+    return MultiIntentAnalyzer()

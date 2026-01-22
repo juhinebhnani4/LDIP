@@ -30,11 +30,12 @@ export function SourceReference({ source, onClick }: SourceReferenceProps) {
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className="h-auto gap-1 px-2 py-1 text-xs font-normal text-primary hover:text-primary/80 hover:underline"
+      className="h-auto max-w-full gap-1 px-2 py-1 text-xs font-normal text-primary hover:text-primary/80 hover:underline"
       data-testid="source-reference"
+      title={label}
     >
-      <FileText className="h-3 w-3" aria-hidden="true" />
-      <span>{label}</span>
+      <FileText className="h-3 w-3 shrink-0" aria-hidden="true" />
+      <span className="truncate">{label}</span>
     </Button>
   );
 }

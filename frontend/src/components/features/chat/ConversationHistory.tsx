@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Loader2, ChevronUp, ArrowDown } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
@@ -129,10 +128,10 @@ export function ConversationHistory({
   }
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Load more button */}
       {hasMore && (
-        <div className="flex justify-center border-b bg-background/95 p-2">
+        <div className="flex shrink-0 justify-center border-b bg-background/95 p-2">
           <Button
             variant="ghost"
             size="sm"
@@ -151,40 +150,38 @@ export function ConversationHistory({
       )}
 
       {/* Messages list */}
-      <ScrollArea className="flex-1">
-        <div
-          ref={scrollRef}
-          className="flex h-full flex-col overflow-y-auto"
-          onScroll={handleScroll}
-          data-testid="conversation-history"
-        >
-          {/* Loading indicator at top when loading more */}
-          {isLoading && messages.length > 0 && (
-            <div className="flex justify-center p-4">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+        onScroll={handleScroll}
+        data-testid="conversation-history"
+      >
+        {/* Loading indicator at top when loading more */}
+        {isLoading && messages.length > 0 && (
+          <div className="flex justify-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
 
-          {/* Initial loading state */}
-          {isLoading && messages.length === 0 && (
-            <div className="flex flex-1 items-center justify-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          )}
+        {/* Initial loading state */}
+        {isLoading && messages.length === 0 && (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
 
-          {/* Messages */}
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              onSourceClick={handleSourceClick}
-            />
-          ))}
+        {/* Messages */}
+        {messages.map((message) => (
+          <ChatMessage
+            key={message.id}
+            message={message}
+            onSourceClick={handleSourceClick}
+          />
+        ))}
 
-          {/* Spacer for scroll padding at bottom */}
-          <div className="h-4" />
-        </div>
-      </ScrollArea>
+        {/* Spacer for scroll padding at bottom */}
+        <div className="h-4" />
+      </div>
 
       {/* Scroll to bottom button */}
       {showScrollButton && (

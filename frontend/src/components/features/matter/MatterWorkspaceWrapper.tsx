@@ -106,16 +106,16 @@ export function MatterWorkspaceWrapper({
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col min-h-full">
+      <div className="flex h-full flex-col overflow-hidden">
         {/* Processing status banner */}
         {showBanner && (
-          <div className="px-6 pt-4">
+          <div className="shrink-0 px-6 pt-4">
             <ProcessingStatusBanner collapsible={true} />
           </div>
         )}
 
         {/* Workspace content */}
-        <div className="flex-1">{children}</div>
+        <div className="h-full min-h-0 flex-1">{children}</div>
 
         {/* Act Discovery Modal - auto-shows when missing Acts detected (Story 3-2) */}
         <ActDiscoveryTrigger matterId={matterId} />

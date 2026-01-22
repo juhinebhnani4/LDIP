@@ -14,6 +14,7 @@ import { QAPanel } from '@/components/features/chat/QAPanel';
 import { FloatingQAPanel } from '@/components/features/chat/FloatingQAPanel';
 import { QAPanelExpandButton } from '@/components/features/chat/QAPanelExpandButton';
 import { PDFSplitView } from '@/components/features/pdf/PDFSplitView';
+import { fetchDocument } from '@/lib/api/documents';
 import type { SourceReference } from '@/types/chat';
 
 /**
@@ -75,14 +76,8 @@ export function WorkspaceContentArea({
 
       try {
         // Fetch document details to get signed URL
-        const response = await fetch(`/api/documents/${source.documentId}`);
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch document');
-        }
-
-        const result = await response.json();
-        const documentUrl = result.data?.storage_path;
+        const document = await fetchDocument(source.documentId);
+        const documentUrl = document.storagePath;
 
         if (!documentUrl) {
           throw new Error('Document URL not found');
@@ -133,7 +128,7 @@ export function WorkspaceContentArea({
   if (position === 'right') {
     return (
       <PDFSplitView>
-        <ResizablePanelGroup direction="horizontal" className="flex-1">
+        <ResizablePanelGroup direction="horizontal" className="h-full flex-1">
           <ResizablePanel defaultSize={100 - rightWidth} minSize={40}>
             <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           </ResizablePanel>
@@ -143,6 +138,7 @@ export function WorkspaceContentArea({
             minSize={20}
             maxSize={60}
             onResize={setRightWidth}
+            className="h-full"
           >
             <QAPanel
               matterId={matterId}
@@ -159,7 +155,7 @@ export function WorkspaceContentArea({
   if (position === 'bottom') {
     return (
       <PDFSplitView>
-        <ResizablePanelGroup direction="vertical" className="flex-1">
+        <ResizablePanelGroup direction="vertical" className="h-full flex-1">
           <ResizablePanel defaultSize={100 - bottomHeight} minSize={40}>
             <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           </ResizablePanel>
@@ -169,6 +165,7 @@ export function WorkspaceContentArea({
             minSize={20}
             maxSize={60}
             onResize={setBottomHeight}
+            className="h-full"
           >
             <QAPanel
               matterId={matterId}
@@ -185,7 +182,7 @@ export function WorkspaceContentArea({
   if (position === 'float') {
     return (
       <PDFSplitView>
-        <div className="relative flex-1">
+        <div className="relative h-full flex-1">
           <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
           <FloatingQAPanel
             matterId={matterId}
@@ -200,7 +197,7 @@ export function WorkspaceContentArea({
   // Hidden - just content with expand button
   return (
     <PDFSplitView>
-      <div className="relative flex-1">
+      <div className="relative h-full flex-1">
         <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
         <QAPanelExpandButton />
       </div>

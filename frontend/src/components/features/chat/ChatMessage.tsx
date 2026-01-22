@@ -62,19 +62,19 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
       {/* Message bubble */}
       <div
         className={cn(
-          'flex max-w-[80%] flex-col gap-1',
+          'flex min-w-0 max-w-[80%] flex-col gap-1',
           isUser ? 'items-end' : 'items-start'
         )}
       >
         <div
           className={cn(
-            'rounded-lg px-4 py-2 text-sm',
+            'min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-2 text-sm',
             isUser
               ? 'bg-primary text-primary-foreground'
               : 'bg-muted text-foreground'
           )}
         >
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
 
           {/* Source references (assistant only) */}
           {!isUser && message.sources && message.sources.length > 0 && (

@@ -50,7 +50,7 @@ export default async function MatterLayout({ children, params }: MatterLayoutPro
       <WorkspaceTabBar matterId={matterId} />
 
       {/* Main content area with Q&A panel - Story 10A.3 */}
-      <main data-matter-id={matterId} className="flex flex-1">
+      <main data-matter-id={matterId} className="flex min-h-0 flex-1 overflow-hidden">
         <MatterWorkspaceWrapper matterId={matterId}>
           <WorkspaceContentArea matterId={matterId}>
             {children}

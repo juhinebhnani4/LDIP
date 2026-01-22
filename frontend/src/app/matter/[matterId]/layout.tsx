@@ -39,15 +39,19 @@ export default async function MatterLayout({ children, params }: MatterLayoutPro
   const { matterId } = await params;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       {/* Service status banner - Story 13.4 (only shows when circuits are degraded) */}
       <ServiceStatusBanner />
 
       {/* Workspace header - Story 10A.1 */}
-      <WorkspaceHeader matterId={matterId} />
+      <div className="shrink-0">
+        <WorkspaceHeader matterId={matterId} />
+      </div>
 
       {/* Tab bar navigation - Story 10A.2 */}
-      <WorkspaceTabBar matterId={matterId} />
+      <div className="shrink-0">
+        <WorkspaceTabBar matterId={matterId} />
+      </div>
 
       {/* Main content area with Q&A panel - Story 10A.3 */}
       <main data-matter-id={matterId} className="flex min-h-0 flex-1 overflow-hidden">

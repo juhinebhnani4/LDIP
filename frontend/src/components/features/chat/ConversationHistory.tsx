@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, ChevronUp, ArrowDown } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
@@ -16,6 +16,8 @@ interface ConversationHistoryProps {
   userId: string;
   /** Callback when a source reference is clicked */
   onSourceClick?: (source: SourceReference) => void;
+  /** Optional children to render after messages (e.g., streaming message) */
+  children?: ReactNode;
 }
 
 /** Distance from bottom (in pixels) to consider "near bottom" for auto-scroll */
@@ -36,6 +38,7 @@ export function ConversationHistory({
   matterId,
   userId,
   onSourceClick,
+  children,
 }: ConversationHistoryProps) {
   const messages = useChatStore((state) => state.messages);
   const isLoading = useChatStore((state) => state.isLoading);
@@ -178,6 +181,9 @@ export function ConversationHistory({
             onSourceClick={handleSourceClick}
           />
         ))}
+
+        {/* Streaming message or other children (rendered inside scroll area) */}
+        {children}
 
         {/* Spacer for scroll padding at bottom */}
         <div className="h-4" />

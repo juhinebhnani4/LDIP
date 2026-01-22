@@ -197,15 +197,13 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
                 <SuggestedQuestions onQuestionClick={handleSubmit} />
               </div>
             ) : (
-              <>
-                {/* Conversation history */}
-                <ConversationHistory
-                  matterId={matterId!}
-                  userId={userId!}
-                  onSourceClick={onSourceClick}
-                />
-
-                {/* Streaming message (shown during streaming) */}
+              /* Conversation history with streaming message inside scroll area */
+              <ConversationHistory
+                matterId={matterId!}
+                userId={userId!}
+                onSourceClick={onSourceClick}
+              >
+                {/* Streaming message (shown during streaming) - inside scroll area */}
                 {streamingMessageId && (
                   <StreamingMessage
                     content={streamingContent}
@@ -215,12 +213,12 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
                     totalTimeMs={streamingTotalTimeMs}
                   />
                 )}
-              </>
+              </ConversationHistory>
             )}
 
             {/* Story 13.4: Inline error alert for streaming errors */}
             {streamError && canRetryError(streamError) && (
-              <div className="px-4 py-2">
+              <div className="shrink-0 px-4 py-2">
                 <ErrorAlert
                   error={streamError}
                   onRetry={handleRetry}
@@ -230,11 +228,12 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
               </div>
             )}
 
-            {/* Chat input (always visible) */}
+            {/* Chat input (always visible at bottom) */}
             <ChatInput
               onSubmit={handleSubmit}
               disabled={isStreaming}
               isLoading={isStreaming}
+              className="shrink-0"
             />
           </>
         ) : (

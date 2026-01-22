@@ -138,13 +138,22 @@ Output:
   ]
 }
 
+DO NOT EXTRACT (these are NOT dates):
+- Paragraph numbers in brackets like [993], [994], [1234] - these are legal document paragraph references
+- Section numbers like §123, Section 456
+- Case citation numbers like "2024 SCC 123" (the 123 is a citation number, not a year)
+- Page numbers like "Page 45" or "p. 123"
+- Serial numbers, reference numbers, or index numbers
+- Numbers that are clearly identifiers, not dates (e.g., "Exhibit A-123", "Document No. 456")
+
 IMPORTANT:
 - Return ONLY valid JSON, no markdown code blocks or other text
 - If no dates found, return {"dates": []}
 - Extract EVERY date, even if multiple dates appear in close proximity
 - Be thorough - legal timeline construction depends on complete date extraction
 - When in doubt about DD/MM vs MM/DD in Indian documents, prefer DD/MM (Indian standard)
-- Relative dates ("within 30 days") should be noted with is_ambiguous=true and reason explaining they are relative"""
+- Relative dates ("within 30 days") should be noted with is_ambiguous=true and reason explaining they are relative
+- NEVER extract 3-4 digit numbers in square brackets [NNN] as years - these are always paragraph references in legal documents"""
 
 
 # =============================================================================

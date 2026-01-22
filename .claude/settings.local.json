@@ -57,7 +57,25 @@
       "Bash(del \"e:\\\\Career coaching\\\\100x\\\\LDIP\\\\backend\\\\.env.local\")",
       "Bash(rabbitmq-server:*)",
       "Bash(cmd /c \"where supabase 2>&1\")",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(docker restart:*)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(celery:*)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMWIyYzNkNC1lNWY2LTc4OTAtYWJjZC1lZjEyMzQ1Njc4OTAiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImF1ZCI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjE3NjkwNTU2NTEsImlhdCI6MTc2ODk2OTI1MX0.XX9y5wt9uXJGKEJ1pY16CtC6EuwX-qJM2XYK2GyRbig\")",
+      "Bash(cmd /c \"taskkill /F /IM python.exe\")",
+      "Bash(for pid in 80816 61076 78828)",
+      "Bash(do cmd /c \"taskkill /F /PID $pid\")",
+      "Bash(done)",
+      "Bash(.venv/Scripts/celery:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(pip install:*)",
+      "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import pypdf; print\\(f''pypdf version: {pypdf.__version__}''\\)\")",
+      "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\python.exe\" -c \"from app.workers.celery import celery_app; print\\(''Celery app loaded successfully''\\)\")",
+      "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\pip.exe\" install:*)"
     ]
   }
 }

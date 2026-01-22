@@ -11,26 +11,11 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { SplitViewBoundingBox } from '@/types/citation';
-
-/**
- * Bounding box data as returned by the API (percentage 0-100 format).
- * Supports both snake_case and camelCase for backward compatibility.
- */
-interface ApiBoundingBoxData {
-  id: string;
-  document_id?: string;
-  documentId?: string;
-  page_number?: number;
-  pageNumber?: number;
-  x: number; // 0-100 (percentage)
-  y: number; // 0-100 (percentage)
-  width: number; // 0-100 (percentage)
-  height: number; // 0-100 (percentage)
-  text: string;
-  confidence: number | null;
-  reading_order_index?: number | null;
-  readingOrderIndex?: number | null;
-}
+import type { BoundingBox } from '@/types/document';
+import {
+  fetchBoundingBoxesForChunk,
+  fetchBoundingBoxesForPage,
+} from '@/lib/api/bounding-boxes';
 
 /**
  * Result of a bbox fetch operation including page number.
@@ -60,9 +45,9 @@ interface UseBoundingBoxesReturn {
 
 /**
  * Normalize bounding box coordinates from API format (0-100) to canvas format (0-1).
- * Handles both snake_case and camelCase for backward compatibility.
+ * The API client already handles snake_case to camelCase conversion.
  */
-function normalizeBbox(bbox: ApiBoundingBoxData): SplitViewBoundingBox {
+function normalizeBbox(bbox: BoundingBox): SplitViewBoundingBox {
   return {
     bboxId: bbox.id,
     x: bbox.x / 100,
@@ -71,13 +56,6 @@ function normalizeBbox(bbox: ApiBoundingBoxData): SplitViewBoundingBox {
     height: bbox.height / 100,
     text: bbox.text,
   };
-}
-
-/**
- * Get page number from bbox data, handling both snake_case and camelCase.
- */
-function getPageNumber(bbox: ApiBoundingBoxData): number | undefined {
-  return bbox.pageNumber ?? bbox.page_number;
 }
 
 /**
@@ -133,25 +111,14 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
       setError(null);
 
       try {
-        const response = await fetch(`/api/chunks/${chunkId}/bounding-boxes`);
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            // No bboxes found is not an error, just empty result
-            setBoundingBoxes([]);
-            setBboxPageNumber(null);
-            return { bboxes: [], pageNumber: null };
-          }
-          throw new Error(`Failed to fetch bounding boxes: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const data = result.data as ApiBoundingBoxData[];
+        // Use API client with correct base URL (port 8000)
+        const result = await fetchBoundingBoxesForChunk(chunkId);
+        const data = result.data;
 
         const normalized = data.map(normalizeBbox);
 
         // Get page number from first bbox (all bboxes from same chunk should be on same page)
-        const pageNumber = data.length > 0 && data[0] ? getPageNumber(data[0]) ?? null : null;
+        const pageNumber = data.length > 0 && data[0] ? data[0].pageNumber ?? null : null;
 
         // Cache the result
         cacheRef.current.set(cacheKey, { bboxes: normalized, pageNumber });
@@ -160,6 +127,12 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
         setBboxPageNumber(pageNumber);
         return { bboxes: normalized, pageNumber };
       } catch (err) {
+        // Handle 404 as empty result, not error
+        if (err && typeof err === 'object' && 'status' in err && err.status === 404) {
+          setBoundingBoxes([]);
+          setBboxPageNumber(null);
+          return { bboxes: [], pageNumber: null };
+        }
         const errorMessage = err instanceof Error ? err.message : 'Unknown error fetching bounding boxes';
         setError(errorMessage);
         setBoundingBoxes([]);
@@ -193,22 +166,9 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/documents/${documentId}/pages/${pageNumber}/bounding-boxes`
-        );
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            // No bboxes found is not an error, just empty result
-            setBoundingBoxes([]);
-            setBboxPageNumber(pageNumber);
-            return { bboxes: [], pageNumber };
-          }
-          throw new Error(`Failed to fetch bounding boxes: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const data = result.data as ApiBoundingBoxData[];
+        // Use API client with correct base URL (port 8000)
+        const result = await fetchBoundingBoxesForPage(documentId, pageNumber);
+        const data = result.data;
 
         const normalized = data.map(normalizeBbox);
 
@@ -219,6 +179,12 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
         setBboxPageNumber(pageNumber);
         return { bboxes: normalized, pageNumber };
       } catch (err) {
+        // Handle 404 as empty result, not error
+        if (err && typeof err === 'object' && 'status' in err && err.status === 404) {
+          setBoundingBoxes([]);
+          setBboxPageNumber(pageNumber);
+          return { bboxes: [], pageNumber };
+        }
         const errorMessage = err instanceof Error ? err.message : 'Unknown error fetching bounding boxes';
         setError(errorMessage);
         setBoundingBoxes([]);

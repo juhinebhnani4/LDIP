@@ -252,6 +252,8 @@ export interface UploadWizardActions {
   setProcessingStage: (stage: ProcessingStage | null) => void;
   /** Add a live discovery */
   addLiveDiscovery: (discovery: LiveDiscovery) => void;
+  /** Replace all live discoveries (for real API sync) */
+  setLiveDiscoveries: (discoveries: LiveDiscovery[]) => void;
   /** Set the created matter ID */
   setMatterId: (matterId: string | null) => void;
   /** Set overall progress percentage */

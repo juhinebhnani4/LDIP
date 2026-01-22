@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircle2, Clock, Flag } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -129,8 +130,8 @@ function KeyIssueItem({ issue, onVerify, onFlag, onSaveNote }: KeyIssueItemProps
         >
           {issue.number}
         </span>
-        <div className="flex-1 min-w-0 pt-0.5">
-          <p className="text-sm leading-relaxed">{issue.title}</p>
+        <div className="flex-1 min-w-0 pt-0.5 prose prose-sm dark:prose-invert max-w-none prose-p:my-0 prose-strong:text-foreground">
+          <ReactMarkdown>{issue.title}</ReactMarkdown>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <InlineVerificationButtons

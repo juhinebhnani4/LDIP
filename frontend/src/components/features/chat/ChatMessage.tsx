@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { User, Bot } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { SourceReference } from './SourceReference';
 import { EngineTrace } from './EngineTrace';
 import type { ChatMessage as ChatMessageType, SourceReference as SourceReferenceType } from '@/types/chat';
@@ -74,7 +75,13 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
               : 'bg-muted text-foreground'
           )}
         >
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ul:pl-4 prose-li:my-1 prose-strong:text-foreground prose-headings:mt-3 prose-headings:mb-1">
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )}
 
           {/* Source references (assistant only) */}
           {!isUser && message.sources && message.sources.length > 0 && (

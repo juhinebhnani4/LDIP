@@ -19,6 +19,7 @@ from typing import Final
 import structlog
 
 from app.engines.citation.abbreviations import (
+    clean_act_name,
     get_canonical_name,
     get_display_name,
     normalize_act_name,
@@ -135,9 +136,12 @@ class CitationStorageService:
                 records = []
 
                 for citation in batch:
+                    # Clean the act name first (remove sentence fragments)
+                    cleaned_act_name = clean_act_name(citation.act_name)
+
                     # Get canonical name if available
-                    canonical = get_canonical_name(citation.act_name)
-                    act_name = citation.act_name
+                    canonical = get_canonical_name(cleaned_act_name)
+                    act_name = cleaned_act_name
                     if canonical:
                         name, year = canonical
                         act_name = f"{name}, {year}" if year else name

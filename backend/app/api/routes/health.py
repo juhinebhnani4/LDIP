@@ -14,6 +14,7 @@ from app.core.circuit_breaker import (
 )
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import HEALTH_RATE_LIMIT, get_rate_limit_status, limiter
+from app.workers.celery import celery_app
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = structlog.get_logger(__name__)
@@ -305,6 +306,90 @@ async def get_rate_limits_status(
     )
 
     return {"data": status}
+
+
+# =============================================================================
+# Celery Worker Health Endpoint
+# =============================================================================
+
+
+@router.get("/celery")
+async def get_celery_status() -> dict[str, Any]:
+    """Get Celery worker and beat status.
+
+    Checks if Celery workers are running and responsive by
+    sending a ping command.
+
+    Returns:
+        Celery status with worker info.
+
+    Example response:
+        {
+            "data": {
+                "status": "healthy",
+                "workers": {
+                    "celery@hostname": {
+                        "ok": "pong"
+                    }
+                },
+                "worker_count": 1,
+                "queues": ["default", "high", "low"]
+            }
+        }
+    """
+    try:
+        # Ping workers with a short timeout
+        inspect = celery_app.control.inspect(timeout=2.0)
+        ping_response = inspect.ping()
+
+        if ping_response:
+            worker_count = len(ping_response)
+            workers = ping_response
+
+            # Get active queues
+            active_queues = inspect.active_queues() or {}
+            queue_names = set()
+            for worker_queues in active_queues.values():
+                for q in worker_queues:
+                    queue_names.add(q.get("name", "unknown"))
+
+            logger.debug(
+                "celery_health_check",
+                worker_count=worker_count,
+                queues=list(queue_names),
+            )
+
+            return {
+                "data": {
+                    "status": "healthy",
+                    "workers": workers,
+                    "worker_count": worker_count,
+                    "queues": list(queue_names) if queue_names else ["default"],
+                }
+            }
+        else:
+            logger.warning("celery_health_check_no_workers")
+            return {
+                "data": {
+                    "status": "unhealthy",
+                    "workers": {},
+                    "worker_count": 0,
+                    "queues": [],
+                    "message": "No Celery workers are responding",
+                }
+            }
+
+    except Exception as e:
+        logger.error("celery_health_check_failed", error=str(e))
+        return {
+            "data": {
+                "status": "error",
+                "workers": {},
+                "worker_count": 0,
+                "queues": [],
+                "message": f"Failed to check Celery status: {e!s}",
+            }
+        }
 
 
 # =============================================================================

@@ -331,3 +331,133 @@ def recover_skipped_large_documents(self) -> dict:
     except Exception as e:
         logger.error("recover_skipped_large_documents_failed", error=str(e))
         return {"error": str(e)}
+
+
+# =============================================================================
+# Auto-Fix Missing Extracted Text Task
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.fix_missing_extracted_text",
+    bind=True,
+    max_retries=1,
+)
+def fix_missing_extracted_text(self) -> dict:
+    """Periodic task to fix documents with missing extracted_text.
+
+    Finds documents where:
+    - status = 'ocr_complete'
+    - extracted_text is NULL
+    - bounding_boxes exist
+
+    Reconstructs extracted_text from bounding_boxes table.
+
+    Returns:
+        Dictionary with fix results.
+    """
+    from app.services.supabase.client import get_supabase_client
+
+    logger.info("fix_missing_extracted_text_started")
+
+    try:
+        client = get_supabase_client()
+
+        # Find documents with missing extracted_text but OCR complete
+        docs_response = (
+            client.table("documents")
+            .select("id, filename, status")
+            .is_("extracted_text", "null")
+            .eq("status", "ocr_complete")
+            .execute()
+        )
+
+        docs_to_fix = docs_response.data or []
+        results = {
+            "checked": len(docs_to_fix),
+            "fixed": 0,
+            "skipped": 0,
+            "errors": [],
+        }
+
+        for doc in docs_to_fix:
+            doc_id = doc["id"]
+            try:
+                # Get all bounding boxes for this document
+                bboxes_response = (
+                    client.table("bounding_boxes")
+                    .select("page_number, reading_order_index, text")
+                    .eq("document_id", doc_id)
+                    .order("page_number")
+                    .order("reading_order_index")
+                    .execute()
+                )
+
+                bboxes = bboxes_response.data or []
+                if not bboxes:
+                    logger.debug(
+                        "fix_extracted_text_no_bboxes",
+                        document_id=doc_id,
+                    )
+                    results["skipped"] += 1
+                    continue
+
+                # Build full text from bounding boxes
+                texts_by_page: dict[int, list[str]] = {}
+                for bbox in bboxes:
+                    page = bbox.get("page_number", 1)
+                    text = bbox.get("text", "")
+                    if text:
+                        if page not in texts_by_page:
+                            texts_by_page[page] = []
+                        texts_by_page[page].append(text)
+
+                # Combine texts - join words on same page with spaces, pages with newlines
+                full_text = ""
+                for page in sorted(texts_by_page.keys()):
+                    page_text = " ".join(texts_by_page[page])
+                    full_text += page_text + "\n\n"
+
+                full_text = full_text.strip()
+
+                if not full_text:
+                    results["skipped"] += 1
+                    continue
+
+                # Update document with extracted_text
+                client.table("documents").update(
+                    {"extracted_text": full_text}
+                ).eq("id", doc_id).execute()
+
+                logger.info(
+                    "fix_extracted_text_success",
+                    document_id=doc_id,
+                    text_length=len(full_text),
+                    bbox_count=len(bboxes),
+                )
+                results["fixed"] += 1
+
+            except Exception as e:
+                logger.error(
+                    "fix_extracted_text_document_failed",
+                    document_id=doc_id,
+                    error=str(e),
+                )
+                results["errors"].append({
+                    "document_id": doc_id,
+                    "error": str(e),
+                })
+
+        logger.info(
+            "fix_missing_extracted_text_completed",
+            checked=results["checked"],
+            fixed=results["fixed"],
+            skipped=results["skipped"],
+            errors=len(results["errors"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error("fix_missing_extracted_text_failed", error=str(e))
+        return {"error": str(e)}

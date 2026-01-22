@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { useUploadWizardStore, selectIsProcessingComplete } from '@/stores/uploadWizardStore';
 import { useBackgroundProcessingStore } from '@/stores/backgroundProcessingStore';
@@ -24,6 +24,7 @@ import { ProcessingScreen, CompletionScreen } from '@/components/features/upload
 import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
 import { createMatterAndUpload } from '@/lib/api/upload-orchestration';
 import { useProcessingStatus } from '@/hooks/useProcessingStatus';
+import { useLiveDiscoveries } from '@/hooks/useLiveDiscoveries';
 import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -36,8 +37,11 @@ const USE_MOCK_PROCESSING = process.env.NEXT_PUBLIC_USE_MOCK_PROCESSING !== 'fal
 
 export default function ProcessingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showCompletion, setShowCompletion] = useState(false);
   const [uploadPhaseComplete, setUploadPhaseComplete] = useState(false);
+  // Recovery mode: when we have matterId from URL but no files (page refresh)
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
 
   // Use selector pattern for store access
   const files = useUploadWizardStore((state) => state.files);
@@ -56,6 +60,9 @@ export default function ProcessingPage() {
   );
   const addLiveDiscovery = useUploadWizardStore(
     (state) => state.addLiveDiscovery
+  );
+  const setLiveDiscoveries = useUploadWizardStore(
+    (state) => state.setLiveDiscoveries
   );
   const setMatterId = useUploadWizardStore((state) => state.setMatterId);
   const setProcessingComplete = useUploadWizardStore(
@@ -90,7 +97,28 @@ export default function ProcessingPage() {
   // Track upload orchestration errors
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Real API: Poll processing status when we have a matter ID and upload is complete
+  // Recovery mode: Check URL for matterId on mount (handles page refresh)
+  useEffect(() => {
+    const urlMatterId = searchParams.get('matterId');
+    if (urlMatterId && !matterId && files.length === 0) {
+      // Page was refreshed - recover using matterId from URL
+      setMatterId(urlMatterId);
+      setIsRecoveryMode(true);
+      setUploadPhaseComplete(true); // Skip upload phase, go straight to polling
+    }
+  }, [searchParams, matterId, files.length, setMatterId]);
+
+  // Update URL when matterId changes (for refresh persistence)
+  useEffect(() => {
+    if (matterId && !searchParams.get('matterId')) {
+      // Add matterId to URL without navigation
+      const url = new URL(window.location.href);
+      url.searchParams.set('matterId', matterId);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [matterId, searchParams]);
+
+  // Real API: Poll processing status when we have a matter ID and upload is complete (or in recovery mode)
   const {
     overallProgress: realProgress,
     currentStage: realStage,
@@ -98,12 +126,25 @@ export default function ProcessingPage() {
     hasFailed: realHasFailed,
     error: processingError,
   } = useProcessingStatus(
-    // Only poll if NOT using mock and upload phase is complete
-    !USE_MOCK_PROCESSING && uploadPhaseComplete ? matterId : null,
+    // Poll if NOT using mock and (upload phase complete OR recovery mode)
+    !USE_MOCK_PROCESSING && (uploadPhaseComplete || isRecoveryMode) ? matterId : null,
     {
       pollingInterval: 1000,
-      enabled: !USE_MOCK_PROCESSING && uploadPhaseComplete && !!matterId,
+      enabled: !USE_MOCK_PROCESSING && (uploadPhaseComplete || isRecoveryMode) && !!matterId,
       stopOnComplete: true,
+    }
+  );
+
+  // Real API: Poll for live discoveries when processing
+  const {
+    discoveries: realDiscoveries,
+  } = useLiveDiscoveries(
+    // Poll if NOT using mock and (upload phase complete OR recovery mode)
+    !USE_MOCK_PROCESSING && (uploadPhaseComplete || isRecoveryMode) ? matterId : null,
+    {
+      pollingInterval: 3000, // Less frequent than job status
+      enabled: !USE_MOCK_PROCESSING && (uploadPhaseComplete || isRecoveryMode) && !!matterId,
+      stopOnComplete: false, // Keep updating discoveries even after processing completes
     }
   );
 
@@ -122,6 +163,16 @@ export default function ProcessingPage() {
     setOverallProgress,
   ]);
 
+  // Sync real discoveries to store when using real APIs
+  // The hook handles deduplication, we just need to sync to the store
+  useEffect(() => {
+    if (!USE_MOCK_PROCESSING && matterId && realDiscoveries.length > 0) {
+      // Replace all discoveries in the store with the hook's discoveries
+      // This ensures the store always reflects the latest state from the API
+      setLiveDiscoveries(realDiscoveries);
+    }
+  }, [realDiscoveries, matterId, setLiveDiscoveries]);
+
   // Determine if there's an error to display
   const displayError = uploadError ?? processingError?.message ?? null;
   // Determine if there are partial failures (some jobs failed but processing completed)
@@ -135,13 +186,15 @@ export default function ProcessingPage() {
       } as Parameters<typeof selectIsProcessingComplete>[0])
     : realIsComplete;
 
-  // Redirect if no files - use useLayoutEffect to redirect before paint
+  // Redirect if no files AND not in recovery mode - use useLayoutEffect to redirect before paint
   useLayoutEffect(() => {
-    if (files.length === 0) {
+    const urlMatterId = searchParams.get('matterId');
+    // Don't redirect if we have a matterId in URL (recovery mode)
+    if (files.length === 0 && !urlMatterId && !isRecoveryMode) {
       reset();
       router.replace('/upload');
     }
-  }, [files.length, reset, router]);
+  }, [files.length, reset, router, searchParams, isRecoveryMode]);
 
   // Start processing when component mounts (with files)
   useEffect(() => {
@@ -312,13 +365,15 @@ export default function ProcessingPage() {
     }
   }, [matterId, matterName, overallProgressPct, addBackgroundMatter, updateBackgroundMatter, markComplete]);
 
-  // Show loading state while redirecting (files.length === 0)
-  if (files.length === 0) {
+  // Show loading state while redirecting (files.length === 0 and not in recovery mode)
+  if (files.length === 0 && !isRecoveryMode) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="size-8 text-muted-foreground animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Redirecting to upload...</p>
+          <p className="text-muted-foreground">
+            {searchParams.get('matterId') ? 'Recovering session...' : 'Redirecting to upload...'}
+          </p>
         </div>
       </div>
     );

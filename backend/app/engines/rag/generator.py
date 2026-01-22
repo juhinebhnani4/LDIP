@@ -17,6 +17,11 @@ from typing import Any
 import structlog
 
 from app.core.config import get_settings
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+)
 from app.engines.rag.prompts import (
     RAG_ANSWER_SYSTEM_PROMPT,
     format_rag_answer_prompt,
@@ -164,12 +169,14 @@ class RAGAnswerGenerator:
         self,
         query: str,
         chunks: list[dict[str, Any]],
+        matter_id: str | None = None,
     ) -> RAGAnswerResult:
         """Generate a grounded answer from retrieved chunks.
 
         Args:
             query: User's question.
             chunks: Retrieved document chunks with content and metadata.
+            matter_id: Optional matter ID for cost tracking.
 
         Returns:
             RAGAnswerResult with generated answer and metadata.
@@ -196,6 +203,13 @@ class RAGAnswerGenerator:
         # Format prompt
         user_prompt = format_rag_answer_prompt(query, chunks_to_use)
 
+        # Initialize cost tracker for Gemini Flash
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="rag_generation",
+            matter_id=matter_id,
+        )
+
         # Generate answer with retries
         last_error = None
         retry_delay = INITIAL_RETRY_DELAY
@@ -209,6 +223,12 @@ class RAGAnswerGenerator:
 
                 # Extract answer text
                 answer_text = response.text.strip()
+
+                # Track costs (Gemini doesn't expose token counts, so estimate)
+                input_tokens = estimate_tokens(user_prompt)
+                output_tokens = estimate_tokens(answer_text)
+                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                cost_tracker.log_cost()
 
                 # Truncate if too long
                 if len(answer_text) > MAX_ANSWER_LENGTH:
@@ -293,15 +313,17 @@ def get_rag_generator() -> RAGAnswerGenerator:
 async def generate_rag_answer(
     query: str,
     chunks: list[dict[str, Any]],
+    matter_id: str | None = None,
 ) -> RAGAnswerResult:
     """Convenience function to generate RAG answer.
 
     Args:
         query: User's question.
         chunks: Retrieved document chunks.
+        matter_id: Optional matter ID for cost tracking.
 
     Returns:
         RAGAnswerResult with generated answer.
     """
     generator = get_rag_generator()
-    return await generator.generate_answer(query, chunks)
+    return await generator.generate_answer(query, chunks, matter_id=matter_id)

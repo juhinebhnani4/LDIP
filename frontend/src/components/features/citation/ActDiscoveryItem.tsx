@@ -25,7 +25,7 @@
  * ```
  */
 
-import { CheckCircle2, AlertCircle, Upload, SkipForward, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Upload, SkipForward, Loader2, CloudDownload, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -60,6 +60,17 @@ function getStatusBadge(status: ActDiscoverySummary['resolutionStatus'], citatio
           Available
         </Badge>
       );
+    case 'auto_fetched':
+      return (
+        <Badge
+          variant="default"
+          className="bg-blue-500/10 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-800"
+          aria-label="Act auto-fetched from India Code"
+        >
+          <CloudDownload className="mr-1 h-3 w-3" aria-hidden="true" />
+          Auto-fetched
+        </Badge>
+      );
     case 'missing':
       return (
         <Badge
@@ -69,6 +80,17 @@ function getStatusBadge(status: ActDiscoverySummary['resolutionStatus'], citatio
         >
           <AlertCircle className="mr-1 h-3 w-3" aria-hidden="true" />
           Missing ({citationCount} {citationCount === 1 ? 'citation' : 'citations'})
+        </Badge>
+      );
+    case 'not_on_indiacode':
+      return (
+        <Badge
+          variant="outline"
+          className="bg-orange-500/10 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-800"
+          aria-label={`Act not available on India Code, upload manually`}
+        >
+          <ExternalLink className="mr-1 h-3 w-3" aria-hidden="true" />
+          Upload manually
         </Badge>
       );
     case 'skipped':
@@ -81,6 +103,9 @@ function getStatusBadge(status: ActDiscoverySummary['resolutionStatus'], citatio
           Skipped
         </Badge>
       );
+    case 'invalid':
+      // Invalid acts should be filtered out by the backend, but handle just in case
+      return null;
     default:
       return null;
   }
@@ -89,10 +114,13 @@ function getStatusBadge(status: ActDiscoverySummary['resolutionStatus'], citatio
 /**
  * ActDiscoveryItem displays a single Act with its status and available actions.
  *
- * Visual Design (from UX wireframe):
+ * Visual Design:
  * - Available Acts: Green checkmark badge
+ * - Auto-fetched Acts: Blue cloud download badge (from India Code)
  * - Missing Acts: Amber warning badge with citation count + Upload/Skip buttons
+ * - Not on India Code: Orange external link badge + Upload/Skip buttons
  * - Skipped Acts: Muted secondary badge
+ * - Invalid Acts: Hidden (garbage extractions filtered by backend)
  */
 export function ActDiscoveryItem({
   act,
@@ -101,15 +129,23 @@ export function ActDiscoveryItem({
   isUploading = false,
   isDisabled = false,
 }: ActDiscoveryItemProps) {
-  const isMissing = act.resolutionStatus === 'missing';
-  const showActions = isMissing && act.userAction === 'pending';
+  // Acts that need user action (missing or not on India Code)
+  const needsUpload = act.resolutionStatus === 'missing' || act.resolutionStatus === 'not_on_indiacode';
+  const showActions = needsUpload && act.userAction === 'pending';
+
+  // Don't render invalid acts (garbage extractions)
+  if (act.resolutionStatus === 'invalid') {
+    return null;
+  }
 
   return (
     <div
       className={cn(
         'flex items-center justify-between gap-4 p-3 rounded-lg border',
         act.resolutionStatus === 'available' && 'bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900',
+        act.resolutionStatus === 'auto_fetched' && 'bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900',
         act.resolutionStatus === 'missing' && 'bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900',
+        act.resolutionStatus === 'not_on_indiacode' && 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-900',
         act.resolutionStatus === 'skipped' && 'bg-muted/50 border-muted'
       )}
       role="listitem"
@@ -120,7 +156,7 @@ export function ActDiscoveryItem({
         <p className="font-medium text-sm truncate" title={act.actName}>
           {act.actName}
         </p>
-        {act.resolutionStatus !== 'missing' && (
+        {!needsUpload && (
           <p className="text-xs text-muted-foreground">
             {act.citationCount} {act.citationCount === 1 ? 'citation' : 'citations'}
           </p>

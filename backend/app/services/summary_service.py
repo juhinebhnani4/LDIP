@@ -21,6 +21,11 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.core.cost_tracking import (
+    BatchCostAggregator,
+    CostTracker,
+    LLMProvider,
+)
 from app.engines.summary.prompts import (
     CURRENT_STATUS_SYSTEM_PROMPT,
     KEY_ISSUES_SYSTEM_PROMPT,
@@ -239,7 +244,7 @@ class SummaryService:
             self.get_stats(matter_id),
             self.get_attention_items(matter_id),
             self.get_parties(matter_id),
-            self._get_top_chunks(matter_id),
+            self._get_top_chunks(matter_id, limit=15),  # More chunks for comprehensive overview
             self._get_recent_events(matter_id),
         )
 
@@ -346,12 +351,26 @@ class SummaryService:
             return 0
 
     async def _count_citation_issues(self, matter_id: str) -> int:
-        """Count unverified citations from citations table."""
+        """Count unverified citations from citations table (excluding soft-deleted docs)."""
         try:
+            # Get active document IDs first
+            docs_result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            active_doc_ids = [d["id"] for d in docs_result.data or []]
+
+            if not active_doc_ids:
+                return 0
+
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("citations")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
+                .in_("source_document_id", active_doc_ids)
                 .neq("verification_status", "verified")
                 .execute()
             )
@@ -379,7 +398,7 @@ class SummaryService:
     # =========================================================================
 
     async def get_parties(self, matter_id: str) -> list[PartyInfo]:
-        """Get parties from MIG (Matter Identity Graph).
+        """Get parties from MIG (Matter Identity Graph), excluding soft-deleted docs.
 
         Story 14.1: AC #6 - Parties extracted from entity_mentions.
         Story 14.6: AC #9 - Include citation data for CitationLink.
@@ -391,8 +410,22 @@ class SummaryService:
             List of PartyInfo objects.
         """
         try:
+            # First get active document IDs
+            docs_result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            active_doc_ids = [d["id"] for d in docs_result.data or []]
+
+            if not active_doc_ids:
+                return []
+
             # Query entity_mentions for parties with role information
             # Join with identity_nodes and documents for complete info
+            # Filter to only include mentions from active documents
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("entity_mentions")
                 .select(
@@ -401,6 +434,7 @@ class SummaryService:
                     "documents(id, name)"
                 )
                 .eq("identity_nodes.matter_id", matter_id)
+                .in_("document_id", active_doc_ids)
                 .limit(10)
                 .execute()
             )
@@ -633,12 +667,13 @@ class SummaryService:
         )
 
     async def _get_total_pages(self, matter_id: str) -> int:
-        """Get total pages from documents table."""
+        """Get total pages from documents table (excluding soft-deleted)."""
         try:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("documents")
                 .select("page_count")
                 .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
                 .execute()
             )
             return sum(
@@ -752,6 +787,13 @@ class SummaryService:
         try:
             user_prompt = format_subject_matter_prompt(chunks)
 
+            # Cost tracking for GPT-4 usage
+            cost_tracker = CostTracker(
+                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                operation="summary_subject_matter",
+                matter_id=matter_id,
+            )
+
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -761,6 +803,14 @@ class SummaryService:
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
+
+            # Track tokens from response
+            if response.usage:
+                cost_tracker.add_tokens(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                )
+            cost_tracker.log_cost()
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
@@ -841,6 +891,13 @@ class SummaryService:
         try:
             user_prompt = format_key_issues_prompt(chunks)
 
+            # Cost tracking for GPT-4 usage
+            cost_tracker = CostTracker(
+                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                operation="summary_key_issues",
+                matter_id=matter_id,
+            )
+
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -850,6 +907,14 @@ class SummaryService:
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
+
+            # Track tokens from response
+            if response.usage:
+                cost_tracker.add_tokens(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                )
+            cost_tracker.log_cost()
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
@@ -924,6 +989,13 @@ class SummaryService:
         try:
             user_prompt = format_current_status_prompt(chunks, events)
 
+            # Cost tracking for GPT-4 usage
+            cost_tracker = CostTracker(
+                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                operation="summary_current_status",
+                matter_id=matter_id,
+            )
+
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -933,6 +1005,14 @@ class SummaryService:
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
+
+            # Track tokens from response
+            if response.usage:
+                cost_tracker.add_tokens(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                )
+            cost_tracker.log_cost()
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
@@ -999,9 +1079,11 @@ class SummaryService:
         matter_id: str,
         limit: int = 10,
     ) -> list[dict]:
-        """Retrieve top chunks for summary generation.
+        """Retrieve top chunks for summary generation (excluding soft-deleted docs).
 
-        Uses recent documents as proxy for relevance in summary context.
+        Samples chunks across ALL documents to get representative content,
+        rather than just taking the most recent chunks (which could all be
+        from one document).
 
         Args:
             matter_id: Matter UUID.
@@ -1011,26 +1093,56 @@ class SummaryService:
             List of chunk dictionaries with content and metadata.
         """
         try:
-            # Get most recent chunks from the matter
-            result = await asyncio.to_thread(
-                lambda: self.supabase.table("chunks")
-                .select("id, content, page_number, document_id, documents(filename)")
+            # Get active document IDs (non-deleted, non-reference material)
+            # Reference material like Acts should not dominate the case summary
+            docs_result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id, is_reference_material")
                 .eq("matter_id", matter_id)
-                .order("created_at", desc=True)
-                .limit(limit)
+                .is_("deleted_at", "null")
                 .execute()
             )
 
-            chunks = []
-            for row in result.data or []:
-                doc_data = row.get("documents", {}) or {}
-                chunks.append({
-                    "content": row.get("content", ""),
-                    "document_name": doc_data.get("filename", "Unknown"),
-                    "page_number": row.get("page_number"),
-                })
+            # Separate case documents from reference material
+            case_doc_ids = []
+            reference_doc_ids = []
+            for d in docs_result.data or []:
+                if d.get("is_reference_material"):
+                    reference_doc_ids.append(d["id"])
+                else:
+                    case_doc_ids.append(d["id"])
 
-            return chunks
+            # Prioritize case documents, fall back to reference if no case docs
+            active_doc_ids = case_doc_ids if case_doc_ids else reference_doc_ids
+
+            if not active_doc_ids:
+                return []
+
+            # Get chunks distributed across documents
+            # Take first chunk from each document, then cycle through
+            all_chunks = []
+            chunks_per_doc = max(1, limit // len(active_doc_ids))
+
+            for doc_id in active_doc_ids:
+                result = await asyncio.to_thread(
+                    lambda did=doc_id: self.supabase.table("chunks")
+                    .select("id, content, page_number, document_id, documents(filename)")
+                    .eq("document_id", did)
+                    .order("page_number")
+                    .limit(chunks_per_doc)
+                    .execute()
+                )
+
+                for row in result.data or []:
+                    doc_data = row.get("documents", {}) or {}
+                    all_chunks.append({
+                        "content": row.get("content", ""),
+                        "document_name": doc_data.get("filename", "Unknown"),
+                        "page_number": row.get("page_number"),
+                    })
+
+            # Return up to limit chunks
+            return all_chunks[:limit]
 
         except Exception as e:
             logger.warning("get_top_chunks_failed", error=str(e))
@@ -1041,7 +1153,7 @@ class SummaryService:
         matter_id: str,
         limit: int = 5,
     ) -> list[dict]:
-        """Get most recent timeline events.
+        """Get most recent timeline events (excluding soft-deleted docs).
 
         Args:
             matter_id: Matter UUID.
@@ -1051,10 +1163,24 @@ class SummaryService:
             List of event dictionaries.
         """
         try:
+            # Get active document IDs first
+            docs_result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            active_doc_ids = [d["id"] for d in docs_result.data or []]
+
+            if not active_doc_ids:
+                return []
+
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("events")
                 .select("id, event_date, description, event_type, document_id, documents(name)")
                 .eq("matter_id", matter_id)
+                .in_("document_id", active_doc_ids)
                 .order("event_date", desc=True)
                 .limit(limit)
                 .execute()
@@ -1156,7 +1282,7 @@ class SummaryService:
         matter_id: str,
         document_name: str,
     ) -> str | None:
-        """Look up document ID by name.
+        """Look up document ID by name (excluding soft-deleted).
 
         Args:
             matter_id: Matter UUID.
@@ -1174,6 +1300,7 @@ class SummaryService:
                 .select("id")
                 .eq("matter_id", matter_id)
                 .eq("filename", document_name)
+                .is_("deleted_at", "null")
                 .limit(1)
                 .execute()
             )

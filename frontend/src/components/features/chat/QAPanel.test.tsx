@@ -58,6 +58,15 @@ vi.mock('@/hooks/useSSE', () => ({
   }),
 }));
 
+// Mock useUser hook - default to loaded state with no user
+vi.mock('@/hooks/useAuth', () => ({
+  useUser: () => ({
+    user: null,
+    loading: false,
+    error: null,
+  }),
+}));
+
 // Mock the child components
 vi.mock('./QAPanelHeader', () => ({
   QAPanelHeader: () => <div data-testid="qa-panel-header">Header</div>,
@@ -68,9 +77,10 @@ vi.mock('./QAPanelPlaceholder', () => ({
 }));
 
 vi.mock('./ConversationHistory', () => ({
-  ConversationHistory: ({ matterId, userId }: { matterId: string; userId: string }) => (
+  ConversationHistory: ({ matterId, userId, children }: { matterId: string; userId: string; children?: React.ReactNode }) => (
     <div data-testid="conversation-history" data-matter-id={matterId} data-user-id={userId}>
       Conversation History
+      {children}
     </div>
   ),
 }));

@@ -9,3 +9,4 @@ export { ProcessingStatusBanner } from './ProcessingStatusBanner';
 export { JobProgressCard } from './JobProgressCard';
 export { FailedJobCard } from './FailedJobCard';
 export { ProcessingQueue } from './ProcessingQueue';
+export { StuckJobsBanner } from './StuckJobsBanner';

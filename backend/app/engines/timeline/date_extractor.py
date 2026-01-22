@@ -26,6 +26,11 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+)
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
@@ -43,6 +48,10 @@ logger = structlog.get_logger(__name__)
 
 MAX_TEXT_LENGTH = 5000  # Max characters per extraction request (reduced from 30000 to avoid Gemini output truncation)
 CHUNK_OVERLAP = 500  # Characters to overlap between chunks for boundary dates
+
+# Date validation bounds - reject dates outside reasonable legal document range
+MIN_VALID_YEAR = 1800  # No legal documents before 1800
+MAX_VALID_YEAR = 2100  # No future dates beyond 2100
 
 
 # =============================================================================
@@ -240,9 +249,23 @@ class DateExtractor:
         """
         prompt = DATE_EXTRACTION_USER_PROMPT.format(text=text)
 
+        # Initialize cost tracker for Gemini Flash
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="date_extraction",
+            matter_id=matter_id,
+            document_id=document_id,
+        )
+
         try:
             # Call Gemini with circuit breaker protection
             response_text = await self._call_gemini_extract(prompt)
+
+            # Track costs (Gemini doesn't expose token counts, so estimate)
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(response_text) if response_text else 0
+            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.log_cost()
 
             # Parse response
             result = self._parse_response(
@@ -536,6 +559,14 @@ class DateExtractor:
 
         prompt = DATE_EXTRACTION_USER_PROMPT.format(text=text)
 
+        # Initialize cost tracker for Gemini Flash
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="date_extraction_sync",
+            matter_id=matter_id,
+            document_id=document_id,
+        )
+
         # Check circuit state (manual check for sync methods)
         registry = get_circuit_registry()
         breaker = registry.get(CircuitService.GEMINI_FLASH)
@@ -551,8 +582,15 @@ class DateExtractor:
         try:
             response = self.model.generate_content(prompt)
 
+            # Track costs (Gemini doesn't expose token counts, so estimate)
+            response_text = response.text if response.text else ""
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(response_text)
+            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.log_cost()
+
             result = self._parse_response(
-                response.text,
+                response_text,
                 document_id=document_id,
                 matter_id=matter_id,
                 page_number=page_number,
@@ -681,6 +719,16 @@ class DateExtractor:
         if not date_text:
             return None
 
+        # Reject bracket numbers misidentified as dates (e.g., [993], [994])
+        # These are paragraph references in legal documents, not years
+        if re.match(r'^\[?\d{3,4}\]?$', date_text):
+            logger.debug(
+                "date_rejected_bracket_number",
+                date_text=date_text,
+                reason="Looks like paragraph reference [NNN], not a date",
+            )
+            return None
+
         extracted_date_str = raw_date.get("extracted_date", "")
         if not extracted_date_str:
             return None
@@ -688,11 +736,21 @@ class DateExtractor:
         # Parse date string
         try:
             date_parts = extracted_date_str.split("-")
-            extracted_date = date(
-                int(date_parts[0]),
-                int(date_parts[1]),
-                int(date_parts[2]),
-            )
+            year = int(date_parts[0])
+            month = int(date_parts[1])
+            day = int(date_parts[2])
+
+            # Validate year is within reasonable bounds for legal documents
+            if year < MIN_VALID_YEAR or year > MAX_VALID_YEAR:
+                logger.debug(
+                    "date_rejected_invalid_year",
+                    date_str=extracted_date_str,
+                    year=year,
+                    reason=f"Year {year} outside valid range {MIN_VALID_YEAR}-{MAX_VALID_YEAR}",
+                )
+                return None
+
+            extracted_date = date(year, month, day)
         except (ValueError, IndexError):
             logger.debug(
                 "date_parse_invalid_date",

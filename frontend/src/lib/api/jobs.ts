@@ -13,11 +13,13 @@ import type {
   JobDetailResponse,
   JobListResponse,
   JobQueueStats,
+  JobResetResponse,
   JobRetryRequest,
   JobRetryResponse,
   JobSkipResponse,
   JobStatus,
   JobType,
+  StuckJobsResponse,
 } from '@/types/job'
 
 // =============================================================================
@@ -55,6 +57,17 @@ export async function listJobs(params: ListJobsParams): Promise<JobListResponse>
  */
 export async function getJobStats(matterId: string): Promise<JobQueueStats> {
   return api.get<JobQueueStats>(`/api/jobs/matters/${matterId}/stats`)
+}
+
+/**
+ * Get stuck jobs for a matter.
+ */
+export async function getStuckJobs(
+  matterId: string,
+  thresholdMinutes?: number
+): Promise<StuckJobsResponse> {
+  const query = thresholdMinutes ? `?threshold_minutes=${thresholdMinutes}` : ''
+  return api.get<StuckJobsResponse>(`/api/jobs/matters/${matterId}/stuck${query}`)
 }
 
 /**
@@ -99,6 +112,13 @@ export async function skipJob(jobId: string): Promise<JobSkipResponse> {
  */
 export async function cancelJob(jobId: string): Promise<JobCancelResponse> {
   return api.post<JobCancelResponse>(`/api/jobs/${jobId}/cancel`, {})
+}
+
+/**
+ * Reset a stuck or failed job back to QUEUED for re-processing.
+ */
+export async function resetJob(jobId: string): Promise<JobResetResponse> {
+  return api.post<JobResetResponse>(`/api/jobs/${jobId}/reset`, {})
 }
 
 // =============================================================================
@@ -147,6 +167,7 @@ export const jobsApi = {
   // Query
   list: listJobs,
   getStats: getJobStats,
+  getStuckJobs: getStuckJobs,
   get: getJob,
   getActiveForDocument: getActiveJobForDocument,
 
@@ -154,6 +175,7 @@ export const jobsApi = {
   retry: retryJob,
   skip: skipJob,
   cancel: cancelJob,
+  reset: resetJob,
 
   // Keys
   keys: {

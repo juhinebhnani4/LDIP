@@ -11,4 +11,5 @@ __all__ = [
     "maintenance_tasks",
     "table_extraction_tasks",
     "evaluation_tasks",
+    "act_validation_tasks",
 ]

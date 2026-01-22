@@ -155,6 +155,10 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
     set({ liveDiscoveries: [...currentDiscoveries, discovery] });
   },
 
+  setLiveDiscoveries: (discoveries: LiveDiscovery[]) => {
+    set({ liveDiscoveries: discoveries });
+  },
+
   setMatterId: (matterId: string | null) => {
     set({ matterId });
   },

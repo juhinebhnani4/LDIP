@@ -38,12 +38,18 @@ class ActResolutionStatus(str, Enum):
 
     Status values:
     - AVAILABLE: Act document uploaded and available
+    - AUTO_FETCHED: Act document auto-fetched from India Code
     - MISSING: Act document not yet uploaded
+    - INVALID: Garbage extraction (hidden from user)
+    - NOT_ON_INDIACODE: Valid but not available online (needs manual upload)
     - SKIPPED: User chose to skip uploading this Act
     """
 
     AVAILABLE = "available"
+    AUTO_FETCHED = "auto_fetched"
     MISSING = "missing"
+    INVALID = "invalid"
+    NOT_ON_INDIACODE = "not_on_indiacode"
     SKIPPED = "skipped"
 
 
@@ -53,11 +59,13 @@ class UserAction(str, Enum):
     Actions:
     - UPLOADED: User uploaded the Act document
     - SKIPPED: User chose to skip this Act
+    - AUTO_FETCHED: System auto-fetched the Act document
     - PENDING: Awaiting user action
     """
 
     UPLOADED = "uploaded"
     SKIPPED = "skipped"
+    AUTO_FETCHED = "auto_fetched"
     PENDING = "pending"
 
 

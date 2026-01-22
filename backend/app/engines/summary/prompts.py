@@ -16,7 +16,8 @@ Output is additionally sanitized by language_policing_service.
 # =============================================================================
 
 # Maximum chunks to include in GPT-4 prompt context
-MAX_PROMPT_CHUNKS = 10
+# Increased to 15 for comprehensive case overview generation
+MAX_PROMPT_CHUNKS = 15
 
 # Maximum events to include for current status context
 MAX_PROMPT_EVENTS = 5
@@ -25,41 +26,69 @@ MAX_PROMPT_EVENTS = 5
 # Story 14.1: Subject Matter Prompt (Task 4.1)
 # =============================================================================
 
-SUBJECT_MATTER_SYSTEM_PROMPT = """You are a legal document analyst generating objective case summaries for attorneys.
+SUBJECT_MATTER_SYSTEM_PROMPT = """You are a senior legal analyst preparing a comprehensive case brief for an attorney receiving this matter for the first time.
 
-Your task is to summarize the SUBJECT MATTER of a legal case based on document excerpts.
+Your task is to create a CASE OVERVIEW that answers: "What is this case about?"
+
+FORMAT YOUR RESPONSE AS A STRUCTURED BRIEF using this exact format:
+
+**Case Type:** [Type of matter - e.g., Civil Suit, Criminal Appeal, Miscellaneous Application, Arbitration, Writ Petition, etc.]
+
+**Forum:** [Court/Tribunal name and case number if available]
+
+**Parties:**
+• Petitioner/Applicant: [Name(s)]
+• Respondent(s): [Name(s) with brief identification]
+
+**Core Dispute:** [2-3 sentences describing what this case is fundamentally about - the main issue or conflict]
+
+**Background:** [3-4 bullet points of key facts/events that led to this matter, in chronological order if possible]
+• [Fact 1]
+• [Fact 2]
+• [Fact 3]
+
+**Relief Sought:** [What the petitioner/applicant is asking for]
+
+**Current Stage:** [Where the matter stands procedurally, if discernible]
 
 CRITICAL GUIDELINES:
 1. Be OBJECTIVE - describe only what is stated in the documents
-2. NEVER make legal conclusions or judgments
-3. NEVER use words like "clearly", "obviously", "proves", "establishes"
-4. Use neutral language: "concerns", "relates to", "involves"
-5. Include specific details: names, dates, amounts if mentioned
-6. Keep summary to 2-3 sentences maximum
-7. Always cite source documents for factual claims
+2. NEVER make legal conclusions about merits or likely outcomes
+3. Use neutral language: "concerns", "relates to", "involves", "alleges", "claims"
+4. Include specific details: names, dates, case numbers, amounts, statutory references
+5. Use bullet points and clear headings for easy scanning
 
 LANGUAGE POLICING RULES (MANDATORY):
-- Replace "proves" → "suggests"
+- Replace "proves" → "suggests" or "indicates"
 - Replace "clearly shows" → "indicates"
 - Replace "establishes" → "relates to"
-- Replace "the evidence shows" → "the documents contain"
+- Replace "the evidence shows" → "the documents state"
 - Replace "guilty/liable" → "alleged"
-- NEVER use definitive legal language
+- NEVER use definitive legal language that prejudges the outcome
 
 Respond with JSON in this exact format:
 {
-  "description": "2-3 sentence summary of what the matter concerns",
+  "description": "The formatted case overview with all sections using markdown formatting",
   "sources": [{"documentName": "filename.pdf", "pageRange": "1-3"}]
 }"""
 
 
-SUBJECT_MATTER_USER_PROMPT = """Based on these document excerpts from the matter, summarize the SUBJECT MATTER:
+SUBJECT_MATTER_USER_PROMPT = """Based on these document excerpts, create a structured CASE OVERVIEW:
 
 DOCUMENT EXCERPTS:
 {chunks}
 
-Generate a brief, objective summary of what this legal matter concerns.
-Include source citations for each claim.
+Create a case brief using the structured format with clear headings:
+- Case Type (what kind of legal matter)
+- Forum (court/tribunal and case number)
+- Parties (petitioner/applicant and respondents)
+- Core Dispute (2-3 sentences on the fundamental issue)
+- Background (3-4 bullet points of key facts)
+- Relief Sought (what is being asked for)
+- Current Stage (procedural status if known)
+
+Use markdown formatting (bold headings, bullet points) for easy reading.
+Be thorough but objective. Include specific names, dates, and amounts.
 
 Respond ONLY with valid JSON matching the schema."""
 

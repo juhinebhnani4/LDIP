@@ -26,7 +26,9 @@ import {
   compressPdfIfNeeded,
   needsCompression,
   getCompressionStats,
+  compressionExceedsLimit,
   COMPRESSION_THRESHOLD_BYTES,
+  SUPABASE_FILE_LIMIT_BYTES,
 } from '@/lib/utils/pdf-compression';
 
 /** Backend API base URL */
@@ -162,15 +164,39 @@ export async function uploadFile(
 }
 
 /**
+ * Error thrown when a file exceeds the Supabase upload limit even after compression.
+ */
+export class FileTooLargeError extends Error {
+  constructor(
+    public filename: string,
+    public fileSize: number,
+    public limit: number = SUPABASE_FILE_LIMIT_BYTES
+  ) {
+    const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+    const limitMB = (limit / (1024 * 1024)).toFixed(0);
+    super(
+      `File "${filename}" is ${sizeMB}MB which exceeds the ${limitMB}MB upload limit. Please split this document into smaller parts.`
+    );
+    this.name = 'FileTooLargeError';
+  }
+}
+
+/**
  * Compress a file if it exceeds the size threshold.
  * Updates the upload store with compression status.
+ * Throws FileTooLargeError if file still exceeds limit after compression.
  *
  * @param fileId - ID in upload store
  * @param file - File to potentially compress
  * @returns The file (compressed or original)
+ * @throws FileTooLargeError if file exceeds 50MB limit after compression
  */
 async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
   if (!needsCompression(file)) {
+    // Even files under compression threshold need to be checked against Supabase limit
+    if (file.size > SUPABASE_FILE_LIMIT_BYTES) {
+      throw new FileTooLargeError(file.name, file.size);
+    }
     return file;
   }
 
@@ -199,11 +225,37 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
       console.warn(`[Compression] ${file.name}: ${result.warning}`);
     }
 
+    // Check if file still exceeds Supabase limit after compression
+    if (compressionExceedsLimit(result)) {
+      store.updateStatus(
+        fileId,
+        'error',
+        `File exceeds 50MB limit after compression (${(result.finalSize / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
+      );
+      throw new FileTooLargeError(file.name, result.finalSize);
+    }
+
     return result.file;
   } catch (error) {
+    // Re-throw FileTooLargeError
+    if (error instanceof FileTooLargeError) {
+      throw error;
+    }
+
     console.error(`[Compression] Failed for ${file.name}:`, error);
     // Continue with original file if compression fails
     store.updateStatus(fileId, 'pending');
+
+    // But still check if original file exceeds limit
+    if (file.size > SUPABASE_FILE_LIMIT_BYTES) {
+      store.updateStatus(
+        fileId,
+        'error',
+        `File exceeds 50MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
+      );
+      throw new FileTooLargeError(file.name, file.size);
+    }
+
     return file;
   }
 }
@@ -257,8 +309,8 @@ export async function uploadFiles(
   }
 }
 
-/** Re-export compression threshold for UI display */
-export { COMPRESSION_THRESHOLD_BYTES };
+/** Re-export compression constants for UI display */
+export { COMPRESSION_THRESHOLD_BYTES, SUPABASE_FILE_LIMIT_BYTES };
 
 // =============================================================================
 // Document List and Management API Functions
@@ -612,4 +664,148 @@ export async function renameDocument(
   filename: string
 ): Promise<Document> {
   return updateDocument(documentId, { filename });
+}
+
+// =============================================================================
+// Document Retry API Functions
+// =============================================================================
+
+export interface RetryResponse {
+  success: boolean;
+  documentId: string;
+  taskId: string | null;
+  message: string;
+  retryType: 'full' | 'rag';
+}
+
+/**
+ * Retry processing for a stuck or failed document
+ *
+ * @param matterId - Matter ID
+ * @param documentId - Document ID to retry
+ * @param retryType - 'full' (full OCR), 'rag' (RAG only), 'auto' (detect)
+ * @returns Retry response with task details
+ */
+export async function retryDocumentProcessing(
+  matterId: string,
+  documentId: string,
+  retryType: 'full' | 'rag' | 'auto' = 'auto'
+): Promise<RetryResponse> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/matters/${matterId}/documents/${documentId}/retry?retry_type=${retryType}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to retry document: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  return toCamelCase<{ data: RetryResponse }>(data).data;
+}
+
+/**
+ * Retry all stuck documents in a matter
+ *
+ * @param matterId - Matter ID
+ * @returns Summary of retry operations
+ */
+export async function retryAllStuckDocuments(
+  matterId: string
+): Promise<{
+  totalChecked: number;
+  retried: number;
+  skipped: number;
+  errors: Array<{ documentId: string; error: string }>;
+}> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/matters/${matterId}/documents/retry-all-stuck`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message ?? `Failed to retry stuck documents: ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  return toCamelCase<{ data: {
+    totalChecked: number;
+    retried: number;
+    skipped: number;
+    errors: Array<{ documentId: string; error: string }>;
+  }}>(data).data;
+}
+
+// =============================================================================
+// Health Check API Functions
+// =============================================================================
+
+export interface CeleryStatus {
+  status: 'healthy' | 'unhealthy' | 'error';
+  workers: Record<string, { ok: string }>;
+  workerCount: number;
+  queues: string[];
+  message?: string;
+}
+
+/**
+ * Check Celery worker health status
+ *
+ * @returns Celery status with worker info
+ */
+export async function checkCeleryHealth(): Promise<CeleryStatus> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const url = `${API_BASE_URL}/api/health/celery`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    // Return unhealthy status instead of throwing
+    return {
+      status: 'error',
+      workers: {},
+      workerCount: 0,
+      queues: [],
+      message: `Health check failed: ${response.statusText}`,
+    };
+  }
+
+  const data = await response.json();
+  return toCamelCase<{ data: CeleryStatus }>(data).data;
 }

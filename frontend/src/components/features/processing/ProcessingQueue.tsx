@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, XCircle, Filter, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, XCircle, Filter, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { jobsApi } from '@/lib/api/jobs';
 import { JobProgressCard } from './JobProgressCard';
 import { FailedJobCard } from './FailedJobCard';
+import { StuckJobsBanner } from './StuckJobsBanner';
 import {
   useProcessingStore,
   selectJobsArray,
@@ -164,8 +165,24 @@ export function ProcessingQueue({ matterId, getFilename }: ProcessingQueueProps)
     return <ProcessingQueueSkeleton />;
   }
 
+  // Count stuck jobs (processing for > 5 min without update)
+  const stuckCount = jobs.filter((job) => {
+    if (job.status !== 'PROCESSING') return false;
+    const lastUpdate = new Date(job.updated_at);
+    const now = new Date();
+    const diffMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+    return diffMinutes > 5;
+  }).length;
+
   return (
     <div className="space-y-4">
+      {/* Stuck jobs warning banner */}
+      <StuckJobsBanner
+        matterId={matterId}
+        onRefresh={loadJobs}
+        getDocumentName={getFilename}
+      />
+
       {/* Header with filters and actions */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -246,6 +263,12 @@ export function ProcessingQueue({ matterId, getFilename }: ProcessingQueueProps)
         <span className={failedCount > 0 ? 'text-destructive' : ''}>
           {failedCount} failed
         </span>
+        {stuckCount > 0 && (
+          <span className="text-amber-600 dark:text-amber-500">
+            <AlertTriangle className="mr-1 inline size-4" />
+            {stuckCount} stuck
+          </span>
+        )}
       </div>
 
       {/* Job list */}

@@ -17,6 +17,7 @@ import {
   fetchDocument,
   fetchDocuments,
   renameDocument,
+  retryDocumentProcessing,
   updateDocument,
 } from '@/lib/api/documents';
 import { DocumentTypeBadge } from './DocumentTypeBadge';
@@ -373,6 +374,17 @@ export function DocumentList({
     }
   };
 
+  const handleRetryDocument = async (doc: DocumentListItem) => {
+    try {
+      const result = await retryDocumentProcessing(matterId, doc.id, 'auto');
+      toast.success(result.message);
+      loadDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to retry document';
+      toast.error(message);
+    }
+  };
+
   // Only show loading in uncontrolled mode
   if (!isControlled && isLoading && documents.length === 0) {
     return <DocumentListSkeleton />;
@@ -595,6 +607,7 @@ export function DocumentList({
                         setSelectedDocument(doc);
                         setDeleteDialogOpen(true);
                       }}
+                      onRetry={() => handleRetryDocument(doc)}
                     />
                   </TableCell>
                 </TableRow>

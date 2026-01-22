@@ -13,6 +13,7 @@ import io
 import os
 import tempfile
 import zipfile
+from typing import Any
 
 import structlog
 from fastapi import (
@@ -82,6 +83,7 @@ from app.workers.tasks.document_tasks import (
     resolve_aliases,
     validate_ocr,
 )
+from celery import chain
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -1511,6 +1513,286 @@ async def request_manual_review(
                 "error": {
                     "code": "MANUAL_REVIEW_REQUEST_FAILED",
                     "message": f"Failed to request manual review: {e!s}",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Document Retry/Reprocess Endpoints
+# =============================================================================
+
+
+class RetryResponse(BaseModel):
+    """Response model for retry operations."""
+
+    success: bool = Field(..., description="Whether retry was initiated")
+    document_id: str = Field(..., description="Document ID")
+    task_id: str | None = Field(None, description="Celery task ID")
+    message: str = Field(..., description="Status message")
+    retry_type: str = Field(..., description="Type of retry: full_ocr or rag_only")
+
+
+@matters_router.post(
+    "/{matter_id}/documents/{document_id}/retry",
+    response_model=dict[str, RetryResponse],
+)
+async def retry_document_processing(
+    document_id: str = Path(..., description="Document UUID to retry"),
+    retry_type: str = Query(
+        "auto",
+        description="Retry type: 'full' (full OCR), 'rag' (RAG only), 'auto' (detect)",
+    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])),
+    doc_service: DocumentService = Depends(get_document_service),
+) -> dict[str, RetryResponse]:
+    """Retry processing for a stuck or failed document.
+
+    This endpoint allows users to retry document processing without re-uploading.
+    It can retry the full OCR pipeline or just the RAG pipeline based on document state.
+
+    Args:
+        document_id: The document UUID to retry.
+        retry_type: Type of retry:
+            - 'full': Full OCR pipeline (process_document -> validate_ocr -> etc)
+            - 'rag': RAG only (chunk_document -> embed_chunks -> etc)
+            - 'auto': Automatically detect based on document status
+
+    Returns:
+        RetryResponse with task details.
+
+    Raises:
+        404: Document not found.
+        400: Document cannot be retried (e.g., already processing).
+    """
+    matter_id = membership.matter_id
+
+    try:
+        # Get document
+        doc = doc_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "DOCUMENT_NOT_FOUND",
+                        "message": "Document not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Verify document belongs to this matter
+        if str(doc.matter_id) != matter_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "DOCUMENT_NOT_FOUND",
+                        "message": "Document not found in this matter",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Determine retry type
+        actual_retry_type = retry_type
+        if retry_type == "auto":
+            # If OCR is complete, just retry RAG
+            if doc.status.value in ["ocr_complete", "ocr_failed"]:
+                actual_retry_type = "rag" if doc.extracted_text else "full"
+            else:
+                actual_retry_type = "full"
+
+        # Build and dispatch task chain
+        if actual_retry_type == "full":
+            # Full OCR pipeline
+            task_chain = chain(
+                process_document.s(document_id),
+                validate_ocr.s(),
+                calculate_confidence.s(),
+                chunk_document.s(),
+                embed_chunks.s(),
+                extract_entities.s(),
+                resolve_aliases.s(),
+            )
+            message = "Full OCR and RAG pipeline queued"
+        else:
+            # RAG only pipeline - need to pass document context
+            task_chain = chain(
+                chunk_document.s({"document_id": document_id}),
+                embed_chunks.s(),
+                extract_entities.s(),
+                resolve_aliases.s(),
+            )
+            message = "RAG pipeline (chunking, embedding, entities) queued"
+
+        # Apply the chain
+        result = task_chain.apply_async()
+
+        logger.info(
+            "document_retry_initiated",
+            document_id=document_id,
+            matter_id=matter_id,
+            retry_type=actual_retry_type,
+            task_id=result.id,
+            user_id=membership.user_id,
+        )
+
+        return {
+            "data": RetryResponse(
+                success=True,
+                document_id=document_id,
+                task_id=result.id,
+                message=message,
+                retry_type=actual_retry_type,
+            )
+        }
+
+    except HTTPException:
+        raise
+    except DocumentNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "DOCUMENT_NOT_FOUND",
+                    "message": str(e),
+                    "details": {},
+                }
+            },
+        ) from e
+    except Exception as e:
+        logger.error(
+            "document_retry_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "RETRY_FAILED",
+                    "message": f"Failed to retry document: {e!s}",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@matters_router.post(
+    "/{matter_id}/documents/retry-all-stuck",
+    response_model=dict[str, Any],
+)
+async def retry_all_stuck_documents(
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])),
+    doc_service: DocumentService = Depends(get_document_service),
+) -> dict[str, Any]:
+    """Retry all stuck documents in a matter.
+
+    Finds documents that are stuck (OCR complete but RAG not done, or failed)
+    and queues them for reprocessing.
+
+    Returns:
+        Summary of retry operations.
+    """
+    from app.services.supabase.client import get_supabase_client
+
+    matter_id = membership.matter_id
+
+    try:
+        client = get_supabase_client()
+
+        # Find stuck documents in this matter:
+        # 1. OCR complete but have no chunks (RAG not run)
+        # 2. Processing jobs stuck in QUEUED or PROCESSING for too long
+        docs_response = (
+            client.table("documents")
+            .select("id, filename, status, extracted_text")
+            .eq("matter_id", matter_id)
+            .eq("status", "ocr_complete")
+            .execute()
+        )
+
+        documents = docs_response.data or []
+        results = {
+            "total_checked": len(documents),
+            "retried": 0,
+            "skipped": 0,
+            "errors": [],
+        }
+
+        for doc in documents:
+            doc_id = doc["id"]
+            has_text = bool(doc.get("extracted_text"))
+
+            # Check if document has chunks
+            chunks_response = (
+                client.table("chunks")
+                .select("id", count="exact")
+                .eq("document_id", doc_id)
+                .limit(1)
+                .execute()
+            )
+            has_chunks = (chunks_response.count or 0) > 0
+
+            # Skip if already has chunks (RAG done)
+            if has_chunks:
+                results["skipped"] += 1
+                continue
+
+            # Skip if no text to process
+            if not has_text:
+                results["skipped"] += 1
+                continue
+
+            try:
+                # Queue RAG pipeline
+                task_chain = chain(
+                    chunk_document.s({"document_id": doc_id}),
+                    embed_chunks.s(),
+                    extract_entities.s(),
+                    resolve_aliases.s(),
+                )
+                task_chain.apply_async()
+                results["retried"] += 1
+
+                logger.info(
+                    "stuck_document_retry_queued",
+                    document_id=doc_id,
+                    matter_id=matter_id,
+                )
+
+            except Exception as e:
+                results["errors"].append({
+                    "document_id": doc_id,
+                    "error": str(e),
+                })
+
+        logger.info(
+            "retry_all_stuck_completed",
+            matter_id=matter_id,
+            total=results["total_checked"],
+            retried=results["retried"],
+            skipped=results["skipped"],
+            errors=len(results["errors"]),
+        )
+
+        return {"data": results}
+
+    except Exception as e:
+        logger.error(
+            "retry_all_stuck_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "RETRY_ALL_FAILED",
+                    "message": f"Failed to retry stuck documents: {e!s}",
                     "details": {},
                 }
             },

@@ -240,6 +240,26 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "prevention of corruption act": ("Prevention of Corruption Act", 1988),
     "pc act": ("Prevention of Corruption Act", 1988),
     "whistleblowers protection act": ("Whistle Blowers Protection Act", 2014),
+    # -------------------------------------------------------------------------
+    # Securities and Special Courts
+    # -------------------------------------------------------------------------
+    # TORTS = Trial of Offences Relating to Transactions in Securities
+    "torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "torts": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "the torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "special court act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "special courts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "special court torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "trial of offences relating to transactions in securities act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "special court (trial of offences relating to transactions in securities) act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    # Also handle the ordinance version
+    "special court ordinance": ("Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance", 1992),
+    "torts ordinance": ("Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance", 1992),
+    # -------------------------------------------------------------------------
+    # Insolvency (additional variations)
+    # -------------------------------------------------------------------------
+    "provincial insolvency act": ("Provincial Insolvency Act", 1920),
+    "presidency insolvency act": ("Presidency Towns Insolvency Act", 1909),
 }
 
 
@@ -367,6 +387,77 @@ def extract_year_from_name(act_name: str) -> int | None:
     if year_match:
         return int(year_match.group(1))
     return None
+
+
+def clean_act_name(raw_name: str) -> str:
+    """Clean and sanitize an extracted act name.
+
+    Removes trailing sentence fragments, punctuation artifacts, and
+    other garbage that may be captured during citation extraction.
+
+    Args:
+        raw_name: The raw act name as extracted from text.
+
+    Returns:
+        Cleaned act name suitable for normalization.
+
+    Examples:
+        >>> clean_act_name("the Torts Act. By not marking copies...")
+        "the Torts Act"
+        >>> clean_act_name("Companies Act, 2013 and accordingly")
+        "Companies Act, 2013"
+    """
+    if not raw_name:
+        return raw_name
+
+    # Remove leading/trailing whitespace
+    cleaned = raw_name.strip()
+
+    # Truncate at common sentence-ending patterns that indicate garbage
+    # These patterns indicate the act name has ended and sentence continues
+    truncation_patterns = [
+        r"\.\s+[A-Z]",  # Period followed by capital letter (new sentence)
+        r"\.\s+[a-z]",  # Period followed by lowercase (sentence continues)
+        r"\.\s*$",  # Trailing period
+        r"\s+and\s+accordingly",  # Common continuation phrase
+        r"\s+from\s+Respondent",  # Legal document continuation
+        r"\s+into\s+Investor",  # Legal document continuation
+        r"\s+such\s+attachment",  # Legal language continuation
+        r"\s+then\s+it\s+can",  # Legal language continuation
+        r"\s+the\s+said\s+attachment",  # Legal language continuation
+        r"\s+in\s+terms\s+of",  # Legal language continuation
+        r"\s+read\s+with\s+",  # This should be captured separately
+        r"\s+provides\s+for",  # Legal language
+        r"\s+even\s+covers",  # Legal language
+        r"\s+gives\s+the",  # Legal language
+        r"\s+to\s+cancel",  # Legal language
+        r"\s+who\s+has\s+been",  # Legal language
+    ]
+
+    for pattern in truncation_patterns:
+        match = re.search(pattern, cleaned, re.IGNORECASE)
+        if match:
+            cleaned = cleaned[: match.start()].strip()
+
+    # Remove trailing punctuation (except year parentheses)
+    cleaned = re.sub(r"[.,;:!?]+$", "", cleaned)
+
+    # If the result is too short or empty, return original
+    if len(cleaned) < 3:
+        return raw_name.strip()
+
+    # If result is excessively long (>100 chars), it's likely garbage
+    # Try to extract just the act name pattern
+    if len(cleaned) > 100:
+        # Look for common act name patterns
+        act_pattern = re.search(
+            r"([A-Z][A-Za-z\s]+(?:Act|Code|Rules|Ordinance)(?:,?\s*\d{4})?)",
+            cleaned,
+        )
+        if act_pattern:
+            cleaned = act_pattern.group(1).strip()
+
+    return cleaned
 
 
 def get_display_name(normalized_name: str) -> str:

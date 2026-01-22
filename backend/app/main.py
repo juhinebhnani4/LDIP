@@ -33,6 +33,7 @@ from app.api.routes import (
     notifications,
     ocr_validation,
     search,
+    session,
     summary,
     tables,
     timeline,
@@ -292,6 +293,7 @@ def create_app() -> FastAPI:
     app.include_router(verifications.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
+    app.include_router(session.router, prefix="/api")
     app.include_router(summary.router, prefix="/api")
     app.include_router(activity.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")

@@ -20,6 +20,11 @@ from typing import Final
 import structlog
 
 from app.core.config import get_settings
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+)
 from app.engines.citation.abbreviations import (
     get_canonical_name,
     normalize_act_name,
@@ -510,12 +515,26 @@ class CitationExtractor:
         """
         prompt = CITATION_EXTRACTION_PROMPT.format(text=text)
 
+        # Cost tracking for Gemini usage
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="citation_extraction",
+            document_id=document_id,
+        )
+
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
         for attempt in range(MAX_RETRIES):
             try:
                 response = await self.model.generate_content_async(prompt)
+
+                # Estimate tokens for Gemini (doesn't expose usage directly)
+                input_tokens = estimate_tokens(prompt)
+                output_tokens = estimate_tokens(response.text) if response.text else 0
+                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                cost_tracker.log_cost()
+
                 return self._parse_gemini_response(response.text)
 
             except CitationConfigurationError:
@@ -569,12 +588,26 @@ class CitationExtractor:
         """
         prompt = CITATION_EXTRACTION_PROMPT.format(text=text)
 
+        # Cost tracking for Gemini usage
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="citation_extraction_sync",
+            document_id=document_id,
+        )
+
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
         for attempt in range(MAX_RETRIES):
             try:
                 response = self.model.generate_content(prompt)
+
+                # Estimate tokens for Gemini (doesn't expose usage directly)
+                input_tokens = estimate_tokens(prompt)
+                output_tokens = estimate_tokens(response.text) if response.text else 0
+                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                cost_tracker.log_cost()
+
                 return self._parse_gemini_response(response.text)
 
             except CitationConfigurationError:

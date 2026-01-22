@@ -13,7 +13,10 @@ export type JobType =
   | 'CHUNKING'
   | 'EMBEDDING'
   | 'ENTITY_EXTRACTION'
-  | 'ALIAS_RESOLUTION';
+  | 'ALIAS_RESOLUTION'
+  | 'CITATION_EXTRACTION'
+  | 'CITATION_VERIFICATION'
+  | 'CONTRADICTION_DETECTION';
 
 /** Job status enum matching backend */
 export type JobStatus =
@@ -41,6 +44,9 @@ export const STAGE_LABELS: Record<string, string> = {
   embedding: 'Vector Embedding',
   entity_extraction: 'Entity Extraction',
   alias_resolution: 'Alias Resolution',
+  citation_extraction: 'Citation Extraction',
+  citation_verification: 'Citation Verification',
+  contradiction_detection: 'Contradiction Detection',
 };
 
 /** Stage history record */
@@ -102,7 +108,27 @@ export interface JobQueueStats {
   failed: number;
   cancelled: number;
   skipped: number;
+  stuck: number;  // Jobs stuck in PROCESSING for too long
   avg_processing_time_ms: number | null;
+}
+
+/** Information about a stuck job */
+export interface StuckJobInfo {
+  job_id: string;
+  document_id: string | null;
+  document_name: string | null;
+  current_stage: string | null;
+  progress_pct: number;
+  stuck_minutes: number;
+  recovery_attempts: number;
+  last_update: string;
+}
+
+/** Response for stuck jobs query */
+export interface StuckJobsResponse {
+  stuck_jobs: StuckJobInfo[];
+  total: number;
+  threshold_minutes: number;
 }
 
 // =============================================================================
@@ -146,6 +172,14 @@ export interface JobSkipResponse {
 
 /** Response for job cancel */
 export interface JobCancelResponse {
+  success: boolean;
+  message: string;
+  job_id: string;
+  new_status: string;
+}
+
+/** Response for job reset */
+export interface JobResetResponse {
   success: boolean;
   message: string;
   job_id: string;
@@ -224,6 +258,20 @@ export function canSkipJob(job: ProcessingJob): boolean {
 /** Helper to determine if a job can be cancelled */
 export function canCancelJob(job: ProcessingJob): boolean {
   return job.status === 'QUEUED' || job.status === 'PROCESSING';
+}
+
+/** Helper to determine if a job can be reset */
+export function canResetJob(job: ProcessingJob): boolean {
+  return job.status === 'PROCESSING' || job.status === 'FAILED';
+}
+
+/** Helper to check if a job appears stuck (no update for given minutes) */
+export function isJobStuck(job: ProcessingJob, thresholdMinutes: number = 5): boolean {
+  if (job.status !== 'PROCESSING') return false;
+  const lastUpdate = new Date(job.updated_at);
+  const now = new Date();
+  const diffMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+  return diffMinutes > thresholdMinutes;
 }
 
 /** Helper to check if a job is active (in progress) */

@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Eye, FileText, MoreVertical, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ export interface DocumentActionMenuProps {
   onRename: () => void;
   onSetAsAct: () => void;
   onDelete: () => void;
+  onRetry?: () => void;
   userRole?: MatterRole;
   disabled?: boolean;
 }
@@ -35,6 +36,7 @@ export function DocumentActionMenu({
   onRename,
   onSetAsAct,
   onDelete,
+  onRetry,
   userRole = 'editor',
   disabled = false,
 }: DocumentActionMenuProps) {
@@ -42,6 +44,14 @@ export function DocumentActionMenu({
   // Allow delete for both owner and editor roles
   const canDelete = userRole === 'owner' || userRole === 'editor';
   const canEdit = userRole === 'owner' || userRole === 'editor';
+
+  // Show retry option for failed or stuck documents
+  const canRetry =
+    onRetry &&
+    canEdit &&
+    (document.status === 'ocr_failed' ||
+      document.status === 'ocr_complete' ||
+      document.status === 'processing');
 
   return (
     <DropdownMenu>
@@ -71,6 +81,12 @@ export function DocumentActionMenu({
           <DropdownMenuItem onClick={onSetAsAct}>
             <FileText className="mr-2 h-4 w-4" />
             Set as Act
+          </DropdownMenuItem>
+        )}
+        {canRetry && (
+          <DropdownMenuItem onClick={onRetry}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry Processing
           </DropdownMenuItem>
         )}
         {canDelete && (

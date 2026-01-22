@@ -143,20 +143,42 @@ function normalizeJob(job: JobListResponse['jobs'][0]): ProcessingJob {
 }
 
 /**
- * Calculate overall progress from job completion counts
+ * Calculate overall progress from job completion counts AND in-progress job percentages.
+ *
+ * This provides real-time progress feedback by incorporating:
+ * - Completed jobs: count as 100% each
+ * - Failed jobs: count as 100% each (terminal state)
+ * - Processing jobs: use their individual progressPct values
+ * - Queued jobs: count as 0%
  */
-function calculateOverallProgress(stats: {
-  queued: number;
-  processing: number;
-  completed: number;
-  failed: number;
-}): number {
+function calculateOverallProgress(
+  stats: {
+    queued: number;
+    processing: number;
+    completed: number;
+    failed: number;
+  },
+  jobs: ProcessingJob[] = []
+): number {
   const total = stats.queued + stats.processing + stats.completed + stats.failed;
   if (total === 0) return 0;
 
   // Terminal states (completed + failed) count as 100% done
-  const done = stats.completed + stats.failed;
-  return Math.round((done / total) * 100);
+  const terminalProgress = (stats.completed + stats.failed) * 100;
+
+  // Sum progress from in-progress jobs
+  const processingJobs = jobs.filter((j) => j.status === 'PROCESSING');
+  const processingProgress = processingJobs.reduce(
+    (sum, job) => sum + (job.progressPct || 0),
+    0
+  );
+
+  // Queued jobs contribute 0%
+  // Total possible progress = total jobs * 100
+  const totalPossible = total * 100;
+  const actualProgress = terminalProgress + processingProgress;
+
+  return Math.round((actualProgress / totalPossible) * 100);
 }
 
 // =============================================================================
@@ -247,8 +269,8 @@ export function useProcessingStatus(
       };
       setStats(newStats);
 
-      // Calculate overall progress
-      const progress = calculateOverallProgress(newStats);
+      // Calculate overall progress (including in-progress job percentages)
+      const progress = calculateOverallProgress(newStats, normalizedJobs);
       setOverallProgress(progress);
 
       // Determine current stage from active jobs

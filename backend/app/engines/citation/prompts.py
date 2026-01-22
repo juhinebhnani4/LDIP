@@ -45,7 +45,7 @@ Return a JSON object with this exact structure:
 {{
   "citations": [
     {{
-      "act_name": "Full Act name as extracted (e.g., 'Negotiable Instruments Act' or 'NI Act')",
+      "act_name": "ONLY the Act name with optional year - nothing else (e.g., 'Negotiable Instruments Act, 1881' or 'NI Act')",
       "section": "Section number (e.g., '138')",
       "subsection": "Subsection if present (e.g., '(1)') or null",
       "clause": "Clause if present (e.g., '(a)') or null",
@@ -56,6 +56,26 @@ Return a JSON object with this exact structure:
   ]
 }}
 ```
+
+## CRITICAL: act_name Field Rules
+
+The "act_name" field must contain ONLY the Act/statute name. It must NOT contain:
+- Sentence fragments or surrounding text
+- Explanatory phrases like "By not marking copies..."
+- Legal arguments or descriptions
+- References to parties or respondents
+- Any text after a period (.)
+
+CORRECT examples:
+- "Companies Act, 2013"
+- "TORTS Act" (Trial of Offences Relating to Transactions in Securities Act)
+- "Special Court Act, 1992"
+- "Constitution of India, 1950"
+
+INCORRECT examples (DO NOT DO THIS):
+- "the Torts Act. By not marking copies of crucial correspondence..." ❌
+- "Companies Act, 2013 and accordingly directed IEPF to transfer..." ❌
+- "the Act in terms of which being a Special Statute the TRUE COPY..." ❌
 
 ## Important Rules
 
@@ -187,6 +207,7 @@ Key behaviors:
 4. Maintain exact raw text for document highlighting
 5. Output valid JSON only - no markdown, no explanation
 6. When uncertain, include the citation with lower confidence rather than omitting it
+7. CRITICAL: The "act_name" field must contain ONLY the Act name - never include sentence fragments, descriptions, or surrounding text
 
 Common Indian Act abbreviations you must recognize:
 - NI Act / N.I. Act = Negotiable Instruments Act
@@ -204,7 +225,11 @@ Common Indian Act abbreviations you must recognize:
 - Evidence Act = Indian Evidence Act
 - Contract Act = Indian Contract Act
 - TPA = Transfer of Property Act
+- TORTS Act = Special Court (Trial of Offences Relating to Transactions in Securities) Act, 1992
+- Special Court Act = Special Court (Trial of Offences Relating to Transactions in Securities) Act, 1992
 
 When you see patterns like "u/s 138", "S. 138", "sec. 138", treat them as section references.
 When you see ranges like "Sections 138-141", extract each section number separately.
-When you see "read with" patterns, extract each mentioned section."""
+When you see "read with" patterns, extract each mentioned section.
+
+IMPORTANT: If you see "the TORTS Act", "the Torts Act", or similar - the act_name should be "TORTS Act" or "Special Court Act, 1992", NOT the entire sentence that follows."""

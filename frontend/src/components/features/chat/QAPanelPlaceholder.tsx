@@ -5,8 +5,8 @@ import { JaanchIcon } from '@/components/ui/jaanch-logo';
 /**
  * Q&A Panel Placeholder
  *
- * MVP placeholder content for the Q&A panel. The actual Q&A functionality
- * will be implemented in Epic 11.
+ * Placeholder content shown when the Q&A panel cannot load
+ * (e.g., no matter selected or user not authenticated).
  *
  * Story 10A.3: Main Content Area and Q&A Panel Integration
  */
@@ -19,7 +19,6 @@ export function QAPanelPlaceholder() {
         Ask questions about your matter. The AI will analyze documents and
         provide answers with citations.
       </p>
-      <p className="mt-4 text-xs text-muted-foreground">Coming in Epic 11</p>
     </div>
   );
 }

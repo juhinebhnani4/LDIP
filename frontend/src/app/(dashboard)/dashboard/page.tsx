@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
-import { DashboardContent } from './DashboardContent';
-import { DashboardSidebar } from './DashboardSidebar';
-import { MobileActivitySection } from './MobileActivitySection';
+import { DashboardContent } from '../DashboardContent';
+import { DashboardSidebar } from '../DashboardSidebar';
+import { MobileActivitySection } from '../MobileActivitySection';
 
 /**
  * Dashboard Page

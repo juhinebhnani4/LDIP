@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { GripHorizontal } from 'lucide-react';
+import { GripHorizontal, Loader2 } from 'lucide-react';
 import {
   useQAPanelStore,
   MIN_FLOAT_WIDTH,
@@ -10,6 +10,7 @@ import {
 import { QAPanelHeader } from './QAPanelHeader';
 import { ConversationHistory } from './ConversationHistory';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
+import { useUser } from '@/hooks/useAuth';
 import type { SourceReference } from '@/types/chat';
 
 /**
@@ -34,13 +35,16 @@ const KEYBOARD_MOVE_STEP = 20;
 interface FloatingQAPanelProps {
   /** Matter ID for loading conversation history */
   matterId?: string;
-  /** User ID for loading conversation history */
+  /** User ID for loading conversation history (optional - will use auth if not provided) */
   userId?: string;
   /** Callback when a source reference is clicked */
   onSourceClick?: (source: SourceReference) => void;
 }
 
-export function FloatingQAPanel({ matterId, userId, onSourceClick }: FloatingQAPanelProps) {
+export function FloatingQAPanel({ matterId, userId: userIdProp, onSourceClick }: FloatingQAPanelProps) {
+  // Get user from auth if not provided as prop
+  const { user, loading: authLoading } = useUser();
+  const userId = userIdProp ?? user?.id;
   const floatX = useQAPanelStore((state) => state.floatX);
   const floatY = useQAPanelStore((state) => state.floatY);
   const floatWidth = useQAPanelStore((state) => state.floatWidth);
@@ -202,7 +206,11 @@ export function FloatingQAPanel({ matterId, userId, onSourceClick }: FloatingQAP
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {matterId && userId ? (
+        {authLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : matterId && userId ? (
           <ConversationHistory
             matterId={matterId}
             userId={userId}

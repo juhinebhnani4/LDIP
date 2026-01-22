@@ -1245,16 +1245,15 @@ def finalize_chunked_document(
     # Update job tracking if available
     if job_id:
         from app.services.job_tracking import get_job_tracking_service
+        from app.models.job import ProcessingJobUpdate
         job_tracker = get_job_tracking_service()
-        _run_async(
-            job_tracker.update_job_status(
-                job_id=job_id,
-                status=JobStatus.PROCESSING,
-                stage="ocr_complete",
-                progress_pct=100,
-                completed_stages=1,
-            )
+        update = ProcessingJobUpdate(
+            status=JobStatus.PROCESSING,
+            current_stage="ocr_complete",
+            progress_pct=100,
+            completed_stages=1,
         )
+        _run_async(job_tracker.update_job(job_id, update))
 
     # Clean up chunk records (Story 15.4)
     _run_async(cleanup_service.cleanup_document_chunks(document_id))

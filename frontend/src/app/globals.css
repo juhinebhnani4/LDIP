@@ -52,48 +52,48 @@
   --radius: 0.625rem;
 
   /* Jaanch "Intelligent Legal" Brand Colors - Light Mode */
-  /* From UX Design Document v1.2 */
-  /* Primary: Deep Navy (#1a2744), Accent: Warm Gold (#c9a227), Background: Soft Cream (#f8f6f2) */
+  /* From Landing Page Masterplan v1.0 */
+  /* Primary: Deep Indigo (#0d1b5e), Accent: Muted Gold (#b8973b), Background: Bond Paper (#f8f6f1) */
 
-  --background: #f8f6f2;              /* Soft Cream - warm off-white */
-  --foreground: #2d3748;              /* Charcoal - primary text */
+  --background: #f8f6f1;              /* Bond Paper - warm off-white */
+  --foreground: #1a1a1a;              /* Ink Black - body text */
   --card: #ffffff;                    /* Pure White - elevated surface */
-  --card-foreground: #2d3748;
+  --card-foreground: #1a1a1a;
   --popover: #ffffff;
-  --popover-foreground: #2d3748;
-  --primary: #1a2744;                 /* Deep Navy - brand primary */
+  --popover-foreground: #1a1a1a;
+  --primary: #0d1b5e;                 /* Deep Indigo - brand primary */
   --primary-foreground: #ffffff;
-  --secondary: #f8f6f2;               /* Soft Cream */
-  --secondary-foreground: #2d3748;
-  --muted: #f8f6f2;                   /* Soft Cream */
+  --secondary: #f8f6f1;               /* Bond Paper */
+  --secondary-foreground: #1a1a1a;
+  --muted: #e8e4dc;                   /* Warm Gray - muted backgrounds */
   --muted-foreground: #64748b;        /* Slate - secondary text */
-  --accent: #c9a227;                  /* Warm Gold */
-  --accent-foreground: #1a2744;
-  --destructive: #dc2626;             /* Error Red */
+  --accent: #b8973b;                  /* Muted Gold */
+  --accent-foreground: #0d1b5e;
+  --destructive: #8b2635;             /* Burgundy - errors/contradictions */
   --destructive-foreground: #ffffff;
-  --border: #e5e2dd;                  /* Warm Gray - dividers */
-  --input: #e5e2dd;
-  --ring: #1a2744;                    /* Deep Navy for focus rings */
+  --border: #e8e4dc;                  /* Warm Gray - dividers */
+  --input: #e8e4dc;
+  --ring: #0d1b5e;                    /* Deep Indigo for focus rings */
 
   /* Chart colors - brand-aligned */
-  --chart-1: #1a2744;                 /* Deep Navy */
-  --chart-2: #166534;                 /* Legal Green */
-  --chart-3: #c9a227;                 /* Warm Gold */
+  --chart-1: #0d1b5e;                 /* Deep Indigo */
+  --chart-2: #2d5a3d;                 /* Forest Green */
+  --chart-3: #b8973b;                 /* Muted Gold */
   --chart-4: #3b82f6;                 /* Steel Blue */
-  --chart-5: #dc2626;                 /* Error Red */
+  --chart-5: #8b2635;                 /* Burgundy */
 
   /* Sidebar - slightly darker paper tone */
   --sidebar: #f0ede8;
-  --sidebar-foreground: #2d3748;
-  --sidebar-primary: #1a2744;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #0d1b5e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f8f6f2;
-  --sidebar-accent-foreground: #2d3748;
-  --sidebar-border: #e5e2dd;
-  --sidebar-ring: #1a2744;
+  --sidebar-accent: #f8f6f1;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e8e4dc;
+  --sidebar-ring: #0d1b5e;
 
   /* Extended brand colors for status/semantic use */
-  --success: #166534;                 /* Legal Green */
+  --success: #2d5a3d;                 /* Forest Green */
   --success-foreground: #ffffff;
   --warning: #d97706;                 /* Amber */
   --warning-foreground: #ffffff;
@@ -101,61 +101,73 @@
   --info-foreground: #ffffff;
 
   /* Special legal accents */
-  --seal-red: #8b0000;                /* Dark red for stamps/seals */
+  --seal-red: #8b2635;                /* Burgundy for stamps/alerts */
   --legal-pad: #fffef0;               /* Yellow legal pad color */
+
+  /* Landing page specific */
+  --indigo: #0d1b5e;
+  --gold: #b8973b;
+  --burgundy: #8b2635;
+  --forest: #2d5a3d;
 }
 
 .dark {
   /* Jaanch "Chambers Mode" - Dark Theme for late-night document review */
-  /* From UX Design Document v1.2 */
+  /* From Landing Page Masterplan v1.0 */
   --background: #1a1a1f;              /* Dark background */
   --foreground: #e5e5e7;              /* Light text */
   --card: #25252d;                    /* Elevated dark surface */
   --card-foreground: #e5e5e7;
   --popover: #25252d;
   --popover-foreground: #e5e5e7;
-  --primary: #1a2744;                 /* Keep Deep Navy for brand consistency */
+  --primary: #0d1b5e;                 /* Deep Indigo for brand consistency */
   --primary-foreground: #ffffff;
   --secondary: #25252d;
   --secondary-foreground: #e5e5e7;
   --muted: #25252d;
   --muted-foreground: #9ca3af;        /* Muted text */
-  --accent: #dbb536;                  /* Slightly brighter Gold for dark mode */
+  --accent: #d4af37;                  /* Brighter Gold for dark mode */
   --accent-foreground: #1a1a1f;
-  --destructive: #ef4444;             /* Brighter red for visibility */
+  --destructive: #c9424f;             /* Brighter burgundy for visibility */
   --destructive-foreground: #ffffff;
   --border: #3d3d47;
   --input: #3d3d47;
-  --ring: #dbb536;                    /* Gold ring in dark mode */
+  --ring: #d4af37;                    /* Gold ring in dark mode */
 
   /* Chart colors - dark mode adjusted */
-  --chart-1: #4a5a7a;                 /* Lighter Navy */
-  --chart-2: #22c55e;                 /* Bright Green */
-  --chart-3: #dbb536;                 /* Bright Gold */
+  --chart-1: #4a5a7a;                 /* Lighter Indigo */
+  --chart-2: #3d7a4d;                 /* Lighter Forest */
+  --chart-3: #d4af37;                 /* Bright Gold */
   --chart-4: #60a5fa;                 /* Light Blue */
-  --chart-5: #ef4444;                 /* Bright Red */
+  --chart-5: #c9424f;                 /* Bright Burgundy */
 
   /* Sidebar dark mode */
   --sidebar: #1f1f24;
   --sidebar-foreground: #e5e5e7;
-  --sidebar-primary: #dbb536;         /* Gold primary in sidebar */
+  --sidebar-primary: #d4af37;         /* Gold primary in sidebar */
   --sidebar-primary-foreground: #1a1a1f;
   --sidebar-accent: #25252d;
   --sidebar-accent-foreground: #e5e5e7;
   --sidebar-border: #3d3d47;
-  --sidebar-ring: #dbb536;
+  --sidebar-ring: #d4af37;
 
   /* Extended brand colors - dark mode */
-  --success: #22c55e;                 /* Bright green for visibility */
-  --success-foreground: #1a1a1f;
+  --success: #3d7a4d;                 /* Lighter forest for visibility */
+  --success-foreground: #ffffff;
   --warning: #f59e0b;                 /* Bright amber */
   --warning-foreground: #1a1a1f;
   --info: #60a5fa;                    /* Light blue */
   --info-foreground: #1a1a1f;
 
   /* Special legal accents - dark mode */
-  --seal-red: #dc2626;                /* Brighter for visibility */
+  --seal-red: #c9424f;                /* Brighter burgundy for visibility */
   --legal-pad: #3d3d2a;               /* Muted yellow-brown */
+
+  /* Landing page specific */
+  --indigo: #4a5a7a;
+  --gold: #d4af37;
+  --burgundy: #c9424f;
+  --forest: #3d7a4d;
 }
 
 @layer base {

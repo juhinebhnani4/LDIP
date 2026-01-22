@@ -17,6 +17,9 @@ class JobType(str, Enum):
     - EMBEDDING: Vector embedding generation stage
     - ENTITY_EXTRACTION: MIG entity extraction stage
     - ALIAS_RESOLUTION: Entity alias resolution stage
+    - CITATION_EXTRACTION: Legal citation extraction stage
+    - CITATION_VERIFICATION: Citation verification stage (Story 3-3)
+    - CONTRADICTION_DETECTION: Contradiction detection stage (Epic 5)
     - DATE_EXTRACTION: Timeline date extraction stage (Story 4-1)
     - EVENT_CLASSIFICATION: Timeline event classification stage (Story 4-2)
     - ENTITY_LINKING: Timeline event to MIG entity linking stage (Story 4-3)
@@ -30,6 +33,9 @@ class JobType(str, Enum):
     EMBEDDING = "EMBEDDING"
     ENTITY_EXTRACTION = "ENTITY_EXTRACTION"
     ALIAS_RESOLUTION = "ALIAS_RESOLUTION"
+    CITATION_EXTRACTION = "CITATION_EXTRACTION"
+    CITATION_VERIFICATION = "CITATION_VERIFICATION"
+    CONTRADICTION_DETECTION = "CONTRADICTION_DETECTION"
     DATE_EXTRACTION = "DATE_EXTRACTION"
     EVENT_CLASSIFICATION = "EVENT_CLASSIFICATION"
     ENTITY_LINKING = "ENTITY_LINKING"

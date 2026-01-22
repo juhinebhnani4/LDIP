@@ -49,12 +49,14 @@ class ActDiscoveryService:
         self,
         matter_id: str,
         include_available: bool = True,
+        include_invalid: bool = False,
     ) -> list[ActDiscoverySummary]:
         """Generate Act Discovery Report for a matter.
 
         Args:
             matter_id: Matter UUID.
             include_available: Whether to include Acts that are already available.
+            include_invalid: Whether to include invalid (garbage) acts. Default False.
 
         Returns:
             List of ActDiscoverySummary items sorted by citation count.
@@ -71,12 +73,20 @@ class ActDiscoveryService:
             summaries: list[ActDiscoverySummary] = []
 
             for resolution in resolutions:
-                # Skip available if not requested
+                # Skip invalid acts (garbage extractions) unless explicitly requested
                 if (
-                    not include_available
-                    and resolution.resolution_status == ActResolutionStatus.AVAILABLE
+                    not include_invalid
+                    and resolution.resolution_status == ActResolutionStatus.INVALID
                 ):
                     continue
+
+                # Skip available/auto-fetched if not requested
+                if not include_available:
+                    if resolution.resolution_status in (
+                        ActResolutionStatus.AVAILABLE,
+                        ActResolutionStatus.AUTO_FETCHED,
+                    ):
+                        continue
 
                 # Get display name
                 display_name = resolution.act_name_display or get_display_name(
@@ -113,7 +123,14 @@ class ActDiscoveryService:
                 ),
                 available_acts=sum(
                     1 for s in summaries
-                    if s.resolution_status == ActResolutionStatus.AVAILABLE
+                    if s.resolution_status in (
+                        ActResolutionStatus.AVAILABLE,
+                        ActResolutionStatus.AUTO_FETCHED,
+                    )
+                ),
+                auto_fetched_acts=sum(
+                    1 for s in summaries
+                    if s.resolution_status == ActResolutionStatus.AUTO_FETCHED
                 ),
             )
 
@@ -340,7 +357,8 @@ class ActDiscoveryService:
             matter_id: Matter UUID.
 
         Returns:
-            Dict with total_acts, missing_count, available_count, skipped_count.
+            Dict with total_acts, missing_count, available_count, auto_fetched_count,
+            skipped_count, invalid_count.
         """
         try:
             resolutions = await self._storage.get_act_resolutions(matter_id)
@@ -349,7 +367,9 @@ class ActDiscoveryService:
                 "total_acts": len(resolutions),
                 "missing_count": 0,
                 "available_count": 0,
+                "auto_fetched_count": 0,
                 "skipped_count": 0,
+                "invalid_count": 0,
                 "total_citations": 0,
             }
 
@@ -360,8 +380,12 @@ class ActDiscoveryService:
                     stats["missing_count"] += 1
                 elif resolution.resolution_status == ActResolutionStatus.AVAILABLE:
                     stats["available_count"] += 1
+                elif resolution.resolution_status == ActResolutionStatus.AUTO_FETCHED:
+                    stats["auto_fetched_count"] += 1
                 elif resolution.resolution_status == ActResolutionStatus.SKIPPED:
                     stats["skipped_count"] += 1
+                elif resolution.resolution_status == ActResolutionStatus.INVALID:
+                    stats["invalid_count"] += 1
 
             return stats
 
@@ -375,7 +399,9 @@ class ActDiscoveryService:
                 "total_acts": 0,
                 "missing_count": 0,
                 "available_count": 0,
+                "auto_fetched_count": 0,
                 "skipped_count": 0,
+                "invalid_count": 0,
                 "total_citations": 0,
             }
 

@@ -24,6 +24,15 @@ vi.mock('./ConversationHistory', () => ({
   ),
 }));
 
+// Mock useUser hook - default to loaded state with no user
+vi.mock('@/hooks/useAuth', () => ({
+  useUser: () => ({
+    user: null,
+    loading: false,
+    error: null,
+  }),
+}));
+
 describe('FloatingQAPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();

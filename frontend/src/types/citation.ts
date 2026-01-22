@@ -17,10 +17,16 @@ export type VerificationStatus =
   | 'act_unavailable';
 
 /** Act resolution status */
-export type ActResolutionStatus = 'available' | 'missing' | 'skipped';
+export type ActResolutionStatus =
+  | 'available'
+  | 'auto_fetched'
+  | 'missing'
+  | 'invalid'
+  | 'not_on_indiacode'
+  | 'skipped';
 
 /** User action on Act resolution */
-export type UserAction = 'uploaded' | 'skipped' | 'pending';
+export type UserAction = 'uploaded' | 'skipped' | 'auto_fetched' | 'pending';
 
 // =============================================================================
 // Citation Types

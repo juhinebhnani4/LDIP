@@ -62,8 +62,10 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||
     request.nextUrl.pathname.startsWith('/matter') ||
-    request.nextUrl.pathname.startsWith('/upload') ||
-    request.nextUrl.pathname === '/';
+    request.nextUrl.pathname.startsWith('/upload');
+
+  // Landing page is public but redirects authenticated users to dashboard
+  const isLandingPage = request.nextUrl.pathname === '/';
 
   const isAuthRoute =
     request.nextUrl.pathname.startsWith('/login') ||
@@ -88,7 +90,14 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from auth pages (but not callback)
   if (user && isAuthRoute && !isAuthCallback) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect authenticated users from landing page to dashboard
+  if (user && isLandingPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 

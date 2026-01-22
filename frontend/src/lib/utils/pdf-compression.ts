@@ -7,14 +7,12 @@
 
 import { PDFDocument } from 'pdf-lib';
 
-/** Size threshold for compression (50MB) */
-export const COMPRESSION_THRESHOLD_BYTES = 50 * 1024 * 1024;
+/** Supabase free tier limit (50MB) */
+export const SUPABASE_FILE_LIMIT_BYTES = 50 * 1024 * 1024;
 
-/** Target size after compression (45MB to have some buffer) */
-const TARGET_SIZE_BYTES = 45 * 1024 * 1024;
+/** Size threshold for compression (40MB - start early to have buffer room) */
+export const COMPRESSION_THRESHOLD_BYTES = 40 * 1024 * 1024;
 
-/** Maximum compression attempts */
-const MAX_COMPRESSION_ATTEMPTS = 3;
 
 export interface CompressionResult {
   /** The compressed file (or original if no compression needed) */
@@ -141,10 +139,13 @@ export async function compressPdfIfNeeded(
       };
     }
 
-    // Warn if still over threshold
-    const warning = compressedSize > COMPRESSION_THRESHOLD_BYTES
-      ? `File is still ${formatBytes(compressedSize)} after compression (limit: ${formatBytes(COMPRESSION_THRESHOLD_BYTES)}). Consider splitting the document.`
-      : undefined;
+    // Warn if still over Supabase limit (50MB)
+    let warning: string | undefined;
+    if (compressedSize > SUPABASE_FILE_LIMIT_BYTES) {
+      warning = `File is still ${formatBytes(compressedSize)} after compression, which exceeds the 50MB upload limit. Please split this document into smaller parts before uploading.`;
+    } else if (compressedSize > COMPRESSION_THRESHOLD_BYTES) {
+      warning = `File compressed to ${formatBytes(compressedSize)} (near the 50MB limit). Upload should succeed but consider splitting large documents.`;
+    }
 
     return {
       file: compressedFile,
@@ -209,6 +210,20 @@ export async function compressFilesIfNeeded(
  */
 export function needsCompression(file: File): boolean {
   return file.size > COMPRESSION_THRESHOLD_BYTES;
+}
+
+/**
+ * Check if a file exceeds the Supabase free tier limit (50MB).
+ */
+export function exceedsSupabaseLimit(file: File): boolean {
+  return file.size > SUPABASE_FILE_LIMIT_BYTES;
+}
+
+/**
+ * Check if compression result still exceeds Supabase limit.
+ */
+export function compressionExceedsLimit(result: CompressionResult): boolean {
+  return result.finalSize > SUPABASE_FILE_LIMIT_BYTES;
 }
 
 /**

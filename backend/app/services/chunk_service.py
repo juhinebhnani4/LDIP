@@ -250,6 +250,45 @@ class ChunkService:
                 code="DELETE_FAILED",
             ) from e
 
+    async def count_chunks_for_document(
+        self,
+        document_id: str,
+        chunk_type: str | None = None,
+    ) -> int:
+        """Count chunks for a document (for idempotency checks).
+
+        Args:
+            document_id: Document UUID.
+            chunk_type: Optional filter by chunk type ("parent" or "child").
+
+        Returns:
+            Number of chunks for the document.
+        """
+        if self.client is None:
+            return 0
+
+        try:
+            def _count() -> int:
+                query = (
+                    self.client.table("chunks")
+                    .select("id", count="exact")
+                    .eq("document_id", document_id)
+                )
+                if chunk_type:
+                    query = query.eq("chunk_type", chunk_type)
+                result = query.execute()
+                return result.count or 0
+
+            return await asyncio.to_thread(_count)
+        except Exception as e:
+            logger.warning(
+                "chunk_count_failed",
+                document_id=document_id,
+                chunk_type=chunk_type,
+                error=str(e),
+            )
+            return 0  # Return 0 on error to allow re-processing
+
     def get_chunks_for_document(
         self,
         document_id: str,

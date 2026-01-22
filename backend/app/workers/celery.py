@@ -44,6 +44,13 @@ celery_app.conf.update(
     # Worker settings
     worker_prefetch_multiplier=1,
     worker_concurrency=4,
+    # Heartbeat and health settings
+    broker_heartbeat=30,  # Send heartbeat every 30 seconds
+    broker_heartbeat_checkrate=2,  # Check for heartbeat every 2 iterations
+    worker_send_task_events=True,  # Enable task events for monitoring
+    worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks (prevents memory leaks)
+    task_time_limit=3600,  # Hard timeout: 1 hour per task
+    task_soft_time_limit=3300,  # Soft timeout: 55 minutes (gives 5 min cleanup)
     # Priority queues configuration
     task_queues={
         # Align with architecture convention: high / default / low
@@ -95,6 +102,18 @@ celery_app.conf.update(
             "schedule": 3600,  # Every hour
             "options": {"queue": "low"},
         },
+        # Auto-fix missing extracted_text - runs every 5 minutes
+        "fix-missing-extracted-text": {
+            "task": "app.workers.tasks.maintenance_tasks.fix_missing_extracted_text",
+            "schedule": 300,  # Every 5 minutes
+            "options": {"queue": "low"},
+        },
+        # Act validation - process pending validations every 30 minutes
+        "process-pending-act-validations": {
+            "task": "app.workers.tasks.act_validation_tasks.process_pending_validations",
+            "schedule": 1800,  # Every 30 minutes
+            "options": {"queue": "low"},
+        },
     },
 )
 
@@ -104,6 +123,7 @@ celery_app.autodiscover_tasks(["app.workers.tasks"])
 # Explicit imports to ensure tasks are registered
 # (autodiscover can be unreliable on Windows)
 from app.workers.tasks import (  # noqa: E402, F401
+    act_validation_tasks,
     chunked_document_tasks,
     document_tasks,
     engine_tasks,

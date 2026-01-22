@@ -593,12 +593,13 @@ class DocumentService:
         """Soft delete a document by setting deleted_at timestamp.
 
         Documents are retained for 30 days before permanent deletion.
+        Also invalidates the matter's summary cache.
 
         Args:
             document_id: Document UUID.
 
         Returns:
-            Dict with deleted_at timestamp.
+            Dict with deleted_at timestamp and matter_id.
 
         Raises:
             DocumentNotFoundError: If document doesn't exist.
@@ -611,13 +612,15 @@ class DocumentService:
             )
 
         try:
-            # First verify document exists
-            result = self.client.table("documents").select("id").eq(
+            # First verify document exists and get matter_id for cache invalidation
+            result = self.client.table("documents").select("id, matter_id").eq(
                 "id", document_id
             ).execute()
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
+
+            matter_id = result.data[0].get("matter_id")
 
             # Set deleted_at timestamp
             deleted_at = datetime.now(UTC)
@@ -631,15 +634,26 @@ class DocumentService:
                     code="SOFT_DELETE_FAILED"
                 )
 
+            # Cascade cleanup: delete related data to prevent orphaned records
+            cleanup_result = self.cascade_soft_delete_related_data(document_id)
+
+            # Invalidate summary cache for the matter
+            if matter_id:
+                self._invalidate_summary_cache(matter_id)
+
             logger.info(
                 "document_soft_deleted",
                 document_id=document_id,
+                matter_id=matter_id,
                 deleted_at=deleted_at.isoformat(),
+                cleanup=cleanup_result,
             )
 
             return {
                 "deleted_at": deleted_at.isoformat(),
                 "document_id": document_id,
+                "matter_id": matter_id,
+                "cleanup": cleanup_result,
             }
 
         except DocumentNotFoundError:
@@ -656,6 +670,96 @@ class DocumentService:
                 message=f"Failed to soft delete document: {e!s}",
                 code="SOFT_DELETE_FAILED"
             ) from e
+
+    def _invalidate_summary_cache(self, matter_id: str) -> None:
+        """Invalidate the summary cache for a matter.
+
+        Args:
+            matter_id: Matter UUID.
+        """
+        try:
+            import asyncio
+            from app.services.summary_service import get_summary_service
+
+            # Run async cache invalidation in sync context
+            loop = asyncio.new_event_loop()
+            try:
+                summary_service = get_summary_service()
+                loop.run_until_complete(summary_service.invalidate_cache(matter_id))
+                logger.info(
+                    "summary_cache_invalidated_on_delete",
+                    matter_id=matter_id,
+                )
+            finally:
+                loop.close()
+        except Exception as e:
+            # Don't fail the delete operation if cache invalidation fails
+            logger.warning(
+                "summary_cache_invalidation_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+
+    def cascade_soft_delete_related_data(self, document_id: str) -> dict:
+        """Soft-delete or clean up data related to a soft-deleted document.
+
+        This method handles orphaned data that would otherwise still appear
+        in queries. It marks related records for cleanup.
+
+        Args:
+            document_id: Document UUID that was soft-deleted.
+
+        Returns:
+            Dict with counts of affected records per table.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        affected = {
+            "chunks_deleted": 0,
+            "citations_deleted": 0,
+            "events_nullified": 0,
+        }
+
+        try:
+            # Delete chunks (they have ON DELETE CASCADE, but for soft-delete
+            # we need to manually remove them to prevent orphaned embeddings)
+            chunks_result = self.client.table("chunks").delete().eq(
+                "document_id", document_id
+            ).execute()
+            affected["chunks_deleted"] = len(chunks_result.data) if chunks_result.data else 0
+
+            # Delete citations from this document
+            citations_result = self.client.table("citations").delete().eq(
+                "source_document_id", document_id
+            ).execute()
+            affected["citations_deleted"] = len(citations_result.data) if citations_result.data else 0
+
+            # Nullify document_id on events (matches ON DELETE SET NULL behavior)
+            events_result = self.client.table("events").update({
+                "document_id": None
+            }).eq("document_id", document_id).execute()
+            affected["events_nullified"] = len(events_result.data) if events_result.data else 0
+
+            logger.info(
+                "cascade_soft_delete_completed",
+                document_id=document_id,
+                **affected,
+            )
+
+            return affected
+
+        except Exception as e:
+            logger.error(
+                "cascade_soft_delete_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            # Don't raise - this is a cleanup operation
+            return affected
 
     def _parse_datetime(self, value: str | None) -> datetime | None:
         """Parse datetime string from database.

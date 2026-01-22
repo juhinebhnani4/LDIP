@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss"
+import typography from "@tailwindcss/typography"
 
 export default {
   darkMode: "class",
@@ -17,10 +18,18 @@ export default {
         // Extended semantic colors from UX design
         'seal-red': 'var(--seal-red)',
         'legal-pad': 'var(--legal-pad)',
+        'success': 'var(--success)',
+        'warning': 'var(--warning)',
+        'info': 'var(--info)',
+        // Landing page brand colors
+        'indigo': 'var(--indigo)',
+        'gold': 'var(--gold)',
+        'burgundy': 'var(--burgundy)',
+        'forest': 'var(--forest)',
       },
     },
   },
-  plugins: [],
+  plugins: [typography],
 } satisfies Config
 
 

@@ -48,7 +48,7 @@ export interface ValidationError {
 
 /** Validation warning structure */
 export interface ValidationWarning {
-  code: 'MAX_FILES_EXCEEDED';
+  code: 'MAX_FILES_EXCEEDED' | 'COMPRESSION_REQUIRED';
   message: string;
   acceptedCount: number;
   rejectedCount: number;

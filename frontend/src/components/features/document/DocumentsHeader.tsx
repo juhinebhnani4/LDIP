@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import type { DocumentType } from '@/types/document';
+import { CeleryStatusIndicator } from '@/components/features/system/CeleryStatusIndicator';
 
 interface DocumentsHeaderProps {
   /** Total document count */
@@ -78,10 +79,14 @@ export function DocumentsHeader({
             {totalCount} {totalCount === 1 ? 'document' : 'documents'} in this matter
           </p>
         </div>
-        <Button onClick={onAddFiles}>
-          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-          Add Files
-        </Button>
+        <div className="flex items-center gap-4">
+          {/* Celery status indicator */}
+          <CeleryStatusIndicator showLabel />
+          <Button onClick={onAddFiles}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            Add Files
+          </Button>
+        </div>
       </div>
 
       {/* Type breakdown badges */}

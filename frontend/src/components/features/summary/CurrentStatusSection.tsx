@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Calendar, ExternalLink } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,9 +118,12 @@ export function CurrentStatusSection({
   };
 
   // Story 14.6: Content renderer with CitationLink
+  // Updated to render markdown for structured status descriptions
   const renderContent = () => (
     <>
-      <p className="text-sm leading-relaxed">{displayContent}</p>
+      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-strong:text-foreground">
+        <ReactMarkdown>{displayContent}</ReactMarkdown>
+      </div>
 
       {/* Source reference with CitationLink */}
       <div className="mt-4 pt-4 border-t flex items-center justify-between flex-wrap gap-4">

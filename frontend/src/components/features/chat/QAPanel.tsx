@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QAPanelHeader } from './QAPanelHeader';
 import { ConversationHistory } from './ConversationHistory';
@@ -11,13 +12,14 @@ import { SuggestedQuestions } from './SuggestedQuestions';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData } from '@/hooks/useSSE';
+import { useUser } from '@/hooks/useAuth';
 import { canRetryError } from '@/lib/api/client';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
 
 interface QAPanelProps {
   /** Matter ID for loading conversation history */
   matterId?: string;
-  /** User ID for loading conversation history */
+  /** User ID for loading conversation history (optional - will use auth if not provided) */
   userId?: string;
   /** Callback when a source reference is clicked */
   onSourceClick?: (source: SourceReference) => void;
@@ -34,7 +36,10 @@ interface QAPanelProps {
  * Story 11.3: Streaming Response with Engine Trace
  * Story 11.4: Suggested Questions and Message Input
  */
-export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
+export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanelProps) {
+  // Get user from auth if not provided as prop
+  const { user, loading: authLoading } = useUser();
+  const userId = userIdProp ?? user?.id;
   // Zustand selectors for streaming state
   const addMessage = useChatStore((state) => state.addMessage);
   const startStreaming = useChatStore((state) => state.startStreaming);
@@ -176,7 +181,8 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
     setLastQuery(null);
   }, []);
 
-  // Show placeholder if we don't have matter/user context
+  // Show loading state while auth is loading, placeholder if no matter/user context
+  const isAuthReady = !authLoading;
   const canLoadHistory = Boolean(matterId && userId);
 
   // Calculate total time from traces for streaming message (use max since engines run in parallel)
@@ -184,61 +190,79 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
     ? Math.max(...streamingTraces.map((t) => t.executionTimeMs))
     : 0;
 
+  // Render content based on state
+  const renderContent = () => {
+    // Show loading spinner while auth is loading
+    if (!isAuthReady) {
+      return (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    // Show placeholder if no matter context
+    if (!canLoadHistory) {
+      return <QAPanelPlaceholder />;
+    }
+
+    // Show chat interface
+    return (
+      <>
+        {/* Story 11.4: Empty state with suggested questions */}
+        {isEmpty && !streamingMessageId ? (
+          <div className="flex flex-1 flex-col items-center justify-center p-6">
+            <SuggestedQuestions onQuestionClick={handleSubmit} />
+          </div>
+        ) : (
+          /* Conversation history with streaming message inside scroll area */
+          <ConversationHistory
+            matterId={matterId!}
+            userId={userId!}
+            onSourceClick={onSourceClick}
+          >
+            {/* Streaming message (shown during streaming) - inside scroll area */}
+            {streamingMessageId && (
+              <StreamingMessage
+                content={streamingContent}
+                isTyping={isTyping}
+                isStreaming={isStreaming}
+                traces={streamingTraces}
+                totalTimeMs={streamingTotalTimeMs}
+              />
+            )}
+          </ConversationHistory>
+        )}
+
+        {/* Story 13.4: Inline error alert for streaming errors */}
+        {streamError && canRetryError(streamError) && (
+          <div className="shrink-0 px-4 py-2">
+            <ErrorAlert
+              error={streamError}
+              onRetry={handleRetry}
+              onDismiss={handleDismissError}
+              isRetrying={isRetrying}
+            />
+          </div>
+        )}
+
+        {/* Chat input (always visible at bottom) */}
+        <ChatInput
+          onSubmit={handleSubmit}
+          disabled={isStreaming}
+          isLoading={isStreaming}
+          className="shrink-0"
+        />
+      </>
+    );
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
       <QAPanelHeader />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {canLoadHistory ? (
-          <>
-            {/* Story 11.4: Empty state with suggested questions */}
-            {isEmpty && !streamingMessageId ? (
-              <div className="flex flex-1 flex-col items-center justify-center p-6">
-                <SuggestedQuestions onQuestionClick={handleSubmit} />
-              </div>
-            ) : (
-              /* Conversation history with streaming message inside scroll area */
-              <ConversationHistory
-                matterId={matterId!}
-                userId={userId!}
-                onSourceClick={onSourceClick}
-              >
-                {/* Streaming message (shown during streaming) - inside scroll area */}
-                {streamingMessageId && (
-                  <StreamingMessage
-                    content={streamingContent}
-                    isTyping={isTyping}
-                    isStreaming={isStreaming}
-                    traces={streamingTraces}
-                    totalTimeMs={streamingTotalTimeMs}
-                  />
-                )}
-              </ConversationHistory>
-            )}
-
-            {/* Story 13.4: Inline error alert for streaming errors */}
-            {streamError && canRetryError(streamError) && (
-              <div className="shrink-0 px-4 py-2">
-                <ErrorAlert
-                  error={streamError}
-                  onRetry={handleRetry}
-                  onDismiss={handleDismissError}
-                  isRetrying={isRetrying}
-                />
-              </div>
-            )}
-
-            {/* Chat input (always visible at bottom) */}
-            <ChatInput
-              onSubmit={handleSubmit}
-              disabled={isStreaming}
-              isLoading={isStreaming}
-              className="shrink-0"
-            />
-          </>
-        ) : (
-          <QAPanelPlaceholder />
-        )}
+        {renderContent()}
       </div>
     </div>
   );

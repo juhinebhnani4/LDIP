@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { FileText, ExternalLink } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -96,9 +97,12 @@ export function SubjectMatterSection({
   };
 
   // Story 14.6: Content renderer with CitationLinks
+  // Updated to render markdown for structured case overviews
   const renderContent = () => (
     <>
-      <p className="text-sm leading-relaxed">{displayContent}</p>
+      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-strong:text-foreground">
+        <ReactMarkdown>{displayContent}</ReactMarkdown>
+      </div>
 
       {/* Story 14.6: Citation links for factual claims */}
       {subjectMatter.citations && subjectMatter.citations.length > 0 && (

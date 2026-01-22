@@ -3,11 +3,11 @@ import { render, screen } from '@testing-library/react';
 import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 
 describe('QAPanelPlaceholder', () => {
-  it('renders ASK LDIP heading', () => {
+  it('renders Ask jaanch heading', () => {
     render(<QAPanelPlaceholder />);
 
     expect(
-      screen.getByRole('heading', { name: 'ASK LDIP' })
+      screen.getByRole('heading', { name: 'Ask jaanch' })
     ).toBeInTheDocument();
   });
 
@@ -21,20 +21,12 @@ describe('QAPanelPlaceholder', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows Coming in Epic 11 note', () => {
+  it('renders jaanch icon', () => {
     render(<QAPanelPlaceholder />);
 
-    expect(screen.getByText('Coming in Epic 11')).toBeInTheDocument();
-  });
-
-  it('renders message square icon', () => {
-    const { container } = render(<QAPanelPlaceholder />);
-
-    // MessageSquare icon should be present
-    const icon = container.querySelector('svg');
+    // JaanchIcon renders an img element
+    const icon = screen.getByRole('img', { name: 'jaanch.ai' });
     expect(icon).toBeInTheDocument();
-    expect(icon).toHaveClass('h-12');
-    expect(icon).toHaveClass('w-12');
   });
 
   it('has proper layout structure', () => {
@@ -52,13 +44,9 @@ describe('QAPanelPlaceholder', () => {
   it('has proper text styling', () => {
     render(<QAPanelPlaceholder />);
 
-    const heading = screen.getByRole('heading', { name: 'ASK LDIP' });
+    const heading = screen.getByRole('heading', { name: 'Ask jaanch' });
     expect(heading.tagName).toBe('H3');
     expect(heading).toHaveClass('text-lg');
     expect(heading).toHaveClass('font-medium');
-
-    const comingSoon = screen.getByText('Coming in Epic 11');
-    expect(comingSoon).toHaveClass('text-xs');
-    expect(comingSoon).toHaveClass('text-muted-foreground');
   });
 });

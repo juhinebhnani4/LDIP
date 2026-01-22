@@ -89,7 +89,38 @@ class JobQueueStats(BaseModel):
     failed: int
     cancelled: int
     skipped: int
+    stuck: int = 0  # Jobs stuck in PROCESSING for too long
     avg_processing_time_ms: int | None = None
+
+
+class StuckJobInfo(BaseModel):
+    """Information about a stuck job for user display."""
+
+    job_id: str
+    document_id: str | None
+    document_name: str | None = None
+    current_stage: str | None
+    progress_pct: int
+    stuck_minutes: int
+    recovery_attempts: int = 0
+    last_update: str
+
+
+class StuckJobsResponse(BaseModel):
+    """Response for stuck jobs query."""
+
+    stuck_jobs: list[StuckJobInfo]
+    total: int
+    threshold_minutes: int
+
+
+class JobResetResponse(BaseModel):
+    """Response for job reset request."""
+
+    success: bool
+    message: str
+    job_id: str
+    new_status: str
 
 
 class StaleJobInfo(BaseModel):
@@ -270,8 +301,31 @@ async def get_matter_job_stats(
     job_tracker: JobTrackingService = Depends(_get_job_tracker),
 ) -> JobQueueStats:
     """Get job queue statistics for a matter."""
+    from datetime import datetime, timezone
+    from app.core.config import get_settings
+    settings = get_settings()
+
     try:
         stats = await job_tracker.get_queue_stats(access.matter_id)
+
+        # Count stuck jobs (PROCESSING for > threshold)
+        stuck_count = 0
+        try:
+            jobs = await job_tracker.list_jobs_for_matter(
+                matter_id=access.matter_id,
+                status_filter=JobStatus.PROCESSING,
+                limit=100,
+            )
+            threshold_minutes = settings.job_stale_timeout_minutes
+            now = datetime.now(timezone.utc)
+            for job in jobs:
+                if job.updated_at:
+                    updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=timezone.utc)
+                    age_minutes = (now - updated).total_seconds() / 60
+                    if age_minutes > threshold_minutes:
+                        stuck_count += 1
+        except Exception:
+            pass  # Don't fail stats if stuck count fails
 
         return JobQueueStats(
             matter_id=access.matter_id,
@@ -281,6 +335,7 @@ async def get_matter_job_stats(
             failed=stats.failed,
             cancelled=stats.cancelled,
             skipped=stats.skipped,
+            stuck=stuck_count,
             avg_processing_time_ms=stats.avg_processing_time_ms,
         )
 
@@ -296,6 +351,84 @@ async def get_matter_job_stats(
                 "error": {
                     "code": "STATS_FAILED",
                     "message": "Failed to get job statistics",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.get(
+    "/matters/{matter_id}/stuck",
+    response_model=StuckJobsResponse,
+    response_model_by_alias=True,
+    summary="Get stuck jobs for a matter",
+    description="Get jobs that have been stuck in PROCESSING state for too long.",
+)
+async def get_stuck_jobs(
+    access: MatterAccessContext = Depends(validate_matter_access()),
+    threshold_minutes: int = Query(
+        None,
+        ge=1,
+        le=120,
+        description="Minutes before a job is considered stuck (defaults to server config)",
+    ),
+    job_tracker: JobTrackingService = Depends(_get_job_tracker),
+) -> StuckJobsResponse:
+    """Get stuck jobs for a matter."""
+    from datetime import datetime, timezone
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    threshold = threshold_minutes or settings.job_stale_timeout_minutes
+
+    try:
+        jobs = await job_tracker.list_jobs_for_matter(
+            matter_id=access.matter_id,
+            status_filter=JobStatus.PROCESSING,
+            limit=100,
+        )
+
+        now = datetime.now(timezone.utc)
+        stuck_jobs = []
+
+        for job in jobs:
+            if job.updated_at:
+                updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=timezone.utc)
+                age_minutes = (now - updated).total_seconds() / 60
+                if age_minutes > threshold:
+                    recovery_attempts = 0
+                    if job.metadata and isinstance(job.metadata, dict):
+                        recovery_attempts = job.metadata.get("recovery_attempts", 0)
+
+                    stuck_jobs.append(StuckJobInfo(
+                        job_id=job.id,
+                        document_id=job.document_id,
+                        document_name=None,  # Frontend can look this up
+                        current_stage=job.current_stage,
+                        progress_pct=job.progress_pct,
+                        stuck_minutes=int(age_minutes),
+                        recovery_attempts=recovery_attempts,
+                        last_update=job.updated_at.isoformat(),
+                    ))
+
+        return StuckJobsResponse(
+            stuck_jobs=stuck_jobs,
+            total=len(stuck_jobs),
+            threshold_minutes=threshold,
+        )
+
+    except JobTrackingError as e:
+        logger.error(
+            "get_stuck_jobs_failed",
+            matter_id=access.matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "STUCK_JOBS_FAILED",
+                    "message": "Failed to get stuck jobs",
                     "details": {},
                 }
             },
@@ -471,6 +604,97 @@ async def skip_job(
                 "error": {
                     "code": "SKIP_FAILED",
                     "message": "Failed to skip job",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.post(
+    "/{job_id}/reset",
+    response_model=JobResetResponse,
+    response_model_by_alias=True,
+    summary="Reset a stuck job",
+    description="Reset a job stuck in PROCESSING state back to QUEUED for re-processing.",
+)
+async def reset_job(
+    job_id: str = Path(..., description="Job UUID"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    job_tracker: JobTrackingService = Depends(_get_job_tracker),
+) -> JobResetResponse:
+    """Reset a stuck job back to QUEUED state."""
+    job = await _validate_job_access(job_id, user, job_tracker)
+
+    # Validate job can be reset (must be PROCESSING or FAILED)
+    if job.status not in (JobStatus.PROCESSING, JobStatus.FAILED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_JOB_STATUS",
+                    "message": f"Cannot reset job with status {job.status.value}. Only PROCESSING or FAILED jobs can be reset.",
+                    "details": {"current_status": job.status.value},
+                }
+            },
+        )
+
+    try:
+        # Track reset in metadata
+        metadata = job.metadata or {}
+        reset_count = metadata.get("user_reset_count", 0) + 1
+        metadata["user_reset_count"] = reset_count
+        metadata["last_reset_by"] = user.id
+        metadata["last_reset_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        metadata["reset_from_stage"] = job.current_stage
+
+        # Reset job to QUEUED
+        await job_tracker.update_job_status(
+            job_id=job_id,
+            status=JobStatus.QUEUED,
+            error_message=None,
+            error_code=None,
+        )
+
+        # Update metadata and reset progress
+        await job_tracker.update_job_progress(
+            job_id=job_id,
+            stage=None,
+            progress_pct=0,
+            metadata=metadata,
+        )
+
+        # Re-queue the Celery task if it's a document processing job
+        if job.document_id and job.job_type == JobType.DOCUMENT_PROCESSING:
+            process_document.delay(job.document_id)
+
+        logger.info(
+            "job_reset_by_user",
+            job_id=job_id,
+            document_id=job.document_id,
+            user_id=user.id,
+            previous_status=job.status.value,
+            previous_stage=job.current_stage,
+        )
+
+        return JobResetResponse(
+            success=True,
+            message="Job has been reset and queued for re-processing",
+            job_id=job_id,
+            new_status=JobStatus.QUEUED.value,
+        )
+
+    except JobTrackingError as e:
+        logger.error(
+            "job_reset_failed",
+            job_id=job_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "RESET_FAILED",
+                    "message": "Failed to reset job",
                     "details": {},
                 }
             },

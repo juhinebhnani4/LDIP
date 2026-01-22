@@ -36,6 +36,14 @@ from app.engines.citation.storage import (
     CitationStorageService,
     get_citation_storage_service,
 )
+from app.engines.citation.validation import (
+    ActValidationService,
+    ValidationSource,
+    ValidationStatus,
+    get_validation_service,
+    is_garbage_act_name,
+    validate_act_name,
+)
 from app.engines.citation.verifier import (
     CitationVerificationError,
     CitationVerifier,
@@ -76,4 +84,11 @@ __all__ = [
     "QuoteComparisonError",
     "VerificationConfigurationError",
     "get_citation_verifier",
+    # Validation (Act Validation and Auto-Fetching)
+    "ActValidationService",
+    "ValidationSource",
+    "ValidationStatus",
+    "get_validation_service",
+    "is_garbage_act_name",
+    "validate_act_name",
 ]

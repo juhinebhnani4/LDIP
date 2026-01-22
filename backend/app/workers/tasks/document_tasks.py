@@ -106,6 +106,11 @@ from app.services.summary_service import get_summary_service
 from app.services.pdf_chunker import get_pdf_chunker, CHUNK_THRESHOLD
 from app.services.pdf_router import CHUNK_SIZE
 from app.services.ocr_chunk_service import get_ocr_chunk_service
+from app.services.contradiction import (
+    StatementComparisonService,
+    get_statement_comparison_service,
+)
+from app.services.contradiction.comparator import ComparisonServiceError
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -258,6 +263,7 @@ PIPELINE_STAGES = [
     "alias_resolution",
     "citation_extraction",
     "citation_verification",  # Story 3-3: Citation Verification
+    "contradiction_detection",  # Epic 5: Contradiction Detection
 ]
 
 STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
@@ -1892,6 +1898,71 @@ def chunk_document(
                 "job_id": job_id,
                 "reason": "No extracted text available",
             }
+
+        # IDEMPOTENCY CHECK: Skip if chunking was already completed successfully
+        # We verify completion by checking if BOTH parent AND child chunks exist.
+        # Partial failure would typically have only parents (children created after)
+        # or be empty. If only one type exists, we re-chunk from scratch.
+        async def _check_chunking_complete() -> tuple[bool, int, int]:
+            """Check if chunking is complete (not partial).
+
+            Returns:
+                Tuple of (is_complete, parent_count, child_count)
+            """
+            parent_count = await chunks_service.count_chunks_for_document(
+                doc_id, chunk_type="parent"
+            )
+            child_count = await chunks_service.count_chunks_for_document(
+                doc_id, chunk_type="child"
+            )
+
+            # Chunking is complete if we have BOTH parent and child chunks
+            is_complete = parent_count > 0 and child_count > 0
+
+            return is_complete, parent_count, child_count
+
+        is_chunking_complete, parent_count, child_count = asyncio.run(
+            _check_chunking_complete()
+        )
+
+        if is_chunking_complete and not force:
+            logger.info(
+                "chunk_document_already_complete",
+                document_id=doc_id,
+                job_id=job_id,
+                parent_chunks=parent_count,
+                child_chunks=child_count,
+                action="skipping_rechunk",
+            )
+            # Mark stage complete and return success
+            _update_job_stage_complete(job_id, "chunking", matter_id)
+            broadcast_document_status(
+                matter_id=matter_id,
+                document_id=doc_id,
+                status="chunking_complete",
+                parent_chunks=parent_count,
+                child_chunks=child_count,
+                note="Chunks already existed (idempotent skip)",
+            )
+            return {
+                "status": "chunking_complete",
+                "document_id": doc_id,
+                "job_id": job_id,
+                "parent_chunks": parent_count,
+                "child_chunks": child_count,
+                "note": "Chunking already complete, skipped re-chunking",
+            }
+        elif parent_count > 0 or child_count > 0:
+            # Partial chunks exist - log warning, proceed to re-chunk
+            # (save_chunks will delete existing chunks first)
+            logger.warning(
+                "chunk_document_partial_detected",
+                document_id=doc_id,
+                job_id=job_id,
+                parent_chunks=parent_count,
+                child_chunks=child_count,
+                action="will_delete_and_rechunk",
+            )
 
         # Record stage start for job tracking (Story 2c-3)
         _update_job_stage_start(job_id, "chunking", matter_id)
@@ -3841,7 +3912,8 @@ def extract_citations(
             skipped_chunks=skipped_chunks,
         )
 
-        return {
+        # Chain to contradiction detection (Epic 5)
+        citation_result = {
             "status": "citations_extracted",
             "document_id": doc_id,
             "citations_extracted": total_citations,
@@ -3852,6 +3924,47 @@ def extract_citations(
             "skipped_chunks": skipped_chunks,
             "job_id": job_id,
         }
+
+        # Dispatch contradiction detection task
+        try:
+            celery_app.send_task(
+                "app.workers.tasks.document_tasks.detect_contradictions",
+                kwargs={
+                    "prev_result": citation_result,
+                    "document_id": doc_id,
+                },
+            )
+            logger.debug("detect_contradictions_dispatched", document_id=doc_id)
+        except Exception as dispatch_error:
+            logger.warning(
+                "detect_contradictions_dispatch_failed",
+                document_id=doc_id,
+                error=str(dispatch_error),
+            )
+
+        # Trigger act validation and auto-fetching (if unique acts were found)
+        if total_unique_acts:
+            try:
+                celery_app.send_task(
+                    "app.workers.tasks.act_validation_tasks.validate_acts_for_matter",
+                    kwargs={
+                        "matter_id": matter_id,
+                    },
+                    queue="low",  # Low priority - background processing
+                )
+                logger.debug(
+                    "act_validation_triggered",
+                    matter_id=matter_id,
+                    unique_acts=len(total_unique_acts),
+                )
+            except Exception as validation_error:
+                logger.warning(
+                    "act_validation_dispatch_failed",
+                    matter_id=matter_id,
+                    error=str(validation_error),
+                )
+
+        return citation_result
 
     except CitationExtractorError as e:
         retry_count = self.request.retries
@@ -3901,6 +4014,329 @@ def extract_citations(
         )
         return {
             "status": "citation_extraction_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Contradiction Detection Task (Epic 5)
+# =============================================================================
+
+# Configuration
+CONTRADICTION_MAX_ENTITIES_PER_RUN = 50  # Max entities to process per task run
+CONTRADICTION_MAX_PAIRS_PER_ENTITY = 25  # Max pairs per entity (cost control)
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.detect_contradictions",
+    bind=True,
+    autoretry_for=(ComparisonServiceError, ConnectionError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+    retry_jitter=True,
+)  # type: ignore[misc]
+def detect_contradictions(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    document_service: DocumentService | None = None,
+    comparison_service: StatementComparisonService | None = None,
+    mig_graph_service: MIGGraphService | None = None,
+    job_tracker: JobTrackingService | None = None,
+) -> dict[str, str | int | float | None]:
+    """Detect contradictions for entities in a document's matter.
+
+    This task runs after citation extraction to identify contradictions
+    between statements about the same entities across documents.
+
+    Epic 5: Consistency & Contradiction Engine
+
+    Pipeline: ... -> Extract Citations -> **Detect Contradictions**
+
+    The task:
+    1. Gets all entities mentioned in the document
+    2. For each entity, compares statement pairs using GPT-4
+    3. Stores contradiction results in statement_comparisons table
+    4. Updates job tracking with contradiction counts
+
+    Args:
+        prev_result: Result from previous task in chain (contains document_id).
+        document_id: Document UUID (optional, can be in prev_result).
+        document_service: Optional DocumentService instance (for testing).
+        comparison_service: Optional StatementComparisonService (for testing).
+        mig_graph_service: Optional MIGGraphService (for testing).
+        job_tracker: Optional JobTrackingService (for testing).
+
+    Returns:
+        Task result with contradiction detection summary.
+
+    Raises:
+        ComparisonServiceError: If comparison fails (will trigger retry).
+    """
+    from app.services.supabase.client import get_service_client
+
+    # Get document_id and job_id from prev_result or parameter
+    doc_id = document_id
+    job_id: str | None = None
+
+    if prev_result:
+        if doc_id is None:
+            doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+        job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("detect_contradictions_no_document_id")
+        return {
+            "status": "contradiction_detection_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task wasn't successful
+    if prev_result:
+        prev_status = prev_result.get("status")
+        valid_statuses = (
+            "citations_extracted",
+            "citation_extraction_complete",
+            "searchable",
+        )
+        if prev_status not in valid_statuses:
+            logger.info(
+                "detect_contradictions_skipped",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "contradiction_detection_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task status: {prev_status}",
+            }
+
+    # Use injected services or get defaults
+    doc_service = document_service or get_document_service()
+    compare_service = comparison_service or get_statement_comparison_service()
+    mig_service = mig_graph_service or get_mig_graph_service()
+
+    logger.info(
+        "detect_contradictions_task_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
+
+    try:
+        # Get matter_id for the document
+        _, matter_id = doc_service.get_document_for_processing(doc_id)
+
+        # Get database client
+        client = get_service_client()
+        if client is None:
+            raise ComparisonServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+            )
+
+        # Track contradiction detection stage start (Story 2c-3)
+        _update_job_stage_start(job_id, "contradiction_detection", matter_id)
+
+        # Get entities mentioned in this document from chunks.entity_ids
+        response = (
+            client.table("chunks")
+            .select("entity_ids")
+            .eq("document_id", doc_id)
+            .not_.is_("entity_ids", "null")
+            .execute()
+        )
+
+        # Collect unique entity IDs
+        entity_ids: set[str] = set()
+        for chunk in response.data or []:
+            chunk_entities = chunk.get("entity_ids") or []
+            entity_ids.update(chunk_entities)
+
+        if not entity_ids:
+            logger.info(
+                "detect_contradictions_no_entities",
+                document_id=doc_id,
+            )
+            _update_job_stage_complete(
+                job_id,
+                "contradiction_detection",
+                matter_id,
+                metadata={"entities_processed": 0, "contradictions_found": 0},
+            )
+            return {
+                "status": "contradiction_detection_complete",
+                "document_id": doc_id,
+                "entities_processed": 0,
+                "contradictions_found": 0,
+                "reason": "No entities found in document",
+                "job_id": job_id,
+            }
+
+        # Limit entities for cost control
+        entities_to_process = list(entity_ids)[:CONTRADICTION_MAX_ENTITIES_PER_RUN]
+
+        logger.info(
+            "detect_contradictions_processing",
+            document_id=doc_id,
+            total_entities=len(entity_ids),
+            entities_to_process=len(entities_to_process),
+        )
+
+        # Process entities and detect contradictions
+        total_contradictions = 0
+        total_pairs_compared = 0
+        entities_processed = 0
+        entities_skipped = 0
+        total_cost_usd = 0.0
+
+        async def _detect_contradictions_async():
+            nonlocal total_contradictions, total_pairs_compared, entities_processed
+            nonlocal entities_skipped, total_cost_usd
+
+            for entity_id in entities_to_process:
+                try:
+                    # Compare statements for this entity
+                    comparison_result = await compare_service.compare_entity_statements(
+                        entity_id=entity_id,
+                        matter_id=matter_id,
+                        max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
+                        confidence_threshold=0.5,
+                        include_aliases=True,
+                    )
+
+                    # Aggregate results
+                    total_contradictions += comparison_result.meta.contradictions_found
+                    total_pairs_compared += comparison_result.meta.pairs_compared
+                    total_cost_usd += comparison_result.meta.total_cost_usd
+                    entities_processed += 1
+
+                    logger.debug(
+                        "detect_contradictions_entity_complete",
+                        document_id=doc_id,
+                        entity_id=entity_id,
+                        contradictions=comparison_result.meta.contradictions_found,
+                        pairs_compared=comparison_result.meta.pairs_compared,
+                    )
+
+                except Exception as e:
+                    # Log but continue with other entities
+                    logger.warning(
+                        "detect_contradictions_entity_failed",
+                        document_id=doc_id,
+                        entity_id=entity_id,
+                        error=str(e),
+                    )
+                    entities_skipped += 1
+
+        # Run async comparison
+        asyncio.run(_detect_contradictions_async())
+
+        # Broadcast contradiction detection completion
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=doc_id,
+            status="contradictions_detected",
+            contradictions_found=total_contradictions,
+        )
+
+        # Track contradiction detection stage completion
+        _update_job_stage_complete(
+            job_id,
+            "contradiction_detection",
+            matter_id,
+            metadata={
+                "entities_processed": entities_processed,
+                "entities_skipped": entities_skipped,
+                "contradictions_found": total_contradictions,
+                "pairs_compared": total_pairs_compared,
+                "cost_usd": total_cost_usd,
+            },
+        )
+
+        # Broadcast contradictions feature availability
+        broadcast_feature_ready(
+            matter_id=matter_id,
+            document_id=doc_id,
+            feature=FeatureType.ENTITIES,  # Use ENTITIES for now since no CONTRADICTIONS type
+            metadata={
+                "contradictions_count": total_contradictions,
+                "entities_analyzed": entities_processed,
+            },
+        )
+
+        logger.info(
+            "detect_contradictions_task_completed",
+            document_id=doc_id,
+            entities_processed=entities_processed,
+            entities_skipped=entities_skipped,
+            contradictions_found=total_contradictions,
+            pairs_compared=total_pairs_compared,
+            cost_usd=total_cost_usd,
+        )
+
+        return {
+            "status": "contradictions_detected",
+            "document_id": doc_id,
+            "entities_processed": entities_processed,
+            "entities_skipped": entities_skipped,
+            "contradictions_found": total_contradictions,
+            "pairs_compared": total_pairs_compared,
+            "cost_usd": total_cost_usd,
+            "job_id": job_id,
+        }
+
+    except ComparisonServiceError as e:
+        retry_count = self.request.retries
+
+        logger.warning(
+            "detect_contradictions_task_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            max_retries=3,
+            error=str(e),
+        )
+
+        if retry_count >= 3:
+            logger.error(
+                "detect_contradictions_task_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+            return {
+                "status": "contradiction_detection_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+            }
+
+        raise
+
+    except DocumentServiceError as e:
+        logger.error(
+            "detect_contradictions_document_error",
+            document_id=doc_id,
+            error=str(e),
+        )
+        return {
+            "status": "contradiction_detection_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+        }
+
+    except Exception as e:
+        logger.error(
+            "detect_contradictions_unexpected_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),

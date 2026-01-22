@@ -57,6 +57,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("application_starting", app_name=app.title)
 
+    # Clear LRU caches on startup to ensure fresh instances
+    from app.engines.orchestrator.adapters import get_cached_adapter
+    from app.engines.orchestrator.aggregator import get_result_aggregator
+    from app.engines.orchestrator.streaming import reset_streaming_orchestrator
+
+    get_cached_adapter.cache_clear()
+    get_result_aggregator.cache_clear()
+    reset_streaming_orchestrator()
+    logger.info("singleton_caches_cleared")
+
     settings = get_settings()
     if not settings.is_configured:
         logger.warning(

@@ -200,16 +200,17 @@ class StreamingOrchestrator:
             # Calculate total time
             total_time_ms = int((time.perf_counter() - start_time) * 1000)
 
-            # Task 4.4: Save assistant response to session
+            # Convert sources to event format (needed for both save and SSE event)
+            sources = self._convert_sources(result)
+
+            # Task 4.4: Save assistant response to session (with sources)
             await self._save_assistant_response(
                 matter_id=matter_id,
                 user_id=user_id,
                 response=response_text,
                 message_id=message_id,
+                sources=sources,
             )
-
-            # Convert sources to event format
-            sources = self._convert_sources(result)
 
             # Task 3.7: Emit complete event with full trace summary
             complete_event = StreamCompleteEvent(
@@ -310,6 +311,7 @@ class StreamingOrchestrator:
         user_id: str,
         response: str,
         message_id: str,
+        sources: list[SourceReferenceEvent] | None = None,
     ) -> None:
         """Save assistant response to session memory.
 
@@ -320,18 +322,33 @@ class StreamingOrchestrator:
             user_id: User UUID.
             response: Full assistant response.
             message_id: Message ID for tracking.
+            sources: Optional source references from engine results.
         """
         try:
+            # Convert SourceReferenceEvent to dicts for session storage
+            source_refs = None
+            if sources:
+                source_refs = [
+                    {
+                        "document_id": s.document_id,
+                        "document_name": s.document_name or "Unknown Document",
+                        "page": s.page,
+                    }
+                    for s in sources
+                ]
+
             await self.session_service.add_message(
                 matter_id=matter_id,
                 user_id=user_id,
                 role="assistant",
                 content=response,
+                source_refs=source_refs,
             )
             logger.debug(
                 "assistant_response_saved",
                 matter_id=matter_id,
                 message_id=message_id,
+                sources_count=len(sources) if sources else 0,
             )
         except Exception as e:
             logger.warning(
@@ -386,6 +403,13 @@ class StreamingOrchestrator:
         sources: list[SourceReferenceEvent] = []
 
         for source in result.sources:
+            # DEBUG: Log document_name during conversion
+            logger.debug(
+                "convert_source",
+                document_id=source.document_id[:8] if source.document_id else None,
+                document_name=source.document_name,
+                has_doc_name=source.document_name is not None,
+            )
             sources.append(
                 SourceReferenceEvent(
                     document_id=source.document_id,

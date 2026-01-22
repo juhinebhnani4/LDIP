@@ -246,16 +246,31 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
         case 'complete': {
           // Transform API response to camelCase (handles both snake_case and camelCase)
           const rawData = eventData as Record<string, unknown>;
+          // DEBUG: Log raw source data to trace document_name flow
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[useSSE] complete event raw sources:', rawData.sources);
+          }
           const completeData: CompleteData = {
             response: (rawData.response as string) ?? '',
             sources: ((rawData.sources as Array<Record<string, unknown>>) ?? []).map(
-              (s) => ({
-                documentId: ((s.documentId ?? s.document_id) as string) ?? '',
-                documentName: (s.documentName ?? s.document_name) as string | undefined,
-                page: s.page as number | undefined,
-                chunkId: (s.chunkId ?? s.chunk_id) as string | undefined,
-                confidence: s.confidence as number | undefined,
-              })
+              (s) => {
+                const docName = (s.documentName ?? s.document_name) as string | undefined;
+                // DEBUG: Log each source's document_name
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[useSSE] source transform:', {
+                    raw_documentName: s.documentName,
+                    raw_document_name: s.document_name,
+                    resolved: docName,
+                  });
+                }
+                return {
+                  documentId: ((s.documentId ?? s.document_id) as string) ?? '',
+                  documentName: docName,
+                  page: s.page as number | undefined,
+                  chunkId: (s.chunkId ?? s.chunk_id) as string | undefined,
+                  confidence: s.confidence as number | undefined,
+                };
+              }
             ),
             engineTraces: (
               ((rawData.engineTraces ?? rawData.engine_traces) as Array<Record<string, unknown>>) ?? []

@@ -476,11 +476,14 @@ class ContradictionEngineAdapter(EngineAdapter):
 
 
 class RAGEngineAdapter(EngineAdapter):
-    """Adapter for RAG Hybrid Search (Epic 2B).
+    """Adapter for RAG Hybrid Search + Answer Generation (Epic 2B, Story 6-2).
 
-    Story 6-2: Wraps hybrid search with reranking for orchestrator.
+    Story 6-2: Wraps hybrid search with reranking and LLM answer synthesis.
 
-    Uses HybridSearchService for general document queries.
+    Pipeline:
+    1. Hybrid search (BM25 + semantic) with RRF fusion
+    2. Cohere reranking for top results
+    3. Gemini answer generation from retrieved chunks
     """
 
     @property
@@ -490,6 +493,8 @@ class RAGEngineAdapter(EngineAdapter):
     def __init__(self) -> None:
         """Initialize RAG engine adapter."""
         self._search = None
+        self._generator = None
+        self._supabase = None
         logger.debug("rag_adapter_initialized")
 
     def _get_search(self):
@@ -500,13 +505,94 @@ class RAGEngineAdapter(EngineAdapter):
             self._search = get_hybrid_search_service()
         return self._search
 
+    def _get_generator(self):
+        """Lazy-load RAG answer generator."""
+        if self._generator is None:
+            from app.engines.rag.generator import get_rag_generator
+
+            self._generator = get_rag_generator()
+        return self._generator
+
+    def _get_supabase(self):
+        """Lazy-load Supabase client for document lookups."""
+        if self._supabase is None:
+            from app.services.supabase.client import get_supabase_client
+
+            self._supabase = get_supabase_client()
+        return self._supabase
+
+    async def _get_document_names(
+        self,
+        document_ids: list[str],
+    ) -> dict[str, str]:
+        """Fetch document filenames for given IDs.
+
+        Args:
+            document_ids: List of document UUIDs.
+
+        Returns:
+            Dict mapping document_id to filename.
+        """
+        if not document_ids:
+            logger.debug("rag_document_names_empty_ids")
+            return {}
+
+        try:
+            supabase = self._get_supabase()
+            logger.debug(
+                "rag_document_names_query",
+                document_ids=[d[:8] for d in document_ids],
+            )
+            result = (
+                supabase.table("documents")
+                .select("id, filename")
+                .in_("id", document_ids)
+                .execute()
+            )
+
+            # DEBUG: Log what we got back from the database
+            logger.debug(
+                "rag_document_names_result",
+                result_count=len(result.data) if result.data else 0,
+                sample_data=[
+                    {"id": doc.get("id", "")[:8], "filename": doc.get("filename")}
+                    for doc in (result.data or [])[:3]
+                ],
+            )
+
+            doc_names = {
+                str(doc["id"]): doc.get("filename", "Unknown Document")
+                for doc in result.data
+            }
+
+            logger.debug(
+                "rag_document_names_mapped",
+                mapped_count=len(doc_names),
+                sample_names=list(doc_names.items())[:2],
+            )
+
+            return doc_names
+        except Exception as e:
+            logger.warning(
+                "rag_document_names_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                document_count=len(document_ids),
+            )
+            return {}
+
     async def execute(
         self,
         matter_id: str,
         query: str,
         context: dict[str, Any] | None = None,
     ) -> EngineExecutionResult:
-        """Execute RAG search for the query.
+        """Execute RAG search and generate answer.
+
+        Pipeline:
+        1. Hybrid search with reranking
+        2. Fetch document names for citations
+        3. Generate grounded answer with Gemini
 
         Args:
             matter_id: Matter UUID.
@@ -514,11 +600,12 @@ class RAGEngineAdapter(EngineAdapter):
             context: Optional context.
 
         Returns:
-            EngineExecutionResult with search results.
+            EngineExecutionResult with generated answer and sources.
         """
         start_time = time.time()
 
         try:
+            # Step 1: Hybrid search with reranking
             search = self._get_search()
             settings = get_settings()
             results = await search.search_with_rerank(
@@ -528,17 +615,44 @@ class RAGEngineAdapter(EngineAdapter):
                 rerank_top_n=settings.rag_rerank_top_n,
             )
 
-            # Convert search results to dict format
+            # Step 2: Get document names for citations
+            document_ids = list({item.document_id for item in results.results})
+            doc_names = await self._get_document_names(document_ids)
+
+            # Step 3: Prepare chunks for generation with document names
+            chunks_for_generation = [
+                {
+                    "chunk_id": item.id,
+                    "document_id": item.document_id,
+                    "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                    "content": item.content,
+                    "page_number": item.page_number,
+                    "relevance_score": item.relevance_score,
+                }
+                for item in results.results
+            ]
+
+            # Step 4: Generate answer with Gemini
+            generator = self._get_generator()
+            answer_result = await generator.generate_answer(
+                query=query,
+                chunks=chunks_for_generation,
+            )
+
+            # Build response data
             rag_data = {
+                "answer": answer_result.answer,
                 "total_candidates": results.total_candidates,
                 "rerank_used": results.rerank_used,
+                "generation_time_ms": answer_result.generation_time_ms,
+                "model_used": answer_result.model_used,
                 "results": [
                     {
                         "chunk_id": item.id,
                         "document_id": item.document_id,
-                        "content": item.content[:500],  # Preview first 500 chars
+                        "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                        "content": item.content[:500],  # Preview for UI
                         "page_number": item.page_number,
-                        "rrf_score": item.rrf_score,
                         "relevance_score": item.relevance_score,
                     }
                     for item in results.results
@@ -558,6 +672,7 @@ class RAGEngineAdapter(EngineAdapter):
                 total_candidates=results.total_candidates,
                 results_returned=len(results.results),
                 rerank_used=results.rerank_used,
+                answer_length=len(answer_result.answer),
                 execution_time_ms=execution_time_ms,
             )
 
@@ -627,3 +742,8 @@ def get_cached_adapter(engine_type: EngineType) -> EngineAdapter:
         EngineAdapter instance.
     """
     return get_adapter(engine_type)
+
+
+def clear_adapter_cache() -> None:
+    """Clear the adapter cache (for testing/reload)."""
+    get_cached_adapter.cache_clear()

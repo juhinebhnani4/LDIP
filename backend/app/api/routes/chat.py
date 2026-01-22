@@ -117,6 +117,21 @@ async def stream_chat(
                 query=body.query,
                 session_id=body.session_id,
             ):
+                # DEBUG: Log complete event sources to trace document_name
+                if event.type.value == "complete":
+                    sources = event.data.get("sources", [])
+                    logger.debug(
+                        "sse_complete_event_sources",
+                        sources_count=len(sources),
+                        sample_sources=[
+                            {
+                                "document_id": s.get("document_id", "")[:8],
+                                "document_name": s.get("document_name"),
+                                "has_doc_name": s.get("document_name") is not None,
+                            }
+                            for s in sources[:3]
+                        ],
+                    )
                 yield {
                     "event": event.type.value,
                     "data": json.dumps(event.data),

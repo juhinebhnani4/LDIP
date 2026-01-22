@@ -95,6 +95,14 @@ export function QAPanel({ matterId, userId, onSourceClick }: QAPanelProps) {
       chunkId: s.chunkId,
       confidence: s.confidence,
     }));
+    // DEBUG: Log sources before storing
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[QAPanel] handleComplete sources:', sources.map(s => ({
+        documentId: s.documentId.slice(0, 8) + '...',
+        documentName: s.documentName,
+        page: s.page,
+      })));
+    }
     completeStreaming(data.response, traces, sources);
     // Story 13.4: Clear error state on success
     setStreamError(null);

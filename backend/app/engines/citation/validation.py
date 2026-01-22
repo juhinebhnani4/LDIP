@@ -15,6 +15,7 @@ from enum import Enum
 from app.core.config import get_settings
 from app.core.data_loader import (
     get_garbage_patterns,
+    get_generic_terms,
     get_valid_act_keywords,
     get_valid_act_suffixes,
 )
@@ -267,6 +268,8 @@ class ActValidationService:
         These are terms that are too vague to be useful, even if they match
         in the abbreviations dictionary via fuzzy matching.
 
+        Generic terms are loaded from validation_rules.json.
+
         Args:
             act_name: The cleaned act name.
 
@@ -280,18 +283,8 @@ class ActValidationService:
         # Remove year suffix
         lower = re.sub(r",?\s*\d{4}\s*$", "", lower).strip()
 
-        # List of generic terms that are too vague
-        generic_terms = {
-            # Single word suffixes
-            "act", "the act", "code", "the code", "ordinance", "the ordinance",
-            "rules", "the rules", "regulations", "the regulations",
-            "bill", "the bill", "amendment", "the amendment",
-            "notification", "the notification",
-            # Hindi equivalents
-            "adhiniyam", "sanhita", "niyam",
-            # Other vague terms
-            "of india", "india",
-        }
+        # Get generic terms from JSON config
+        generic_terms = get_generic_terms()
 
         return lower in generic_terms
 

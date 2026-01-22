@@ -24,6 +24,10 @@ from app.engines.citation.abbreviations import (
     get_display_name,
     normalize_act_name,
 )
+from app.engines.citation.validation import (
+    ActValidationService,
+    ValidationStatus,
+)
 from app.models.citation import (
     ActResolution,
     ActResolutionStatus,
@@ -178,8 +182,20 @@ class CitationStorageService:
                     saved_count += len(result.data)
 
                     # Update act resolutions for each unique act in batch
+                    # Skip acts that are detected as garbage
+                    validation_service = ActValidationService()
                     unique_acts = set(r["act_name"] for r in records)
                     for act_name in unique_acts:
+                        # Validate act name before creating resolution
+                        validation_result = validation_service.validate(act_name)
+                        if validation_result.validation_status == ValidationStatus.INVALID:
+                            logger.debug(
+                                "skipping_garbage_act",
+                                act_name=act_name,
+                                reason=validation_result.garbage_patterns_matched,
+                            )
+                            continue
+
                         await self.create_or_update_act_resolution(
                             matter_id=matter_id,
                             act_name=act_name,

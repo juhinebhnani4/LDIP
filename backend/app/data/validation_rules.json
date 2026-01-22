@@ -107,5 +107,28 @@
       "pattern": "\\s+who\\s+has\\s+been",
       "description": "Relative clause"
     }
+  ],
+  "generic_terms": [
+    "act",
+    "the act",
+    "code",
+    "the code",
+    "ordinance",
+    "the ordinance",
+    "rules",
+    "the rules",
+    "regulations",
+    "the regulations",
+    "bill",
+    "the bill",
+    "amendment",
+    "the amendment",
+    "notification",
+    "the notification",
+    "adhiniyam",
+    "sanhita",
+    "niyam",
+    "of india",
+    "india"
   ]
 }

@@ -213,6 +213,29 @@ def get_valid_act_keywords() -> set[str]:
     return set(rules.get("valid_keywords", []))
 
 
+def get_generic_terms() -> set[str]:
+    """Get generic terms that should always be considered invalid.
+
+    These are terms that are too vague to be useful act names,
+    like "the Act" or "Ordinance" alone.
+
+    Returns:
+        Set of generic term strings (lowercase).
+    """
+    rules = get_validation_rules()
+    terms = rules.get("generic_terms", [])
+
+    if not terms:
+        # Fallback defaults
+        return {
+            "act", "the act", "code", "the code", "ordinance", "the ordinance",
+            "rules", "the rules", "regulations", "the regulations",
+            "bill", "the bill", "amendment", "the amendment",
+        }
+
+    return set(t.lower() for t in terms)
+
+
 # =============================================================================
 # Act Abbreviations Data
 # =============================================================================

@@ -212,6 +212,16 @@ class StreamingOrchestrator:
                 sources=sources,
             )
 
+            # RAG Production Gaps - Feature 2: Auto-evaluation hook
+            # Trigger async evaluation if enabled (non-blocking)
+            await self._trigger_auto_evaluation(
+                matter_id=matter_id,
+                query=query,
+                response=response_text,
+                result=result,
+                message_id=message_id,
+            )
+
             # Task 3.7: Emit complete event with full trace summary
             complete_event = StreamCompleteEvent(
                 response=response_text,
@@ -353,6 +363,81 @@ class StreamingOrchestrator:
         except Exception as e:
             logger.warning(
                 "assistant_response_save_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+
+    async def _trigger_auto_evaluation(
+        self,
+        matter_id: str,
+        query: str,
+        response: str,
+        result: OrchestratorResult,
+        message_id: str,
+    ) -> None:
+        """Trigger async evaluation of chat response if enabled.
+
+        RAG Production Gaps - Feature 2: Auto-evaluation hook.
+
+        This queues an evaluation task to run asynchronously via Celery.
+        The task is non-blocking and failures don't affect the chat response.
+
+        Args:
+            matter_id: Matter UUID.
+            query: User's question.
+            response: Generated response.
+            result: Orchestrator result with sources/contexts.
+            message_id: Message ID for linking.
+        """
+        try:
+            from app.core.config import get_settings
+
+            settings = get_settings()
+
+            if not settings.auto_evaluation_enabled:
+                return
+
+            # Extract contexts from RAG results
+            contexts: list[str] = []
+            for engine_result in result.engine_results:
+                if engine_result.data:
+                    chunks = engine_result.data.get("chunks", [])
+                    for chunk in chunks:
+                        if isinstance(chunk, dict) and "content" in chunk:
+                            contexts.append(chunk["content"])
+                        elif isinstance(chunk, str):
+                            contexts.append(chunk)
+
+            if not contexts:
+                logger.debug(
+                    "auto_evaluation_skipped_no_contexts",
+                    matter_id=matter_id,
+                    message_id=message_id,
+                )
+                return
+
+            # Queue async evaluation task
+            from app.workers.tasks.evaluation_tasks import evaluate_chat_response
+
+            evaluate_chat_response.delay(
+                matter_id=matter_id,
+                question=query,
+                answer=response,
+                contexts=contexts[:10],  # Limit contexts
+                chat_message_id=message_id,
+            )
+
+            logger.debug(
+                "auto_evaluation_triggered",
+                matter_id=matter_id,
+                message_id=message_id,
+                context_count=len(contexts),
+            )
+
+        except Exception as e:
+            # Non-blocking: log warning but don't fail chat
+            logger.warning(
+                "auto_evaluation_trigger_failed",
                 matter_id=matter_id,
                 error=str(e),
             )

@@ -145,6 +145,12 @@ export {
   selectPdfChunkId,
 } from './pdfSplitViewStore';
 
+// Inspector store for debug/inspector mode (RAG Production Gaps - Feature 3)
+export {
+  useInspectorStore,
+  selectIsDebugActive,
+} from './inspectorStore';
+
 // Future stores (to be added in later stories):
 // export { useMatterStore } from './matterStore';
 // export { useSessionStore } from './sessionStore';

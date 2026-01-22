@@ -41,6 +41,14 @@ interface UploadActions {
   /** Update status for a file by ID */
   updateStatus: (id: string, status: UploadStatus, error?: string) => void;
 
+  /** Update file after compression */
+  updateFileAfterCompression: (
+    id: string,
+    compressedFile: File,
+    originalSize: number,
+    compressionInfo: string
+  ) => void;
+
   /** Clear completed uploads from queue */
   clearCompleted: () => void;
 
@@ -95,6 +103,28 @@ export const useUploadStore = create<UploadStore>()((set) => ({
               status,
               error,
               progress: status === 'completed' ? 100 : f.progress,
+            }
+          : f
+      ),
+    }));
+  },
+
+  updateFileAfterCompression: (
+    id: string,
+    compressedFile: File,
+    originalSize: number,
+    compressionInfo: string
+  ) => {
+    set((state) => ({
+      uploadQueue: state.uploadQueue.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              file: compressedFile,
+              originalSize,
+              wasCompressed: true,
+              compressionInfo,
+              status: 'pending' as const,
             }
           : f
       ),

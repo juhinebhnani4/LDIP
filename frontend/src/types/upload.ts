@@ -83,9 +83,15 @@ export interface UploadProgress {
   /** Upload progress percentage (0-100) */
   progressPct: number;
   /** Upload status */
-  status: 'pending' | 'uploading' | 'complete' | 'error';
+  status: 'pending' | 'compressing' | 'uploading' | 'complete' | 'error';
   /** Error message if failed */
   errorMessage?: string;
+  /** Original file size before compression (if compressed) */
+  originalSize?: number;
+  /** Whether file was compressed */
+  wasCompressed?: boolean;
+  /** Compression info message */
+  compressionInfo?: string;
 }
 
 /**

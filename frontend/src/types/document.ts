@@ -15,7 +15,7 @@ export type DocumentStatus = 'pending' | 'processing' | 'ocr_complete' | 'comple
 export type OCRQualityStatus = 'good' | 'fair' | 'poor';
 
 /** Upload file status for UI tracking */
-export type UploadStatus = 'pending' | 'uploading' | 'completed' | 'error';
+export type UploadStatus = 'pending' | 'compressing' | 'uploading' | 'completed' | 'error';
 
 /** Tracked file in upload queue */
 export interface UploadFile {
@@ -24,6 +24,12 @@ export interface UploadFile {
   progress: number;
   status: UploadStatus;
   error?: string;
+  /** Original file size before compression */
+  originalSize?: number;
+  /** Whether file was compressed */
+  wasCompressed?: boolean;
+  /** Compression message for display */
+  compressionInfo?: string;
 }
 
 /** Validation result for file upload */

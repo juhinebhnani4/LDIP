@@ -1,3 +1,10 @@
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "migrations*"]
+
 [project]
 name = "ldip-backend"
 version = "0.1.0"
@@ -28,7 +35,15 @@ dependencies = [
     "tiktoken>=0.12.0",
     "uvicorn[standard]>=0.40.0",
     "python-multipart>=0.0.21",
+    "pypdf>=5.1.0",
     "sse-starlette>=2.0.0",
+    # Table Extraction (Feature 1)
+    "docling>=2.0.0",
+    "docling-core>=2.0.0",
+    "pandas>=2.0.0",
+    # Evaluation Framework (Feature 2)
+    "ragas>=0.2.0",
+    "datasets>=3.0.0",
 ]
 
 [dependency-groups]

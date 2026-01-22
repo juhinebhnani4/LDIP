@@ -11,7 +11,7 @@
  */
 
 import { useMemo } from 'react';
-import { CheckCircle2, Loader2, XCircle, File, RefreshCw, SkipForward, X } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, File, RefreshCw, SkipForward, X, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -57,6 +57,13 @@ function StatusIcon({ status }: { status: UploadProgress['status'] }) {
           aria-label="Upload failed"
         />
       );
+    case 'compressing':
+      return (
+        <Archive
+          className="size-5 text-amber-600 flex-shrink-0 animate-pulse"
+          aria-label="Compressing"
+        />
+      );
     case 'uploading':
       return (
         <Loader2
@@ -87,6 +94,7 @@ function FileProgressItem({ progress, onRetry, onSkip, onCancel }: FileProgressI
   const isComplete = progress.status === 'complete';
   const isError = progress.status === 'error';
   const isUploading = progress.status === 'uploading';
+  const isCompressing = progress.status === 'compressing';
   const isPending = progress.status === 'pending';
   const canCancel = (isUploading || isPending) && onCancel;
 
@@ -95,7 +103,8 @@ function FileProgressItem({ progress, onRetry, onSkip, onCancel }: FileProgressI
       className={cn(
         'flex flex-col gap-2 py-3 px-3 rounded-md transition-colors',
         isError && 'bg-destructive/5',
-        isComplete && 'bg-green-50 dark:bg-green-950/20'
+        isComplete && 'bg-green-50 dark:bg-green-950/20',
+        isCompressing && 'bg-amber-50 dark:bg-amber-950/20'
       )}
       aria-describedby={isError ? `error-${progress.fileName}` : undefined}
     >
@@ -117,6 +126,11 @@ function FileProgressItem({ progress, onRetry, onSkip, onCancel }: FileProgressI
           <span className="text-sm text-muted-foreground whitespace-nowrap">
             {formatFileSize(progress.fileSize)}
           </span>
+          {isCompressing && (
+            <span className="text-sm font-medium text-amber-600 whitespace-nowrap">
+              Compressing...
+            </span>
+          )}
           {isUploading && (
             <span className="text-sm font-medium text-primary min-w-[3ch]">
               {Math.round(progress.progressPct)}%
@@ -192,6 +206,22 @@ function FileProgressItem({ progress, onRetry, onSkip, onCancel }: FileProgressI
           className="h-1.5"
           aria-label={`Upload progress for ${progress.fileName}`}
         />
+      )}
+
+      {/* Compression info message */}
+      {progress.wasCompressed && progress.compressionInfo && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="text-xs text-amber-600 ml-8 truncate cursor-help max-w-[300px]">
+                Compressed: {formatFileSize(progress.originalSize ?? 0)} → {formatFileSize(progress.fileSize)}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[400px]">
+              <p className="text-sm">{progress.compressionInfo}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       {/* Error message with truncation and expand on hover */}

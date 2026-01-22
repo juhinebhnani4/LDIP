@@ -23,15 +23,18 @@ from app.api.routes import (
     dashboard,
     documents,
     entities,
+    evaluation,
     exports,
     global_search,
     health,
+    inspector,
     jobs,
     matters,
     notifications,
     ocr_validation,
     search,
     summary,
+    tables,
     timeline,
     users,
     verifications,
@@ -294,6 +297,10 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router, prefix="/api")
     app.include_router(notifications.router, prefix="/api")
     app.include_router(global_search.router, prefix="/api")
+    app.include_router(tables.router, prefix="/api")
+    app.include_router(tables.document_tables_router, prefix="/api")
+    app.include_router(evaluation.router, prefix="/api")
+    app.include_router(inspector.router, prefix="/api")
     app.include_router(users.router)
 
     # Admin routes (require admin access)

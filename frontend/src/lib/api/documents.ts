@@ -22,6 +22,12 @@ import type {
 } from '@/types/document';
 import { createClient } from '@/lib/supabase/client';
 import { useUploadStore } from '@/stores/uploadStore';
+import {
+  compressPdfIfNeeded,
+  needsCompression,
+  getCompressionStats,
+  COMPRESSION_THRESHOLD_BYTES,
+} from '@/lib/utils/pdf-compression';
 
 /** Backend API base URL */
 const API_BASE_URL = (() => {
@@ -156,7 +162,57 @@ export async function uploadFile(
 }
 
 /**
+ * Compress a file if it exceeds the size threshold.
+ * Updates the upload store with compression status.
+ *
+ * @param fileId - ID in upload store
+ * @param file - File to potentially compress
+ * @returns The file (compressed or original)
+ */
+async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
+  if (!needsCompression(file)) {
+    return file;
+  }
+
+  const store = useUploadStore.getState();
+
+  // Update status to compressing
+  store.updateStatus(fileId, 'compressing');
+
+  try {
+    const result = await compressPdfIfNeeded(file, (progress) => {
+      // Could add more granular progress here if needed
+      console.log(`[Compression] ${file.name}: ${progress.message}`);
+    });
+
+    if (result.wasCompressed) {
+      const compressionInfo = getCompressionStats(result);
+      store.updateFileAfterCompression(
+        fileId,
+        result.file,
+        result.originalSize,
+        compressionInfo
+      );
+      console.log(`[Compression] ${file.name}: ${compressionInfo}`);
+    } else if (result.warning) {
+      // File couldn't be compressed or is still too large
+      console.warn(`[Compression] ${file.name}: ${result.warning}`);
+    }
+
+    return result.file;
+  } catch (error) {
+    console.error(`[Compression] Failed for ${file.name}:`, error);
+    // Continue with original file if compression fails
+    store.updateStatus(fileId, 'pending');
+    return file;
+  }
+}
+
+/**
  * Upload multiple files with concurrency throttling
+ *
+ * Automatically compresses PDF files larger than 50MB before uploading
+ * to comply with Supabase storage limits.
  *
  * Limits concurrent uploads to MAX_CONCURRENT_UPLOADS to prevent
  * browser/network saturation when uploading many files at once.
@@ -174,11 +230,19 @@ export async function uploadFiles(
   useUploadStore.getState().setUploading(true);
 
   try {
+    // First, compress any large files
+    const filesToUpload: { id: string; file: File }[] = [];
+
+    for (const { id, file } of files) {
+      const processedFile = await compressFileIfNeeded(id, file);
+      filesToUpload.push({ id, file: processedFile });
+    }
+
     const results: PromiseSettledResult<UploadResponse>[] = [];
 
     // Process files in batches of MAX_CONCURRENT_UPLOADS
-    for (let i = 0; i < files.length; i += MAX_CONCURRENT_UPLOADS) {
-      const batch = files.slice(i, i + MAX_CONCURRENT_UPLOADS);
+    for (let i = 0; i < filesToUpload.length; i += MAX_CONCURRENT_UPLOADS) {
+      const batch = filesToUpload.slice(i, i + MAX_CONCURRENT_UPLOADS);
       const batchResults = await Promise.allSettled(
         batch.map(({ id, file }) =>
           uploadFile(file, id, { matterId, documentType })
@@ -192,6 +256,9 @@ export async function uploadFiles(
     useUploadStore.getState().setUploading(false);
   }
 }
+
+/** Re-export compression threshold for UI display */
+export { COMPRESSION_THRESHOLD_BYTES };
 
 // =============================================================================
 // Document List and Management API Functions

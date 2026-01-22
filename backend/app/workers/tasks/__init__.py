@@ -9,4 +9,6 @@ __all__ = [
     "engine_tasks",
     "verification_tasks",
     "maintenance_tasks",
+    "table_extraction_tasks",
+    "evaluation_tasks",
 ]

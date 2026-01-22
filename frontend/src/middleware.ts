@@ -62,6 +62,7 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||
     request.nextUrl.pathname.startsWith('/matter') ||
+    request.nextUrl.pathname.startsWith('/upload') ||
     request.nextUrl.pathname === '/';
 
   const isAuthRoute =

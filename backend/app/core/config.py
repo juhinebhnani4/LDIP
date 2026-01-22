@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Gemini Configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"  # Valid models: gemini-2.0-flash, gemini-1.5-pro
+    gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
@@ -106,7 +106,7 @@ class Settings(BaseSettings):
     verification_export_block_below: float = 70.0   # < 70% unverified = blocks export
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
     # Axiom Logging (Story 13.1)
     axiom_token: str = ""  # AXIOM_TOKEN env var
@@ -154,6 +154,18 @@ class Settings(BaseSettings):
     # Admin Configuration (Story 14.17)
     admin_emails: str = ""  # Comma-separated list of admin emails (ADMIN_EMAILS env var)
     rate_limit_admin: int = 10  # Admin operations rate limit (per minute)
+
+    # Table Extraction Configuration (RAG Production Gaps - Feature 1)
+    table_extraction_enabled: bool = True  # Master switch for table extraction
+    table_detection_confidence_threshold: float = 0.70  # Min confidence to include table
+
+    # Evaluation Framework Configuration (RAG Production Gaps - Feature 2)
+    auto_evaluation_enabled: bool = False  # Auto-evaluate after ingestion (cost warning)
+    openai_evaluation_model: str = "gpt-4"  # Model for RAGAS evaluation
+    evaluation_batch_size: int = 10  # Golden dataset items per batch
+
+    # Inspector Mode Configuration (RAG Production Gaps - Feature 3)
+    inspector_enabled: bool = True  # Enable search inspector endpoints
 
     @property
     def is_configured(self) -> bool:

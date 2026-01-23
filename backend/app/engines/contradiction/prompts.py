@@ -335,3 +335,98 @@ def validate_classification_response(parsed: dict) -> list[str]:
             errors.append(f"Invalid confidence value: {confidence}")
 
     return errors
+
+
+# =============================================================================
+# Gemini Screening Prompts (Cost Optimization - Two-Tier Routing)
+# =============================================================================
+
+GEMINI_SCREENING_SYSTEM_PROMPT = """You are a fast legal screening assistant. Your job is to QUICKLY determine if two statements potentially conflict.
+
+You do NOT need detailed analysis. Just quickly check:
+1. Do the statements discuss the SAME topic/fact about the entity?
+2. If yes, do they appear to conflict or agree?
+
+CLASSIFICATION (be conservative - when unsure, say "needs_review"):
+- consistent: Statements clearly agree or complement each other
+- unrelated: Statements discuss completely different topics
+- needs_review: Statements MIGHT conflict OR you're not sure - requires expert review
+
+IMPORTANT: It's better to flag something for review than to miss a potential contradiction.
+
+Respond ONLY with valid JSON."""
+
+GEMINI_SCREENING_USER_PROMPT = """Entity: {entity_name}
+
+Statement A: "{content_a}"
+
+Statement B: "{content_b}"
+
+Quick assessment - do these statements conflict?
+
+Respond with JSON:
+{{
+  "result": "consistent|unrelated|needs_review",
+  "confidence": 0.0-1.0,
+  "quick_reason": "One sentence explanation"
+}}"""
+
+
+def format_screening_prompt(
+    entity_name: str,
+    content_a: str,
+    content_b: str,
+) -> str:
+    """Format the user prompt for Gemini screening.
+
+    Cost optimization: Quick screening before full GPT-4 analysis.
+
+    Args:
+        entity_name: Name of the entity being discussed.
+        content_a: Content of statement A.
+        content_b: Content of statement B.
+
+    Returns:
+        Formatted prompt string.
+    """
+    return GEMINI_SCREENING_USER_PROMPT.format(
+        entity_name=entity_name,
+        content_a=content_a,
+        content_b=content_b,
+    )
+
+
+def validate_screening_response(parsed: dict) -> list[str]:
+    """Validate parsed Gemini screening response.
+
+    Args:
+        parsed: Parsed JSON response from Gemini.
+
+    Returns:
+        List of validation errors (empty if valid).
+    """
+    errors: list[str] = []
+
+    # Check required fields
+    required_fields = ["result", "confidence"]
+    for field in required_fields:
+        if field not in parsed:
+            errors.append(f"Missing required field: {field}")
+
+    # Validate result enum
+    valid_results = {"consistent", "unrelated", "needs_review"}
+    result = parsed.get("result", "").lower()
+    if result and result not in valid_results:
+        errors.append(f"Invalid result '{result}'. Must be one of: {valid_results}")
+
+    # Validate confidence range
+    confidence = parsed.get("confidence")
+    if confidence is not None:
+        try:
+            conf_val = float(confidence)
+            if conf_val < 0.0 or conf_val > 1.0:
+                errors.append(f"Confidence {conf_val} out of range [0.0, 1.0]")
+        except (TypeError, ValueError):
+            errors.append(f"Invalid confidence value: {confidence}")
+
+    return errors

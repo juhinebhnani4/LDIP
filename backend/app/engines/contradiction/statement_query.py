@@ -584,7 +584,7 @@ class StatementQueryEngine:
         def _query():
             return (
                 self._client.table("documents")
-                .select("id, name")
+                .select("id, filename")
                 .in_("id", document_ids)
                 .execute()
             )
@@ -592,7 +592,7 @@ class StatementQueryEngine:
         response = await asyncio.to_thread(_query)
 
         return {
-            doc["id"]: doc.get("name", "Unknown")
+            doc["id"]: doc.get("filename", "Unknown")
             for doc in (response.data or [])
         }
 

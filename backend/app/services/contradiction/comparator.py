@@ -193,7 +193,8 @@ class StatementComparisonService:
                 raise TooManyStatementsError(statement_count, ASYNC_THRESHOLD)
 
             # Get all statements for entity using pagination to avoid OOM
-            all_statements_data = []
+            # The response structure is: EntityStatements.documents[].statements[]
+            all_documents_data: dict[str, list] = {}  # doc_id -> statements
             stmt_page = 1
             batch_size = 200
 
@@ -206,19 +207,24 @@ class StatementComparisonService:
                     per_page=batch_size,
                 )
 
-                if statement_response.data.statements:
-                    all_statements_data.extend(statement_response.data.statements)
+                # Collect statements from each document
+                for doc in statement_response.data.documents:
+                    if doc.document_id not in all_documents_data:
+                        all_documents_data[doc.document_id] = []
+                    all_documents_data[doc.document_id].extend(doc.statements)
+
+                # Count total statements loaded
+                total_loaded = sum(len(stmts) for stmts in all_documents_data.values())
 
                 # Check if we've loaded all
-                if len(all_statements_data) >= statement_response.data.total_statements:
+                if total_loaded >= statement_response.data.total_statements:
                     break
-                if not statement_response.data.statements:
+                if not statement_response.data.documents:
                     break
                 stmt_page += 1
 
+            # Use the last response as base and it already has the correct structure
             entity_statements = statement_response.data
-            # Update statements list with all loaded data
-            entity_statements.statements = all_statements_data
 
             # Handle empty/single statement case
             if entity_statements.total_statements < 2:

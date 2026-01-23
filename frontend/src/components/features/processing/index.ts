@@ -10,3 +10,15 @@ export { JobProgressCard } from './JobProgressCard';
 export { FailedJobCard } from './FailedJobCard';
 export { ProcessingQueue } from './ProcessingQueue';
 export { StuckJobsBanner } from './StuckJobsBanner';
+
+// Skeleton loading components for improved perceived performance
+export {
+  DocumentCardSkeleton,
+  ProcessingQueueSkeleton,
+  EntityPanelSkeleton,
+  CitationListSkeleton,
+  TimelineSkeleton,
+  DocumentSidebarSkeleton,
+  FeatureProcessingSkeleton,
+  ProcessingOverlaySkeleton,
+} from './ProcessingSkeleton';

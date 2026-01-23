@@ -1330,44 +1330,60 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
                 }
 
                 # Get all citations for this matter with act_unavailable status
-                citations_response = (
-                    client.table("citations")
-                    .select("id, act_name")
-                    .eq("matter_id", matter_id)
-                    .eq("verification_status", "act_unavailable")
-                    .execute()
-                )
-
-                citations = citations_response.data or []
-
-                if not citations:
-                    continue
-
-                # Find citations where Act is actually available
+                # Handle pagination (Supabase returns max 1000 rows per request)
                 citations_to_update = []
-                for citation in citations:
-                    citation_normalized = normalize_act_name(citation.get("act_name", ""))
-                    if citation_normalized in available_normalized_names:
-                        citations_to_update.append(citation["id"])
+                offset = 0
+                page_size = 1000
+
+                while True:
+                    citations_response = (
+                        client.table("citations")
+                        .select("id, act_name")
+                        .eq("matter_id", matter_id)
+                        .eq("verification_status", "act_unavailable")
+                        .range(offset, offset + page_size - 1)
+                        .execute()
+                    )
+
+                    citations = citations_response.data or []
+                    if not citations:
+                        break
+
+                    # Find citations where Act is actually available
+                    for citation in citations:
+                        citation_normalized = normalize_act_name(citation.get("act_name", ""))
+                        if citation_normalized in available_normalized_names:
+                            citations_to_update.append(citation["id"])
+
+                    # If we got fewer than page_size, we've reached the end
+                    if len(citations) < page_size:
+                        break
+                    offset += page_size
 
                 if not citations_to_update:
                     continue
 
-                # Batch update citation statuses
+                # Batch update citation statuses (max 100 per request to avoid JSON errors)
                 from datetime import UTC, datetime
 
-                client.table("citations").update({
-                    "verification_status": "pending",
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }).in_("id", citations_to_update).execute()
+                UPDATE_BATCH_SIZE = 100
+                matter_updated = 0
 
-                results["citations_updated"] += len(citations_to_update)
-                results["act_unavailable_to_pending"] += len(citations_to_update)
+                for i in range(0, len(citations_to_update), UPDATE_BATCH_SIZE):
+                    batch = citations_to_update[i:i + UPDATE_BATCH_SIZE]
+                    update_result = client.table("citations").update({
+                        "verification_status": "pending",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }).in_("id", batch).execute()
+                    matter_updated += len(update_result.data) if update_result.data else 0
+
+                results["citations_updated"] += matter_updated
+                results["act_unavailable_to_pending"] += matter_updated
 
                 logger.info(
                     "citation_statuses_synced",
                     matter_id=matter_id,
-                    citations_updated=len(citations_to_update),
+                    citations_updated=matter_updated,
                 )
 
             except Exception as e:

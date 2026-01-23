@@ -696,3 +696,239 @@ class TestGetCitationStorageService:
         service = get_citation_storage_service()
 
         assert isinstance(service, CitationStorageService)
+
+
+class TestNormalizedActNameMatching:
+    """Tests for normalized act name matching in storage queries.
+
+    These tests ensure that citations can be found even when act names
+    have slight variations (case, year presence, etc.).
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_citations_for_act_matches_by_normalized_name(self) -> None:
+        """Should find citations using normalized name matching.
+
+        Scenario: Citations stored as 'Torts Act' should match query for 'TORTS Act 1992'.
+        """
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+
+        # Build a chain mock that supports any method call sequence
+        mock_chain = MagicMock()
+        mock_table.select.return_value = mock_chain
+        mock_chain.eq.return_value = mock_chain
+        mock_chain.order.return_value = mock_chain
+        mock_chain.execute.return_value = MagicMock(
+            data=[
+                {
+                    "id": "cit-1",
+                    "matter_id": "matter-123",
+                    "source_document_id": "doc-456",
+                    "act_name": "Torts Act",  # Stored without year
+                    "section": "5",
+                    "source_page": 1,
+                    "verification_status": "pending",
+                    "confidence": 0.85,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "id": "cit-2",
+                    "matter_id": "matter-123",
+                    "source_document_id": "doc-456",
+                    "act_name": "TORTS Act 1992",  # Stored with year and caps
+                    "section": "10",
+                    "source_page": 2,
+                    "verification_status": "pending",
+                    "confidence": 0.90,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "id": "cit-3",
+                    "matter_id": "matter-123",
+                    "source_document_id": "doc-456",
+                    "act_name": "Companies Act",  # Different act - should not match
+                    "section": "15",
+                    "source_page": 3,
+                    "verification_status": "pending",
+                    "confidence": 0.80,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            ]
+        )
+
+        mock_client.table.return_value = mock_table
+
+        with patch(
+            "app.engines.citation.storage.get_service_client",
+            return_value=mock_client,
+        ):
+            service = CitationStorageService()
+
+            # Query with different casing and year (exclude_verified=False to simplify test)
+            citations = await service.get_citations_for_act(
+                matter_id="matter-123",
+                act_name="TORTS Act 1992",
+                exclude_verified=False,
+            )
+
+            # Should match both Torts Act variations, not Companies Act
+            assert len(citations) == 2
+            act_names = {c.act_name for c in citations}
+            assert "Torts Act" in act_names
+            assert "TORTS Act 1992" in act_names
+            assert "Companies Act" not in act_names
+
+    @pytest.mark.asyncio
+    async def test_get_citations_for_act_normalizes_query_and_rows(self) -> None:
+        """Should normalize both query param and database rows for matching."""
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+
+        # Build a chain mock that supports any method call sequence
+        mock_chain = MagicMock()
+        mock_table.select.return_value = mock_chain
+        mock_chain.eq.return_value = mock_chain
+        mock_chain.order.return_value = mock_chain
+        mock_chain.execute.return_value = MagicMock(
+            data=[
+                {
+                    "id": "cit-1",
+                    "matter_id": "matter-123",
+                    "source_document_id": "doc-456",
+                    "act_name": "negotiable instruments act, 1881",  # lowercase with comma
+                    "section": "138",
+                    "source_page": 1,
+                    "verification_status": "pending",
+                    "confidence": 0.95,
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "updated_at": "2024-01-01T00:00:00Z",
+                },
+            ]
+        )
+
+        mock_client.table.return_value = mock_table
+
+        with patch(
+            "app.engines.citation.storage.get_service_client",
+            return_value=mock_client,
+        ):
+            service = CitationStorageService()
+
+            # Query with abbreviation (exclude_verified=False to simplify test)
+            citations = await service.get_citations_for_act(
+                matter_id="matter-123",
+                act_name="NI Act",  # Common abbreviation
+                exclude_verified=False,
+            )
+
+            # Should match because both normalize to negotiable_instruments_act_1881
+            assert len(citations) == 1
+            assert citations[0].act_name == "negotiable instruments act, 1881"
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_verification_status_uses_normalized_matching(
+        self,
+    ) -> None:
+        """Should update citations matching by normalized name, not exact string.
+
+        Scenario: Update all 'Torts Act' citations to verified status,
+        regardless of how the act_name is stored (with/without year, different case).
+        """
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+
+        # Step 1: Get candidates (all pending citations)
+        mock_select = MagicMock()
+        mock_eq_matter = MagicMock()
+        mock_eq_status = MagicMock()
+
+        mock_table.select.return_value = mock_select
+        mock_select.eq.return_value = mock_eq_matter
+        mock_eq_matter.eq.return_value = mock_eq_status
+        mock_eq_status.execute.return_value = MagicMock(
+            data=[
+                {"id": "cit-1", "act_name": "Torts Act"},  # Should match
+                {"id": "cit-2", "act_name": "TORTS Act 1992"},  # Should match
+                {"id": "cit-3", "act_name": "torts act"},  # Should match
+                {"id": "cit-4", "act_name": "Companies Act"},  # Should NOT match
+            ]
+        )
+
+        # Step 2: Update matching citations
+        mock_update = MagicMock()
+        mock_in = MagicMock()
+        mock_table.update.return_value = mock_update
+        mock_update.in_.return_value = mock_in
+        mock_in.execute.return_value = MagicMock(
+            data=[{"id": "cit-1"}, {"id": "cit-2"}, {"id": "cit-3"}]
+        )
+
+        mock_client.table.return_value = mock_table
+
+        with patch(
+            "app.engines.citation.storage.get_service_client",
+            return_value=mock_client,
+        ):
+            service = CitationStorageService()
+
+            updated_count = await service.bulk_update_verification_status(
+                matter_id="matter-123",
+                act_name="Torts Act 1992",
+                from_status=VerificationStatus.PENDING,
+                to_status=VerificationStatus.VERIFIED,
+            )
+
+            # Should have updated 3 citations (all Torts Act variants)
+            assert updated_count == 3
+
+            # Verify update was called with correct IDs
+            mock_update.in_.assert_called_once()
+            call_args = mock_update.in_.call_args
+            assert call_args[0][0] == "id"
+            updated_ids = set(call_args[0][1])
+            assert updated_ids == {"cit-1", "cit-2", "cit-3"}
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_returns_zero_when_no_normalized_matches(self) -> None:
+        """Should return 0 when no citations match after normalization."""
+        mock_client = MagicMock()
+        mock_table = MagicMock()
+
+        # Get candidates returns citations for other acts
+        mock_select = MagicMock()
+        mock_eq_matter = MagicMock()
+        mock_eq_status = MagicMock()
+
+        mock_table.select.return_value = mock_select
+        mock_select.eq.return_value = mock_eq_matter
+        mock_eq_matter.eq.return_value = mock_eq_status
+        mock_eq_status.execute.return_value = MagicMock(
+            data=[
+                {"id": "cit-1", "act_name": "Companies Act"},
+                {"id": "cit-2", "act_name": "NI Act"},
+            ]
+        )
+
+        mock_client.table.return_value = mock_table
+
+        with patch(
+            "app.engines.citation.storage.get_service_client",
+            return_value=mock_client,
+        ):
+            service = CitationStorageService()
+
+            # Query for Torts Act - no matches expected
+            updated_count = await service.bulk_update_verification_status(
+                matter_id="matter-123",
+                act_name="Torts Act",
+                from_status=VerificationStatus.PENDING,
+                to_status=VerificationStatus.VERIFIED,
+            )
+
+            assert updated_count == 0
+            # Update should not have been called
+            mock_table.update.assert_not_called()

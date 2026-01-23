@@ -229,6 +229,7 @@ class CitationStorageService:
         matter_id: str,
         page: int = 1,
         per_page: int = 20,
+        filter_invalid: bool = True,
     ) -> tuple[list[Citation], int]:
         """Get paginated citations from a specific document.
 
@@ -237,31 +238,74 @@ class CitationStorageService:
             matter_id: Matter UUID (REQUIRED for security).
             page: Page number (1-indexed).
             per_page: Items per page.
+            filter_invalid: If True, filters out citations with garbage/invalid act names.
 
         Returns:
             Tuple of (citations list, total count).
         """
+        from app.engines.citation.validation import get_validation_service, ValidationStatus
+
         try:
-            # Calculate offset for proper database-level pagination
-            offset = (page - 1) * per_page
+            # Get validation service for filtering
+            validation_service = get_validation_service() if filter_invalid else None
 
-            def _query():
-                return self.client.table("citations").select(
-                    "*", count="exact"
-                ).eq(
-                    "source_document_id", document_id
-                ).eq(
-                    "matter_id", matter_id
-                ).order("source_page").range(
-                    offset, offset + per_page - 1
-                ).execute()
+            # Fetch document names for all documents in this matter
+            document_names = await self._get_document_names_for_matter(matter_id)
 
-            result = await asyncio.to_thread(_query)
+            if filter_invalid and validation_service:
+                # When filtering, fetch all and filter in Python
+                def _query_all():
+                    return self.client.table("citations").select("*").eq(
+                        "source_document_id", document_id
+                    ).eq(
+                        "matter_id", matter_id
+                    ).order("source_page").execute()
 
-            citations = [self._row_to_citation(row) for row in (result.data or [])]
-            total = result.count or 0
+                result = await asyncio.to_thread(_query_all)
+                all_rows = result.data or []
 
-            return citations, total
+                # Filter out invalid act names
+                valid_rows = []
+                for row in all_rows:
+                    act = row.get("act_name", "")
+                    validation = validation_service.validate(act)
+                    if validation.validation_status != ValidationStatus.INVALID:
+                        valid_rows.append(row)
+
+                # Apply pagination to filtered results
+                total = len(valid_rows)
+                offset = (page - 1) * per_page
+                paginated_rows = valid_rows[offset : offset + per_page]
+                citations = [
+                    self._row_to_citation(row, document_names)
+                    for row in paginated_rows
+                ]
+
+                return citations, total
+            else:
+                # No filtering - use DB pagination directly
+                offset = (page - 1) * per_page
+
+                def _query():
+                    return self.client.table("citations").select(
+                        "*", count="exact"
+                    ).eq(
+                        "source_document_id", document_id
+                    ).eq(
+                        "matter_id", matter_id
+                    ).order("source_page").range(
+                        offset, offset + per_page - 1
+                    ).execute()
+
+                result = await asyncio.to_thread(_query)
+
+                citations = [
+                    self._row_to_citation(row, document_names)
+                    for row in (result.data or [])
+                ]
+                total = result.count or 0
+
+                return citations, total
 
         except Exception as e:
             logger.error(
@@ -278,6 +322,7 @@ class CitationStorageService:
         verification_status: VerificationStatus | None = None,
         page: int = 1,
         per_page: int = 20,
+        filter_invalid: bool = True,
     ) -> tuple[list[Citation], int]:
         """Get citations for a matter with optional filtering.
 
@@ -287,35 +332,82 @@ class CitationStorageService:
             verification_status: Optional filter by status.
             page: Page number (1-indexed).
             per_page: Items per page.
+            filter_invalid: If True, filters out citations with garbage/invalid act names.
 
         Returns:
             Tuple of (citations list, total count).
         """
+        from app.engines.citation.validation import get_validation_service, ValidationStatus
+
         try:
-            # Calculate offset
-            offset = (page - 1) * per_page
+            # Get validation service for filtering
+            validation_service = get_validation_service() if filter_invalid else None
 
-            def _query():
-                query = self.client.table("citations").select(
-                    "*", count="exact"
-                ).eq("matter_id", matter_id)
+            # Fetch document names for all citations in this matter
+            document_names = await self._get_document_names_for_matter(matter_id)
 
-                if act_name:
-                    query = query.eq("act_name", act_name)
+            if filter_invalid and validation_service:
+                # When filtering, we need to fetch all and filter in Python
+                # This is necessary because garbage detection is in Python, not DB
+                def _query_all():
+                    query = self.client.table("citations").select("*").eq(
+                        "matter_id", matter_id
+                    )
+                    if act_name:
+                        query = query.eq("act_name", act_name)
+                    if verification_status:
+                        query = query.eq("verification_status", verification_status.value)
+                    return query.order("created_at", desc=True).execute()
 
-                if verification_status:
-                    query = query.eq("verification_status", verification_status.value)
+                result = await asyncio.to_thread(_query_all)
+                all_rows = result.data or []
 
-                return query.order("created_at", desc=True).range(
-                    offset, offset + per_page - 1
-                ).execute()
+                # Filter out invalid act names
+                valid_rows = []
+                for row in all_rows:
+                    act = row.get("act_name", "")
+                    validation = validation_service.validate(act)
+                    if validation.validation_status != ValidationStatus.INVALID:
+                        valid_rows.append(row)
 
-            result = await asyncio.to_thread(_query)
+                # Apply pagination to filtered results
+                total = len(valid_rows)
+                offset = (page - 1) * per_page
+                paginated_rows = valid_rows[offset : offset + per_page]
+                citations = [
+                    self._row_to_citation(row, document_names)
+                    for row in paginated_rows
+                ]
 
-            citations = [self._row_to_citation(row) for row in (result.data or [])]
-            total = result.count or 0
+                return citations, total
+            else:
+                # No filtering - use DB pagination directly
+                offset = (page - 1) * per_page
 
-            return citations, total
+                def _query():
+                    query = self.client.table("citations").select(
+                        "*", count="exact"
+                    ).eq("matter_id", matter_id)
+
+                    if act_name:
+                        query = query.eq("act_name", act_name)
+
+                    if verification_status:
+                        query = query.eq("verification_status", verification_status.value)
+
+                    return query.order("created_at", desc=True).range(
+                        offset, offset + per_page - 1
+                    ).execute()
+
+                result = await asyncio.to_thread(_query)
+
+                citations = [
+                    self._row_to_citation(row, document_names)
+                    for row in (result.data or [])
+                ]
+                total = result.count or 0
+
+                return citations, total
 
         except Exception as e:
             logger.error(
@@ -552,15 +644,19 @@ class CitationStorageService:
     async def get_citation_counts_by_act(
         self,
         matter_id: str,
+        filter_invalid: bool = True,
     ) -> list[dict]:
         """Get citation counts grouped by Act name.
 
         Args:
             matter_id: Matter UUID.
+            filter_invalid: If True, filters out garbage/invalid act names.
 
         Returns:
             List of dicts with act_name, citation_count, verified_count, pending_count.
         """
+        from app.engines.citation.validation import get_validation_service, ValidationStatus
+
         try:
             # Get all citations for the matter
             def _query():
@@ -570,11 +666,20 @@ class CitationStorageService:
 
             result = await asyncio.to_thread(_query)
 
+            # Get validation service for filtering
+            validation_service = get_validation_service() if filter_invalid else None
+
             # Aggregate counts
             counts: dict[str, dict] = {}
             for row in (result.data or []):
                 act_name = row["act_name"]
                 status = row["verification_status"]
+
+                # Skip invalid/garbage act names
+                if filter_invalid and validation_service:
+                    validation = validation_service.validate(act_name)
+                    if validation.validation_status == ValidationStatus.INVALID:
+                        continue
 
                 if act_name not in counts:
                     counts[act_name] = {
@@ -609,12 +714,64 @@ class CitationStorageService:
             )
             return []
 
-    def _row_to_citation(self, row: dict) -> Citation:
-        """Convert database row to Citation model."""
+    async def _get_document_names_for_matter(
+        self,
+        matter_id: str,
+    ) -> dict[str, str]:
+        """Get document names for all documents in a matter.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            Dictionary mapping document_id to filename.
+        """
+        try:
+            def _query():
+                return (
+                    self.client.table("documents")
+                    .select("id, filename")
+                    .eq("matter_id", matter_id)
+                    .execute()
+                )
+
+            result = await asyncio.to_thread(_query)
+
+            return {
+                row["id"]: row.get("filename", "Unknown Document")
+                for row in (result.data or [])
+            }
+        except Exception as e:
+            logger.warning(
+                "get_document_names_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return {}
+
+    def _row_to_citation(
+        self,
+        row: dict,
+        document_names: dict[str, str] | None = None,
+    ) -> Citation:
+        """Convert database row to Citation model.
+
+        Args:
+            row: Database row dictionary.
+            document_names: Optional mapping of document_id to filename.
+
+        Returns:
+            Citation model instance.
+        """
+        document_id = row["source_document_id"]
+        document_name = None
+        if document_names:
+            document_name = document_names.get(document_id)
+
         return Citation(
             id=row["id"],
             matter_id=row["matter_id"],
-            document_id=row["source_document_id"],
+            document_id=document_id,
             act_name=row["act_name"],
             act_name_original=row.get("act_name_original"),
             section_number=row["section"],
@@ -632,6 +789,7 @@ class CitationStorageService:
             extraction_metadata=row.get("extraction_metadata") or {},
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
+            document_name=document_name,
         )
 
     def _row_to_act_resolution(self, row: dict) -> ActResolution:
@@ -743,10 +901,13 @@ class CitationStorageService:
             List of citations referencing the Act.
         """
         try:
+            # Normalize the requested act name for matching
+            normalized_target = normalize_act_name(act_name)
+
             def _query():
                 query = self.client.table("citations").select("*").eq(
                     "matter_id", matter_id
-                ).eq("act_name", act_name)
+                )
 
                 if exclude_verified:
                     # Exclude verified and mismatch (already processed)
@@ -759,7 +920,22 @@ class CitationStorageService:
 
             result = await asyncio.to_thread(_query)
 
-            return [self._row_to_citation(row) for row in (result.data or [])]
+            # Filter by normalized act name match (handles case and year differences)
+            citations = []
+            for row in (result.data or []):
+                row_act_name = row.get("act_name", "")
+                if normalize_act_name(row_act_name) == normalized_target:
+                    citations.append(self._row_to_citation(row))
+
+            logger.debug(
+                "get_citations_for_act_normalized_match",
+                act_name=act_name,
+                normalized=normalized_target,
+                total_rows=len(result.data or []),
+                matched=len(citations),
+            )
+
+            return citations
 
         except Exception as e:
             logger.error(
@@ -825,9 +1001,13 @@ class CitationStorageService:
 
         Used when Act is uploaded to change status from act_unavailable to pending.
 
+        Uses normalized act name matching to handle variations like:
+        - "Torts Act" vs "TORTS Act 1992"
+        - "Companies Act" vs "Companies Act, 2013"
+
         Args:
             matter_id: Matter UUID.
-            act_name: Act name to filter by.
+            act_name: Act name to filter by (will be normalized).
             from_status: Current status to match.
             to_status: New status to set.
 
@@ -835,16 +1015,44 @@ class CitationStorageService:
             Number of citations updated.
         """
         try:
+            # Normalize the target act name
+            normalized_target = normalize_act_name(act_name)
+
+            # First, get all citations with matching status to find normalized matches
+            def _get_candidates():
+                return self.client.table("citations").select("id, act_name").eq(
+                    "matter_id", matter_id
+                ).eq(
+                    "verification_status", from_status.value
+                ).execute()
+
+            candidates_result = await asyncio.to_thread(_get_candidates)
+            candidates = candidates_result.data or []
+
+            # Find IDs where normalized act name matches
+            matching_ids = []
+            for row in candidates:
+                row_act_name = row.get("act_name", "")
+                if normalize_act_name(row_act_name) == normalized_target:
+                    matching_ids.append(row["id"])
+
+            if not matching_ids:
+                logger.info(
+                    "bulk_verification_status_no_matches",
+                    matter_id=matter_id,
+                    act_name=act_name,
+                    normalized=normalized_target,
+                    candidates_checked=len(candidates),
+                )
+                return 0
+
+            # Update matching citations by ID
             def _update():
                 return self.client.table("citations").update({
                     "verification_status": to_status.value,
                     "updated_at": datetime.now(UTC).isoformat(),
-                }).eq(
-                    "matter_id", matter_id
-                ).eq(
-                    "act_name", act_name
-                ).eq(
-                    "verification_status", from_status.value
+                }).in_(
+                    "id", matching_ids
                 ).execute()
 
             result = await asyncio.to_thread(_update)
@@ -855,8 +1063,11 @@ class CitationStorageService:
                 "bulk_verification_status_updated",
                 matter_id=matter_id,
                 act_name=act_name,
+                normalized=normalized_target,
                 from_status=from_status.value,
                 to_status=to_status.value,
+                candidates_checked=len(candidates),
+                matched=len(matching_ids),
                 updated_count=updated_count,
             )
 

@@ -10,6 +10,8 @@ import pytest
 
 from app.engines.citation.discovery import (
     ActDiscoveryService,
+    ActResolutionStats,
+    compute_resolution_stats,
     get_act_discovery_service,
 )
 from app.models.citation import (
@@ -526,3 +528,330 @@ class TestGetActDiscoveryService:
         service = get_act_discovery_service()
 
         assert isinstance(service, ActDiscoveryService)
+
+
+# =============================================================================
+# Tests for centralized stats calculation (consistency)
+# =============================================================================
+
+
+class TestComputeResolutionStats:
+    """Tests for centralized compute_resolution_stats function."""
+
+    def test_counts_all_statuses_correctly(self) -> None:
+        """Should count each status type correctly."""
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_a",
+                act_name_display="Act A",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-2",
+                matter_id="matter-123",
+                act_name_normalized="act_b",
+                act_name_display="Act B",
+                resolution_status=ActResolutionStatus.AVAILABLE,
+                user_action=UserAction.UPLOADED,
+                citation_count=10,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-3",
+                matter_id="matter-123",
+                act_name_normalized="act_c",
+                act_name_display="Act C",
+                resolution_status=ActResolutionStatus.AUTO_FETCHED,
+                user_action=UserAction.PENDING,
+                citation_count=8,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-4",
+                matter_id="matter-123",
+                act_name_normalized="act_d",
+                act_name_display="Act D",
+                resolution_status=ActResolutionStatus.SKIPPED,
+                user_action=UserAction.SKIPPED,
+                citation_count=3,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        stats = compute_resolution_stats(resolutions)
+
+        assert stats.total_acts == 4
+        assert stats.missing_count == 1
+        assert stats.available_count == 1
+        assert stats.auto_fetched_count == 1
+        assert stats.skipped_count == 1
+        assert stats.total_citations == 26  # 5 + 10 + 8 + 3
+
+    def test_excludes_invalid_from_total_by_default(self) -> None:
+        """Should exclude invalid acts from total_acts by default."""
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_valid",
+                act_name_display="Valid Act",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-2",
+                matter_id="matter-123",
+                act_name_normalized="garbage_act",
+                act_name_display="Garbage Act",
+                resolution_status=ActResolutionStatus.INVALID,
+                user_action=UserAction.PENDING,
+                citation_count=2,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        stats = compute_resolution_stats(resolutions, include_invalid=False)
+
+        # Invalid should be excluded from total_acts
+        assert stats.total_acts == 1
+        assert stats.invalid_count == 1
+        # But citations from invalid should still be counted
+        assert stats.total_citations == 7
+
+    def test_includes_invalid_when_requested(self) -> None:
+        """Should include invalid acts in total_acts when requested."""
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_valid",
+                act_name_display="Valid Act",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-2",
+                matter_id="matter-123",
+                act_name_normalized="garbage_act",
+                act_name_display="Garbage Act",
+                resolution_status=ActResolutionStatus.INVALID,
+                user_action=UserAction.PENDING,
+                citation_count=2,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        stats = compute_resolution_stats(resolutions, include_invalid=True)
+
+        # Invalid should be included in total_acts
+        assert stats.total_acts == 2
+        assert stats.invalid_count == 1
+
+    def test_detects_data_inconsistency_document_status_mismatch(self) -> None:
+        """Should detect when resolution has document_id but status is 'missing'."""
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_inconsistent",
+                act_name_display="Inconsistent Act",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                act_document_id="doc-123",  # Has document_id but status is missing
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        stats = compute_resolution_stats(resolutions, check_consistency=True)
+
+        assert len(stats.inconsistencies) == 1
+        assert stats.inconsistencies[0]["type"] == "document_status_mismatch"
+        assert stats.inconsistencies[0]["act_name"] == "act_inconsistent"
+        assert stats.inconsistencies[0]["document_id"] == "doc-123"
+
+    def test_no_inconsistencies_when_data_is_correct(self) -> None:
+        """Should not report inconsistencies when data is correct."""
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_missing",
+                act_name_display="Missing Act",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                act_document_id=None,  # Correctly no document
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-2",
+                matter_id="matter-123",
+                act_name_normalized="act_available",
+                act_name_display="Available Act",
+                resolution_status=ActResolutionStatus.AVAILABLE,
+                user_action=UserAction.UPLOADED,
+                citation_count=10,
+                act_document_id="doc-456",  # Correctly has document
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        stats = compute_resolution_stats(resolutions, check_consistency=True)
+
+        assert len(stats.inconsistencies) == 0
+
+    def test_to_dict_returns_correct_structure(self) -> None:
+        """Should return correct dict structure for API responses."""
+        stats = ActResolutionStats(
+            total_acts=10,
+            missing_count=3,
+            available_count=4,
+            auto_fetched_count=2,
+            skipped_count=1,
+            invalid_count=0,
+            total_citations=50,
+        )
+
+        result = stats.to_dict()
+
+        assert result == {
+            "total_acts": 10,
+            "missing_count": 3,
+            "available_count": 4,
+            "auto_fetched_count": 2,
+            "skipped_count": 1,
+            "invalid_count": 0,
+            "total_citations": 50,
+        }
+
+
+class TestStatsDiscoveryConsistency:
+    """Tests to ensure get_discovery_stats and get_discovery_report counts match."""
+
+    @pytest.mark.asyncio
+    async def test_stats_match_discovery_report_counts(self) -> None:
+        """Stats counts should match the number of items in discovery report.
+
+        This is a critical consistency test that ensures:
+        - get_discovery_stats().total_acts == len(get_discovery_report())
+        - get_discovery_stats().missing_count == len([r for r in report if r.status == missing])
+        etc.
+        """
+        resolutions = [
+            ActResolution(
+                id="res-1",
+                matter_id="matter-123",
+                act_name_normalized="act_missing_1",
+                act_name_display="Missing Act 1",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=5,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-2",
+                matter_id="matter-123",
+                act_name_normalized="act_missing_2",
+                act_name_display="Missing Act 2",
+                resolution_status=ActResolutionStatus.MISSING,
+                user_action=UserAction.PENDING,
+                citation_count=3,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-3",
+                matter_id="matter-123",
+                act_name_normalized="act_available",
+                act_name_display="Available Act",
+                resolution_status=ActResolutionStatus.AVAILABLE,
+                user_action=UserAction.UPLOADED,
+                citation_count=10,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-4",
+                matter_id="matter-123",
+                act_name_normalized="act_auto_fetched",
+                act_name_display="Auto-fetched Act",
+                resolution_status=ActResolutionStatus.AUTO_FETCHED,
+                user_action=UserAction.PENDING,
+                citation_count=7,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            ActResolution(
+                id="res-5",
+                matter_id="matter-123",
+                act_name_normalized="act_invalid",
+                act_name_display="Invalid Act",
+                resolution_status=ActResolutionStatus.INVALID,
+                user_action=UserAction.PENDING,
+                citation_count=1,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+
+        mock_storage = MagicMock()
+        mock_storage.get_act_resolutions = AsyncMock(return_value=resolutions)
+        mock_storage.get_citation_counts_by_act = AsyncMock(return_value=[])
+
+        with patch(
+            "app.engines.citation.discovery.get_citation_storage_service",
+            return_value=mock_storage,
+        ):
+            service = ActDiscoveryService()
+
+            # Get both stats and report
+            stats = await service.get_discovery_stats("matter-123")
+            report = await service.get_discovery_report(
+                "matter-123",
+                include_available=True,
+                include_invalid=False,  # Default behavior
+            )
+
+            # Verify consistency
+            # Total acts should match (excluding invalid)
+            assert stats["total_acts"] == len(report)
+
+            # Count from report should match stats
+            report_missing = sum(
+                1 for r in report
+                if r.resolution_status == ActResolutionStatus.MISSING
+            )
+            report_available = sum(
+                1 for r in report
+                if r.resolution_status == ActResolutionStatus.AVAILABLE
+            )
+            report_auto_fetched = sum(
+                1 for r in report
+                if r.resolution_status == ActResolutionStatus.AUTO_FETCHED
+            )
+
+            assert stats["missing_count"] == report_missing
+            assert stats["available_count"] == report_available
+            assert stats["auto_fetched_count"] == report_auto_fetched

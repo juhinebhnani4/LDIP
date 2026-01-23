@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
 
+    # Model Routing for Contradiction Detection (Cost Optimization)
+    # Two-tier approach: Gemini Flash screens first, GPT-4 only for uncertain/contradictions
+    contradiction_model_routing_enabled: bool = True  # Enable two-tier routing
+    contradiction_screening_model: str = "gemini-2.0-flash"  # Fast/cheap for initial screening
+    contradiction_screening_confidence_threshold: float = 0.85  # Below this -> escalate to GPT-4
+    contradiction_escalate_results: list[str] = ["contradiction", "uncertain"]  # Results to escalate
+
     # GPT-3.5 Configuration (Story 6-1: Query Intent Classification)
     openai_intent_model: str = "gpt-3.5-turbo"  # Cost-sensitive classification
 
@@ -95,6 +102,17 @@ class Settings(BaseSettings):
     verification_rate_limit_delay: float = 0.5      # Delay between API calls (seconds)
     verification_min_similarity: float = 70.0       # Minimum similarity for VERIFIED status
     verification_section_search_top_k: int = 5      # Max section candidates to retrieve
+
+    # LLM Rate Limiting Configuration (Application-level throttling)
+    # Prevents hitting provider rate limits (429 errors) with concurrent workers
+    # Gemini rate limits (conservative for free tier ~60 RPM)
+    gemini_max_concurrent_requests: int = 3         # Max parallel Gemini API calls
+    gemini_min_request_delay: float = 0.2           # Min seconds between requests
+    gemini_requests_per_minute: int = 60            # Target RPM (for monitoring)
+    # OpenAI rate limits (tier 1 ~500 RPM)
+    openai_max_concurrent_requests: int = 5         # Max parallel OpenAI API calls
+    openai_min_request_delay: float = 0.1           # Min seconds between requests
+    openai_requests_per_minute: int = 500           # Target RPM (for monitoring)
 
     # Finding Verification Thresholds (Story 8-4: ADR-004 Tiered Verification)
     # Controls when attorney verification is optional, suggested, or required

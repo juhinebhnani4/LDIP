@@ -19,6 +19,7 @@ from typing import Final
 import structlog
 
 from app.core.config import get_settings
+from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.citation.act_indexer import (
     ActIndexer,
     ActNotIndexedError,
@@ -621,7 +622,10 @@ class CitationVerifier:
         )
 
     async def _call_gemini_with_retry(self, prompt: str) -> str:
-        """Call Gemini API with retry logic.
+        """Call Gemini API with retry logic and rate limiting.
+
+        Uses centralized rate limiter to prevent 429 errors across all
+        concurrent workers.
 
         Args:
             prompt: Prompt to send.
@@ -635,12 +639,14 @@ class CitationVerifier:
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
+        # Get rate limiter for Gemini
+        gemini_limiter = get_rate_limiter(LLMProvider.GEMINI)
+
         for attempt in range(MAX_RETRIES):
             try:
-                # Rate limiting
-                await asyncio.sleep(_get_rate_limit_delay())
-
-                response = await self.model.generate_content_async(prompt)
+                # Apply rate limiting via semaphore (limits concurrent requests)
+                async with gemini_limiter:
+                    response = await self.model.generate_content_async(prompt)
                 return response.text
 
             except VerificationConfigurationError:

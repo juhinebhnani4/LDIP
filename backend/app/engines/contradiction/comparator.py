@@ -28,10 +28,14 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.contradiction.prompts import (
+    GEMINI_SCREENING_SYSTEM_PROMPT,
     STATEMENT_COMPARISON_SYSTEM_PROMPT,
     format_comparison_prompt,
+    format_screening_prompt,
     validate_comparison_response,
+    validate_screening_response,
 )
 from app.models.contradiction import (
     ComparisonResult,
@@ -53,6 +57,10 @@ logger = structlog.get_logger(__name__)
 GPT4_INPUT_COST_PER_1K = 0.01  # $0.01 per 1K input tokens
 GPT4_OUTPUT_COST_PER_1K = 0.03  # $0.03 per 1K output tokens
 
+# Gemini Flash pricing (as of Jan 2025) - much cheaper for screening
+GEMINI_INPUT_COST_PER_1K = 0.000075  # $0.075 per 1M input tokens
+GEMINI_OUTPUT_COST_PER_1K = 0.0003  # $0.30 per 1M output tokens
+
 # Rate limiting
 DEFAULT_BATCH_SIZE = 5  # Process 5 pairs in parallel (rate limit safe)
 
@@ -67,22 +75,40 @@ class LLMCostTracker:
     """Track LLM costs per comparison.
 
     Story 5-2: Cost control is critical for high-volume comparisons.
+    Supports both GPT-4 (full analysis) and Gemini (screening) costs.
     """
 
     model: str = "gpt-4-turbo-preview"
     input_tokens: int = 0
     output_tokens: int = 0
+    # Two-tier routing tracking
+    screening_model: str | None = None
+    screening_input_tokens: int = 0
+    screening_output_tokens: int = 0
+    was_escalated: bool = False  # True if escalated to GPT-4
 
     @property
     def cost_usd(self) -> float:
         """Calculate total cost in USD.
 
         Returns:
-            Total cost based on token counts.
+            Total cost based on token counts for both tiers.
         """
-        input_cost = (self.input_tokens / 1000) * GPT4_INPUT_COST_PER_1K
-        output_cost = (self.output_tokens / 1000) * GPT4_OUTPUT_COST_PER_1K
-        return input_cost + output_cost
+        total_cost = 0.0
+
+        # Screening tier cost (Gemini)
+        if self.screening_model:
+            screening_input = (self.screening_input_tokens / 1000) * GEMINI_INPUT_COST_PER_1K
+            screening_output = (self.screening_output_tokens / 1000) * GEMINI_OUTPUT_COST_PER_1K
+            total_cost += screening_input + screening_output
+
+        # Full analysis tier cost (GPT-4) - only if escalated
+        if self.input_tokens > 0 or self.output_tokens > 0:
+            input_cost = (self.input_tokens / 1000) * GPT4_INPUT_COST_PER_1K
+            output_cost = (self.output_tokens / 1000) * GPT4_OUTPUT_COST_PER_1K
+            total_cost += input_cost + output_cost
+
+        return total_cost
 
 
 @dataclass
@@ -190,14 +216,17 @@ class StatementPair:
 
 
 class StatementComparator:
-    """Engine for comparing statement pairs using GPT-4.
+    """Engine for comparing statement pairs using two-tier model routing.
 
     Story 5-2: Implements the second stage of the Contradiction Engine pipeline.
 
     Pipeline:
     1. STATEMENT QUERYING (5-1) -> 2. PAIR COMPARISON (5-2) -> 3. CLASSIFICATION (5-3)
 
-    CRITICAL: Uses GPT-4 for chain-of-thought reasoning per LLM routing rules.
+    Cost Optimization (Two-Tier Routing):
+    - Tier 1: Gemini Flash for quick screening (~$0.0001/comparison)
+    - Tier 2: GPT-4 for uncertain/contradiction results (~$0.025/comparison)
+    - Expected cost reduction: 60-80% for typical legal document analysis
 
     Example:
         >>> comparator = StatementComparator()
@@ -211,11 +240,23 @@ class StatementComparator:
     """
 
     def __init__(self) -> None:
-        """Initialize statement comparator."""
-        self._client = None
+        """Initialize statement comparator with two-tier model routing."""
+        self._openai_client = None
+        self._gemini_model = None
         settings = get_settings()
+
+        # OpenAI (GPT-4) config
         self.api_key = settings.openai_api_key
-        self.model_name = settings.openai_comparison_model  # Configurable via settings
+        self.model_name = settings.openai_comparison_model
+
+        # Two-tier routing config
+        self.routing_enabled = settings.contradiction_model_routing_enabled
+        self.screening_model = settings.contradiction_screening_model
+        self.confidence_threshold = settings.contradiction_screening_confidence_threshold
+        self.escalate_results = settings.contradiction_escalate_results
+
+        # Gemini API key (reuse from entity extraction)
+        self.gemini_api_key = settings.gemini_api_key
 
     @property
     def client(self):
@@ -227,7 +268,7 @@ class StatementComparator:
         Raises:
             OpenAIConfigurationError: If API key is not configured.
         """
-        if self._client is None:
+        if self._openai_client is None:
             if not self.api_key:
                 raise OpenAIConfigurationError(
                     "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
@@ -236,10 +277,11 @@ class StatementComparator:
             try:
                 from openai import AsyncOpenAI
 
-                self._client = AsyncOpenAI(api_key=self.api_key)
+                self._openai_client = AsyncOpenAI(api_key=self.api_key)
                 logger.info(
                     "statement_comparator_initialized",
                     model=self.model_name,
+                    routing_enabled=self.routing_enabled,
                 )
             except Exception as e:
                 logger.error("statement_comparator_init_failed", error=str(e))
@@ -247,7 +289,40 @@ class StatementComparator:
                     f"Failed to initialize OpenAI client: {e}"
                 ) from e
 
-        return self._client
+        return self._openai_client
+
+    @property
+    def gemini_model(self):
+        """Get or create Gemini model for screening.
+
+        Returns:
+            Gemini GenerativeModel instance.
+
+        Raises:
+            ComparatorError: If Gemini API key is not configured.
+        """
+        if self._gemini_model is None:
+            if not self.gemini_api_key:
+                logger.warning(
+                    "gemini_not_configured_for_screening",
+                    hint="Set GEMINI_API_KEY for two-tier routing cost savings",
+                )
+                return None
+
+            try:
+                import google.generativeai as genai
+
+                genai.configure(api_key=self.gemini_api_key)
+                self._gemini_model = genai.GenerativeModel(self.screening_model)
+                logger.info(
+                    "gemini_screening_initialized",
+                    model=self.screening_model,
+                )
+            except Exception as e:
+                logger.error("gemini_screening_init_failed", error=str(e))
+                return None
+
+        return self._gemini_model
 
     async def compare_statement_pair(
         self,
@@ -257,7 +332,12 @@ class StatementComparator:
         doc_a_name: str | None = None,
         doc_b_name: str | None = None,
     ) -> tuple[StatementPairComparison, LLMCostTracker]:
-        """Compare a single pair of statements using GPT-4 with circuit breaker.
+        """Compare a single pair of statements using two-tier model routing.
+
+        Two-tier routing (when enabled):
+        1. Gemini Flash screens first (~$0.0001/comparison)
+        2. GPT-4 only for uncertain/contradiction results (~$0.025/comparison)
+        3. Consistent/unrelated results with high confidence skip GPT-4
 
         Args:
             statement_a: First statement.
@@ -273,30 +353,95 @@ class StatementComparator:
             ComparatorError: If comparison fails or circuit is open.
         """
         start_time = time.time()
-
-        # Format prompt
-        user_prompt = format_comparison_prompt(
-            entity_name=entity_name,
-            content_a=statement_a.content,
-            content_b=statement_b.content,
-            doc_a=doc_a_name or "Document A",
-            doc_b=doc_b_name or "Document B",
-            page_a=statement_a.page_number,
-            page_b=statement_b.page_number,
-        )
+        cost_tracker = LLMCostTracker(model=self.model_name)
 
         try:
-            # Call GPT-4 with circuit breaker protection
+            # === TIER 1: Gemini Screening (if enabled) ===
+            if self.routing_enabled and self.gemini_model:
+                screening_result = await self._call_gemini_screening(
+                    entity_name=entity_name,
+                    content_a=statement_a.content,
+                    content_b=statement_b.content,
+                )
+
+                if screening_result:
+                    result, confidence, quick_reason, in_tokens, out_tokens = screening_result
+
+                    # Track screening costs
+                    cost_tracker.screening_model = self.screening_model
+                    cost_tracker.screening_input_tokens = in_tokens
+                    cost_tracker.screening_output_tokens = out_tokens
+
+                    # Check if we can skip GPT-4
+                    skip_gpt4 = (
+                        result in ("consistent", "unrelated")
+                        and confidence >= self.confidence_threshold
+                    )
+
+                    if skip_gpt4:
+                        # Use Gemini result directly - no GPT-4 needed
+                        cost_tracker.was_escalated = False
+
+                        # Map screening result to ComparisonResult
+                        result_enum = (
+                            ComparisonResult.CONSISTENT if result == "consistent"
+                            else ComparisonResult.UNRELATED
+                        )
+
+                        comparison = StatementPairComparison(
+                            statement_a_id=statement_a.chunk_id,
+                            statement_b_id=statement_b.chunk_id,
+                            statement_a_content=statement_a.content,
+                            statement_b_content=statement_b.content,
+                            result=result_enum,
+                            reasoning=f"[Gemini screening] {quick_reason}",
+                            confidence=confidence,
+                            evidence=ContradictionEvidence(type=EvidenceType.NONE),
+                            document_a_id=statement_a.document_id,
+                            document_b_id=statement_b.document_id,
+                            page_a=statement_a.page_number,
+                            page_b=statement_b.page_number,
+                        )
+
+                        processing_time = int((time.time() - start_time) * 1000)
+                        logger.info(
+                            "statement_comparison_screened",
+                            entity_name=entity_name,
+                            result=comparison.result.value,
+                            confidence=confidence,
+                            cost_usd=cost_tracker.cost_usd,
+                            processing_time_ms=processing_time,
+                            escalated=False,
+                        )
+                        return comparison, cost_tracker
+
+                    # Needs escalation to GPT-4
+                    cost_tracker.was_escalated = True
+                    logger.debug(
+                        "screening_escalating_to_gpt4",
+                        entity_name=entity_name,
+                        screening_result=result,
+                        screening_confidence=confidence,
+                    )
+
+            # === TIER 2: GPT-4 Full Analysis ===
+            user_prompt = format_comparison_prompt(
+                entity_name=entity_name,
+                content_a=statement_a.content,
+                content_b=statement_b.content,
+                doc_a=doc_a_name or "Document A",
+                doc_b=doc_b_name or "Document B",
+                page_a=statement_a.page_number,
+                page_b=statement_b.page_number,
+            )
+
             response_text, input_tokens, output_tokens = await self._call_gpt4_comparison(
                 user_prompt
             )
 
-            # Track tokens
-            cost_tracker = LLMCostTracker(
-                model=self.model_name,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-            )
+            # Track GPT-4 tokens
+            cost_tracker.input_tokens = input_tokens
+            cost_tracker.output_tokens = output_tokens
 
             # Parse response
             comparison = self._parse_comparison_response(
@@ -314,13 +459,13 @@ class StatementComparator:
                 confidence=comparison.confidence,
                 cost_usd=cost_tracker.cost_usd,
                 processing_time_ms=processing_time,
+                escalated=cost_tracker.was_escalated,
             )
 
             return comparison, cost_tracker
 
         except CircuitOpenError as e:
             # No silent fallback for high-stakes contradiction detection
-            # User must be aware system is in degraded state
             logger.error(
                 "comparison_circuit_open",
                 circuit_name=e.circuit_name,
@@ -349,11 +494,88 @@ class StatementComparator:
                 code="COMPARISON_FAILED",
             ) from e
 
+    async def _call_gemini_screening(
+        self,
+        entity_name: str,
+        content_a: str,
+        content_b: str,
+    ) -> tuple[str, float, str, int, int] | None:
+        """Call Gemini for fast screening with rate limiting.
+
+        Args:
+            entity_name: Name of the entity being discussed.
+            content_a: Content of statement A.
+            content_b: Content of statement B.
+
+        Returns:
+            Tuple of (result, confidence, quick_reason, input_tokens, output_tokens)
+            or None if screening fails (will fall back to GPT-4).
+        """
+        try:
+            screening_prompt = format_screening_prompt(
+                entity_name=entity_name,
+                content_a=content_a,
+                content_b=content_b,
+            )
+
+            # Combine system + user prompt for Gemini
+            full_prompt = f"{GEMINI_SCREENING_SYSTEM_PROMPT}\n\n{screening_prompt}"
+
+            # Apply rate limiting to prevent 429 errors
+            gemini_limiter = get_rate_limiter(LLMProvider.GEMINI)
+            async with gemini_limiter:
+                response = await asyncio.to_thread(
+                    self.gemini_model.generate_content,
+                    full_prompt,
+                    generation_config={
+                        "response_mime_type": "application/json",
+                        "temperature": 0.1,
+                    },
+                )
+
+            response_text = response.text
+
+            # Parse JSON response
+            parsed = json.loads(response_text)
+
+            # Validate response
+            validation_errors = validate_screening_response(parsed)
+            if validation_errors:
+                logger.warning(
+                    "screening_validation_failed",
+                    errors=validation_errors,
+                )
+                return None
+
+            result = parsed.get("result", "needs_review").lower()
+            confidence = float(parsed.get("confidence", 0.0))
+            quick_reason = parsed.get("quick_reason", "")
+
+            # Estimate tokens (Gemini doesn't always provide exact counts)
+            input_tokens = len(full_prompt) // 4  # Rough estimate
+            output_tokens = len(response_text) // 4
+
+            return result, confidence, quick_reason, input_tokens, output_tokens
+
+        except Exception as e:
+            logger.warning(
+                "gemini_screening_failed",
+                error=str(e),
+                hint="Falling back to GPT-4",
+            )
+            return None
+
     @with_circuit_breaker(CircuitService.OPENAI_CHAT)
     async def _call_gpt4_comparison(
         self, user_prompt: str
     ) -> tuple[str, int, int]:
         """Call GPT-4 API with circuit breaker protection.
+
+        OpenAI Prompt Caching: Automatic caching applies when:
+        - Total prompt >= 1024 tokens (system + user)
+        - System prompt is identical across requests (which it is)
+        - Requests within ~1 hour window
+        Expected cache hit rate: ~50-70% for batch comparisons
 
         Args:
             user_prompt: Formatted user prompt.
@@ -364,6 +586,9 @@ class StatementComparator:
         response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=[
+                # System prompt first - enables OpenAI's automatic prompt caching
+                # When the same system prompt is used repeatedly, OpenAI caches it
+                # and charges 50% less for cached input tokens
                 {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],

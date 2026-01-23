@@ -25,6 +25,7 @@ from app.core.cost_tracking import (
     LLMProvider,
     estimate_tokens,
 )
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.engines.citation.abbreviations import (
     get_canonical_name,
     normalize_act_name,
@@ -525,9 +526,14 @@ class CitationExtractor:
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
+        # Get rate limiter for Gemini
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+
         for attempt in range(MAX_RETRIES):
             try:
-                response = await self.model.generate_content_async(prompt)
+                # Apply rate limiting via semaphore (limits concurrent requests)
+                async with gemini_limiter:
+                    response = await self.model.generate_content_async(prompt)
 
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)

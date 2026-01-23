@@ -86,6 +86,19 @@ export interface WSEntityDiscovery {
   timestamp: string;
 }
 
+/** Entity stream data for progressive rendering (individual entities) */
+export interface WSEntityStream {
+  event: 'entity_stream';
+  matter_id: string;
+  entity: {
+    name: string;
+    type: string;
+  };
+  current_count: number;
+  document_id?: string;
+  timestamp: string;
+}
+
 /** Timeline discovery data from WebSocket */
 export interface WSTimelineDiscovery {
   event: 'timeline_discovery';
@@ -97,8 +110,8 @@ export interface WSTimelineDiscovery {
   timestamp: string;
 }
 
-/** Discovery update (union of entity and timeline discoveries) */
-export type WSDiscoveryUpdate = WSEntityDiscovery | WSTimelineDiscovery;
+/** Discovery update (union of entity, entity stream, and timeline discoveries) */
+export type WSDiscoveryUpdate = WSEntityDiscovery | WSEntityStream | WSTimelineDiscovery;
 
 /** Connection state */
 export type WSConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';

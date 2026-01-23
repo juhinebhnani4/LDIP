@@ -705,6 +705,7 @@ class FeatureType:
     ENTITIES = "entities"  # After entity extraction completes
     TIMELINE = "timeline"  # After date extraction completes
     CITATIONS = "citations"  # After citation extraction completes
+    CONTRADICTIONS = "contradictions"  # After contradiction detection completes
     BBOX_HIGHLIGHTING = "bbox_highlighting"  # After bbox linking completes
 
 
@@ -812,5 +813,169 @@ def broadcast_features_batch(
             "broadcast_features_batch_failed",
             matter_id=matter_id,
             document_id=document_id,
+            error=str(e),
+        )
+
+
+# =============================================================================
+# Discovery Broadcasting (WebSocket Real-time Updates)
+# =============================================================================
+
+# Channel pattern for discovery updates: discoveries:{matter_id}
+DISCOVERY_CHANNEL_PATTERN = "discoveries:{matter_id}"
+
+
+def broadcast_entity_discovery(
+    matter_id: str,
+    total_entities: int,
+    entity_counts: dict[str, int] | None = None,
+    new_entities: list[dict] | None = None,
+) -> None:
+    """Broadcast entity discovery update.
+
+    Called when new entities are extracted during processing.
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        total_entities: Total entity count for the matter.
+        entity_counts: Optional counts by entity type (PERSON, ORG, etc.).
+        new_entities: Optional list of newly discovered entities.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = DISCOVERY_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "entity_discovery",
+            "matter_id": matter_id,
+            "total_entities": total_entities,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        if entity_counts:
+            message["entity_counts"] = entity_counts
+        if new_entities:
+            message["new_entities"] = new_entities
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "entity_discovery_broadcast",
+            matter_id=matter_id,
+            total_entities=total_entities,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "broadcast_entity_discovery_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+
+
+def broadcast_entity_streaming(
+    matter_id: str,
+    entity_name: str,
+    entity_type: str,
+    current_count: int,
+    document_id: str | None = None,
+) -> None:
+    """Broadcast individual entity discovery for progressive streaming.
+
+    Called as each entity is discovered to enable ChatGPT-style
+    progressive rendering on the frontend. Entities appear one-by-one.
+
+    Args:
+        matter_id: Matter UUID.
+        entity_name: Name of the discovered entity.
+        entity_type: Type (PERSON, ORG, LOCATION, etc.).
+        current_count: Running total of entities discovered.
+        document_id: Optional document where entity was found.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = DISCOVERY_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "entity_stream",
+            "matter_id": matter_id,
+            "entity": {
+                "name": entity_name,
+                "type": entity_type,
+            },
+            "current_count": current_count,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        if document_id:
+            message["document_id"] = document_id
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "entity_stream_broadcast",
+            matter_id=matter_id,
+            entity_name=entity_name,
+            current_count=current_count,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "broadcast_entity_streaming_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+
+
+def broadcast_timeline_discovery(
+    matter_id: str,
+    total_events: int,
+    date_range_start: str | None = None,
+    date_range_end: str | None = None,
+    events_by_type: dict[str, int] | None = None,
+) -> None:
+    """Broadcast timeline/date discovery update.
+
+    Called when new timeline events are extracted during processing.
+    Safe to call from anywhere - will not raise exceptions.
+
+    Args:
+        matter_id: Matter UUID.
+        total_events: Total timeline events for the matter.
+        date_range_start: Earliest date found (ISO format).
+        date_range_end: Latest date found (ISO format).
+        events_by_type: Optional counts by event type.
+    """
+    try:
+        service = get_pubsub_service()
+        channel = DISCOVERY_CHANNEL_PATTERN.format(matter_id=matter_id)
+
+        message = {
+            "event": "timeline_discovery",
+            "matter_id": matter_id,
+            "total_events": total_events,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        if date_range_start:
+            message["date_range_start"] = date_range_start
+        if date_range_end:
+            message["date_range_end"] = date_range_end
+        if events_by_type:
+            message["events_by_type"] = events_by_type
+
+        service.client.publish(channel, json.dumps(message))
+
+        logger.debug(
+            "timeline_discovery_broadcast",
+            matter_id=matter_id,
+            total_events=total_events,
+        )
+
+    except Exception as e:
+        logger.warning(
+            "broadcast_timeline_discovery_failed",
+            matter_id=matter_id,
             error=str(e),
         )

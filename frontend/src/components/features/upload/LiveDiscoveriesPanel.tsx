@@ -20,6 +20,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type {
   LiveDiscovery,
@@ -32,8 +33,54 @@ import type {
 interface LiveDiscoveriesPanelProps {
   /** All discoveries from processing */
   discoveries: LiveDiscovery[];
+  /** Whether processing is still in progress (shows skeleton if true and no content) */
+  isProcessing?: boolean;
   /** Optional className */
   className?: string;
+}
+
+/** Skeleton loading state for discoveries */
+function DiscoveriesSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      {/* Entities skeleton */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4 rounded" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="pl-6 space-y-1.5">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+      </div>
+
+      {/* Dates skeleton */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4 rounded" />
+          <Skeleton className="h-4 w-36" />
+        </div>
+        <div className="pl-6 space-y-1.5">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      </div>
+
+      {/* Citations skeleton */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4 rounded" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="pl-6 space-y-1.5">
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="h-4 w-36" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Format a date for display */
@@ -45,10 +92,10 @@ function formatDate(date: Date): string {
   }).format(date);
 }
 
-/** Entities section */
+/** Entities section with staggered animations for progressive rendering */
 function EntitiesSection({ entities, count }: { entities: DiscoveredEntity[]; count: number }) {
-  const displayEntities = entities.slice(0, 3);
-  const moreCount = count > 3 ? count - 3 : 0;
+  const displayEntities = entities.slice(0, 5);
+  const moreCount = count > 5 ? count - 5 : 0;
 
   return (
     <div className="space-y-2 animate-fade-in">
@@ -57,8 +104,15 @@ function EntitiesSection({ entities, count }: { entities: DiscoveredEntity[]; co
         <span>ENTITIES FOUND ({count})</span>
       </div>
       <ul className="space-y-1 pl-6 text-sm text-muted-foreground">
-        {displayEntities.map((entity) => (
-          <li key={`${entity.name}-${entity.role}`} className="flex items-center gap-1">
+        {displayEntities.map((entity, index) => (
+          <li
+            key={`${entity.name}-${entity.role}`}
+            className="flex items-center gap-1 animate-fade-in"
+            style={{
+              animationDelay: `${index * 100}ms`,
+              animationFillMode: 'backwards',
+            }}
+          >
             <span className="font-medium text-foreground">{entity.name}</span>
             {entity.role && (
               <span className="text-xs">({entity.role})</span>
@@ -66,7 +120,9 @@ function EntitiesSection({ entities, count }: { entities: DiscoveredEntity[]; co
           </li>
         ))}
         {moreCount > 0 && (
-          <li className="text-xs">+{moreCount} more...</li>
+          <li className="text-xs animate-fade-in" style={{ animationDelay: `${displayEntities.length * 100}ms` }}>
+            +{moreCount} more...
+          </li>
         )}
       </ul>
     </div>
@@ -231,6 +287,7 @@ function EarlyInsightsSection({ insights }: { insights: EarlyInsight[] }) {
 
 export function LiveDiscoveriesPanel({
   discoveries,
+  isProcessing = false,
   className,
 }: LiveDiscoveriesPanelProps) {
   // Extract different discovery types
@@ -295,7 +352,11 @@ export function LiveDiscoveriesPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!hasContent && (
+          {/* Show skeleton when processing and no content yet */}
+          {!hasContent && isProcessing && <DiscoveriesSkeleton />}
+
+          {/* Show placeholder text only when not processing and no content */}
+          {!hasContent && !isProcessing && (
             <p className="text-sm text-muted-foreground text-center py-4">
               Analyzing documents... discoveries will appear here.
             </p>

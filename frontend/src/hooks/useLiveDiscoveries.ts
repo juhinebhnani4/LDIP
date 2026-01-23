@@ -1,7 +1,8 @@
 /**
  * useLiveDiscoveries Hook
  *
- * Polls backend APIs to fetch live discovery data during document processing.
+ * WebSocket-based live discovery data during document processing.
+ * Falls back to polling if WebSocket is unavailable.
  * Aggregates entities, dates/timeline stats, and citations to populate
  * the LiveDiscoveriesPanel.
  *
@@ -11,10 +12,16 @@
  * - GET /api/matters/{matter_id}/entities - Entity list
  * - GET /api/matters/{matter_id}/timeline/stats - Timeline statistics
  * - GET /api/matters/{matter_id}/citations/acts/discovery - Act citations
+ *
+ * WebSocket channels:
+ * - discoveries:{matter_id} - Entity/timeline discovery updates
+ * - citations:{matter_id} - Citation extraction updates
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api/client';
+import { useWebSocket } from './useWebSocket';
+import type { WSMessage, WSDiscoveryUpdate, WSEntityStream } from '@/lib/ws/client';
 import type {
   LiveDiscovery,
   DiscoveredEntity,
@@ -81,12 +88,14 @@ interface ActDiscoveryResponse {
 
 /** Hook options */
 export interface UseLiveDiscoveriesOptions {
-  /** Polling interval in ms (default: 3000ms - less frequent than job status) */
+  /** Polling interval in ms (default: 5000ms - fallback only) */
   pollingInterval?: number;
-  /** Whether to enable polling (default: true) */
+  /** Whether to enable the hook (default: true) */
   enabled?: boolean;
-  /** Stop polling when processing is complete */
+  /** Stop updates when processing is complete */
   stopOnComplete?: boolean;
+  /** Prefer WebSocket over polling (default: true) */
+  preferWebSocket?: boolean;
 }
 
 /** Hook return value */
@@ -97,6 +106,8 @@ export interface LiveDiscoveriesResult {
   isLoading: boolean;
   /** Error from API calls */
   error: Error | null;
+  /** Whether using WebSocket (true) or polling fallback (false) */
+  isRealTime: boolean;
   /** Force refresh data */
   refresh: () => Promise<void>;
 }
@@ -105,7 +116,7 @@ export interface LiveDiscoveriesResult {
 // Constants
 // =============================================================================
 
-const DEFAULT_POLLING_INTERVAL = 3000;
+const DEFAULT_POLLING_INTERVAL = 5000; // Slower fallback since we have WebSocket
 
 // =============================================================================
 // Helper Functions
@@ -136,16 +147,17 @@ function getEntityRole(entityType: string): string {
 // =============================================================================
 
 /**
- * Hook to poll for live discoveries during processing.
+ * Hook to receive live discoveries during processing via WebSocket.
+ * Falls back to polling if WebSocket is unavailable.
  *
  * @param matterId - Matter ID to fetch discoveries for, null to disable
- * @param options - Polling configuration options
+ * @param options - Configuration options
  * @returns Discovery data, loading state, and error
  *
  * @example
- * const { discoveries, isLoading, error } = useLiveDiscoveries(matterId, {
- *   pollingInterval: 3000,
+ * const { discoveries, isLoading, isRealTime } = useLiveDiscoveries(matterId, {
  *   enabled: !USE_MOCK_PROCESSING && uploadPhaseComplete,
+ *   preferWebSocket: true,
  * });
  */
 export function useLiveDiscoveries(
@@ -156,6 +168,7 @@ export function useLiveDiscoveries(
     pollingInterval = DEFAULT_POLLING_INTERVAL,
     enabled = true,
     stopOnComplete = false,
+    preferWebSocket = true,
   } = options;
 
   const [discoveries, setDiscoveries] = useState<LiveDiscovery[]>([]);
@@ -167,16 +180,235 @@ export function useLiveDiscoveries(
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isCompleteRef = useRef(false);
 
-  // Track what we've already discovered to avoid duplicates
-  const hasEntitiesRef = useRef(false);
-  const hasDateRef = useRef(false);
-  const hasCitationsRef = useRef(false);
+  // Track counts to detect changes
   const lastEntityCountRef = useRef(0);
   const lastDateCountRef = useRef(0);
   const lastCitationCountRef = useRef(0);
 
+  // WebSocket connection
+  const { isConnected, subscribe } = useWebSocket(
+    preferWebSocket ? matterId : null,
+    { enabled: enabled && preferWebSocket }
+  );
+
+  // Track if we're using real-time updates
+  const isRealTime = preferWebSocket && isConnected;
+
   /**
-   * Fetch discovery data from all endpoints
+   * Update entity discovery from WebSocket message
+   */
+  const handleEntityDiscovery = useCallback((data: WSDiscoveryUpdate) => {
+    if (data.event !== 'entity_discovery') return;
+
+    const totalEntities = data.total_entities;
+    if (totalEntities <= 0 || totalEntities === lastEntityCountRef.current) return;
+
+    lastEntityCountRef.current = totalEntities;
+
+    // Build entity details from the message or use placeholder
+    const entityDetails: DiscoveredEntity[] = data.new_entities
+      ? data.new_entities.slice(0, 5).map((e) => ({
+          name: e.canonical_name,
+          role: getEntityRole(e.entity_type),
+        }))
+      : [];
+
+    setDiscoveries((prev) => {
+      const filtered = prev.filter((d) => d.type !== 'entity');
+      return [
+        ...filtered,
+        {
+          id: generateDiscoveryId(),
+          type: 'entity' as const,
+          count: totalEntities,
+          details: entityDetails,
+          timestamp: new Date(),
+        },
+      ];
+    });
+  }, []);
+
+  /**
+   * Handle individual entity streaming for progressive rendering
+   * Entities appear one-by-one as they're discovered
+   */
+  const handleEntityStream = useCallback((data: WSEntityStream) => {
+    if (data.event !== 'entity_stream') return;
+
+    const newEntity: DiscoveredEntity = {
+      name: data.entity.name,
+      role: getEntityRole(data.entity.type),
+    };
+
+    setDiscoveries((prev) => {
+      const existing = prev.find((d) => d.type === 'entity');
+
+      if (existing) {
+        // Add new entity to existing list (keep max 5 recent)
+        const currentDetails = existing.details as DiscoveredEntity[];
+        const updatedDetails = [...currentDetails];
+
+        // Only add if not already in list
+        const alreadyExists = updatedDetails.some(
+          (e) => e.name.toLowerCase() === newEntity.name.toLowerCase()
+        );
+
+        if (!alreadyExists) {
+          // Add new entity at the end, keep max 5
+          updatedDetails.push(newEntity);
+          if (updatedDetails.length > 5) {
+            updatedDetails.shift(); // Remove oldest
+          }
+        }
+
+        return prev.map((d) =>
+          d.type === 'entity'
+            ? {
+                ...d,
+                count: data.current_count,
+                details: updatedDetails,
+                timestamp: new Date(),
+              }
+            : d
+        );
+      }
+
+      // First entity - create new discovery
+      return [
+        ...prev,
+        {
+          id: generateDiscoveryId(),
+          type: 'entity' as const,
+          count: data.current_count,
+          details: [newEntity],
+          timestamp: new Date(),
+        },
+      ];
+    });
+
+    // Update ref
+    lastEntityCountRef.current = data.current_count;
+  }, []);
+
+  /**
+   * Update timeline discovery from WebSocket message
+   */
+  const handleTimelineDiscovery = useCallback((data: WSDiscoveryUpdate) => {
+    if (data.event !== 'timeline_discovery') return;
+
+    const totalEvents = data.total_events;
+    if (totalEvents <= 0 || totalEvents === lastDateCountRef.current) return;
+    if (!data.date_range_start || !data.date_range_end) return;
+
+    lastDateCountRef.current = totalEvents;
+
+    const dateDetails: DiscoveredDate = {
+      earliest: new Date(data.date_range_start),
+      latest: new Date(data.date_range_end),
+      count: totalEvents,
+    };
+
+    setDiscoveries((prev) => {
+      const filtered = prev.filter((d) => d.type !== 'date');
+      return [
+        ...filtered,
+        {
+          id: generateDiscoveryId(),
+          type: 'date' as const,
+          count: totalEvents,
+          details: dateDetails,
+          timestamp: new Date(),
+        },
+      ];
+    });
+  }, []);
+
+  /**
+   * Handle WebSocket discovery messages
+   */
+  const handleDiscoveryMessage = useCallback(
+    (msg: WSMessage<WSDiscoveryUpdate | WSEntityStream>) => {
+      if (!msg.data) return;
+
+      const data = msg.data;
+      if (data.event === 'entity_discovery') {
+        handleEntityDiscovery(data as WSDiscoveryUpdate);
+      } else if (data.event === 'entity_stream') {
+        handleEntityStream(data as WSEntityStream);
+      } else if (data.event === 'timeline_discovery') {
+        handleTimelineDiscovery(data as WSDiscoveryUpdate);
+      }
+    },
+    [handleEntityDiscovery, handleEntityStream, handleTimelineDiscovery]
+  );
+
+  /**
+   * Handle WebSocket citation messages
+   */
+  const handleCitationMessage = useCallback(
+    (msg: WSMessage<{ event?: string; total_acts?: number; citations_found?: number }>) => {
+      if (!msg.data) return;
+
+      const data = msg.data;
+      // Handle act_discovery_update or citation_extraction_progress events
+      if (data.event === 'act_discovery_update' || data.event === 'citation_extraction_progress') {
+        const totalCitations = data.citations_found ?? data.total_acts ?? 0;
+        if (totalCitations <= 0 || totalCitations === lastCitationCountRef.current) return;
+
+        lastCitationCountRef.current = totalCitations;
+
+        // We don't have detailed act names from WS, so just update the count
+        // The full refresh will populate details
+        setDiscoveries((prev) => {
+          const existing = prev.find((d) => d.type === 'citation');
+          if (existing) {
+            // Update count in place
+            return prev.map((d) =>
+              d.type === 'citation'
+                ? { ...d, count: totalCitations, timestamp: new Date() }
+                : d
+            );
+          }
+          // Add new citation discovery (details will be populated by refresh)
+          return [
+            ...prev,
+            {
+              id: generateDiscoveryId(),
+              type: 'citation' as const,
+              count: totalCitations,
+              details: [] as DiscoveredCitation[],
+              timestamp: new Date(),
+            },
+          ];
+        });
+      }
+    },
+    []
+  );
+
+  /**
+   * Subscribe to WebSocket messages
+   */
+  useEffect(() => {
+    if (!isConnected || !enabled) return;
+
+    const unsubDiscovery = subscribe<WSDiscoveryUpdate>(
+      'discovery_update',
+      handleDiscoveryMessage
+    );
+    const unsubCitation = subscribe<{ event?: string; total_acts?: number; citations_found?: number }>(
+      'citation_update',
+      handleCitationMessage
+    );
+
+    return () => {
+      unsubDiscovery();
+      unsubCitation();
+    };
+  }, [isConnected, enabled, subscribe, handleDiscoveryMessage, handleCitationMessage]);
+
+  /**
+   * Fetch discovery data from all endpoints (initial load + polling fallback)
    */
   const fetchDiscoveries = useCallback(async () => {
     if (!matterId) return;
@@ -201,7 +433,6 @@ export function useLiveDiscoveries(
         const entities = entitiesResult.value.data;
         const totalEntities = entitiesResult.value.meta.total;
 
-        // Only add/update if we have new entities
         if (totalEntities > 0 && totalEntities !== lastEntityCountRef.current) {
           lastEntityCountRef.current = totalEntities;
 
@@ -210,31 +441,13 @@ export function useLiveDiscoveries(
             role: getEntityRole(e.entityType),
           }));
 
-          // Replace existing entity discovery or add new one
-          if (hasEntitiesRef.current) {
-            setDiscoveries((prev) => {
-              const filtered = prev.filter((d) => d.type !== 'entity');
-              return [
-                ...filtered,
-                {
-                  id: generateDiscoveryId(),
-                  type: 'entity' as const,
-                  count: totalEntities,
-                  details: entityDetails,
-                  timestamp: new Date(),
-                },
-              ];
-            });
-          } else {
-            hasEntitiesRef.current = true;
-            newDiscoveries.push({
-              id: generateDiscoveryId(),
-              type: 'entity',
-              count: totalEntities,
-              details: entityDetails,
-              timestamp: new Date(),
-            });
-          }
+          newDiscoveries.push({
+            id: generateDiscoveryId(),
+            type: 'entity',
+            count: totalEntities,
+            details: entityDetails,
+            timestamp: new Date(),
+          });
         }
       }
 
@@ -245,7 +458,6 @@ export function useLiveDiscoveries(
         if (stats.totalEvents > 0 && stats.dateRangeStart && stats.dateRangeEnd) {
           const dateCount = stats.totalEvents;
 
-          // Only add/update if count changed
           if (dateCount !== lastDateCountRef.current) {
             lastDateCountRef.current = dateCount;
 
@@ -255,31 +467,13 @@ export function useLiveDiscoveries(
               count: dateCount,
             };
 
-            // Replace existing date discovery or add new one
-            if (hasDateRef.current) {
-              setDiscoveries((prev) => {
-                const filtered = prev.filter((d) => d.type !== 'date');
-                return [
-                  ...filtered,
-                  {
-                    id: generateDiscoveryId(),
-                    type: 'date' as const,
-                    count: dateCount,
-                    details: dateDetails,
-                    timestamp: new Date(),
-                  },
-                ];
-              });
-            } else {
-              hasDateRef.current = true;
-              newDiscoveries.push({
-                id: generateDiscoveryId(),
-                type: 'date',
-                count: dateCount,
-                details: dateDetails,
-                timestamp: new Date(),
-              });
-            }
+            newDiscoveries.push({
+              id: generateDiscoveryId(),
+              type: 'date',
+              count: dateCount,
+              details: dateDetails,
+              timestamp: new Date(),
+            });
           }
         }
       }
@@ -290,56 +484,46 @@ export function useLiveDiscoveries(
         const totalCitations = acts.reduce((sum, act) => sum + act.citationCount, 0);
 
         if (acts.length > 0 && totalCitations > 0) {
-          // Only add/update if count changed
           if (totalCitations !== lastCitationCountRef.current) {
             lastCitationCountRef.current = totalCitations;
 
             const citationDetails: DiscoveredCitation[] = acts
               .filter((act) => act.citationCount > 0)
-              .slice(0, 5) // Show top 5 acts
+              .slice(0, 5)
               .map((act) => ({
                 actName: act.actName,
                 count: act.citationCount,
               }));
 
-            // Replace existing citation discovery or add new one
-            if (hasCitationsRef.current) {
-              setDiscoveries((prev) => {
-                const filtered = prev.filter((d) => d.type !== 'citation');
-                return [
-                  ...filtered,
-                  {
-                    id: generateDiscoveryId(),
-                    type: 'citation' as const,
-                    count: totalCitations,
-                    details: citationDetails,
-                    timestamp: new Date(),
-                  },
-                ];
-              });
-            } else {
-              hasCitationsRef.current = true;
-              newDiscoveries.push({
-                id: generateDiscoveryId(),
-                type: 'citation',
-                count: totalCitations,
-                details: citationDetails,
-                timestamp: new Date(),
-              });
-            }
+            newDiscoveries.push({
+              id: generateDiscoveryId(),
+              type: 'citation',
+              count: totalCitations,
+              details: citationDetails,
+              timestamp: new Date(),
+            });
           }
         }
       }
 
-      // Add all new discoveries at once
+      // Update discoveries - merge with existing or add new
       if (newDiscoveries.length > 0) {
-        setDiscoveries((prev) => [...prev, ...newDiscoveries]);
+        setDiscoveries((prev) => {
+          const result = [...prev];
+          for (const newDisc of newDiscoveries) {
+            const existingIdx = result.findIndex((d) => d.type === newDisc.type);
+            if (existingIdx >= 0) {
+              result[existingIdx] = newDisc;
+            } else {
+              result.push(newDisc);
+            }
+          }
+          return result;
+        });
       }
-
     } catch (err) {
       if (!isMountedRef.current) return;
 
-      // Don't fail hard on discovery errors - these are progressive enhancements
       console.warn('Failed to fetch some discovery data:', err);
 
       if (err instanceof Error) {
@@ -361,15 +545,14 @@ export function useLiveDiscoveries(
     await fetchDiscoveries();
   }, [fetchDiscoveries]);
 
-  // Set up polling
+  /**
+   * Initial fetch and polling fallback setup
+   */
   useEffect(() => {
     isMountedRef.current = true;
     isCompleteRef.current = false;
 
     // Reset tracking refs when matterId changes
-    hasEntitiesRef.current = false;
-    hasDateRef.current = false;
-    hasCitationsRef.current = false;
     lastEntityCountRef.current = 0;
     lastDateCountRef.current = 0;
     lastCitationCountRef.current = 0;
@@ -380,28 +563,29 @@ export function useLiveDiscoveries(
       return;
     }
 
-    // Initial fetch
+    // Always do initial fetch
     void fetchDiscoveries();
 
-    // Set up polling interval
-    const poll = () => {
-      if (stopOnComplete && isCompleteRef.current) {
-        return;
-      }
-
-      pollingRef.current = setTimeout(async () => {
-        if (!isMountedRef.current) return;
-
-        await fetchDiscoveries();
-
-        // Continue polling
-        if (!stopOnComplete || !isCompleteRef.current) {
-          poll();
+    // Only poll if WebSocket is not connected
+    if (!isRealTime) {
+      const poll = () => {
+        if (stopOnComplete && isCompleteRef.current) {
+          return;
         }
-      }, pollingInterval);
-    };
 
-    poll();
+        pollingRef.current = setTimeout(async () => {
+          if (!isMountedRef.current) return;
+
+          await fetchDiscoveries();
+
+          if (!stopOnComplete || !isCompleteRef.current) {
+            poll();
+          }
+        }, pollingInterval);
+      };
+
+      poll();
+    }
 
     // Cleanup
     return () => {
@@ -411,12 +595,13 @@ export function useLiveDiscoveries(
         pollingRef.current = null;
       }
     };
-  }, [matterId, enabled, pollingInterval, stopOnComplete, fetchDiscoveries]);
+  }, [matterId, enabled, pollingInterval, stopOnComplete, isRealTime, fetchDiscoveries]);
 
   return {
     discoveries,
     isLoading,
     error,
+    isRealTime,
     refresh,
   };
 }

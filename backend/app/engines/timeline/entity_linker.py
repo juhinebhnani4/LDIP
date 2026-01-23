@@ -14,6 +14,7 @@ import asyncio
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -432,6 +433,67 @@ class EventEntityLinker:
                 matched_entity_ids.add(match.entity_id)
 
         return list(matched_entity_ids)
+
+    def link_entities_batch_parallel(
+        self,
+        events: list[RawEvent],
+        matter_id: str,
+        entities: list[EntityNode],
+        max_workers: int = 10,
+    ) -> dict[str, list[str]]:
+        """Parallel batch entity linking using ThreadPoolExecutor.
+
+        Processes multiple events concurrently using a thread pool.
+        More efficient than sequential processing for large batches.
+
+        Args:
+            events: List of RawEvent objects to link.
+            matter_id: Matter UUID (for logging).
+            entities: Pre-loaded list of EntityNode objects for the matter.
+            max_workers: Maximum number of parallel workers (default 10).
+
+        Returns:
+            Dict mapping event_id to list of entity_ids.
+        """
+        start_time = time.time()
+
+        if not events or not entities:
+            return {e.id: [] for e in events} if events else {}
+
+        def process_single_event(event: RawEvent) -> tuple[str, list[str]]:
+            """Process a single event in a thread."""
+            entity_ids = self.link_entities_to_event_sync(
+                event_id=event.id,
+                description=event.description,
+                matter_id=matter_id,
+                entities=entities,
+            )
+            return event.id, entity_ids
+
+        results: dict[str, list[str]] = {}
+
+        # Use ThreadPoolExecutor for CPU-bound parallel processing
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(events))) as executor:
+            futures = executor.map(process_single_event, events)
+            for event_id, entity_ids in futures:
+                results[event_id] = entity_ids
+
+        processing_time = int((time.time() - start_time) * 1000)
+
+        total_linked = sum(len(ids) for ids in results.values())
+        events_with_links = sum(1 for ids in results.values() if ids)
+
+        logger.info(
+            "entity_linking_batch_parallel_complete",
+            matter_id=matter_id,
+            events_processed=len(events),
+            events_with_links=events_with_links,
+            total_entities_linked=total_linked,
+            max_workers=max_workers,
+            processing_time_ms=processing_time,
+        )
+
+        return results
 
     # =========================================================================
     # Helper Methods

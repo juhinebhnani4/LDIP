@@ -29,6 +29,17 @@ from app.models.entity import (
 )
 from app.services.supabase.client import get_supabase_client
 
+# Import is done lazily to avoid circular dependencies
+_broadcast_entity_streaming = None
+
+def _get_broadcast_entity_streaming():
+    """Lazily import broadcast function to avoid circular imports."""
+    global _broadcast_entity_streaming
+    if _broadcast_entity_streaming is None:
+        from app.services.pubsub_service import broadcast_entity_streaming
+        _broadcast_entity_streaming = broadcast_entity_streaming
+    return _broadcast_entity_streaming
+
 logger = structlog.get_logger(__name__)
 
 
@@ -191,6 +202,22 @@ class MIGGraphService:
                 entities=new_entities,
             )
             saved_nodes.extend(created)
+
+            # Broadcast each new entity for progressive streaming
+            # This enables ChatGPT-style one-by-one entity appearance in the UI
+            broadcast = _get_broadcast_entity_streaming()
+            current_count = len(saved_nodes)
+            for node in created:
+                try:
+                    broadcast(
+                        matter_id=matter_id,
+                        entity_name=node.canonical_name,
+                        entity_type=node.entity_type.value,
+                        current_count=current_count,
+                        document_id=extraction_result.source_document_id,
+                    )
+                except Exception:
+                    pass  # Non-critical, don't fail entity creation
 
             # Build entity_id map for mentions
             new_entity_map = {

@@ -150,7 +150,10 @@ export function ProcessingScreen({
               LIVE DISCOVERIES
             </h2>
 
-            <LiveDiscoveriesPanel discoveries={liveDiscoveries} />
+            <LiveDiscoveriesPanel
+              discoveries={liveDiscoveries}
+              isProcessing={!uploadsComplete || processingStage !== null}
+            />
           </div>
         </div>
 

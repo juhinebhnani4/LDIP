@@ -31,7 +31,11 @@ from app.services.chunk_service import get_chunk_service
 from app.services.document_service import get_document_service
 from app.services.job_tracking import get_job_tracking_service
 from app.services.mig.graph import get_mig_graph_service
-from app.services.pubsub_service import FeatureType, broadcast_feature_ready
+from app.services.pubsub_service import (
+    FeatureType,
+    broadcast_feature_ready,
+    broadcast_timeline_discovery,
+)
 from app.services.timeline_cache import get_timeline_cache_service
 from app.services.timeline_service import get_timeline_service
 from app.workers.celery import celery_app
@@ -286,6 +290,27 @@ def extract_dates_from_document(
             events_created=len(event_ids),
             processing_time_ms=extraction_result.processing_time_ms,
         )
+
+        # Broadcast progressive timeline discovery for real-time UI updates
+        if len(extraction_result.dates) > 0:
+            # Calculate date range
+            date_range_start = None
+            date_range_end = None
+            if extraction_result.dates:
+                sorted_dates = sorted(
+                    [d.date for d in extraction_result.dates if d.date],
+                    key=lambda x: x or "",
+                )
+                if sorted_dates:
+                    date_range_start = sorted_dates[0]
+                    date_range_end = sorted_dates[-1]
+
+            broadcast_timeline_discovery(
+                matter_id=matter_id,
+                total_events=len(event_ids),
+                date_range_start=date_range_start,
+                date_range_end=date_range_end,
+            )
 
         # Story 7.1: Broadcast timeline feature availability
         broadcast_feature_ready(
@@ -1024,7 +1049,7 @@ def link_entities_for_matter(
                 "reason": "no_mig_entities",
             }
 
-        # Process events in batches
+        # Process events in batches with parallel processing
         batch_size = 50
         total_events = len(events)
         events_with_links = 0
@@ -1033,27 +1058,30 @@ def link_entities_for_matter(
         for i in range(0, total_events, batch_size):
             batch = events[i : i + batch_size]
 
-            # Link entities for each event in batch
-            event_entities: dict[str, list[str]] = {}
-            for event in batch:
-                entity_ids = entity_linker.link_entities_to_event_sync(
-                    event_id=event.id,
-                    description=event.description,
-                    matter_id=matter_id,
-                    entities=entities,
-                )
+            # Link entities for batch using parallel processing (ThreadPoolExecutor)
+            # This is significantly faster than sequential processing for large batches
+            event_entities = entity_linker.link_entities_batch_parallel(
+                events=batch,
+                matter_id=matter_id,
+                entities=entities,
+                max_workers=10,  # Parallel threads for CPU-bound entity matching
+            )
 
+            # Count results
+            for entity_ids in event_entities.values():
                 if entity_ids:
-                    event_entities[event.id] = entity_ids
                     events_with_links += 1
                     total_entity_links += len(entity_ids)
 
             # Bulk update events with entity links
             if event_entities:
-                timeline_service.bulk_update_event_entities_sync(
-                    event_entities=event_entities,
-                    matter_id=matter_id,
-                )
+                # Filter to only events that have links
+                links_to_update = {k: v for k, v in event_entities.items() if v}
+                if links_to_update:
+                    timeline_service.bulk_update_event_entities_sync(
+                        event_entities=links_to_update,
+                        matter_id=matter_id,
+                    )
 
             # Update progress
             progress = min(10 + int((i + batch_size) / total_events * 85), 95)
@@ -1264,26 +1292,22 @@ def link_entities_after_extraction(
                     result["anomaly_detection_queued"] = False
             return result
 
-        # Link entities
-        events_linked = 0
-        event_entities: dict[str, list[str]] = {}
+        # Link entities using parallel batch processing
+        event_entities = entity_linker.link_entities_batch_parallel(
+            events=events,
+            matter_id=matter_id,
+            entities=entities,
+            max_workers=10,  # Parallel threads for CPU-bound entity matching
+        )
 
-        for event in events:
-            entity_ids = entity_linker.link_entities_to_event_sync(
-                event_id=event.id,
-                description=event.description,
-                matter_id=matter_id,
-                entities=entities,
-            )
+        # Count linked events
+        events_linked = sum(1 for ids in event_entities.values() if ids)
 
-            if entity_ids:
-                event_entities[event.id] = entity_ids
-                events_linked += 1
-
-        # Update events
-        if event_entities:
+        # Update events with links
+        links_to_update = {k: v for k, v in event_entities.items() if v}
+        if links_to_update:
             timeline_service.bulk_update_event_entities_sync(
-                event_entities=event_entities,
+                event_entities=links_to_update,
                 matter_id=matter_id,
             )
             # Invalidate cache

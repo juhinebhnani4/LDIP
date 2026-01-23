@@ -8,6 +8,9 @@
 /** Document types matching backend enum */
 export type DocumentType = 'case_file' | 'act' | 'annexure' | 'other';
 
+/** Document source indicating how the document was added */
+export type DocumentSource = 'user_upload' | 'auto_fetched' | 'system';
+
 /** Document status from processing pipeline */
 export type DocumentStatus = 'pending' | 'processing' | 'ocr_complete' | 'completed' | 'ocr_failed' | 'failed';
 
@@ -84,8 +87,10 @@ export interface Document {
   pageCount: number | null;
   documentType: DocumentType;
   isReferenceMaterial: boolean;
-  uploadedBy: string;
+  source: DocumentSource;
+  uploadedBy: string | null;
   uploadedAt: string;
+  indiaCodeUrl: string | null;
   status: DocumentStatus;
   processingStartedAt: string | null;
   processingCompletedAt: string | null;
@@ -102,7 +107,15 @@ export interface Document {
   updatedAt: string;
 }
 
-/** Document list item (subset of Document for list views) */
+/**
+ * Document list item (subset of Document for list views)
+ *
+ * IMPORTANT: Fields here must stay in sync with:
+ * 1. DOCUMENT_LIST_SELECT_FIELDS in backend/app/services/document_service.py
+ * 2. DocumentListItem class in backend/app/models/document.py
+ *
+ * When adding fields, update all three locations.
+ */
 export interface DocumentListItem {
   id: string;
   matterId: string;
@@ -111,9 +124,11 @@ export interface DocumentListItem {
   pageCount: number | null;
   documentType: DocumentType;
   isReferenceMaterial: boolean;
+  /** Document source - defaults to 'user_upload' for backward compatibility */
+  source?: DocumentSource;
   status: DocumentStatus;
   uploadedAt: string;
-  uploadedBy: string;
+  uploadedBy: string | null;
   ocrConfidence: number | null;
   ocrQualityStatus: OCRQualityStatus | null;
 }

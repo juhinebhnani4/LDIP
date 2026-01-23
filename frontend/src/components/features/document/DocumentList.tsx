@@ -6,6 +6,7 @@ import type {
   DocumentListItem,
   DocumentSort,
   DocumentSortColumn,
+  DocumentSource,
   DocumentStatus,
   DocumentType,
   PaginationMeta,
@@ -26,8 +27,9 @@ import { DocumentProcessingStatus } from './DocumentProcessingStatus';
 import { DocumentActionMenu } from './DocumentActionMenu';
 import { RenameDocumentDialog } from './RenameDocumentDialog';
 import { DeleteDocumentDialog } from './DeleteDocumentDialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -105,6 +107,40 @@ function formatDate(dateString: string): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+/**
+ * Source badge component for showing document origin
+ */
+function SourceBadge({ source }: { source?: DocumentSource }) {
+  // Default to user_upload for backward compatibility
+  const actualSource = source || 'user_upload';
+
+  if (actualSource === 'auto_fetched') {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">
+            India Code
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Auto-fetched from India Code</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (actualSource === 'system') {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        System
+      </Badge>
+    );
+  }
+
+  // user_upload - no badge needed
+  return null;
 }
 
 /**
@@ -540,21 +576,24 @@ export function DocumentList({
                     </div>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={doc.documentType}
-                      onValueChange={(v) => handleTypeChange(doc.id, v as DocumentType)}
-                    >
-                      <SelectTrigger className="h-auto p-0 border-0 shadow-none focus:ring-0">
-                        <DocumentTypeBadge type={doc.documentType} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOCUMENT_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1.5">
+                      <Select
+                        value={doc.documentType}
+                        onValueChange={(v) => handleTypeChange(doc.id, v as DocumentType)}
+                      >
+                        <SelectTrigger className="h-auto p-0 border-0 shadow-none focus:ring-0">
+                          <DocumentTypeBadge type={doc.documentType} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DOCUMENT_TYPES.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <SourceBadge source={doc.source} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span
@@ -576,14 +615,23 @@ export function DocumentList({
                     {formatDate(doc.uploadedAt)}
                   </TableCell>
                   <TableCell>
-                    <OCRQualityBadge
-                      status={doc.ocrQualityStatus}
-                      confidence={doc.ocrConfidence}
-                      showPercentage={true}
-                    />
+                    {/* Auto-fetched docs don't have OCR - show N/A */}
+                    {doc.source === 'auto_fetched' ? (
+                      <span className="text-muted-foreground text-sm">N/A</span>
+                    ) : /* Completed docs without quality data show dash, not "Pending" */
+                    (doc.status === 'completed' || doc.status === 'ocr_complete') && !doc.ocrQualityStatus ? (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    ) : (
+                      <OCRQualityBadge
+                        status={doc.ocrQualityStatus}
+                        confidence={doc.ocrConfidence}
+                        showPercentage={true}
+                      />
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-center">
-                    {doc.pageCount ?? '—'}
+                    {/* Auto-fetched docs may not have page count */}
+                    {doc.source === 'auto_fetched' && !doc.pageCount ? 'N/A' : (doc.pageCount ?? '—')}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <DocumentProcessingStatus

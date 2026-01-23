@@ -11,6 +11,7 @@ import {
 import { jobsApi } from '@/lib/api/jobs';
 import { createClient } from '@/lib/supabase/client';
 import { ActDiscoveryTrigger } from '@/components/features/citation';
+import { useFeatureSubscription } from '@/hooks/useFeatureSubscription';
 import type { JobProgressEvent, JobStatusChangeEvent } from '@/types/job';
 
 interface MatterWorkspaceWrapperProps {
@@ -100,6 +101,10 @@ export function MatterWorkspaceWrapper({
       setMatterId(null);
     };
   }, [matterId, setMatterId, setJobs, setStats, setLoading, onProgressEvent, onStatusChangeEvent]);
+
+  // Subscribe to feature availability broadcasts for progressive UI
+  // This enables showing features as they become ready during processing
+  useFeatureSubscription({ matterId, enabled: true });
 
   // Determine if banner should show
   const showBanner = activeCount > 0 || failedCount > 0;

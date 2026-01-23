@@ -46,12 +46,14 @@ export function DocumentActionMenu({
   const canEdit = userRole === 'owner' || userRole === 'editor';
 
   // Show retry option for failed or stuck documents
+  // Include 'pending' status for documents where processing never started
   const canRetry =
     onRetry &&
     canEdit &&
     (document.status === 'ocr_failed' ||
       document.status === 'ocr_complete' ||
-      document.status === 'processing');
+      document.status === 'processing' ||
+      document.status === 'pending');
 
   return (
     <DropdownMenu>

@@ -23,6 +23,7 @@ import { CitationsByDocumentView } from './CitationsByDocumentView';
 import { MissingActsCard } from './MissingActsCard';
 import { SplitViewCitationPanel } from './SplitViewCitationPanel';
 import { SplitViewModal } from './SplitViewModal';
+import { PdfErrorBoundary } from '../pdf';
 import {
   useCitationsList,
   useCitationStats,
@@ -315,17 +316,51 @@ export function CitationsContent({
 
             {/* Split-view panel */}
             <Panel defaultSize={65} minSize={40}>
-              <SplitViewCitationPanel
-                data={splitViewData as SplitViewData}
-                isFullScreen={false}
-                isLoading={splitViewLoading}
-                error={splitViewError}
-                navigationInfo={navigationInfo}
-                onClose={closeSplitView}
-                onToggleFullScreen={toggleFullScreen}
-                onPrev={navigateToPrev}
-                onNext={navigateToNext}
-              />
+              {splitViewLoading && !splitViewData ? (
+                // Show dedicated loading state when data hasn't loaded yet
+                <div className="h-full flex flex-col items-center justify-center border-l bg-background">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    <p className="text-sm text-muted-foreground">Loading citation view...</p>
+                  </div>
+                </div>
+              ) : splitViewError && !splitViewData ? (
+                // Show error state when there's an error and no data
+                <div className="h-full flex flex-col items-center justify-center border-l bg-background">
+                  <div className="flex flex-col items-center gap-2 text-center px-4">
+                    <p className="text-sm text-destructive">{splitViewError}</p>
+                    <button
+                      onClick={closeSplitView}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : splitViewData ? (
+                // Show the panel only when data is available, wrapped in error boundary
+                <PdfErrorBoundary
+                  fallbackMessage="Failed to load citation split view. Please try again."
+                  onRetry={() => {
+                    // Re-open the split view to trigger a reload
+                    if (splitViewData?.citation?.id) {
+                      openSplitView(splitViewData.citation.id, matterId);
+                    }
+                  }}
+                >
+                  <SplitViewCitationPanel
+                    data={splitViewData}
+                    isFullScreen={false}
+                    isLoading={splitViewLoading}
+                    error={splitViewError}
+                    navigationInfo={navigationInfo}
+                    onClose={closeSplitView}
+                    onToggleFullScreen={toggleFullScreen}
+                    onPrev={navigateToPrev}
+                    onNext={navigateToNext}
+                  />
+                </PdfErrorBoundary>
+              ) : null}
             </Panel>
           </PanelGroup>
         ) : (

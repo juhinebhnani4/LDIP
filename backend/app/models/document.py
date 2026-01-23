@@ -22,6 +22,20 @@ class DocumentType(str, Enum):
     OTHER = "other"
 
 
+class DocumentSource(str, Enum):
+    """Document source indicating how the document was added.
+
+    Sources:
+    - user_upload: Manually uploaded by a user
+    - auto_fetched: Automatically fetched from India Code
+    - system: System-generated or internal documents
+    """
+
+    USER_UPLOAD = "user_upload"
+    AUTO_FETCHED = "auto_fetched"
+    SYSTEM = "system"
+
+
 class DocumentStatus(str, Enum):
     """Processing status for documents.
 
@@ -76,7 +90,16 @@ class DocumentCreate(DocumentBase):
         alias="isReferenceMaterial",
         description="True for Acts and reference docs"
     )
-    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded the document")
+    source: DocumentSource = Field(
+        default=DocumentSource.USER_UPLOAD,
+        description="Document source: user_upload, auto_fetched, or system"
+    )
+    uploaded_by: str | None = Field(None, alias="uploadedBy", description="User UUID who uploaded (null for auto-fetched)")
+    india_code_url: str | None = Field(
+        None,
+        alias="indiaCodeUrl",
+        description="Original India Code URL for auto-fetched Acts"
+    )
 
 
 class Document(DocumentBase):
@@ -92,8 +115,17 @@ class Document(DocumentBase):
         alias="isReferenceMaterial",
         description="True for Acts and reference docs"
     )
-    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded")
+    source: DocumentSource = Field(
+        default=DocumentSource.USER_UPLOAD,
+        description="Document source: user_upload, auto_fetched, or system"
+    )
+    uploaded_by: str | None = Field(None, alias="uploadedBy", description="User UUID who uploaded (null for auto-fetched)")
     uploaded_at: datetime = Field(..., alias="uploadedAt", description="Upload timestamp")
+    india_code_url: str | None = Field(
+        None,
+        alias="indiaCodeUrl",
+        description="Original India Code URL for auto-fetched Acts"
+    )
     status: DocumentStatus = Field(
         default=DocumentStatus.PENDING,
         description="Processing status"
@@ -259,7 +291,14 @@ class PaginationMeta(BaseModel):
 
 
 class DocumentListItem(BaseModel):
-    """Document item for list responses (subset of full Document)."""
+    """Document item for list responses (subset of full Document).
+
+    IMPORTANT: Fields here must stay in sync with:
+    1. DOCUMENT_LIST_SELECT_FIELDS in document_service.py
+    2. DocumentListItem interface in frontend/src/types/document.ts
+
+    When adding fields, update all three locations.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -267,11 +306,16 @@ class DocumentListItem(BaseModel):
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
     filename: str = Field(..., description="Original filename")
     file_size: int = Field(..., ge=0, alias="fileSize", description="File size in bytes")
+    page_count: int | None = Field(None, alias="pageCount", description="Number of pages (null until OCR)")
     document_type: DocumentType = Field(..., alias="documentType", description="Document classification")
     is_reference_material: bool = Field(..., alias="isReferenceMaterial", description="True for Acts and reference docs")
+    source: DocumentSource = Field(
+        default=DocumentSource.USER_UPLOAD,
+        description="Document source: user_upload, auto_fetched, or system"
+    )
     status: DocumentStatus = Field(..., description="Processing status")
     uploaded_at: datetime = Field(..., alias="uploadedAt", description="Upload timestamp")
-    uploaded_by: str = Field(..., alias="uploadedBy", description="User UUID who uploaded")
+    uploaded_by: str | None = Field(None, alias="uploadedBy", description="User UUID who uploaded (null for auto-fetched)")
     ocr_confidence: float | None = Field(
         None, ge=0, le=1,
         alias="ocrConfidence",

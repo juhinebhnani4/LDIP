@@ -635,13 +635,15 @@ def _mark_job_failed(
 def _mark_job_completed(
     job_id: str | None,
     matter_id: str | None = None,
+    document_id: str | None = None,
     job_tracker: JobTrackingService | None = None,
 ) -> None:
-    """Mark job as completed successfully.
+    """Mark job as completed successfully and update document status.
 
     Args:
         job_id: Job UUID.
         matter_id: Matter UUID for broadcasting.
+        document_id: Document UUID to update status.
         job_tracker: Optional JobTrackingService instance.
     """
     if not job_id:
@@ -657,6 +659,27 @@ def _mark_job_completed(
                 progress_pct=100,
             )
         )
+
+        # Update document status to completed
+        if document_id:
+            try:
+                doc_service = get_document_service()
+                doc_service.update_ocr_status(
+                    document_id=document_id,
+                    status=DocumentStatus.COMPLETED,
+                )
+                logger.info(
+                    "document_status_updated_to_completed",
+                    document_id=document_id,
+                    job_id=job_id,
+                )
+            except Exception as doc_err:
+                logger.warning(
+                    "document_status_update_failed",
+                    document_id=document_id,
+                    job_id=job_id,
+                    error=str(doc_err),
+                )
 
         # Broadcast status change
         if matter_id:
@@ -722,6 +745,290 @@ def _mark_job_completed(
             job_id=job_id,
             error=str(e),
         )
+
+
+# =============================================================================
+# Job ID Lookup and Idempotency Helpers (Pipeline Resilience)
+# =============================================================================
+
+
+def _lookup_job_id_for_document(document_id: str) -> str | None:
+    """Lookup job_id from database when not provided in task chain.
+
+    This enables standalone task calls (via apply_async with just document_id)
+    to still update job progress correctly.
+
+    Args:
+        document_id: Document UUID.
+
+    Returns:
+        Job ID if found, None otherwise.
+    """
+    from app.services.supabase.client import get_service_client
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return None
+
+        # Find active job for this document
+        response = (
+            client.table("processing_jobs")
+            .select("id")
+            .eq("document_id", document_id)
+            .in_("status", ["QUEUED", "PROCESSING"])
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data:
+            job_id = response.data[0]["id"]
+            logger.debug(
+                "job_id_lookup_success",
+                document_id=document_id,
+                job_id=job_id,
+            )
+            return job_id
+
+        logger.debug(
+            "job_id_lookup_no_active_job",
+            document_id=document_id,
+        )
+        return None
+
+    except Exception as e:
+        logger.warning(
+            "job_id_lookup_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return None
+
+
+def _check_embedding_complete(document_id: str) -> tuple[bool, int, int]:
+    """Check if embedding is already complete for a document.
+
+    Returns:
+        Tuple of (is_complete, total_chunks, embedded_chunks).
+    """
+    from app.services.supabase.client import get_service_client
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return False, 0, 0
+
+        # Count total chunks
+        total_resp = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        total_count = total_resp.count or 0
+
+        if total_count == 0:
+            return False, 0, 0
+
+        # Count chunks with embeddings
+        embedded_resp = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .not_.is_("embedding", "null")
+            .execute()
+        )
+        embedded_count = embedded_resp.count or 0
+
+        is_complete = total_count > 0 and total_count == embedded_count
+
+        logger.debug(
+            "embedding_completeness_check",
+            document_id=document_id,
+            total_chunks=total_count,
+            embedded_chunks=embedded_count,
+            is_complete=is_complete,
+        )
+
+        return is_complete, total_count, embedded_count
+
+    except Exception as e:
+        logger.warning(
+            "embedding_completeness_check_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return False, 0, 0
+
+
+def _check_entities_exist(matter_id: str) -> tuple[bool, int]:
+    """Check if entities have been extracted for a matter.
+
+    Returns:
+        Tuple of (has_entities, entity_count).
+    """
+    from app.services.supabase.client import get_service_client
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return False, 0
+
+        response = (
+            client.table("identity_nodes")
+            .select("id", count="exact")
+            .eq("matter_id", matter_id)
+            .execute()
+        )
+        entity_count = response.count or 0
+
+        logger.debug(
+            "entity_existence_check",
+            matter_id=matter_id,
+            entity_count=entity_count,
+        )
+
+        return entity_count > 0, entity_count
+
+    except Exception as e:
+        logger.warning(
+            "entity_existence_check_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+        return False, 0
+
+
+def _check_entity_mentions_exist_for_document(document_id: str) -> tuple[bool, int]:
+    """Check if entity mentions have been extracted for a specific document.
+
+    This is used for per-document idempotency to ensure entity extraction
+    runs for each document, not just once per matter.
+
+    Returns:
+        Tuple of (has_mentions, mention_count).
+    """
+    from app.services.supabase.client import get_service_client
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return False, 0
+
+        response = (
+            client.table("entity_mentions")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        mention_count = response.count or 0
+
+        logger.debug(
+            "entity_mentions_document_check",
+            document_id=document_id,
+            mention_count=mention_count,
+        )
+
+        return mention_count > 0, mention_count
+    except Exception as e:
+        logger.warning(
+            "entity_mentions_document_check_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return False, 0
+
+
+def _sync_entity_ids_to_chunks(document_id: str) -> int:
+    """Sync entity_ids from entity_mentions to chunks table.
+
+    After entity extraction, this function populates the chunks.entity_ids
+    array based on entity_mentions records. This denormalized array enables
+    efficient filtering during contradiction detection and other queries.
+
+    Args:
+        document_id: Document UUID.
+
+    Returns:
+        Number of chunks updated.
+    """
+    from app.services.supabase.client import get_service_client
+
+    try:
+        client = get_service_client()
+        if client is None:
+            logger.warning(
+                "sync_entity_ids_no_client",
+                document_id=document_id,
+            )
+            return 0
+
+        # Step 1: Get all entity mentions for this document
+        # Group by chunk_id to build the entity_ids array for each chunk
+        mentions_response = (
+            client.table("entity_mentions")
+            .select("entity_id, chunk_id")
+            .eq("document_id", document_id)
+            .not_.is_("chunk_id", "null")
+            .execute()
+        )
+
+        if not mentions_response.data:
+            logger.info(
+                "sync_entity_ids_no_mentions",
+                document_id=document_id,
+            )
+            return 0
+
+        # Step 2: Build chunk_id -> entity_ids map
+        chunk_entities: dict[str, set[str]] = {}
+        for row in mentions_response.data:
+            chunk_id = row.get("chunk_id")
+            entity_id = row.get("entity_id")
+            if chunk_id and entity_id:
+                if chunk_id not in chunk_entities:
+                    chunk_entities[chunk_id] = set()
+                chunk_entities[chunk_id].add(entity_id)
+
+        if not chunk_entities:
+            logger.info(
+                "sync_entity_ids_no_chunk_mappings",
+                document_id=document_id,
+            )
+            return 0
+
+        # Step 3: Update each chunk with its entity_ids
+        updated_count = 0
+        for chunk_id, entity_ids in chunk_entities.items():
+            try:
+                client.table("chunks").update(
+                    {"entity_ids": list(entity_ids)}
+                ).eq("id", chunk_id).execute()
+                updated_count += 1
+            except Exception as e:
+                logger.warning(
+                    "sync_entity_ids_chunk_update_failed",
+                    chunk_id=chunk_id,
+                    error=str(e),
+                )
+
+        logger.info(
+            "sync_entity_ids_completed",
+            document_id=document_id,
+            chunks_updated=updated_count,
+            total_chunk_entity_pairs=sum(len(ids) for ids in chunk_entities.values()),
+        )
+
+        return updated_count
+
+    except Exception as e:
+        logger.error(
+            "sync_entity_ids_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return 0
 
 
 @celery_app.task(
@@ -1218,6 +1525,10 @@ def validate_ocr(
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
+    # If job_id not in prev_result, look it up from database
+    if job_id is None and doc_id:
+        job_id = _lookup_job_id_for_document(doc_id)
+
     if not doc_id:
         logger.error("validate_ocr_no_document_id")
         return {
@@ -1614,6 +1925,10 @@ def calculate_confidence(
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
+    # If job_id not in prev_result, look it up from database
+    if job_id is None and doc_id:
+        job_id = _lookup_job_id_for_document(doc_id)
+
     if not doc_id:
         logger.error("calculate_confidence_no_document_id")
         return {
@@ -1808,6 +2123,10 @@ def chunk_document(
         if doc_id is None:
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
+    # If job_id not in prev_result, look it up from database
+    if job_id is None and doc_id:
+        job_id = _lookup_job_id_for_document(doc_id)
 
     if not doc_id:
         logger.error("chunk_document_no_document_id")
@@ -2387,9 +2706,32 @@ def embed_chunks(
             )
 
         # Get job_id for partial progress tracking
+        # First try prev_result, then lookup from database
         job_id: str | None = None
         if prev_result:
             job_id = prev_result.get("job_id")  # type: ignore[assignment]
+        if job_id is None:
+            job_id = _lookup_job_id_for_document(doc_id)
+
+        # IDEMPOTENCY CHECK: Skip if embedding is already complete
+        is_embedding_complete, total_chunks, embedded_chunks = _check_embedding_complete(doc_id)
+        if is_embedding_complete and not force:
+            logger.info(
+                "embed_chunks_idempotency_skip",
+                document_id=doc_id,
+                total_chunks=total_chunks,
+                embedded_chunks=embedded_chunks,
+                reason="All chunks already have embeddings",
+            )
+            # Update job stage to mark embedding complete
+            _update_job_stage_complete(job_id, "embedding", matter_id)
+            return {
+                "status": "embedding_complete",
+                "document_id": doc_id,
+                "embedded_count": embedded_chunks,
+                "reason": "Idempotency check: all chunks already embedded",
+                "job_id": job_id,
+            }
 
         # Get chunks without embeddings for this document
         response = (
@@ -2785,9 +3127,33 @@ def extract_entities(
             )
 
         # Get job_id for partial progress tracking
+        # First try prev_result, then lookup from database
         job_id: str | None = None
         if prev_result:
             job_id = prev_result.get("job_id")  # type: ignore[assignment]
+        if job_id is None:
+            job_id = _lookup_job_id_for_document(doc_id)
+
+        # IDEMPOTENCY CHECK: Skip if entity mentions already exist for this DOCUMENT
+        # Changed from per-matter to per-document to ensure all documents get processed
+        has_mentions, mention_count = _check_entity_mentions_exist_for_document(doc_id)
+        if has_mentions and not force:
+            logger.info(
+                "extract_entities_idempotency_skip",
+                document_id=doc_id,
+                matter_id=matter_id,
+                mention_count=mention_count,
+                reason="Entity mentions already exist for this document",
+            )
+            # Update job stage to mark entity_extraction complete
+            _update_job_stage_complete(job_id, "entity_extraction", matter_id)
+            return {
+                "status": "entities_extracted",
+                "document_id": doc_id,
+                "entities_extracted": mention_count,
+                "reason": "Idempotency check: entity mentions already exist for document",
+                "job_id": job_id,
+            }
 
         # Get all chunks for this document (child chunks for more granular extraction)
         response = (
@@ -3135,6 +3501,12 @@ def extract_entities(
             used_raw_text_fallback=use_raw_text_fallback,
         )
 
+        # Sync entity_ids to chunks for downstream tasks (e.g., contradiction detection)
+        # This must happen after entity extraction to populate chunks.entity_ids array
+        chunks_synced = 0
+        if total_entities > 0 and not use_raw_text_fallback:
+            chunks_synced = _sync_entity_ids_to_chunks(doc_id)
+
         return {
             "status": "entities_extracted",
             "document_id": doc_id,
@@ -3145,6 +3517,7 @@ def extract_entities(
             "skipped_chunks": skipped_chunks,
             "job_id": job_id,
             "used_raw_text_fallback": use_raw_text_fallback,
+            "chunks_synced_entity_ids": chunks_synced,
         }
 
     except MIGExtractorError as e:
@@ -3346,6 +3719,10 @@ def resolve_aliases(
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
+    # If job_id not in prev_result, look it up from database
+    if job_id is None and doc_id:
+        job_id = _lookup_job_id_for_document(doc_id)
+
     if not doc_id:
         logger.error("resolve_aliases_no_document_id")
         return {
@@ -3478,7 +3855,7 @@ def resolve_aliases(
         if result[0] is None:
             # No entities to resolve - mark stage and job complete
             _update_job_stage_complete(job_id, "alias_resolution", matter_id)
-            _mark_job_completed(job_id, matter_id)
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
             logger.info(
                 "resolve_aliases_no_entities",
                 document_id=doc_id,
@@ -3516,7 +3893,7 @@ def resolve_aliases(
         )
 
         # Mark the entire job as COMPLETED since this is the final stage
-        _mark_job_completed(job_id, matter_id)
+        _mark_job_completed(job_id, matter_id, document_id=doc_id)
 
         logger.info(
             "resolve_aliases_task_completed",
@@ -3725,6 +4102,10 @@ def extract_citations(
         job_id: str | None = None
         if prev_result:
             job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
+        # If job_id not in prev_result, look it up from database
+        if job_id is None:
+            job_id = _lookup_job_id_for_document(doc_id)
 
         # Track citation extraction stage start (Story 2c-3)
         _update_job_stage_start(job_id, "citation_extraction", matter_id)
@@ -4086,6 +4467,10 @@ def detect_contradictions(
         if doc_id is None:
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
+
+    # If job_id not in prev_result, look it up from database
+    if job_id is None and doc_id:
+        job_id = _lookup_job_id_for_document(doc_id)
 
     if not doc_id:
         logger.error("detect_contradictions_no_document_id")

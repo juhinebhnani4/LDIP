@@ -4,17 +4,19 @@ This module provides async tasks for:
 1. Validating extracted act names (garbage detection)
 2. Auto-fetching valid Act PDFs from India Code
 3. Updating validation cache and act resolutions
+4. Creating document records for auto-fetched Acts
 
 Part of Act Validation and Auto-Fetching feature.
 """
 
 import asyncio
 from typing import Any
+from uuid import uuid4
 
 import structlog
 
 from app.core.config import get_settings
-from app.engines.citation.abbreviations import normalize_act_name
+from app.engines.citation.abbreviations import normalize_act_name, get_canonical_name
 from app.engines.citation.india_code import IndiaCodeClient, is_india_code_enabled
 from app.engines.citation.validation import (
     ActValidationService,
@@ -123,6 +125,82 @@ def _update_act_resolution(
             error=str(e),
         )
         return False
+
+
+def _create_document_for_auto_fetched_act(
+    client: Any,
+    matter_id: str,
+    normalized_name: str,
+    canonical_name: str | None,
+    storage_path: str,
+    india_code_url: str | None,
+    file_size: int,
+) -> str | None:
+    """Create a document record for an auto-fetched Act.
+
+    Args:
+        client: Supabase client.
+        matter_id: Matter UUID where this Act is referenced.
+        normalized_name: Normalized act name (used for filename).
+        canonical_name: Display name for the Act.
+        storage_path: Global storage path to the cached Act PDF.
+        india_code_url: Original URL from India Code.
+        file_size: Size of the PDF in bytes.
+
+    Returns:
+        Document UUID if created, None if already exists or on error.
+    """
+    try:
+        # Check if document already exists for this matter + act
+        existing = client.table("documents").select("id").eq(
+            "matter_id", matter_id
+        ).eq(
+            "storage_path", storage_path
+        ).execute()
+
+        if existing.data:
+            # Already exists
+            return existing.data[0]["id"]
+
+        # Build filename from canonical name
+        display_name = canonical_name or normalized_name.replace("_", " ").title()
+        filename = f"{display_name}.pdf"
+
+        # Create document record
+        doc_id = str(uuid4())
+        result = client.table("documents").insert({
+            "id": doc_id,
+            "matter_id": matter_id,
+            "filename": filename,
+            "storage_path": storage_path,
+            "file_size": file_size,
+            "document_type": "act",
+            "is_reference_material": True,
+            "source": "auto_fetched",
+            "uploaded_by": None,  # System-fetched, no user
+            "india_code_url": india_code_url,
+            "status": "completed",  # Already processed (cached PDF)
+        }).execute()
+
+        if result.data:
+            logger.info(
+                "document_created_for_auto_fetched_act",
+                matter_id=matter_id,
+                document_id=doc_id,
+                act_name=normalized_name,
+            )
+            return doc_id
+
+        return None
+
+    except Exception as e:
+        logger.error(
+            "create_document_for_auto_fetched_act_error",
+            matter_id=matter_id,
+            normalized_name=normalized_name,
+            error=str(e),
+        )
+        return None
 
 
 def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int = 50) -> list[dict]:
@@ -479,45 +557,100 @@ def fetch_acts_from_india_code(self) -> dict:
     return results
 
 
-def _update_matter_resolutions_from_cache(client: Any) -> int:
+def _update_matter_resolutions_from_cache(client: Any) -> dict:
     """Update act resolutions in all matters where acts are now cached.
 
-    Returns count of resolutions updated.
+    Also creates document records for auto-fetched Acts in each matter.
+
+    Returns dict with counts of resolutions and documents updated/created.
     """
+    settings = get_settings()
+    cache_service = get_act_cache_service()
+
     try:
-        # Get all cached acts
+        # Get all cached acts with additional details
         cached_result = client.table("act_validation_cache").select(
-            "id, act_name_normalized, cached_storage_path"
+            "id, act_name_normalized, act_name_canonical, cached_storage_path, india_code_url"
         ).not_.is_("cached_storage_path", "null").execute()
 
         cached_acts = cached_result.data or []
-        updated = 0
+        updated_resolutions = 0
+        created_documents = 0
 
         for cached in cached_acts:
             normalized = cached.get("act_name_normalized")
+            canonical = cached.get("act_name_canonical")
             cache_id = cached.get("id")
+            storage_path = cached.get("cached_storage_path")
+            india_code_url = cached.get("india_code_url")
 
-            # Update all matching act_resolutions to auto_fetched
-            result = client.table("act_resolutions").update({
-                "resolution_status": "auto_fetched",
-                "user_action": "auto_fetched",
-                "validation_cache_id": cache_id,
-                "updated_at": "now()",
-            }).eq(
+            # Get all matching act_resolutions that are missing (not yet auto_fetched)
+            resolutions_result = client.table("act_resolutions").select(
+                "id, matter_id"
+            ).eq(
                 "act_name_normalized", normalized
             ).eq(
                 "resolution_status", "missing"
             ).execute()
 
-            if result.data:
-                updated += len(result.data)
+            missing_resolutions = resolutions_result.data or []
 
-        logger.info("update_matter_resolutions_complete", updated=updated)
-        return updated
+            for resolution in missing_resolutions:
+                matter_id = resolution.get("matter_id")
+
+                # Get file size from storage for document record
+                file_size = 0
+                try:
+                    # Try to get size from storage metadata
+                    prefix = settings.act_cache_storage_prefix
+                    files = client.storage.from_("documents").list(
+                        path=f"{prefix}/",
+                        options={"search": f"{normalized}.pdf"}
+                    )
+                    for f in files or []:
+                        if f.get("name") == f"{normalized}.pdf":
+                            file_size = f.get("metadata", {}).get("size", 0)
+                            break
+                except Exception:
+                    file_size = 0
+
+                # Create document record for this matter
+                doc_id = _create_document_for_auto_fetched_act(
+                    client,
+                    matter_id,
+                    normalized,
+                    canonical,
+                    storage_path,
+                    india_code_url,
+                    file_size,
+                )
+
+                if doc_id:
+                    created_documents += 1
+
+                    # Update act_resolution with document_id
+                    client.table("act_resolutions").update({
+                        "resolution_status": "auto_fetched",
+                        "user_action": "auto_fetched",
+                        "validation_cache_id": cache_id,
+                        "act_document_id": doc_id,
+                        "updated_at": "now()",
+                    }).eq(
+                        "id", resolution.get("id")
+                    ).execute()
+
+                    updated_resolutions += 1
+
+        result = {
+            "resolutions_updated": updated_resolutions,
+            "documents_created": created_documents,
+        }
+        logger.info("update_matter_resolutions_complete", **result)
+        return result
 
     except Exception as e:
         logger.error("update_matter_resolutions_error", error=str(e))
-        return 0
+        return {"resolutions_updated": 0, "documents_created": 0}
 
 
 @celery_app.task(

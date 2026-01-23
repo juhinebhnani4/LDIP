@@ -101,13 +101,38 @@ class MIGEntityExtractor:
         """Initialize MIG entity extractor."""
         self._model = None
         self._genai = None
+        self._event_loop_id: int | None = None  # Track event loop to detect changes
         settings = get_settings()
         self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
+    def _get_current_loop_id(self) -> int | None:
+        """Get the ID of the current event loop, or None if no loop is running."""
+        try:
+            loop = asyncio.get_running_loop()
+            return id(loop)
+        except RuntimeError:
+            # No running event loop
+            return None
+
+    def _reset_model(self) -> None:
+        """Reset the model instance.
+
+        This is needed when the event loop changes (e.g., new asyncio.run() call)
+        because the google.generativeai library maintains internal gRPC connections
+        that hold references to the event loop.
+        """
+        self._model = None
+        self._genai = None
+        self._event_loop_id = None
+
     @property
     def model(self):
         """Get or create Gemini model instance.
+
+        IMPORTANT: Automatically resets the model when a new event loop is detected.
+        This prevents "Event loop is closed" errors when multiple Celery tasks
+        run entity extraction in sequence (each asyncio.run() creates a new loop).
 
         Returns:
             Gemini GenerativeModel instance.
@@ -115,6 +140,16 @@ class MIGEntityExtractor:
         Raises:
             MIGConfigurationError: If API key is not configured.
         """
+        # Check if event loop has changed - if so, we need a fresh model
+        current_loop_id = self._get_current_loop_id()
+        if self._model is not None and self._event_loop_id != current_loop_id:
+            logger.debug(
+                "mig_extractor_loop_changed",
+                old_loop_id=self._event_loop_id,
+                new_loop_id=current_loop_id,
+            )
+            self._reset_model()
+
         if self._model is None:
             if not self.api_key:
                 raise MIGConfigurationError(
@@ -130,9 +165,11 @@ class MIGEntityExtractor:
                     self.model_name,
                     system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
                 )
+                self._event_loop_id = current_loop_id
                 logger.info(
                     "mig_extractor_initialized",
                     model=self.model_name,
+                    event_loop_id=current_loop_id,
                 )
             except Exception as e:
                 logger.error("mig_extractor_init_failed", error=str(e))

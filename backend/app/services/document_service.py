@@ -13,14 +13,39 @@ from supabase import Client
 from app.models.document import (
     Document,
     DocumentListItem,
+    DocumentSource,
     DocumentStatus,
     DocumentType,
     PaginationMeta,
     UploadedDocument,
 )
 from app.services.supabase.client import get_supabase_client
+from app.engines.citation.abbreviations import normalize_act_name
 
 logger = structlog.get_logger(__name__)
+
+# =============================================================================
+# SELECT Field Constants
+# =============================================================================
+# IMPORTANT: These constants define which fields are selected from the database.
+# When adding new fields to DocumentListItem or Document models, you MUST also
+# add them here. The field mapping in list_documents() and get_document() must
+# stay in sync with these SELECT strings.
+#
+# Checklist when adding a new field:
+# 1. Add column to database migration
+# 2. Add field to Pydantic model (DocumentListItem, Document, etc.)
+# 3. Add column name to the appropriate SELECT constant below
+# 4. Add field mapping in the list comprehension (doc["field_name"])
+# 5. Update frontend types if needed
+# =============================================================================
+
+# Fields for DocumentListItem (list views) - must match DocumentListItem model
+DOCUMENT_LIST_SELECT_FIELDS = (
+    "id, matter_id, filename, file_size, page_count, document_type, "
+    "is_reference_material, source, status, uploaded_at, uploaded_by, "
+    "ocr_confidence, ocr_quality_status"
+)
 
 
 class DocumentServiceError(Exception):
@@ -221,26 +246,7 @@ class DocumentService:
                 "matter_id", matter_id
             ).order("created_at", desc=True).execute()
 
-            return [
-                Document(
-                    id=doc["id"],
-                    matter_id=doc["matter_id"],
-                    filename=doc["filename"],
-                    storage_path=doc["storage_path"],
-                    file_size=doc["file_size"],
-                    page_count=doc.get("page_count"),
-                    document_type=DocumentType(doc["document_type"]),
-                    is_reference_material=doc["is_reference_material"],
-                    uploaded_by=doc["uploaded_by"],
-                    uploaded_at=datetime.fromisoformat(doc["uploaded_at"].replace("Z", "+00:00")),
-                    status=DocumentStatus(doc["status"]),
-                    processing_started_at=self._parse_datetime(doc.get("processing_started_at")),
-                    processing_completed_at=self._parse_datetime(doc.get("processing_completed_at")),
-                    created_at=datetime.fromisoformat(doc["created_at"].replace("Z", "+00:00")),
-                    updated_at=datetime.fromisoformat(doc["updated_at"].replace("Z", "+00:00")),
-                )
-                for doc in result.data
-            ]
+            return [self._to_document(doc) for doc in result.data]
 
         except Exception as e:
             logger.error(
@@ -291,9 +297,9 @@ class DocumentService:
         try:
             # Build query with filters
             # Note: Service role key bypasses RLS, so we must explicitly filter soft-deleted documents
+            # IMPORTANT: Use DOCUMENT_LIST_SELECT_FIELDS constant to ensure SELECT stays in sync with model
             query = self.client.table("documents").select(
-                "id, matter_id, filename, file_size, document_type, "
-                "is_reference_material, status, uploaded_at, uploaded_by",
+                DOCUMENT_LIST_SELECT_FIELDS,
                 count="exact"
             ).eq("matter_id", matter_id).is_("deleted_at", "null")
 
@@ -321,19 +327,23 @@ class DocumentService:
             total = result.count or 0
             total_pages = (total + per_page - 1) // per_page if total > 0 else 0
 
+            # IMPORTANT: Field mapping must match DOCUMENT_LIST_SELECT_FIELDS
+            # If you add a field, add it to both the SELECT constant AND here
             documents = [
                 DocumentListItem(
                     id=doc["id"],
                     matter_id=doc["matter_id"],
                     filename=doc["filename"],
                     file_size=doc["file_size"],
+                    page_count=doc.get("page_count"),
                     document_type=DocumentType(doc["document_type"]),
                     is_reference_material=doc["is_reference_material"],
+                    source=DocumentSource(doc.get("source", "user_upload")),
                     status=DocumentStatus(doc["status"]),
                     uploaded_at=datetime.fromisoformat(
                         doc["uploaded_at"].replace("Z", "+00:00")
                     ),
-                    uploaded_by=doc["uploaded_by"],
+                    uploaded_by=doc.get("uploaded_by"),
                     ocr_confidence=doc.get("ocr_confidence"),
                     ocr_quality_status=doc.get("ocr_quality_status"),
                 )
@@ -440,33 +450,7 @@ class DocumentService:
                 updated_fields=list(update_data.keys()),
             )
 
-            return Document(
-                id=doc_data["id"],
-                matter_id=doc_data["matter_id"],
-                filename=doc_data["filename"],
-                storage_path=doc_data["storage_path"],
-                file_size=doc_data["file_size"],
-                page_count=doc_data.get("page_count"),
-                document_type=DocumentType(doc_data["document_type"]),
-                is_reference_material=doc_data["is_reference_material"],
-                uploaded_by=doc_data["uploaded_by"],
-                uploaded_at=datetime.fromisoformat(
-                    doc_data["uploaded_at"].replace("Z", "+00:00")
-                ),
-                status=DocumentStatus(doc_data["status"]),
-                processing_started_at=self._parse_datetime(
-                    doc_data.get("processing_started_at")
-                ),
-                processing_completed_at=self._parse_datetime(
-                    doc_data.get("processing_completed_at")
-                ),
-                created_at=datetime.fromisoformat(
-                    doc_data["created_at"].replace("Z", "+00:00")
-                ),
-                updated_at=datetime.fromisoformat(
-                    doc_data["updated_at"].replace("Z", "+00:00")
-                ),
-            )
+            return self._to_document(doc_data)
 
         except DocumentNotFoundError:
             raise
@@ -783,6 +767,13 @@ class DocumentService:
         Returns:
             Document model instance.
         """
+        # Handle source field with default for backward compatibility
+        source_str = doc_data.get("source", "user_upload")
+        try:
+            source = DocumentSource(source_str)
+        except ValueError:
+            source = DocumentSource.USER_UPLOAD
+
         return Document(
             id=doc_data["id"],
             matter_id=doc_data["matter_id"],
@@ -792,10 +783,12 @@ class DocumentService:
             page_count=doc_data.get("page_count"),
             document_type=DocumentType(doc_data["document_type"]),
             is_reference_material=doc_data["is_reference_material"],
-            uploaded_by=doc_data["uploaded_by"],
+            source=source,
+            uploaded_by=doc_data.get("uploaded_by"),
             uploaded_at=datetime.fromisoformat(
                 doc_data["uploaded_at"].replace("Z", "+00:00")
             ),
+            india_code_url=doc_data.get("india_code_url"),
             status=DocumentStatus(doc_data["status"]),
             processing_started_at=self._parse_datetime(
                 doc_data.get("processing_started_at")
@@ -1001,6 +994,118 @@ class DocumentService:
                 message=f"Failed to get document for processing: {e!s}",
                 code="GET_FOR_PROCESSING_FAILED"
             ) from e
+
+    def sync_act_resolutions_for_matter(self, matter_id: str) -> int:
+        """Sync act_resolutions table with existing Act documents.
+
+        This method finds Act documents in the matter that are not reflected
+        in the act_resolutions table and updates them to AVAILABLE status.
+
+        This fixes the issue where Acts uploaded via India Code or manually
+        still show as "missing" in the Citations tab.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            Number of act resolutions updated.
+        """
+        if self.client is None:
+            logger.warning("sync_act_resolutions_no_client")
+            return 0
+
+        try:
+            # Get all Act documents in the matter
+            act_docs_result = self.client.table("documents").select(
+                "id, filename, source"
+            ).eq("matter_id", matter_id).eq("document_type", "act").execute()
+
+            act_docs = act_docs_result.data or []
+            if not act_docs:
+                return 0
+
+            updated_count = 0
+
+            for doc in act_docs:
+                doc_id = doc["id"]
+                filename = doc["filename"]
+                source = doc.get("source", "uploaded")
+
+                # Extract act name from filename (remove .pdf extension)
+                act_name = filename
+                if act_name.lower().endswith(".pdf"):
+                    act_name = act_name[:-4]
+
+                normalized_name = normalize_act_name(act_name)
+
+                # Determine resolution status based on source
+                if source in ("india_code", "auto_fetched"):
+                    resolution_status = "auto_fetched"
+                else:
+                    resolution_status = "available"
+
+                # Check if act_resolution exists and update if needed
+                existing = self.client.table("act_resolutions").select(
+                    "id, resolution_status, act_document_id"
+                ).eq("matter_id", matter_id).eq(
+                    "act_name_normalized", normalized_name
+                ).execute()
+
+                if existing.data:
+                    resolution = existing.data[0]
+                    # Only update if currently missing and no document linked
+                    if resolution.get("resolution_status") == "missing":
+                        self.client.table("act_resolutions").update({
+                            "resolution_status": resolution_status,
+                            "act_document_id": doc_id,
+                            "user_action": "uploaded" if source == "uploaded" else "auto_fetched",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }).eq("id", resolution["id"]).execute()
+
+                        updated_count += 1
+                        logger.info(
+                            "act_resolution_synced",
+                            matter_id=matter_id,
+                            act_name=act_name,
+                            document_id=doc_id,
+                            resolution_status=resolution_status,
+                        )
+                else:
+                    # No resolution exists - create one
+                    self.client.table("act_resolutions").insert({
+                        "matter_id": matter_id,
+                        "act_name_normalized": normalized_name,
+                        "act_name_display": act_name,
+                        "resolution_status": resolution_status,
+                        "act_document_id": doc_id,
+                        "user_action": "uploaded" if source == "uploaded" else "auto_fetched",
+                        "citation_count": 0,
+                    }).execute()
+
+                    updated_count += 1
+                    logger.info(
+                        "act_resolution_created",
+                        matter_id=matter_id,
+                        act_name=act_name,
+                        document_id=doc_id,
+                    )
+
+            if updated_count > 0:
+                logger.info(
+                    "act_resolutions_sync_complete",
+                    matter_id=matter_id,
+                    updated_count=updated_count,
+                )
+
+            return updated_count
+
+        except Exception as e:
+            logger.error(
+                "sync_act_resolutions_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return 0
 
 
 @lru_cache(maxsize=1)

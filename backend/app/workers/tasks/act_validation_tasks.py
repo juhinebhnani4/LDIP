@@ -641,6 +641,31 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
 
                     updated_resolutions += 1
 
+                    # Update citation statuses from act_unavailable to pending
+                    # This ensures citations can be verified now that Act is available
+                    try:
+                        from app.workers.tasks.verification_tasks import (
+                            trigger_verification_on_act_upload,
+                        )
+                        trigger_verification_on_act_upload.delay(
+                            matter_id=matter_id,
+                            act_name=canonical or normalized,
+                            act_document_id=doc_id,
+                        )
+                        logger.info(
+                            "verification_triggered_for_auto_fetched_act",
+                            matter_id=matter_id,
+                            act_name=normalized,
+                            document_id=doc_id,
+                        )
+                    except Exception as ve:
+                        logger.warning(
+                            "verification_trigger_failed_for_auto_fetched_act",
+                            matter_id=matter_id,
+                            act_name=normalized,
+                            error=str(ve),
+                        )
+
         result = {
             "resolutions_updated": updated_resolutions,
             "documents_created": created_documents,

@@ -12,6 +12,7 @@ from app.services.supabase.client import get_supabase_client
 def main():
     requeue = '--requeue' in sys.argv
     dry_run = '--dry-run' in sys.argv
+    auto_yes = '-y' in sys.argv or '--yes' in sys.argv
 
     client = get_supabase_client()
     if not client:
@@ -50,12 +51,12 @@ def main():
                 'parent_count': parent_count,
                 'child_count': child_count,
             })
-            print(f"  ✓ {job['id'][:12]}... has {parent_count} parent + {child_count} child chunks - COMPLETE, skip to embedding")
+            print(f"  [OK] {job['id'][:12]}... has {parent_count} parent + {child_count} child chunks - COMPLETE, skip to embedding")
         elif parent_count > 0 or child_count > 0:
             # Partial chunking - needs re-chunking
-            print(f"  ⚠ {job['id'][:12]}... has PARTIAL chunks (parent={parent_count}, child={child_count}) - needs re-chunking")
+            print(f"  [PARTIAL] {job['id'][:12]}... has PARTIAL chunks (parent={parent_count}, child={child_count}) - needs re-chunking")
         else:
-            print(f"  ✗ {job['id'][:12]}... has 0 chunks - needs actual reprocessing")
+            print(f"  [NONE] {job['id'][:12]}... has 0 chunks - needs actual reprocessing")
 
     if not jobs_to_fix:
         print("\nNo jobs with existing chunks found. Jobs need actual reprocessing.")
@@ -68,10 +69,11 @@ def main():
         print("\nDRY RUN - no changes made")
         return
 
-    confirm = input("\nFix these jobs by advancing them to embedding? [y/N]: ").strip().lower()
-    if confirm != 'y':
-        print("Cancelled.")
-        return
+    if not auto_yes:
+        confirm = input("\nFix these jobs by advancing them to embedding? [y/N]: ").strip().lower()
+        if confirm != 'y':
+            print("Cancelled.")
+            return
 
     print("\nFixing jobs...")
 
@@ -96,7 +98,7 @@ def main():
 
         print(f"  Fixed: {job_id[:12]}... -> embedding stage")
 
-    print(f"\n✓ Fixed {len(jobs_to_fix)} jobs")
+    print(f"\n[DONE] Fixed {len(jobs_to_fix)} jobs")
 
     if requeue:
         print("\nRequeuing embedding tasks...")
@@ -116,7 +118,7 @@ def main():
             )
             print(f"  Queued embedding: {doc_id[:12]}...")
 
-        print(f"\n✓ Queued {len(jobs_to_fix)} embedding tasks")
+        print(f"\n[DONE] Queued {len(jobs_to_fix)} embedding tasks")
     else:
         print("\nRun with --requeue to also dispatch embedding tasks to Celery")
         print("Or use the Celery Beat scheduler to pick them up automatically")

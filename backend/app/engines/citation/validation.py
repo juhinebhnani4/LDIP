@@ -221,12 +221,16 @@ class ActValidationService:
         normalized = normalize_act_name(cleaned)
 
         # Step 5: Determine validation status using configurable confidence
-        # Generic terms are ALWAYS invalid, even if they match abbreviations
+        # Priority order: generic terms > garbage patterns > known acts > unknown
+        # IMPORTANT: Garbage patterns should override known act matches to catch
+        # malformed extractions like "A of the Trial of Offences..." that fuzzy-match
         if is_generic_term:
             status = ValidationStatus.INVALID
             source = ValidationSource.GARBAGE_DETECTION
             confidence = 0.95  # High confidence for generic terms
-        elif is_garbage and not is_known:
+        elif is_garbage:
+            # Garbage patterns detected - ALWAYS invalid, even if it matches a known act
+            # This catches malformed extractions that fuzzy-match to real acts
             status = ValidationStatus.INVALID
             source = ValidationSource.GARBAGE_DETECTION
             base_confidence = settings.validation_garbage_base_confidence
@@ -473,3 +477,126 @@ def is_validation_enabled() -> bool:
         True if enabled, False otherwise.
     """
     return get_settings().act_validation_enabled
+
+
+# =============================================================================
+# LLM-Based Validation (for edge cases)
+# =============================================================================
+
+
+@dataclass
+class LLMValidationResult:
+    """Result from LLM-based act name validation."""
+
+    is_valid: bool
+    canonical_name: str | None
+    confidence: float
+    reason: str
+    raw_response: str | None = None
+
+
+async def validate_act_name_with_llm(
+    act_name: str,
+    context: str | None = None,
+) -> LLMValidationResult:
+    """Validate an act name using LLM for semantic understanding.
+
+    This is a fallback for when heuristic validation is uncertain.
+    Uses Gemini Flash for cost-effective validation (~$0.00003 per call).
+
+    Args:
+        act_name: The extracted act name to validate.
+        context: Optional surrounding text context from the document.
+
+    Returns:
+        LLMValidationResult with validation decision and reasoning.
+    """
+    settings = get_settings()
+
+    if not settings.gemini_api_key:
+        logger.warning("llm_validation_skipped", reason="Gemini API key not configured")
+        return LLMValidationResult(
+            is_valid=False,
+            canonical_name=None,
+            confidence=0.5,
+            reason="LLM validation unavailable - API key not configured",
+        )
+
+    try:
+        import google.generativeai as genai
+        import json
+
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel(
+            "gemini-2.0-flash-exp",  # Fast and cheap
+            generation_config={
+                "temperature": 0.1,
+                "max_output_tokens": 200,
+            },
+        )
+
+        # Build prompt
+        context_section = ""
+        if context:
+            context_section = f"\nContext where it was found:\n\"{context[:500]}\"\n"
+
+        prompt = f'''Is the following a valid Indian legal act/statute name?
+
+Extracted text: "{act_name}"
+{context_section}
+Respond with JSON only:
+{{"is_valid": true/false, "canonical_name": "corrected name if valid, null if invalid", "confidence": 0.0-1.0, "reason": "brief explanation"}}
+
+INVALID examples (sentence fragments, not act names):
+- "the Act. By not marking" → sentence fragment
+- "provides for simultaneous and automatic attachment" → explanatory prose
+- "the Act" / "Ordinance" alone → generic reference
+- "A of the Trial of Offences..." → malformed/truncated
+
+VALID examples (real Indian statutes):
+- "Indian Contract Act, 1872" → valid
+- "SARFAESI Act" → valid abbreviation
+- "Bharatiya Nyaya Sanhita, 2023" → valid (new Hindi name)
+- "TORTS Act" → valid (Special Court Trial of Offences...)
+
+JSON response:'''
+
+        response = await model.generate_content_async(prompt)
+        response_text = response.text.strip()
+
+        # Parse JSON response
+        # Handle potential markdown code blocks
+        if response_text.startswith("```"):
+            response_text = response_text.split("```")[1]
+            if response_text.startswith("json"):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+
+        try:
+            result = json.loads(response_text)
+            return LLMValidationResult(
+                is_valid=result.get("is_valid", False),
+                canonical_name=result.get("canonical_name"),
+                confidence=float(result.get("confidence", 0.5)),
+                reason=result.get("reason", ""),
+                raw_response=response_text,
+            )
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try to extract decision from text
+            is_valid = "true" in response_text.lower() and "is_valid" in response_text.lower()
+            return LLMValidationResult(
+                is_valid=is_valid,
+                canonical_name=None,
+                confidence=0.5,
+                reason="Failed to parse LLM response",
+                raw_response=response_text,
+            )
+
+    except Exception as e:
+        logger.error("llm_validation_error", error=str(e), act_name=act_name[:50])
+        return LLMValidationResult(
+            is_valid=False,
+            canonical_name=None,
+            confidence=0.3,
+            reason=f"LLM validation error: {str(e)[:100]}",
+        )

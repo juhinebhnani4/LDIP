@@ -423,6 +423,30 @@
       "flags": ["IGNORECASE"],
       "description": "Legal phrase - satisfied that",
       "category": "legal_language"
+    },
+    {
+      "pattern": "\\n",
+      "flags": [],
+      "description": "Contains newline character",
+      "category": "malformed"
+    },
+    {
+      "pattern": "\\r",
+      "flags": [],
+      "description": "Contains carriage return",
+      "category": "malformed"
+    },
+    {
+      "pattern": "\\s+Secur$",
+      "flags": ["IGNORECASE"],
+      "description": "Truncated - ends with 'Secur'",
+      "category": "truncated"
+    },
+    {
+      "pattern": "^Trial\\s+of\\s+Offences",
+      "flags": ["IGNORECASE"],
+      "description": "Partial act name - missing 'Special Court'",
+      "category": "malformed"
     }
   ]
 }

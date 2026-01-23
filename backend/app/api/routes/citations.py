@@ -59,8 +59,11 @@ from app.workers.tasks.verification_tasks import (
 class MarkActUploadedRequest(BaseModel):
     """Request to mark an Act as uploaded."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     act_name: str = Field(
         ...,
+        alias="actName",
         min_length=1,
         max_length=500,
         description="Act name (will be normalized)",
@@ -68,6 +71,7 @@ class MarkActUploadedRequest(BaseModel):
     )
     act_document_id: str = Field(
         ...,
+        alias="actDocumentId",
         description="UUID of the uploaded Act document",
     )
 
@@ -75,8 +79,11 @@ class MarkActUploadedRequest(BaseModel):
 class MarkActSkippedRequest(BaseModel):
     """Request to mark an Act as skipped."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     act_name: str = Field(
         ...,
+        alias="actName",
         min_length=1,
         max_length=500,
         description="Act name (will be normalized)",
@@ -524,6 +531,19 @@ async def get_act_discovery_report(
     )
 
     try:
+        # Sync act_resolutions with existing Act documents before generating report
+        # This fixes the issue where Acts uploaded via India Code or manually
+        # still show as "missing" because act_resolutions wasn't updated
+        from app.services.document_service import get_document_service
+        doc_service = get_document_service()
+        synced_count = doc_service.sync_act_resolutions_for_matter(matter_id)
+        if synced_count > 0:
+            logger.info(
+                "act_resolutions_synced_before_discovery",
+                matter_id=matter_id,
+                synced_count=synced_count,
+            )
+
         report = await discovery_service.get_discovery_report(
             matter_id=matter_id,
             include_available=include_available,
@@ -1294,7 +1314,9 @@ async def get_citation_split_view(
         target_doc_data: DocumentViewDataModel | None = None
         verification_result: VerificationResult | None = None
 
-        if citation.verification_status not in (VerificationStatus.PENDING, VerificationStatus.ACT_UNAVAILABLE):
+        # Load Act document for all statuses except ACT_UNAVAILABLE
+        # PENDING citations should show the Act doc so users can verify
+        if citation.verification_status != VerificationStatus.ACT_UNAVAILABLE:
             # Get Act document info from act resolution
             act_resolution = await discovery_service.get_act_resolution_by_name(
                 matter_id=matter_id,

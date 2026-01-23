@@ -17,7 +17,7 @@
       "normalized_name": "bharatiya_nyaya_sanhita_2023",
       "canonical_name": "Bharatiya Nyaya Sanhita, 2023",
       "india_code_doc_id": "20062",
-      "india_code_filename": "a202345.pdf",
+      "india_code_filename": "1/a202345.pdf",
       "category": "criminal",
       "is_active": true,
       "replaces": "indian_penal_code_1860"
@@ -61,40 +61,40 @@
     {
       "normalized_name": "code_of_civil_procedure_1908",
       "canonical_name": "Code of Civil Procedure, 1908",
-      "india_code_doc_id": "1463",
-      "india_code_filename": "19085.pdf",
+      "india_code_doc_id": "11087",
+      "india_code_filename": "1/the_code_of_civil_procedure,_1908.pdf",
       "category": "civil",
       "is_active": true
     },
     {
       "normalized_name": "negotiable_instruments_act_1881",
       "canonical_name": "Negotiable Instruments Act, 1881",
-      "india_code_doc_id": "1456",
-      "india_code_filename": "188126.pdf",
+      "india_code_doc_id": "2189",
+      "india_code_filename": "1/a1881-26.pdf",
       "category": "commercial",
       "is_active": true
     },
     {
       "normalized_name": "indian_contract_act_1872",
       "canonical_name": "Indian Contract Act, 1872",
-      "india_code_doc_id": "1421",
-      "india_code_filename": "18729.pdf",
+      "india_code_doc_id": "2187",
+      "india_code_filename": "2/A187209.pdf",
       "category": "commercial",
       "is_active": true
     },
     {
       "normalized_name": "transfer_of_property_act_1882",
       "canonical_name": "Transfer of Property Act, 1882",
-      "india_code_doc_id": "1425",
-      "india_code_filename": "18824.pdf",
+      "india_code_doc_id": "2338",
+      "india_code_filename": "1/A1882-04.pdf",
       "category": "property",
       "is_active": true
     },
     {
       "normalized_name": "specific_relief_act_1963",
       "canonical_name": "Specific Relief Act, 1963",
-      "india_code_doc_id": "1483",
-      "india_code_filename": "196347.pdf",
+      "india_code_doc_id": "1583",
+      "india_code_filename": "7/A1963-47.pdf",
       "category": "civil",
       "is_active": true
     },
@@ -109,8 +109,8 @@
     {
       "normalized_name": "arbitration_and_conciliation_act_1996",
       "canonical_name": "Arbitration and Conciliation Act, 1996",
-      "india_code_doc_id": "1899",
-      "india_code_filename": "199626.pdf",
+      "india_code_doc_id": "11799",
+      "india_code_filename": "1/the_arbitration_and_conciliation_act,_1996.pdf",
       "category": "commercial",
       "is_active": true
     },
@@ -157,10 +157,11 @@
     {
       "normalized_name": "companies_act_2013",
       "canonical_name": "Companies Act, 2013",
-      "india_code_doc_id": "7347",
-      "india_code_filename": "a2013-18.pdf",
+      "india_code_doc_id": "2114",
+      "india_code_filename": "5/A2013-18.pdf",
       "category": "corporate",
-      "is_active": true
+      "is_active": true,
+      "aliases": ["indian_companies_act_2013"]
     },
     {
       "normalized_name": "companies_act_1956",
@@ -169,7 +170,8 @@
       "india_code_filename": "19561.pdf",
       "category": "corporate",
       "is_active": true,
-      "notes": "Repealed but applicable for older matters"
+      "notes": "Repealed but applicable for older matters",
+      "aliases": ["indian_companies_act_1956"]
     },
     {
       "normalized_name": "limited_liability_partnership_act_2008",
@@ -238,8 +240,8 @@
     {
       "normalized_name": "constitution_of_india_1950",
       "canonical_name": "Constitution of India, 1950",
-      "india_code_doc_id": "1001",
-      "india_code_filename": "coi-.pdf",
+      "india_code_doc_id": "16124",
+      "india_code_filename": "1/the_constitution_of_india.pdf",
       "category": "constitutional",
       "is_active": true
     },
@@ -279,16 +281,16 @@
     {
       "normalized_name": "special_court_trial_of_offences_relating_to_transactions_in_securities_act_1992",
       "canonical_name": "Special Court (Trial of Offences Relating to Transactions in Securities) Act, 1992",
-      "india_code_doc_id": "1749",
-      "india_code_filename": "199227.pdf",
+      "india_code_doc_id": "1966",
+      "india_code_filename": "1/aA1992-27.pdf",
       "category": "securities",
       "is_active": true
     },
     {
       "normalized_name": "environment_protection_act_1986",
       "canonical_name": "Environment (Protection) Act, 1986",
-      "india_code_doc_id": "1608",
-      "india_code_filename": "198629.pdf",
+      "india_code_doc_id": "15368",
+      "india_code_filename": "1/the_environment_(protection)_act,_1986.pdf",
       "category": "environmental",
       "is_active": true
     },
@@ -383,8 +385,8 @@
     {
       "normalized_name": "sale_of_goods_act_1930",
       "canonical_name": "Sale of Goods Act, 1930",
-      "india_code_doc_id": "1373",
-      "india_code_filename": "193030.pdf",
+      "india_code_doc_id": "2390",
+      "india_code_filename": "1/193003.pdf",
       "category": "commercial",
       "is_active": true
     },
@@ -410,6 +412,30 @@
       "india_code_doc_id": "1364",
       "india_code_filename": "192539.pdf",
       "category": "family",
+      "is_active": true
+    },
+    {
+      "normalized_name": "provincial_insolvency_act_1920",
+      "canonical_name": "Provincial Insolvency Act, 1920",
+      "india_code_doc_id": "19723",
+      "india_code_filename": "1/a1920-05.pdf",
+      "category": "insolvency",
+      "is_active": true
+    },
+    {
+      "normalized_name": "presidency_towns_insolvency_act_1909",
+      "canonical_name": "Presidency Towns Insolvency Act, 1909",
+      "india_code_doc_id": "19722",
+      "india_code_filename": "1/a1909-03.pdf",
+      "category": "insolvency",
+      "is_active": true
+    },
+    {
+      "normalized_name": "contempt_of_courts_act_1971",
+      "canonical_name": "Contempt of Courts Act, 1971",
+      "india_code_doc_id": "1514",
+      "india_code_filename": "197170.pdf",
+      "category": "civil",
       "is_active": true
     }
   ]

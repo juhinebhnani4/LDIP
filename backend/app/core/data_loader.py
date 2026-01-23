@@ -79,7 +79,11 @@ def clear_data_cache() -> None:
 
 @lru_cache(maxsize=1)
 def _get_known_acts_mapping() -> dict[str, tuple[str, str]]:
-    """Internal cached loader for known acts mapping."""
+    """Internal cached loader for known acts mapping.
+
+    Also includes aliases so acts like "indian_companies_act_1956"
+    can match "companies_act_1956".
+    """
     data = load_json_data("known_acts.json")
 
     if not data or "acts" not in data:
@@ -87,6 +91,8 @@ def _get_known_acts_mapping() -> dict[str, tuple[str, str]]:
         return {}
 
     mapping: dict[str, tuple[str, str]] = {}
+    alias_count = 0
+
     for act in data.get("acts", []):
         if not act.get("is_active", True):
             continue
@@ -96,7 +102,13 @@ def _get_known_acts_mapping() -> dict[str, tuple[str, str]]:
         if normalized and doc_id and filename:
             mapping[normalized] = (doc_id, filename)
 
-    logger.info(f"Loaded {len(mapping)} known acts from JSON")
+            # Also add aliases pointing to the same doc_id/filename
+            for alias in act.get("aliases", []):
+                if alias and alias not in mapping:
+                    mapping[alias] = (doc_id, filename)
+                    alias_count += 1
+
+    logger.info(f"Loaded {len(mapping)} known acts from JSON ({alias_count} aliases)")
     return mapping
 
 

@@ -171,7 +171,12 @@ class IndiaCodeClient:
         known_acts = self._get_known_acts()
         if normalized_act_name in known_acts:
             doc_id, filename = known_acts[normalized_act_name]
-            return f"{BASE_URL}/bitstream/123456789/{doc_id}/1/{filename}"
+            # filename may include bitstream number prefix like "2/A187209.pdf"
+            # or just the filename for legacy format
+            if "/" in filename:
+                return f"{BASE_URL}/bitstream/123456789/{doc_id}/{filename}"
+            else:
+                return f"{BASE_URL}/bitstream/123456789/{doc_id}/1/{filename}"
         return None
 
     def get_known_doc_id(self, normalized_act_name: str) -> str | None:

@@ -7,6 +7,7 @@ Story 3-1: Act Citation Extraction (AC: #4)
 Story 3-3: Citation Verification (trigger_verification_on_upload)
 """
 
+from dataclasses import dataclass
 from functools import lru_cache
 
 import structlog
@@ -21,6 +22,113 @@ from app.models.citation import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# Centralized Stats Calculation (Single Source of Truth)
+# =============================================================================
+
+
+@dataclass
+class ActResolutionStats:
+    """Centralized statistics for act resolutions.
+
+    This ensures stats and discovery report use identical counting logic.
+    """
+    total_acts: int = 0  # Excludes invalid acts
+    missing_count: int = 0
+    available_count: int = 0
+    auto_fetched_count: int = 0
+    skipped_count: int = 0
+    invalid_count: int = 0
+    total_citations: int = 0
+
+    # Data consistency tracking
+    inconsistencies: list[dict] = None
+
+    def __post_init__(self):
+        if self.inconsistencies is None:
+            self.inconsistencies = []
+
+    def to_dict(self) -> dict:
+        """Convert to dict for API responses."""
+        return {
+            "total_acts": self.total_acts,
+            "missing_count": self.missing_count,
+            "available_count": self.available_count,
+            "auto_fetched_count": self.auto_fetched_count,
+            "skipped_count": self.skipped_count,
+            "invalid_count": self.invalid_count,
+            "total_citations": self.total_citations,
+        }
+
+
+def compute_resolution_stats(
+    resolutions: list[ActResolution],
+    include_invalid: bool = False,
+    check_consistency: bool = True,
+) -> ActResolutionStats:
+    """Centralized function to compute stats from resolutions.
+
+    This is the SINGLE SOURCE OF TRUTH for counting act resolutions.
+    Both get_discovery_stats() and get_discovery_report() should use this
+    to ensure consistency.
+
+    Args:
+        resolutions: List of ActResolution objects.
+        include_invalid: Whether to include invalid acts in total_acts.
+        check_consistency: Whether to check for data inconsistencies.
+
+    Returns:
+        ActResolutionStats with computed values.
+    """
+    stats = ActResolutionStats()
+
+    for resolution in resolutions:
+        stats.total_citations += resolution.citation_count
+
+        # Check for data inconsistencies
+        if check_consistency:
+            # Inconsistency: has document_id but marked as missing
+            if (
+                resolution.act_document_id
+                and resolution.resolution_status == ActResolutionStatus.MISSING
+            ):
+                stats.inconsistencies.append({
+                    "type": "document_status_mismatch",
+                    "act_name": resolution.act_name_normalized,
+                    "issue": "Has document_id but status is 'missing'",
+                    "document_id": resolution.act_document_id,
+                })
+
+        # Count by status
+        if resolution.resolution_status == ActResolutionStatus.MISSING:
+            stats.missing_count += 1
+            stats.total_acts += 1
+        elif resolution.resolution_status == ActResolutionStatus.AVAILABLE:
+            stats.available_count += 1
+            stats.total_acts += 1
+        elif resolution.resolution_status == ActResolutionStatus.AUTO_FETCHED:
+            stats.auto_fetched_count += 1
+            stats.total_acts += 1
+        elif resolution.resolution_status == ActResolutionStatus.SKIPPED:
+            stats.skipped_count += 1
+            stats.total_acts += 1
+        elif resolution.resolution_status == ActResolutionStatus.INVALID:
+            stats.invalid_count += 1
+            # Invalid acts excluded from total_acts unless explicitly included
+            if include_invalid:
+                stats.total_acts += 1
+
+    # Log any inconsistencies found
+    if stats.inconsistencies:
+        logger.warning(
+            "data_inconsistencies_detected",
+            count=len(stats.inconsistencies),
+            inconsistencies=stats.inconsistencies,
+        )
+
+    return stats
 
 
 # =============================================================================
@@ -359,35 +467,22 @@ class ActDiscoveryService:
         Returns:
             Dict with total_acts, missing_count, available_count, auto_fetched_count,
             skipped_count, invalid_count.
+
+        Note:
+            Uses centralized compute_resolution_stats() to ensure consistency
+            with get_discovery_report(). Invalid acts are excluded from total_acts.
         """
         try:
             resolutions = await self._storage.get_act_resolutions(matter_id)
 
-            stats = {
-                "total_acts": len(resolutions),
-                "missing_count": 0,
-                "available_count": 0,
-                "auto_fetched_count": 0,
-                "skipped_count": 0,
-                "invalid_count": 0,
-                "total_citations": 0,
-            }
+            # Use centralized stats computation
+            stats = compute_resolution_stats(
+                resolutions,
+                include_invalid=False,
+                check_consistency=True,
+            )
 
-            for resolution in resolutions:
-                stats["total_citations"] += resolution.citation_count
-
-                if resolution.resolution_status == ActResolutionStatus.MISSING:
-                    stats["missing_count"] += 1
-                elif resolution.resolution_status == ActResolutionStatus.AVAILABLE:
-                    stats["available_count"] += 1
-                elif resolution.resolution_status == ActResolutionStatus.AUTO_FETCHED:
-                    stats["auto_fetched_count"] += 1
-                elif resolution.resolution_status == ActResolutionStatus.SKIPPED:
-                    stats["skipped_count"] += 1
-                elif resolution.resolution_status == ActResolutionStatus.INVALID:
-                    stats["invalid_count"] += 1
-
-            return stats
+            return stats.to_dict()
 
         except Exception as e:
             logger.error(
@@ -395,15 +490,7 @@ class ActDiscoveryService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            return {
-                "total_acts": 0,
-                "missing_count": 0,
-                "available_count": 0,
-                "auto_fetched_count": 0,
-                "skipped_count": 0,
-                "invalid_count": 0,
-                "total_citations": 0,
-            }
+            return ActResolutionStats().to_dict()
 
 
 # =============================================================================

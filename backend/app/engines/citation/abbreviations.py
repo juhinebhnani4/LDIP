@@ -99,6 +99,9 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "companies act": ("Companies Act", 2013),
     "companies act 2013": ("Companies Act", 2013),
     "companies act 1956": ("Companies Act", 1956),
+    "indian companies act": ("Companies Act", 2013),
+    "indian companies act 2013": ("Companies Act", 2013),
+    "indian companies act 1956": ("Companies Act", 1956),
     "llp act": ("Limited Liability Partnership Act", 2008),
     "limited liability partnership act": ("Limited Liability Partnership Act", 2008),
     "sebi act": ("Securities and Exchange Board of India Act", 1992),
@@ -208,6 +211,8 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     # Environmental Law
     # -------------------------------------------------------------------------
     "environment protection act": ("Environment (Protection) Act", 1986),
+    "environment (protection) act": ("Environment (Protection) Act", 1986),
+    "environment (protection) act 1986": ("Environment (Protection) Act", 1986),
     "epa": ("Environment (Protection) Act", 1986),
     "wildlife protection act": ("Wildlife (Protection) Act", 1972),
     "forest act": ("Indian Forest Act", 1927),
@@ -251,6 +256,7 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "special courts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
     "special court torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
     "trial of offences relating to transactions in securities act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "trial of offences relating to transaction in securities act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),  # singular variant
     "special court (trial of offences relating to transactions in securities) act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
     # Also handle the ordinance version
     "special court ordinance": ("Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance", 1992),
@@ -340,9 +346,21 @@ def get_canonical_name(abbreviated: str) -> tuple[str, int | None] | None:
         >>> get_canonical_name("Unknown Act")
         None
     """
+    # First try with year preserved to match year-specific entries
+    # e.g., "indian companies act 1956" should match before "indian companies act"
+    key_with_year = abbreviated.lower().strip()
+    key_with_year = re.sub(r"\s+", " ", key_with_year)
+    key_with_year = key_with_year.replace(",", "")  # Remove comma but keep year
+    key_with_year = key_with_year.replace("&", "and")
+
+    # Direct lookup with year
+    if key_with_year in ACT_ABBREVIATIONS:
+        return ACT_ABBREVIATIONS[key_with_year]
+
+    # Now try without year
     key = _normalize_key(abbreviated)
 
-    # Direct lookup
+    # Direct lookup without year
     if key in ACT_ABBREVIATIONS:
         return ACT_ABBREVIATIONS[key]
 
@@ -358,11 +376,26 @@ def get_canonical_name(abbreviated: str) -> tuple[str, int | None] | None:
     if key_without_year != key and key_without_year in ACT_ABBREVIATIONS:
         return ACT_ABBREVIATIONS[key_without_year]
 
-    # Try fuzzy match for close variations
+    # Try conservative fuzzy matching - only for short abbreviations (<=6 chars)
+    # This prevents "A of the Trial of..." from matching "trial of offences..."
+    # but allows "IPC" to match "ipc 1860" etc.
     for abbr_key, value in ACT_ABBREVIATIONS.items():
-        # Check if the input contains the abbreviation
-        if abbr_key in key or key in abbr_key:
-            return value
+        # Only allow containment matching for short abbreviations (like IPC, CPC, NI)
+        # to prevent garbage strings from matching via partial containment
+        if len(abbr_key) <= 6:
+            # Short abbreviation - allow if key starts with it followed by space/year
+            if key.startswith(abbr_key + " ") or key == abbr_key:
+                return value
+        # For longer keys, require exact match (already handled above)
+        # or the input being a clear suffix/prefix variation
+        elif len(abbr_key) > 6 and len(key) > 6:
+            # Allow match if one is contained in the other AND they're similar length
+            # This catches "companies act" matching "companies act 2013" but not
+            # "A of the trial..." matching "trial of offences relating..."
+            if abbr_key in key and len(key) <= len(abbr_key) * 1.5:
+                return value
+            if key in abbr_key and len(abbr_key) <= len(key) * 1.5:
+                return value
 
     return None
 

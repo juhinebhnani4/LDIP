@@ -332,6 +332,7 @@ export interface SplitViewBoundingBox {
 export interface DocumentViewData {
   documentId: string;
   documentUrl: string;
+  documentType: 'case_file' | 'act' | 'annexure' | 'other';
   pageNumber: number;
   boundingBoxes: SplitViewBoundingBox[];
 }

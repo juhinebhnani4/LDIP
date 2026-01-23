@@ -191,6 +191,15 @@ class AliasExpandedSearchRequest(BaseModel):
     )
 
 
+class FuzzyMatchInfo(BaseModel):
+    """Information about a fuzzy entity match."""
+
+    query_term: str = Field(..., description="The term from the query that was matched")
+    matched_entity: str = Field(..., description="The canonical entity name that was matched")
+    match_score: float = Field(..., description="Match confidence score (0-100)")
+    is_exact: bool = Field(..., description="True if exact match, False if fuzzy")
+
+
 class AliasExpandedSearchMeta(BaseModel):
     """Metadata for alias-expanded search results."""
 
@@ -209,6 +218,10 @@ class AliasExpandedSearchMeta(BaseModel):
     entities_matched: list[str] = Field(
         default_factory=list,
         description="Entity names from query that matched MIG entities",
+    )
+    fuzzy_matches: list[FuzzyMatchInfo] = Field(
+        default_factory=list,
+        description="Details of fuzzy matches used (empty if all exact matches)",
     )
     rerank_used: bool | None = Field(
         None,

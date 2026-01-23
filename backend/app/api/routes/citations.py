@@ -1179,6 +1179,7 @@ class DocumentViewDataModel(BaseModel):
 
     document_id: str = Field(..., alias="documentId", description="Document UUID")
     document_url: str = Field(..., alias="documentUrl", description="Signed URL for PDF")
+    document_type: str = Field(..., alias="documentType", description="Document type (case_file, act, annexure, other)")
     page_number: int = Field(..., alias="pageNumber", description="Page to display (1-indexed)")
     bounding_boxes: list[SplitViewBoundingBox] = Field(
         ..., alias="boundingBoxes", description="Bounding boxes to highlight"
@@ -1264,10 +1265,10 @@ async def get_citation_split_view(
         source_document_id = citation.document_id
         source_page = citation.source_page or 1
 
-        # Get source document storage path
+        # Get source document storage path and type
         client = get_service_client()
         doc_result = await asyncio.to_thread(
-            lambda: client.table("documents").select("storage_path, filename").eq("id", source_document_id).single().execute()
+            lambda: client.table("documents").select("storage_path, filename, document_type").eq("id", source_document_id).single().execute()
         )
 
         if not doc_result.data:
@@ -1283,6 +1284,7 @@ async def get_citation_split_view(
             )
 
         source_storage_path = doc_result.data["storage_path"]
+        source_document_type = doc_result.data.get("document_type", "case_file")
         source_url = file_storage.get_signed_url(source_storage_path, expires_in=3600)
 
         # Get source bounding boxes (sync service, use to_thread)
@@ -1306,6 +1308,7 @@ async def get_citation_split_view(
         source_doc_data = DocumentViewDataModel(
             document_id=source_document_id,
             document_url=source_url,
+            document_type=source_document_type,
             page_number=source_page,
             bounding_boxes=source_bboxes,
         )
@@ -1356,6 +1359,7 @@ async def get_citation_split_view(
                     target_doc_data = DocumentViewDataModel(
                         document_id=act_resolution.act_document_id,
                         document_url=target_url,
+                        document_type="act",  # Target is always an Act document
                         page_number=target_page,
                         bounding_boxes=target_bboxes,
                     )

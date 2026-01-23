@@ -73,6 +73,11 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
   const { citation, sourceDocument, targetDocument, verification } = data;
   const hasTargetDocument = targetDocument !== null;
 
+  // Determine label based on document type
+  const sourceLabel = sourceDocument.documentType === 'act' ? 'Act Document' : 'Source Document';
+  const sourcePanelTitle = sourceDocument.documentType === 'act' ? 'Act Document' : 'Case Document';
+  const isSourceAct = sourceDocument.documentType === 'act';
+
   // Handle source page change
   const handleSourcePageChange = useCallback(
     (page: number) => setSourcePage(page),
@@ -155,12 +160,16 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
         {hasTargetDocument ? (
           // Two-panel mode: source and target
           <PanelGroup direction="horizontal" className="h-full">
-            {/* Source panel (case document) */}
+            {/* Source panel (case document or act document) */}
             <Panel defaultSize={50} minSize={30}>
               <div className="h-full flex flex-col">
-                <div className="flex items-center gap-2 px-3 py-2 border-b bg-yellow-50 dark:bg-yellow-950/30">
-                  <FileText className="h-4 w-4 text-yellow-600" />
-                  <span className="text-sm font-medium">Source Document</span>
+                <div className={`flex items-center gap-2 px-3 py-2 border-b ${isSourceAct ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-yellow-50 dark:bg-yellow-950/30'}`}>
+                  {isSourceAct ? (
+                    <Book className="h-4 w-4 text-blue-600" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-yellow-600" />
+                  )}
+                  <span className="text-sm font-medium">{sourceLabel}</span>
                 </div>
                 <div className="flex-1 min-h-0">
                   <PdfErrorBoundary fallbackMessage="Failed to load the source document.">
@@ -175,7 +184,7 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
                       scale={sourceViewState.scale}
                       onPageChange={handleSourcePageChange}
                       onScaleChange={handleSourceZoomChange}
-                      panelTitle="Case Document"
+                      panelTitle={sourcePanelTitle}
                       className="h-full"
                     />
                   </PdfErrorBoundary>
@@ -222,11 +231,15 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
         ) : (
           // Single-panel mode: only source (AC: #4)
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-2 px-3 py-2 border-b bg-yellow-50 dark:bg-yellow-950/30">
-              <FileText className="h-4 w-4 text-yellow-600" />
-              <span className="text-sm font-medium">Source Document</span>
+            <div className={`flex items-center gap-2 px-3 py-2 border-b ${isSourceAct ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-yellow-50 dark:bg-yellow-950/30'}`}>
+              {isSourceAct ? (
+                <Book className="h-4 w-4 text-blue-600" />
+              ) : (
+                <FileText className="h-4 w-4 text-yellow-600" />
+              )}
+              <span className="text-sm font-medium">{sourceLabel}</span>
               <span className="text-xs text-muted-foreground ml-auto">
-                Act not uploaded - verification unavailable
+                Target Act not uploaded - verification unavailable
               </span>
             </div>
             <div className="flex-1 min-h-0">
@@ -242,7 +255,7 @@ export const SplitViewCitationPanel: FC<SplitViewCitationPanelProps> = ({
                   scale={sourceViewState.scale}
                   onPageChange={handleSourcePageChange}
                   onScaleChange={handleSourceZoomChange}
-                  panelTitle="Case Document"
+                  panelTitle={sourcePanelTitle}
                   className="h-full"
                 />
               </PdfErrorBoundary>

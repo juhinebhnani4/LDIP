@@ -222,6 +222,13 @@ class Settings(BaseSettings):
     india_code_circuit_breaker_threshold: int = 5      # Failures before circuit opens
     india_code_circuit_breaker_timeout: int = 300      # Seconds before trying again
 
+    # ==========================================================================
+    # WebSocket Configuration (Real-time Streaming)
+    # ==========================================================================
+    websocket_ping_interval: int = 30                  # Seconds between server pings
+    websocket_max_connections_per_matter: int = 100    # Max connections per matter
+    websocket_heartbeat_timeout: int = 60              # Seconds before considering connection dead
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

@@ -28,11 +28,13 @@ from app.models.rerank import (
     RerankedSearchResultItem,
     RerankRequest,
 )
+from app.core.fuzzy_match import fuzzy_match_name
 from app.models.search import (
     AliasExpandedSearchMeta,
     AliasExpandedSearchRequest,
     AliasExpandedSearchResponse,
     BM25SearchRequest,
+    FuzzyMatchInfo,
     SearchMeta,
     SearchRequest,
     SearchResponse,
@@ -613,6 +615,7 @@ async def alias_expanded_search(
         # Track expansion metadata
         aliases_found: list[str] = []
         entities_matched: list[str] = []
+        fuzzy_matches: list[FuzzyMatchInfo] = []
         expanded_query = body.query
 
         # Expand aliases if enabled
@@ -623,29 +626,41 @@ async def alias_expanded_search(
             )
 
             if entities:
-                # Find entity names that appear in the query
-                query_lower = body.query.lower()
-
+                # Find entity names that appear in the query using hybrid matching
+                # (exact substring first, fuzzy fallback)
                 for entity in entities:
-                    canonical_lower = entity.canonical_name.lower()
                     aliases_list = entity.aliases or []
 
-                    # Check if canonical name or any alias appears in query
-                    matched = False
-                    matched_name = ""
+                    # Use hybrid matching: exact first, then fuzzy with 85% threshold
+                    match_result = fuzzy_match_name(
+                        query=body.query,
+                        canonical_name=entity.canonical_name,
+                        aliases=aliases_list,
+                        threshold=85.0,
+                    )
 
-                    if canonical_lower in query_lower:
-                        matched = True
-                        matched_name = entity.canonical_name
-                    else:
-                        for alias in aliases_list:
-                            if alias.lower() in query_lower:
-                                matched = True
-                                matched_name = alias
-                                break
-
-                    if matched:
+                    if match_result.matched:
                         entities_matched.append(entity.canonical_name)
+                        matched_name = match_result.matched_name
+
+                        # Track fuzzy matches for transparency
+                        if not match_result.is_exact:
+                            fuzzy_matches.append(
+                                FuzzyMatchInfo(
+                                    query_term=body.query,
+                                    matched_entity=entity.canonical_name,
+                                    match_score=match_result.score,
+                                    is_exact=False,
+                                )
+                            )
+                            logger.info(
+                                "fuzzy_entity_match",
+                                query=body.query,
+                                matched_entity=entity.canonical_name,
+                                matched_name=matched_name,
+                                score=match_result.score,
+                                matter_id=membership.matter_id,
+                            )
 
                         # Collect all name variants for this entity
                         all_variants = [entity.canonical_name] + (aliases_list or [])
@@ -699,6 +714,7 @@ async def alias_expanded_search(
                     semantic_weight=result.weights.semantic,
                     aliases_found=aliases_found,
                     entities_matched=entities_matched,
+                    fuzzy_matches=fuzzy_matches,
                     rerank_used=result.rerank_used,
                     fallback_reason=result.fallback_reason,
                 ),
@@ -725,6 +741,7 @@ async def alias_expanded_search(
                 semantic_weight=result.weights.semantic,
                 aliases_found=aliases_found,
                 entities_matched=entities_matched,
+                fuzzy_matches=fuzzy_matches,
                 rerank_used=None,
                 fallback_reason=None,
             ),

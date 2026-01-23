@@ -39,6 +39,7 @@ from app.api.routes import (
     timeline,
     users,
     verifications,
+    ws,
 )
 from app.api.routes.admin import pipeline as admin_pipeline
 from app.core.config import get_settings
@@ -99,10 +100,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             hint="Set OPENAI_API_KEY in .env file",
         )
 
+    # Start Redis-to-WebSocket bridge for real-time streaming
+    from app.api.ws.redis_bridge import get_redis_bridge
+
+    redis_bridge = get_redis_bridge()
+    try:
+        await redis_bridge.start()
+        logger.info("redis_websocket_bridge_started")
+    except Exception as e:
+        # Log but don't fail startup - WebSocket is non-critical
+        logger.warning(
+            "redis_websocket_bridge_start_failed",
+            error=str(e),
+            hint="WebSocket streaming will be unavailable",
+        )
+
     yield
 
     # Shutdown
     logger.info("application_shutting_down")
+
+    # Stop Redis bridge
+    try:
+        await redis_bridge.stop()
+        logger.info("redis_websocket_bridge_stopped")
+    except Exception as e:
+        logger.warning("redis_websocket_bridge_stop_failed", error=str(e))
 
 
 def create_app() -> FastAPI:
@@ -307,6 +330,9 @@ def create_app() -> FastAPI:
 
     # Admin routes (require admin access)
     app.include_router(admin_pipeline.router, prefix="/api")
+
+    # WebSocket routes for real-time streaming
+    app.include_router(ws.router, prefix="/api")
 
     return app
 

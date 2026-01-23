@@ -61,6 +61,7 @@ export function JaanchLogo({
           width={config.icon}
           height={config.icon}
           className="object-contain"
+          style={{ width: 'auto', height: 'auto' }}
           priority
           aria-hidden="true"
         />
@@ -70,6 +71,7 @@ export function JaanchLogo({
           width={config.text.width}
           height={config.text.height}
           className="object-contain"
+          style={{ width: 'auto', height: 'auto' }}
           priority
         />
       </span>
@@ -84,6 +86,7 @@ export function JaanchLogo({
       width={config.icon}
       height={config.icon}
       className={cn('object-contain', className)}
+      style={{ width: 'auto', height: 'auto' }}
       priority
     />
   );
@@ -108,6 +111,7 @@ export function JaanchIcon({
       width={iconSize}
       height={iconSize}
       className={cn('object-contain', className)}
+      style={{ width: 'auto', height: 'auto' }}
       priority
     />
   );

@@ -25,6 +25,7 @@ export default function LandingPage() {
               width={120}
               height={32}
               className="h-8 w-auto"
+              style={{ width: 'auto', height: 'auto' }}
             />
           </Link>
           <div className="flex items-center gap-4">
@@ -557,6 +558,7 @@ export default function LandingPage() {
               width={100}
               height={26}
               className="h-6 w-auto"
+              style={{ width: 'auto', height: 'auto' }}
             />
           </div>
           <p className="text-sm text-muted-foreground">

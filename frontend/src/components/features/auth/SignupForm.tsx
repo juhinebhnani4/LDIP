@@ -216,6 +216,7 @@ export function SignupForm() {
               name="password"
               type="password"
               placeholder="At least 8 characters"
+              autoComplete="new-password"
               value={formData.password}
               onChange={handleChange}
               disabled={isLoading}
@@ -231,6 +232,7 @@ export function SignupForm() {
               name="confirmPassword"
               type="password"
               placeholder="Confirm your password"
+              autoComplete="new-password"
               value={formData.confirmPassword}
               onChange={handleChange}
               disabled={isLoading}

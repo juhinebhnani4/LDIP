@@ -295,6 +295,7 @@ export function LoginForm() {
                   name="password"
                   type="password"
                   placeholder="Your password"
+                  autoComplete="current-password"
                   value={formData.password}
                   onChange={handleChange}
                   disabled={isLoading}

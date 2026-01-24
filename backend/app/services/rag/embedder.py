@@ -16,7 +16,7 @@ import json
 from collections.abc import Sequence
 
 import structlog
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, RateLimitError
 
 from app.core.circuit_breaker import (
     CircuitOpenError,
@@ -198,6 +198,16 @@ class EmbeddingService:
             )
             return None
 
+        except RateLimitError as e:
+            # Fallback: return None when rate limited (quota exceeded)
+            # Callers (hybrid search) should use BM25 only
+            logger.warning(
+                "embedding_rate_limit_fallback",
+                text_len=len(text),
+                error=str(e)[:200],
+            )
+            return None
+
         except Exception as e:
             logger.error(
                 "embedding_generation_failed",
@@ -303,6 +313,15 @@ class EmbeddingService:
                 batch_size=len(texts),
                 circuit_name=e.circuit_name,
                 cooldown_remaining=e.cooldown_remaining,
+            )
+            return [None] * len(texts)
+
+        except RateLimitError as e:
+            # Fallback: return all None when rate limited (quota exceeded)
+            logger.warning(
+                "batch_embedding_rate_limit_fallback",
+                batch_size=len(texts),
+                error=str(e)[:200],
             )
             return [None] * len(texts)
 

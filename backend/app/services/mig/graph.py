@@ -251,7 +251,7 @@ class MIGGraphService:
             else:
                 continue  # Entity creation failed
 
-            # Collect mentions
+            # Collect mentions (gold standard: preserve source_bbox_ids from extraction)
             for mention in extracted.mentions:
                 all_mentions.append({
                     "entity_id": entity_id,
@@ -261,7 +261,7 @@ class MIGGraphService:
                     "mention_text": mention.text,
                     "context": mention.context,
                     "confidence": extracted.confidence,
-                    "bbox_ids": [],
+                    "bbox_ids": extraction_result.source_bbox_ids or [],
                 })
 
         if all_mentions:

@@ -186,6 +186,7 @@ class MIGEntityExtractor:
         matter_id: str,
         chunk_id: str | None = None,
         page_number: int | None = None,
+        bbox_ids: list[str] | None = None,
     ) -> EntityExtractionResult:
         """Extract entities and relationships from text.
 
@@ -195,6 +196,7 @@ class MIGEntityExtractor:
             matter_id: Matter UUID for context.
             chunk_id: Optional source chunk UUID.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs for source highlighting.
 
         Returns:
             EntityExtractionResult containing extracted entities and relationships.
@@ -215,6 +217,7 @@ class MIGEntityExtractor:
                 source_document_id=document_id,
                 source_chunk_id=chunk_id,
                 page_number=page_number,
+                source_bbox_ids=bbox_ids or [],
             )
 
         # Track truncation metadata
@@ -252,6 +255,7 @@ class MIGEntityExtractor:
                     document_id=document_id,
                     chunk_id=chunk_id,
                     page_number=page_number,
+                    bbox_ids=bbox_ids,
                 )
 
                 # Add truncation metadata to result
@@ -317,6 +321,7 @@ class MIGEntityExtractor:
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
+            source_bbox_ids=bbox_ids or [],
         )
 
     def extract_entities_sync(
@@ -326,6 +331,7 @@ class MIGEntityExtractor:
         matter_id: str,
         chunk_id: str | None = None,
         page_number: int | None = None,
+        bbox_ids: list[str] | None = None,
     ) -> EntityExtractionResult:
         """Synchronous wrapper for entity extraction.
 
@@ -337,6 +343,7 @@ class MIGEntityExtractor:
             matter_id: Matter UUID for context.
             chunk_id: Optional source chunk UUID.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs for source highlighting.
 
         Returns:
             EntityExtractionResult containing extracted entities and relationships.
@@ -349,6 +356,7 @@ class MIGEntityExtractor:
                 source_document_id=document_id,
                 source_chunk_id=chunk_id,
                 page_number=page_number,
+                source_bbox_ids=bbox_ids or [],
             )
 
         # Truncate if too long
@@ -370,6 +378,7 @@ class MIGEntityExtractor:
                     document_id=document_id,
                     chunk_id=chunk_id,
                     page_number=page_number,
+                    bbox_ids=bbox_ids,
                 )
 
                 processing_time = int((time.time() - start_time) * 1000)
@@ -422,6 +431,7 @@ class MIGEntityExtractor:
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
+            source_bbox_ids=bbox_ids or [],
         )
 
     def _parse_response(
@@ -430,6 +440,7 @@ class MIGEntityExtractor:
         document_id: str,
         chunk_id: str | None,
         page_number: int | None,
+        bbox_ids: list[str] | None = None,
     ) -> EntityExtractionResult:
         """Parse Gemini response into EntityExtractionResult.
 
@@ -438,6 +449,7 @@ class MIGEntityExtractor:
             document_id: Source document UUID.
             chunk_id: Optional source chunk UUID.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs for source highlighting.
 
         Returns:
             Parsed EntityExtractionResult.
@@ -544,6 +556,7 @@ class MIGEntityExtractor:
                 source_document_id=document_id,
                 source_chunk_id=chunk_id,
                 page_number=page_number,
+                source_bbox_ids=bbox_ids or [],
             )
 
         except json.JSONDecodeError as e:
@@ -552,14 +565,14 @@ class MIGEntityExtractor:
                 error=str(e),
                 response_preview=response_text[:200] if response_text else "",
             )
-            return self._empty_result(document_id, chunk_id, page_number)
+            return self._empty_result(document_id, chunk_id, page_number, bbox_ids)
 
         except Exception as e:
             logger.warning(
                 "mig_response_parse_error",
                 error=str(e),
             )
-            return self._empty_result(document_id, chunk_id, page_number)
+            return self._empty_result(document_id, chunk_id, page_number, bbox_ids)
 
     def _parse_entity_type(self, type_str: str) -> EntityType | None:
         """Parse entity type string to enum."""
@@ -594,6 +607,7 @@ class MIGEntityExtractor:
         document_id: str,
         chunk_id: str | None,
         page_number: int | None,
+        bbox_ids: list[str] | None = None,
     ) -> EntityExtractionResult:
         """Create empty extraction result."""
         return EntityExtractionResult(
@@ -602,6 +616,7 @@ class MIGEntityExtractor:
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
+            source_bbox_ids=bbox_ids or [],
         )
 
     async def extract_entities_batch(
@@ -616,7 +631,7 @@ class MIGEntityExtractor:
         reducing API calls from N to 1 and improving throughput 3-5x.
 
         Args:
-            chunks: List of chunk dicts with 'id', 'content', 'page_number'.
+            chunks: List of chunk dicts with 'id', 'content', 'page_number', 'bbox_ids'.
             document_id: Source document UUID.
             matter_id: Matter UUID for context.
 
@@ -637,6 +652,7 @@ class MIGEntityExtractor:
             chunk_id = chunk.get("id", "")
             content = chunk.get("content", "")
             page_number = chunk.get("page_number")
+            bbox_ids = chunk.get("bbox_ids") or []
 
             if not content or not content.strip():
                 continue
@@ -654,11 +670,20 @@ class MIGEntityExtractor:
             chunk_map[chunk_id] = {
                 "chunk_id": chunk_id,
                 "page_number": page_number,
+                "bbox_ids": [str(b) for b in bbox_ids] if bbox_ids else [],
             }
             total_text_length += len(section_text)
 
         if not sections_parts:
-            return [self._empty_result(document_id, c.get("id"), c.get("page_number")) for c in chunks]
+            return [
+                self._empty_result(
+                    document_id,
+                    c.get("id"),
+                    c.get("page_number"),
+                    [str(b) for b in c.get("bbox_ids") or []] if c.get("bbox_ids") else [],
+                )
+                for c in chunks
+            ]
 
         sections_text = "\n".join(sections_parts)
         prompt = BATCH_ENTITY_EXTRACTION_PROMPT.format(sections=sections_text)
@@ -681,10 +706,12 @@ class MIGEntityExtractor:
                     results.append(parsed_sections[chunk_id])
                 else:
                     # Chunk not in response (maybe filtered out or failed)
+                    chunk_bbox_ids = [str(b) for b in chunk.get("bbox_ids") or []] if chunk.get("bbox_ids") else []
                     results.append(self._empty_result(
                         document_id,
                         chunk_id,
                         chunk.get("page_number"),
+                        chunk_bbox_ids,
                     ))
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -709,7 +736,15 @@ class MIGEntityExtractor:
                 chunks_count=len(chunks),
             )
             # Return empty results for all chunks on failure
-            return [self._empty_result(document_id, c.get("id"), c.get("page_number")) for c in chunks]
+            return [
+                self._empty_result(
+                    document_id,
+                    c.get("id"),
+                    c.get("page_number"),
+                    [str(b) for b in c.get("bbox_ids") or []] if c.get("bbox_ids") else [],
+                )
+                for c in chunks
+            ]
 
     def _parse_batch_response(
         self,
@@ -722,7 +757,7 @@ class MIGEntityExtractor:
         Args:
             response_text: Raw response from Gemini.
             document_id: Source document UUID.
-            chunk_map: Map of chunk_id -> chunk info.
+            chunk_map: Map of chunk_id -> chunk info (includes page_number, bbox_ids).
 
         Returns:
             Dict mapping chunk_id -> EntityExtractionResult.
@@ -766,12 +801,13 @@ class MIGEntityExtractor:
                     "relationships": section.get("relationships", []),
                 }
 
-                # Parse using existing method
+                # Parse using existing method (pass bbox_ids from chunk_map)
                 result = self._parse_response(
                     json.dumps(temp_parsed),
                     document_id=document_id,
                     chunk_id=section_id,
                     page_number=chunk_info.get("page_number"),
+                    bbox_ids=chunk_info.get("bbox_ids"),
                 )
                 results[section_id] = result
 

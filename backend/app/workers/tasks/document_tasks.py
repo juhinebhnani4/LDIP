@@ -3368,9 +3368,10 @@ def extract_entities(
             }
 
         # Get all chunks for this document (child chunks for more granular extraction)
+        # Include bbox_ids for spatial data passthrough (gold standard pattern)
         response = (
             client.table("chunks")
-            .select("id, content, chunk_type, page_number")
+            .select("id, content, chunk_type, page_number, bbox_ids")
             .eq("document_id", doc_id)
             .eq("chunk_type", "child")  # Extract from child chunks for precision
             .order("chunk_index", desc=False)
@@ -3553,12 +3554,17 @@ def extract_entities(
 
                 async with semaphore:
                     try:
+                        # Extract bbox_ids and convert to string list for gold standard pattern
+                        chunk_bbox_ids = chunk.get("bbox_ids") or []
+                        bbox_ids_list = [str(b) for b in chunk_bbox_ids] if chunk_bbox_ids else []
+
                         extraction_result = await extractor.extract_entities(
                             text=chunk["content"],
                             document_id=doc_id,
                             matter_id=matter_id,
                             chunk_id=chunk_id,
                             page_number=chunk.get("page_number"),
+                            bbox_ids=bbox_ids_list,
                         )
 
                         entities_count = 0

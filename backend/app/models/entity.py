@@ -256,6 +256,10 @@ class EntityExtractionResult(BaseModel):
     source_document_id: str | None = Field(None, description="Source document UUID")
     source_chunk_id: str | None = Field(None, description="Source chunk UUID")
     page_number: int | None = Field(None, description="Page number if available")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list,
+        description="Bounding box UUIDs for precise source highlighting (gold standard pattern)",
+    )
     was_truncated: bool = Field(
         default=False, description="True if input text was truncated due to length limits"
     )

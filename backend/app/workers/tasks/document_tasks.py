@@ -113,6 +113,11 @@ from app.services.contradiction import (
     get_statement_comparison_service,
 )
 from app.services.contradiction.comparator import ComparisonServiceError
+from app.models.contradiction import (
+    ComparisonResult,
+    StatementPairComparison,
+    EntityComparisonsResponse,
+)
 from app.workers.celery import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -4669,6 +4674,108 @@ CONTRADICTION_MAX_ENTITIES_PER_RUN = 50  # Max entities to process per task run
 CONTRADICTION_MAX_PAIRS_PER_ENTITY = 25  # Max pairs per entity (cost control)
 
 
+def _store_comparison_results(
+    comparison_response: EntityComparisonsResponse,
+    matter_id: str,
+    entity_id: str,
+) -> int:
+    """Store comparison results to the statement_comparisons table.
+
+    Follows the same pattern as CitationStorageService - persists detection
+    results to database for UI consumption.
+
+    Args:
+        comparison_response: The comparison results from the service.
+        matter_id: Matter UUID for the comparison.
+        entity_id: Entity UUID that was compared.
+
+    Returns:
+        Number of records stored (only contradictions are stored).
+    """
+    from app.services.supabase.client import get_service_client
+
+    comparisons = comparison_response.data.comparisons
+    if not comparisons:
+        return 0
+
+    # Only store contradictions (other results are not needed for UI)
+    contradictions = [
+        c for c in comparisons if c.result == ComparisonResult.CONTRADICTION
+    ]
+
+    if not contradictions:
+        return 0
+
+    client = get_service_client()
+    stored = 0
+
+    # Build records for batch insert
+    records = []
+    for comparison in contradictions:
+        # Determine severity based on contradiction type and confidence
+        # HIGH: date/amount mismatch with high confidence
+        # MEDIUM: factual contradiction or moderate confidence
+        # LOW: semantic or low confidence
+        severity = "medium"  # default
+        if comparison.contradiction_type in ("date_mismatch", "amount_mismatch"):
+            severity = "high" if comparison.confidence >= 0.8 else "medium"
+        elif comparison.contradiction_type == "factual_contradiction":
+            severity = "high" if comparison.confidence >= 0.9 else "medium"
+        elif comparison.confidence < 0.7:
+            severity = "low"
+
+        # Build evidence JSON from the model
+        evidence_json = None
+        if comparison.evidence:
+            evidence_json = {
+                "type": comparison.evidence.type.value if comparison.evidence.type else None,
+                "value_a": comparison.evidence.value_a,
+                "value_b": comparison.evidence.value_b,
+                "page_refs": comparison.evidence.page_refs,
+            }
+
+        record = {
+            "matter_id": matter_id,
+            "entity_id": entity_id,
+            "statement_a_id": comparison.statement_a_id,
+            "statement_b_id": comparison.statement_b_id,
+            "result": comparison.result.value,  # 'contradiction'
+            "contradiction_type": comparison.contradiction_type or "semantic_contradiction",
+            "severity": severity,
+            "reasoning": comparison.reasoning,  # Chain-of-thought from GPT-4
+            "explanation": comparison.reasoning,  # Attorney-friendly explanation
+            "confidence": comparison.confidence,
+            "evidence": evidence_json,
+        }
+        records.append(record)
+
+    if records:
+        try:
+            # Use upsert to avoid duplicates (statement_a_id + statement_b_id)
+            # Note: This requires a unique constraint on (statement_a_id, statement_b_id)
+            # If not available, use insert with on_conflict handling
+            result = client.table("statement_comparisons").insert(records).execute()
+            stored = len(result.data) if result.data else 0
+
+            logger.info(
+                "contradiction_results_stored",
+                matter_id=matter_id,
+                entity_id=entity_id,
+                contradictions_stored=stored,
+            )
+        except Exception as e:
+            # Log but don't fail the task - detection was successful even if storage fails
+            logger.error(
+                "contradiction_storage_failed",
+                matter_id=matter_id,
+                entity_id=entity_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+    return stored
+
+
 @celery_app.task(
     name="app.workers.tasks.document_tasks.detect_contradictions",
     bind=True,
@@ -4820,36 +4927,92 @@ def detect_contradictions(
                 "job_id": job_id,
             }
 
-        # Limit entities for cost control
-        entities_to_process = list(entity_ids)[:CONTRADICTION_MAX_ENTITIES_PER_RUN]
+        # Get canonical_names for entity_ids and group by name (ignoring type)
+        # This enables cross-type comparison: "Custodian [PERSON]" and "Custodian [ORG]"
+        # will be treated as the same entity for contradiction detection
+        entities_resp = (
+            client.table("identity_nodes")
+            .select("id, canonical_name, entity_type")
+            .in_("id", list(entity_ids))
+            .execute()
+        )
+
+        # Group by canonical_name (the key fix for rigid entity matching)
+        canonical_names: set[str] = set()
+        name_to_types: dict[str, set[str]] = {}  # For logging cross-type matches
+        for entity in entities_resp.data or []:
+            name = entity.get("canonical_name")
+            etype = entity.get("entity_type")
+            if name:
+                canonical_names.add(name)
+                if name not in name_to_types:
+                    name_to_types[name] = set()
+                if etype:
+                    name_to_types[name].add(etype)
+
+        if not canonical_names:
+            logger.info(
+                "detect_contradictions_no_canonical_names",
+                document_id=doc_id,
+                entity_ids_count=len(entity_ids),
+            )
+            _update_job_stage_complete(
+                job_id,
+                "contradiction_detection",
+                matter_id,
+                metadata={"entities_processed": 0, "contradictions_found": 0},
+            )
+            return {
+                "status": "contradiction_detection_complete",
+                "document_id": doc_id,
+                "entities_processed": 0,
+                "contradictions_found": 0,
+                "reason": "No canonical names resolved for entities",
+                "job_id": job_id,
+            }
+
+        # Log cross-type entities (same name, multiple types)
+        cross_type_names = [n for n, types in name_to_types.items() if len(types) > 1]
+        if cross_type_names:
+            logger.info(
+                "detect_contradictions_cross_type_entities",
+                document_id=doc_id,
+                cross_type_count=len(cross_type_names),
+                examples=cross_type_names[:5],
+            )
+
+        # Limit canonical names for cost control
+        names_to_process = list(canonical_names)[:CONTRADICTION_MAX_ENTITIES_PER_RUN]
 
         logger.info(
             "detect_contradictions_processing",
             document_id=doc_id,
-            total_entities=len(entity_ids),
-            entities_to_process=len(entities_to_process),
+            total_entity_ids=len(entity_ids),
+            unique_canonical_names=len(canonical_names),
+            names_to_process=len(names_to_process),
         )
 
-        # Process entities and detect contradictions
+        # Process by canonical_name (not entity_id) for cross-type comparison
         total_contradictions = 0
         total_pairs_compared = 0
+        total_stored = 0
         entities_processed = 0
         entities_skipped = 0
         total_cost_usd = 0.0
 
         async def _detect_contradictions_async():
             nonlocal total_contradictions, total_pairs_compared, entities_processed
-            nonlocal entities_skipped, total_cost_usd
+            nonlocal entities_skipped, total_cost_usd, total_stored
 
-            for entity_id in entities_to_process:
+            for canonical_name in names_to_process:
                 try:
-                    # Compare statements for this entity
-                    comparison_result = await compare_service.compare_entity_statements(
-                        entity_id=entity_id,
+                    # Compare statements for ALL entities with this canonical_name
+                    # This is the key change: group by name, ignore type
+                    comparison_result = await compare_service.compare_statements_by_canonical_name(
+                        canonical_name=canonical_name,
                         matter_id=matter_id,
                         max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
                         confidence_threshold=0.5,
-                        include_aliases=True,
                     )
 
                     # Aggregate results
@@ -4858,20 +5021,32 @@ def detect_contradictions(
                     total_cost_usd += comparison_result.meta.total_cost_usd
                     entities_processed += 1
 
+                    # Store contradictions to database (Epic 5 requirement)
+                    # Uses entity_id from the comparison result (primary entity for merged names)
+                    stored = 0
+                    if comparison_result.meta.contradictions_found > 0:
+                        stored = _store_comparison_results(
+                            comparison_response=comparison_result,
+                            matter_id=matter_id,
+                            entity_id=comparison_result.data.entity_id,
+                        )
+                        total_stored += stored
+
                     logger.debug(
-                        "detect_contradictions_entity_complete",
+                        "detect_contradictions_name_complete",
                         document_id=doc_id,
-                        entity_id=entity_id,
+                        canonical_name=canonical_name,
                         contradictions=comparison_result.meta.contradictions_found,
                         pairs_compared=comparison_result.meta.pairs_compared,
+                        stored=stored,
                     )
 
                 except Exception as e:
                     # Log but continue with other entities
                     logger.warning(
-                        "detect_contradictions_entity_failed",
+                        "detect_contradictions_name_failed",
                         document_id=doc_id,
-                        entity_id=entity_id,
+                        canonical_name=canonical_name,
                         error=str(e),
                     )
                     entities_skipped += 1
@@ -4896,6 +5071,7 @@ def detect_contradictions(
                 "entities_processed": entities_processed,
                 "entities_skipped": entities_skipped,
                 "contradictions_found": total_contradictions,
+                "contradictions_stored": total_stored,
                 "pairs_compared": total_pairs_compared,
                 "cost_usd": total_cost_usd,
             },
@@ -4918,6 +5094,7 @@ def detect_contradictions(
             entities_processed=entities_processed,
             entities_skipped=entities_skipped,
             contradictions_found=total_contradictions,
+            contradictions_stored=total_stored,
             pairs_compared=total_pairs_compared,
             cost_usd=total_cost_usd,
         )
@@ -4928,6 +5105,7 @@ def detect_contradictions(
             "entities_processed": entities_processed,
             "entities_skipped": entities_skipped,
             "contradictions_found": total_contradictions,
+            "contradictions_stored": total_stored,
             "pairs_compared": total_pairs_compared,
             "cost_usd": total_cost_usd,
             "job_id": job_id,

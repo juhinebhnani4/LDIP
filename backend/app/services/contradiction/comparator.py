@@ -298,6 +298,249 @@ class StatementComparisonService:
                 code="COMPARISON_FAILED",
             ) from e
 
+    async def compare_statements_by_canonical_name(
+        self,
+        canonical_name: str,
+        matter_id: str,
+        max_pairs: int = DEFAULT_MAX_PAIRS,
+        confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    ) -> EntityComparisonsResponse:
+        """Compare statements across ALL entity_ids with the same canonical_name.
+
+        This method enables cross-type comparison: if "Custodian" exists as both
+        PERSON and ORGANIZATION types, their statements will be compared together.
+
+        Story 5-2 enhancement: Group entities by name, ignoring type, for broader
+        contradiction detection coverage.
+
+        Args:
+            canonical_name: Entity canonical name to match.
+            matter_id: Matter UUID for isolation (CRITICAL).
+            max_pairs: Maximum pairs to compare (cost control).
+            confidence_threshold: Minimum confidence to include.
+
+        Returns:
+            EntityComparisonsResponse with comparisons across all matching entities.
+        """
+        from app.services.supabase.client import get_supabase_client
+
+        logger.info(
+            "compare_statements_by_canonical_name_request",
+            canonical_name=canonical_name,
+            matter_id=matter_id,
+            max_pairs=max_pairs,
+        )
+
+        client = get_supabase_client()
+
+        # Get ALL entity_ids with this canonical_name in the matter (ignoring type)
+        entities_resp = (
+            client.table("identity_nodes")
+            .select("id, canonical_name, entity_type")
+            .eq("matter_id", matter_id)
+            .eq("canonical_name", canonical_name)
+            .execute()
+        )
+
+        entity_ids = [e["id"] for e in (entities_resp.data or [])]
+
+        if not entity_ids:
+            logger.warning(
+                "compare_by_name_no_entities_found",
+                canonical_name=canonical_name,
+                matter_id=matter_id,
+            )
+            return self._create_empty_response(
+                entity_id="",
+                entity_name=canonical_name,
+            )
+
+        # Log if multiple types found (the whole point of this method)
+        entity_types = [e.get("entity_type") for e in (entities_resp.data or [])]
+        if len(set(entity_types)) > 1:
+            logger.info(
+                "compare_by_name_cross_type_match",
+                canonical_name=canonical_name,
+                entity_types=list(set(entity_types)),
+                entity_count=len(entity_ids),
+            )
+
+        # Use the first entity_id as the "primary" for response structure
+        primary_entity_id = entity_ids[0]
+
+        # Get statements for ALL entity_ids using overlaps query
+        return await self._compare_merged_entity_statements(
+            entity_ids=entity_ids,
+            entity_name=canonical_name,
+            matter_id=matter_id,
+            max_pairs=max_pairs,
+            confidence_threshold=confidence_threshold,
+            primary_entity_id=primary_entity_id,
+        )
+
+    async def _compare_merged_entity_statements(
+        self,
+        entity_ids: list[str],
+        entity_name: str,
+        matter_id: str,
+        max_pairs: int,
+        confidence_threshold: float,
+        primary_entity_id: str,
+    ) -> EntityComparisonsResponse:
+        """Compare statements that mention ANY of the given entity_ids.
+
+        This enables cross-type comparison by merging statements from
+        multiple entity_ids with the same canonical_name.
+
+        Args:
+            entity_ids: List of entity UUIDs to search for.
+            entity_name: Display name for the entity group.
+            matter_id: Matter UUID for isolation.
+            max_pairs: Maximum pairs to compare.
+            confidence_threshold: Minimum confidence threshold.
+            primary_entity_id: ID to use for response structure.
+
+        Returns:
+            EntityComparisonsResponse with merged statement comparisons.
+        """
+        from app.models.contradiction import (
+            DocumentStatements,
+            EntityStatements,
+            Statement,
+        )
+        from app.services.supabase.client import get_supabase_client
+
+        client = get_supabase_client()
+
+        # Query chunks containing ANY of the entity_ids
+        chunks_resp = (
+            client.table("chunks")
+            .select("id, document_id, content, page_number, bbox_ids, entity_ids")
+            .eq("matter_id", matter_id)
+            .overlaps("entity_ids", entity_ids)
+            .order("document_id")
+            .order("page_number")
+            .execute()
+        )
+
+        chunks = chunks_resp.data or []
+
+        if len(chunks) < 2:
+            logger.info(
+                "compare_merged_insufficient_statements",
+                entity_name=entity_name,
+                chunk_count=len(chunks),
+            )
+            return self._create_empty_response(
+                entity_id=primary_entity_id,
+                entity_name=entity_name,
+            )
+
+        # Get document names
+        doc_ids = list(set(c["document_id"] for c in chunks))
+        docs_resp = (
+            client.table("documents")
+            .select("id, filename")
+            .in_("id", doc_ids)
+            .execute()
+        )
+        doc_names = {d["id"]: d.get("filename", "Unknown") for d in (docs_resp.data or [])}
+
+        # Build EntityStatements structure from chunks
+        # Group by document
+        docs_map: dict[str, list[dict]] = {}
+        for chunk in chunks:
+            doc_id = chunk["document_id"]
+            if doc_id not in docs_map:
+                docs_map[doc_id] = []
+            docs_map[doc_id].append(chunk)
+
+        # Build document statements
+        document_statements: list[DocumentStatements] = []
+        from app.engines.contradiction.statement_query import ValueExtractor
+        extractor = ValueExtractor()
+
+        for doc_id, doc_chunks in docs_map.items():
+            statements: list[Statement] = []
+            for chunk in doc_chunks:
+                content = chunk.get("content", "")
+                dates, amounts = extractor.extract_all_values(content)
+                statements.append(
+                    Statement(
+                        entity_id=primary_entity_id,
+                        chunk_id=chunk.get("id", ""),
+                        document_id=doc_id,
+                        content=content,
+                        dates=dates,
+                        amounts=amounts,
+                        page_number=chunk.get("page_number"),
+                        bbox_ids=[str(b) for b in chunk.get("bbox_ids") or []],
+                        confidence=1.0,
+                    )
+                )
+            document_statements.append(
+                DocumentStatements(
+                    document_id=doc_id,
+                    document_name=doc_names.get(doc_id),
+                    statements=statements,
+                    statement_count=len(statements),
+                )
+            )
+
+        total_statements = sum(ds.statement_count for ds in document_statements)
+
+        entity_statements = EntityStatements(
+            entity_id=primary_entity_id,
+            entity_name=entity_name,
+            total_statements=total_statements,
+            documents=document_statements,
+            aliases_included=[],
+        )
+
+        # Run comparisons
+        batch_result = await self.comparator.compare_all_entity_statements(
+            entity_statements=entity_statements,
+            max_pairs=max_pairs,
+        )
+
+        # Filter by confidence threshold
+        filtered_comparisons = [
+            c for c in batch_result.comparisons
+            if c.confidence >= confidence_threshold
+        ]
+
+        # Build response
+        entity_comparisons = EntityComparisons(
+            entity_id=primary_entity_id,
+            entity_name=entity_name,
+            comparisons=filtered_comparisons,
+            contradictions_found=sum(
+                1 for c in filtered_comparisons
+                if c.result == ComparisonResult.CONTRADICTION
+            ),
+            total_pairs_compared=len(filtered_comparisons),
+        )
+
+        meta = ComparisonMeta(
+            pairs_compared=len(batch_result.comparisons),
+            contradictions_found=batch_result.contradictions_found,
+            total_cost_usd=batch_result.total_cost_usd,
+            processing_time_ms=batch_result.processing_time_ms,
+        )
+
+        logger.info(
+            "compare_merged_statements_success",
+            entity_name=entity_name,
+            entity_ids_count=len(entity_ids),
+            pairs_compared=len(batch_result.comparisons),
+            contradictions_found=batch_result.contradictions_found,
+        )
+
+        return EntityComparisonsResponse(
+            data=entity_comparisons,
+            meta=meta,
+        )
+
     async def get_estimated_pairs(
         self,
         entity_id: str,

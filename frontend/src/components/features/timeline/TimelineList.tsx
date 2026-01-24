@@ -46,6 +46,8 @@ interface TimelineListProps {
   getAnomaliesForEvent?: (eventId: string) => AnomalyListItem[];
   /** Story 14.16: Callback when anomaly indicator is clicked */
   onAnomalyClick?: (anomaly: AnomalyListItem) => void;
+  /** Callback when source document is clicked - opens in PDF split view */
+  onSourceClick?: (event: TimelineEvent) => void;
   /** Optional className */
   className?: string;
 }
@@ -175,6 +177,7 @@ export function TimelineList({
   onRetry,
   getAnomaliesForEvent,
   onAnomalyClick,
+  onSourceClick,
   className,
 }: TimelineListProps) {
   // Group events by year
@@ -249,6 +252,7 @@ export function TimelineList({
                     onAnomalyClick={onAnomalyClick}
                     onEdit={onEditEvent}
                     onDelete={onDeleteEvent}
+                    onSourceClick={onSourceClick}
                   />
                 </div>
               );

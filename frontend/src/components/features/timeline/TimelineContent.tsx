@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineStats } from '@/hooks/useTimelineStats';
 import {
@@ -10,6 +11,7 @@ import {
   useAnomalyMutations,
   type AnomalyListItem,
 } from '@/hooks/useAnomalies';
+import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineList } from './TimelineList';
 import { TimelineHorizontal } from './TimelineHorizontal';
@@ -21,7 +23,7 @@ import { AddEventDialog } from './AddEventDialog';
 import { EditEventDialog } from './EditEventDialog';
 import { DeleteEventConfirmation } from './DeleteEventConfirmation';
 import { timelineEventApi } from '@/lib/api/client';
-import { fetchDocuments } from '@/lib/api/documents';
+import { fetchDocument, fetchDocuments } from '@/lib/api/documents';
 import useSWR from 'swr';
 import type {
   TimelineViewMode,
@@ -144,6 +146,9 @@ export function TimelineContent({ className }: TimelineContentProps) {
     verify: verifyAnomaly,
     isLoading: anomalyMutationLoading,
   } = useAnomalyMutations(matterId);
+
+  // PDF split view for source document viewing
+  const openPdfSplitView = usePdfSplitViewStore((state) => state.openPdfSplitView);
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: TimelineViewMode) => {
@@ -279,6 +284,40 @@ export function TimelineContent({ className }: TimelineContentProps) {
     setFilters((prev) => ({ ...prev, showAnomaliesOnly: true }));
   }, []);
 
+  /**
+   * Handle source document click from timeline event card.
+   * Opens the document in PDF split view instead of navigating away.
+   */
+  const handleSourceClick = useCallback(
+    async (event: TimelineEvent) => {
+      if (!event.documentId) return;
+
+      try {
+        // Fetch document details to get signed URL and filename
+        const document = await fetchDocument(event.documentId);
+        const documentUrl = document.storagePath;
+
+        if (!documentUrl) {
+          throw new Error('Document URL not found');
+        }
+
+        // Open PDF split view with document at the source page
+        openPdfSplitView(
+          {
+            documentId: event.documentId,
+            documentName: document.filename,
+            page: event.sourcePage ?? 1,
+          },
+          matterId,
+          documentUrl
+        );
+      } catch {
+        toast.error('Unable to open document. Please try again.');
+      }
+    },
+    [matterId, openPdfSplitView]
+  );
+
   // Calculate active filter count for display
   const activeFilterCount = countActiveFilters(filters);
 
@@ -331,6 +370,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
             onRetry={refreshTimeline}
             getAnomaliesForEvent={getAnomaliesForEvent}
             onAnomalyClick={handleAnomalyClick}
+            onSourceClick={handleSourceClick}
             className="mt-4"
           />
         );

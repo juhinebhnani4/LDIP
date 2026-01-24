@@ -69,6 +69,8 @@ interface TimelineEventCardProps {
   onEdit?: (event: TimelineEvent) => void;
   /** Callback when delete is clicked (only for manual events) */
   onDelete?: (event: TimelineEvent) => void;
+  /** Callback when source document is clicked - opens in PDF split view */
+  onSourceClick?: (event: TimelineEvent) => void;
   /** Optional className */
   className?: string;
 }
@@ -105,6 +107,7 @@ export function TimelineEventCard({
   onAnomalyClick,
   onEdit,
   onDelete,
+  onSourceClick,
   className,
 }: TimelineEventCardProps) {
   const params = useParams<{ matterId: string }>();
@@ -288,14 +291,26 @@ export function TimelineEventCard({
               aria-hidden="true"
             />
             <span className="text-muted-foreground">Source:</span>
-            <Link
-              href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
-              className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {event.sourcePage
-                ? `Document, pg ${event.sourcePage}`
-                : 'Document'}
-            </Link>
+            {onSourceClick ? (
+              <button
+                type="button"
+                onClick={() => onSourceClick(event)}
+                className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                {event.sourcePage
+                  ? `Document, pg ${event.sourcePage}`
+                  : 'Document'}
+              </button>
+            ) : (
+              <Link
+                href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
+                className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                {event.sourcePage
+                  ? `Document, pg ${event.sourcePage}`
+                  : 'Document'}
+              </Link>
+            )}
           </div>
         )}
 

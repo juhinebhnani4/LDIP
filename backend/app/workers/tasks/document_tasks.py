@@ -88,6 +88,8 @@ from app.services.ocr.validation_extractor import (
 from app.services.pubsub_service import (
     FeatureType,
     broadcast_document_status,
+    broadcast_entity_discovery,
+    broadcast_entity_streaming,
     broadcast_feature_ready,
     broadcast_job_progress,
     broadcast_job_status_change,
@@ -2917,6 +2919,65 @@ def embed_chunks(
             total_chunks=len(chunks),
         )
 
+        # Dispatch downstream tasks based on document type
+        # - Act documents: index sections for split-view navigation
+        # - Case files: extract citations with source bbox_ids
+        try:
+            from app.workers.celery import celery_app
+
+            doc_type_result = (
+                client.table("documents")
+                .select("document_type")
+                .eq("id", doc_id)
+                .single()
+                .execute()
+            )
+            document_type = doc_type_result.data.get("document_type") if doc_type_result.data else None
+
+            if document_type == "act":
+                # Index sections for accurate split-view navigation
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.index_act_sections",
+                    kwargs={
+                        "prev_result": {
+                            "document_id": doc_id,
+                            "status": "searchable",
+                            "job_id": job_id,
+                        },
+                        "document_id": doc_id,
+                    },
+                )
+                logger.info(
+                    "index_act_sections_dispatched",
+                    document_id=doc_id,
+                    document_type=document_type,
+                )
+            else:
+                # Extract citations after chunks with bbox_ids are ready
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.extract_citations",
+                    kwargs={
+                        "prev_result": {
+                            "document_id": doc_id,
+                            "status": "searchable",
+                            "job_id": job_id,
+                        },
+                        "document_id": doc_id,
+                    },
+                )
+                logger.info(
+                    "extract_citations_dispatched_after_embedding",
+                    document_id=doc_id,
+                    document_type=document_type,
+                )
+        except Exception as e:
+            # Non-fatal: downstream tasks can be triggered manually or via backfill
+            logger.warning(
+                "downstream_task_dispatch_failed",
+                document_id=doc_id,
+                error=str(e),
+            )
+
         return {
             "status": "searchable",
             "document_id": doc_id,
@@ -2977,6 +3038,154 @@ def embed_chunks(
             "status": "embedding_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Section Indexing Task (for Act documents)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.index_act_sections",
+    bind=True,
+    max_retries=2,
+    retry_backoff=True,
+)  # type: ignore[misc]
+def index_act_sections(
+    self,  # type: ignore[no-untyped-def]
+    prev_result: dict[str, str | int | float | None] | None = None,
+    document_id: str | None = None,
+    force: bool = False,
+) -> dict[str, str | int | float | None]:
+    """Index sections in Act documents for fast section lookups.
+
+    This task runs after chunking for Act documents to pre-compute
+    section -> page mappings, enabling O(1) lookups in split-view.
+
+    Pipeline: OCR -> Chunk -> **Index Sections** (Acts only)
+
+    Args:
+        prev_result: Result from previous task in chain.
+        document_id: Document UUID.
+        force: If True, re-index even if already indexed.
+
+    Returns:
+        Task result with indexing summary.
+    """
+    from app.services.section_index_service import (
+        SectionIndexService,
+        get_section_index_service,
+    )
+    from app.services.supabase.client import get_service_client
+
+    # Get document_id from prev_result or parameter
+    doc_id = document_id
+    if doc_id is None and prev_result:
+        doc_id = prev_result.get("document_id")  # type: ignore[assignment]
+
+    if not doc_id:
+        logger.error("index_act_sections_no_document_id")
+        return {
+            "status": "section_indexing_failed",
+            "error_code": "NO_DOCUMENT_ID",
+            "error_message": "No document_id provided",
+        }
+
+    # Skip if previous task failed
+    if prev_result and not force:
+        prev_status = prev_result.get("status", "")
+        if "failed" in str(prev_status).lower():
+            logger.info(
+                "index_act_sections_skipped_prev_failed",
+                document_id=doc_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "section_indexing_skipped",
+                "document_id": doc_id,
+                "reason": f"Previous task failed: {prev_status}",
+            }
+
+    client = get_service_client()
+
+    # Check if this is an Act document
+    doc_result = (
+        client.table("documents")
+        .select("document_type, matter_id")
+        .eq("id", doc_id)
+        .single()
+        .execute()
+    )
+
+    if not doc_result.data:
+        logger.warning(
+            "index_act_sections_document_not_found",
+            document_id=doc_id,
+        )
+        return {
+            "status": "section_indexing_skipped",
+            "document_id": doc_id,
+            "reason": "Document not found",
+        }
+
+    document_type = doc_result.data.get("document_type")
+    matter_id = doc_result.data.get("matter_id")
+
+    # Only index Act documents
+    if document_type != "act":
+        logger.info(
+            "index_act_sections_skipped_not_act",
+            document_id=doc_id,
+            document_type=document_type,
+        )
+        return {
+            "status": "section_indexing_skipped",
+            "document_id": doc_id,
+            "reason": f"Not an Act document (type: {document_type})",
+        }
+
+    logger.info(
+        "index_act_sections_started",
+        document_id=doc_id,
+        matter_id=matter_id,
+    )
+
+    try:
+        # Index sections
+        section_service = get_section_index_service()
+        section_count = section_service.index_document_sections(
+            document_id=doc_id,
+            matter_id=matter_id,
+        )
+
+        logger.info(
+            "index_act_sections_completed",
+            document_id=doc_id,
+            section_count=section_count,
+        )
+
+        return {
+            "status": "section_indexing_complete",
+            "document_id": doc_id,
+            "sections_indexed": section_count,
+        }
+
+    except Exception as e:
+        logger.error(
+            "index_act_sections_failed",
+            document_id=doc_id,
+            error=str(e),
+        )
+
+        if self.request.retries < 2:
+            raise self.retry(exc=e)
+
+        return {
+            "status": "section_indexing_failed",
+            "document_id": doc_id,
+            "error_code": "INDEXING_ERROR",
             "error_message": str(e),
         }
 
@@ -3420,6 +3629,13 @@ def extract_entities(
                     if progress_tracker and stage_progress:
                         progress_tracker.save_progress(stage_progress)
 
+                    # Broadcast progressive entity discovery for real-time UI updates
+                    if total_entities > 0:
+                        broadcast_entity_discovery(
+                            matter_id=matter_id,
+                            total_entities=total_entities,
+                        )
+
                     # Rate limit between outer batches
                     if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks_to_process):
                         await asyncio.sleep(rate_delay)
@@ -3454,6 +3670,13 @@ def extract_entities(
 
                     if progress_tracker and stage_progress:
                         progress_tracker.save_progress(stage_progress)
+
+                    # Broadcast progressive entity discovery for real-time UI updates
+                    if total_entities > 0:
+                        broadcast_entity_discovery(
+                            matter_id=matter_id,
+                            total_entities=total_entities,
+                        )
 
                     if i + ENTITY_EXTRACTION_BATCH_SIZE < len(chunks_to_process):
                         await asyncio.sleep(rate_delay)
@@ -4098,6 +4321,28 @@ def extract_citations(
                 is_retryable=False,
             )
 
+        # Check document type - skip citation extraction for Act documents
+        # Citations should only be extracted from case files, not from Acts
+        doc_type_result = (
+            client.table("documents")
+            .select("document_type")
+            .eq("id", doc_id)
+            .single()
+            .execute()
+        )
+        document_type = doc_type_result.data.get("document_type") if doc_type_result.data else None
+        if document_type == "act":
+            logger.info(
+                "extract_citations_skipped_act_document",
+                document_id=doc_id,
+                document_type=document_type,
+            )
+            return {
+                "status": "citation_extraction_skipped",
+                "document_id": doc_id,
+                "reason": "Act documents are not processed for citation extraction",
+            }
+
         # Get job_id for partial progress tracking
         job_id: str | None = None
         if prev_result:
@@ -4111,9 +4356,10 @@ def extract_citations(
         _update_job_stage_start(job_id, "citation_extraction", matter_id)
 
         # Get all chunks for this document (child chunks for granular extraction)
+        # Include bbox_ids for linking citations to source bounding boxes
         response = (
             client.table("chunks")
-            .select("id, content, chunk_type, page_number")
+            .select("id, content, chunk_type, page_number, bbox_ids")
             .eq("document_id", doc_id)
             .eq("chunk_type", "child")  # Extract from child chunks for precision
             .order("chunk_index", desc=False)
@@ -4188,11 +4434,14 @@ def extract_citations(
                         )
 
                         if extraction_result.citations:
-                            # Save citations to database
+                            # Save citations to database with source bbox IDs for highlighting
+                            # bbox_ids come from the chunk's bbox linking step
+                            chunk_bbox_ids = chunk.get("bbox_ids") or []
                             saved_count = await storage.save_citations(
                                 matter_id=matter_id,
                                 document_id=doc_id,
                                 extraction_result=extraction_result,
+                                source_bbox_ids=chunk_bbox_ids,
                             )
                             total_citations += saved_count
 
@@ -4646,7 +4895,7 @@ def detect_contradictions(
         broadcast_feature_ready(
             matter_id=matter_id,
             document_id=doc_id,
-            feature=FeatureType.ENTITIES,  # Use ENTITIES for now since no CONTRADICTIONS type
+            feature=FeatureType.CONTRADICTIONS,
             metadata={
                 "contradictions_count": total_contradictions,
                 "entities_analyzed": entities_processed,

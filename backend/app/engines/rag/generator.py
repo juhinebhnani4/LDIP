@@ -10,6 +10,7 @@ CRITICAL: Answers must be grounded in provided context only.
 """
 
 import asyncio
+import re
 import time
 from functools import lru_cache
 from typing import Any
@@ -23,9 +24,9 @@ from app.core.cost_tracking import (
     estimate_tokens,
 )
 from app.engines.rag.prompts import (
+    MAX_CONTEXT_CHUNKS,
     RAG_ANSWER_SYSTEM_PROMPT,
     format_rag_answer_prompt,
-    MAX_CONTEXT_CHUNKS,
 )
 
 logger = structlog.get_logger(__name__)
@@ -223,6 +224,31 @@ class RAGAnswerGenerator:
 
                 # Extract answer text
                 answer_text = response.text.strip()
+
+                # Post-process: Remove "p. ?" patterns that LLM may generate
+                # despite instructions not to (FR4: Eliminate "p. ?" output)
+                original_text = answer_text
+
+                # Pattern 1: "(Document, p. ?)" -> "(Document)"
+                answer_text = re.sub(r',\s*p\.?\s*\?\s*\)', ')', answer_text)
+
+                # Pattern 2: ", p. ?" at end of text or before newline
+                answer_text = re.sub(r',\s*p\.?\s*\?(?=\s|$|\n)', '', answer_text)
+
+                # Pattern 3: Standalone "p. ?" or "p.?" anywhere
+                answer_text = re.sub(r'\bp\.?\s*\?(?!\w)', '', answer_text)
+
+                # Pattern 4: "(Document p. ?)" without comma -> "(Document)"
+                answer_text = re.sub(r'\s+p\.?\s*\?\s*\)', ')', answer_text)
+
+                # Clean up any double spaces created
+                answer_text = re.sub(r'  +', ' ', answer_text)
+
+                if original_text != answer_text:
+                    logger.info(
+                        "rag_postprocess_p_question_cleaned",
+                        answer_length=len(answer_text),
+                    )
 
                 # Track costs (Gemini doesn't expose token counts, so estimate)
                 input_tokens = estimate_tokens(user_prompt)

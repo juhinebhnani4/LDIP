@@ -20,6 +20,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.bbox_filter import get_filtered_bbox_ids
 from app.core.circuit_breaker import (
     CircuitOpenError,
     CircuitService,
@@ -678,7 +679,9 @@ class DateExtractor:
 
             for raw_date in raw_dates:
                 try:
-                    extracted = self._parse_single_date(raw_date, page_number, bbox_ids)
+                    extracted = self._parse_single_date(
+                        raw_date, page_number, bbox_ids, document_id
+                    )
                     if extracted:
                         dates.append(extracted)
                 except Exception as e:
@@ -717,6 +720,7 @@ class DateExtractor:
         raw_date: dict,
         page_number: int | None,
         bbox_ids: list[str] | None = None,
+        document_id: str | None = None,
     ) -> ExtractedDate | None:
         """Parse a single date entry from LLM response.
 
@@ -724,6 +728,7 @@ class DateExtractor:
             raw_date: Raw date dictionary from Gemini response.
             page_number: Optional page number.
             bbox_ids: Optional bounding box UUIDs from source chunk.
+            document_id: Optional document ID for per-date bbox filtering.
 
         Returns:
             ExtractedDate or None if parsing fails.
@@ -776,14 +781,34 @@ class DateExtractor:
         if precision_str not in ("day", "month", "year", "approximate"):
             precision_str = "day"
 
+        # Per-date bbox filtering: filter chunk bbox_ids to only those
+        # containing this specific date's text (fixes chunk-level aggregation)
+        filtered_bbox_ids = bbox_ids or []
+        filtered_page = page_number
+        if bbox_ids and document_id:
+            # Build search text from date_text + context for better matching
+            context_before = raw_date.get("context_before", "")[:200]
+            context_after = raw_date.get("context_after", "")[:200]
+            search_text = f"{context_before} {date_text} {context_after}".strip()
+
+            filtered_ids, detected_page = get_filtered_bbox_ids(
+                item_text=search_text,
+                chunk_bbox_ids=bbox_ids,
+                document_id=document_id,
+            )
+            if filtered_ids:
+                filtered_bbox_ids = filtered_ids
+                if detected_page is not None:
+                    filtered_page = detected_page
+
         return ExtractedDate(
             extracted_date=extracted_date,
             date_text=date_text,
             date_precision=precision_str,  # type: ignore
             context_before=raw_date.get("context_before", "")[:1000],  # Limit size
             context_after=raw_date.get("context_after", "")[:1000],
-            page_number=page_number,
-            bbox_ids=bbox_ids or [],  # Use provided bbox_ids from chunk
+            page_number=filtered_page,
+            bbox_ids=filtered_bbox_ids,
             is_ambiguous=raw_date.get("is_ambiguous", False),
             ambiguity_reason=raw_date.get("ambiguity_reason"),
             confidence=float(raw_date.get("confidence", 0.8)),

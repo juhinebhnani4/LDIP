@@ -1546,14 +1546,17 @@ async def get_citation_split_view(
                     target_storage_path = target_doc_result.data["storage_path"]
                     target_url = file_storage.get_signed_url(target_storage_path, expires_in=3600)
 
-                    target_page = citation.target_page or 1
-
-                    # For PENDING citations, always try section index first (most accurate)
-                    # The section_index provides authoritative page mappings
-                    if citation.verification_status == VerificationStatus.PENDING:
+                    # Use stored target_page if available, otherwise use section index lookup
+                    if citation.target_page is not None:
+                        target_page = citation.target_page
+                        section_found_in_act = True
+                    else:
+                        # Use section index to find the correct page
+                        # This handles both PENDING citations and verified citations
+                        # where target_page wasn't properly saved during verification
+                        target_page = 1  # Default fallback
                         section_str = citation.section_number or ""
 
-                        # Use SectionIndexService for efficient section lookup
                         try:
                             from app.services.section_index_service import get_section_index_service
 
@@ -1576,8 +1579,6 @@ async def get_citation_split_view(
                                     confidence=section_location.confidence,
                                 )
                             else:
-                                # Fall back to stored target_page if section not found
-                                target_page = citation.target_page or 1
                                 logger.info(
                                     "section_not_found_in_act",
                                     citation_id=citation_id,
@@ -1586,8 +1587,6 @@ async def get_citation_split_view(
                                     fallback_page=target_page,
                                 )
                         except Exception as e:
-                            # Fall back to stored target_page on error
-                            target_page = citation.target_page or 1
                             logger.warning(
                                 "section_lookup_failed",
                                 citation_id=citation_id,
@@ -1595,9 +1594,6 @@ async def get_citation_split_view(
                                 error=str(e),
                                 fallback_page=target_page,
                             )
-                    elif citation.target_page is not None:
-                        target_page = citation.target_page
-                        section_found_in_act = True
 
                     # Get target bounding boxes - filter to section-relevant ones
                     target_bboxes: list[SplitViewBoundingBox] = []

@@ -2736,11 +2736,14 @@ def embed_chunks(
             }
 
         # Get chunks without embeddings for this document
+        # Priority ordering: page_number first so earlier pages are embedded first
+        # This enables "optimistic RAG" - users can search early content sooner
         response = (
             client.table("chunks")
             .select("id, content")
             .eq("document_id", doc_id)
             .is_("embedding", "null")
+            .order("page_number", desc=False, nullsfirst=False)
             .order("chunk_index", desc=False)
             .execute()
         )
@@ -3852,11 +3855,12 @@ def _dispatch_downstream_tasks(
             error=str(e),
         )
 
-    # Task 2: Date extraction
+    # Task 2: Date extraction (with auto-classification enabled)
     try:
         extract_dates_from_document.delay(
             document_id=document_id,
             matter_id=matter_id,
+            auto_classify=True,  # Enable automatic event classification
         )
         triggered_tasks.append("extract_dates_from_document")
         logger.debug("extract_dates_dispatched", document_id=document_id)

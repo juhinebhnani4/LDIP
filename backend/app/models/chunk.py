@@ -64,6 +64,7 @@ class ChunkListItem(BaseModel):
     token_count: int = Field(..., description="Number of tokens")
     parent_chunk_id: str | None = Field(None, description="Parent chunk UUID")
     page_number: int | None = Field(None, description="Primary page number")
+    bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
 
 
 class ChunkWithContent(ChunkListItem):

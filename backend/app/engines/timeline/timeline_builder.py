@@ -18,6 +18,7 @@ from app.models.timeline import (
     EventType,
 )
 from app.services.mig.graph import MIGGraphService, get_mig_graph_service
+from app.services.supabase.client import get_supabase_client
 from app.services.timeline_service import TimelineService, get_timeline_service
 
 logger = structlog.get_logger(__name__)
@@ -141,6 +142,7 @@ class TimelineBuilder:
         """Initialize timeline builder."""
         self._timeline_service: TimelineService | None = None
         self._mig_service: MIGGraphService | None = None
+        self._supabase = None
 
     @property
     def timeline_service(self) -> TimelineService:
@@ -223,6 +225,14 @@ class TimelineBuilder:
         if include_entities:
             entities_map = await self._load_entities_paginated(matter_id)
 
+        # Fetch document names for all events (fix: Unknown Document bug)
+        document_ids = list({
+            event_item.document_id
+            for event_item in events_response.data
+            if event_item.document_id
+        })
+        document_names = await self._get_document_names(document_ids)
+
         # Convert to TimelineEvent objects with entity enrichment
         timeline_events: list[TimelineEvent] = []
         events_with_entities = 0
@@ -268,6 +278,11 @@ class TimelineBuilder:
             except ValueError:
                 parsed_type = EventType.UNCLASSIFIED
 
+            # Get document name from fetched map
+            doc_name = None
+            if event_item.document_id:
+                doc_name = document_names.get(event_item.document_id)
+
             timeline_events.append(
                 TimelineEvent(
                     event_id=event_item.id,
@@ -277,7 +292,7 @@ class TimelineBuilder:
                     event_type=parsed_type,
                     description=event_item.description,
                     document_id=event_item.document_id,
-                    document_name=getattr(full_event, 'document_name', None),
+                    document_name=doc_name,
                     source_page=event_item.source_page,
                     confidence=getattr(event_item, 'confidence', 0.8),
                     entities=entity_refs,
@@ -382,6 +397,14 @@ class TimelineBuilder:
             per_page=per_page,
         )
 
+        # Fetch document names for all events
+        document_ids = list({
+            event_item.document_id
+            for event_item in events_response.data
+            if event_item.document_id
+        })
+        document_names = await self._get_document_names(document_ids)
+
         # Convert to timeline events
         timeline_events: list[TimelineEvent] = []
         for event_item in events_response.data:
@@ -389,6 +412,11 @@ class TimelineBuilder:
                 parsed_type = EventType(getattr(event_item, 'event_type', 'unclassified'))
             except ValueError:
                 parsed_type = EventType.UNCLASSIFIED
+
+            # Get document name from fetched map
+            doc_name = None
+            if event_item.document_id:
+                doc_name = document_names.get(event_item.document_id)
 
             timeline_events.append(
                 TimelineEvent(
@@ -399,7 +427,7 @@ class TimelineBuilder:
                     event_type=parsed_type,
                     description=event_item.description,
                     document_id=event_item.document_id,
-                    document_name=None,
+                    document_name=doc_name,
                     source_page=event_item.source_page,
                     confidence=getattr(event_item, 'confidence', 0.8),
                     entities=[],  # Don't need entity info for entity-focused view
@@ -501,6 +529,56 @@ class TimelineBuilder:
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    def _get_supabase(self):
+        """Lazy-load Supabase client for document lookups."""
+        if self._supabase is None:
+            self._supabase = get_supabase_client()
+        return self._supabase
+
+    async def _get_document_names(
+        self,
+        document_ids: list[str],
+    ) -> dict[str, str]:
+        """Fetch document filenames for given IDs.
+
+        Args:
+            document_ids: List of document UUIDs.
+
+        Returns:
+            Dict mapping document_id to filename.
+        """
+        if not document_ids:
+            return {}
+
+        try:
+            supabase = self._get_supabase()
+            result = (
+                supabase.table("documents")
+                .select("id, filename")
+                .in_("id", document_ids)
+                .execute()
+            )
+
+            doc_names = {
+                str(doc["id"]): doc.get("filename", "Unknown Document")
+                for doc in result.data
+            }
+
+            logger.debug(
+                "timeline_document_names_fetched",
+                requested=len(document_ids),
+                found=len(doc_names),
+            )
+
+            return doc_names
+        except Exception as e:
+            logger.warning(
+                "timeline_document_names_failed",
+                error=str(e),
+                document_count=len(document_ids),
+            )
+            return {}
 
     async def _load_entities_paginated(
         self,

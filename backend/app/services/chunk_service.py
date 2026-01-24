@@ -580,6 +580,7 @@ class ChunkService:
             token_count=row.get("token_count") or 0,
             parent_chunk_id=row.get("parent_chunk_id"),
             page_number=row.get("page_number"),
+            bbox_ids=row.get("bbox_ids"),
         )
 
 

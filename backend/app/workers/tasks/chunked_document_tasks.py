@@ -911,12 +911,12 @@ def _trigger_parallel_processing(
     try:
         from app.workers.tasks.document_tasks import chunk_document
 
-        # Use skip_bbox_linking=True for faster chunking
-        # Bbox linking can be done later via background task
+        # Enable bbox linking to populate page_number on chunks
+        # This is needed for citation split-view to show correct pages
         chunk_document.delay(
             prev_result=prev_result,
             document_id=document_id,
-            skip_bbox_linking=True,  # Story 2.3: Decouple bbox linking
+            skip_bbox_linking=False,  # Required for citation page navigation
         )
         triggered_tasks.append("chunk_document")
         logger.debug("chunk_document_dispatched", document_id=document_id)
@@ -947,13 +947,14 @@ def _trigger_parallel_processing(
             error=str(e),
         )
 
-    # Task 3: Date extraction (can work on raw text)
+    # Task 3: Date extraction (with auto-classification enabled)
     try:
         from app.workers.tasks.engine_tasks import extract_dates_from_document
 
         extract_dates_from_document.delay(
             document_id=document_id,
             matter_id=matter_id,
+            auto_classify=True,  # Enable automatic event classification
         )
         triggered_tasks.append("extract_dates_from_document")
         logger.debug("extract_dates_dispatched", document_id=document_id)

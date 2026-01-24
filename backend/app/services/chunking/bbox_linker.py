@@ -18,8 +18,10 @@ from app.services.chunking.parent_child_chunker import ChunkData
 logger = structlog.get_logger(__name__)
 
 # Threshold for fuzzy text matching (0-100)
-# 80 allows for minor OCR differences while avoiding false matches
-MATCH_THRESHOLD = 80
+# 50 allows for OCR errors, multilingual text, and formatting differences
+# while still avoiding false matches. Higher thresholds caused many chunks
+# to have NULL page_number which breaks citation/timeline source links.
+MATCH_THRESHOLD = 50
 
 # Maximum number of bounding boxes to check per chunk
 MAX_BBOX_WINDOW = 100

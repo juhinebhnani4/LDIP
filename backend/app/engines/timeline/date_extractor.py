@@ -234,6 +234,7 @@ class DateExtractor:
         document_id: str,
         matter_id: str,
         page_number: int | None = None,
+        bbox_ids: list[str] | None = None,
     ) -> DateExtractionResult:
         """Extract dates from a single text chunk with circuit breaker.
 
@@ -242,6 +243,7 @@ class DateExtractor:
             document_id: Source document UUID.
             matter_id: Matter UUID.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs from source chunk.
 
         Returns:
             DateExtractionResult with extracted dates.
@@ -273,6 +275,7 @@ class DateExtractor:
                 document_id=document_id,
                 matter_id=matter_id,
                 page_number=page_number,
+                bbox_ids=bbox_ids,
             )
 
             logger.debug(
@@ -482,6 +485,7 @@ class DateExtractor:
         document_id: str,
         matter_id: str,
         page_number: int | None = None,
+        bbox_ids: list[str] | None = None,
     ) -> DateExtractionResult:
         """Synchronous wrapper for date extraction.
 
@@ -492,6 +496,7 @@ class DateExtractor:
             document_id: Source document UUID.
             matter_id: Matter UUID for context.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs from source chunk.
 
         Returns:
             DateExtractionResult containing extracted dates.
@@ -519,6 +524,7 @@ class DateExtractor:
                     document_id=document_id,
                     matter_id=matter_id,
                     page_number=page_number,
+                    bbox_ids=bbox_ids,
                 )
                 all_dates.extend(chunk_result.dates)
 
@@ -538,6 +544,7 @@ class DateExtractor:
             document_id=document_id,
             matter_id=matter_id,
             page_number=page_number,
+            bbox_ids=bbox_ids,
         )
 
         result.processing_time_ms = int((time.time() - start_time) * 1000)
@@ -549,6 +556,7 @@ class DateExtractor:
         document_id: str,
         matter_id: str,
         page_number: int | None = None,
+        bbox_ids: list[str] | None = None,
     ) -> DateExtractionResult:
         """Synchronous single chunk extraction.
 
@@ -594,6 +602,7 @@ class DateExtractor:
                 document_id=document_id,
                 matter_id=matter_id,
                 page_number=page_number,
+                bbox_ids=bbox_ids,
             )
 
             # Record success
@@ -622,6 +631,7 @@ class DateExtractor:
         document_id: str,
         matter_id: str,
         page_number: int | None,
+        bbox_ids: list[str] | None = None,
     ) -> DateExtractionResult:
         """Parse Gemini response into DateExtractionResult.
 
@@ -630,6 +640,7 @@ class DateExtractor:
             document_id: Source document UUID.
             matter_id: Matter UUID.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs from source chunk.
 
         Returns:
             Parsed DateExtractionResult.
@@ -667,7 +678,7 @@ class DateExtractor:
 
             for raw_date in raw_dates:
                 try:
-                    extracted = self._parse_single_date(raw_date, page_number)
+                    extracted = self._parse_single_date(raw_date, page_number, bbox_ids)
                     if extracted:
                         dates.append(extracted)
                 except Exception as e:
@@ -705,12 +716,14 @@ class DateExtractor:
         self,
         raw_date: dict,
         page_number: int | None,
+        bbox_ids: list[str] | None = None,
     ) -> ExtractedDate | None:
         """Parse a single date entry from LLM response.
 
         Args:
             raw_date: Raw date dictionary from Gemini response.
             page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs from source chunk.
 
         Returns:
             ExtractedDate or None if parsing fails.
@@ -770,7 +783,7 @@ class DateExtractor:
             context_before=raw_date.get("context_before", "")[:1000],  # Limit size
             context_after=raw_date.get("context_after", "")[:1000],
             page_number=page_number,
-            bbox_ids=[],  # Will be populated if bbox data available
+            bbox_ids=bbox_ids or [],  # Use provided bbox_ids from chunk
             is_ambiguous=raw_date.get("is_ambiguous", False),
             ambiguity_reason=raw_date.get("ambiguity_reason"),
             confidence=float(raw_date.get("confidence", 0.8)),

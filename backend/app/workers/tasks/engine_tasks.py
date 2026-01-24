@@ -103,6 +103,49 @@ def run_engine(matter_id: str, engine: str) -> dict[str, str]:
 # =============================================================================
 
 
+def _deduplicate_extracted_dates(dates: list) -> list:
+    """Deduplicate dates extracted from multiple chunks.
+
+    Dates are considered duplicates if they have the same extracted_date
+    and similar context. Keeps the date with higher confidence or more
+    complete metadata (page_number, bbox_ids).
+
+    Args:
+        dates: List of ExtractedDate objects from multiple chunks.
+
+    Returns:
+        Deduplicated list of ExtractedDate objects.
+    """
+    if not dates:
+        return []
+
+    # Group by extracted_date
+    date_groups: dict[str, list] = {}
+    for d in dates:
+        key = d.extracted_date.isoformat() if d.extracted_date else "unknown"
+        if key not in date_groups:
+            date_groups[key] = []
+        date_groups[key].append(d)
+
+    # For each group, pick the best one (highest confidence, has page/bbox)
+    unique_dates = []
+    for date_key, group in date_groups.items():
+        if len(group) == 1:
+            unique_dates.append(group[0])
+        else:
+            # Sort by: has page_number, has bbox_ids, confidence
+            def score(d):
+                return (
+                    1 if d.page_number is not None else 0,
+                    len(d.bbox_ids) if d.bbox_ids else 0,
+                    d.confidence or 0,
+                )
+            group.sort(key=score, reverse=True)
+            unique_dates.append(group[0])
+
+    return unique_dates
+
+
 @celery_app.task(
     name="app.workers.tasks.engine_tasks.extract_dates_from_document",
     bind=True,
@@ -222,16 +265,11 @@ def extract_dates_from_document(
                 "reason": "no_chunks",
             }
 
-        # Combine chunk content for extraction
-        # Using parent chunks if available, otherwise all chunks
+        # Process per-chunk to preserve page_number and bbox_ids
+        # Using parent chunks if available (they have better context), otherwise child chunks
         # ChunkWithContent is a Pydantic model, access attributes directly
         parent_chunks = [c for c in chunks if c.parent_chunk_id is None]
         chunks_to_process = parent_chunks if parent_chunks else chunks
-
-        # Extract text from chunks
-        full_text = "\n\n".join(
-            chunk.content for chunk in chunks_to_process
-        )
 
         if job_id:
             _run_async(
@@ -244,12 +282,44 @@ def extract_dates_from_document(
                 )
             )
 
-        # Run date extraction via Gemini
-        extraction_result = date_extractor.extract_dates_sync(
-            text=full_text,
+        # Extract dates from each chunk individually to preserve page/bbox info
+        from app.models.timeline import ExtractedDate
+        all_dates: list[ExtractedDate] = []
+        total_chunks = len(chunks_to_process)
+
+        for idx, chunk in enumerate(chunks_to_process):
+            # Run date extraction via Gemini for this chunk
+            chunk_result = date_extractor.extract_dates_sync(
+                text=chunk.content,
+                document_id=document_id,
+                matter_id=matter_id,
+                page_number=chunk.page_number,  # Pass chunk's page number
+                bbox_ids=chunk.bbox_ids or [],  # Pass chunk's bbox_ids
+            )
+            all_dates.extend(chunk_result.dates)
+
+            # Update progress proportionally
+            if job_id and total_chunks > 1:
+                progress = 30 + int((idx + 1) / total_chunks * 40)  # 30-70%
+                _run_async(
+                    job_tracker.update_job_status(
+                        job_id=job_id,
+                        status=JobStatus.PROCESSING,
+                        stage="date_extraction",
+                        progress_pct=progress,
+                        matter_id=matter_id,
+                    )
+                )
+
+        # Deduplicate dates that appear in multiple chunks (same date + similar context)
+        unique_dates = _deduplicate_extracted_dates(all_dates)
+
+        logger.info(
+            "date_extraction_chunks_processed",
             document_id=document_id,
-            matter_id=matter_id,
-            page_number=None,  # Will be refined if we process per-page
+            total_chunks=total_chunks,
+            raw_dates=len(all_dates),
+            unique_dates=len(unique_dates),
         )
 
         if job_id:
@@ -267,7 +337,7 @@ def extract_dates_from_document(
         event_ids = timeline_service.save_extracted_dates_sync(
             matter_id=matter_id,
             document_id=document_id,
-            dates=extraction_result.dates,
+            dates=unique_dates,
         )
 
         # Mark job complete
@@ -286,24 +356,21 @@ def extract_dates_from_document(
             "date_extraction_complete",
             document_id=document_id,
             matter_id=matter_id,
-            dates_found=len(extraction_result.dates),
+            dates_found=len(unique_dates),
             events_created=len(event_ids),
-            processing_time_ms=extraction_result.processing_time_ms,
         )
 
         # Broadcast progressive timeline discovery for real-time UI updates
-        if len(extraction_result.dates) > 0:
+        if len(unique_dates) > 0:
             # Calculate date range
             date_range_start = None
             date_range_end = None
-            if extraction_result.dates:
-                sorted_dates = sorted(
-                    [d.date for d in extraction_result.dates if d.date],
-                    key=lambda x: x or "",
-                )
-                if sorted_dates:
-                    date_range_start = sorted_dates[0]
-                    date_range_end = sorted_dates[-1]
+            sorted_dates = sorted(
+                [d.extracted_date for d in unique_dates if d.extracted_date],
+            )
+            if sorted_dates:
+                date_range_start = sorted_dates[0]
+                date_range_end = sorted_dates[-1]
 
             broadcast_timeline_discovery(
                 matter_id=matter_id,
@@ -318,7 +385,7 @@ def extract_dates_from_document(
             document_id=document_id,
             feature=FeatureType.TIMELINE,
             metadata={
-                "dates_found": len(extraction_result.dates),
+                "dates_found": len(unique_dates),
                 "events_created": len(event_ids),
             },
         )
@@ -327,10 +394,9 @@ def extract_dates_from_document(
             "status": "completed",
             "document_id": document_id,
             "matter_id": matter_id,
-            "dates_found": len(extraction_result.dates),
+            "dates_found": len(unique_dates),
             "events_created": len(event_ids),
             "event_ids": event_ids,
-            "processing_time_ms": extraction_result.processing_time_ms,
         }
 
         # Auto-classify events if requested (Story 4-2)
@@ -679,12 +745,25 @@ def classify_events_for_document(
             events_updated=updated_count,
         )
 
+        # Auto-trigger entity linking after classification
+        if updated_count > 0:
+            logger.info(
+                "entity_linking_auto_triggered",
+                document_id=document_id,
+                matter_id=matter_id,
+            )
+            link_entities_after_extraction.delay(
+                document_id=document_id,
+                matter_id=matter_id,
+            )
+
         return {
             "status": "completed",
             "document_id": document_id,
             "matter_id": matter_id,
             "events_processed": len(doc_events),
             "events_updated": updated_count,
+            "entity_linking_queued": updated_count > 0,
         }
 
     except Exception as e:

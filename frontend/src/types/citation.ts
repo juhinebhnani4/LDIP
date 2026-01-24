@@ -337,12 +337,22 @@ export interface DocumentViewData {
   boundingBoxes: SplitViewBoundingBox[];
 }
 
+/** Context information to help users understand what to compare */
+export interface CitationContext {
+  citationText: string;
+  actName: string;
+  section: string;
+  instruction: string;
+  sectionFoundInAct: boolean;
+}
+
 /** Complete split view data for citation display */
 export interface SplitViewData {
   citation: Citation;
   sourceDocument: DocumentViewData;
   targetDocument: DocumentViewData | null;
   verification: VerificationResult | null;
+  citationContext: CitationContext | null;
 }
 
 /** Response for split view endpoint */

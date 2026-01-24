@@ -9,9 +9,9 @@
  * Story 3-4: Split-View Citation Highlighting
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useSplitViewStore } from '@/stores/splitViewStore';
-import { getCitationSplitViewData } from '@/lib/api/citations';
+import { getCitationSplitViewData, updateCitationStatus } from '@/lib/api/citations';
 import type { PdfViewerState } from '@/types/pdf';
 import type { SplitViewData } from '@/types/citation';
 import { PDF_KEYBOARD_SHORTCUTS } from '@/types/pdf';
@@ -19,6 +19,8 @@ import { PDF_KEYBOARD_SHORTCUTS } from '@/types/pdf';
 interface UseSplitViewOptions {
   /** Enable keyboard shortcuts */
   enableKeyboardShortcuts?: boolean;
+  /** Callback when citation status changes (e.g., after marking verified) */
+  onStatusChange?: () => void;
 }
 
 interface UseSplitViewReturn {
@@ -57,6 +59,10 @@ interface UseSplitViewReturn {
   navigateToNext: () => void;
   /** Set citation IDs for navigation */
   setCitationIds: (ids: string[]) => void;
+  /** Mark current citation as verified */
+  markVerified: () => Promise<void>;
+  /** Whether mark verified action is in progress */
+  isMarkingVerified: boolean;
 }
 
 /**
@@ -79,7 +85,7 @@ interface UseSplitViewReturn {
  * ```
  */
 export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewReturn {
-  const { enableKeyboardShortcuts = true } = options;
+  const { enableKeyboardShortcuts = true, onStatusChange } = options;
 
   // Use selectors to avoid unnecessary re-renders
   const isOpen = useSplitViewStore((state) => state.isOpen);
@@ -106,6 +112,13 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
   const storeNavigateToNext = useSplitViewStore((state) => state.navigateToNextCitation);
   const setSourceZoom = useSplitViewStore((state) => state.setSourceZoom);
   const setTargetZoom = useSplitViewStore((state) => state.setTargetZoom);
+
+  // Local state for mark verified loading
+  const [isMarkingVerified, setIsMarkingVerified] = useState(false);
+
+  // Use ref for onStatusChange to avoid recreating markVerified on every render
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   // Computed navigation info
   const navigationInfo = {
@@ -148,6 +161,27 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
       await loadSplitViewData(newCitationId, matterId);
     }
   }, [storeNavigateToNext, matterId, loadSplitViewData]);
+
+  // Mark current citation as verified
+  const markVerified = useCallback(async () => {
+    if (!currentCitationId || !matterId) {
+      return;
+    }
+
+    setIsMarkingVerified(true);
+    try {
+      await updateCitationStatus(matterId, currentCitationId, 'verified');
+      // Reload split view data to reflect the updated status
+      await loadSplitViewData(currentCitationId, matterId);
+      // Notify parent to refresh the citations list (use ref to avoid dependency)
+      onStatusChangeRef.current?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to mark citation as verified';
+      setError(message);
+    } finally {
+      setIsMarkingVerified(false);
+    }
+  }, [currentCitationId, matterId, loadSplitViewData, setError]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -244,5 +278,7 @@ export function useSplitView(options: UseSplitViewOptions = {}): UseSplitViewRet
     navigateToPrev,
     navigateToNext,
     setCitationIds: storeCitationIds,
+    markVerified,
+    isMarkingVerified,
   };
 }

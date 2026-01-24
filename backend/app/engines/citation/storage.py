@@ -230,6 +230,7 @@ class CitationStorageService:
         page: int = 1,
         per_page: int = 20,
         filter_invalid: bool = True,
+        filter_act_sources: bool = True,
     ) -> tuple[list[Citation], int]:
         """Get paginated citations from a specific document.
 
@@ -239,6 +240,8 @@ class CitationStorageService:
             page: Page number (1-indexed).
             per_page: Items per page.
             filter_invalid: If True, filters out citations with garbage/invalid act names.
+            filter_act_sources: If True, returns empty if document is an Act
+                (citations should come from case files, not from Acts themselves).
 
         Returns:
             Tuple of (citations list, total count).
@@ -246,6 +249,17 @@ class CitationStorageService:
         from app.engines.citation.validation import get_validation_service, ValidationStatus
 
         try:
+            # Check if this document is an Act - if so, return no citations
+            if filter_act_sources:
+                act_doc_ids = await self._get_act_document_ids_for_matter(matter_id)
+                if document_id in act_doc_ids:
+                    logger.debug(
+                        "get_citations_by_document_skipped_act",
+                        document_id=document_id,
+                        reason="Document is an Act - citations from Acts are filtered",
+                    )
+                    return [], 0
+
             # Get validation service for filtering
             validation_service = get_validation_service() if filter_invalid else None
 
@@ -323,6 +337,7 @@ class CitationStorageService:
         page: int = 1,
         per_page: int = 20,
         filter_invalid: bool = True,
+        filter_act_sources: bool = True,
     ) -> tuple[list[Citation], int]:
         """Get citations for a matter with optional filtering.
 
@@ -333,6 +348,8 @@ class CitationStorageService:
             page: Page number (1-indexed).
             per_page: Items per page.
             filter_invalid: If True, filters out citations with garbage/invalid act names.
+            filter_act_sources: If True, filters out citations from Act documents
+                (citations should come from case files, not from Acts themselves).
 
         Returns:
             Tuple of (citations list, total count).
@@ -346,9 +363,12 @@ class CitationStorageService:
             # Fetch document names for all citations in this matter
             document_names = await self._get_document_names_for_matter(matter_id)
 
-            if filter_invalid and validation_service:
-                # When filtering, we need to fetch all and filter in Python
-                # This is necessary because garbage detection is in Python, not DB
+            # Get Act document IDs to filter out citations from Acts
+            act_doc_ids = await self._get_act_document_ids_for_matter(matter_id) if filter_act_sources else set()
+
+            # Always fetch all and filter in Python when we need any filtering
+            # This handles garbage detection, act-source filtering, or both
+            if filter_invalid or filter_act_sources:
                 def _query_all():
                     query = self.client.table("citations").select("*").eq(
                         "matter_id", matter_id
@@ -362,13 +382,21 @@ class CitationStorageService:
                 result = await asyncio.to_thread(_query_all)
                 all_rows = result.data or []
 
-                # Filter out invalid act names
+                # Filter rows based on criteria
                 valid_rows = []
                 for row in all_rows:
-                    act = row.get("act_name", "")
-                    validation = validation_service.validate(act)
-                    if validation.validation_status != ValidationStatus.INVALID:
-                        valid_rows.append(row)
+                    # Filter out citations from Act documents
+                    if filter_act_sources and row.get("source_document_id") in act_doc_ids:
+                        continue
+
+                    # Filter out invalid act names
+                    if filter_invalid and validation_service:
+                        act = row.get("act_name", "")
+                        validation = validation_service.validate(act)
+                        if validation.validation_status == ValidationStatus.INVALID:
+                            continue
+
+                    valid_rows.append(row)
 
                 # Apply pagination to filtered results
                 total = len(valid_rows)
@@ -748,6 +776,42 @@ class CitationStorageService:
                 error=str(e),
             )
             return {}
+
+    async def _get_act_document_ids_for_matter(
+        self,
+        matter_id: str,
+    ) -> set[str]:
+        """Get IDs of all Act documents in a matter.
+
+        Used to filter out citations that were extracted from Act documents,
+        since citations should only come from case files, not from Acts.
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            Set of document IDs that are Act documents.
+        """
+        try:
+            def _query():
+                return (
+                    self.client.table("documents")
+                    .select("id")
+                    .eq("matter_id", matter_id)
+                    .eq("document_type", "act")
+                    .execute()
+                )
+
+            result = await asyncio.to_thread(_query)
+
+            return {row["id"] for row in (result.data or [])}
+        except Exception as e:
+            logger.warning(
+                "get_act_document_ids_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return set()
 
     def _row_to_citation(
         self,

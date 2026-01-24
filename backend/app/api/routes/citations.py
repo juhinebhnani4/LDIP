@@ -420,6 +420,151 @@ async def get_citation(
 
 
 # =============================================================================
+# Update Citation Verification Status (Manual Override)
+# =============================================================================
+
+
+class UpdateCitationStatusRequest(BaseModel):
+    """Request to manually update citation verification status."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    verification_status: VerificationStatus = Field(
+        ...,
+        alias="verificationStatus",
+        description="New verification status",
+    )
+
+
+class UpdateCitationStatusResponse(BaseModel):
+    """Response for citation status update."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    success: bool = Field(..., description="Whether update was successful")
+    citation_id: str = Field(..., alias="citationId", description="Citation UUID")
+    verification_status: VerificationStatus = Field(
+        ..., alias="verificationStatus", description="New verification status"
+    )
+
+
+@router.patch(
+    "/{citation_id}/status",
+    response_model=UpdateCitationStatusResponse,
+    response_model_by_alias=True,
+)
+async def update_citation_status(
+    matter_id: str = Path(..., description="Matter UUID"),
+    citation_id: str = Path(..., description="Citation UUID"),
+    request: UpdateCitationStatusRequest = ...,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    storage_service=Depends(_get_storage_service),
+) -> UpdateCitationStatusResponse:
+    """Manually update citation verification status.
+
+    Allows lawyers to mark a citation as verified after manual review,
+    or change status when automated verification is incorrect.
+
+    Only OWNER and EDITOR roles can update citation status.
+
+    Args:
+        matter_id: Matter UUID.
+        citation_id: Citation UUID.
+        request: New verification status.
+        membership: Validated matter membership (OWNER or EDITOR).
+        storage_service: Citation storage service.
+
+    Returns:
+        Update confirmation with new status.
+
+    Raises:
+        HTTPException 404: If citation not found.
+        HTTPException 400: If status transition is invalid.
+    """
+    logger.info(
+        "update_citation_status_request",
+        matter_id=matter_id,
+        citation_id=citation_id,
+        new_status=request.verification_status.value,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Verify citation exists
+        existing = await storage_service.get_citation(citation_id, matter_id)
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "CITATION_NOT_FOUND",
+                        "message": f"Citation {citation_id} not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Update the status
+        updated = await storage_service.update_citation_verification(
+            citation_id=citation_id,
+            matter_id=matter_id,
+            verification_status=request.verification_status,
+            # For manual verification, set confidence to 100% to indicate human review
+            confidence=100.0 if request.verification_status == VerificationStatus.VERIFIED else None,
+        )
+
+        if updated is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": {
+                        "code": "UPDATE_FAILED",
+                        "message": "Failed to update citation status",
+                        "details": {},
+                    }
+                },
+            )
+
+        logger.info(
+            "update_citation_status_success",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            old_status=existing.verification_status.value,
+            new_status=request.verification_status.value,
+            user_id=membership.user_id,
+        )
+
+        return UpdateCitationStatusResponse(
+            success=True,
+            citation_id=citation_id,
+            verification_status=request.verification_status,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "update_citation_status_error",
+            matter_id=matter_id,
+            citation_id=citation_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to update citation status",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
 # Citation Summary
 # =============================================================================
 
@@ -1186,6 +1331,18 @@ class DocumentViewDataModel(BaseModel):
     )
 
 
+class CitationContextModel(BaseModel):
+    """Context information to help users understand what to compare."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    citation_text: str = Field(..., alias="citationText", description="The citation text from the source document")
+    act_name: str = Field(..., alias="actName", description="The Act being cited")
+    section: str = Field(..., description="The section being cited (e.g., '206A')")
+    instruction: str = Field(..., description="Human-readable instruction for what to verify")
+    section_found_in_act: bool = Field(..., alias="sectionFoundInAct", description="Whether the section was found in the Act index")
+
+
 class SplitViewDataModel(BaseModel):
     """Complete split view data for citation display."""
 
@@ -1195,12 +1352,35 @@ class SplitViewDataModel(BaseModel):
     source_document: DocumentViewDataModel = Field(..., alias="sourceDocument")
     target_document: DocumentViewDataModel | None = Field(None, alias="targetDocument")
     verification: VerificationResult | None = None
+    citation_context: CitationContextModel | None = Field(None, alias="citationContext", description="Context to help users verify the citation")
 
 
 class SplitViewResponseModel(BaseModel):
     """Response for split view endpoint."""
 
     data: SplitViewDataModel
+
+
+def _build_verification_instruction(citation: Citation, section_found: bool) -> str:
+    """Build a human-readable instruction for verifying the citation."""
+    section_display = f"Section {citation.section_number}" if citation.section_number else "the cited section"
+    act_display = citation.act_name
+
+    if citation.verification_status == VerificationStatus.PENDING:
+        if section_found:
+            return f"Compare the highlighted citation text (left) with {section_display} of {act_display} (right). Verify that the quoted text matches the actual Act."
+        else:
+            return f"The source document cites {section_display} of {act_display}. Search the Act document (right) to find this section and verify the citation."
+    elif citation.verification_status == VerificationStatus.VERIFIED:
+        return f"This citation has been verified. The text matches {section_display} of {act_display}."
+    elif citation.verification_status == VerificationStatus.MISMATCH:
+        return f"MISMATCH DETECTED: The cited text does not match {section_display} of {act_display}. Review the differences above."
+    elif citation.verification_status == VerificationStatus.SECTION_NOT_FOUND:
+        return f"{section_display} was not found in {act_display}. The section may not exist or may be numbered differently."
+    elif citation.verification_status == VerificationStatus.ACT_UNAVAILABLE:
+        return f"The {act_display} document has not been uploaded. Upload it to verify this citation."
+    else:
+        return f"Review the citation of {section_display} from {act_display}."
 
 
 @router.get("/{citation_id}/split-view", response_model=SplitViewResponseModel, response_model_by_alias=True)
@@ -1288,22 +1468,49 @@ async def get_citation_split_view(
         source_url = file_storage.get_signed_url(source_storage_path, expires_in=3600)
 
         # Get source bounding boxes (sync service, use to_thread)
+        # Only highlight bboxes containing the section number (most specific identifier)
         source_bboxes: list[SplitViewBoundingBox] = []
         if citation.source_bbox_ids:
             bboxes = await asyncio.to_thread(
                 bbox_service.get_bounding_boxes_by_ids, citation.source_bbox_ids
             )
-            source_bboxes = [
-                SplitViewBoundingBox(
-                    bbox_id=str(bbox["id"]),
-                    x=bbox["x"],
-                    y=bbox["y"],
-                    width=bbox["width"],
-                    height=bbox["height"],
-                    text=bbox.get("text", ""),
-                )
-                for bbox in bboxes
-            ]
+
+            # Use section number as the key identifier (e.g., "205A", "102(1A)")
+            section_str = (citation.section_number or "").lower().strip()
+
+            # Filter bboxes to only those containing the section number
+            for bbox in bboxes:
+                bbox_text = bbox.get("text", "").lower()
+                # Check if bbox contains the section number
+                if section_str and section_str in bbox_text:
+                    source_bboxes.append(
+                        SplitViewBoundingBox(
+                            bbox_id=str(bbox["id"]),
+                            # Convert from percentage (0-100) to normalized (0-1)
+                            x=bbox["x"] / 100.0,
+                            y=bbox["y"] / 100.0,
+                            width=bbox["width"] / 100.0,
+                            height=bbox["height"] / 100.0,
+                            text=bbox.get("text", ""),
+                        )
+                    )
+
+            # Limit to max 3 bboxes to avoid covering too much
+            source_bboxes = source_bboxes[:3]
+
+            # If no section matches, show just 1 bbox as location indicator
+            if not source_bboxes and bboxes:
+                first_bbox = bboxes[0]
+                source_bboxes = [
+                    SplitViewBoundingBox(
+                        bbox_id=str(first_bbox["id"]),
+                        x=first_bbox["x"] / 100.0,
+                        y=first_bbox["y"] / 100.0,
+                        width=first_bbox["width"] / 100.0,
+                        height=first_bbox["height"] / 100.0,
+                        text=first_bbox.get("text", ""),
+                    )
+                ]
 
         source_doc_data = DocumentViewDataModel(
             document_id=source_document_id,
@@ -1316,6 +1523,9 @@ async def get_citation_split_view(
         # Build target document data (Act document) if available
         target_doc_data: DocumentViewDataModel | None = None
         verification_result: VerificationResult | None = None
+
+        # Track if section was found in Act index (for citation context)
+        section_found_in_act = False
 
         # Load Act document for all statuses except ACT_UNAVAILABLE
         # PENDING citations should show the Act doc so users can verify
@@ -1338,23 +1548,99 @@ async def get_citation_split_view(
 
                     target_page = citation.target_page or 1
 
-                    # Get target bounding boxes
+                    # For PENDING citations, always try section index first (most accurate)
+                    # The section_index provides authoritative page mappings
+                    if citation.verification_status == VerificationStatus.PENDING:
+                        section_str = citation.section_number or ""
+
+                        # Use SectionIndexService for efficient section lookup
+                        try:
+                            from app.services.section_index_service import get_section_index_service
+
+                            section_service = get_section_index_service()
+                            section_location = await asyncio.to_thread(
+                                section_service.get_section_page,
+                                act_resolution.act_document_id,
+                                section_str,
+                            )
+
+                            if section_location:
+                                target_page = section_location.page_number
+                                section_found_in_act = True
+                                logger.info(
+                                    "section_found_via_section_index",
+                                    citation_id=citation_id,
+                                    section=section_str,
+                                    page=target_page,
+                                    source=section_location.source,
+                                    confidence=section_location.confidence,
+                                )
+                            else:
+                                # Fall back to stored target_page if section not found
+                                target_page = citation.target_page or 1
+                                logger.info(
+                                    "section_not_found_in_act",
+                                    citation_id=citation_id,
+                                    section=section_str,
+                                    act_document_id=act_resolution.act_document_id,
+                                    fallback_page=target_page,
+                                )
+                        except Exception as e:
+                            # Fall back to stored target_page on error
+                            target_page = citation.target_page or 1
+                            logger.warning(
+                                "section_lookup_failed",
+                                citation_id=citation_id,
+                                section=section_str,
+                                error=str(e),
+                                fallback_page=target_page,
+                            )
+                    elif citation.target_page is not None:
+                        target_page = citation.target_page
+                        section_found_in_act = True
+
+                    # Get target bounding boxes - filter to section-relevant ones
                     target_bboxes: list[SplitViewBoundingBox] = []
                     if citation.target_bbox_ids:
                         target_bbox_data = await asyncio.to_thread(
                             bbox_service.get_bounding_boxes_by_ids, citation.target_bbox_ids
                         )
-                        target_bboxes = [
-                            SplitViewBoundingBox(
-                                bbox_id=str(bbox["id"]),
-                                x=bbox["x"],
-                                y=bbox["y"],
-                                width=bbox["width"],
-                                height=bbox["height"],
-                                text=bbox.get("text", ""),
-                            )
-                            for bbox in target_bbox_data
-                        ]
+
+                        # For target (Act), filter to bboxes mentioning section number
+                        section_str = citation.section_number.lower() if citation.section_number else ""
+
+                        for bbox in target_bbox_data:
+                            bbox_text = bbox.get("text", "").lower()
+                            # Check if bbox mentions the section
+                            has_section = section_str and section_str in bbox_text
+                            if has_section:
+                                target_bboxes.append(
+                                    SplitViewBoundingBox(
+                                        bbox_id=str(bbox["id"]),
+                                        x=bbox["x"] / 100.0,
+                                        y=bbox["y"] / 100.0,
+                                        width=bbox["width"] / 100.0,
+                                        height=bbox["height"] / 100.0,
+                                        text=bbox.get("text", ""),
+                                    )
+                                )
+
+                        # Limit to max 3 bboxes to avoid covering too much
+                        target_bboxes = target_bboxes[:3]
+
+                        # If no section matches, show just 1 bbox as location indicator
+                        if not target_bboxes and target_bbox_data:
+                            first_bbox = target_bbox_data[0]
+                            target_bboxes = [
+                                SplitViewBoundingBox(
+                                    bbox_id=str(first_bbox["id"]),
+                                    x=first_bbox["x"] / 100.0,
+                                    y=first_bbox["y"] / 100.0,
+                                    width=first_bbox["width"] / 100.0,
+                                    height=first_bbox["height"] / 100.0,
+                                    text=first_bbox.get("text", ""),
+                                )
+                            ]
 
                     target_doc_data = DocumentViewDataModel(
                         document_id=act_resolution.act_document_id,
@@ -1389,11 +1675,21 @@ async def get_citation_split_view(
                 diff_details=diff_details,
             )
 
+        # Build citation context to help users understand what to compare
+        citation_context = CitationContextModel(
+            citation_text=citation.raw_citation_text or "",
+            act_name=citation.act_name,
+            section=citation.section_number,
+            instruction=_build_verification_instruction(citation, section_found_in_act),
+            section_found_in_act=section_found_in_act,
+        )
+
         split_view_data = SplitViewDataModel(
             citation=citation,
             source_document=source_doc_data,
             target_document=target_doc_data,
             verification=verification_result,
+            citation_context=citation_context,
         )
 
         logger.info(
@@ -1401,6 +1697,7 @@ async def get_citation_split_view(
             matter_id=matter_id,
             citation_id=citation_id,
             has_target=target_doc_data is not None,
+            section_found=section_found_in_act,
         )
 
         return SplitViewResponseModel(data=split_view_data)

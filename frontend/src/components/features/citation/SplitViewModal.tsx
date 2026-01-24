@@ -39,6 +39,12 @@ export interface SplitViewModalProps {
   onPrev: () => void;
   /** Next citation handler */
   onNext: () => void;
+  /** Mark verified handler */
+  onMarkVerified?: () => Promise<void>;
+  /** Whether mark verified action is in progress */
+  isMarkingVerified?: boolean;
+  /** Retry handler when error occurs */
+  onRetry?: () => void;
 }
 
 /**
@@ -67,6 +73,9 @@ export const SplitViewModal: FC<SplitViewModalProps> = ({
   onExitFullScreen,
   onPrev,
   onNext,
+  onMarkVerified,
+  isMarkingVerified = false,
+  onRetry,
 }) => {
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -113,6 +122,9 @@ export const SplitViewModal: FC<SplitViewModalProps> = ({
             onToggleFullScreen={onExitFullScreen}
             onPrev={onPrev}
             onNext={onNext}
+            onMarkVerified={onMarkVerified}
+            isMarkingVerified={isMarkingVerified}
+            onRetry={onRetry}
           />
         )}
 

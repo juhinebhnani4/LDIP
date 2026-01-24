@@ -9,7 +9,7 @@
  * Story 3-4: Split-View Citation Highlighting (AC: #1, #3)
  */
 
-import type { FC } from 'react';
+import { useState, type FC } from 'react';
 import {
   X,
   Maximize2,
@@ -20,9 +20,16 @@ import {
   CheckCircle,
   XCircle,
   HelpCircle,
+  Loader2,
+  CheckCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Citation, VerificationResult, VerificationStatus } from '@/types/citation';
 
 export interface SplitViewHeaderProps {
@@ -47,10 +54,15 @@ export interface SplitViewHeaderProps {
   onPrev: () => void;
   /** Callback when next button is clicked */
   onNext: () => void;
+  /** Callback when mark verified button is clicked */
+  onMarkVerified?: () => Promise<void>;
+  /** Whether mark verified action is in progress */
+  isMarkingVerified?: boolean;
 }
 
 /**
  * Get status badge variant and icon based on verification status.
+ * Clearly distinguishes issues requiring review from awaiting status.
  */
 function getStatusInfo(status: VerificationStatus): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
@@ -61,14 +73,14 @@ function getStatusInfo(status: VerificationStatus): {
     case 'verified':
       return { variant: 'default', icon: CheckCircle, label: 'Verified' };
     case 'mismatch':
-      return { variant: 'destructive', icon: XCircle, label: 'Mismatch' };
+      return { variant: 'destructive', icon: XCircle, label: 'Mismatch - Review Needed' };
     case 'section_not_found':
-      return { variant: 'secondary', icon: AlertTriangle, label: 'Section Not Found' };
+      return { variant: 'destructive', icon: AlertTriangle, label: 'Section Missing' };
     case 'act_unavailable':
-      return { variant: 'outline', icon: HelpCircle, label: 'Act Unavailable' };
+      return { variant: 'outline', icon: HelpCircle, label: 'Awaiting Act Upload' };
     case 'pending':
     default:
-      return { variant: 'outline', icon: HelpCircle, label: 'Pending' };
+      return { variant: 'outline', icon: HelpCircle, label: 'Verification Pending' };
   }
 }
 
@@ -84,9 +96,17 @@ export const SplitViewHeader: FC<SplitViewHeaderProps> = ({
   onToggleFullScreen,
   onPrev,
   onNext,
+  onMarkVerified,
+  isMarkingVerified = false,
 }) => {
   const statusInfo = getStatusInfo(citation.verificationStatus);
   const StatusIcon = statusInfo.icon;
+
+  // Show mark verified button only for non-verified statuses
+  const canMarkVerified =
+    citation.verificationStatus !== 'verified' &&
+    citation.verificationStatus !== 'act_unavailable' &&
+    onMarkVerified !== undefined;
 
   return (
     <div className="flex flex-col border-b bg-muted/50">
@@ -109,16 +129,49 @@ export const SplitViewHeader: FC<SplitViewHeaderProps> = ({
             {statusInfo.label}
           </Badge>
 
-          {/* Similarity score if available */}
+          {/* Similarity score if available - with explanatory tooltip */}
           {verification?.similarityScore !== undefined && (
-            <span className="text-xs text-muted-foreground">
-              {verification.similarityScore.toFixed(1)}% match
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                  {verification.similarityScore.toFixed(1)}% match
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="font-medium mb-1">Similarity Score</p>
+                <p className="text-xs opacity-90">
+                  {verification.similarityScore >= 90
+                    ? 'High similarity: The citation text closely matches the Act section text.'
+                    : verification.similarityScore >= 70
+                    ? 'Medium similarity: Some differences exist. Compare the highlighted sections carefully.'
+                    : 'Low similarity: Significant differences detected. The citation may not accurately reflect the Act text.'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
         {/* Controls */}
         <div className="flex items-center gap-2">
+          {/* Mark Verified button */}
+          {canMarkVerified && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onMarkVerified}
+              disabled={isMarkingVerified}
+              className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+              title="Mark as manually verified"
+            >
+              {isMarkingVerified ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <CheckCheck className="h-4 w-4 mr-1" />
+              )}
+              Mark Verified
+            </Button>
+          )}
+
           {/* Navigation */}
           {navigationInfo.totalCount > 1 && (
             <div className="flex items-center gap-1 mr-2">

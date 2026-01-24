@@ -146,6 +146,36 @@ export async function getCitationStats(
   return api.get<CitationStats>(`/api/matters/${matterId}/citations/stats`);
 }
 
+/**
+ * Update citation verification status (manual override).
+ *
+ * Allows lawyers to mark a citation as verified after manual review,
+ * or change status when automated verification is incorrect.
+ *
+ * @param matterId - Matter UUID
+ * @param citationId - Citation UUID
+ * @param verificationStatus - New verification status
+ * @returns Update confirmation with new status
+ *
+ * @example
+ * ```ts
+ * // Mark citation as manually verified
+ * const result = await updateCitationStatus('matter-123', 'citation-456', 'verified');
+ * console.log(result.success); // true
+ * console.log(result.verificationStatus); // "verified"
+ * ```
+ */
+export async function updateCitationStatus(
+  matterId: string,
+  citationId: string,
+  verificationStatus: VerificationStatus
+): Promise<{ success: boolean; citationId: string; verificationStatus: VerificationStatus }> {
+  return api.patch<{ success: boolean; citationId: string; verificationStatus: VerificationStatus }>(
+    `/api/matters/${matterId}/citations/${citationId}/status`,
+    { verificationStatus }
+  );
+}
+
 // =============================================================================
 // Act Discovery Operations
 // =============================================================================

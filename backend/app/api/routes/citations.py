@@ -332,6 +332,123 @@ async def get_citation_stats(
 
 
 # =============================================================================
+# Bulk Update Citation Status
+# =============================================================================
+# NOTE: This route MUST be defined BEFORE /{citation_id} routes to prevent
+# "/bulk-status" from being matched as a citation_id path parameter.
+
+
+class BulkUpdateStatusRequest(BaseModel):
+    """Request to bulk update citation verification status."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    citation_ids: list[str] = Field(
+        ...,
+        alias="citationIds",
+        min_length=1,
+        max_length=100,
+        description="List of citation UUIDs to update (max 100)",
+    )
+    verification_status: VerificationStatus = Field(
+        ...,
+        alias="verificationStatus",
+        description="New verification status",
+    )
+
+
+class BulkUpdateStatusResponse(BaseModel):
+    """Response for bulk citation status update."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    success: bool = Field(..., description="Whether update was successful")
+    updated_count: int = Field(..., alias="updatedCount", description="Number of citations updated")
+    verification_status: VerificationStatus = Field(
+        ..., alias="verificationStatus", description="New verification status"
+    )
+
+
+@router.patch(
+    "/bulk-status",
+    response_model=BulkUpdateStatusResponse,
+    response_model_by_alias=True,
+)
+async def bulk_update_citation_status(
+    matter_id: str = Path(..., description="Matter UUID"),
+    request: BulkUpdateStatusRequest = ...,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
+    storage_service=Depends(_get_storage_service),
+) -> BulkUpdateStatusResponse:
+    """Bulk update verification status for multiple citations.
+
+    Allows updating multiple citations at once, useful for bulk verify/flag
+    actions in the UI. Maximum 100 citations per request.
+
+    Only OWNER and EDITOR roles can update citation status.
+
+    Args:
+        matter_id: Matter UUID.
+        request: Bulk update request with citation IDs and new status.
+        membership: Validated matter membership (OWNER or EDITOR).
+        storage_service: Citation storage service.
+
+    Returns:
+        Update confirmation with count of updated citations.
+    """
+    logger.info(
+        "bulk_update_citation_status_request",
+        matter_id=matter_id,
+        citation_count=len(request.citation_ids),
+        new_status=request.verification_status.value,
+        user_id=membership.user_id,
+    )
+
+    try:
+        updated_count = await storage_service.bulk_update_by_ids(
+            matter_id=matter_id,
+            citation_ids=request.citation_ids,
+            verification_status=request.verification_status,
+        )
+
+        logger.info(
+            "bulk_update_citation_status_success",
+            matter_id=matter_id,
+            requested_count=len(request.citation_ids),
+            updated_count=updated_count,
+            new_status=request.verification_status.value,
+            user_id=membership.user_id,
+        )
+
+        return BulkUpdateStatusResponse(
+            success=True,
+            updated_count=updated_count,
+            verification_status=request.verification_status,
+        )
+
+    except Exception as e:
+        logger.error(
+            "bulk_update_citation_status_error",
+            matter_id=matter_id,
+            citation_count=len(request.citation_ids),
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to bulk update citation status",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
 # Get Single Citation
 # =============================================================================
 

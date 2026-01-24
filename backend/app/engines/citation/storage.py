@@ -1147,6 +1147,70 @@ class CitationStorageService:
             return 0
 
 
+    async def bulk_update_by_ids(
+        self,
+        matter_id: str,
+        citation_ids: list[str],
+        verification_status: VerificationStatus,
+    ) -> int:
+        """Bulk update verification status for specific citations by ID.
+
+        Used for bulk actions from the UI where user selects multiple citations.
+
+        Args:
+            matter_id: Matter UUID for security validation.
+            citation_ids: List of citation UUIDs to update.
+            verification_status: New verification status.
+
+        Returns:
+            Number of citations updated.
+        """
+        if not citation_ids:
+            return 0
+
+        try:
+            # For manual verification, set confidence to 100%
+            confidence_value = 1.0 if verification_status == VerificationStatus.VERIFIED else None
+
+            update_data: dict = {
+                "verification_status": verification_status.value,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+
+            if confidence_value is not None:
+                update_data["confidence"] = confidence_value
+
+            def _update():
+                return self.client.table("citations").update(update_data).eq(
+                    "matter_id", matter_id
+                ).in_(
+                    "id", citation_ids
+                ).execute()
+
+            result = await asyncio.to_thread(_update)
+
+            updated_count = len(result.data) if result.data else 0
+
+            logger.info(
+                "bulk_update_by_ids_success",
+                matter_id=matter_id,
+                requested_count=len(citation_ids),
+                updated_count=updated_count,
+                status=verification_status.value,
+            )
+
+            return updated_count
+
+        except Exception as e:
+            logger.error(
+                "bulk_update_by_ids_failed",
+                matter_id=matter_id,
+                citation_ids_count=len(citation_ids),
+                error=str(e),
+            )
+            return 0
+
+
 # =============================================================================
 # Service Factory
 # =============================================================================

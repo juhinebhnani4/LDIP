@@ -176,6 +176,39 @@ export async function updateCitationStatus(
   );
 }
 
+/**
+ * Bulk update verification status for multiple citations.
+ *
+ * Allows updating multiple citations at once, useful for bulk verify/flag
+ * actions in the UI. Maximum 100 citations per request.
+ *
+ * @param matterId - Matter UUID
+ * @param citationIds - Array of citation UUIDs to update (max 100)
+ * @param verificationStatus - New verification status
+ * @returns Update confirmation with count of updated citations
+ *
+ * @example
+ * ```ts
+ * // Bulk mark citations as verified
+ * const result = await bulkUpdateCitationStatus(
+ *   'matter-123',
+ *   ['citation-1', 'citation-2', 'citation-3'],
+ *   'verified'
+ * );
+ * console.log(result.updatedCount); // 3
+ * ```
+ */
+export async function bulkUpdateCitationStatus(
+  matterId: string,
+  citationIds: string[],
+  verificationStatus: VerificationStatus
+): Promise<{ success: boolean; updatedCount: number; verificationStatus: VerificationStatus }> {
+  return api.patch<{ success: boolean; updatedCount: number; verificationStatus: VerificationStatus }>(
+    `/api/matters/${matterId}/citations/bulk-status`,
+    { citationIds, verificationStatus }
+  );
+}
+
 // =============================================================================
 // Act Discovery Operations
 // =============================================================================

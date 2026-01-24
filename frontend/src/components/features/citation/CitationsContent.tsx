@@ -12,9 +12,16 @@
 
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, CheckCircle2, AlertTriangle, Wrench, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { CitationsHeader, CitationsViewMode, CitationsFilterState } from './CitationsHeader';
 import { CitationsAttentionBanner } from './CitationsAttentionBanner';
 import { CitationsList } from './CitationsList';
@@ -33,7 +40,8 @@ import {
   getActNamesFromSummary,
 } from '@/hooks/useCitations';
 import { useSplitView } from '@/hooks/useSplitView';
-import type { SplitViewData } from '@/types/citation';
+import { updateCitationStatus, bulkUpdateCitationStatus } from '@/lib/api/citations';
+import type { SplitViewData, VerificationStatus } from '@/types/citation';
 
 export interface CitationsContentProps {
   matterId: string;
@@ -45,20 +53,52 @@ const DEFAULT_FILTERS: CitationsFilterState = {
   verificationStatus: null,
   actName: null,
   showOnlyIssues: false,
+  searchQuery: '',
 };
+
+const STORAGE_KEY_VIEW_MODE = 'citations-view-mode';
+const STORAGE_KEY_GROUPING = 'citations-grouping-enabled';
+
+// Get initial view mode from localStorage or default to 'byAct'
+function getInitialViewMode(): CitationsViewMode {
+  if (typeof window === 'undefined') return 'byAct';
+  const stored = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+  if (stored === 'list' || stored === 'byAct' || stored === 'byDocument') {
+    return stored;
+  }
+  return 'byAct'; // New default
+}
 
 export function CitationsContent({
   matterId,
   onViewInDocument,
   className,
 }: CitationsContentProps) {
-  // View state
-  const [viewMode, setViewMode] = useState<CitationsViewMode>('list');
+  // View state - default to 'byAct' with localStorage persistence
+  const [viewMode, setViewMode] = useState<CitationsViewMode>(getInitialViewMode);
   const [filters, setFilters] = useState<CitationsFilterState>(DEFAULT_FILTERS);
   const [debouncedFilters, setDebouncedFilters] = useState<CitationsFilterState>(DEFAULT_FILTERS);
   const [currentPage, setCurrentPage] = useState(1);
   const [showMissingActsCard, setShowMissingActsCard] = useState(false);
   const filterDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Grouping state - default to true with localStorage persistence
+  const [enableGrouping, setEnableGrouping] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem(STORAGE_KEY_GROUPING);
+    return stored === null ? true : stored === 'true';
+  });
+
+  // Bulk selection state
+  const [selectedCitations, setSelectedCitations] = useState<Set<string>>(new Set());
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
+  // Track if filters are being debounced (for loading indicator)
+  const isFilterDebouncing =
+    filters.verificationStatus !== debouncedFilters.verificationStatus ||
+    filters.actName !== debouncedFilters.actName ||
+    filters.showOnlyIssues !== debouncedFilters.showOnlyIssues ||
+    filters.searchQuery !== debouncedFilters.searchQuery;
 
   // Debounce filter changes to avoid excessive API calls
   useEffect(() => {
@@ -75,22 +115,6 @@ export function CitationsContent({
       }
     };
   }, [filters]);
-
-  // Split view hook - all state and actions at CitationsContent level (Story 10C.4)
-  const {
-    isOpen: isSplitViewOpen,
-    isFullScreen,
-    splitViewData,
-    isLoading: splitViewLoading,
-    error: splitViewError,
-    navigationInfo,
-    openSplitView,
-    closeSplitView,
-    toggleFullScreen,
-    navigateToPrev,
-    navigateToNext,
-    setCitationIds,
-  } = useSplitView({ enableKeyboardShortcuts: true });
 
   // Fetch data
   const { stats, isLoading: statsLoading, mutate: refreshStats } = useCitationStats(matterId);
@@ -113,6 +137,38 @@ export function CitationsContent({
     filters: debouncedFilters,
   });
 
+  // Callback to refresh data after status changes (e.g., marking verified)
+  const handleStatusChange = useCallback(() => {
+    refreshCitations();
+    refreshStats();
+  }, [refreshCitations, refreshStats]);
+
+  // Split view hook - all state and actions at CitationsContent level (Story 10C.4)
+  const {
+    isOpen: isSplitViewOpen,
+    isFullScreen,
+    splitViewData,
+    isLoading: splitViewLoading,
+    error: splitViewError,
+    navigationInfo,
+    openSplitView,
+    closeSplitView,
+    toggleFullScreen,
+    navigateToPrev,
+    navigateToNext,
+    setCitationIds,
+    markVerified,
+    isMarkingVerified,
+    currentCitationId,
+  } = useSplitView({ enableKeyboardShortcuts: true, onStatusChange: handleStatusChange });
+
+  // Retry loading the split view data
+  const handleSplitViewRetry = useCallback(() => {
+    if (currentCitationId) {
+      openSplitView(currentCitationId, matterId);
+    }
+  }, [currentCitationId, openSplitView, matterId]);
+
   // Act mutations
   const { markUploadedAndVerify, markSkipped, isLoading: mutationLoading } = useActMutations(matterId);
 
@@ -123,18 +179,66 @@ export function CitationsContent({
     return Math.max(0, stats.totalCitations - stats.verifiedCount - stats.pendingCount);
   }, [stats]);
 
+  // Client-side search filtering
+  const filteredCitations = useMemo(() => {
+    if (!debouncedFilters.searchQuery.trim()) {
+      return citations;
+    }
+    const query = debouncedFilters.searchQuery.toLowerCase().trim();
+    return citations.filter((citation) => {
+      // Search in act name
+      if (citation.actName.toLowerCase().includes(query)) return true;
+      // Search in section number
+      if (citation.sectionNumber.toLowerCase().includes(query)) return true;
+      // Search in raw citation text
+      if (citation.rawCitationText?.toLowerCase().includes(query)) return true;
+      return false;
+    });
+  }, [citations, debouncedFilters.searchQuery]);
+
   const isLoading = statsLoading || summaryLoading || actsLoading;
 
   // Set citation IDs for split-view navigation when citations change (Story 10C.4)
+  // Only update when we have citations to avoid unnecessary store updates
   useEffect(() => {
-    if (citations.length > 0) {
-      setCitationIds(citations.map((c) => c.id));
+    if (filteredCitations.length > 0) {
+      setCitationIds(filteredCitations.map((c) => c.id));
     }
-  }, [citations, setCitationIds]);
+  }, [filteredCitations, setCitationIds]);
 
-  // Handle view mode change
+  // Close split view if current citation is no longer in the filtered list
+  // This ensures the split view respects active filters
+  // Use a ref to store the close action to avoid dependency on closeSplitView
+  const closeSplitViewRef = useRef(closeSplitView);
+  closeSplitViewRef.current = closeSplitView;
+
+  useEffect(() => {
+    // Only check when split view is open and we have data loaded
+    if (!isSplitViewOpen || !splitViewData || filteredCitations.length === 0) {
+      return;
+    }
+
+    const currentCitationInList = filteredCitations.some(
+      (c) => c.id === splitViewData.citation.id
+    );
+
+    // If the current citation is not in the filtered list, close the split view
+    // This handles cases like: viewing a "pending" citation then filtering to "mismatch"
+    if (!currentCitationInList) {
+      closeSplitViewRef.current();
+    }
+  }, [citations, isSplitViewOpen, splitViewData]);
+
+  // Handle view mode change with localStorage persistence
   const handleViewModeChange = useCallback((mode: CitationsViewMode) => {
     setViewMode(mode);
+    localStorage.setItem(STORAGE_KEY_VIEW_MODE, mode);
+  }, []);
+
+  // Handle grouping toggle with localStorage persistence
+  const handleGroupingToggle = useCallback((enabled: boolean) => {
+    setEnableGrouping(enabled);
+    localStorage.setItem(STORAGE_KEY_GROUPING, String(enabled));
   }, []);
 
   // Handle filter change
@@ -143,10 +247,55 @@ export function CitationsContent({
     setCurrentPage(1); // Reset to page 1 when filters change
   }, []);
 
-  // Handle page change
+  // Handle page change - clear selection when changing pages
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
+    setSelectedCitations(new Set()); // Clear selection on page change
   }, []);
+
+  // Handle selection change from CitationsList
+  const handleSelectionChange = useCallback((newSelection: Set<string>) => {
+    setSelectedCitations(newSelection);
+  }, []);
+
+  // Clear selection
+  const handleClearSelection = useCallback(() => {
+    setSelectedCitations(new Set());
+  }, []);
+
+  // Bulk verify selected citations
+  const handleBulkVerify = useCallback(async () => {
+    if (selectedCitations.size === 0) return;
+    setIsBulkUpdating(true);
+    try {
+      await bulkUpdateCitationStatus(
+        matterId,
+        Array.from(selectedCitations),
+        'verified' as VerificationStatus
+      );
+      handleStatusChange();
+      setSelectedCitations(new Set());
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  }, [selectedCitations, matterId, handleStatusChange]);
+
+  // Bulk flag selected citations
+  const handleBulkFlag = useCallback(async (status: 'mismatch' | 'section_not_found') => {
+    if (selectedCitations.size === 0) return;
+    setIsBulkUpdating(true);
+    try {
+      await bulkUpdateCitationStatus(
+        matterId,
+        Array.from(selectedCitations),
+        status as VerificationStatus
+      );
+      handleStatusChange();
+      setSelectedCitations(new Set());
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  }, [selectedCitations, matterId, handleStatusChange]);
 
   // Handle "Review Issues" from attention banner
   const handleReviewIssues = useCallback(() => {
@@ -175,6 +324,24 @@ export function CitationsContent({
       openSplitView(citationId, matterId);
     },
     [openSplitView, matterId]
+  );
+
+  // Handle verify citation from list
+  const handleVerifyCitation = useCallback(
+    async (citationId: string) => {
+      await updateCitationStatus(matterId, citationId, 'verified' as VerificationStatus);
+      handleStatusChange();
+    },
+    [matterId, handleStatusChange]
+  );
+
+  // Handle flag citation from list
+  const handleFlagCitation = useCallback(
+    async (citationId: string, status: 'mismatch' | 'section_not_found') => {
+      await updateCitationStatus(matterId, citationId, status as VerificationStatus);
+      handleStatusChange();
+    },
+    [matterId, handleStatusChange]
   );
 
   // Handle document click
@@ -228,22 +395,28 @@ export function CitationsContent({
       <div className="flex-1 min-w-0 overflow-auto">
         {viewMode === 'list' && (
           <CitationsList
-            citations={citations}
+            citations={filteredCitations}
             meta={meta}
-            isLoading={citationsLoading}
+            isLoading={citationsLoading || isFilterDebouncing}
             error={citationsError?.message}
             currentPage={currentPage}
+            enableGrouping={enableGrouping}
+            enableBulkSelection={true}
+            selectedIds={selectedCitations}
+            onSelectionChange={handleSelectionChange}
             onPageChange={handlePageChange}
             onDocumentClick={handleDocumentClick}
             onViewCitation={handleViewCitation}
+            onVerifyCitation={handleVerifyCitation}
+            onFlagCitation={handleFlagCitation}
           />
         )}
 
         {viewMode === 'byAct' && (
           <CitationsByActView
-            citations={citations}
+            citations={filteredCitations}
             summary={summary}
-            isLoading={citationsLoading}
+            isLoading={citationsLoading || isFilterDebouncing}
             error={citationsError?.message}
             onViewCitation={handleViewCitation}
             onFixCitation={handleFixCitation}
@@ -252,8 +425,8 @@ export function CitationsContent({
 
         {viewMode === 'byDocument' && (
           <CitationsByDocumentView
-            citations={citations}
-            isLoading={citationsLoading}
+            citations={filteredCitations}
+            isLoading={citationsLoading || isFilterDebouncing}
             error={citationsError?.message}
             onViewCitation={handleViewCitation}
             onFixCitation={handleFixCitation}
@@ -288,6 +461,8 @@ export function CitationsContent({
         onViewModeChange={handleViewModeChange}
         filters={filters}
         onFiltersChange={handleFiltersChange}
+        enableGrouping={enableGrouping}
+        onGroupingToggle={handleGroupingToggle}
         isLoading={statsLoading}
       />
 
@@ -358,6 +533,9 @@ export function CitationsContent({
                     onToggleFullScreen={toggleFullScreen}
                     onPrev={navigateToPrev}
                     onNext={navigateToNext}
+                    onMarkVerified={markVerified}
+                    isMarkingVerified={isMarkingVerified}
+                    onRetry={handleSplitViewRetry}
                   />
                 </PdfErrorBoundary>
               ) : null}
@@ -380,7 +558,76 @@ export function CitationsContent({
         onExitFullScreen={toggleFullScreen}
         onPrev={navigateToPrev}
         onNext={navigateToNext}
+        onMarkVerified={markVerified}
+        isMarkingVerified={isMarkingVerified}
+        onRetry={handleSplitViewRetry}
       />
+
+      {/* Floating bulk action bar */}
+      {selectedCitations.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+          <div className="flex items-center gap-3 bg-background border rounded-lg shadow-lg px-4 py-3">
+            <span className="text-sm font-medium">
+              {selectedCitations.size} selected
+            </span>
+            <div className="h-4 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkVerify}
+              disabled={isBulkUpdating}
+              className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
+            >
+              {isBulkUpdating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Mark Verified
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isBulkUpdating}
+                  className="gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Flag Issue
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem
+                  onClick={() => handleBulkFlag('mismatch')}
+                  className="text-destructive"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Text Mismatch
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleBulkFlag('section_not_found')}
+                  className="text-destructive"
+                >
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Section Not Found
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="h-4 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleClearSelection}
+              disabled={isBulkUpdating}
+              className="gap-1"
+            >
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

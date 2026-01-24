@@ -21,11 +21,13 @@ import {
   Clock,
   HelpCircle,
   Check,
+  Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   ToggleGroup,
@@ -57,6 +59,7 @@ export interface CitationsFilterState {
   verificationStatus: VerificationStatus | null;
   actName: string | null;
   showOnlyIssues: boolean;
+  searchQuery: string;
 }
 
 const verificationStatusOptions: Array<{
@@ -78,6 +81,8 @@ export interface CitationsHeaderProps {
   onViewModeChange: (mode: CitationsViewMode) => void;
   filters: CitationsFilterState;
   onFiltersChange: (filters: CitationsFilterState) => void;
+  enableGrouping?: boolean;
+  onGroupingToggle?: (enabled: boolean) => void;
   isLoading?: boolean;
   className?: string;
 }
@@ -89,6 +94,8 @@ export function CitationsHeader({
   onViewModeChange,
   filters,
   onFiltersChange,
+  enableGrouping = true,
+  onGroupingToggle,
   isLoading = false,
   className,
 }: CitationsHeaderProps) {
@@ -99,6 +106,7 @@ export function CitationsHeader({
     if (filters.verificationStatus) count++;
     if (filters.actName) count++;
     if (filters.showOnlyIssues) count++;
+    if (filters.searchQuery) count++;
     return count;
   }, [filters]);
 
@@ -133,11 +141,19 @@ export function CitationsHeader({
     [filters, onFiltersChange]
   );
 
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      onFiltersChange({ ...filters, searchQuery: value });
+    },
+    [filters, onFiltersChange]
+  );
+
   const handleClearFilters = useCallback(() => {
     onFiltersChange({
       verificationStatus: null,
       actName: null,
       showOnlyIssues: false,
+      searchQuery: '',
     });
   }, [onFiltersChange]);
 
@@ -211,8 +227,20 @@ export function CitationsHeader({
         </div>
       )}
 
-      {/* Bottom row: Filters */}
+      {/* Bottom row: Search and Filters */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Search input */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search Act or Section..."
+            value={filters.searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9 w-[220px] h-9"
+          />
+        </div>
+
         {/* Status filter dropdown */}
         <Popover open={statusFilterOpen} onOpenChange={setStatusFilterOpen}>
           <PopoverTrigger asChild>
@@ -297,6 +325,23 @@ export function CitationsHeader({
             Show only issues
           </Label>
         </div>
+
+        {/* Group duplicates checkbox - only show in list view */}
+        {viewMode === 'list' && onGroupingToggle && (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="group-duplicates"
+              checked={enableGrouping}
+              onCheckedChange={onGroupingToggle}
+            />
+            <Label
+              htmlFor="group-duplicates"
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
+              Group duplicates
+            </Label>
+          </div>
+        )}
 
         {/* Clear filters button */}
         {activeFilterCount > 0 && (

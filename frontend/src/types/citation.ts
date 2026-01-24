@@ -359,3 +359,27 @@ export interface SplitViewData {
 export interface SplitViewResponse {
   data: SplitViewData;
 }
+
+// =============================================================================
+// Grouped Citation Types (UX Improvements)
+// =============================================================================
+
+/** A grouped citation representing multiple identical citations */
+export interface GroupedCitation {
+  /** Unique key for this group */
+  groupKey: string;
+  /** Representative citation (first in the group) */
+  representative: CitationListItem;
+  /** All citations in this group */
+  citations: CitationListItem[];
+  /** Number of citations in this group */
+  count: number;
+  /** All unique document IDs in this group */
+  documentIds: string[];
+  /** All unique document names in this group */
+  documentNames: string[];
+  /** Summary status: worst status in the group */
+  aggregateStatus: VerificationStatus;
+  /** Average confidence across all citations */
+  averageConfidence: number;
+}

@@ -36,6 +36,7 @@ from app.models.citation import (
     UserAction,
     VerificationStatus,
 )
+from app.core.data_quality import DataQualityMetrics
 from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
@@ -45,6 +46,83 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 BATCH_SIZE: Final[int] = 50  # Citations per database batch
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _find_citation_page_from_bboxes(
+    citation_text: str,
+    bboxes: list[dict],
+) -> int | None:
+    """Find the actual page number where citation text appears in bboxes.
+
+    When a chunk spans multiple pages, the chunk's page_number reflects
+    where it starts, not where specific content appears. This function
+    searches through the linked bboxes to find the exact page where
+    the citation text is located.
+
+    Args:
+        citation_text: The raw citation text to locate.
+        bboxes: List of bounding box dicts with 'text' and 'page_number'.
+
+    Returns:
+        Page number where the citation appears, or None if not found.
+    """
+    if not citation_text or not bboxes:
+        return None
+
+    # Normalize citation text for matching
+    citation_lower = citation_text.lower().strip()
+
+    # Strategy 1: Exact substring match in single bbox
+    for bbox in bboxes:
+        bbox_text = (bbox.get("text") or "").lower()
+        if citation_lower in bbox_text:
+            return bbox.get("page_number")
+
+    # Strategy 2: Key phrase matching (section + act name)
+    # Extract key phrases like "Section 205(C)" or "Companies Act"
+    import re
+
+    section_match = re.search(r"section\s+\d+(?:\s*\([^)]+\))?", citation_lower)
+    act_match = re.search(r"(?:the\s+)?[\w\s]+act", citation_lower)
+
+    if section_match:
+        section_phrase = section_match.group(0)
+        for bbox in bboxes:
+            bbox_text = (bbox.get("text") or "").lower()
+            if section_phrase in bbox_text:
+                return bbox.get("page_number")
+
+    if act_match:
+        act_phrase = act_match.group(0)
+        for bbox in bboxes:
+            bbox_text = (bbox.get("text") or "").lower()
+            if act_phrase in bbox_text:
+                return bbox.get("page_number")
+
+    # Strategy 3: Word overlap scoring
+    # Find bbox with highest word overlap
+    citation_words = set(citation_lower.split())
+    if len(citation_words) < 3:
+        return None
+
+    best_page = None
+    best_overlap = 0
+
+    for bbox in bboxes:
+        bbox_text = (bbox.get("text") or "").lower()
+        bbox_words = set(bbox_text.split())
+        overlap = len(citation_words & bbox_words)
+
+        if overlap > best_overlap and overlap >= 3:
+            best_overlap = overlap
+            best_page = bbox.get("page_number")
+
+    return best_page
 
 
 # =============================================================================
@@ -116,6 +194,7 @@ class CitationStorageService:
         document_id: str,
         extraction_result: CitationExtractionResult,
         source_bbox_ids: list[str] | None = None,
+        source_bboxes: list[dict] | None = None,
     ) -> int:
         """Save extracted citations to database.
 
@@ -124,6 +203,9 @@ class CitationStorageService:
             document_id: Source document UUID.
             extraction_result: Extraction result containing citations.
             source_bbox_ids: Optional bounding box IDs for highlighting.
+            source_bboxes: Optional pre-fetched bbox data for per-citation
+                page detection. If not provided but bbox_ids are given,
+                bboxes will be fetched to determine accurate page numbers.
 
         Returns:
             Number of citations saved.
@@ -132,6 +214,26 @@ class CitationStorageService:
             return 0
 
         saved_count = 0
+
+        # Fetch bboxes for per-citation page detection if not provided
+        # This improves accuracy when chunks span multiple pages
+        bboxes_for_page_lookup: list[dict] = []
+        if source_bboxes:
+            bboxes_for_page_lookup = source_bboxes
+        elif source_bbox_ids:
+            try:
+                from app.services.bounding_box_service import get_bounding_box_service
+
+                bbox_service = get_bounding_box_service()
+                bboxes_for_page_lookup = bbox_service.get_bounding_boxes_by_ids(
+                    source_bbox_ids
+                )
+            except Exception as e:
+                logger.debug(
+                    "bbox_fetch_for_page_detection_failed",
+                    document_id=document_id,
+                    error=str(e),
+                )
 
         try:
             # Process in batches
@@ -150,6 +252,26 @@ class CitationStorageService:
                         name, year = canonical
                         act_name = f"{name}, {year}" if year else name
 
+                    # Determine source page: try bbox-level detection first,
+                    # then fall back to chunk page. Allow NULL - don't default to 1
+                    # as that creates incorrect data (user would navigate to wrong page)
+                    source_page = extraction_result.page_number
+                    if bboxes_for_page_lookup and citation.raw_text:
+                        detected_page = _find_citation_page_from_bboxes(
+                            citation.raw_text, bboxes_for_page_lookup
+                        )
+                        if detected_page is not None:
+                            source_page = detected_page
+
+                    # Log if source_page is still None after all detection attempts
+                    if source_page is None:
+                        logger.debug(
+                            "citation_missing_source_page",
+                            document_id=document_id[:8] if document_id else None,
+                            act_name=act_name[:30] if act_name else None,
+                            section=citation.section,
+                        )
+
                     record = {
                         "matter_id": matter_id,
                         "source_document_id": document_id,
@@ -160,7 +282,7 @@ class CitationStorageService:
                         "clause": citation.clause,
                         "raw_citation_text": citation.raw_text,
                         "quoted_text": citation.quoted_text,
-                        "source_page": extraction_result.page_number or 1,
+                        "source_page": source_page,
                         "source_bbox_ids": source_bbox_ids or [],
                         "verification_status": VerificationStatus.ACT_UNAVAILABLE.value,
                         # Confidence: Model uses 0-100 for display, DB uses 0-1 for indexing
@@ -201,12 +323,23 @@ class CitationStorageService:
                             act_name=act_name,
                         )
 
+            # Track data quality metrics
+            metrics = DataQualityMetrics("citation_extraction")
+            for record in records:
+                metrics.record(
+                    has_source_page=record.get("source_page") is not None,
+                    has_bbox=bool(record.get("source_bbox_ids")),
+                )
+            quality_report = metrics.report()
+
             logger.info(
                 "citations_saved",
                 matter_id=matter_id,
                 document_id=document_id,
                 saved_count=saved_count,
                 total_citations=len(extraction_result.citations),
+                source_page_coverage=quality_report.get("source_page_coverage"),
+                bbox_coverage=quality_report.get("bbox_coverage"),
             )
 
             return saved_count

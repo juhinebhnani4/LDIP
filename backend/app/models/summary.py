@@ -112,11 +112,11 @@ class PartyInfo(BaseModel):
         alias="sourceDocument",
         description="Source document name",
     )
-    source_page: int = Field(
-        ...,
+    source_page: int | None = Field(
+        None,
         alias="sourcePage",
         ge=1,
-        description="Source page number",
+        description="Source page number (None if unknown)",
     )
     is_verified: bool = Field(
         False,
@@ -207,11 +207,11 @@ class CurrentStatus(BaseModel):
         alias="sourceDocument",
         description="Source document name",
     )
-    source_page: int = Field(
-        ...,
+    source_page: int | None = Field(
+        None,
         alias="sourcePage",
         ge=1,
-        description="Source page number",
+        description="Source page number (None if unknown)",
     )
     is_verified: bool = Field(
         False,
@@ -626,10 +626,10 @@ class Citation(BaseModel):
         alias="documentName",
         description="Display name of document",
     )
-    page: int = Field(
-        ...,
+    page: int | None = Field(
+        None,
         ge=1,
-        description="Page number",
+        description="Page number (None if unknown)",
     )
     excerpt: str | None = Field(
         None,

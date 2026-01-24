@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Calendar, ExternalLink } from 'lucide-react';
+import { Calendar, ExternalLink, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -134,16 +134,23 @@ export function CurrentStatusSection({
               documentName={currentStatus.citation.documentName}
               pageNumber={currentStatus.citation.page}
               excerpt={currentStatus.citation.excerpt}
-              displayText={`${currentStatus.sourceDocument}, p. ${currentStatus.sourcePage}`}
+              displayText={currentStatus.sourcePage ? `${currentStatus.sourceDocument}, p. ${currentStatus.sourcePage}` : currentStatus.sourceDocument}
             />
           ) : (
-            <span>{currentStatus.sourceDocument}, p. {currentStatus.sourcePage}</span>
+            <span>
+              {currentStatus.sourceDocument}
+              {currentStatus.sourcePage ? `, p. ${currentStatus.sourcePage}` : (
+                <span className="text-amber-600 ml-1" title="Page number unknown">
+                  <AlertTriangle className="inline h-3 w-3" aria-hidden="true" />
+                </span>
+              )}
+            </span>
           )}
         </div>
         <Button asChild variant="ghost" size="sm">
           <Link
-            href={`/matter/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}&page=${currentStatus.sourcePage}`}
-            aria-label={`View full order: ${currentStatus.sourceDocument}, page ${currentStatus.sourcePage}`}
+            href={`/matter/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}${currentStatus.sourcePage ? `&page=${currentStatus.sourcePage}` : ''}`}
+            aria-label={`View full order: ${currentStatus.sourceDocument}${currentStatus.sourcePage ? `, page ${currentStatus.sourcePage}` : ''}`}
           >
             <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
             View Full Order

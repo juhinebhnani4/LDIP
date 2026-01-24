@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { User, ExternalLink } from 'lucide-react';
+import { User, ExternalLink, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -152,10 +152,17 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
                     documentName={party.citation.documentName}
                     pageNumber={party.citation.page}
                     excerpt={party.citation.excerpt}
-                    displayText={`${party.sourceDocument}, p. ${party.sourcePage}`}
+                    displayText={party.sourcePage ? `${party.sourceDocument}, p. ${party.sourcePage}` : party.sourceDocument}
                   />
                 ) : (
-                  <span>{party.sourceDocument}, p. {party.sourcePage}</span>
+                  <span>
+                    {party.sourceDocument}
+                    {party.sourcePage ? `, p. ${party.sourcePage}` : (
+                      <span className="text-amber-600 ml-1" title="Page number unknown">
+                        <AlertTriangle className="inline h-3 w-3" aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
                 )}
               </p>
             </div>
@@ -174,8 +181,8 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
               className="flex-1"
             >
               <Link
-                href={`/matter/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}&page=${party.sourcePage}`}
-                aria-label={`View source: ${party.sourceDocument}, page ${party.sourcePage}`}
+                href={`/matter/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}${party.sourcePage ? `&page=${party.sourcePage}` : ''}`}
+                aria-label={`View source: ${party.sourceDocument}${party.sourcePage ? `, page ${party.sourcePage}` : ''}`}
               >
                 <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 View Source

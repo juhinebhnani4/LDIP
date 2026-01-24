@@ -395,7 +395,9 @@ class SectionMatch(BaseModel):
     section_number: str = Field(..., alias="sectionNumber", description="Section number matched")
     section_text: str = Field(..., alias="sectionText", description="Full text of the section")
     chunk_id: str = Field(..., alias="chunkId", description="Source chunk UUID")
-    page_number: int = Field(..., alias="pageNumber", description="Page in Act document")
+    page_number: int | None = Field(
+        None, alias="pageNumber", description="Page in Act document (None if unknown)"
+    )
     bbox_ids: list[str] = Field(
         default_factory=list, alias="bboxIds", description="Bounding boxes for highlighting"
     )

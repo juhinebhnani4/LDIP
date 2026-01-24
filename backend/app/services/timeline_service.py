@@ -31,6 +31,7 @@ from app.models.timeline import (
     UnclassifiedEventItem,
     UnclassifiedEventsResponse,
 )
+from app.core.data_quality import DataQualityMetrics
 from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
@@ -168,11 +169,23 @@ class TimelineService:
 
             if response.data:
                 event_ids = [row["id"] for row in response.data]
+
+                # Track data quality metrics
+                metrics = DataQualityMetrics("timeline_extraction")
+                for record in event_records:
+                    metrics.record(
+                        has_source_page=record.get("source_page") is not None,
+                        has_bbox=bool(record.get("source_bbox_ids")),
+                    )
+                quality_report = metrics.report()
+
                 logger.info(
                     "timeline_dates_saved",
                     matter_id=matter_id,
                     document_id=document_id,
                     event_count=len(event_ids),
+                    source_page_coverage=quality_report.get("source_page_coverage"),
+                    bbox_coverage=quality_report.get("bbox_coverage"),
                 )
                 return event_ids
 
@@ -250,11 +263,23 @@ class TimelineService:
 
             if response.data:
                 event_ids = [row["id"] for row in response.data]
+
+                # Track data quality metrics
+                metrics = DataQualityMetrics("timeline_extraction")
+                for record in event_records:
+                    metrics.record(
+                        has_source_page=record.get("source_page") is not None,
+                        has_bbox=bool(record.get("source_bbox_ids")),
+                    )
+                quality_report = metrics.report()
+
                 logger.info(
                     "timeline_dates_saved_sync",
                     matter_id=matter_id,
                     document_id=document_id,
                     event_count=len(event_ids),
+                    source_page_coverage=quality_report.get("source_page_coverage"),
+                    bbox_coverage=quality_report.get("bbox_coverage"),
                 )
                 return event_ids
 

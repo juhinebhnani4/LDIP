@@ -1443,6 +1443,11 @@ class DocumentViewDataModel(BaseModel):
     document_url: str = Field(..., alias="documentUrl", description="Signed URL for PDF")
     document_type: str = Field(..., alias="documentType", description="Document type (case_file, act, annexure, other)")
     page_number: int = Field(..., alias="pageNumber", description="Page to display (1-indexed)")
+    page_number_confident: bool = Field(
+        default=True,
+        alias="pageNumberConfident",
+        description="Whether page_number is confident (true) or a fallback estimate (false)",
+    )
     bounding_boxes: list[SplitViewBoundingBox] = Field(
         ..., alias="boundingBoxes", description="Bounding boxes to highlight"
     )
@@ -1560,7 +1565,9 @@ async def get_citation_split_view(
 
         # Build source document data (case file where citation was found)
         source_document_id = citation.document_id
-        source_page = citation.source_page or 1
+        # Track page confidence - don't silently default to 1
+        source_page_confident = citation.source_page is not None and citation.source_page > 0
+        source_page = citation.source_page if source_page_confident else 1
 
         # Get source document storage path and type
         client = get_service_client()
@@ -1634,6 +1641,7 @@ async def get_citation_split_view(
             document_url=source_url,
             document_type=source_document_type,
             page_number=source_page,
+            page_number_confident=source_page_confident,
             bounding_boxes=source_bboxes,
         )
 
@@ -1664,6 +1672,8 @@ async def get_citation_split_view(
                     target_url = file_storage.get_signed_url(target_storage_path, expires_in=3600)
 
                     # Use stored target_page if available, otherwise use section index lookup
+                    # Track confidence to indicate if page is accurate or fallback
+                    target_page_confident = True
                     if citation.target_page is not None:
                         target_page = citation.target_page
                         section_found_in_act = True
@@ -1672,6 +1682,7 @@ async def get_citation_split_view(
                         # This handles both PENDING citations and verified citations
                         # where target_page wasn't properly saved during verification
                         target_page = 1  # Default fallback
+                        target_page_confident = False  # Not confident until we find section
                         section_str = citation.section_number or ""
 
                         try:
@@ -1686,6 +1697,7 @@ async def get_citation_split_view(
 
                             if section_location:
                                 target_page = section_location.page_number
+                                target_page_confident = True
                                 section_found_in_act = True
                                 logger.info(
                                     "section_found_via_section_index",
@@ -1760,6 +1772,7 @@ async def get_citation_split_view(
                         document_url=target_url,
                         document_type="act",  # Target is always an Act document
                         page_number=target_page,
+                        page_number_confident=target_page_confident,
                         bounding_boxes=target_bboxes,
                     )
 

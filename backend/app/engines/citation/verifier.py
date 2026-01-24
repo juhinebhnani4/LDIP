@@ -403,7 +403,7 @@ class CitationVerifier:
                 section_number=section,
                 section_text=section_text,
                 chunk_id=first_chunk.id,
-                page_number=first_chunk.page_number or 1,
+                page_number=first_chunk.page_number,  # Allow None - don't default to 1
                 bbox_ids=[],  # Will be populated if available
                 confidence=90.0,
             )
@@ -463,7 +463,7 @@ class CitationVerifier:
                             section_number=result.get("section_number", section),
                             section_text=result.get("section_text", matching_chunk.content[:1000]),
                             chunk_id=chunk_id,
-                            page_number=matching_chunk.page_number or 1,
+                            page_number=matching_chunk.page_number,  # Allow None - don't default to 1
                             bbox_ids=[],
                             confidence=result.get("confidence", 75.0),
                         )

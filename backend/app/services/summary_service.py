@@ -469,7 +469,8 @@ class SummaryService:
 
                 doc_data = row.get("documents", {}) or {}
                 source_document = doc_data.get("name", "Unknown")
-                source_page = row.get("page_number") or 1
+                # Don't default to 1 - allow None for unknown pages
+                source_page = row.get("page_number")
                 document_id = doc_data.get("id", "")
 
                 # Check if this party entity has been verified
@@ -1225,7 +1226,8 @@ class SummaryService:
         citations = []
         for chunk in chunks:
             document_name = chunk.get("document_name", "")
-            page_number = chunk.get("page_number", 1)
+            # Don't default to 1 - allow None for unknown pages
+            page_number = chunk.get("page_number")
             content = chunk.get("content", "")
 
             # Look up document ID from documents table
@@ -1238,7 +1240,7 @@ class SummaryService:
                     Citation(
                         document_id=document_id,
                         document_name=document_name,
-                        page=page_number or 1,
+                        page=page_number,  # Allow None - don't default to 1
                         excerpt=excerpt,
                     )
                 )

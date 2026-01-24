@@ -302,11 +302,17 @@ export function TimelineContent({ className }: TimelineContentProps) {
         }
 
         // Open PDF split view with document at the source page
+        // Warn user if page is unknown (will default to page 1)
+        const pageNumber = event.sourcePage ?? 1;
+        if (!event.sourcePage) {
+          toast.warning('Page number unknown - opening to page 1');
+        }
+
         openPdfSplitView(
           {
             documentId: event.documentId,
             documentName: document.filename,
-            page: event.sourcePage ?? 1,
+            page: pageNumber,
           },
           matterId,
           documentUrl

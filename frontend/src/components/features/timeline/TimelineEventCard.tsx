@@ -292,24 +292,58 @@ export function TimelineEventCard({
             />
             <span className="text-muted-foreground">Source:</span>
             {onSourceClick ? (
-              <button
-                type="button"
-                onClick={() => onSourceClick(event)}
-                className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                {event.sourcePage
-                  ? `Document, pg ${event.sourcePage}`
-                  : 'Document'}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => onSourceClick(event)}
+                    className={cn(
+                      'hover:underline',
+                      event.sourcePage
+                        ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
+                        : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
+                    )}
+                  >
+                    {event.sourcePage
+                      ? `Document, pg ${event.sourcePage}`
+                      : 'Document'}
+                    {!event.sourcePage && (
+                      <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                {!event.sourcePage && (
+                  <TooltipContent>
+                    <p>Page number unknown - will open to page 1</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             ) : (
-              <Link
-                href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
-                className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                {event.sourcePage
-                  ? `Document, pg ${event.sourcePage}`
-                  : 'Document'}
-              </Link>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
+                    className={cn(
+                      'hover:underline',
+                      event.sourcePage
+                        ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
+                        : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
+                    )}
+                  >
+                    {event.sourcePage
+                      ? `Document, pg ${event.sourcePage}`
+                      : 'Document'}
+                    {!event.sourcePage && (
+                      <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
+                    )}
+                  </Link>
+                </TooltipTrigger>
+                {!event.sourcePage && (
+                  <TooltipContent>
+                    <p>Page number unknown - will open to page 1</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
           </div>
         )}

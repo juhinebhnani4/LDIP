@@ -68,6 +68,7 @@ class SearchResult:
         document_id: Source document UUID.
         content: Chunk text content.
         page_number: Source page number (for highlighting).
+        bbox_ids: Bounding box UUIDs for precise source highlighting.
         chunk_type: 'parent' or 'child'.
         token_count: Number of tokens in chunk.
         bm25_rank: Rank from BM25 search (None if not in BM25 results).
@@ -79,6 +80,7 @@ class SearchResult:
     document_id: str
     content: str
     page_number: int | None
+    bbox_ids: list[str] | None
     chunk_type: str
     token_count: int
     bm25_rank: int | None
@@ -96,12 +98,18 @@ class HybridSearchResult:
         matter_id: Matter UUID for isolation verification.
         weights: Weights used for this search.
         total_candidates: Total number of candidates before limit.
+        search_mode: Search mode used - "hybrid", "bm25_only", or "bm25_fallback".
+        embedding_completion_pct: Percentage of chunks with embeddings (0-100).
+        fallback_reason: Human-readable reason if fallback was used.
     """
     results: list[SearchResult]
     query: str
     matter_id: str
     weights: SearchWeights
     total_candidates: int
+    search_mode: str = "hybrid"
+    embedding_completion_pct: float | None = None
+    fallback_reason: str | None = None
 
 
 @dataclass
@@ -116,6 +124,7 @@ class RerankedSearchResultItem:
         document_id: Source document UUID.
         content: Chunk text content.
         page_number: Source page number (for highlighting).
+        bbox_ids: Bounding box UUIDs for precise source highlighting.
         chunk_type: 'parent' or 'child'.
         token_count: Number of tokens in chunk.
         bm25_rank: Rank from BM25 search (None if not in BM25 results).
@@ -128,6 +137,7 @@ class RerankedSearchResultItem:
     document_id: str
     content: str
     page_number: int | None
+    bbox_ids: list[str] | None
     chunk_type: str
     token_count: int
     bm25_rank: int | None
@@ -148,6 +158,8 @@ class RerankedSearchResult:
         total_candidates: Total candidates from hybrid search before reranking.
         rerank_used: True if Cohere reranking was successful.
         fallback_reason: Reason for fallback if rerank_used is False.
+        search_mode: Search mode used - "hybrid", "bm25_only", or "bm25_fallback".
+        embedding_completion_pct: Percentage of chunks with embeddings (0-100).
     """
     results: list[RerankedSearchResultItem]
     query: str
@@ -156,6 +168,8 @@ class RerankedSearchResult:
     total_candidates: int
     rerank_used: bool
     fallback_reason: str | None
+    search_mode: str = "hybrid"
+    embedding_completion_pct: float | None = None
 
 
 class HybridSearchServiceError(Exception):
@@ -210,6 +224,90 @@ class HybridSearchService:
             embedder: Optional EmbeddingService instance. Uses default if not provided.
         """
         self.embedder = embedder or get_embedding_service()
+
+    async def _check_embedding_status(self, matter_id: str) -> tuple[int, int, float]:
+        """Check embedding completion status for a matter.
+
+        Used for optimistic RAG - allows search to work with partial embeddings
+        by falling back to BM25 when embeddings are incomplete.
+
+        Args:
+            matter_id: Matter UUID to check.
+
+        Returns:
+            Tuple of (total_chunks, embedded_chunks, completion_percentage).
+            Returns (0, 0, 0.0) if no chunks exist.
+        """
+        try:
+            supabase = get_supabase_client()
+            if supabase is None:
+                return 0, 0, 0.0
+
+            # Count total chunks for this matter
+            total_resp = (
+                supabase.table("chunks")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+            total_count = total_resp.count or 0
+
+            if total_count == 0:
+                return 0, 0, 0.0
+
+            # Count chunks with embeddings
+            embedded_resp = (
+                supabase.table("chunks")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .not_.is_("embedding", "null")
+                .execute()
+            )
+            embedded_count = embedded_resp.count or 0
+
+            completion_pct = (embedded_count / total_count * 100) if total_count > 0 else 0.0
+
+            logger.debug(
+                "embedding_status_checked",
+                matter_id=matter_id,
+                total_chunks=total_count,
+                embedded_chunks=embedded_count,
+                completion_pct=round(completion_pct, 1),
+            )
+
+            return total_count, embedded_count, completion_pct
+
+        except Exception as e:
+            logger.warning(
+                "embedding_status_check_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return 0, 0, 0.0
+
+    async def get_embedding_status(self, matter_id: str) -> dict:
+        """Get embedding completion status for a matter.
+
+        Public API for checking embedding progress. Used by search routes
+        to inform users about indexing status.
+
+        Args:
+            matter_id: Matter UUID to check.
+
+        Returns:
+            Dict with:
+                - total_chunks: Total number of chunks for this matter.
+                - embedded_chunks: Number of chunks with embeddings.
+                - completion_pct: Percentage complete (0-100).
+                - is_fully_indexed: True if all chunks have embeddings.
+        """
+        total, embedded, pct = await self._check_embedding_status(matter_id)
+        return {
+            "total_chunks": total,
+            "embedded_chunks": embedded,
+            "completion_pct": pct,
+            "is_fully_indexed": total == 0 or embedded >= total,
+        }
 
     async def search(
         self,
@@ -280,7 +378,17 @@ class HybridSearchService:
                     query_len=len(query),
                 )
                 # Fall back to BM25-only search when embeddings unavailable
-                return await self.bm25_search(query, matter_id, limit=limit)
+                bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit)
+                return HybridSearchResult(
+                    results=bm25_results,
+                    query=query,
+                    matter_id=matter_id,
+                    weights=weights,
+                    total_candidates=len(bm25_results),
+                    search_mode="bm25_fallback",
+                    embedding_completion_pct=None,
+                    fallback_reason="Embedding service unavailable",
+                )
 
             # Execute hybrid search via RPC
             supabase = get_supabase_client()
@@ -304,7 +412,33 @@ class HybridSearchService:
                 }
             ).execute()
 
-            if response.data is None:
+            if response.data is None or len(response.data) == 0:
+                # Check if embeddings are incomplete (optimistic RAG)
+                total_chunks, embedded_chunks, completion_pct = await self._check_embedding_status(matter_id)
+
+                if total_chunks > 0 and embedded_chunks < total_chunks:
+                    # Embeddings incomplete - fall back to BM25-only for optimistic search
+                    logger.info(
+                        "optimistic_bm25_fallback",
+                        matter_id=matter_id,
+                        query_len=len(query),
+                        total_chunks=total_chunks,
+                        embedded_chunks=embedded_chunks,
+                        completion_pct=round(completion_pct, 1),
+                    )
+                    bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit)
+                    return HybridSearchResult(
+                        results=bm25_results,
+                        query=query,
+                        matter_id=matter_id,
+                        weights=weights,
+                        total_candidates=len(bm25_results),
+                        search_mode="bm25_only",
+                        embedding_completion_pct=completion_pct,
+                        fallback_reason=f"Embeddings {int(completion_pct)}% complete",
+                    )
+
+                # No chunks or all embedded but still no results
                 logger.warning(
                     "hybrid_search_no_results",
                     matter_id=matter_id,
@@ -329,6 +463,7 @@ class HybridSearchService:
                     document_id=str(r["document_id"]),
                     content=r["content"],
                     page_number=r.get("page_number"),
+                    bbox_ids=[str(b) for b in r.get("bbox_ids") or []],
                     chunk_type=r["chunk_type"],
                     token_count=r.get("token_count") or 0,
                     bm25_rank=r.get("bm25_rank"),
@@ -375,36 +510,24 @@ class HybridSearchService:
                 is_retryable=True,
             ) from e
 
-    async def bm25_search(
+    async def _bm25_search_internal(
         self,
         query: str,
         matter_id: str,
         limit: int = 30,
     ) -> list[SearchResult]:
-        """Execute BM25-only keyword search.
+        """Internal BM25 search returning raw results.
 
-        Useful for debugging and comparing search approaches.
+        Used by optimistic fallback and public bm25_search method.
 
         Args:
             query: Search query text.
-            matter_id: REQUIRED - matter UUID for isolation.
+            matter_id: matter UUID for isolation.
             limit: Max results to return.
 
         Returns:
             List of search results ranked by BM25 score.
-
-        Raises:
-            HybridSearchServiceError: If search fails.
         """
-        validate_namespace(matter_id)
-
-        logger.info(
-            "bm25_search_start",
-            query_len=len(query),
-            matter_id=matter_id,
-            limit=limit,
-        )
-
         try:
             supabase = get_supabase_client()
             if supabase is None:
@@ -436,6 +559,7 @@ class HybridSearchService:
                     document_id=str(r["document_id"]),
                     content=r["content"],
                     page_number=r.get("page_number"),
+                    bbox_ids=[str(b) for b in r.get("bbox_ids") or []],
                     chunk_type=r["chunk_type"],
                     token_count=r.get("token_count") or 0,
                     bm25_rank=r.get("row_num"),
@@ -449,7 +573,7 @@ class HybridSearchService:
             raise
         except Exception as e:
             logger.error(
-                "bm25_search_failed",
+                "bm25_search_internal_failed",
                 matter_id=matter_id,
                 error=str(e),
             )
@@ -458,6 +582,49 @@ class HybridSearchService:
                 code="BM25_SEARCH_FAILED",
                 is_retryable=True,
             ) from e
+
+    async def bm25_search(
+        self,
+        query: str,
+        matter_id: str,
+        limit: int = 30,
+    ) -> HybridSearchResult:
+        """Execute BM25-only keyword search.
+
+        Useful for debugging and comparing search approaches.
+
+        Args:
+            query: Search query text.
+            matter_id: REQUIRED - matter UUID for isolation.
+            limit: Max results to return.
+
+        Returns:
+            HybridSearchResult with BM25-only results.
+
+        Raises:
+            HybridSearchServiceError: If search fails.
+        """
+        validate_namespace(matter_id)
+
+        logger.info(
+            "bm25_search_start",
+            query_len=len(query),
+            matter_id=matter_id,
+            limit=limit,
+        )
+
+        results = await self._bm25_search_internal(query, matter_id, limit)
+
+        return HybridSearchResult(
+            results=results,
+            query=query,
+            matter_id=matter_id,
+            weights=SearchWeights(),
+            total_candidates=len(results),
+            search_mode="bm25_only",
+            embedding_completion_pct=None,
+            fallback_reason=None,
+        )
 
     async def semantic_search(
         self,
@@ -536,6 +703,7 @@ class HybridSearchService:
                     document_id=str(r["document_id"]),
                     content=r["content"],
                     page_number=r.get("page_number"),
+                    bbox_ids=[str(b) for b in r.get("bbox_ids") or []],
                     chunk_type=r["chunk_type"],
                     token_count=r.get("token_count") or 0,
                     bm25_rank=None,
@@ -630,6 +798,8 @@ class HybridSearchService:
                 total_candidates=0,
                 rerank_used=False,
                 fallback_reason="No hybrid search results",
+                search_mode=hybrid_result.search_mode,
+                embedding_completion_pct=hybrid_result.embedding_completion_pct,
             )
 
         # Step 2: Extract content for reranking
@@ -655,6 +825,7 @@ class HybridSearchService:
                         document_id=original.document_id,
                         content=original.content,
                         page_number=original.page_number,
+                        bbox_ids=original.bbox_ids,
                         chunk_type=original.chunk_type,
                         token_count=original.token_count,
                         bm25_rank=original.bm25_rank,
@@ -681,6 +852,8 @@ class HybridSearchService:
                 total_candidates=hybrid_result.total_candidates,
                 rerank_used=True,
                 fallback_reason=None,
+                search_mode=hybrid_result.search_mode,
+                embedding_completion_pct=hybrid_result.embedding_completion_pct,
             )
 
         except CohereRerankServiceError as e:
@@ -701,6 +874,7 @@ class HybridSearchService:
                     document_id=r.document_id,
                     content=r.content,
                     page_number=r.page_number,
+                    bbox_ids=r.bbox_ids,
                     chunk_type=r.chunk_type,
                     token_count=r.token_count,
                     bm25_rank=r.bm25_rank,
@@ -719,6 +893,8 @@ class HybridSearchService:
                 total_candidates=hybrid_result.total_candidates,
                 rerank_used=False,
                 fallback_reason=e.message,
+                search_mode=hybrid_result.search_mode,
+                embedding_completion_pct=hybrid_result.embedding_completion_pct,
             )
 
 

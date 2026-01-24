@@ -112,6 +112,11 @@ class Statement(BaseModel):
     page_number: int | None = Field(
         None, alias="pageNumber", description="Source page number"
     )
+    bbox_ids: list[str] = Field(
+        default_factory=list,
+        alias="bboxIds",
+        description="Bounding box UUIDs for precise source highlighting",
+    )
     confidence: float = Field(
         default=1.0, ge=0.0, le=1.0, description="Statement extraction confidence"
     )
@@ -304,6 +309,16 @@ class StatementPairComparison(BaseModel):
     )
     page_b: int | None = Field(
         None, alias="pageB", description="Page number for statement B"
+    )
+    bbox_ids_a: list[str] = Field(
+        default_factory=list,
+        alias="bboxIdsA",
+        description="Bounding box UUIDs for statement A (source highlighting)",
+    )
+    bbox_ids_b: list[str] = Field(
+        default_factory=list,
+        alias="bboxIdsB",
+        description="Bounding box UUIDs for statement B (source highlighting)",
     )
     # Story 5-3: Classification fields (populated after comparison)
     contradiction_type: str | None = Field(

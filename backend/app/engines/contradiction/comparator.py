@@ -401,6 +401,8 @@ class StatementComparator:
                             document_b_id=statement_b.document_id,
                             page_a=statement_a.page_number,
                             page_b=statement_b.page_number,
+                            bbox_ids_a=statement_a.bbox_ids,
+                            bbox_ids_b=statement_b.bbox_ids,
                         )
 
                         processing_time = int((time.time() - start_time) * 1000)
@@ -588,7 +590,7 @@ class StatementComparator:
             messages=[
                 # System prompt first - enables OpenAI's automatic prompt caching
                 # When the same system prompt is used repeatedly, OpenAI caches it
-                # and charges 50% less for cached input tokens
+                # and charges 50% less for cached input tokens (automatic for >1024 tokens)
                 {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
@@ -883,6 +885,8 @@ class StatementComparator:
                 document_b_id=statement_b.document_id,
                 page_a=statement_a.page_number,
                 page_b=statement_b.page_number,
+                bbox_ids_a=statement_a.bbox_ids,
+                bbox_ids_b=statement_b.bbox_ids,
             )
 
         except json.JSONDecodeError as e:

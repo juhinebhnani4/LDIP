@@ -386,7 +386,7 @@ class StatementQueryEngine:
         def _query():
             query = (
                 self._client.table("chunks")
-                .select("id, document_id, content, page_number, entity_ids")
+                .select("id, document_id, content, page_number, bbox_ids, entity_ids")
                 .eq("matter_id", matter_id)
                 .contains("entity_ids", [entity_id])
             )
@@ -458,7 +458,7 @@ class StatementQueryEngine:
         def _query():
             query = (
                 self._client.table("chunks")
-                .select("id, document_id, content, page_number, entity_ids")
+                .select("id, document_id, content, page_number, bbox_ids, entity_ids")
                 .eq("matter_id", matter_id)
                 .overlaps("entity_ids", entity_ids_to_search)
             )
@@ -650,6 +650,7 @@ class StatementQueryEngine:
                         dates=dates,
                         amounts=amounts,
                         page_number=chunk.get("page_number"),
+                        bbox_ids=[str(b) for b in chunk.get("bbox_ids") or []],
                         confidence=1.0,
                     )
                 )

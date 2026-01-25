@@ -9,6 +9,19 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const DEBUG_API = process.env.NODE_ENV === 'development'
 
 // =============================================================================
+// Epic 5: Bounded Request Handling - Configuration
+// =============================================================================
+// Story 5.1: Global fetch timeout (NFR1: 30 seconds maximum)
+// Story 5.2: Slow request threshold for feedback
+// =============================================================================
+
+/** Default timeout for all API requests in milliseconds (NFR1: 30s max) */
+export const DEFAULT_TIMEOUT_MS = 30_000
+
+/** Threshold after which "slow request" feedback should be shown (Story 5.2) */
+export const SLOW_REQUEST_THRESHOLD_MS = 5_000
+
+// =============================================================================
 // Singleton Supabase Client (Performance Fix)
 // =============================================================================
 // Creating a new Supabase client on every API call causes:
@@ -40,6 +53,24 @@ export interface RateLimitDetails {
   limit: number
   /** Remaining requests in current window */
   remaining: number
+}
+
+// =============================================================================
+// Epic 5: Timeout Error Handling
+// =============================================================================
+
+/**
+ * Check if an error is a timeout/abort error.
+ * Story 5.3: Helps distinguish timeout errors for user-friendly messaging.
+ */
+export function isTimeoutError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true
+  }
+  if (error instanceof ApiError && error.code === 'TIMEOUT') {
+    return true
+  }
+  return false
 }
 
 /**
@@ -108,6 +139,25 @@ function createApiError(response: Response, errorBody: Record<string, unknown>):
   return new ApiError(code, message, response.status, rateLimitDetails)
 }
 
+/** Options for API client requests */
+export interface ApiClientOptions extends Omit<RequestInit, 'signal'> {
+  /**
+   * Custom timeout in milliseconds. Defaults to DEFAULT_TIMEOUT_MS (30s).
+   * Story 5.1: All requests have bounded wait times.
+   */
+  timeout?: number
+  /**
+   * Optional AbortSignal for external cancellation.
+   * Story 5.4: Allows callers to cancel requests.
+   */
+  signal?: AbortSignal
+  /**
+   * Callback fired when request exceeds SLOW_REQUEST_THRESHOLD_MS.
+   * Story 5.2: Enables "Still loading..." feedback.
+   */
+  onSlowRequest?: () => void
+}
+
 /**
  * API client with automatic auth token injection and refresh.
  *
@@ -117,87 +167,171 @@ function createApiError(response: Response, errorBody: Record<string, unknown>):
  * - Redirects to login on session expiration
  * - Handles structured API error responses
  * - Story 13.4: Enhanced error handling with rate limit and circuit breaker details
+ * - Story 5.1: 30-second timeout enforced on all requests (NFR1)
+ * - Story 5.2: Slow request callback after 5 seconds
+ * - Story 5.4: Proper request cleanup with AbortController
  */
-export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiClient<T>(endpoint: string, options: ApiClientOptions = {}): Promise<T> {
+  const {
+    timeout = DEFAULT_TIMEOUT_MS,
+    signal: externalSignal,
+    onSlowRequest,
+    ...fetchOptions
+  } = options
+
   const supabase = getSupabaseClient()
 
-  // First try getSession() - this works when cookies are accessible
-  let { data: { session } } = await supabase.auth.getSession()
+  // Story 5.4: Create AbortController for timeout management
+  // Each request has its own AbortController (FR22)
+  const timeoutController = new AbortController()
 
-  // If no session from getSession(), try refreshSession() which can recover from cookies
-  // This handles the case where browser storage is empty but cookies exist (incognito, new tabs)
-  if (!session) {
-    const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
-    session = refreshedSession
+  // Combine external signal with timeout signal if both provided
+  const combinedSignal = externalSignal
+    ? combineAbortSignals(externalSignal, timeoutController.signal)
+    : timeoutController.signal
+
+  // Story 5.1: Set up timeout (NFR1: 30s max)
+  const timeoutId = setTimeout(() => {
+    if (DEBUG_API) {
+      console.warn(`[API] Request timeout after ${timeout}ms:`, endpoint)
+    }
+    timeoutController.abort()
+  }, timeout)
+
+  // Story 5.2: Set up slow request callback (>5s threshold)
+  let slowRequestTimeoutId: ReturnType<typeof setTimeout> | undefined
+  if (onSlowRequest) {
+    slowRequestTimeoutId = setTimeout(() => {
+      if (DEBUG_API) {
+        console.log(`[API] Slow request detected (>${SLOW_REQUEST_THRESHOLD_MS}ms):`, endpoint)
+      }
+      onSlowRequest()
+    }, SLOW_REQUEST_THRESHOLD_MS)
   }
 
-  if (DEBUG_API) {
-    console.log(`[API] ${options.method || 'GET'} ${endpoint}`, {
-      hasSession: !!session,
-      userId: session?.user?.id,
-    })
+  // Cleanup function for both timeouts
+  const clearTimeouts = () => {
+    clearTimeout(timeoutId)
+    if (slowRequestTimeoutId) {
+      clearTimeout(slowRequestTimeoutId)
+    }
   }
 
-  const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
+  try {
+    // First try getSession() - this works when cookies are accessible
+    let { data: { session } } = await supabase.auth.getSession()
 
-  if (session?.access_token) {
-    headers.set('Authorization', `Bearer ${session.access_token}`)
-  } else if (DEBUG_API) {
-    console.warn('[API] No auth token available - request will be unauthenticated')
-  }
+    // If no session from getSession(), try refreshSession() which can recover from cookies
+    // This handles the case where browser storage is empty but cookies exist (incognito, new tabs)
+    if (!session) {
+      const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
+      session = refreshedSession
+    }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  })
-
-  if (DEBUG_API) {
-    console.log(`[API] Response: ${response.status} ${response.statusText}`, endpoint)
-  }
-
-  // Handle 401 - try refresh and retry once
-  if (response.status === 401) {
-    const {
-      data: { session: newSession },
-    } = await supabase.auth.refreshSession()
-
-    if (newSession?.access_token) {
-      headers.set('Authorization', `Bearer ${newSession.access_token}`)
-
-      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
+    if (DEBUG_API) {
+      console.log(`[API] ${fetchOptions.method || 'GET'} ${endpoint}`, {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        timeout,
       })
+    }
 
-      if (!retryResponse.ok) {
-        const error = await retryResponse.json()
-        throw createApiError(retryResponse, error)
+    const headers = new Headers(fetchOptions.headers)
+    headers.set('Content-Type', 'application/json')
+
+    if (session?.access_token) {
+      headers.set('Authorization', `Bearer ${session.access_token}`)
+    } else if (DEBUG_API) {
+      console.warn('[API] No auth token available - request will be unauthenticated')
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...fetchOptions,
+      headers,
+      signal: combinedSignal,
+    })
+
+    if (DEBUG_API) {
+      console.log(`[API] Response: ${response.status} ${response.statusText}`, endpoint)
+    }
+
+    // Handle 401 - try refresh and retry once
+    if (response.status === 401) {
+      const {
+        data: { session: newSession },
+      } = await supabase.auth.refreshSession()
+
+      if (newSession?.access_token) {
+        headers.set('Authorization', `Bearer ${newSession.access_token}`)
+
+        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...fetchOptions,
+          headers,
+          signal: combinedSignal,
+        })
+
+        if (!retryResponse.ok) {
+          const error = await retryResponse.json()
+          throw createApiError(retryResponse, error)
+        }
+
+        return retryResponse.json()
       }
 
-      return retryResponse.json()
+      // Refresh failed - redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login?session_expired=true'
+      }
+      throw new ApiError('SESSION_EXPIRED', 'Session expired', 401)
     }
 
-    // Refresh failed - redirect to login
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login?session_expired=true'
+    if (!response.ok) {
+      const error = await response.json()
+      if (DEBUG_API) {
+        console.error(`[API] Error ${response.status}:`, error, endpoint)
+      }
+      throw createApiError(response, error)
     }
-    throw new ApiError('SESSION_EXPIRED', 'Session expired', 401)
+
+    const data = await response.json()
+    if (DEBUG_API && Array.isArray(data?.data)) {
+      console.log(`[API] Received ${data.data.length} items`, endpoint)
+    }
+    return data
+  } catch (error) {
+    // Story 5.3: Convert AbortError to ApiError with TIMEOUT code
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      // Check if it was due to external signal or our timeout
+      if (externalSignal?.aborted) {
+        // External cancellation - rethrow as-is
+        throw error
+      }
+      // Our timeout triggered - throw ApiError with TIMEOUT code
+      throw new ApiError('TIMEOUT', 'Request timed out', 408)
+    }
+    throw error
+  } finally {
+    // Story 5.4: Clean up timeouts (FR22)
+    clearTimeouts()
+  }
+}
+
+/**
+ * Combine multiple AbortSignals into one.
+ * Story 5.4: Allows external cancellation while maintaining timeout behavior.
+ */
+function combineAbortSignals(...signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController()
+
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      break
+    }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true })
   }
 
-  if (!response.ok) {
-    const error = await response.json()
-    if (DEBUG_API) {
-      console.error(`[API] Error ${response.status}:`, error, endpoint)
-    }
-    throw createApiError(response, error)
-  }
-
-  const data = await response.json()
-  if (DEBUG_API && Array.isArray(data?.data)) {
-    console.log(`[API] Received ${data.data.length} items`, endpoint)
-  }
-  return data
+  return controller.signal
 }
 
 /**
@@ -237,21 +371,36 @@ export function canRetryError(error: unknown): boolean {
   return false
 }
 
+/** Options for typed API methods */
+export interface ApiMethodOptions {
+  /** Custom timeout in milliseconds */
+  timeout?: number
+  /** External abort signal */
+  signal?: AbortSignal
+  /** Callback when request is slow (>5s) */
+  onSlowRequest?: () => void
+}
+
 /**
  * Typed API methods for common operations.
+ * Story 5.1: All methods now support timeout option (defaults to 30s)
+ * Story 5.2: All methods support onSlowRequest callback
+ * Story 5.4: All methods support external signal for cancellation
  */
 export const api = {
-  get: <T>(endpoint: string) => apiClient<T>(endpoint, { method: 'GET' }),
-  post: <T>(endpoint: string, data: unknown) =>
-    apiClient<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
-  put: <T>(endpoint: string, data: unknown) =>
-    apiClient<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-  patch: <T>(endpoint: string, data: unknown) =>
-    apiClient<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: <T>(endpoint: string, data?: unknown) =>
+  get: <T>(endpoint: string, options?: ApiMethodOptions) =>
+    apiClient<T>(endpoint, { method: 'GET', ...options }),
+  post: <T>(endpoint: string, data: unknown, options?: ApiMethodOptions) =>
+    apiClient<T>(endpoint, { method: 'POST', body: JSON.stringify(data), ...options }),
+  put: <T>(endpoint: string, data: unknown, options?: ApiMethodOptions) =>
+    apiClient<T>(endpoint, { method: 'PUT', body: JSON.stringify(data), ...options }),
+  patch: <T>(endpoint: string, data: unknown, options?: ApiMethodOptions) =>
+    apiClient<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data), ...options }),
+  delete: <T>(endpoint: string, data?: unknown, options?: ApiMethodOptions) =>
     apiClient<T>(endpoint, {
       method: 'DELETE',
       body: data ? JSON.stringify(data) : undefined,
+      ...options,
     }),
 }
 

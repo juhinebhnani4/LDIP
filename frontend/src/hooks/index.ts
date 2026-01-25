@@ -44,3 +44,11 @@ export { useBoundingBoxes } from './useBoundingBoxes';
 // Export builder hooks (Story 12.1, 12.2, 12.3)
 export { useExportBuilder } from './useExportBuilder';
 export { useExportGeneration } from './useExportGeneration';
+
+// API request hooks (Epic 5: Bounded Request Handling)
+export { useApiRequest } from './useApiRequest';
+export type {
+  ApiRequestResult,
+  UseApiRequestOptions,
+  UseApiRequestReturn,
+} from './useApiRequest';

@@ -1,13 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Settings, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { EditableMatterName } from './EditableMatterName';
 import { ExportDropdown } from './ExportDropdown';
 import { ShareDialog } from './ShareDialog';
+import { DeleteMatterDialog } from './DeleteMatterDialog';
+import { useMatterStore } from '@/stores/matterStore';
+import { mattersApi } from '@/lib/api/matters';
 
 /**
  * Workspace Header Component
@@ -30,8 +35,26 @@ interface WorkspaceHeaderProps {
 }
 
 export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
+  const router = useRouter();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const currentMatter = useMatterStore((state) => state.currentMatter);
+  const deleteMatter = useMatterStore((state) => state.deleteMatter);
+
   const handleSettingsClick = () => {
     toast.info('Settings coming soon');
+  };
+
+  const handleDeleteMatter = async () => {
+    try {
+      await mattersApi.deleteMatter(matterId);
+      deleteMatter(matterId);
+      toast.success('Matter deleted successfully');
+      router.push('/');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete matter';
+      toast.error(message);
+      throw err; // Re-throw to let dialog handle error state
+    }
   };
 
   return (
@@ -78,7 +101,35 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
               <p>Settings</p>
             </TooltipContent>
           </Tooltip>
+
+          {/* Delete button - only visible to owners */}
+          {currentMatter?.role === 'owner' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  aria-label="Delete matter"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete matter</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
+
+        {/* Delete confirmation dialog */}
+        <DeleteMatterDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          matterTitle={currentMatter?.title ?? 'this matter'}
+          onDelete={handleDeleteMatter}
+        />
       </div>
     </header>
   );

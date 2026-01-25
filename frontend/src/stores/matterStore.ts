@@ -86,6 +86,9 @@ interface MatterActions {
   /** Update matter name (Story 10A.1) */
   updateMatterName: (matterId: string, name: string) => Promise<void>;
 
+  /** Remove matter from local state after deletion */
+  deleteMatter: (matterId: string) => void;
+
   /** Set sort option */
   setSortBy: (sortBy: MatterSortOption) => void;
 
@@ -272,6 +275,23 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
       );
       set({ matters: revertedMatters });
       throw error;
+    }
+  },
+
+  /**
+   * Remove matter from local state after deletion.
+   * Called after successful API deletion to update UI immediately.
+   */
+  deleteMatter: (matterId: string) => {
+    const { matters, currentMatter } = get();
+
+    // Remove from matters list
+    const updatedMatters = matters.filter((m) => m.id !== matterId);
+    set({ matters: updatedMatters });
+
+    // Clear currentMatter if it was the deleted one
+    if (currentMatter?.id === matterId) {
+      set({ currentMatter: null });
     }
   },
 

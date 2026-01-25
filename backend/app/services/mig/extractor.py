@@ -5,6 +5,8 @@ institutions, assets) and their relationships from legal document text.
 
 CRITICAL: Uses Gemini for entity extraction per LLM routing rules -
 this is an ingestion task, NOT user-facing reasoning.
+
+Story 6.4: Add Entity Extraction Success Rate Logging
 """
 
 import asyncio
@@ -15,6 +17,7 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.core.reliability_logging import log_entity_extraction_result
 from app.models.entity import (
     EntityExtractionResult,
     EntityType,
@@ -268,6 +271,19 @@ class MIGEntityExtractor:
 
                 processing_time = int((time.time() - start_time) * 1000)
 
+                # Story 6.4: Build entity type counts safely before logging
+                entity_type_counts: dict[str, int] = {}
+                try:
+                    for entity in result.entities:
+                        type_name = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
+                        entity_type_counts[type_name] = entity_type_counts.get(type_name, 0) + 1
+                except Exception as count_err:
+                    logger.warning(
+                        "mig_extraction_type_count_failed",
+                        error=str(count_err),
+                        document_id=document_id,
+                    )
+
                 logger.info(
                     "mig_extraction_complete",
                     document_id=document_id,
@@ -278,6 +294,25 @@ class MIGEntityExtractor:
                     attempts=attempt + 1,
                     was_truncated=was_truncated,
                 )
+
+                # Story 6.4: Log extraction success for reliability metrics
+                if result.entities:
+                    log_entity_extraction_result(
+                        matter_id=matter_id,
+                        document_id=document_id,
+                        status="success",
+                        entity_count=len(result.entities),
+                        entity_types=entity_type_counts,
+                        processing_time_ms=processing_time,
+                    )
+                else:
+                    log_entity_extraction_result(
+                        matter_id=matter_id,
+                        document_id=document_id,
+                        status="empty",
+                        entity_count=0,
+                        processing_time_ms=processing_time,
+                    )
 
                 return result
 
@@ -314,6 +349,15 @@ class MIGEntityExtractor:
             document_id=document_id,
             matter_id=matter_id,
             attempts=MAX_RETRIES,
+        )
+
+        # Story 6.4: Log extraction failure for reliability metrics
+        log_entity_extraction_result(
+            matter_id=matter_id,
+            document_id=document_id,
+            status="error",
+            error_message=str(last_error),
+            error_type=type(last_error).__name__ if last_error else "unknown",
         )
 
         # Return error result on failure (Story 3.2: distinct error state)
@@ -388,6 +432,19 @@ class MIGEntityExtractor:
 
                 processing_time = int((time.time() - start_time) * 1000)
 
+                # Story 6.4: Build entity type counts safely before logging
+                entity_type_counts: dict[str, int] = {}
+                try:
+                    for entity in result.entities:
+                        type_name = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
+                        entity_type_counts[type_name] = entity_type_counts.get(type_name, 0) + 1
+                except Exception as count_err:
+                    logger.warning(
+                        "mig_extraction_type_count_failed",
+                        error=str(count_err),
+                        document_id=document_id,
+                    )
+
                 logger.info(
                     "mig_extraction_sync_complete",
                     document_id=document_id,
@@ -397,6 +454,25 @@ class MIGEntityExtractor:
                     processing_time_ms=processing_time,
                     attempts=attempt + 1,
                 )
+
+                # Story 6.4: Log extraction success for reliability metrics
+                if result.entities:
+                    log_entity_extraction_result(
+                        matter_id=matter_id,
+                        document_id=document_id,
+                        status="success",
+                        entity_count=len(result.entities),
+                        entity_types=entity_type_counts,
+                        processing_time_ms=processing_time,
+                    )
+                else:
+                    log_entity_extraction_result(
+                        matter_id=matter_id,
+                        document_id=document_id,
+                        status="empty",
+                        entity_count=0,
+                        processing_time_ms=processing_time,
+                    )
 
                 return result
 
@@ -428,6 +504,15 @@ class MIGEntityExtractor:
             "mig_extraction_sync_failed",
             error=str(last_error),
             document_id=document_id,
+        )
+
+        # Story 6.4: Log extraction failure for reliability metrics
+        log_entity_extraction_result(
+            matter_id=matter_id,
+            document_id=document_id,
+            status="error",
+            error_message=str(last_error),
+            error_type=type(last_error).__name__ if last_error else "unknown",
         )
 
         # Return error result on failure (Story 3.2: distinct error state)

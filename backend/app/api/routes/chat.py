@@ -3,8 +3,11 @@
 Story 11.3: Streaming Response with Engine Trace
 Task 1: Create backend SSE streaming endpoint (AC: #1)
 
+Story 6.2: Add SSE Error Rate Logging endpoint
+
 Implements:
 - POST /api/chat/{matter_id}/stream - SSE streaming chat endpoint
+- POST /api/chat/report-sse-error - SSE error reporting endpoint
 
 CRITICAL: Requires authentication via get_current_user.
 CRITICAL: Requires matter access via validate_matter_access.
@@ -17,6 +20,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import (
@@ -24,7 +28,8 @@ from app.api.deps import (
     get_current_user,
     validate_matter_access,
 )
-from app.core.rate_limit import CRITICAL_RATE_LIMIT, limiter
+from app.core.rate_limit import CRITICAL_RATE_LIMIT, STANDARD_RATE_LIMIT, limiter
+from app.core.reliability_logging import log_sse_parse_error, log_sse_stream_status
 from app.engines.orchestrator.streaming import (
     StreamingOrchestrator,
     get_streaming_orchestrator,
@@ -39,6 +44,39 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+# =============================================================================
+# Request Models for Story 6.2
+# =============================================================================
+
+
+class SSEErrorReportRequest(BaseModel):
+    """Request model for SSE error reporting.
+
+    Story 6.2: SSE error reporting from frontend.
+    """
+
+    session_id: str = Field(..., description="SSE session ID")
+    matter_id: str | None = Field(None, description="Matter ID from stream URL")
+    error_type: str = Field(..., description="Type of error (sse_json_parse_failed, etc.)")
+    error_message: str = Field(..., description="Error message")
+    raw_chunk: str | None = Field(None, description="Raw chunk content (truncated)")
+    timestamp: str = Field(..., description="ISO timestamp of error")
+
+
+class SSEStreamStatusRequest(BaseModel):
+    """Request model for SSE stream status reporting.
+
+    Story 6.2: Track stream completion vs interruption.
+    """
+
+    session_id: str = Field(..., description="SSE session ID")
+    matter_id: str | None = Field(None, description="Matter ID from stream URL")
+    status: str = Field(..., description="complete or interrupted")
+    parse_error_count: int = Field(0, description="Parse errors during stream")
+    total_chunks: int = Field(0, description="Total chunks received")
+    duration_ms: int | None = Field(None, description="Stream duration in ms")
 
 
 # =============================================================================
@@ -241,3 +279,76 @@ async def send_message(
                 }
             },
         ) from e
+
+
+# =============================================================================
+# Story 6.2: SSE Error Reporting Endpoints
+# =============================================================================
+
+
+@router.post("/report-sse-error")
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def report_sse_error(
+    request: Request,  # Required for rate limiter
+    body: SSEErrorReportRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, str]:
+    """Report SSE parse error from frontend.
+
+    Story 6.2: SSE Error Rate Logging
+    NFR12: SSE parse errors trackable per user session.
+
+    This endpoint receives error reports from the frontend when SSE
+    JSON parsing fails, enabling backend logging and monitoring.
+
+    Args:
+        body: SSE error report details.
+        current_user: Authenticated user.
+
+    Returns:
+        Acknowledgement message.
+    """
+    log_sse_parse_error(
+        user_id=current_user.id,
+        matter_id=body.matter_id,
+        session_id=body.session_id,
+        error_type=body.error_type,
+        error_message=body.error_message,
+        raw_chunk=body.raw_chunk,
+    )
+
+    return {"status": "logged"}
+
+
+@router.post("/report-sse-status")
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def report_sse_status(
+    request: Request,  # Required for rate limiter
+    body: SSEStreamStatusRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, str]:
+    """Report SSE stream completion status from frontend.
+
+    Story 6.2: Track stream completion vs interruption.
+
+    This endpoint receives status reports from the frontend when an
+    SSE stream completes or is interrupted.
+
+    Args:
+        body: SSE stream status details.
+        current_user: Authenticated user.
+
+    Returns:
+        Acknowledgement message.
+    """
+    log_sse_stream_status(
+        user_id=current_user.id,
+        matter_id=body.matter_id,
+        session_id=body.session_id,
+        status=body.status,
+        parse_error_count=body.parse_error_count,
+        total_chunks=body.total_chunks,
+        duration_ms=body.duration_ms,
+    )
+
+    return {"status": "logged"}

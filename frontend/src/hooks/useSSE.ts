@@ -6,12 +6,15 @@
  * Story 11.3: Streaming Response with Engine Trace
  * Task 5: Create frontend SSE hook (AC: #1)
  *
+ * Story 6.2: SSE Error Rate Logging - added backend error reporting
+ *
  * Features:
  * - POST request to SSE endpoint (uses fetch, not EventSource)
  * - Bearer token authentication from Supabase session
  * - Parses SSE events from streaming response
  * - Handles connection errors and reconnection
  * - Cleanup on unmount
+ * - Reports parse errors to backend for monitoring (Story 6.2)
  *
  * USAGE PATTERN (from project-context.md):
  * const { isStreaming, startStream, abortStream } = useSSE();
@@ -21,6 +24,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { sseReportingApi } from '@/lib/api/client';
 
 // ============================================================================
 // Types
@@ -195,6 +199,9 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   // Story 2.4: Track session ID and user ID for logging context
   const sessionIdRef = useRef<string>('');
   const userIdRef = useRef<string | undefined>(undefined);
+  // Story 6.2: Track stream metrics for accurate reporting
+  const streamStartTimeRef = useRef<number>(0);
+  const eventCountRef = useRef<number>(0);
 
   // Keep options ref updated
   useEffect(() => {
@@ -366,6 +373,9 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
       setEngineTraces([]);
       setParseErrorCount(0);
       setWasInterrupted(false);
+      // Story 6.2: Reset stream metrics
+      streamStartTimeRef.current = Date.now();
+      eventCountRef.current = 0;
 
       // Create abort controller for cleanup
       abortControllerRef.current = new AbortController();
@@ -444,6 +454,8 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
               try {
                 const data = JSON.parse(jsonStr);
                 processEvent(currentEventType, data);
+                // Story 6.2: Track event count for accurate reporting
+                eventCountRef.current++;
                 // Track if we received a complete event
                 if (currentEventType === 'complete') {
                   receivedComplete = true;
@@ -473,6 +485,16 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
                 // Story 2.2: Call onParseError callback for toast notification
                 optionsRef.current.onParseError?.(errorContext);
 
+                // Story 6.2: Report error to backend for monitoring (fire-and-forget)
+                void sseReportingApi.reportError({
+                  sessionId: sessionIdRef.current,
+                  matterId,
+                  errorType: 'sse_json_parse_failed',
+                  errorMessage: errorContext.errorMessage,
+                  rawChunk: errorContext.rawChunk,
+                  timestamp: errorContext.timestamp,
+                });
+
                 // F10: Abort stream if too many parse errors
                 if (localParseErrorCount >= MAX_PARSE_ERRORS) {
                   const maxErrorContext: SSEParseErrorContext = {
@@ -484,6 +506,17 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
                     console.error('[useSSE] Max parse errors reached, aborting:', maxErrorContext);
                   }
                   optionsRef.current.onParseError?.(maxErrorContext);
+
+                  // Story 6.2: Report max errors exceeded to backend
+                  void sseReportingApi.reportError({
+                    sessionId: sessionIdRef.current,
+                    matterId,
+                    errorType: 'sse_max_errors_exceeded',
+                    errorMessage: maxErrorContext.errorMessage,
+                    rawChunk: errorContext.rawChunk,
+                    timestamp: new Date().toISOString(),
+                  });
+
                   abortControllerRef.current?.abort();
                   setWasInterrupted(true);
                   return;
@@ -494,19 +527,60 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
         }
 
         // Story 2.3: Check if stream ended without complete event
+        // Story 6.2: Calculate stream duration for reporting
+        const streamDurationMs = Date.now() - streamStartTimeRef.current;
         if (!receivedComplete && localParseErrorCount > 0) {
           setWasInterrupted(true);
+          // Story 6.2: Report interrupted stream
+          void sseReportingApi.reportStatus({
+            sessionId: sessionIdRef.current,
+            matterId,
+            status: 'interrupted',
+            parseErrorCount: localParseErrorCount,
+            totalChunks: eventCountRef.current,
+            durationMs: streamDurationMs,
+          });
+        } else if (receivedComplete) {
+          // Story 6.2: Report successful stream completion
+          void sseReportingApi.reportStatus({
+            sessionId: sessionIdRef.current,
+            matterId,
+            status: 'complete',
+            parseErrorCount: localParseErrorCount,
+            totalChunks: eventCountRef.current,
+            durationMs: streamDurationMs,
+          });
         }
       } catch (err) {
+        // Story 6.2: Calculate stream duration for error reporting
+        const errorDurationMs = Date.now() - streamStartTimeRef.current;
         if (err instanceof Error && err.name === 'AbortError') {
           // Story 2.3: Mark as interrupted if we had content
           setWasInterrupted(true);
+          // Story 6.2: Report aborted stream
+          void sseReportingApi.reportStatus({
+            sessionId: sessionIdRef.current,
+            matterId,
+            status: 'interrupted',
+            parseErrorCount: localParseErrorCount,
+            totalChunks: eventCountRef.current,
+            durationMs: errorDurationMs,
+          });
           return;
         }
         const error = err instanceof Error ? err : new Error(String(err));
         setError(error);
         setWasInterrupted(true);
         optionsRef.current.onError?.(error);
+        // Story 6.2: Report error-interrupted stream
+        void sseReportingApi.reportStatus({
+          sessionId: sessionIdRef.current,
+          matterId,
+          status: 'interrupted',
+          parseErrorCount: localParseErrorCount,
+          totalChunks: eventCountRef.current,
+          durationMs: errorDurationMs,
+        });
       } finally {
         setIsStreaming(false);
       }

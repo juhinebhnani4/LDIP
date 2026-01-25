@@ -683,7 +683,7 @@ class DateExtractor:
             for raw_date in raw_dates:
                 try:
                     extracted = self._parse_single_date(
-                        raw_date, page_number, bbox_ids, document_id
+                        raw_date, page_number, bbox_ids, document_id, matter_id
                     )
                     if extracted:
                         dates.append(extracted)
@@ -724,14 +724,18 @@ class DateExtractor:
         page_number: int | None,
         bbox_ids: list[str] | None = None,
         document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> ExtractedDate | None:
         """Parse a single date entry from LLM response.
+
+        Story 6.1: Added matter_id for citation page accuracy logging.
 
         Args:
             raw_date: Raw date dictionary from Gemini response.
             page_number: Optional page number.
             bbox_ids: Optional bounding box UUIDs from source chunk.
             document_id: Optional document ID for per-date bbox filtering.
+            matter_id: Optional matter ID for reliability logging.
 
         Returns:
             ExtractedDate or None if parsing fails.
@@ -795,10 +799,13 @@ class DateExtractor:
             context_after = raw_date.get("context_after", "")[:500]
             search_text = f"{context_before} {date_text} {context_after}".strip()
 
+            # Story 6.1: Enable reliability logging for citation page accuracy
             filtered_ids, detected_page = get_filtered_bbox_ids(
                 item_text=search_text,
                 chunk_bbox_ids=bbox_ids,
                 document_id=document_id,
+                matter_id=matter_id,
+                log_reliability=bool(matter_id),  # Only log if matter_id provided
             )
             if filtered_ids:
                 filtered_bbox_ids = filtered_ids

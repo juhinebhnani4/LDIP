@@ -617,3 +617,81 @@ export const timelineEventApi = {
     return fromSnakeCaseManualEvent(response)
   },
 }
+
+
+// =============================================================================
+// Story 6.2: SSE Error Reporting API
+// =============================================================================
+
+/**
+ * SSE error context for backend reporting.
+ */
+export interface SSEErrorReport {
+  sessionId: string
+  matterId?: string
+  errorType: string
+  errorMessage: string
+  rawChunk?: string
+  timestamp: string
+}
+
+/**
+ * SSE stream status for backend reporting.
+ */
+export interface SSEStreamStatusReport {
+  sessionId: string
+  matterId?: string
+  status: 'complete' | 'interrupted'
+  parseErrorCount: number
+  totalChunks: number
+  durationMs?: number
+}
+
+/**
+ * SSE error and status reporting API.
+ * Story 6.2: Add SSE Error Rate Logging
+ */
+export const sseReportingApi = {
+  /**
+   * Report an SSE parse error to the backend for monitoring.
+   * NFR12: SSE parse errors trackable per user session.
+   */
+  reportError: async (report: SSEErrorReport): Promise<void> => {
+    try {
+      await api.post('/api/chat/report-sse-error', {
+        session_id: report.sessionId,
+        matter_id: report.matterId,
+        error_type: report.errorType,
+        error_message: report.errorMessage,
+        raw_chunk: report.rawChunk,
+        timestamp: report.timestamp,
+      })
+    } catch (error) {
+      // Don't throw - error reporting should be fire-and-forget
+      if (DEBUG_API) {
+        console.warn('[API] Failed to report SSE error:', error)
+      }
+    }
+  },
+
+  /**
+   * Report SSE stream completion status to the backend.
+   */
+  reportStatus: async (report: SSEStreamStatusReport): Promise<void> => {
+    try {
+      await api.post('/api/chat/report-sse-status', {
+        session_id: report.sessionId,
+        matter_id: report.matterId,
+        status: report.status,
+        parse_error_count: report.parseErrorCount,
+        total_chunks: report.totalChunks,
+        duration_ms: report.durationMs,
+      })
+    } catch (error) {
+      // Don't throw - status reporting should be fire-and-forget
+      if (DEBUG_API) {
+        console.warn('[API] Failed to report SSE status:', error)
+      }
+    }
+  },
+}

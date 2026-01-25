@@ -299,9 +299,13 @@ class WebSocketClient {
       }
 
       // Build WebSocket URL
-      const wsUrl = `${WS_BASE_URL}/api/ws/${this.matterId}?token=${encodeURIComponent(session.access_token)}`;
+      // Story 6.3: Include reconnection context for backend logging
+      const reconnectParams = this.reconnectAttempts > 0
+        ? `&was_reconnect=true&reconnect_attempt=${this.reconnectAttempts}`
+        : '';
+      const wsUrl = `${WS_BASE_URL}/api/ws/${this.matterId}?token=${encodeURIComponent(session.access_token)}${reconnectParams}`;
 
-      if (DEBUG_WS) console.log('[WS] Connecting to:', wsUrl.replace(/token=.*/, 'token=<redacted>'));
+      if (DEBUG_WS) console.log('[WS] Connecting to:', wsUrl.replace(/token=.*?(&|$)/, 'token=<redacted>$1'));
 
       this.ws = new WebSocket(wsUrl);
       this.setupEventHandlers();

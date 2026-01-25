@@ -15,6 +15,8 @@ Usage (any engine):
         chunk_bbox_ids=["uuid1", "uuid2", ...],
         document_id="doc-uuid",
     )
+
+Story 6.1: Citation page detection logging added for accuracy tracking.
 """
 
 import threading
@@ -24,6 +26,7 @@ import structlog
 
 from app.core.bbox_search import search_bboxes_for_text
 from app.core.page_detection import ACT_PATTERN, SECTION_PATTERN
+from app.core.reliability_logging import log_citation_page_detection, log_citation_page_fallback
 
 logger = structlog.get_logger(__name__)
 
@@ -71,11 +74,17 @@ def get_filtered_bbox_ids(
     document_id: str | None = None,
     chunk_bboxes: list[dict] | None = None,
     key_patterns: Sequence[str] | None = None,
+    matter_id: str | None = None,
+    event_id: str | None = None,
+    citation_id: str | None = None,
+    log_reliability: bool = False,
 ) -> tuple[list[str], int | None]:
     """Get filtered bbox IDs for a specific item.
 
     Filters chunk's bbox_ids to only those containing the item's text.
     Falls back to all chunk_bbox_ids if no match found.
+
+    Story 6.1: Added reliability logging for citation page accuracy tracking.
 
     Args:
         item_text: The item text to match (citation, event, entity text)
@@ -83,6 +92,10 @@ def get_filtered_bbox_ids(
         document_id: Optional document ID for cache lookup
         chunk_bboxes: Optional pre-fetched bbox data (preferred)
         key_patterns: Optional regex patterns for key phrase matching
+        matter_id: Optional matter ID for reliability logging
+        event_id: Optional event ID for reliability logging
+        citation_id: Optional citation ID for reliability logging
+        log_reliability: If True, log citation page accuracy metrics
 
     Returns:
         Tuple of (filtered_bbox_ids, detected_page_number)
@@ -99,6 +112,24 @@ def get_filtered_bbox_ids(
 
     if not bboxes:
         # No bbox data available, can't filter - return original
+        # Story 6.1: Log fallback due to no bbox data
+        if log_reliability and document_id and matter_id:
+            log_citation_page_fallback(
+                matter_id=matter_id,
+                document_id=document_id,
+                event_id=event_id,
+                reason="no_bbox_data",
+                chunk_page=None,
+            )
+            # Log chunk detection for accurate COUNT(*) denominator
+            log_citation_page_detection(
+                matter_id=matter_id,
+                document_id=document_id,
+                detection_method="chunk",
+                page_number=None,
+                event_id=event_id,
+                citation_id=citation_id,
+            )
         return chunk_bbox_ids, None
 
     # Filter to only bboxes in chunk_bbox_ids
@@ -106,6 +137,24 @@ def get_filtered_bbox_ids(
     relevant_bboxes = [b for b in bboxes if b.get("id") in chunk_bbox_id_set]
 
     if not relevant_bboxes:
+        # Story 6.1: Log fallback due to no relevant bboxes
+        if log_reliability and document_id and matter_id:
+            log_citation_page_fallback(
+                matter_id=matter_id,
+                document_id=document_id,
+                event_id=event_id,
+                reason="no_relevant_bboxes",
+                chunk_page=None,
+            )
+            # Log chunk detection for accurate COUNT(*) denominator
+            log_citation_page_detection(
+                matter_id=matter_id,
+                document_id=document_id,
+                detection_method="chunk",
+                page_number=None,
+                event_id=event_id,
+                citation_id=citation_id,
+            )
         return chunk_bbox_ids, None
 
     # Use patterns based on content type
@@ -128,9 +177,45 @@ def get_filtered_bbox_ids(
     )
 
     if matched_ids:
+        # Story 6.1: Log successful bbox-based page detection
+        if log_reliability and document_id and matter_id:
+            log_citation_page_detection(
+                matter_id=matter_id,
+                document_id=document_id,
+                detection_method="bbox",
+                page_number=page,
+                event_id=event_id,
+                citation_id=citation_id,
+                bbox_id=matched_ids[0] if matched_ids else None,
+            )
         return matched_ids, page
 
     # No match found, return original chunk bbox_ids
+    # Story 6.1: Log fallback to chunk-level page detection
+    if log_reliability and document_id and matter_id:
+        # Try to get chunk page from any bbox
+        chunk_page = None
+        if relevant_bboxes:
+            chunk_page = relevant_bboxes[0].get("page_number")
+        log_citation_page_fallback(
+            matter_id=matter_id,
+            document_id=document_id,
+            event_id=event_id,
+            reason="no_bbox_match",
+            chunk_page=chunk_page,
+        )
+        # Story 6.1: Also log the chunk detection for accurate COUNT(*) denominator
+        # This ensures Accuracy = COUNT(bbox) / COUNT(*) can be calculated correctly
+        if chunk_page is not None:
+            log_citation_page_detection(
+                matter_id=matter_id,
+                document_id=document_id,
+                detection_method="chunk",
+                page_number=chunk_page,
+                event_id=event_id,
+                citation_id=citation_id,
+                chunk_id=chunk_bbox_ids[0] if chunk_bbox_ids else None,
+            )
     return chunk_bbox_ids, None
 
 

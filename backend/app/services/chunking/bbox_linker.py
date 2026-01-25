@@ -18,13 +18,15 @@ from app.services.chunking.parent_child_chunker import ChunkData
 logger = structlog.get_logger(__name__)
 
 # Threshold for fuzzy text matching (0-100)
-# 50 allows for OCR errors, multilingual text, and formatting differences
-# while still avoiding false matches. Higher thresholds caused many chunks
-# to have NULL page_number which breaks citation/timeline source links.
-MATCH_THRESHOLD = 50
+# 65 balances OCR errors vs avoiding false matches (was 50, caused wrong page links)
+# Higher threshold reduces false positives from cover page boilerplate matching
+MATCH_THRESHOLD = 65
 
 # Maximum number of bounding boxes to check per chunk
 MAX_BBOX_WINDOW = 100
+
+# Minimum word overlap required for bbox inclusion (was 2, too permissive)
+MIN_WORD_OVERLAP = 3
 
 
 class BboxPageIndex:
@@ -149,8 +151,9 @@ async def link_chunk_to_bboxes(
 
     chunk_text_normalized = _normalize_text(chunk.content)
 
-    # Use first portion of chunk for matching (more reliable)
-    chunk_sample = chunk_text_normalized[:500]
+    # Use first 1500 chars for matching (was 500 - too short, matched wrong pages)
+    # Longer sample captures more unique content, reducing false cover-page matches
+    chunk_sample = chunk_text_normalized[:1500]
 
     matched_bbox_ids: list[UUID] = []
     page_counts: Counter[int] = Counter()
@@ -201,10 +204,11 @@ async def link_chunk_to_bboxes(
             bbox_text = bbox_texts[idx]
 
             # Check if bbox text overlaps with chunk words
+            # Require MIN_WORD_OVERLAP words to reduce false matches
             bbox_words = set(bbox_text.split())
             overlap = chunk_words & bbox_words
 
-            if overlap and len(overlap) >= min(2, len(bbox_words)):
+            if overlap and len(overlap) >= min(MIN_WORD_OVERLAP, len(bbox_words)):
                 bbox_id = bbox.get("id")
                 if bbox_id:
                     try:
@@ -317,7 +321,8 @@ async def _link_chunk_with_page_index(
             bbox_words = set(bbox_text.split())
             overlap = chunk_words & bbox_words
 
-            if overlap and len(overlap) >= min(2, len(bbox_words)):
+            # Require MIN_WORD_OVERLAP words to reduce false matches
+            if overlap and len(overlap) >= min(MIN_WORD_OVERLAP, len(bbox_words)):
                 bbox_id = bbox.get("id")
                 if bbox_id:
                     try:

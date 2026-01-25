@@ -28,6 +28,7 @@ from app.models.entity import (
     ExtractedEntity,
 )
 from app.services.supabase.client import get_supabase_client
+from app.core.bbox_filter import get_filtered_bbox_ids
 
 # Import is done lazily to avoid circular dependencies
 _broadcast_entity_streaming = None
@@ -251,17 +252,37 @@ class MIGGraphService:
             else:
                 continue  # Entity creation failed
 
-            # Collect mentions (gold standard: preserve source_bbox_ids from extraction)
+            # Collect mentions with per-mention bbox filtering
+            # Filter chunk bbox_ids to only those containing each mention's text
+            chunk_bbox_ids = extraction_result.source_bbox_ids or []
+            doc_id = extraction_result.source_document_id
+
             for mention in extracted.mentions:
+                # Per-mention filtering: find bboxes containing this specific mention
+                # Uses context for better matching if available
+                search_text = mention.text
+                if mention.context:
+                    search_text = f"{mention.context}"
+
+                filtered_ids, detected_page = get_filtered_bbox_ids(
+                    item_text=search_text,
+                    chunk_bbox_ids=chunk_bbox_ids,
+                    document_id=doc_id,
+                )
+
+                # Use filtered bbox_ids if found, otherwise fall back to chunk's
+                mention_bbox_ids = filtered_ids if filtered_ids else chunk_bbox_ids
+                mention_page = detected_page if detected_page is not None else extraction_result.page_number
+
                 all_mentions.append({
                     "entity_id": entity_id,
-                    "document_id": extraction_result.source_document_id,
+                    "document_id": doc_id,
                     "chunk_id": extraction_result.source_chunk_id,
-                    "page_number": extraction_result.page_number,
+                    "page_number": mention_page,
                     "mention_text": mention.text,
                     "context": mention.context,
                     "confidence": extracted.confidence,
-                    "bbox_ids": extraction_result.source_bbox_ids or [],
+                    "bbox_ids": mention_bbox_ids,
                 })
 
         if all_mentions:
@@ -570,21 +591,49 @@ class MIGGraphService:
         extracted: ExtractedEntity,
         extraction_result: EntityExtractionResult,
     ) -> None:
-        """Save entity mentions to entity_mentions table."""
+        """Save entity mentions to entity_mentions table.
+
+        Uses per-mention bbox filtering to link each mention to only the
+        bboxes containing its text (fixes chunk-level aggregation problem).
+        """
         if not extracted.mentions:
             return
 
+        # Get chunk bbox_ids for filtering
+        chunk_bbox_ids = extraction_result.source_bbox_ids or []
+
         mentions_to_insert = []
         for mention in extracted.mentions:
+            # Per-mention bbox filtering: filter chunk bbox_ids to only those
+            # containing this specific mention's text
+            mention_bbox_ids: list[str] = []
+            mention_page = extraction_result.page_number
+
+            if chunk_bbox_ids and mention.text:
+                # Build search text from mention + context for better matching
+                search_text = mention.text
+                if mention.context:
+                    search_text = f"{mention.context}"  # Context contains the mention
+
+                filtered_ids, detected_page = get_filtered_bbox_ids(
+                    item_text=search_text,
+                    chunk_bbox_ids=chunk_bbox_ids,
+                    document_id=extraction_result.source_document_id,
+                )
+                if filtered_ids:
+                    mention_bbox_ids = filtered_ids
+                    if detected_page is not None:
+                        mention_page = detected_page
+
             mentions_to_insert.append({
                 "entity_id": entity_id,
                 "document_id": extraction_result.source_document_id,
                 "chunk_id": extraction_result.source_chunk_id,
-                "page_number": extraction_result.page_number,
+                "page_number": mention_page,
                 "mention_text": mention.text,
                 "context": mention.context,
                 "confidence": extracted.confidence,
-                "bbox_ids": [],  # Will be linked later if available
+                "bbox_ids": mention_bbox_ids,
             })
 
         if mentions_to_insert:

@@ -9,6 +9,11 @@ Retrieves all statements (chunks) mentioning an entity, including:
 - Extracted dates and amounts (AC #3)
 
 CRITICAL: Does NOT use LLM - regex-based extraction per cost optimization rules.
+
+NOTE: Statements use chunk-level bbox_ids (intentional). Unlike citations or entity
+mentions where per-item filtering is needed, contradictions require showing the
+full statement context. The extracted dates/amounts are derived values for
+comparison, not separate sourced items requiring individual highlighting.
 """
 
 import re

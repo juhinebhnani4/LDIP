@@ -21,6 +21,7 @@ import {
   type WSMessage,
   type WSSubscriber,
   type WSUnsubscribe,
+  type WSReconnectInfo,
 } from '@/lib/ws/client';
 
 // =============================================================================
@@ -39,6 +40,10 @@ export interface UseWebSocketResult {
   connectionState: WSConnectionState;
   /** Whether currently connected */
   isConnected: boolean;
+  /** Whether currently reconnecting */
+  isReconnecting: boolean;
+  /** Reconnect info (attempts, maxAttempts) */
+  reconnectInfo: WSReconnectInfo;
   /** Last error message */
   error: string | null;
   /** Subscribe to a message type */
@@ -83,6 +88,11 @@ export function useWebSocket(
 
   const [connectionState, setConnectionState] = useState<WSConnectionState>('disconnected');
   const [error, setError] = useState<string | null>(null);
+  const [reconnectInfo, setReconnectInfo] = useState<WSReconnectInfo>({
+    attempts: 0,
+    maxAttempts: 5,
+    isReconnecting: false,
+  });
 
   // Track matter ID to detect changes
   const matterIdRef = useRef<string | null>(null);
@@ -100,6 +110,60 @@ export function useWebSocket(
 
     return unsubscribe;
   }, [wsClient]);
+
+  /**
+   * Subscribe to reconnect info changes
+   */
+  useEffect(() => {
+    let previousInfo: WSReconnectInfo | null = null;
+    const isDev = process.env.NODE_ENV === 'development';
+
+    const unsubscribe = wsClient.onReconnectChange((info) => {
+      setReconnectInfo(info);
+
+      // Log reconnection events for monitoring (NFR13) - only in development
+      const logEvent = (event: string, details: Record<string, unknown> = {}) => {
+        if (!isDev) return;
+        console.info(`[WS] ${event}`, {
+          event_type: `websocket_${event.toLowerCase().replace(/\s+/g, '_')}`,
+          matter_id: matterId,
+          timestamp: new Date().toISOString(),
+          ...details,
+        });
+      };
+
+      // Log reconnection attempt start
+      if (info.isReconnecting && info.attempts > 0) {
+        logEvent('reconnection_attempt', {
+          attempt: info.attempts,
+          max_attempts: info.maxAttempts,
+        });
+      }
+
+      // Log reconnection success (was reconnecting, now not, and attempts reset)
+      if (previousInfo?.isReconnecting && !info.isReconnecting && info.attempts === 0) {
+        logEvent('reconnection_success', {
+          previous_attempts: previousInfo.attempts,
+        });
+      }
+
+      // Log max attempts reached
+      if (
+        previousInfo?.isReconnecting &&
+        !info.isReconnecting &&
+        info.attempts >= info.maxAttempts
+      ) {
+        logEvent('reconnection_failed', {
+          attempts: info.attempts,
+          reason: 'max_attempts_reached',
+        });
+      }
+
+      previousInfo = { ...info };
+    });
+
+    return unsubscribe;
+  }, [wsClient, matterId]);
 
   /**
    * Subscribe to error messages
@@ -173,6 +237,8 @@ export function useWebSocket(
   return {
     connectionState,
     isConnected: connectionState === 'connected',
+    isReconnecting: connectionState === 'reconnecting',
+    reconnectInfo,
     error,
     subscribe,
     connect,

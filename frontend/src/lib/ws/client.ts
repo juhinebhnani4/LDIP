@@ -28,6 +28,7 @@ export type WSMessageType =
   | 'discovery_update'
   | 'pong'
   | 'error'
+  | 'reconnected'
   | 'unknown';
 
 /** Message from WebSocket server */
@@ -132,11 +133,12 @@ const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL ||
 /** Reconnection settings */
 const RECONNECT_MIN_DELAY = 1000; // 1 second
 const RECONNECT_MAX_DELAY = 30000; // 30 seconds
-const RECONNECT_MAX_ATTEMPTS = 10;
-const RECONNECT_BACKOFF_MULTIPLIER = 1.5;
+const RECONNECT_MAX_ATTEMPTS = 5; // Reduced for better UX - fail faster
+const RECONNECT_BACKOFF_MULTIPLIER = 2; // Standard exponential: 1s → 2s → 4s → 8s → 16s
 
 /** Heartbeat settings */
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_TIMEOUT = 10000; // 10 seconds - if no pong received, consider disconnected
 
 /** Debug mode */
 const DEBUG_WS = process.env.NODE_ENV === 'development';
@@ -145,6 +147,13 @@ const DEBUG_WS = process.env.NODE_ENV === 'development';
 // WebSocket Client Class
 // =============================================================================
 
+/** Reconnect info for UI display */
+export interface WSReconnectInfo {
+  attempts: number;
+  maxAttempts: number;
+  isReconnecting: boolean;
+}
+
 class WebSocketClient {
   private ws: WebSocket | null = null;
   private matterId: string | null = null;
@@ -152,8 +161,11 @@ class WebSocketClient {
   private reconnectAttempts = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastPongReceived: number = 0;
   private subscribers: Map<WSMessageType | 'all', Set<WSSubscriber>> = new Map();
   private stateListeners: Set<(state: WSConnectionState) => void> = new Set();
+  private reconnectListeners: Set<(info: WSReconnectInfo) => void> = new Set();
 
   /**
    * Connect to WebSocket for a specific matter.
@@ -183,6 +195,7 @@ class WebSocketClient {
     this.matterId = null;
     this.reconnectAttempts = 0;
     this.setConnectionState('disconnected');
+    this.notifyReconnectListeners();
     if (DEBUG_WS) console.log('[WS] Disconnected');
   }
 
@@ -234,6 +247,37 @@ class WebSocketClient {
     return this.matterId === matterId && this.connectionState === 'connected';
   }
 
+  /**
+   * Get current reconnect info for UI display.
+   */
+  getReconnectInfo(): WSReconnectInfo {
+    return {
+      attempts: this.reconnectAttempts,
+      maxAttempts: RECONNECT_MAX_ATTEMPTS,
+      isReconnecting: this.connectionState === 'reconnecting',
+    };
+  }
+
+  /**
+   * Listen for reconnect info changes.
+   */
+  onReconnectChange(callback: (info: WSReconnectInfo) => void): WSUnsubscribe {
+    this.reconnectListeners.add(callback);
+    // Immediately call with current state
+    callback(this.getReconnectInfo());
+    return () => {
+      this.reconnectListeners.delete(callback);
+    };
+  }
+
+  /**
+   * Notify reconnect listeners of state change.
+   */
+  private notifyReconnectListeners(): void {
+    const info = this.getReconnectInfo();
+    this.reconnectListeners.forEach((listener) => listener(info));
+  }
+
   // ===========================================================================
   // Private Methods
   // ===========================================================================
@@ -272,10 +316,23 @@ class WebSocketClient {
     if (!this.ws) return;
 
     this.ws.onopen = () => {
-      if (DEBUG_WS) console.log('[WS] Connected');
+      const wasReconnecting = this.reconnectAttempts > 0;
+      if (DEBUG_WS) console.log('[WS] Connected', wasReconnecting ? '(reconnected)' : '');
       this.reconnectAttempts = 0;
       this.setConnectionState('connected');
+      this.notifyReconnectListeners();
       this.startHeartbeat();
+
+      // Notify about successful reconnection
+      if (wasReconnecting) {
+        const reconnectedMsg: WSMessage = {
+          type: 'reconnected',
+          data: { event: 'reconnected' },
+          timestamp: new Date().toISOString(),
+        };
+        this.notifySubscribers('reconnected', reconnectedMsg);
+        this.notifySubscribers('all', reconnectedMsg);
+      }
     };
 
     this.ws.onclose = (event) => {
@@ -312,6 +369,7 @@ class WebSocketClient {
 
         // Handle pong (heartbeat response)
         if (message.type === 'pong') {
+          this.handlePongReceived();
           return;
         }
 
@@ -329,9 +387,19 @@ class WebSocketClient {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
+    this.lastPongReceived = Date.now();
+
     this.heartbeatInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'ping' }));
+
+        // Set timeout for pong response
+        this.clearHeartbeatTimeout();
+        this.heartbeatTimeout = setTimeout(() => {
+          if (DEBUG_WS) console.log('[WS] Heartbeat timeout - no pong received');
+          // Connection is stale, trigger reconnection
+          this.handleHeartbeatTimeout();
+        }, HEARTBEAT_TIMEOUT);
       }
     }, HEARTBEAT_INTERVAL);
   }
@@ -341,6 +409,37 @@ class WebSocketClient {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    this.clearHeartbeatTimeout();
+  }
+
+  private clearHeartbeatTimeout(): void {
+    if (this.heartbeatTimeout) {
+      clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
+    }
+  }
+
+  private handleHeartbeatTimeout(): void {
+    // Close the stale connection and trigger reconnection
+    if (this.ws) {
+      this.ws.close(4000, 'Heartbeat timeout');
+    }
+  }
+
+  /**
+   * Called when pong is received - clears heartbeat timeout.
+   */
+  private handlePongReceived(): void {
+    const now = Date.now();
+    if (DEBUG_WS && this.lastPongReceived > 0) {
+      const latency = now - this.lastPongReceived;
+      // Only log if latency is unusually high (> 1 minute)
+      if (latency > 60000) {
+        console.log(`[WS] Pong received after ${Math.round(latency / 1000)}s`);
+      }
+    }
+    this.lastPongReceived = now;
+    this.clearHeartbeatTimeout();
   }
 
   private cleanupConnection(): void {
@@ -368,11 +467,12 @@ class WebSocketClient {
     if (this.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
       if (DEBUG_WS) console.log('[WS] Max reconnect attempts reached');
       this.setConnectionState('disconnected');
-      this.notifyError('WebSocket connection failed after multiple attempts');
+      this.notifyReconnectListeners();
+      this.notifyError('Connection lost — please refresh the page');
       return;
     }
 
-    // Exponential backoff
+    // Exponential backoff: 1s → 2s → 4s → 8s → 16s (capped at 30s)
     const delay = Math.min(
       RECONNECT_MIN_DELAY * Math.pow(RECONNECT_BACKOFF_MULTIPLIER, this.reconnectAttempts),
       RECONNECT_MAX_DELAY
@@ -380,6 +480,7 @@ class WebSocketClient {
 
     this.reconnectAttempts++;
     this.setConnectionState('reconnecting');
+    this.notifyReconnectListeners();
 
     if (DEBUG_WS) {
       console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})`);

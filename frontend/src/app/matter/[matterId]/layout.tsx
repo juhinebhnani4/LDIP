@@ -5,7 +5,7 @@ import {
   WorkspaceTabBar,
   WorkspaceContentArea,
 } from '@/components/features/matter';
-import { ServiceStatusBanner } from '@/components/features/status';
+import { ServiceStatusBanner, ConnectionStatusBanner } from '@/components/features/status';
 
 interface MatterLayoutProps {
   children: ReactNode;
@@ -42,6 +42,9 @@ export default async function MatterLayout({ children, params }: MatterLayoutPro
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Service status banner - Story 13.4 (only shows when circuits are degraded) */}
       <ServiceStatusBanner />
+
+      {/* Connection status banner - Epic 4 (only shows during reconnection) */}
+      <ConnectionStatusBanner />
 
       {/* Workspace header - Story 10A.1 */}
       <div className="shrink-0">

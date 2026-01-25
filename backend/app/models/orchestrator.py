@@ -32,6 +32,8 @@ class QueryIntent(str, Enum):
         CONTRADICTION: Questions about inconsistencies, conflicts between statements
         RAG_SEARCH: General questions requiring document search (fallback)
         MULTI_ENGINE: Ambiguous query requiring multiple engines
+        DOCUMENT_DISCOVERY: Questions about what documents exist in the matter
+        ENTITY_LOOKUP: Questions about specific people/entities in the case
     """
 
     CITATION = "citation"
@@ -39,6 +41,8 @@ class QueryIntent(str, Enum):
     CONTRADICTION = "contradiction"
     RAG_SEARCH = "rag_search"
     MULTI_ENGINE = "multi_engine"
+    DOCUMENT_DISCOVERY = "document_discovery"
+    ENTITY_LOOKUP = "entity_lookup"
 
 
 class EngineType(str, Enum):
@@ -51,12 +55,16 @@ class EngineType(str, Enum):
         TIMELINE: Timeline construction engine (Epic 4)
         CONTRADICTION: Consistency and contradiction engine (Epic 5)
         RAG: RAG hybrid search for general questions (Epic 2B)
+        DOCUMENT_DISCOVERY: Document metadata queries (list/count documents)
+        ENTITY_LOOKUP: Entity-focused queries (who is X, parties involved)
     """
 
     CITATION = "citation"
     TIMELINE = "timeline"
     CONTRADICTION = "contradiction"
     RAG = "rag"
+    DOCUMENT_DISCOVERY = "document_discovery"
+    ENTITY_LOOKUP = "entity_lookup"
 
 
 # =============================================================================

@@ -120,6 +120,8 @@ class StreamCompleteEvent(BaseModel):
         total_time_ms: Total processing time
         confidence: Overall response confidence
         message_id: ID of the saved assistant message
+        search_mode: Search mode used (hybrid, bm25_fallback, bm25_only)
+        search_notice: User-friendly notice about search mode (if degraded)
     """
 
     response: str = Field(description="Full response text")
@@ -132,6 +134,27 @@ class StreamCompleteEvent(BaseModel):
     total_time_ms: int = Field(ge=0, description="Total processing time in ms")
     confidence: float = Field(ge=0.0, le=1.0, description="Response confidence")
     message_id: str | None = Field(default=None, description="Saved message ID")
+    search_mode: str | None = Field(
+        default=None,
+        description="Search mode: 'hybrid', 'bm25_fallback', or 'bm25_only'"
+    )
+    search_notice: str | None = Field(
+        default=None,
+        description="User-friendly notice if search was degraded (e.g., rate limit)"
+    )
+    # Response completeness indicators
+    truncated: bool = Field(
+        default=False,
+        description="True if response was truncated due to length"
+    )
+    more_available: bool = Field(
+        default=False,
+        description="True if more results are available beyond what was shown"
+    )
+    total_results_hint: int | None = Field(
+        default=None,
+        description="Total results available (if more_available is True)"
+    )
 
 
 class ChatStreamRequest(BaseModel):

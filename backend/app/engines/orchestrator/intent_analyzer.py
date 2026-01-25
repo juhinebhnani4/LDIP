@@ -108,6 +108,30 @@ CONTRADICTION_PATTERNS = [
     re.compile(r"\bdon'?t\s+match\b", re.IGNORECASE),
 ]
 
+# Document discovery patterns - detect document listing/metadata queries
+DOCUMENT_DISCOVERY_PATTERNS = [
+    re.compile(r"\bwhat\s+(documents?|files?)\b", re.IGNORECASE),  # what documents
+    re.compile(r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE),
+    re.compile(r"\bwhich\s+(documents?|files?)\b", re.IGNORECASE),  # which documents
+    re.compile(r"\bhow\s+many\s+(documents?|files?|pages?)\b", re.IGNORECASE),
+    re.compile(r"\b(show|display)\s*(me\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE),
+    re.compile(r"\bdocuments?\s+(are|were)\s+(in|uploaded|available)\b", re.IGNORECASE),
+    re.compile(r"\b(all|total)\s+(documents?|files?|pages?)\b", re.IGNORECASE),
+    re.compile(r"\bexhibits?\b", re.IGNORECASE),  # legal document reference
+]
+
+# Entity lookup patterns - detect person/party queries
+ENTITY_LOOKUP_PATTERNS = [
+    re.compile(r"\bwho\s+is\b", re.IGNORECASE),  # who is X
+    re.compile(r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?|petitioners?|defendants?|plaintiffs?)\b", re.IGNORECASE),
+    re.compile(r"\btell\s+me\s+about\s+\w+", re.IGNORECASE),  # tell me about [name]
+    re.compile(r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+is\s+the\s+role\s+of\b", re.IGNORECASE),
+    re.compile(r"\b(information|details?)\s+(about|on|regarding)\s+\w+", re.IGNORECASE),
+    re.compile(r"\bwho\s+(filed|initiated|brought)\b", re.IGNORECASE),
+    re.compile(r"\brelationship\s+(between|of)\b", re.IGNORECASE),
+]
+
 
 # =============================================================================
 # Exceptions
@@ -302,6 +326,31 @@ class IntentAnalyzer:
         Returns:
             IntentClassification if fast-path matches, None otherwise.
         """
+        # Check document discovery patterns FIRST (most specific)
+        doc_discovery_matches = sum(
+            1 for pattern in DOCUMENT_DISCOVERY_PATTERNS if pattern.search(query)
+        )
+        if doc_discovery_matches >= 1:
+            return IntentClassification(
+                intent=QueryIntent.DOCUMENT_DISCOVERY,
+                confidence=FAST_PATH_CONFIDENCE,
+                required_engines=[EngineType.DOCUMENT_DISCOVERY],
+                reasoning=f"Fast-path: Detected {doc_discovery_matches} document discovery keyword(s)",
+            )
+
+        # Check entity lookup patterns
+        entity_matches = sum(
+            1 for pattern in ENTITY_LOOKUP_PATTERNS if pattern.search(query)
+        )
+        if entity_matches >= 1:
+            # Entity lookup also uses RAG for context
+            return IntentClassification(
+                intent=QueryIntent.ENTITY_LOOKUP,
+                confidence=FAST_PATH_CONFIDENCE,
+                required_engines=[EngineType.ENTITY_LOOKUP, EngineType.RAG],
+                reasoning=f"Fast-path: Detected {entity_matches} entity lookup keyword(s)",
+            )
+
         # Check citation patterns
         citation_matches = sum(
             1 for pattern in CITATION_PATTERNS if pattern.search(query)
@@ -570,6 +619,20 @@ def get_intent_analyzer() -> IntentAnalyzer:
 
 # Intent patterns with confidence weights - extracts ALL matches, not first match
 INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
+    EngineType.DOCUMENT_DISCOVERY: [
+        (re.compile(r"\bwhat\s+(documents?|files?)\b", re.IGNORECASE), 0.95),
+        (re.compile(r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE), 0.95),
+        (re.compile(r"\bwhich\s+(documents?|files?)\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bhow\s+many\s+(documents?|files?|pages?)\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bexhibits?\b", re.IGNORECASE), 0.8),
+    ],
+    EngineType.ENTITY_LOOKUP: [
+        (re.compile(r"\bwho\s+is\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?)\b", re.IGNORECASE), 0.95),
+        (re.compile(r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b", re.IGNORECASE), 0.9),
+        (re.compile(r"\bwho\s+(filed|initiated|brought)\b", re.IGNORECASE), 0.85),
+        (re.compile(r"\brelationship\s+(between|of)\b", re.IGNORECASE), 0.8),
+    ],
     EngineType.CITATION: [
         (re.compile(r"\b(cite|citation|citations?)\b", re.IGNORECASE), 0.9),
         (re.compile(r"\bsection\s+\d+", re.IGNORECASE), 0.9),

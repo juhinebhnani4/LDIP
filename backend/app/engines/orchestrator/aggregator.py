@@ -27,6 +27,7 @@ from app.models.orchestrator import (
     OrchestratorResult,
     SourceReference,
 )
+from app.core.ocr_cleaner import get_ocr_cleaner
 from app.services.safety.language_police import (
     LanguagePolice,
     get_language_police,
@@ -39,10 +40,14 @@ ENGINE_SECTION_TITLES: dict[EngineType, str] = {
     EngineType.TIMELINE: "Timeline",
     EngineType.CITATION: "Citations Found",
     EngineType.CONTRADICTION: "Contradictions Identified",
+    EngineType.DOCUMENT_DISCOVERY: "Documents",
+    EngineType.ENTITY_LOOKUP: "Key Entities",
 }
 
 # Engine order for parallel_merge (RAG first for context)
 ENGINE_ORDER: list[EngineType] = [
+    EngineType.DOCUMENT_DISCOVERY,
+    EngineType.ENTITY_LOOKUP,
     EngineType.RAG,
     EngineType.TIMELINE,
     EngineType.CITATION,
@@ -625,11 +630,30 @@ class ResultAggregator:
             return f"Found {total_citations} citation(s):\n\n{acts_list}"
 
         elif result.engine == EngineType.CONTRADICTION:
+            # Check for synthesized answer (pre-computed contradictions)
+            answer = data.get("answer")
+            if answer:
+                return answer
+
             if not data.get("analysis_ready"):
                 return data.get("message", "Analysis not available.")
 
             total_statements = data.get("total_statements", 0)
             return f"Analyzed {total_statements} statement(s) for contradictions."
+
+        elif result.engine == EngineType.DOCUMENT_DISCOVERY:
+            # Document discovery returns answer directly
+            answer = data.get("answer")
+            if answer:
+                return answer
+            return "No documents found."
+
+        elif result.engine == EngineType.ENTITY_LOOKUP:
+            # Entity lookup returns answer directly
+            answer = data.get("answer")
+            if answer:
+                return answer
+            return "No entities found."
 
         return ""
 
@@ -709,9 +733,10 @@ class ResultAggregator:
     async def _apply_language_policing(
         self, result: OrchestratorResult
     ) -> OrchestratorResult:
-        """Apply language policing to the unified response.
+        """Apply OCR cleaning and language policing to the unified response.
 
         Story 8-3: Task 7.3 - Sanitize output text.
+        Enhancement: OCR noise filtering before language policing.
 
         Args:
             result: OrchestratorResult with unpoliced unified_response.
@@ -720,11 +745,27 @@ class ResultAggregator:
             OrchestratorResult with sanitized unified_response and metadata.
         """
         try:
-            # Get or create language police
+            # Step 1: Apply OCR cleaning to remove garbage characters
+            ocr_cleaner = get_ocr_cleaner()
+            original_text = result.unified_response
+            cleaned_text = ocr_cleaner.clean(original_text)
+            ocr_cleaned = cleaned_text != original_text
+
+            if ocr_cleaned:
+                result.unified_response = cleaned_text
+                logger.info(
+                    "ocr_cleaning_applied",
+                    matter_id=result.matter_id,
+                    original_length=len(original_text),
+                    cleaned_length=len(cleaned_text),
+                    removed_chars=len(original_text) - len(cleaned_text),
+                )
+
+            # Step 2: Get or create language police
             if self._language_police is None:
                 self._language_police = get_language_police()
 
-            # Apply policing to unified response
+            # Step 3: Apply language policing to unified response
             policing_result = await self._language_police.police_output(
                 result.unified_response
             )
@@ -733,6 +774,7 @@ class ResultAggregator:
             result.unified_response = policing_result.sanitized_text
             result.policing_metadata = {
                 "policing_applied": True,
+                "ocr_cleaned": ocr_cleaned,
                 "replacements_count": len(policing_result.replacements_made),
                 "quotes_preserved_count": len(policing_result.quotes_preserved),
                 "llm_policing_applied": policing_result.llm_policing_applied,
@@ -1085,6 +1127,11 @@ class ResultAggregator:
             )
 
         elif result.engine == EngineType.CONTRADICTION:
+            # Check for synthesized answer (pre-computed contradictions)
+            answer = data.get("answer")
+            if answer:
+                return answer
+
             if not data.get("analysis_ready"):
                 return f"**Contradictions:** {data.get('message', 'Analysis not available.')}"
 
@@ -1119,6 +1166,20 @@ class ResultAggregator:
                 f"**Search:** Found {total_candidates} relevant passage(s).\n"
                 f"Top results:\n{previews}"
             )
+
+        elif result.engine == EngineType.DOCUMENT_DISCOVERY:
+            # Document discovery returns answer directly
+            answer = data.get("answer")
+            if answer:
+                return answer
+            return "**Documents:** No documents found in this matter."
+
+        elif result.engine == EngineType.ENTITY_LOOKUP:
+            # Entity lookup returns answer directly
+            answer = data.get("answer")
+            if answer:
+                return answer
+            return "**Entities:** No entities found in this matter."
 
         return ""
 

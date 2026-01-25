@@ -222,6 +222,12 @@ class StreamingOrchestrator:
                 message_id=message_id,
             )
 
+            # Extract search mode from RAG engine results (if applicable)
+            search_mode, search_notice = self._extract_search_mode(result)
+
+            # Extract completeness indicators
+            truncated, more_available, total_results_hint = self._extract_completeness(result)
+
             # Task 3.7: Emit complete event with full trace summary
             complete_event = StreamCompleteEvent(
                 response=response_text,
@@ -230,6 +236,11 @@ class StreamingOrchestrator:
                 total_time_ms=total_time_ms,
                 confidence=result.confidence,
                 message_id=message_id,
+                search_mode=search_mode,
+                search_notice=search_notice,
+                truncated=truncated,
+                more_available=more_available,
+                total_results_hint=total_results_hint,
             )
 
             yield StreamEvent(
@@ -472,6 +483,105 @@ class StreamingOrchestrator:
 
             # Simulate streaming delay
             await asyncio.sleep(TOKEN_STREAM_DELAY_MS / 1000)
+
+    def _extract_completeness(
+        self,
+        result: OrchestratorResult,
+    ) -> tuple[bool, bool, int | None]:
+        """Extract completeness indicators from engine results.
+
+        Args:
+            result: Orchestrator result with engine results.
+
+        Returns:
+            Tuple of (truncated, more_available, total_results_hint).
+        """
+        truncated = False
+        more_available = False
+        total_results_hint = None
+
+        for engine_result in result.engine_results:
+            if engine_result.data and engine_result.success:
+                data = engine_result.data
+
+                # Check for truncation in RAG results
+                if "total_candidates" in data:
+                    total = data.get("total_candidates", 0)
+                    shown = len(data.get("results", []))
+                    if total > shown:
+                        more_available = True
+                        total_results_hint = total
+
+                # Check for truncation in timeline events
+                if "total_events" in data:
+                    total = data.get("total_events", 0)
+                    shown = len(data.get("events", []))
+                    if total > shown:
+                        more_available = True
+                        total_results_hint = (total_results_hint or 0) + total
+
+                # Check for truncation in document discovery
+                if "total_documents" in data:
+                    total = data.get("total_documents", 0)
+                    shown = len(data.get("documents", []))
+                    if total > shown:
+                        more_available = True
+                        total_results_hint = total
+
+                # Check for truncation in entity results
+                if "total_entities" in data:
+                    total = data.get("total_entities", 0)
+                    shown = len(data.get("entities", []))
+                    if total > shown:
+                        more_available = True
+                        total_results_hint = total
+
+        # Check if response itself was truncated (very long responses)
+        if len(result.unified_response) >= 8000:
+            truncated = True
+
+        return truncated, more_available, total_results_hint
+
+    def _extract_search_mode(
+        self,
+        result: OrchestratorResult,
+    ) -> tuple[str | None, str | None]:
+        """Extract search mode from RAG engine results.
+
+        Args:
+            result: Orchestrator result with engine results.
+
+        Returns:
+            Tuple of (search_mode, search_notice).
+            search_mode: 'hybrid', 'bm25_fallback', or 'bm25_only'
+            search_notice: User-friendly notice if search was degraded
+        """
+        search_mode = None
+        search_notice = None
+
+        for engine_result in result.engine_results:
+            if engine_result.data and engine_result.success:
+                # Check for search mode in RAG results
+                mode = engine_result.data.get("search_mode")
+                if mode:
+                    search_mode = mode
+                    # Generate user-friendly notice for degraded modes
+                    if mode == "bm25_fallback":
+                        fallback_reason = engine_result.data.get(
+                            "fallback_reason", "semantic search unavailable"
+                        )
+                        search_notice = (
+                            f"Using keyword search only ({fallback_reason}). "
+                            "Results may be less comprehensive."
+                        )
+                    elif mode == "bm25_only":
+                        search_notice = (
+                            "Using keyword search only. "
+                            "Semantic search is being indexed."
+                        )
+                    break
+
+        return search_mode, search_notice
 
     def _convert_sources(
         self,

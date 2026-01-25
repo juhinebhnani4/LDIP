@@ -358,10 +358,10 @@ class ContradictionEngineAdapter(EngineAdapter):
     """Adapter for Contradiction Detection Engine (Epic 5).
 
     Story 6-2: Wraps contradiction detection for orchestrator.
+    Enhancement: Returns pre-computed contradictions from database.
 
-    Uses StatementQueryEngine to find entity-grouped statements.
-    Full contradiction detection requires entity_id which comes from
-    the query context.
+    Uses StatementQueryEngine for entity-specific analysis, or
+    ContradictionListService for pre-computed contradictions.
     """
 
     @property
@@ -371,6 +371,7 @@ class ContradictionEngineAdapter(EngineAdapter):
     def __init__(self) -> None:
         """Initialize contradiction engine adapter."""
         self._query_engine = None
+        self._list_service = None
         logger.debug("contradiction_adapter_initialized")
 
     def _get_query_engine(self):
@@ -381,6 +382,14 @@ class ContradictionEngineAdapter(EngineAdapter):
             self._query_engine = get_statement_query_engine()
         return self._query_engine
 
+    def _get_list_service(self):
+        """Lazy-load contradiction list service."""
+        if self._list_service is None:
+            from app.services.contradiction_list_service import ContradictionListService
+
+            self._list_service = ContradictionListService()
+        return self._list_service
+
     async def execute(
         self,
         matter_id: str,
@@ -389,8 +398,8 @@ class ContradictionEngineAdapter(EngineAdapter):
     ) -> EngineExecutionResult:
         """Execute contradiction analysis for the matter.
 
-        If entity_id is provided in context, performs entity-specific
-        contradiction analysis. Otherwise, returns general capability info.
+        Returns pre-computed contradictions from the database, or
+        entity-specific analysis if entity_id is provided.
 
         Args:
             matter_id: Matter UUID.
@@ -430,14 +439,60 @@ class ContradictionEngineAdapter(EngineAdapter):
                     "message": f"Found {statements.total_statements} statements for entity analysis",
                 }
             else:
-                # No entity specified - return capability info
-                contradiction_data = {
-                    "analysis_ready": False,
-                    "message": "Contradiction analysis requires an entity to analyze. "
-                              "Please specify which person or entity you want to check for contradictions.",
-                    "suggestion": "Try asking about a specific person, e.g., "
-                                 "'Are there contradictions in what John Doe said?'",
-                }
+                # Return pre-computed contradictions from database
+                list_service = self._get_list_service()
+                response = await list_service.get_all_contradictions(
+                    matter_id=matter_id,
+                    page=1,
+                    per_page=10,  # Limit for chat
+                )
+
+                if response.data:
+                    # Build human-readable summary
+                    total_contradictions = sum(
+                        len(entity.contradictions) for entity in response.data
+                    )
+                    entity_count = len(response.data)
+
+                    # Build detailed answer
+                    answer_parts = [
+                        f"Found **{total_contradictions} contradiction(s)** "
+                        f"involving **{entity_count} entities**:\n"
+                    ]
+
+                    for entity in response.data[:5]:  # Limit to 5 entities
+                        entity_name = entity.entity_name
+                        answer_parts.append(f"\n**{entity_name}:**")
+                        for c in entity.contradictions[:2]:  # 2 per entity
+                            severity = c.severity.value.upper()
+                            stmt1 = c.statement_a.excerpt[:100] if c.statement_a else ""
+                            stmt2 = c.statement_b.excerpt[:100] if c.statement_b else ""
+                            answer_parts.append(
+                                f"- [{severity}] \"{stmt1}...\" vs \"{stmt2}...\""
+                            )
+
+                    contradiction_data = {
+                        "analysis_ready": True,
+                        "answer": "\n".join(answer_parts),
+                        "total_contradictions": total_contradictions,
+                        "entity_count": entity_count,
+                        "entities": [
+                            {
+                                "entity_id": e.entity_id,
+                                "entity_name": e.entity_name,
+                                "contradiction_count": len(e.contradictions),
+                            }
+                            for e in response.data
+                        ],
+                    }
+                else:
+                    contradiction_data = {
+                        "analysis_ready": True,
+                        "answer": "No contradictions have been detected in this matter's documents.",
+                        "total_contradictions": 0,
+                        "entity_count": 0,
+                        "entities": [],
+                    }
 
             execution_time_ms = int((time.time() - start_time) * 1000)
 
@@ -445,6 +500,7 @@ class ContradictionEngineAdapter(EngineAdapter):
                 "contradiction_adapter_success",
                 matter_id=matter_id,
                 entity_id=entity_id,
+                has_precomputed=entity_id is None,
                 execution_time_ms=execution_time_ms,
             )
 
@@ -646,6 +702,9 @@ class RAGEngineAdapter(EngineAdapter):
                 "rerank_used": results.rerank_used,
                 "generation_time_ms": answer_result.generation_time_ms,
                 "model_used": answer_result.model_used,
+                # Search mode info for frontend UX (rate limit fallback indicator)
+                "search_mode": results.search_mode,
+                "fallback_reason": results.fallback_reason,
                 "results": [
                     {
                         "chunk_id": item.id,
@@ -699,6 +758,264 @@ class RAGEngineAdapter(EngineAdapter):
 
 
 # =============================================================================
+# Document Discovery Engine Adapter
+# =============================================================================
+
+
+class DocumentDiscoveryEngineAdapter(EngineAdapter):
+    """Adapter for Document Discovery queries (metadata-based).
+
+    Handles queries like "What documents are in this matter?" by querying
+    document metadata directly, without semantic search.
+    """
+
+    @property
+    def engine_type(self) -> EngineType:
+        return EngineType.DOCUMENT_DISCOVERY
+
+    def __init__(self) -> None:
+        """Initialize document discovery adapter."""
+        self._supabase = None
+        logger.debug("document_discovery_adapter_initialized")
+
+    def _get_supabase(self):
+        """Lazy-load Supabase client."""
+        if self._supabase is None:
+            from app.services.supabase.client import get_supabase_client
+            self._supabase = get_supabase_client()
+        return self._supabase
+
+    async def execute(
+        self,
+        matter_id: str,
+        query: str,
+        context: dict[str, Any] | None = None,
+    ) -> EngineExecutionResult:
+        """Execute document discovery query.
+
+        Args:
+            matter_id: Matter UUID.
+            query: User's query.
+            context: Optional context.
+
+        Returns:
+            EngineExecutionResult with document listing.
+        """
+        start_time = time.time()
+
+        try:
+            supabase = self._get_supabase()
+
+            if supabase is None:
+                return self._create_error_result(
+                    error="Database client not configured",
+                    execution_time_ms=int((time.time() - start_time) * 1000),
+                )
+
+            # Query documents for this matter
+            result = (
+                supabase.table("documents")
+                .select("id, filename, document_type, page_count, status, created_at")
+                .eq("matter_id", matter_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+
+            documents = result.data or []
+            total_pages = sum(doc.get("page_count", 0) or 0 for doc in documents)
+
+            # Build human-readable response
+            if not documents:
+                answer = "No documents have been uploaded to this matter yet."
+            else:
+                doc_list = []
+                for i, doc in enumerate(documents, 1):
+                    filename = doc.get("filename", "Unknown")
+                    pages = doc.get("page_count", 0) or 0
+                    status = doc.get("status", "unknown")
+                    doc_list.append(f"{i}. **{filename}** ({pages} pages, {status})")
+
+                answer = (
+                    f"This matter contains **{len(documents)} document(s)** "
+                    f"with a total of **{total_pages} pages**:\n\n"
+                    + "\n".join(doc_list)
+                )
+
+            execution_time_ms = int((time.time() - start_time) * 1000)
+
+            logger.info(
+                "document_discovery_success",
+                matter_id=matter_id,
+                document_count=len(documents),
+                total_pages=total_pages,
+                execution_time_ms=execution_time_ms,
+            )
+
+            return self._create_success_result(
+                data={
+                    "answer": answer,
+                    "documents": documents,
+                    "total_documents": len(documents),
+                    "total_pages": total_pages,
+                },
+                execution_time_ms=execution_time_ms,
+                confidence=0.95,  # High confidence for metadata queries
+            )
+
+        except Exception as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(
+                "document_discovery_error",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return self._create_error_result(
+                error=str(e),
+                execution_time_ms=execution_time_ms,
+            )
+
+
+# =============================================================================
+# Entity Lookup Engine Adapter
+# =============================================================================
+
+
+class EntityLookupEngineAdapter(EngineAdapter):
+    """Adapter for Entity Lookup queries (person/party focused).
+
+    Handles queries like "Who are the parties?" by querying the entity
+    database directly for comprehensive entity information.
+    """
+
+    @property
+    def engine_type(self) -> EngineType:
+        return EngineType.ENTITY_LOOKUP
+
+    def __init__(self) -> None:
+        """Initialize entity lookup adapter."""
+        self._supabase = None
+        logger.debug("entity_lookup_adapter_initialized")
+
+    def _get_supabase(self):
+        """Lazy-load Supabase client."""
+        if self._supabase is None:
+            from app.services.supabase.client import get_supabase_client
+            self._supabase = get_supabase_client()
+        return self._supabase
+
+    async def execute(
+        self,
+        matter_id: str,
+        query: str,
+        context: dict[str, Any] | None = None,
+    ) -> EngineExecutionResult:
+        """Execute entity lookup query.
+
+        Args:
+            matter_id: Matter UUID.
+            query: User's query.
+            context: Optional context.
+
+        Returns:
+            EngineExecutionResult with entity information.
+        """
+        start_time = time.time()
+
+        try:
+            supabase = self._get_supabase()
+
+            if supabase is None:
+                return self._create_error_result(
+                    error="Database client not configured",
+                    execution_time_ms=int((time.time() - start_time) * 1000),
+                )
+
+            # Query entities for this matter (identity_nodes table)
+            result = (
+                supabase.table("identity_nodes")
+                .select("id, canonical_name, entity_type, aliases, metadata, mention_count")
+                .eq("matter_id", matter_id)
+                .order("mention_count", desc=True)
+                .limit(50)
+                .execute()
+            )
+
+            entities = result.data or []
+
+            # Group entities by type
+            entities_by_type: dict[str, list] = {}
+            for entity in entities:
+                entity_type = entity.get("entity_type", "other")
+                if entity_type not in entities_by_type:
+                    entities_by_type[entity_type] = []
+                entities_by_type[entity_type].append(entity)
+
+            # Build human-readable response
+            if not entities:
+                answer = "No entities have been identified in this matter yet."
+            else:
+                # Prioritize PERSON entities for party-related queries
+                sections = []
+
+                # Key parties (persons with roles)
+                persons = entities_by_type.get("PERSON", [])
+                if persons:
+                    person_lines = []
+                    for p in persons[:10]:  # Limit to top 10
+                        name = p.get("canonical_name", "Unknown")
+                        # Role might be in metadata
+                        metadata = p.get("metadata") or {}
+                        role = metadata.get("role", "") if isinstance(metadata, dict) else ""
+                        mentions = p.get("mention_count", 0)
+                        role_str = f" ({role})" if role else ""
+                        person_lines.append(f"- **{name}**{role_str} - mentioned {mentions} times")
+                    sections.append("**Key Persons:**\n" + "\n".join(person_lines))
+
+                # Organizations
+                orgs = entities_by_type.get("ORG", []) + entities_by_type.get("ORGANIZATION", [])
+                if orgs:
+                    org_lines = [f"- {o.get('canonical_name', 'Unknown')}" for o in orgs[:5]]
+                    sections.append("**Organizations:**\n" + "\n".join(org_lines))
+
+                answer = (
+                    f"Found **{len(entities)} entities** in this matter:\n\n"
+                    + "\n\n".join(sections)
+                )
+
+            execution_time_ms = int((time.time() - start_time) * 1000)
+
+            logger.info(
+                "entity_lookup_success",
+                matter_id=matter_id,
+                entity_count=len(entities),
+                execution_time_ms=execution_time_ms,
+            )
+
+            return self._create_success_result(
+                data={
+                    "answer": answer,
+                    "entities": entities,
+                    "entities_by_type": entities_by_type,
+                    "total_entities": len(entities),
+                },
+                execution_time_ms=execution_time_ms,
+                confidence=0.9,
+            )
+
+        except Exception as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(
+                "entity_lookup_error",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return self._create_error_result(
+                error=str(e),
+                execution_time_ms=execution_time_ms,
+            )
+
+
+# =============================================================================
 # Adapter Registry (Task 5.6)
 # =============================================================================
 
@@ -708,6 +1025,8 @@ ADAPTER_REGISTRY: dict[EngineType, type[EngineAdapter]] = {
     EngineType.TIMELINE: TimelineEngineAdapter,
     EngineType.CONTRADICTION: ContradictionEngineAdapter,
     EngineType.RAG: RAGEngineAdapter,
+    EngineType.DOCUMENT_DISCOVERY: DocumentDiscoveryEngineAdapter,
+    EngineType.ENTITY_LOOKUP: EntityLookupEngineAdapter,
 }
 
 
@@ -729,7 +1048,7 @@ def get_adapter(engine_type: EngineType) -> EngineAdapter:
     return adapter_class()
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=6)
 def get_cached_adapter(engine_type: EngineType) -> EngineAdapter:
     """Get cached adapter instance for engine type.
 

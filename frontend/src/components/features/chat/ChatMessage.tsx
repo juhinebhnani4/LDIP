@@ -167,6 +167,32 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
             <span>{message.searchNotice}</span>
           </div>
         )}
+
+        {/* More results available notice (assistant only) */}
+        {!isUser && message.moreAvailable && (
+          <div
+            className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+            role="status"
+          >
+            <span>
+              {message.totalResultsHint
+                ? `Showing top results of ${message.totalResultsHint} available.`
+                : 'More results available.'}{' '}
+              Check the relevant tabs for complete information.
+            </span>
+          </div>
+        )}
+
+        {/* Truncated response notice (assistant only) */}
+        {!isUser && message.truncated && (
+          <div
+            className="mt-1 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+            role="status"
+          >
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            <span>Response was truncated due to length.</span>
+          </div>
+        )}
       </div>
     </article>
   );

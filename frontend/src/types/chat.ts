@@ -126,6 +126,12 @@ export interface ChatMessage {
    * - undefined: User message or legacy message (no completion tracking)
    */
   isComplete?: boolean;
+  /** Whether the response was truncated due to length */
+  truncated?: boolean;
+  /** Whether more results are available beyond what was shown */
+  moreAvailable?: boolean;
+  /** Hint showing total results available (if moreAvailable is true) */
+  totalResultsHint?: number;
 }
 
 /**

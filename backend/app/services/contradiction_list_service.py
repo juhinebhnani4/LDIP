@@ -457,14 +457,13 @@ class ContradictionListService:
                 if not contradiction_ids:
                     return []
 
-            # Step 2: Build main query with entity join
+            # Step 2: Build main query (no FK join - fetch entity names separately)
             query = (
                 self.supabase.table("statement_comparisons")
                 .select(
                     "id, entity_id, contradiction_type, severity, explanation, "
                     "confidence, evidence, created_at, "
-                    "statement_a_id, statement_b_id, "
-                    "identity_nodes!statement_comparisons_entity_id_fkey(id, canonical_name)"
+                    "statement_a_id, statement_b_id"
                 )
                 .eq("matter_id", matter_id)
                 .eq("result", "contradiction")
@@ -480,7 +479,7 @@ class ContradictionListService:
             if contradiction_ids is not None:
                 query = query.in_("id", contradiction_ids)
 
-            # Apply sorting
+            # Apply sorting (entityName sorting handled post-query since no FK join)
             desc = sort_order.lower() == "desc"
             if sort_by == "severity":
                 query = query.order("severity", desc=desc)
@@ -488,10 +487,8 @@ class ContradictionListService:
             elif sort_by == "createdAt":
                 query = query.order("created_at", desc=desc)
             elif sort_by == "entityName":
-                # Sort by entity name via the join
-                query = query.order(
-                    "identity_nodes(canonical_name)", desc=desc
-                )
+                # Sort by entity_id for now; post-sort by name after fetching
+                query = query.order("entity_id", desc=desc)
                 query = query.order("created_at", desc=True)
             else:
                 # Default sorting
@@ -507,28 +504,34 @@ class ContradictionListService:
             if not rows:
                 return []
 
-            # Step 3: Collect all chunk IDs for batch lookup
+            # Step 3: Collect all chunk IDs and entity IDs for batch lookup
             chunk_ids: set[str] = set()
+            entity_ids: set[str] = set()
             for row in rows:
                 if row.get("statement_a_id"):
                     chunk_ids.add(row["statement_a_id"])
                 if row.get("statement_b_id"):
                     chunk_ids.add(row["statement_b_id"])
+                if row.get("entity_id"):
+                    entity_ids.add(row["entity_id"])
 
             # Step 4: Batch fetch all chunks with document info
             chunks_map = await self._batch_get_statement_details(list(chunk_ids))
 
-            # Step 5: Build contradiction list with statement data
+            # Step 5: Batch fetch entity names
+            entity_names_map = await self._batch_get_entity_names(list(entity_ids))
+
+            # Step 6: Build contradiction list with statement data
             contradictions: list[dict[str, Any]] = []
             for row in rows:
-                entity_data = row.get("identity_nodes") or {}
+                entity_id = row.get("entity_id", "")
                 statement_a = chunks_map.get(row.get("statement_a_id", ""))
                 statement_b = chunks_map.get(row.get("statement_b_id", ""))
 
                 contradictions.append({
                     "id": row.get("id"),
-                    "entity_id": row.get("entity_id"),
-                    "entity_name": entity_data.get("canonical_name", "Unknown"),
+                    "entity_id": entity_id,
+                    "entity_name": entity_names_map.get(entity_id, "Unknown"),
                     "contradiction_type": row.get("contradiction_type"),
                     "severity": row.get("severity"),
                     "explanation": row.get("explanation", ""),
@@ -643,17 +646,17 @@ class ContradictionListService:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("chunks")
                 .select(
-                    "chunk_id, content, page_number, document_id, "
+                    "id, content, page_number, document_id, "
                     "documents(id, filename)"
                 )
-                .in_("chunk_id", chunk_ids)
+                .in_("id", chunk_ids)
                 .execute()
             )
 
             chunks_map: dict[str, dict[str, Any]] = {}
             for row in result.data or []:
                 doc_data = row.get("documents") or {}
-                chunk_id = row.get("chunk_id")
+                chunk_id = row.get("id")
                 if chunk_id:
                     chunks_map[chunk_id] = {
                         "chunk_id": chunk_id,
@@ -670,6 +673,45 @@ class ContradictionListService:
                 "batch_statement_details_failed",
                 error=str(e),
                 chunk_count=len(chunk_ids),
+            )
+            return {}
+
+    async def _batch_get_entity_names(
+        self,
+        entity_ids: list[str],
+    ) -> dict[str, str]:
+        """Batch fetch entity names from identity_nodes.
+
+        Args:
+            entity_ids: List of entity UUIDs.
+
+        Returns:
+            Dictionary mapping entity_id to canonical_name.
+        """
+        if not entity_ids:
+            return {}
+
+        try:
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("identity_nodes")
+                .select("id, canonical_name")
+                .in_("id", entity_ids)
+                .execute()
+            )
+
+            entity_names: dict[str, str] = {}
+            for row in result.data or []:
+                entity_id = row.get("id")
+                if entity_id:
+                    entity_names[entity_id] = row.get("canonical_name", "Unknown")
+
+            return entity_names
+
+        except Exception as e:
+            logger.warning(
+                "batch_entity_names_failed",
+                error=str(e),
+                entity_count=len(entity_ids),
             )
             return {}
 

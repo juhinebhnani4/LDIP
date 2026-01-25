@@ -104,6 +104,10 @@ export interface CompleteData {
   searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback';
   embeddingCompletionPct?: number;
   searchNotice?: string;
+  // Response completeness indicators
+  truncated?: boolean;
+  moreAvailable?: boolean;
+  totalResultsHint?: number;
 }
 
 export interface ErrorData {
@@ -328,6 +332,10 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             searchMode: (rawData.searchMode ?? rawData.search_mode) as CompleteData['searchMode'],
             embeddingCompletionPct: (rawData.embeddingCompletionPct ?? rawData.embedding_completion_pct) as number | undefined,
             searchNotice: (rawData.searchNotice ?? rawData.search_notice) as string | undefined,
+            // Response completeness indicators
+            truncated: (rawData.truncated as boolean) ?? false,
+            moreAvailable: (rawData.moreAvailable ?? rawData.more_available) as boolean | undefined,
+            totalResultsHint: (rawData.totalResultsHint ?? rawData.total_results_hint) as number | undefined,
           };
           optionsRef.current.onComplete?.(completeData);
           break;

@@ -33,6 +33,7 @@ from app.services.mig import (
     get_correction_learning_service,
     get_mig_graph_service,
 )
+from app.services.mig.entity_resolver import get_entity_resolver, EntityResolver
 
 # =============================================================================
 # Request/Response Models for Alias Management
@@ -101,6 +102,30 @@ class MergeResultResponse(BaseModel):
     deleted_entity_id: str = Field(..., alias="deletedEntityId", description="ID of deleted entity")
     aliases_added: list[str] = Field(..., alias="aliasesAdded", description="Aliases added to kept entity")
 
+
+class MergeSuggestionItem(BaseModel):
+    """A single merge suggestion for two potentially duplicate entities."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    entity_a_id: str = Field(..., alias="entityAId", description="First entity ID")
+    entity_a_name: str = Field(..., alias="entityAName", description="First entity canonical name")
+    entity_b_id: str = Field(..., alias="entityBId", description="Second entity ID")
+    entity_b_name: str = Field(..., alias="entityBName", description="Second entity canonical name")
+    entity_type: str = Field(..., alias="entityType", description="Entity type (PERSON, ORG, etc.)")
+    similarity_score: float = Field(..., alias="similarityScore", description="Similarity score 0-1")
+    shared_documents: int = Field(0, alias="sharedDocuments", description="Documents mentioning both")
+    reason: str = Field(..., description="Human-readable reason for suggestion")
+
+
+class MergeSuggestionsResponse(BaseModel):
+    """Response containing merge suggestions."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    data: list[MergeSuggestionItem] = Field(..., description="List of merge suggestions")
+    total: int = Field(..., description="Total suggestions found")
+
 router = APIRouter(prefix="/matters/{matter_id}/entities", tags=["entities"])
 logger = structlog.get_logger(__name__)
 
@@ -113,6 +138,11 @@ def _get_mig_service() -> MIGGraphService:
 def _get_correction_service() -> CorrectionLearningService:
     """Get correction learning service instance."""
     return get_correction_learning_service()
+
+
+def _get_entity_resolver() -> EntityResolver:
+    """Get entity resolver instance."""
+    return get_entity_resolver()
 
 
 # =============================================================================
@@ -211,6 +241,147 @@ async def list_entities(
                 "error": {
                     "code": "INTERNAL_ERROR",
                     "message": "Failed to list entities",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Merge Suggestions Endpoint (Lawyer UX - Entity Auto-Merge)
+# MUST be before /{entity_id} to avoid route conflict
+# =============================================================================
+
+
+@router.get("/merge-suggestions", response_model=MergeSuggestionsResponse, response_model_by_alias=True)
+async def get_merge_suggestions(
+    matter_id: str = Path(..., description="Matter UUID"),
+    entity_type: EntityType | None = Query(
+        None,
+        description="Filter by entity type",
+    ),
+    min_similarity: float = Query(
+        0.6,
+        ge=0.4,
+        le=1.0,
+        description="Minimum similarity score (0.4-1.0)",
+    ),
+    limit: int = Query(10, ge=1, le=50, description="Maximum suggestions to return"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    mig_service: MIGGraphService = Depends(_get_mig_service),
+    resolver: EntityResolver = Depends(_get_entity_resolver),
+) -> MergeSuggestionsResponse:
+    """Get suggested entity pairs that may be duplicates.
+
+    Uses name similarity algorithms to detect entities that might be
+    the same person/organization with different name variants.
+
+    Examples:
+    - "Ramesh Kumar" and "R. Kumar" (same person)
+    - "HDFC Bank" and "HDFC Bank Ltd" (same organization)
+
+    Args:
+        matter_id: Matter UUID.
+        entity_type: Optional filter by entity type.
+        min_similarity: Minimum similarity threshold.
+        limit: Maximum number of suggestions.
+        membership: Validated matter membership.
+        mig_service: MIG graph service.
+        resolver: Entity resolver for similarity calculations.
+
+    Returns:
+        List of merge suggestions sorted by similarity score.
+    """
+    logger.info(
+        "get_merge_suggestions_request",
+        matter_id=matter_id,
+        entity_type=entity_type.value if entity_type else None,
+        min_similarity=min_similarity,
+        limit=limit,
+        user_id=membership.user_id,
+    )
+
+    try:
+        # Get all entities for the matter (we need all for comparison)
+        entities, _ = await mig_service.get_entities_by_matter(
+            matter_id=matter_id,
+            entity_type=entity_type,
+            page=1,
+            per_page=500,  # Get up to 500 entities for comparison
+        )
+
+        if len(entities) < 2:
+            return MergeSuggestionsResponse(data=[], total=0)
+
+        # Find potential alias pairs using the resolver
+        suggestions: list[MergeSuggestionItem] = []
+        seen_pairs: set[tuple[str, str]] = set()
+
+        for entity in entities:
+            candidates = resolver.find_potential_aliases(entity, entities)
+
+            for candidate in candidates:
+                # Skip if below threshold
+                if candidate.similarity_score < min_similarity:
+                    continue
+
+                # Avoid duplicates (A,B and B,A)
+                pair_key = tuple(sorted([candidate.entity_id, candidate.candidate_entity_id]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                # Generate human-readable reason
+                if candidate.similarity_score >= 0.85:
+                    reason = f'"{candidate.entity_name}" and "{candidate.candidate_name}" appear to be the same {entity.entity_type.value.lower()}'
+                elif candidate.initial_match_score > 0.7:
+                    reason = f'"{candidate.entity_name}" may be an abbreviated form of "{candidate.candidate_name}"'
+                else:
+                    reason = f'Similar names: "{candidate.entity_name}" and "{candidate.candidate_name}"'
+
+                suggestions.append(
+                    MergeSuggestionItem(
+                        entity_a_id=candidate.entity_id,
+                        entity_a_name=candidate.entity_name,
+                        entity_b_id=candidate.candidate_entity_id,
+                        entity_b_name=candidate.candidate_name,
+                        entity_type=entity.entity_type.value,
+                        similarity_score=round(candidate.similarity_score, 2),
+                        shared_documents=0,  # Could query mentions to find shared docs
+                        reason=reason,
+                    )
+                )
+
+        # Sort by similarity score descending and limit
+        suggestions.sort(key=lambda x: x.similarity_score, reverse=True)
+        suggestions = suggestions[:limit]
+
+        logger.info(
+            "get_merge_suggestions_success",
+            matter_id=matter_id,
+            suggestions_count=len(suggestions),
+        )
+
+        return MergeSuggestionsResponse(
+            data=suggestions,
+            total=len(suggestions),
+        )
+
+    except Exception as e:
+        logger.error(
+            "get_merge_suggestions_error",
+            matter_id=matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to get merge suggestions",
                     "details": {},
                 }
             },
@@ -998,3 +1169,5 @@ async def merge_entities(
                 }
             },
         ) from e
+
+

@@ -24,6 +24,8 @@ export interface SourceReference {
   confidence?: number;
   /** Bounding box IDs for highlighting specific content (UI-only) */
   bboxIds?: string[];
+  /** Preview snippet of the cited content for lawyer context */
+  contextSnippet?: string;
 }
 
 /**
@@ -36,6 +38,7 @@ export interface SourceReferenceAPI {
   page?: number | null;
   chunk_id?: string | null;
   confidence?: number | null;
+  context_snippet?: string | null;
 }
 
 /**
@@ -48,6 +51,7 @@ export function transformSourceReference(api: SourceReferenceAPI): SourceReferen
     page: api.page ?? undefined,
     chunkId: api.chunk_id ?? undefined,
     confidence: api.confidence ?? undefined,
+    contextSnippet: api.context_snippet ?? undefined,
   };
 }
 

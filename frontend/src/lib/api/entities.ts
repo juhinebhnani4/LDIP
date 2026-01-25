@@ -160,6 +160,7 @@ import type {
   MergeEntitiesRequest,
   MergeResultResponse,
   AliasesListResponse,
+  MergeSuggestionsResponse,
 } from '@/types/entity';
 
 /**
@@ -238,5 +239,52 @@ export async function removeAlias(
   return api.delete<AliasesListResponse>(
     `/api/matters/${matterId}/entities/${entityId}/aliases`,
     { data: { alias } }
+  );
+}
+
+
+// =============================================================================
+// Merge Suggestions (Lawyer UX - Entity Auto-Merge)
+// =============================================================================
+
+export interface MergeSuggestionsOptions {
+  entityType?: string;
+  minSimilarity?: number;
+  limit?: number;
+}
+
+/**
+ * Get suggested entity pairs that may be duplicates.
+ *
+ * Uses name similarity algorithms to detect entities that might be
+ * the same person/organization with different name variants.
+ *
+ * @param matterId - Matter UUID
+ * @param options - Filter options
+ * @returns List of merge suggestions
+ *
+ * @example
+ * ```ts
+ * const suggestions = await getMergeSuggestions('matter-123', {
+ *   minSimilarity: 0.7,
+ *   limit: 10,
+ * });
+ * for (const s of suggestions.data) {
+ *   console.log(`${s.entityAName} may be the same as ${s.entityBName}`);
+ * }
+ * ```
+ */
+export async function getMergeSuggestions(
+  matterId: string,
+  options: MergeSuggestionsOptions = {}
+): Promise<MergeSuggestionsResponse> {
+  const queryString = buildQueryString({
+    entityType: options.entityType,
+    minSimilarity: options.minSimilarity,
+    limit: options.limit,
+  });
+
+  return api.get<MergeSuggestionsResponse>(
+    `/api/matters/${matterId}/entities/merge-suggestions${queryString}`
   );
 }

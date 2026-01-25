@@ -21,13 +21,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, X, Flag, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Check, X, Flag, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { VerificationQueueItem } from '@/types';
 import {
   getConfidenceColorClass,
   formatFindingType,
   getFindingTypeIcon,
 } from '@/stores/verificationStore';
+import { getVerificationStatus, formatConfidenceTooltip } from '@/lib/utils/confidenceDisplay';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'findingType' | 'findingSummary' | 'confidence' | 'sourceDocument' | null;
@@ -242,7 +244,7 @@ export function VerificationQueue({
                 className="-ml-3 h-8"
                 onClick={() => handleSort('confidence')}
               >
-                Confidence
+                Status
                 <SortIcon column="confidence" sortColumn={sortColumn} sortDirection={sortDirection} />
               </Button>
             </TableHead>
@@ -298,24 +300,21 @@ export function VerificationQueue({
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2 min-w-[120px]">
-                      <div
-                        className="relative w-20 h-2 bg-muted rounded-full overflow-hidden"
-                        role="progressbar"
-                        aria-valuenow={Math.round(item.confidence)}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`Confidence: ${item.confidence.toFixed(0)}%`}
-                      >
+                    {(() => {
+                      const status = getVerificationStatus(item.confidence);
+                      const StatusIcon = status.level === 'verified' ? CheckCircle2 : status.level === 'likely_correct' ? AlertCircle : XCircle;
+                      return (
                         <div
-                          className={`absolute left-0 top-0 h-full ${colorClass} transition-all`}
-                          style={{ width: `${item.confidence}%` }}
-                        />
-                      </div>
-                      <span className="text-sm text-muted-foreground w-12 text-right">
-                        {item.confidence.toFixed(0)}%
-                      </span>
-                    </div>
+                          className="flex items-center gap-2"
+                          title={formatConfidenceTooltip(item.confidence)}
+                        >
+                          <Badge variant="outline" className={status.badgeClass}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {status.shortLabel}
+                          </Badge>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground">

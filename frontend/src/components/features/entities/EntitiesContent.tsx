@@ -22,6 +22,7 @@ import { EntitiesDetailPanel } from './EntitiesDetailPanel';
 import { EntitiesListView } from './EntitiesListView';
 import { EntitiesGridView } from './EntitiesGridView';
 import { EntityMergeDialog } from './EntityMergeDialog';
+import { EntityMergeSuggestions } from './EntityMergeSuggestions';
 import type { ViewInDocumentParams } from './EntitiesDetailPanel';
 import {
   useEntities,
@@ -30,6 +31,7 @@ import {
   useEntityStats,
   useEntityMerge,
   useEntityAlias,
+  useMergeSuggestions,
 } from '@/hooks/useEntities';
 import {
   transformEntitiesToNodes,
@@ -89,6 +91,12 @@ export function EntitiesContent({
   // Merge and alias hooks
   const { merge, isLoading: mergeLoading } = useEntityMerge(matterId);
   const { addAlias: addAliasApi } = useEntityAlias(matterId);
+
+  // Merge suggestions for auto-merge feature (Lawyer UX)
+  const { suggestions: mergeSuggestions, mutate: mutateSuggestions } = useMergeSuggestions(
+    matterId,
+    { minSimilarity: 0.6, limit: 10 }
+  );
 
   // Compute statistics
   const stats = useEntityStats(entities);
@@ -306,8 +314,27 @@ export function EntitiesContent({
     );
   }
 
+  // Handle merge from suggestion banner
+  const handleSuggestionMerge = useCallback(
+    async (sourceId: string, targetId: string) => {
+      await handleMergeConfirm(sourceId, targetId);
+      await mutateSuggestions();
+    },
+    [handleMergeConfirm, mutateSuggestions]
+  );
+
   return (
     <div className={cn('flex flex-col h-full', className)}>
+      {/* Merge Suggestions Banner (Lawyer UX) */}
+      {mergeSuggestions.length > 0 && !isMultiSelectMode && (
+        <EntityMergeSuggestions
+          suggestions={mergeSuggestions}
+          onMerge={handleSuggestionMerge}
+          isLoading={mergeLoading}
+          className="mb-4"
+        />
+      )}
+
       <EntitiesHeader
         stats={{
           ...stats,

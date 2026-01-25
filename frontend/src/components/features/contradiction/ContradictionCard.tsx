@@ -10,12 +10,13 @@
  * Task 4: Create ContradictionCard component
  */
 
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatementSection } from './StatementSection';
 import { HelpTooltipInline } from '@/components/features/help';
+import { getVerificationStatus, formatConfidenceTooltip } from '@/lib/utils/confidenceDisplay';
 import type {
   ContradictionItem,
   ContradictionType,
@@ -141,13 +142,25 @@ export function ContradictionCard({
               {severityStyle.label} Severity
             </Badge>
           </div>
-          <div className="flex items-center text-xs text-muted-foreground">
-            {Math.round(contradiction.confidence * 100)}% confidence
-            <HelpTooltipInline
-              content="Confidence indicates how certain the AI is about this contradiction. Higher scores (90%+) are more reliable."
-              learnMoreId="confidence-scores"
-            />
-          </div>
+          {(() => {
+            const status = getVerificationStatus(contradiction.confidence);
+            const StatusIcon = status.level === 'verified' ? CheckCircle2 : status.level === 'likely_correct' ? AlertCircle : XCircle;
+            return (
+              <div
+                className="flex items-center gap-1"
+                title={formatConfidenceTooltip(contradiction.confidence)}
+              >
+                <Badge variant="outline" className={status.badgeClass}>
+                  <StatusIcon className="h-3 w-3 mr-1" />
+                  {status.label}
+                </Badge>
+                <HelpTooltipInline
+                  content={`${status.label}: ${status.level === 'verified' ? 'High confidence finding, reliable for court use.' : status.level === 'likely_correct' ? 'Review recommended before relying on this finding.' : 'Requires attorney verification before use.'}`}
+                  learnMoreId="confidence-scores"
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Statements */}

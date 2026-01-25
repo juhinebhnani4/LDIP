@@ -138,7 +138,11 @@ export function MissingActsCard({
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload these Acts to enable citation verification
+              {missingActs.length === 1
+                ? `Upload "${missingActs[0].actName}" to verify ${missingActs[0].citationCount} citation${missingActs[0].citationCount !== 1 ? 's' : ''}`
+                : missingActs.length <= 3
+                  ? `Upload "${missingActs.map(a => a.actName).join('", "')}" to enable citation verification`
+                  : `Upload "${missingActs.slice(0, 2).map(a => a.actName).join('", "')}" and ${missingActs.length - 2} more to enable citation verification`}
             </p>
           </CardHeader>
         </CollapsibleTrigger>

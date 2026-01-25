@@ -364,3 +364,69 @@ export function useEntityAlias(matterId: string | null): UseEntityAliasReturn {
 
   return { addAlias, removeAlias, isLoading, error };
 }
+
+
+// =============================================================================
+// Merge Suggestions Hook (Lawyer UX - Entity Auto-Merge)
+// =============================================================================
+
+import { getMergeSuggestions, MergeSuggestionsOptions } from '@/lib/api/entities';
+import type { MergeSuggestionsResponse, MergeSuggestionItem } from '@/types/entity';
+
+export interface UseMergeSuggestionsOptions extends MergeSuggestionsOptions {
+  enabled?: boolean;
+}
+
+export interface UseMergeSuggestionsReturn {
+  suggestions: MergeSuggestionItem[];
+  total: number;
+  isLoading: boolean;
+  error: Error | null;
+  mutate: () => void;
+}
+
+/**
+ * Hook for fetching merge suggestions (potential duplicate entities).
+ *
+ * @example
+ * ```tsx
+ * const { suggestions, isLoading } = useMergeSuggestions(matterId, {
+ *   minSimilarity: 0.7,
+ *   limit: 10,
+ * });
+ *
+ * if (suggestions.length > 0) {
+ *   return <MergeSuggestionsBanner suggestions={suggestions} />;
+ * }
+ * ```
+ */
+export function useMergeSuggestions(
+  matterId: string | null,
+  options: UseMergeSuggestionsOptions = {}
+): UseMergeSuggestionsReturn {
+  const { enabled = true, entityType, minSimilarity, limit } = options;
+
+  const { data, error, isLoading, mutate } = useSWR<MergeSuggestionsResponse>(
+    enabled && matterId
+      ? ['mergeSuggestions', matterId, entityType, minSimilarity, limit]
+      : null,
+    () =>
+      getMergeSuggestions(matterId!, {
+        entityType,
+        minSimilarity,
+        limit,
+      }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // 1 minute - suggestions don't change often
+    }
+  );
+
+  return {
+    suggestions: data?.data ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    error: error ?? null,
+    mutate,
+  };
+}

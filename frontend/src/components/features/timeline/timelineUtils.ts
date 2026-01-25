@@ -375,3 +375,165 @@ export function formatGapDuration(days: number): string {
   const years = Math.round(days / 365);
   return `~${years} year${years === 1 ? '' : 's'}`;
 }
+
+
+// =============================================================================
+// Legal Context for Gaps (Lawyer UX Improvement)
+// =============================================================================
+
+/**
+ * Indian legal limitation periods (in days)
+ * Based on Limitation Act, 1963 and common court procedures
+ */
+export const LEGAL_LIMITATION_PERIODS = {
+  // Appeals
+  APPEAL_HIGH_COURT: 30,
+  APPEAL_DISTRICT_COURT: 30,
+  APPEAL_SUPREME_COURT: 90,
+
+  // Review and revision
+  REVIEW_PETITION: 30,
+  REVISION_PETITION: 90,
+
+  // Civil limitations
+  CIVIL_SUIT_CONTRACT: 3 * 365, // 3 years
+  CIVIL_SUIT_TORT: 1 * 365, // 1 year
+  CIVIL_SUIT_IMMOVABLE: 12 * 365, // 12 years
+
+  // Criminal
+  COMPLAINT_MAGISTRATE: 6 * 30, // 6 months for certain offences
+
+  // Consumer
+  CONSUMER_COMPLAINT: 2 * 365, // 2 years
+
+  // Arbitration
+  ARBITRATION_AWARD_CHALLENGE: 90,
+
+  // Execution
+  DECREE_EXECUTION: 12 * 365, // 12 years
+
+  // Common procedural
+  WRITTEN_STATEMENT: 30,
+  REPLY_AFFIDAVIT: 15,
+  SURREJOINDER: 15,
+} as const;
+
+/**
+ * Legal significance analysis for a gap
+ */
+export interface GapLegalSignificance {
+  /** Whether this gap has potential legal implications */
+  hasLegalSignificance: boolean;
+  /** Type of limitation that may be affected */
+  limitationType: string | null;
+  /** Days for the limitation period */
+  limitationDays: number | null;
+  /** Whether the gap exceeds the limitation */
+  exceedsLimitation: boolean;
+  /** Human-readable context message */
+  message: string;
+  /** Severity level */
+  severity: 'info' | 'warning' | 'critical';
+}
+
+/**
+ * Analyze a gap for legal significance.
+ * Checks if the gap exceeds common Indian legal limitation periods.
+ *
+ * @param gapDays - Duration of the gap in days
+ * @returns Analysis of legal significance
+ *
+ * @example
+ * ```ts
+ * const analysis = analyzeGapLegalSignificance(45);
+ * // { hasLegalSignificance: true, message: "45-day gap exceeds 30-day appeal window" }
+ * ```
+ */
+export function analyzeGapLegalSignificance(gapDays: number): GapLegalSignificance {
+  // Check against common limitation periods
+  const checks: Array<{
+    period: number;
+    name: string;
+    severity: 'info' | 'warning' | 'critical';
+  }> = [
+    { period: LEGAL_LIMITATION_PERIODS.APPEAL_HIGH_COURT, name: 'appeal to High Court', severity: 'critical' },
+    { period: LEGAL_LIMITATION_PERIODS.REVIEW_PETITION, name: 'review petition', severity: 'warning' },
+    { period: LEGAL_LIMITATION_PERIODS.REVISION_PETITION, name: 'revision petition', severity: 'warning' },
+    { period: LEGAL_LIMITATION_PERIODS.ARBITRATION_AWARD_CHALLENGE, name: 'arbitration award challenge', severity: 'warning' },
+    { period: LEGAL_LIMITATION_PERIODS.CIVIL_SUIT_TORT, name: 'tort action', severity: 'critical' },
+    { period: LEGAL_LIMITATION_PERIODS.CONSUMER_COMPLAINT, name: 'consumer complaint', severity: 'warning' },
+    { period: LEGAL_LIMITATION_PERIODS.CIVIL_SUIT_CONTRACT, name: 'contract suit', severity: 'critical' },
+  ];
+
+  // Find the most relevant exceeded limitation
+  for (const check of checks) {
+    if (gapDays > check.period) {
+      return {
+        hasLegalSignificance: true,
+        limitationType: check.name,
+        limitationDays: check.period,
+        exceedsLimitation: true,
+        message: `${gapDays}-day gap exceeds ${check.period}-day ${check.name} limitation`,
+        severity: check.severity,
+      };
+    }
+  }
+
+  // Check if approaching a limitation (within 80% of period)
+  for (const check of checks) {
+    if (gapDays > check.period * 0.8) {
+      return {
+        hasLegalSignificance: true,
+        limitationType: check.name,
+        limitationDays: check.period,
+        exceedsLimitation: false,
+        message: `${gapDays}-day gap approaches ${check.period}-day ${check.name} limitation`,
+        severity: 'info',
+      };
+    }
+  }
+
+  // No legal significance
+  return {
+    hasLegalSignificance: false,
+    limitationType: null,
+    limitationDays: null,
+    exceedsLimitation: false,
+    message: formatGapDuration(gapDays),
+    severity: 'info',
+  };
+}
+
+/**
+ * Get color class for gap based on legal significance
+ */
+export function getGapLegalColorClass(significance: GapLegalSignificance): string {
+  if (!significance.hasLegalSignificance) {
+    return 'text-muted-foreground';
+  }
+  switch (significance.severity) {
+    case 'critical':
+      return 'text-red-600 dark:text-red-400';
+    case 'warning':
+      return 'text-amber-600 dark:text-amber-400';
+    default:
+      return 'text-blue-600 dark:text-blue-400';
+  }
+}
+
+/**
+ * Get background color class for gap indicator
+ */
+export function getGapLegalBgClass(significance: GapLegalSignificance): string {
+  if (!significance.hasLegalSignificance) {
+    return 'bg-gray-100 dark:bg-gray-800';
+  }
+  switch (significance.severity) {
+    case 'critical':
+      return 'bg-red-100 dark:bg-red-900/30';
+    case 'warning':
+      return 'bg-amber-100 dark:bg-amber-900/30';
+    default:
+      return 'bg-blue-100 dark:bg-blue-900/30';
+  }
+}

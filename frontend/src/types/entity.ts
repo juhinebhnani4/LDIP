@@ -281,3 +281,26 @@ export const DEFAULT_ENTITY_FILTERS: EntityFilterState = {
   minMentionCount: 0,
   searchQuery: '',
 };
+
+
+// =============================================================================
+// Merge Suggestions Types (Lawyer UX - Entity Auto-Merge)
+// =============================================================================
+
+/** A single merge suggestion for two potentially duplicate entities */
+export interface MergeSuggestionItem {
+  entityAId: string;
+  entityAName: string;
+  entityBId: string;
+  entityBName: string;
+  entityType: EntityType;
+  similarityScore: number;
+  sharedDocuments: number;
+  reason: string;
+}
+
+/** Response for merge suggestions */
+export interface MergeSuggestionsResponse {
+  data: MergeSuggestionItem[];
+  total: number;
+}

@@ -109,6 +109,19 @@ export interface ChatMessage {
   sources?: SourceReference[];
   /** Engine execution traces (assistant messages only) - Story 11.3 */
   engineTraces?: EngineTrace[];
+  /** Search mode used: hybrid, bm25_only, or bm25_fallback (Optimistic RAG) */
+  searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback';
+  /** Embedding completion percentage 0-100 (Optimistic RAG) */
+  embeddingCompletionPct?: number;
+  /** User-friendly notice about search limitations (Optimistic RAG) */
+  searchNotice?: string;
+  /**
+   * Story 2.3: Whether the response completed normally.
+   * - true: Response completed with proper 'complete' event
+   * - false: Response was interrupted (error, timeout, or parse failure)
+   * - undefined: User message or legacy message (no completion tracking)
+   */
+  isComplete?: boolean;
 }
 
 /**

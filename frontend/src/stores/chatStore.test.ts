@@ -353,6 +353,158 @@ describe('chatStore', () => {
     });
   });
 
+  describe('streaming actions', () => {
+    describe('startStreaming', () => {
+      test('sets streaming state', () => {
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+        });
+        expect(useChatStore.getState().streamingMessageId).toBe('msg-1');
+        expect(useChatStore.getState().streamingContent).toBe('');
+        expect(useChatStore.getState().streamingTraces).toEqual([]);
+        expect(useChatStore.getState().isTyping).toBe(true);
+        expect(useChatStore.getState().error).toBeNull();
+      });
+    });
+
+    describe('appendToken', () => {
+      test('updates streaming content and disables typing', () => {
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().appendToken('Hello', 'Hello');
+        });
+        expect(useChatStore.getState().streamingContent).toBe('Hello');
+        expect(useChatStore.getState().isTyping).toBe(false);
+      });
+    });
+
+    describe('addTrace', () => {
+      test('appends trace to streaming traces', () => {
+        const trace = {
+          engine: 'rag',
+          executionTimeMs: 100,
+          findingsCount: 5,
+          success: true,
+        };
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().addTrace(trace);
+        });
+        expect(useChatStore.getState().streamingTraces).toHaveLength(1);
+        expect(useChatStore.getState().streamingTraces[0]).toEqual(trace);
+      });
+    });
+
+    describe('completeStreaming', () => {
+      test('creates completed message with isComplete=true', () => {
+        const trace = {
+          engine: 'rag',
+          executionTimeMs: 100,
+          findingsCount: 5,
+          success: true,
+        };
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().appendToken('Test', 'Test response');
+          useChatStore.getState().completeStreaming('Final response', [trace], undefined);
+        });
+
+        const messages = useChatStore.getState().messages;
+        expect(messages).toHaveLength(1);
+        expect(messages[0]!.id).toBe('msg-1');
+        expect(messages[0]!.content).toBe('Final response');
+        expect(messages[0]!.isComplete).toBe(true);
+        expect(useChatStore.getState().streamingMessageId).toBeNull();
+      });
+
+      test('includes optimistic RAG metadata', () => {
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().completeStreaming(
+            'Response',
+            [],
+            undefined,
+            'Search notice',
+            'bm25_fallback',
+            75
+          );
+        });
+
+        const msg = useChatStore.getState().messages[0];
+        expect(msg!.searchNotice).toBe('Search notice');
+        expect(msg!.searchMode).toBe('bm25_fallback');
+        expect(msg!.embeddingCompletionPct).toBe(75);
+      });
+    });
+
+    describe('abortStreaming', () => {
+      test('saves incomplete message with isComplete=false when content exists', () => {
+        const trace = {
+          engine: 'rag',
+          executionTimeMs: 50,
+          findingsCount: 2,
+          success: true,
+        };
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().appendToken('Partial', 'Partial response');
+          useChatStore.getState().addTrace(trace);
+          useChatStore.getState().abortStreaming();
+        });
+
+        const messages = useChatStore.getState().messages;
+        expect(messages).toHaveLength(1);
+        expect(messages[0]!.id).toBe('msg-1');
+        expect(messages[0]!.content).toBe('Partial response');
+        expect(messages[0]!.isComplete).toBe(false);
+        expect(messages[0]!.engineTraces).toHaveLength(1);
+        expect(useChatStore.getState().streamingMessageId).toBeNull();
+      });
+
+      test('does not save message when content is empty', () => {
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().abortStreaming();
+        });
+
+        expect(useChatStore.getState().messages).toHaveLength(0);
+        expect(useChatStore.getState().streamingMessageId).toBeNull();
+      });
+
+      test('does not save message when content is whitespace only', () => {
+        act(() => {
+          useChatStore.getState().startStreaming('msg-1');
+          useChatStore.getState().appendToken('   ', '   ');
+          useChatStore.getState().abortStreaming();
+        });
+
+        expect(useChatStore.getState().messages).toHaveLength(0);
+      });
+
+      test('does nothing when not streaming', () => {
+        act(() => {
+          useChatStore.getState().abortStreaming();
+        });
+        // Should not throw, just do nothing
+        expect(useChatStore.getState().messages).toHaveLength(0);
+      });
+    });
+
+    describe('setTyping', () => {
+      test('sets typing indicator', () => {
+        act(() => {
+          useChatStore.getState().setTyping(true);
+        });
+        expect(useChatStore.getState().isTyping).toBe(true);
+
+        act(() => {
+          useChatStore.getState().setTyping(false);
+        });
+        expect(useChatStore.getState().isTyping).toBe(false);
+      });
+    });
+  });
+
   describe('persistence', () => {
     test('persists only last N messages', () => {
       // Create more than MAX_PERSISTED_MESSAGES

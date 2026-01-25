@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QAPanelHeader } from './QAPanelHeader';
@@ -11,7 +11,7 @@ import { StreamingMessage } from './StreamingMessage';
 import { SuggestedQuestions } from './SuggestedQuestions';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
-import { useSSE, type CompleteData, type EngineTraceData, type TokenData } from '@/hooks/useSSE';
+import { useSSE, type CompleteData, type EngineTraceData, type TokenData, type SSEParseErrorContext } from '@/hooks/useSSE';
 import { useUser } from '@/hooks/useAuth';
 import { canRetryError } from '@/lib/api/client';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
@@ -46,6 +46,7 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
   const appendToken = useChatStore((state) => state.appendToken);
   const addTrace = useChatStore((state) => state.addTrace);
   const completeStreaming = useChatStore((state) => state.completeStreaming);
+  const abortStreaming = useChatStore((state) => state.abortStreaming);
   const setTyping = useChatStore((state) => state.setTyping);
   const setError = useChatStore((state) => state.setError);
 
@@ -61,6 +62,10 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<Error | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // F5: Track last parse error toast time to debounce multiple errors
+  const lastParseErrorToastRef = useRef<number>(0);
+  const PARSE_ERROR_TOAST_DEBOUNCE_MS = 2000;
 
   // Convert EngineTraceData from hook to EngineTrace type
   const convertTrace = useCallback((data: EngineTraceData): EngineTrace => ({
@@ -108,7 +113,14 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
         page: s.page,
       })));
     }
-    completeStreaming(data.response, traces, sources);
+    completeStreaming(
+      data.response,
+      traces,
+      sources,
+      data.searchNotice,
+      data.searchMode,
+      data.embeddingCompletionPct
+    );
     // Story 13.4: Clear error state on success
     setStreamError(null);
     setIsRetrying(false);
@@ -127,15 +139,52 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
     }
   }, [setError, setTyping]);
 
+  /**
+   * Story 2.2: Handle SSE JSON parse errors with toast notification.
+   * Shows user-friendly error message without retry action in toast
+   * (retry is available via the ErrorAlert component below).
+   * F3: Includes sessionId for correlation.
+   * F5: Debounces multiple rapid errors to avoid toast spam.
+   */
+  const handleParseError = useCallback((context: SSEParseErrorContext) => {
+    // F5: Debounce multiple parse errors within 2 seconds
+    const now = Date.now();
+    if (now - lastParseErrorToastRef.current < PARSE_ERROR_TOAST_DEBOUNCE_MS) {
+      return; // Skip toast, already shown recently
+    }
+    lastParseErrorToastRef.current = now;
+
+    // Story 2.2: Show toast within 500ms (sonner is immediate)
+    // F3: Include sessionId in description for debugging correlation
+    toast.error('Response interrupted — please retry', {
+      description: `Some data could not be processed. Your response may be incomplete. (Session: ${context.sessionId.slice(-8)})`,
+      duration: 10000, // 10 seconds before auto-dismiss
+    });
+
+    // Log to console for debugging (context already logged in useSSE)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[QAPanel] SSE parse error received:', context.sessionId);
+    }
+  }, []);
+
   // Initialize SSE hook
-  // Note: abortStream available but not exposed in UI yet (future story for cancel button)
-  const { isStreaming, startStream } = useSSE({
+  // Story 2.1/2.2: Added onParseError for SSE JSON parse error handling
+  // F4: Now extracting wasInterrupted to wire up abortStreaming
+  const { isStreaming, startStream, wasInterrupted } = useSSE({
     onTyping: handleTyping,
     onToken: handleToken,
     onEngineComplete: handleEngineComplete,
     onComplete: handleComplete,
     onError: handleError,
+    onParseError: handleParseError,
   });
+
+  // F4: Wire up wasInterrupted to call abortStreaming when stream is interrupted
+  useEffect(() => {
+    if (wasInterrupted && !isStreaming) {
+      abortStreaming();
+    }
+  }, [wasInterrupted, isStreaming, abortStreaming]);
 
   // Handle message submission
   const handleSubmit = useCallback(async (query: string) => {

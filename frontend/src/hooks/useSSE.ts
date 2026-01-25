@@ -34,6 +34,35 @@ export type StreamEventType =
   | 'complete'
   | 'error';
 
+/**
+ * F9: SSE error types as union for extensibility.
+ */
+export type SSEErrorType = 'sse_json_parse_failed' | 'sse_max_errors_exceeded';
+
+/**
+ * Story 2.4: SSE parse error context for logging.
+ * Includes all relevant identifiers for debugging and monitoring.
+ */
+export interface SSEParseErrorContext {
+  /** User ID from auth session */
+  userId?: string;
+  /** Matter ID extracted from stream URL */
+  matterId?: string;
+  /** Session ID (generated per stream) */
+  sessionId: string;
+  /** Timestamp of error */
+  timestamp: string;
+  /** F9: Type of error - union type for extensibility */
+  errorType: SSEErrorType;
+  /** Raw chunk content (truncated to 1KB) */
+  rawChunk: string;
+  /** Original error message */
+  errorMessage: string;
+}
+
+// F10: Maximum parse errors before aborting stream
+const MAX_PARSE_ERRORS = 5;
+
 export interface StreamEvent<T = unknown> {
   type: StreamEventType;
   data: T;
@@ -67,6 +96,10 @@ export interface CompleteData {
   totalTimeMs: number;
   confidence: number;
   messageId?: string;
+  // Optimistic RAG metadata
+  searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback';
+  embeddingCompletionPct?: number;
+  searchNotice?: string;
 }
 
 export interface ErrorData {
@@ -88,6 +121,11 @@ interface UseSSEOptions {
   onToken?: (data: TokenData) => void;
   /** Called when an engine completes */
   onEngineComplete?: (data: EngineTraceData) => void;
+  /**
+   * Story 2.1/2.2: Called when SSE JSON parsing fails.
+   * Use this to show toast notifications to the user.
+   */
+  onParseError?: (context: SSEParseErrorContext) => void;
 }
 
 interface UseSSEReturn {
@@ -105,6 +143,10 @@ interface UseSSEReturn {
   accumulatedText: string;
   /** Engine traces received so far */
   engineTraces: EngineTraceData[];
+  /** Story 2.1: Count of JSON parse errors in current stream */
+  parseErrorCount: number;
+  /** Story 2.3: Whether stream was interrupted (error or abort with content) */
+  wasInterrupted: boolean;
 }
 
 // ============================================================================
@@ -143,30 +185,21 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   const [error, setError] = useState<Error | null>(null);
   const [accumulatedText, setAccumulatedText] = useState('');
   const [engineTraces, setEngineTraces] = useState<EngineTraceData[]>([]);
+  // Story 2.1: Track parse errors
+  const [parseErrorCount, setParseErrorCount] = useState(0);
+  // Story 2.3: Track if stream was interrupted
+  const [wasInterrupted, setWasInterrupted] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const optionsRef = useRef(options);
+  // Story 2.4: Track session ID and user ID for logging context
+  const sessionIdRef = useRef<string>('');
+  const userIdRef = useRef<string | undefined>(undefined);
 
   // Keep options ref updated
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
-
-  /**
-   * Get auth token from Supabase session.
-   * Task 5.2: Implement EventSource connection with Bearer token.
-   */
-  const getAuthToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      return session?.access_token ?? null;
-    } catch {
-      return null;
-    }
-  }, []);
 
   /**
    * Parse SSE line and extract event data.
@@ -284,6 +317,10 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             totalTimeMs: ((rawData.totalTimeMs ?? rawData.total_time_ms) as number) ?? 0,
             confidence: (rawData.confidence as number) ?? 0,
             messageId: (rawData.messageId ?? rawData.message_id) as string | undefined,
+            // Optimistic RAG metadata
+            searchMode: (rawData.searchMode ?? rawData.search_mode) as CompleteData['searchMode'],
+            embeddingCompletionPct: (rawData.embeddingCompletionPct ?? rawData.embedding_completion_pct) as number | undefined,
+            searchNotice: (rawData.searchNotice ?? rawData.search_notice) as string | undefined,
           };
           optionsRef.current.onComplete?.(completeData);
           break;
@@ -310,23 +347,42 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   /**
    * Start SSE stream.
    * Task 5.2-5.4: Connection, parsing, and reconnection handling.
+   * Story 2.1/2.4: Enhanced with parse error handling and logging.
    */
   const startStream = useCallback(
     async (url: string, body: unknown) => {
+      // F8: Use crypto.randomUUID for guaranteed unique session ID
+      sessionIdRef.current = `sse_${crypto.randomUUID()}`;
+
+      // Story 2.4: Extract matter ID from URL (pattern: /api/chat/{matterId}/stream)
+      const matterIdMatch = url.match(/\/api\/chat\/([^/]+)\/stream/);
+      const matterId = matterIdMatch?.[1];
+
       // Reset state
       setIsStreaming(true);
       setEvents([]);
       setError(null);
       setAccumulatedText('');
       setEngineTraces([]);
+      setParseErrorCount(0);
+      setWasInterrupted(false);
 
       // Create abort controller for cleanup
       abortControllerRef.current = new AbortController();
       const { signal } = abortControllerRef.current;
 
+      // Track if we received a complete event
+      let receivedComplete = false;
+      // Track local parse error count for this stream
+      let localParseErrorCount = 0;
+
       try {
-        // Get auth token
-        const token = await getAuthToken();
+        // Get auth token and user ID
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        userIdRef.current = session?.user?.id;
+
         if (!token) {
           throw new Error('Not authenticated');
         }
@@ -388,25 +444,74 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
               try {
                 const data = JSON.parse(jsonStr);
                 processEvent(currentEventType, data);
-              } catch {
-                // Skip malformed JSON
+                // Track if we received a complete event
+                if (currentEventType === 'complete') {
+                  receivedComplete = true;
+                }
+              } catch (parseError) {
+                // Story 2.1: Log malformed JSON with context
+                localParseErrorCount++;
+                setParseErrorCount(localParseErrorCount);
+
+                // Story 2.4: Create error context for logging
+                const errorContext: SSEParseErrorContext = {
+                  userId: userIdRef.current,
+                  matterId,
+                  sessionId: sessionIdRef.current,
+                  timestamp: new Date().toISOString(),
+                  errorType: 'sse_json_parse_failed',
+                  // Truncate raw chunk to 1KB max
+                  rawChunk: jsonStr.length > 1024 ? jsonStr.substring(0, 1024) + '...' : jsonStr,
+                  errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+                };
+
+                // F7: Only log to console in development
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('[useSSE] JSON parse error:', errorContext);
+                }
+
+                // Story 2.2: Call onParseError callback for toast notification
+                optionsRef.current.onParseError?.(errorContext);
+
+                // F10: Abort stream if too many parse errors
+                if (localParseErrorCount >= MAX_PARSE_ERRORS) {
+                  const maxErrorContext: SSEParseErrorContext = {
+                    ...errorContext,
+                    errorType: 'sse_max_errors_exceeded',
+                    errorMessage: `Aborted after ${MAX_PARSE_ERRORS} parse errors`,
+                  };
+                  if (process.env.NODE_ENV === 'development') {
+                    console.error('[useSSE] Max parse errors reached, aborting:', maxErrorContext);
+                  }
+                  optionsRef.current.onParseError?.(maxErrorContext);
+                  abortControllerRef.current?.abort();
+                  setWasInterrupted(true);
+                  return;
+                }
               }
             }
           }
         }
+
+        // Story 2.3: Check if stream ended without complete event
+        if (!receivedComplete && localParseErrorCount > 0) {
+          setWasInterrupted(true);
+        }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-          // Stream was intentionally aborted, not an error
+          // Story 2.3: Mark as interrupted if we had content
+          setWasInterrupted(true);
           return;
         }
         const error = err instanceof Error ? err : new Error(String(err));
         setError(error);
+        setWasInterrupted(true);
         optionsRef.current.onError?.(error);
       } finally {
         setIsStreaming(false);
       }
     },
-    [getAuthToken, processEvent]
+    [processEvent]
   );
 
   /**
@@ -433,5 +538,7 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
     abortStream,
     accumulatedText,
     engineTraces,
+    parseErrorCount,
+    wasInterrupted,
   };
 }

@@ -82,7 +82,19 @@ interface ChatActions {
   /** Story 11.3: Add engine trace during streaming */
   addTrace: (trace: EngineTrace) => void;
   /** Story 11.3: Complete streaming and finalize message */
-  completeStreaming: (finalContent: string, traces: EngineTrace[], sources?: SourceReference[]) => void;
+  completeStreaming: (
+    finalContent: string,
+    traces: EngineTrace[],
+    sources?: SourceReference[],
+    searchNotice?: string,
+    searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback',
+    embeddingCompletionPct?: number
+  ) => void;
+  /**
+   * Story 2.3: Abort streaming and save incomplete message.
+   * Called when stream is interrupted (error, timeout, or user abort).
+   */
+  abortStreaming: () => void;
   /** Story 11.3: Set typing indicator */
   setTyping: (isTyping: boolean) => void;
 }
@@ -237,11 +249,12 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
 
-      completeStreaming: (finalContent, traces, sources) => {
+      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct) => {
         const { streamingMessageId, messages } = get();
         if (!streamingMessageId) return;
 
         // Create the completed assistant message
+        // Story 2.3: Mark as complete since we received proper 'complete' event
         const completedMessage: ChatMessage = {
           id: streamingMessageId,
           role: 'assistant',
@@ -249,6 +262,12 @@ export const useChatStore = create<ChatStore>()(
           timestamp: new Date().toISOString(),
           engineTraces: traces,
           sources: sources,
+          // Optimistic RAG metadata
+          searchNotice,
+          searchMode,
+          embeddingCompletionPct,
+          // Story 2.3: Mark as successfully completed
+          isComplete: true,
         };
 
         set({
@@ -258,6 +277,41 @@ export const useChatStore = create<ChatStore>()(
           streamingTraces: [],
           isTyping: false,
         });
+      },
+
+      // Story 2.3: Abort streaming and save incomplete message
+      abortStreaming: () => {
+        const { streamingMessageId, streamingContent, streamingTraces, messages } = get();
+        if (!streamingMessageId) return;
+
+        // Only save message if there's some content
+        if (streamingContent.trim()) {
+          const incompleteMessage: ChatMessage = {
+            id: streamingMessageId,
+            role: 'assistant',
+            content: streamingContent,
+            timestamp: new Date().toISOString(),
+            engineTraces: streamingTraces,
+            // Story 2.3: Mark as incomplete
+            isComplete: false,
+          };
+
+          set({
+            messages: [...messages, incompleteMessage],
+            streamingMessageId: null,
+            streamingContent: '',
+            streamingTraces: [],
+            isTyping: false,
+          });
+        } else {
+          // No content, just clear streaming state
+          set({
+            streamingMessageId: null,
+            streamingContent: '',
+            streamingTraces: [],
+            isTyping: false,
+          });
+        }
       },
 
       setTyping: (isTyping) => {

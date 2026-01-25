@@ -2,7 +2,8 @@
 
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, isValid } from 'date-fns';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { SourceReference } from './SourceReference';
 import { EngineTrace } from './EngineTrace';
@@ -13,6 +14,8 @@ interface ChatMessageProps {
   message: ChatMessageType;
   /** Callback when a source reference is clicked */
   onSourceClick?: (source: SourceReferenceType) => void;
+  /** Story 2.3: Callback when user clicks retry on an incomplete message */
+  onRetry?: () => void;
 }
 
 /**
@@ -36,7 +39,7 @@ function formatTimestamp(timestamp: string): string {
   return formatDistanceToNow(date, { addSuffix: true });
 }
 
-export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
+export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const roleLabel = isUser ? 'Your message' : 'LDIP assistant message';
 
@@ -97,10 +100,50 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
           )}
         </div>
 
-        {/* Timestamp */}
-        <span className="text-xs text-muted-foreground">
-          {formatTimestamp(message.timestamp)}
-        </span>
+        {/* Timestamp and completion indicator */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {formatTimestamp(message.timestamp)}
+          </span>
+
+          {/* Story 2.3: Completion indicator (assistant only) */}
+          {/* F6: Added role="status" for accessibility parity with incomplete indicator */}
+          {!isUser && message.isComplete === true && (
+            <span
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+              title="Response completed"
+              role="status"
+              aria-label="Response completed successfully"
+            >
+              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">Complete</span>
+            </span>
+          )}
+
+          {/* Story 2.3: Incomplete indicator with retry (assistant only) */}
+          {!isUser && message.isComplete === false && (
+            <span className="flex items-center gap-1.5">
+              <span
+                className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+                role="status"
+              >
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                <span>Incomplete</span>
+              </span>
+              {onRetry && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRetry}
+                  className="h-5 px-1.5 text-xs"
+                >
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Retry
+                </Button>
+              )}
+            </span>
+          )}
+        </div>
 
         {/* Engine trace (assistant only) - Story 11.3 */}
         {/* Note: Use max instead of sum since engines run in parallel */}
@@ -111,6 +154,18 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
               ...message.engineTraces.map((t) => t.executionTimeMs)
             )}
           />
+        )}
+
+        {/* Search notice for optimistic RAG (assistant only) */}
+        {!isUser && message.searchNotice && (
+          <div
+            className="mt-1 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+            role="status"
+            aria-live="polite"
+          >
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            <span>{message.searchNotice}</span>
+          </div>
         )}
       </div>
     </article>

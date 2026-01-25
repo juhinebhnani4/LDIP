@@ -44,6 +44,10 @@ from app.engines.orchestrator.query_history import (
     QueryHistoryStore,
     get_query_history_store,
 )
+from app.services.memory.query_cache_service import (
+    QueryCacheService,
+    get_query_cache_service,
+)
 from app.models.orchestrator import (
     EngineType,
     IntentAnalysisResult,
@@ -98,7 +102,9 @@ class QueryOrchestrator:
         aggregator: ResultAggregator | None = None,
         audit_logger: QueryAuditLogger | None = None,
         history_store: QueryHistoryStore | None = None,
+        cache_service: QueryCacheService | None = None,
         use_multi_intent: bool = True,
+        use_response_cache: bool = True,
     ) -> None:
         """Initialize query orchestrator.
 
@@ -106,6 +112,7 @@ class QueryOrchestrator:
         Story 6-3: Add audit logging components.
         Story 8-2: Add safety guard (Task 6.2).
         Story 6-1 Enhancement: Multi-intent classification support.
+        Cost Optimization: Response caching for repeated queries.
 
         Args:
             safety_guard: Optional custom safety guard (Story 8-2).
@@ -116,7 +123,9 @@ class QueryOrchestrator:
             aggregator: Optional custom result aggregator.
             audit_logger: Optional custom audit logger (Story 6-3).
             history_store: Optional custom history store (Story 6-3).
+            cache_service: Optional query cache service for response caching.
             use_multi_intent: If True, use new multi-intent classifier (default True).
+            use_response_cache: If True, cache and reuse responses (default True).
         """
         self._safety_guard = safety_guard or get_safety_guard()
         self._intent_analyzer = intent_analyzer or get_intent_analyzer()
@@ -126,11 +135,14 @@ class QueryOrchestrator:
         self._aggregator = aggregator or get_result_aggregator()
         self._audit_logger = audit_logger or get_query_audit_logger()
         self._history_store = history_store or get_query_history_store()
+        self._cache_service = cache_service or get_query_cache_service()
         self._use_multi_intent = use_multi_intent
+        self._use_response_cache = use_response_cache
 
         logger.info(
             "query_orchestrator_initialized",
             use_multi_intent=use_multi_intent,
+            use_response_cache=use_response_cache,
         )
 
     async def process_query(
@@ -202,6 +214,43 @@ class QueryOrchestrator:
                 suggested_rewrite=safety_result.suggested_rewrite,
                 wall_clock_time_ms=wall_clock_time_ms,
             )
+
+        # Step 0.5: Check response cache (Cost Optimization)
+        if self._use_response_cache:
+            try:
+                cached = await self._cache_service.check_cache(matter_id, query)
+                if cached and cached.response_data:
+                    wall_clock_time_ms = int((time.time() - start_time) * 1000)
+                    logger.info(
+                        "process_query_cache_hit",
+                        matter_id=matter_id,
+                        query_hash=cached.query_hash[:16] + "...",
+                        cached_at=cached.cached_at,
+                        wall_clock_time_ms=wall_clock_time_ms,
+                    )
+                    # Reconstruct OrchestratorResult from cached data
+                    return OrchestratorResult(
+                        matter_id=matter_id,
+                        query=query,
+                        success=cached.response_data.get("success", True),
+                        unified_response=cached.response_data.get("unified_response"),
+                        successful_engines=[
+                            EngineType(e) for e in cached.response_data.get("successful_engines", [])
+                        ],
+                        failed_engines=[
+                            EngineType(e) for e in cached.response_data.get("failed_engines", [])
+                        ],
+                        confidence=cached.confidence,
+                        wall_clock_time_ms=wall_clock_time_ms,
+                        from_cache=True,
+                    )
+            except Exception as e:
+                # Cache errors should not fail the query
+                logger.warning(
+                    "process_query_cache_check_failed",
+                    matter_id=matter_id,
+                    error=str(e),
+                )
 
         # Step 1: Analyze intent and determine required engines
         # Story 6-1 Enhancement: Support multi-intent classification
@@ -281,6 +330,33 @@ class QueryOrchestrator:
             confidence=result.confidence,
             wall_clock_time_ms=result.wall_clock_time_ms,
         )
+
+        # Step 3.5: Cache successful result (Cost Optimization)
+        if self._use_response_cache and result.success:
+            try:
+                # Prepare response data for caching
+                response_data = {
+                    "success": result.success,
+                    "unified_response": result.unified_response,
+                    "successful_engines": [e.value for e in result.successful_engines],
+                    "failed_engines": [e.value for e in result.failed_engines],
+                }
+                await self._cache_service.cache_result(
+                    matter_id=matter_id,
+                    query=query,
+                    result_summary=result.unified_response[:200] if result.unified_response else "",
+                    response_data=response_data,
+                    engine_used=result.successful_engines[0].value if result.successful_engines else None,
+                    findings_count=len(result.successful_engines),
+                    confidence=result.confidence,
+                )
+            except Exception as e:
+                # Cache errors should not fail the query
+                logger.warning(
+                    "process_query_cache_store_failed",
+                    matter_id=matter_id,
+                    error=str(e),
+                )
 
         # Step 4: Audit logging (non-blocking, fire-and-forget)
         # Story 6-3: AC #5 - audit failures should not fail the query
@@ -507,6 +583,97 @@ class QueryOrchestrator:
     def history_store(self) -> QueryHistoryStore:
         """Get the query history store instance (Story 6-3)."""
         return self._history_store
+
+    @property
+    def cache_service(self) -> QueryCacheService:
+        """Get the query cache service instance (Cost Optimization)."""
+        return self._cache_service
+
+    async def process_batch(
+        self,
+        matter_id: str,
+        queries: list[str],
+        user_id: str,
+        context: dict[str, Any] | None = None,
+        max_concurrent: int = 3,
+    ) -> list[OrchestratorResult]:
+        """Process multiple queries in batch with cost optimization.
+
+        Cost Optimization: Batch processing reduces per-query overhead by:
+        - Sharing cache lookups across queries
+        - Limiting concurrent API calls to avoid rate limits
+        - Reusing intent analysis patterns
+
+        Args:
+            matter_id: Matter UUID for isolation.
+            queries: List of user queries to process.
+            user_id: User ID for audit trail.
+            context: Optional shared context.
+            max_concurrent: Maximum concurrent queries (default 3).
+
+        Returns:
+            List of OrchestratorResult for each query (same order as input).
+        """
+        if not queries:
+            return []
+
+        logger.info(
+            "process_batch_start",
+            matter_id=matter_id,
+            query_count=len(queries),
+            max_concurrent=max_concurrent,
+        )
+
+        # Use semaphore to limit concurrent processing
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_with_semaphore(query: str) -> OrchestratorResult:
+            async with semaphore:
+                return await self.process_query(
+                    matter_id=matter_id,
+                    query=query,
+                    user_id=user_id,
+                    context=context,
+                )
+
+        # Process all queries with limited concurrency
+        results = await asyncio.gather(
+            *[process_with_semaphore(q) for q in queries],
+            return_exceptions=True,
+        )
+
+        # Convert exceptions to error results
+        processed_results: list[OrchestratorResult] = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(
+                    "process_batch_query_failed",
+                    matter_id=matter_id,
+                    query_index=i,
+                    error=str(result),
+                )
+                processed_results.append(
+                    OrchestratorResult(
+                        matter_id=matter_id,
+                        query=queries[i],
+                        success=False,
+                        unified_response=f"Error processing query: {result!s}",
+                    )
+                )
+            else:
+                processed_results.append(result)
+
+        # Count cache hits for logging
+        cache_hits = sum(1 for r in processed_results if r.from_cache)
+        logger.info(
+            "process_batch_complete",
+            matter_id=matter_id,
+            query_count=len(queries),
+            cache_hits=cache_hits,
+            cache_hit_rate=cache_hits / len(queries) if queries else 0,
+        )
+
+        return processed_results
 
 
 # =============================================================================

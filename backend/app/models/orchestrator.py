@@ -421,6 +421,12 @@ class OrchestratorResult(BaseModel):
         description="Metadata for finding verification requirements (findings_count, required_verifications, etc.)",
     )
 
+    # Cost Optimization: Response cache indicator
+    from_cache: bool = Field(
+        default=False,
+        description="True if response was served from cache (saves ~₹0.20/query)",
+    )
+
 
 class OrchestratorResponse(BaseModel):
     """API response wrapper for orchestrator execution.

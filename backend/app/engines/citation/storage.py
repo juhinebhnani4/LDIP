@@ -18,7 +18,7 @@ from typing import Final
 
 import structlog
 
-from app.core.bbox_search import filter_bboxes_for_item
+from app.core.bbox_search import BboxWordIndex, filter_bboxes_for_item
 from app.core.data_quality import DataQualityMetrics
 from app.core.page_detection import ACT_PATTERN, SECTION_PATTERN, detect_item_page
 from app.engines.citation.abbreviations import (
@@ -143,6 +143,7 @@ class CitationStorageService:
         # Fetch bboxes for per-citation page detection if not provided
         # This improves accuracy when chunks span multiple pages
         bboxes_for_page_lookup: list[dict] = []
+        bbox_index: BboxWordIndex | None = None  # F7: Pre-computed index for O(1) lookup
         if source_bboxes:
             bboxes_for_page_lookup = source_bboxes
         elif source_bbox_ids:
@@ -159,6 +160,10 @@ class CitationStorageService:
                     document_id=document_id,
                     error=str(e),
                 )
+
+        # F7: Build word index once for O(1) candidate lookup
+        if bboxes_for_page_lookup:
+            bbox_index = BboxWordIndex(bboxes_for_page_lookup)
 
         try:
             # Process in batches
@@ -181,47 +186,51 @@ class CitationStorageService:
                     # then fall back to chunk page. Allow NULL - don't default to 1
                     # as that creates incorrect data (user would navigate to wrong page)
                     source_page = extraction_result.page_number
-                    if bboxes_for_page_lookup and citation.raw_text:
-                        detected_page = detect_item_page(
-                            citation.raw_text,
-                            bboxes_for_page_lookup,
-                            key_phrase_patterns=[SECTION_PATTERN, ACT_PATTERN],
-                        )
-                        if detected_page is not None:
-                            source_page = detected_page
-                        elif extraction_result.page_number is not None:
-                            # FR5: Log when falling back to chunk page for monitoring
-                            logger.info(
-                                "citation_page_fallback",
-                                matter_id=matter_id,
-                                document_id=document_id,
-                                act_name=act_name[:50] if act_name else None,
-                                section=citation.section,
-                                fallback_page=extraction_result.page_number,
-                                detection_method="chunk",
-                            )
-
-                    # Log if source_page is still None after all detection attempts
-                    if source_page is None:
-                        logger.debug(
-                            "citation_missing_source_page",
-                            document_id=document_id[:8] if document_id else None,
-                            act_name=act_name[:30] if act_name else None,
-                            section=citation.section,
-                        )
-
-                    # Filter chunk bbox_ids to only those containing this citation's text
-                    # This solves the "chunk-level aggregation" problem where all citations
-                    # in a chunk get all the chunk's bboxes instead of just their own
                     citation_bbox_ids = source_bbox_ids or []
-                    if bboxes_for_page_lookup and citation.raw_text:
-                        filtered_ids = filter_bboxes_for_item(
-                            item_text=citation.raw_text,
-                            chunk_bboxes=bboxes_for_page_lookup,
-                            key_phrase_patterns=[SECTION_PATTERN, ACT_PATTERN],
+
+                    if bbox_index and citation.raw_text:
+                        # F7: Use pre-computed index for O(1) candidate lookup
+                        candidates = bbox_index.find_candidates(citation.raw_text, min_words=2)
+                        if candidates:
+                            detected_page = detect_item_page(
+                                citation.raw_text,
+                                candidates,  # Search only candidates, not all bboxes
+                                key_phrase_patterns=[SECTION_PATTERN, ACT_PATTERN],
+                            )
+                            if detected_page is not None:
+                                source_page = detected_page
+                            elif extraction_result.page_number is not None:
+                                # FR5: Log when falling back to chunk page for monitoring
+                                logger.info(
+                                    "citation_page_fallback",
+                                    matter_id=matter_id,
+                                    document_id=document_id,
+                                    act_name=act_name[:50] if act_name else None,
+                                    section=citation.section,
+                                    fallback_page=extraction_result.page_number,
+                                    detection_method="chunk",
+                                )
+
+                            # Filter candidates to only those containing this citation's text
+                            filtered_ids = filter_bboxes_for_item(
+                                item_text=citation.raw_text,
+                                chunk_bboxes=candidates,  # Search only candidates
+                                key_phrase_patterns=[SECTION_PATTERN, ACT_PATTERN],
+                            )
+                            if filtered_ids:
+                                citation_bbox_ids = filtered_ids
+
+                    # F8: Log if source_page is still None after all detection attempts
+                    # This captures both-null case (detection failed + chunk has no page)
+                    if source_page is None:
+                        logger.info(
+                            "citation_missing_source_page",
+                            matter_id=matter_id,
+                            document_id=document_id,
+                            act_name=act_name[:50] if act_name else None,
+                            section=citation.section,
+                            detection_attempted=bbox_index is not None,
                         )
-                        if filtered_ids:
-                            citation_bbox_ids = filtered_ids
 
                     record = {
                         "matter_id": matter_id,

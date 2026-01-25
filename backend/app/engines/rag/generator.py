@@ -227,16 +227,18 @@ class RAGAnswerGenerator:
 
                 # Post-process: Remove "p. ?" patterns that LLM may generate
                 # despite instructions not to (FR4: Eliminate "p. ?" output)
+                # F6: Narrow patterns to citation contexts only (avoid removing valid content)
                 original_text = answer_text
 
                 # Pattern 1: "(Document, p. ?)" -> "(Document)"
                 answer_text = re.sub(r',\s*p\.?\s*\?\s*\)', ')', answer_text)
 
-                # Pattern 2: ", p. ?" at end of text or before newline
-                answer_text = re.sub(r',\s*p\.?\s*\?(?=\s|$|\n)', '', answer_text)
+                # Pattern 2: ", p. ?" at end of citation reference (before ] or newline)
+                answer_text = re.sub(r',\s*p\.?\s*\?(?=\s*[\]\)]|\s*$|\s*\n)', '', answer_text)
 
-                # Pattern 3: Standalone "p. ?" or "p.?" anywhere
-                answer_text = re.sub(r'\bp\.?\s*\?(?!\w)', '', answer_text)
+                # Pattern 3: "p. ?" after opening paren - "(p. ?)" or "(Doc p. ?)"
+                # F6: Only match in parenthetical contexts, not standalone
+                answer_text = re.sub(r'(\()\s*p\.?\s*\?', r'\1', answer_text)
 
                 # Pattern 4: "(Document p. ?)" without comma -> "(Document)"
                 answer_text = re.sub(r'\s+p\.?\s*\?\s*\)', ')', answer_text)

@@ -20,7 +20,7 @@ Usage:
 """
 
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 # =============================================================================
 # Common patterns for different content types
@@ -28,10 +28,36 @@ from typing import Sequence
 
 # Citation patterns
 SECTION_PATTERN = r"section\s+\d+(?:\s*\([^)]+\))?"
-ACT_PATTERN = r"(?:the\s+)?[\w\s]+act"
+# ACT_PATTERN: Limit to 100 chars to prevent ReDoS backtracking (F2)
+ACT_PATTERN = r"(?:the\s+)?[\w\s]{1,100}act"
 
 # Timeline patterns
 DATE_PATTERN = r"\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}"
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _validate_page_number(page: object) -> int | None:
+    """Validate and return page number, or None if invalid.
+
+    F10: Ensures page_number is a positive integer to prevent
+    invalid data from propagating through the system.
+    """
+    if page is None:
+        return None
+    if isinstance(page, int) and page > 0:
+        return page
+    # Try to convert to int if it's a numeric string
+    if isinstance(page, str):
+        try:
+            parsed = int(page)
+            return parsed if parsed > 0 else None
+        except ValueError:
+            return None
+    return None
 
 
 # =============================================================================
@@ -86,7 +112,8 @@ def detect_item_page(
     for bbox in bboxes:
         bbox_text = (bbox.get("text") or "").lower()
         if text_lower in bbox_text:
-            return bbox.get("page_number")
+            # F10: Validate page_number before returning
+            return _validate_page_number(bbox.get("page_number"))
 
     # Strategy 2: Key phrase matching
     if key_phrase_patterns:
@@ -97,7 +124,8 @@ def detect_item_page(
                 for bbox in bboxes:
                     bbox_text = (bbox.get("text") or "").lower()
                     if phrase in bbox_text:
-                        return bbox.get("page_number")
+                        # F10: Validate page_number before returning
+                        return _validate_page_number(bbox.get("page_number"))
 
     # Strategy 3: Word overlap scoring
     # Find bbox with highest word overlap
@@ -115,6 +143,7 @@ def detect_item_page(
 
         if overlap > best_overlap and overlap >= min_word_overlap:
             best_overlap = overlap
-            best_page = bbox.get("page_number")
+            # F10: Validate page_number before storing
+            best_page = _validate_page_number(bbox.get("page_number"))
 
     return best_page

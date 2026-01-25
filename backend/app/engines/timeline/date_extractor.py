@@ -786,9 +786,10 @@ class DateExtractor:
         filtered_bbox_ids = bbox_ids or []
         filtered_page = page_number
         if bbox_ids and document_id:
-            # Build search text from date_text + context for better matching
-            context_before = raw_date.get("context_before", "")[:200]
-            context_after = raw_date.get("context_after", "")[:200]
+            # F9: Build search text from date_text + context for better matching
+            # Increased from 200 to 500 chars to capture more context for legal clauses
+            context_before = raw_date.get("context_before", "")[:500]
+            context_after = raw_date.get("context_after", "")[:500]
             search_text = f"{context_before} {date_text} {context_after}".strip()
 
             filtered_ids, detected_page = get_filtered_bbox_ids(

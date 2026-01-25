@@ -17,18 +17,34 @@ Usage (any engine):
     )
 """
 
-from functools import lru_cache
-from typing import Sequence
+import threading
+from collections.abc import Sequence
 
 import structlog
 
 from app.core.bbox_search import search_bboxes_for_text
-from app.core.page_detection import SECTION_PATTERN, ACT_PATTERN, DATE_PATTERN
+from app.core.page_detection import ACT_PATTERN, SECTION_PATTERN
 
 logger = structlog.get_logger(__name__)
 
 # In-memory cache for bbox data per document (cleared after processing)
+# Thread-safe access via _bbox_cache_lock
+# F3: Limited to MAX_CACHE_SIZE documents with LRU eviction
 _bbox_cache: dict[str, list[dict]] = {}
+_bbox_cache_lock = threading.Lock()
+MAX_CACHE_SIZE = 50  # Max documents to cache before eviction
+
+
+def _evict_oldest_if_needed() -> None:
+    """Evict oldest cache entries if cache exceeds max size.
+
+    Must be called while holding _bbox_cache_lock.
+    """
+    while len(_bbox_cache) > MAX_CACHE_SIZE:
+        # Python 3.7+ dicts maintain insertion order, so first key is oldest
+        oldest_key = next(iter(_bbox_cache))
+        del _bbox_cache[oldest_key]
+        logger.debug("bbox_cache_evicted", document_id=oldest_key[:8] if oldest_key else None)
 
 
 def set_document_bboxes(document_id: str, bboxes: list[dict]) -> None:
@@ -38,12 +54,15 @@ def set_document_bboxes(document_id: str, bboxes: list[dict]) -> None:
         document_id: Document UUID
         bboxes: List of bbox dicts with 'id', 'text', 'page_number'
     """
-    _bbox_cache[document_id] = bboxes
+    with _bbox_cache_lock:
+        _bbox_cache[document_id] = bboxes
+        _evict_oldest_if_needed()
 
 
 def clear_document_bboxes(document_id: str) -> None:
     """Clear cached bbox data for a document."""
-    _bbox_cache.pop(document_id, None)
+    with _bbox_cache_lock:
+        _bbox_cache.pop(document_id, None)
 
 
 def get_filtered_bbox_ids(
@@ -72,10 +91,11 @@ def get_filtered_bbox_ids(
     if not item_text or not chunk_bbox_ids:
         return chunk_bbox_ids or [], None
 
-    # Get bbox data
+    # Get bbox data (thread-safe cache access)
     bboxes = chunk_bboxes
     if not bboxes and document_id:
-        bboxes = _bbox_cache.get(document_id)
+        with _bbox_cache_lock:
+            bboxes = _bbox_cache.get(document_id)
 
     if not bboxes:
         # No bbox data available, can't filter - return original
@@ -125,20 +145,23 @@ async def fetch_and_cache_bboxes(document_id: str) -> list[dict]:
     Returns:
         List of bbox dicts
     """
-    if document_id in _bbox_cache:
-        return _bbox_cache[document_id]
+    # Thread-safe cache check
+    with _bbox_cache_lock:
+        if document_id in _bbox_cache:
+            return _bbox_cache[document_id]
 
     try:
         from app.services.bounding_box_service import get_bounding_box_service
 
         bbox_service = get_bounding_box_service()
 
-        # Fetch all bboxes (paginated)
+        # Fetch all bboxes (paginated) with max iterations guard (F4)
         all_bboxes = []
         page = 1
         batch_size = 1000
+        max_iterations = 500  # Safety limit: 500 * 1000 = 500K bboxes max
 
-        while True:
+        while page <= max_iterations:
             batch, total = bbox_service.get_bounding_boxes_for_document(
                 document_id=document_id,
                 page=page,
@@ -149,7 +172,17 @@ async def fetch_and_cache_bboxes(document_id: str) -> list[dict]:
                 break
             page += 1
 
-        _bbox_cache[document_id] = all_bboxes
+        if page > max_iterations:
+            logger.warning(
+                "bbox_cache_max_iterations_reached",
+                document_id=document_id[:8],
+                iterations=max_iterations,
+            )
+
+        # Thread-safe cache write with eviction check (F3)
+        with _bbox_cache_lock:
+            _bbox_cache[document_id] = all_bboxes
+            _evict_oldest_if_needed()
         logger.debug(
             "bbox_cache_loaded",
             document_id=document_id[:8],

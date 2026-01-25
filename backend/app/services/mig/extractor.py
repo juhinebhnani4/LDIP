@@ -21,6 +21,7 @@ from app.models.entity import (
     ExtractedEntity,
     ExtractedEntityMention,
     ExtractedRelationship,
+    ExtractionStatus,
     RelationshipType,
 )
 from app.services.mig.prompts import (
@@ -204,7 +205,7 @@ class MIGEntityExtractor:
         Raises:
             MIGExtractorError: If extraction fails after retries.
         """
-        # Handle empty text
+        # Handle empty text - this is success with no entities, not an error
         if not text or not text.strip():
             logger.debug(
                 "mig_extraction_empty_text",
@@ -212,6 +213,7 @@ class MIGEntityExtractor:
                 matter_id=matter_id,
             )
             return EntityExtractionResult(
+                status=ExtractionStatus.SUCCESS,
                 entities=[],
                 relationships=[],
                 source_document_id=document_id,
@@ -314,8 +316,10 @@ class MIGEntityExtractor:
             attempts=MAX_RETRIES,
         )
 
-        # Return empty result on failure (graceful degradation)
+        # Return error result on failure (Story 3.2: distinct error state)
         return EntityExtractionResult(
+            status=ExtractionStatus.ERROR,
+            error_message="Entity extraction failed after multiple retries",
             entities=[],
             relationships=[],
             source_document_id=document_id,
@@ -348,9 +352,10 @@ class MIGEntityExtractor:
         Returns:
             EntityExtractionResult containing extracted entities and relationships.
         """
-        # Handle empty text
+        # Handle empty text - this is success with no entities, not an error
         if not text or not text.strip():
             return EntityExtractionResult(
+                status=ExtractionStatus.SUCCESS,
                 entities=[],
                 relationships=[],
                 source_document_id=document_id,
@@ -425,7 +430,10 @@ class MIGEntityExtractor:
             document_id=document_id,
         )
 
+        # Return error result on failure (Story 3.2: distinct error state)
         return EntityExtractionResult(
+            status=ExtractionStatus.ERROR,
+            error_message="Entity extraction failed after multiple retries",
             entities=[],
             relationships=[],
             source_document_id=document_id,
@@ -479,7 +487,10 @@ class MIGEntityExtractor:
                     "mig_response_not_dict",
                     response_type=type(parsed).__name__,
                 )
-                return self._empty_result(document_id, chunk_id, page_number)
+                return self._empty_result(
+                    document_id, chunk_id, page_number, bbox_ids,
+                    is_error=True, error_message="Unexpected response format from extraction"
+                )
 
             # Parse entities
             entities: list[ExtractedEntity] = []
@@ -565,14 +576,20 @@ class MIGEntityExtractor:
                 error=str(e),
                 response_preview=response_text[:200] if response_text else "",
             )
-            return self._empty_result(document_id, chunk_id, page_number, bbox_ids)
+            return self._empty_result(
+                document_id, chunk_id, page_number, bbox_ids,
+                is_error=True, error_message="Failed to parse extraction response"
+            )
 
         except Exception as e:
             logger.warning(
                 "mig_response_parse_error",
                 error=str(e),
             )
-            return self._empty_result(document_id, chunk_id, page_number, bbox_ids)
+            return self._empty_result(
+                document_id, chunk_id, page_number, bbox_ids,
+                is_error=True, error_message="Failed to parse extraction response"
+            )
 
     def _parse_entity_type(self, type_str: str) -> EntityType | None:
         """Parse entity type string to enum."""
@@ -608,9 +625,26 @@ class MIGEntityExtractor:
         chunk_id: str | None,
         page_number: int | None,
         bbox_ids: list[str] | None = None,
+        *,
+        is_error: bool = False,
+        error_message: str | None = None,
     ) -> EntityExtractionResult:
-        """Create empty extraction result."""
+        """Create empty extraction result.
+
+        Args:
+            document_id: Source document UUID.
+            chunk_id: Optional source chunk UUID.
+            page_number: Optional page number.
+            bbox_ids: Optional bounding box UUIDs.
+            is_error: If True, marks result as error state (Story 3.2).
+            error_message: Error message when is_error=True.
+
+        Returns:
+            Empty EntityExtractionResult with appropriate status.
+        """
         return EntityExtractionResult(
+            status=ExtractionStatus.ERROR if is_error else ExtractionStatus.SUCCESS,
+            error_message=error_message if is_error else None,
             entities=[],
             relationships=[],
             source_document_id=document_id,
@@ -735,13 +769,15 @@ class MIGEntityExtractor:
                 error=str(e),
                 chunks_count=len(chunks),
             )
-            # Return empty results for all chunks on failure
+            # Return error results for all chunks on failure (Story 3.2)
             return [
                 self._empty_result(
                     document_id,
                     c.get("id"),
                     c.get("page_number"),
                     [str(b) for b in c.get("bbox_ids") or []] if c.get("bbox_ids") else [],
+                    is_error=True,
+                    error_message="Batch extraction failed",
                 )
                 for c in chunks
             ]

@@ -42,6 +42,7 @@ from app.models.entity import (
     ExtractedEntity,
     ExtractedEntityMention,
     ExtractedRelationship,
+    ExtractionStatus,
     RelationshipType,
 )
 from app.models.job import (
@@ -191,6 +192,7 @@ __all__ = [
     "ExtractedEntity",
     "ExtractedEntityMention",
     "ExtractedRelationship",
+    "ExtractionStatus",
     "RelationshipType",
     # Matter models
     "Matter",

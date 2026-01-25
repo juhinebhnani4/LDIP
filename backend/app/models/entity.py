@@ -241,12 +241,37 @@ class ExtractedRelationship(BaseModel):
     )
 
 
+class ExtractionStatus(str, Enum):
+    """Status of entity extraction operation.
+
+    Used to distinguish between successful extraction with no results
+    vs extraction that failed due to an error.
+
+    Story 3.2: Clear Error States & Feedback
+    """
+
+    SUCCESS = "success"
+    ERROR = "error"
+
+
 class EntityExtractionResult(BaseModel):
     """Complete extraction result from Gemini.
 
     Contains all entities and relationships extracted from a text chunk.
+
+    Story 3.2: Added status and error_message fields to distinguish
+    between "no entities found" (success with empty list) and
+    "extraction failed" (error state).
     """
 
+    status: ExtractionStatus = Field(
+        default=ExtractionStatus.SUCCESS,
+        description="Extraction status: 'success' or 'error'",
+    )
+    error_message: str | None = Field(
+        None,
+        description="Error message when status is 'error' (None for success)",
+    )
     entities: list[ExtractedEntity] = Field(
         default_factory=list, description="Extracted entities"
     )

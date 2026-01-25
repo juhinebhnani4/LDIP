@@ -121,6 +121,12 @@ const ERROR_MESSAGES_WITH_ACTIONS: Record<string, ErrorMessageWithAction> = {
   },
 
   // Processing Errors
+  ENTITY_EXTRACTION_FAILED: {
+    title: 'Entity Extraction Failed',
+    description: 'We could not extract entities from this document. Please try again.',
+    isRetryable: true,
+    action: { type: 'retry', label: 'Try Again' },
+  },
   OCR_FAILED: {
     title: 'Document Processing Failed',
     description: 'We could not process this document. You can retry or skip it.',

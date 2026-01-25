@@ -14,6 +14,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ActionableError } from '@/components/ui/actionable-error';
+import { ApiError } from '@/lib/api/client';
 import { EntitiesHeader } from './EntitiesHeader';
 import { EntitiesGraph } from './EntitiesGraph';
 import { EntitiesDetailPanel } from './EntitiesDetailPanel';
@@ -272,17 +274,34 @@ export function EntitiesContent({
 
   const isLoading = entitiesLoading || edgesLoading;
 
+  // Handle retry for entity loading errors
+  const handleRetry = useCallback(async () => {
+    await mutateEntities();
+  }, [mutateEntities]);
+
+  // Story 3.1: Distinguish error state from empty state
+  // Error state: API call failed - show ActionableError with retry
   if (entitiesError) {
+    // F7: Use ApiError code if available, otherwise use generic error
+    // (ENTITY_EXTRACTION_FAILED is for extraction-specific errors, not network errors)
+    const errorCode = entitiesError instanceof ApiError
+      ? entitiesError.code
+      : 'UNKNOWN_ERROR';
+
     return (
       <div
         className={cn(
-          `flex items-center justify-center ${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg`,
+          `flex items-center justify-center ${ENTITY_VIEW_HEIGHT} bg-muted/30 border rounded-lg p-4`,
           className
         )}
       >
-        <p className="text-destructive">
-          Failed to load entities. Please try again.
-        </p>
+        <ActionableError
+          error={entitiesError}
+          errorCode={errorCode}
+          onRetry={handleRetry}
+          matterId={matterId}
+          className="max-w-md"
+        />
       </div>
     );
   }

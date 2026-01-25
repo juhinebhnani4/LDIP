@@ -89,6 +89,9 @@ interface MatterActions {
   /** Remove matter from local state after deletion */
   deleteMatter: (matterId: string) => void;
 
+  /** Remove multiple matters from local state after bulk deletion */
+  deleteMatters: (matterIds: string[]) => void;
+
   /** Set sort option */
   setSortBy: (sortBy: MatterSortOption) => void;
 
@@ -291,6 +294,24 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
 
     // Clear currentMatter if it was the deleted one
     if (currentMatter?.id === matterId) {
+      set({ currentMatter: null });
+    }
+  },
+
+  /**
+   * Remove multiple matters from local state after bulk deletion.
+   * Called after successful API bulk deletion to update UI immediately.
+   */
+  deleteMatters: (matterIds: string[]) => {
+    const { matters, currentMatter } = get();
+    const idsToDelete = new Set(matterIds);
+
+    // Remove from matters list
+    const updatedMatters = matters.filter((m) => !idsToDelete.has(m.id));
+    set({ matters: updatedMatters });
+
+    // Clear currentMatter if it was one of the deleted ones
+    if (currentMatter && idsToDelete.has(currentMatter.id)) {
       set({ currentMatter: null });
     }
   },

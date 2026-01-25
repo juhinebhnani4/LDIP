@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { MatterCardData } from '@/types/matter';
 
@@ -47,6 +48,14 @@ interface MatterCardProps {
   matter: MatterCardData;
   /** Optional className for styling */
   className?: string;
+  /** Whether selection mode is active */
+  selectionMode?: boolean;
+  /** Whether this card is selected */
+  isSelected?: boolean;
+  /** Callback when selection changes */
+  onSelectChange?: (checked: boolean) => void;
+  /** Whether this matter can be deleted (owner only) */
+  canDelete?: boolean;
 }
 
 // Time constants for readability
@@ -216,15 +225,44 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
   );
 }
 
-export function MatterCard({ matter, className }: MatterCardProps) {
+export function MatterCard({
+  matter,
+  className,
+  selectionMode = false,
+  isSelected = false,
+  onSelectChange,
+  canDelete = true,
+}: MatterCardProps) {
   const isProcessing = matter.processingStatus === 'processing';
+
+  const handleCheckboxChange = (checked: boolean | 'indeterminate') => {
+    if (onSelectChange && checked !== 'indeterminate') {
+      onSelectChange(checked);
+    }
+  };
 
   return (
     <Card
-      className={cn('hover:shadow-md transition-shadow', className)}
+      className={cn(
+        'hover:shadow-md transition-shadow relative',
+        isSelected && 'ring-2 ring-primary bg-primary/5',
+        className
+      )}
       role="article"
       aria-label={`Matter: ${matter.title}`}
+      aria-selected={selectionMode ? isSelected : undefined}
     >
+      {/* Selection checkbox - visible in selection mode */}
+      {selectionMode && canDelete && (
+        <div className="absolute top-3 right-3 z-10">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={handleCheckboxChange}
+            aria-label={`Select ${matter.title}`}
+            className="h-5 w-5 border-2"
+          />
+        </div>
+      )}
       <CardContent className="flex flex-col gap-3 pt-4">
         {isProcessing ? (
           <ProcessingContent matter={matter} />

@@ -46,7 +46,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
 
   const handleDeleteMatter = async () => {
     try {
-      await mattersApi.deleteMatter(matterId);
+      await mattersApi.delete(matterId);
       deleteMatter(matterId);
       toast.success('Matter deleted successfully');
       router.push('/');

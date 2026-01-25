@@ -1,18 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Plus, FolderOpen } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MatterCard } from './MatterCard';
 import { MatterCardErrorBoundary } from './MatterCardErrorBoundary';
+import { BulkMatterSelectionToolbar } from './BulkMatterSelectionToolbar';
+import { BulkDeleteMattersDialog } from './BulkDeleteMattersDialog';
 import { useMatterStore, selectSortedMatters, initializeViewMode } from '@/stores/matterStore';
 import {
   useBackgroundProcessingStore,
   selectCompletedMatters,
 } from '@/stores/backgroundProcessingStore';
+import { mattersApi } from '@/lib/api/matters';
 import { cn } from '@/lib/utils';
 
 /**
@@ -120,6 +124,7 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   const isLoading = useMatterStore((state) => state.isLoading);
   const error = useMatterStore((state) => state.error);
   const viewMode = useMatterStore((state) => state.viewMode);
+  const deleteMattersFromStore = useMatterStore((state) => state.deleteMatters);
   // useShallow prevents re-renders when array contents are equal
   const sortedMatters = useMatterStore(useShallow(selectSortedMatters));
 
@@ -130,6 +135,83 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   const removeBackgroundMatter = useBackgroundProcessingStore(
     (state) => state.removeBackgroundMatter
   );
+
+  // Selection state for bulk operations
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+
+  // Filter to only owner matters (only owners can delete)
+  const deletableMatters = sortedMatters.filter((m) => m.role === 'owner');
+  const deletableMatterIds = new Set(deletableMatters.map((m) => m.id));
+
+  // Selection mode is active when there are matters to select
+  const selectionMode = deletableMatters.length > 0;
+
+  // Compute selection states
+  const selectedCount = selectedIds.size;
+  const allSelected = deletableMatters.length > 0 && selectedCount === deletableMatters.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
+  // Get titles of selected matters for dialog
+  const selectedMatterTitles = sortedMatters
+    .filter((m) => selectedIds.has(m.id))
+    .map((m) => m.title);
+
+  // Selection handlers
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedIds(new Set(deletableMatters.map((m) => m.id)));
+      } else {
+        setSelectedIds(new Set());
+      }
+    },
+    [deletableMatters]
+  );
+
+  const handleSelectOne = useCallback((matterId: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(matterId);
+      } else {
+        newSet.delete(matterId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async () => {
+    const idsToDelete = Array.from(selectedIds);
+    if (idsToDelete.length === 0) return;
+
+    const result = await mattersApi.deleteMany(idsToDelete);
+
+    // Update local store for successful deletions
+    if (result.succeeded > 0) {
+      deleteMattersFromStore(idsToDelete.slice(0, result.succeeded));
+    }
+
+    // Show result toast
+    if (result.failed === 0) {
+      toast.success(`Deleted ${result.succeeded} matter${result.succeeded !== 1 ? 's' : ''}`);
+    } else if (result.succeeded > 0) {
+      toast.warning(
+        `Deleted ${result.succeeded} matter${result.succeeded !== 1 ? 's' : ''}, ` +
+          `failed to delete ${result.failed}`
+      );
+    } else {
+      toast.error(`Failed to delete matters: ${result.errors[0] || 'Unknown error'}`);
+    }
+
+    // Clear selection
+    setSelectedIds(new Set());
+  }, [selectedIds, deleteMattersFromStore]);
 
   // Initialize view mode from localStorage and fetch matters on mount
   useEffect(() => {
@@ -154,6 +236,20 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
       return () => clearTimeout(timeoutId);
     }
   }, [completedBackgroundMatters, removeBackgroundMatter]);
+
+  // Clear selection when matters change (e.g., after deletion)
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const currentMatterIds = new Set(sortedMatters.map((m) => m.id));
+      const newSelected = new Set<string>();
+      prev.forEach((id) => {
+        if (currentMatterIds.has(id)) {
+          newSelected.add(id);
+        }
+      });
+      return newSelected;
+    });
+  }, [sortedMatters]);
 
   const gridClasses = cn(
     'grid gap-4',
@@ -195,19 +291,49 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
 
   // Normal state with matters
   return (
-    <div
-      className={gridClasses}
-      role="feed"
-      aria-label="Matter cards"
-      aria-busy={isLoading}
-      data-tour="matter-cards"
-    >
-      <NewMatterCard />
-      {sortedMatters.map((matter) => (
-        <MatterCardErrorBoundary key={matter.id} matterId={matter.id}>
-          <MatterCard matter={matter} />
-        </MatterCardErrorBoundary>
-      ))}
-    </div>
+    <>
+      {/* Bulk selection toolbar - show when there are deletable matters */}
+      {selectionMode && (
+        <BulkMatterSelectionToolbar
+          totalCount={deletableMatters.length}
+          selectedCount={selectedCount}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onSelectAllChange={handleSelectAll}
+          onDeleteClick={() => setBulkDeleteDialogOpen(true)}
+          onClearSelection={handleClearSelection}
+        />
+      )}
+
+      {/* Matter cards grid */}
+      <div
+        className={gridClasses}
+        role="feed"
+        aria-label="Matter cards"
+        aria-busy={isLoading}
+        data-tour="matter-cards"
+      >
+        <NewMatterCard />
+        {sortedMatters.map((matter) => (
+          <MatterCardErrorBoundary key={matter.id} matterId={matter.id}>
+            <MatterCard
+              matter={matter}
+              selectionMode={selectionMode}
+              isSelected={selectedIds.has(matter.id)}
+              onSelectChange={(checked) => handleSelectOne(matter.id, checked)}
+              canDelete={deletableMatterIds.has(matter.id)}
+            />
+          </MatterCardErrorBoundary>
+        ))}
+      </div>
+
+      {/* Bulk delete confirmation dialog */}
+      <BulkDeleteMattersDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        matterTitles={selectedMatterTitles}
+        onDelete={handleBulkDelete}
+      />
+    </>
   );
 }

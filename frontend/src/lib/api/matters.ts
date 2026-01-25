@@ -90,6 +90,29 @@ export async function deleteMatter(matterId: string): Promise<void> {
 }
 
 /**
+ * Bulk delete multiple matters.
+ * Requires owner role on each matter.
+ * Uses Promise.allSettled to handle partial failures gracefully.
+ *
+ * @returns Object with counts of succeeded and failed deletions
+ */
+export async function deleteMatters(
+  matterIds: string[]
+): Promise<{ succeeded: number; failed: number; errors: string[] }> {
+  const results = await Promise.allSettled(
+    matterIds.map((id) => deleteMatter(id))
+  );
+
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+  const failedResults = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+  const errors = failedResults.map((r) =>
+    r.reason instanceof Error ? r.reason.message : String(r.reason)
+  );
+
+  return { succeeded, failed: failedResults.length, errors };
+}
+
+/**
  * Get all members of a matter.
  */
 export async function getMembers(matterId: string): Promise<MatterMember[]> {
@@ -145,6 +168,7 @@ export const mattersApi = {
   get: getMatter,
   update: updateMatter,
   delete: deleteMatter,
+  deleteMany: deleteMatters,
   getMembers,
   inviteMember,
   updateMemberRole,

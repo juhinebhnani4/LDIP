@@ -7,13 +7,14 @@
  * - Total document count
  * - Document type breakdown
  * - Processing banner with progress
+ * - Stuck documents warning with retry all button
  * - Add Files button
  *
  * Story 10D.3: Documents Tab File List
  * Task 2: Create DocumentsHeader with statistics and processing banner
  */
 
-import { FileText, FolderOpen, Gavel, Paperclip, Plus, Loader2 } from 'lucide-react';
+import { FileText, FolderOpen, Gavel, Paperclip, Plus, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
@@ -27,10 +28,16 @@ interface DocumentsHeaderProps {
   processingCount: number;
   /** Percentage of documents processing */
   processingPercent: number;
+  /** Number of stuck documents (failed or stuck processing) */
+  stuckCount?: number;
   /** Breakdown by document type */
   typeBreakdown: Record<DocumentType, number>;
   /** Callback when Add Files button is clicked */
   onAddFiles: () => void;
+  /** Callback when Retry All Stuck button is clicked */
+  onRetryAllStuck?: () => void;
+  /** Whether retry all operation is in progress */
+  isRetryingAll?: boolean;
 }
 
 /**
@@ -66,8 +73,11 @@ export function DocumentsHeader({
   totalCount,
   processingCount,
   processingPercent,
+  stuckCount = 0,
   typeBreakdown,
   onAddFiles,
+  onRetryAllStuck,
+  isRetryingAll = false,
 }: DocumentsHeaderProps) {
   return (
     <div className="space-y-4">
@@ -128,6 +138,34 @@ export function DocumentsHeader({
                 aria-label={`${100 - processingPercent}% of documents indexed`}
               />
             </div>
+          </div>
+        </Alert>
+      )}
+
+      {/* Stuck/Failed documents warning banner */}
+      {stuckCount > 0 && onRetryAllStuck && (
+        <Alert className="bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" aria-hidden="true" />
+              <AlertDescription className="text-amber-800 dark:text-amber-200">
+                {stuckCount} {stuckCount === 1 ? 'document has' : 'documents have'} failed or appear stuck
+              </AlertDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetryAllStuck}
+              disabled={isRetryingAll}
+              className="border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50"
+            >
+              {isRetryingAll ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              Retry All
+            </Button>
           </div>
         </Alert>
       )}

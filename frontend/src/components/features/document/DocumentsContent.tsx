@@ -15,10 +15,12 @@ import { useState, useCallback, useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { DocumentList } from './DocumentList';
 import { DocumentsHeader } from './DocumentsHeader';
 import { AddDocumentsDialog } from './AddDocumentsDialog';
 import { useDocuments } from '@/hooks/useDocuments';
+import { retryAllStuckDocuments } from '@/lib/api/documents';
 import type { DocumentListItem } from '@/types/document';
 
 interface DocumentsContentProps {
@@ -112,6 +114,8 @@ export function DocumentsContent({
 }: DocumentsContentProps) {
   // Dialog state for adding documents
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  // Retry all stuck state
+  const [isRetryingAll, setIsRetryingAll] = useState(false);
 
   // Fetch documents using hook
   const { documents, isLoading, error, refresh } = useDocuments(matterId);
@@ -119,19 +123,25 @@ export function DocumentsContent({
   // Calculate processing documents count
   const processingStats = useMemo(() => {
     if (!documents.length) {
-      return { processingCount: 0, totalCount: 0, processingPercent: 0 };
+      return { processingCount: 0, totalCount: 0, processingPercent: 0, stuckCount: 0 };
     }
 
     const processingDocs = documents.filter(
       (d) => d.status === 'processing' || d.status === 'pending'
     );
 
+    // Stuck documents: failed status (we can't tell time here, so just count failed)
+    const stuckDocs = documents.filter(
+      (d) => d.status === 'failed' || d.status === 'ocr_failed'
+    );
+
     const processingCount = processingDocs.length;
     const totalCount = documents.length;
     const processingPercent =
       totalCount > 0 ? Math.round((processingCount / totalCount) * 100) : 0;
+    const stuckCount = stuckDocs.length;
 
-    return { processingCount, totalCount, processingPercent };
+    return { processingCount, totalCount, processingPercent, stuckCount };
   }, [documents]);
 
   // Calculate document type breakdown
@@ -161,6 +171,28 @@ export function DocumentsContent({
     refresh();
   }, [refresh]);
 
+  // Handle retry all stuck documents
+  const handleRetryAllStuck = useCallback(async () => {
+    setIsRetryingAll(true);
+    try {
+      const result = await retryAllStuckDocuments(matterId);
+      if (result.retried > 0) {
+        toast.success(`Retrying ${result.retried} document${result.retried !== 1 ? 's' : ''}`);
+      } else {
+        toast.info('No documents needed retry');
+      }
+      if (result.errors.length > 0) {
+        toast.warning(`${result.errors.length} document${result.errors.length !== 1 ? 's' : ''} failed to retry`);
+      }
+      refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to retry documents';
+      toast.error(message);
+    } finally {
+      setIsRetryingAll(false);
+    }
+  }, [matterId, refresh]);
+
   // Show loading state
   if (isLoading && !documents.length) {
     return <DocumentsSkeleton />;
@@ -179,8 +211,11 @@ export function DocumentsContent({
           totalCount={processingStats.totalCount}
           processingCount={processingStats.processingCount}
           processingPercent={processingStats.processingPercent}
+          stuckCount={processingStats.stuckCount}
           typeBreakdown={typeBreakdown}
           onAddFiles={handleAddFiles}
+          onRetryAllStuck={handleRetryAllStuck}
+          isRetryingAll={isRetryingAll}
         />
 
         {/* Error Display (inline, when data exists) */}

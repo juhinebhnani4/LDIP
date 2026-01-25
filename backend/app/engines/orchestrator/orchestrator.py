@@ -54,6 +54,7 @@ from app.models.orchestrator import (
     IntentClassification,
     OrchestratorResult,
     QueryIntent,
+    SourceReference,
 )
 from app.models.safety import SafetyCheckResult
 from app.services.safety import SafetyGuard, get_safety_guard
@@ -229,6 +230,10 @@ class QueryOrchestrator:
                         wall_clock_time_ms=wall_clock_time_ms,
                     )
                     # Reconstruct OrchestratorResult from cached data
+                    # Restore sources from cached data
+                    cached_sources = [
+                        SourceReference(**s) for s in cached.response_data.get("sources", [])
+                    ]
                     return OrchestratorResult(
                         matter_id=matter_id,
                         query=query,
@@ -240,6 +245,7 @@ class QueryOrchestrator:
                         failed_engines=[
                             EngineType(e) for e in cached.response_data.get("failed_engines", [])
                         ],
+                        sources=cached_sources,
                         confidence=cached.confidence,
                         wall_clock_time_ms=wall_clock_time_ms,
                         from_cache=True,
@@ -334,12 +340,13 @@ class QueryOrchestrator:
         # Step 3.5: Cache successful result (Cost Optimization)
         if self._use_response_cache and result.success:
             try:
-                # Prepare response data for caching
+                # Prepare response data for caching (include sources for full restore)
                 response_data = {
                     "success": result.success,
                     "unified_response": result.unified_response,
                     "successful_engines": [e.value for e in result.successful_engines],
                     "failed_engines": [e.value for e in result.failed_engines],
+                    "sources": [s.model_dump() for s in result.sources] if result.sources else [],
                 }
                 await self._cache_service.cache_result(
                     matter_id=matter_id,

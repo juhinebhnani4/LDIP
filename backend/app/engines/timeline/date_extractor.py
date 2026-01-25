@@ -31,6 +31,7 @@ from app.core.cost_tracking import (
     CostTracker,
     LLMProvider,
     estimate_tokens,
+    persist_cost,
 )
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_SYSTEM_PROMPT,
@@ -269,6 +270,7 @@ class DateExtractor:
             output_tokens = estimate_tokens(response_text) if response_text else 0
             cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
             cost_tracker.log_cost()
+            await persist_cost(cost_tracker)
 
             # Parse response
             result = self._parse_response(
@@ -597,6 +599,7 @@ class DateExtractor:
             output_tokens = estimate_tokens(response_text)
             cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
             cost_tracker.log_cost()
+            # Note: persist_cost not called here - sync context, costs logged only
 
             result = self._parse_response(
                 response_text,

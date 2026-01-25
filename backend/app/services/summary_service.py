@@ -25,6 +25,7 @@ from app.core.cost_tracking import (
     BatchCostAggregator,
     CostTracker,
     LLMProvider,
+    persist_cost,
 )
 from app.engines.summary.prompts import (
     CURRENT_STATUS_SYSTEM_PROMPT,
@@ -812,6 +813,7 @@ class SummaryService:
                     output_tokens=response.usage.completion_tokens,
                 )
             cost_tracker.log_cost()
+            await persist_cost(cost_tracker)
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
@@ -916,6 +918,7 @@ class SummaryService:
                     output_tokens=response.usage.completion_tokens,
                 )
             cost_tracker.log_cost()
+            await persist_cost(cost_tracker)
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
@@ -1014,6 +1017,7 @@ class SummaryService:
                     output_tokens=response.usage.completion_tokens,
                 )
             cost_tracker.log_cost()
+            await persist_cost(cost_tracker)
 
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)

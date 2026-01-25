@@ -22,6 +22,7 @@ from app.core.cost_tracking import (
     CostTracker,
     LLMProvider,
     estimate_tokens,
+    persist_cost,
 )
 from app.engines.rag.prompts import (
     MAX_CONTEXT_CHUNKS,
@@ -257,6 +258,7 @@ class RAGAnswerGenerator:
                 output_tokens = estimate_tokens(answer_text)
                 cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
                 cost_tracker.log_cost()
+                await persist_cost(cost_tracker)
 
                 # Truncate if too long
                 if len(answer_text) > MAX_ANSWER_LENGTH:

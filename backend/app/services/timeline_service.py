@@ -5,6 +5,8 @@ for the Timeline Construction Engine.
 
 Story 4-1: Date Extraction with Gemini
 Story 4-2: Event Classification
+
+Note: RawDateListItem now includes event_type from LLM extraction (2026-01-26)
 """
 
 import asyncio
@@ -126,15 +128,19 @@ class TimelineService:
         # Convert dates to event records
         event_records = []
         for date_obj in dates:
-            # Combine context into description
-            context_parts = []
-            if date_obj.context_before:
-                context_parts.append(date_obj.context_before)
-            context_parts.append(f"[{date_obj.date_text}]")
-            if date_obj.context_after:
-                context_parts.append(date_obj.context_after)
-
-            description = " ".join(context_parts)
+            # Use event_description if available, otherwise build from context
+            description = ""
+            if hasattr(date_obj, 'event_description') and date_obj.event_description:
+                description = date_obj.event_description
+            else:
+                # Fallback: Combine context into description
+                context_parts = []
+                if date_obj.context_before:
+                    context_parts.append(date_obj.context_before)
+                context_parts.append(f"[{date_obj.date_text}]")
+                if date_obj.context_after:
+                    context_parts.append(date_obj.context_after)
+                description = " ".join(context_parts)
 
             # Add ambiguity marker to description if date is ambiguous
             # Format: [AMBIGUOUS: reason] at the start of description
@@ -143,13 +149,20 @@ class TimelineService:
             elif date_obj.is_ambiguous:
                 description = f"[AMBIGUOUS] {description}"
 
+            # Use event_type if available and valid, otherwise use "raw_date"
+            event_type = "raw_date"
+            if hasattr(date_obj, 'event_type') and date_obj.event_type:
+                valid_types = ["filing", "hearing", "order", "notice", "transaction", "document", "deadline", "incident"]
+                if date_obj.event_type in valid_types:
+                    event_type = date_obj.event_type
+
             event_records.append({
                 "matter_id": matter_id,
                 "document_id": document_id,
                 "event_date": date_obj.extracted_date.isoformat(),
                 "event_date_precision": date_obj.date_precision,
                 "event_date_text": date_obj.date_text,
-                "event_type": "raw_date",  # Pre-classification type
+                "event_type": event_type,
                 "description": description[:5000],  # Limit description length
                 "source_page": date_obj.page_number,
                 "source_bbox_ids": date_obj.bbox_ids,
@@ -223,16 +236,25 @@ class TimelineService:
         if not dates:
             return []
 
+        # Valid event types from prompts
+        valid_types = {
+            "filing", "hearing", "order", "notice", "transaction",
+            "document", "deadline", "incident", "unclassified"
+        }
+
         event_records = []
         for date_obj in dates:
-            context_parts = []
-            if date_obj.context_before:
-                context_parts.append(date_obj.context_before)
-            context_parts.append(f"[{date_obj.date_text}]")
-            if date_obj.context_after:
-                context_parts.append(date_obj.context_after)
-
-            description = " ".join(context_parts)
+            # Use event_description if available, otherwise build from context
+            if hasattr(date_obj, 'event_description') and date_obj.event_description:
+                description = date_obj.event_description
+            else:
+                context_parts = []
+                if date_obj.context_before:
+                    context_parts.append(date_obj.context_before)
+                context_parts.append(f"[{date_obj.date_text}]")
+                if date_obj.context_after:
+                    context_parts.append(date_obj.context_after)
+                description = " ".join(context_parts)
 
             # Add ambiguity marker to description if date is ambiguous
             if date_obj.is_ambiguous and date_obj.ambiguity_reason:
@@ -240,13 +262,19 @@ class TimelineService:
             elif date_obj.is_ambiguous:
                 description = f"[AMBIGUOUS] {description}"
 
+            # Use event_type if available and valid, otherwise use "raw_date"
+            event_type = "raw_date"
+            if hasattr(date_obj, 'event_type') and date_obj.event_type:
+                if date_obj.event_type in valid_types:
+                    event_type = date_obj.event_type
+
             event_records.append({
                 "matter_id": matter_id,
                 "document_id": document_id,
                 "event_date": date_obj.extracted_date.isoformat(),
                 "event_date_precision": date_obj.date_precision,
                 "event_date_text": date_obj.date_text,
-                "event_type": "raw_date",
+                "event_type": event_type,
                 "description": description[:5000],
                 "source_page": date_obj.page_number,
                 "source_bbox_ids": date_obj.bbox_ids,
@@ -1278,6 +1306,7 @@ class TimelineService:
             event_date=event_date,
             event_date_precision=row.get("event_date_precision", "day"),
             event_date_text=row.get("event_date_text"),
+            event_type=row.get("event_type", "raw_date"),
             description=clean_description,
             document_id=row.get("document_id"),
             source_page=row.get("source_page"),

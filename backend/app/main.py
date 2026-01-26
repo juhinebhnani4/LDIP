@@ -1,4 +1,7 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+Updated: 2026-01-26 15:30 - Force reload for timeline event_type fix v2
+"""
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -29,6 +32,7 @@ from app.api.routes import (
     health,
     inspector,
     jobs,
+    library,
     matters,
     notifications,
     ocr_validation,
@@ -310,6 +314,8 @@ def create_app() -> FastAPI:
     app.include_router(entities.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(citations.router, prefix="/api")
+    app.include_router(library.router, prefix="/api")
+    app.include_router(library.matters_router, prefix="/api")
     app.include_router(timeline.router, prefix="/api")
     app.include_router(anomalies.router, prefix="/api")
     app.include_router(contradiction.router, prefix="/api")

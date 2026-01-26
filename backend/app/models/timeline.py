@@ -129,6 +129,14 @@ class ExtractedDate(BaseModel):
     date_precision: Literal["day", "month", "year", "approximate"] = Field(
         ..., description="Precision level of the extracted date"
     )
+    event_type: str = Field(
+        default="unclassified",
+        description="Event type: filing, hearing, order, notice, transaction, document, deadline, incident, unclassified"
+    )
+    event_description: str = Field(
+        default="",
+        description="Clear, action-oriented summary of the event (10-20 words)"
+    )
     context_before: str = Field(
         default="", description="Up to 200 words before the date"
     )
@@ -256,6 +264,7 @@ class RawDateListItem(BaseModel):
     event_date: date = Field(..., alias="eventDate", description="Extracted date")
     event_date_precision: str = Field(..., alias="eventDatePrecision", description="Date precision")
     event_date_text: str | None = Field(None, alias="eventDateText", description="Original date text")
+    event_type: str = Field(default="raw_date", alias="eventType", description="Event type classification")
     description: str = Field(..., description="Context text")
     document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
     source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
@@ -452,6 +461,7 @@ class TimelineEventWithEntities(BaseModel):
     event_type: str = Field(..., alias="eventType", description="Event type")
     description: str = Field(..., description="Event description")
     document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
+    document_name: str | None = Field(None, alias="documentName", description="Source document filename")
     source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
     confidence: float = Field(..., description="Classification confidence")
     entities: list[EntityReference] = Field(

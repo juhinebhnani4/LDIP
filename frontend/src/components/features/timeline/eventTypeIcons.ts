@@ -15,6 +15,7 @@ import {
   CreditCard,
   File,
   Clock,
+  AlertCircle,
   HelpCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ export const EVENT_TYPE_ICONS: Record<TimelineEventType, LucideIcon> = {
   transaction: CreditCard,
   document: File,
   deadline: Clock,
+  incident: AlertCircle,
   unclassified: HelpCircle,
   raw_date: HelpCircle,
 };
@@ -46,6 +48,7 @@ export const EVENT_TYPE_LABELS: Record<TimelineEventType, string> = {
   transaction: 'Transaction',
   document: 'Document',
   deadline: 'Deadline',
+  incident: 'Incident',
   unclassified: 'Unclassified',
   raw_date: 'Date',
 };
@@ -61,6 +64,7 @@ export const EVENT_TYPE_COLORS: Record<TimelineEventType, string> = {
   transaction: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
   document: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
   deadline: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  incident: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
   unclassified: 'bg-slate-100 text-slate-600 dark:bg-slate-900/30 dark:text-slate-400',
   raw_date: 'bg-slate-100 text-slate-600 dark:bg-slate-900/30 dark:text-slate-400',
 };
@@ -77,6 +81,7 @@ export const EVENT_TYPE_MARKER_BG: Record<TimelineEventType, string> = {
   transaction: 'bg-pink-200 dark:bg-pink-800',
   document: 'bg-gray-200 dark:bg-gray-700',
   deadline: 'bg-red-200 dark:bg-red-800',
+  incident: 'bg-orange-200 dark:bg-orange-800',
   unclassified: 'bg-slate-200 dark:bg-slate-700',
   raw_date: 'bg-slate-200 dark:bg-slate-700',
 };

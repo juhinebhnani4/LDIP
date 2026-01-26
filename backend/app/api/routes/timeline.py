@@ -1026,6 +1026,7 @@ async def get_timeline_with_entities(
                         event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
                         description=e.description,
                         document_id=e.document_id,
+                        document_name=getattr(e, 'document_name', None),
                         source_page=e.source_page,
                         confidence=e.confidence,
                         entities=[
@@ -1097,6 +1098,7 @@ async def get_timeline_with_entities(
                 event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
                 description=e.description,
                 document_id=e.document_id,
+                document_name=e.document_name,
                 source_page=e.source_page,
                 confidence=e.confidence,
                 entities=[

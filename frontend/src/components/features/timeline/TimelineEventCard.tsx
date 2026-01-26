@@ -285,66 +285,74 @@ export function TimelineEventCard({
 
         {/* Source Document */}
         {event.documentId && (
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-start gap-2 text-sm">
             <ExternalLink
-              className="h-4 w-4 text-muted-foreground"
+              className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0"
               aria-hidden="true"
             />
-            <span className="text-muted-foreground">Source:</span>
-            {onSourceClick ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => onSourceClick(event)}
-                    className={cn(
-                      'hover:underline',
-                      event.sourcePage
-                        ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
-                        : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
-                    )}
-                  >
-                    {event.sourcePage
-                      ? `Document, pg ${event.sourcePage}`
-                      : 'Document'}
-                    {!event.sourcePage && (
-                      <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                {!event.sourcePage && (
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Source:</span>
+              {onSourceClick ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => onSourceClick(event)}
+                      className={cn(
+                        'hover:underline text-left',
+                        event.sourcePage
+                          ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
+                          : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
+                      )}
+                    >
+                      <span className="font-medium">
+                        {event.documentName || 'Document'}
+                      </span>
+                      {event.sourcePage && (
+                        <span className="text-muted-foreground">, page {event.sourcePage}</span>
+                      )}
+                      {!event.sourcePage && (
+                        <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
                   <TooltipContent>
-                    <p>Page number unknown - will open to page 1</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link
-                    href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
-                    className={cn(
-                      'hover:underline',
-                      event.sourcePage
-                        ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
-                        : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
-                    )}
-                  >
                     {event.sourcePage
-                      ? `Document, pg ${event.sourcePage}`
-                      : 'Document'}
-                    {!event.sourcePage && (
-                      <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
-                    )}
-                  </Link>
-                </TooltipTrigger>
-                {!event.sourcePage && (
-                  <TooltipContent>
-                    <p>Page number unknown - will open to page 1</p>
+                      ? `Click to view ${event.documentName || 'document'} at page ${event.sourcePage}`
+                      : 'Page number unknown - will open to page 1'}
                   </TooltipContent>
-                )}
-              </Tooltip>
-            )}
+                </Tooltip>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/matter/${matterId}/documents?doc=${event.documentId}${event.sourcePage ? `&page=${event.sourcePage}` : ''}`}
+                      className={cn(
+                        'hover:underline',
+                        event.sourcePage
+                          ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300'
+                          : 'text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300'
+                      )}
+                    >
+                      <span className="font-medium">
+                        {event.documentName || 'Document'}
+                      </span>
+                      {event.sourcePage && (
+                        <span className="text-muted-foreground">, page {event.sourcePage}</span>
+                      )}
+                      {!event.sourcePage && (
+                        <AlertTriangle className="inline-block ml-1 h-3 w-3" aria-hidden="true" />
+                      )}
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {event.sourcePage
+                      ? `Click to view ${event.documentName || 'document'} at page ${event.sourcePage}`
+                      : 'Page number unknown - will open to page 1'}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
         )}
 
@@ -355,12 +363,25 @@ export function TimelineEventCard({
           </div>
         )}
 
-        {/* Low confidence warning */}
-        {event.confidence < 0.7 && !event.isVerified && (
-          <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-            Low confidence ({Math.round(event.confidence * 100)}%) - needs
-            verification
+        {/* Confidence indicator */}
+        {!event.isVerified && (
+          <div className="mt-2">
+            {event.confidence < 0.7 ? (
+              <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                Low confidence ({Math.round(event.confidence * 100)}%) - needs verification
+              </div>
+            ) : event.confidence < 0.85 ? (
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-yellow-400" aria-hidden="true" />
+                Medium confidence ({Math.round(event.confidence * 100)}%)
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500" aria-hidden="true" />
+                High confidence ({Math.round(event.confidence * 100)}%)
+              </div>
+            )}
           </div>
         )}
       </CardContent>

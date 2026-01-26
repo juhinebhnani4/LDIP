@@ -18,6 +18,7 @@ export type TimelineEventType =
   | 'transaction'
   | 'document'
   | 'deadline'
+  | 'incident'
   | 'unclassified'
   | 'raw_date';
 
@@ -55,6 +56,8 @@ export interface TimelineEvent {
   description: string;
   /** Source document ID */
   documentId: string | null;
+  /** Source document filename */
+  documentName: string | null;
   /** Source page number */
   sourcePage: number | null;
   /** Classification confidence */

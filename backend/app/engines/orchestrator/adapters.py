@@ -16,6 +16,7 @@ from typing import Any
 import structlog
 
 from app.core.config import get_settings
+from app.core.ocr_cleaner import clean_for_display
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,
@@ -158,42 +159,118 @@ class CitationEngineAdapter(EngineAdapter):
     ) -> EngineExecutionResult:
         """Execute citation discovery for the matter.
 
+        Provides lawyer-focused analysis of citation ISSUES, not just counts.
+
         Args:
             matter_id: Matter UUID.
             query: User's query (used for logging).
             context: Optional context.
 
         Returns:
-            EngineExecutionResult with citation discovery data.
+            EngineExecutionResult with citation issues analysis.
         """
         start_time = time.time()
 
         try:
+            from app.models.citation import ActResolutionStatus
+
             discovery = self._get_discovery()
             report = await discovery.get_discovery_report(
                 matter_id=matter_id,
                 include_available=True,
             )
 
-            # Convert report to dict format
+            # Categorize by resolution status for issue analysis
+            missing_acts = []
+            available_acts = []
+            needs_manual_upload = []
+            skipped_acts = []
+
+            for item in report:
+                act_info = {
+                    "name": item.act_name,
+                    "citations": item.citation_count,
+                    "has_document": item.act_document_id is not None,
+                }
+                if item.resolution_status == ActResolutionStatus.MISSING:
+                    missing_acts.append(act_info)
+                elif item.resolution_status == ActResolutionStatus.NOT_ON_INDIACODE:
+                    needs_manual_upload.append(act_info)
+                elif item.resolution_status == ActResolutionStatus.SKIPPED:
+                    skipped_acts.append(act_info)
+                elif item.resolution_status in (
+                    ActResolutionStatus.AVAILABLE,
+                    ActResolutionStatus.AUTO_FETCHED,
+                ):
+                    available_acts.append(act_info)
+
+            # Calculate totals
+            total_citations = sum(item.citation_count for item in report)
+            unverifiable_citations = sum(a["citations"] for a in missing_acts)
+            unverifiable_citations += sum(a["citations"] for a in needs_manual_upload)
+
+            # Build lawyer-focused answer about ISSUES
+            answer_parts = []
+
+            if missing_acts or needs_manual_upload:
+                issue_count = len(missing_acts) + len(needs_manual_upload)
+                answer_parts.append(
+                    f"**{issue_count} Act(s) Missing** - {unverifiable_citations} citations cannot be verified:\n"
+                )
+                # List missing acts sorted by citation count
+                all_missing = sorted(
+                    missing_acts + needs_manual_upload,
+                    key=lambda x: x["citations"],
+                    reverse=True,
+                )
+                for act in all_missing[:5]:  # Top 5
+                    answer_parts.append(f"- **{act['name']}** ({act['citations']} citations)")
+                if len(all_missing) > 5:
+                    answer_parts.append(f"- ...and {len(all_missing) - 5} more")
+                answer_parts.append("")
+
+            if available_acts:
+                verified_citations = sum(a["citations"] for a in available_acts)
+                answer_parts.append(
+                    f"**{len(available_acts)} Act(s) Available** - {verified_citations} citations can be verified"
+                )
+
+            if skipped_acts:
+                skipped_citations = sum(a["citations"] for a in skipped_acts)
+                answer_parts.append(
+                    f"\n**{len(skipped_acts)} Act(s) Skipped** - {skipped_citations} citations marked as skip"
+                )
+
+            # Summary recommendation
+            if missing_acts or needs_manual_upload:
+                answer_parts.append(
+                    f"\n**Action Required:** Upload missing Act documents to verify {unverifiable_citations} citations."
+                )
+            elif not report:
+                answer_parts.append("No Act citations found in this matter.")
+            else:
+                answer_parts.append("\n**All referenced Acts are available for verification.**")
+
+            answer = "\n".join(answer_parts)
+
+            # Build data for API
             citations_data = {
+                "answer": answer,
                 "total_acts": len(report),
+                "total_citations": total_citations,
+                "missing_acts_count": len(missing_acts) + len(needs_manual_upload),
+                "unverifiable_citations": unverifiable_citations,
+                "available_acts_count": len(available_acts),
                 "acts": [
                     {
                         "act_name": item.act_name,
-                        "act_name_normalized": item.act_name_normalized,
                         "citation_count": item.citation_count,
                         "resolution_status": item.resolution_status.value,
-                        "user_action": item.user_action.value if item.user_action else None,
-                        "referenced_sections": item.referenced_sections,
+                        "act_document_id": item.act_document_id,
                     }
                     for item in report
                 ],
             }
-
-            # Calculate total citations
-            total_citations = sum(item.citation_count for item in report)
-            citations_data["total_citations"] = total_citations
 
             execution_time_ms = int((time.time() - start_time) * 1000)
 
@@ -202,13 +279,14 @@ class CitationEngineAdapter(EngineAdapter):
                 matter_id=matter_id,
                 total_acts=len(report),
                 total_citations=total_citations,
+                missing_acts=len(missing_acts),
                 execution_time_ms=execution_time_ms,
             )
 
             return self._create_success_result(
                 data=citations_data,
                 execution_time_ms=execution_time_ms,
-                confidence=0.95,  # High confidence for citation discovery
+                confidence=0.95,
             )
 
         except Exception as e:
@@ -218,11 +296,13 @@ class CitationEngineAdapter(EngineAdapter):
                 "citation_adapter_error",
                 matter_id=matter_id,
                 error=str(e),
+                error_type=type(e).__name__,
                 execution_time_ms=execution_time_ms,
+                exc_info=True,
             )
 
             return self._create_error_result(
-                error=str(e),
+                error=f"Citation engine error: {e}",
                 execution_time_ms=execution_time_ms,
             )
 
@@ -465,8 +545,11 @@ class ContradictionEngineAdapter(EngineAdapter):
                         answer_parts.append(f"\n**{entity_name}:**")
                         for c in entity.contradictions[:2]:  # 2 per entity
                             severity = c.severity.value.upper()
-                            stmt1 = c.statement_a.excerpt[:100] if c.statement_a else ""
-                            stmt2 = c.statement_b.excerpt[:100] if c.statement_b else ""
+                            # Clean OCR artifacts from excerpts before display
+                            stmt1_raw = c.statement_a.excerpt[:100] if c.statement_a else ""
+                            stmt2_raw = c.statement_b.excerpt[:100] if c.statement_b else ""
+                            stmt1 = clean_for_display(stmt1_raw)
+                            stmt2 = clean_for_display(stmt2_raw)
                             answer_parts.append(
                                 f"- [{severity}] \"{stmt1}...\" vs \"{stmt2}...\""
                             )
@@ -901,18 +984,47 @@ class DocumentDiscoveryEngineAdapter(EngineAdapter):
 class EntityLookupEngineAdapter(EngineAdapter):
     """Adapter for Entity Lookup queries (person/party focused).
 
-    Handles queries like "Who are the parties?" by querying the entity
-    database directly for comprehensive entity information.
+    Handles two types of queries:
+    1. Specific entity questions: "Who is Respondent No. 2?" -> searches for match
+    2. General listing: "Who are the parties?" -> lists all entities
+
+    Uses fuzzy matching to find entities by name, alias, or role.
     """
 
     @property
     def engine_type(self) -> EngineType:
         return EngineType.ENTITY_LOOKUP
 
+    # Common patterns for extracting entity references from queries
+    ENTITY_PATTERNS = [
+        r"who\s+is\s+(?:the\s+)?(.+?)(?:\?|$)",  # "who is X?" or "who is the X?"
+        r"what\s+is\s+(.+?)(?:\?|$)",  # "what is X?"
+        r"tell\s+me\s+about\s+(.+?)(?:\?|$)",  # "tell me about X"
+        r"information\s+(?:about|on)\s+(.+?)(?:\?|$)",  # "information about X"
+        r"describe\s+(.+?)(?:\?|$)",  # "describe X"
+    ]
+
     def __init__(self) -> None:
         """Initialize entity lookup adapter."""
         self._supabase = None
+        self._compiled_patterns = None
+        self._search = None
+        self._generator = None
         logger.debug("entity_lookup_adapter_initialized")
+
+    def _get_search(self):
+        """Lazy-load hybrid search service for entity context retrieval."""
+        if self._search is None:
+            from app.services.rag import get_hybrid_search_service
+            self._search = get_hybrid_search_service()
+        return self._search
+
+    def _get_generator(self):
+        """Lazy-load RAG answer generator for comprehensive entity answers."""
+        if self._generator is None:
+            from app.engines.rag.generator import get_rag_generator
+            self._generator = get_rag_generator()
+        return self._generator
 
     def _get_supabase(self):
         """Lazy-load Supabase client."""
@@ -921,6 +1033,289 @@ class EntityLookupEngineAdapter(EngineAdapter):
             self._supabase = get_supabase_client()
         return self._supabase
 
+    def _get_patterns(self):
+        """Get compiled regex patterns."""
+        if self._compiled_patterns is None:
+            import re
+            self._compiled_patterns = [
+                re.compile(p, re.IGNORECASE) for p in self.ENTITY_PATTERNS
+            ]
+        return self._compiled_patterns
+
+    def _extract_entity_reference(self, query: str) -> str | None:
+        """Extract the entity being asked about from the query.
+
+        Args:
+            query: User's question.
+
+        Returns:
+            Extracted entity reference or None if not a specific entity query.
+        """
+        query_lower = query.lower().strip()
+
+        # Check for specific entity question patterns
+        for pattern in self._get_patterns():
+            match = pattern.search(query_lower)
+            if match:
+                return match.group(1).strip()
+
+        return None
+
+    def _normalize_for_matching(self, text: str) -> str:
+        """Normalize text for fuzzy matching.
+
+        Args:
+            text: Text to normalize.
+
+        Returns:
+            Normalized text (lowercase, punctuation and extra spaces removed).
+        """
+        import re
+        # Lowercase and normalize whitespace
+        normalized = text.lower().strip()
+        # Remove common punctuation
+        normalized = re.sub(r'[.,;:!?\-\'\"()]', '', normalized)
+        # Normalize spaces around numbers (e.g., "no 2" -> "no2", "no.2" -> "no2")
+        normalized = re.sub(r'\s+', '', normalized)  # Remove all spaces for matching
+        return normalized
+
+    def _find_matching_entity(
+        self,
+        entity_ref: str,
+        entities: list[dict],
+    ) -> dict | None:
+        """Find entity matching the reference using fuzzy matching.
+
+        Searches canonical_name, aliases, and metadata.role.
+
+        Args:
+            entity_ref: Entity reference from query.
+            entities: List of entities to search.
+
+        Returns:
+            Best matching entity or None.
+        """
+        ref_normalized = self._normalize_for_matching(entity_ref)
+
+        best_match = None
+        best_score = 0
+
+        for entity in entities:
+            # Check canonical name
+            canonical = entity.get("canonical_name", "")
+            canonical_norm = self._normalize_for_matching(canonical)
+
+            # Exact match
+            if ref_normalized == canonical_norm:
+                return entity
+
+            # Substring match (entity ref in canonical or vice versa)
+            if ref_normalized in canonical_norm or canonical_norm in ref_normalized:
+                score = len(ref_normalized) / max(len(canonical_norm), 1)
+                if score > best_score:
+                    best_score = score
+                    best_match = entity
+
+            # Check aliases
+            aliases = entity.get("aliases") or []
+            for alias in aliases:
+                alias_norm = self._normalize_for_matching(alias)
+                if ref_normalized == alias_norm:
+                    return entity
+                if ref_normalized in alias_norm or alias_norm in ref_normalized:
+                    score = len(ref_normalized) / max(len(alias_norm), 1)
+                    if score > best_score:
+                        best_score = score
+                        best_match = entity
+
+            # Check metadata.role (e.g., "Respondent No. 2")
+            metadata = entity.get("metadata") or {}
+            if isinstance(metadata, dict):
+                role = metadata.get("role", "")
+                if role:
+                    role_norm = self._normalize_for_matching(role)
+                    if ref_normalized == role_norm:
+                        return entity
+                    if ref_normalized in role_norm or role_norm in ref_normalized:
+                        score = len(ref_normalized) / max(len(role_norm), 1)
+                        if score > best_score:
+                            best_score = score
+                            best_match = entity
+
+        # Return best match if score is reasonable (> 0.3)
+        return best_match if best_score > 0.3 else None
+
+    def _format_entity_answer(self, entity: dict, all_entities: list[dict]) -> str:
+        """Format a detailed answer about a specific entity.
+
+        Args:
+            entity: The matched entity.
+            all_entities: All entities for context.
+
+        Returns:
+            Formatted answer string.
+        """
+        name = entity.get("canonical_name", "Unknown")
+        entity_type = entity.get("entity_type", "UNKNOWN")
+        mentions = entity.get("mention_count", 0)
+        aliases = entity.get("aliases") or []
+        metadata = entity.get("metadata") or {}
+
+        # Build answer
+        parts = [f"**{name}**"]
+
+        # Add type
+        type_display = entity_type.replace("_", " ").title()
+        parts.append(f"\n- **Type:** {type_display}")
+
+        # Add role if available
+        if isinstance(metadata, dict) and metadata.get("role"):
+            parts.append(f"- **Role:** {metadata['role']}")
+
+        # Add aliases if any
+        if aliases:
+            alias_str = ", ".join(aliases[:5])
+            parts.append(f"- **Also known as:** {alias_str}")
+
+        # Add mention count
+        parts.append(f"- **Mentioned:** {mentions} times in the documents")
+
+        # Check for related entities (same type, high mentions)
+        related = [
+            e for e in all_entities
+            if e.get("id") != entity.get("id")
+            and e.get("entity_type") == entity_type
+        ][:3]
+        if related:
+            related_names = [e.get("canonical_name", "Unknown") for e in related]
+            parts.append(f"\n**Other {type_display}s:** {', '.join(related_names)}")
+
+        return "\n".join(parts)
+
+    async def _get_entity_context_from_rag(
+        self,
+        entity: dict,
+        matter_id: str,
+        original_query: str,
+    ) -> str | None:
+        """Get comprehensive entity context using RAG search.
+
+        Searches for chunks mentioning the entity and synthesizes a comprehensive
+        answer about who they are and what they did in the case.
+
+        Args:
+            entity: The matched entity with canonical_name, aliases, etc.
+            matter_id: Matter UUID.
+            original_query: The user's original query.
+
+        Returns:
+            Comprehensive answer string, or None if RAG search fails.
+        """
+        try:
+            entity_name = entity.get("canonical_name", "")
+            aliases = entity.get("aliases") or []
+
+            # Build search query using entity name
+            # Use the entity name as the search query to find relevant chunks
+            search_query = f"who is {entity_name} and what is their role in this case"
+
+            logger.debug(
+                "entity_lookup_rag_search_start",
+                matter_id=matter_id,
+                entity_name=entity_name,
+                search_query=search_query,
+            )
+
+            # Do hybrid search for entity context
+            search = self._get_search()
+            from app.core.config import get_settings
+            settings = get_settings()
+
+            results = await search.search_with_library(
+                query=search_query,
+                matter_id=matter_id,
+                limit=8,  # Get top 8 relevant chunks
+                library_limit=0,  # No library docs for entity context
+            )
+
+            if not results.results:
+                logger.debug(
+                    "entity_lookup_rag_no_results",
+                    matter_id=matter_id,
+                    entity_name=entity_name,
+                )
+                return None
+
+            # Get document names for citations
+            supabase = self._get_supabase()
+            doc_ids = list({item.document_id for item in results.results})
+            doc_names_result = (
+                supabase.table("documents")
+                .select("id, filename")
+                .in_("id", doc_ids)
+                .execute()
+            )
+            doc_names = {
+                str(doc["id"]): doc.get("filename", "Unknown Document")
+                for doc in (doc_names_result.data or [])
+            }
+
+            # Prepare chunks for generation
+            chunks_for_generation = [
+                {
+                    "chunk_id": item.id,
+                    "document_id": item.document_id,
+                    "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                    "content": item.content,
+                    "page_number": item.page_number,
+                    "relevance_score": item.rrf_score,
+                    "is_library": False,
+                }
+                for item in results.results
+            ]
+
+            # Build entity metadata for context
+            entity_type = entity.get("entity_type", "UNKNOWN").replace("_", " ").title()
+            metadata = entity.get("metadata") or {}
+            role = metadata.get("role", "") if isinstance(metadata, dict) else ""
+            alias_str = ", ".join(aliases[:3]) if aliases else "none"
+
+            # Create enhanced query with entity context for better generation
+            enhanced_query = (
+                f"Based on the documents, provide a comprehensive answer about {entity_name}. "
+                f"This is a {entity_type}"
+                + (f" with role '{role}'" if role else "")
+                + f". Also known as: {alias_str}. "
+                f"Include: their role in the case, key actions they took, relationships with other parties, "
+                f"and any significant events involving them."
+            )
+
+            # Generate comprehensive answer
+            generator = self._get_generator()
+            answer_result = await generator.generate_answer(
+                query=enhanced_query,
+                chunks=chunks_for_generation,
+            )
+
+            logger.info(
+                "entity_lookup_rag_success",
+                matter_id=matter_id,
+                entity_name=entity_name,
+                chunks_used=len(results.results),
+                answer_length=len(answer_result.answer),
+            )
+
+            return answer_result.answer
+
+        except Exception as e:
+            logger.warning(
+                "entity_lookup_rag_error",
+                matter_id=matter_id,
+                entity_name=entity.get("canonical_name", "unknown"),
+                error=str(e),
+            )
+            return None
+
     async def execute(
         self,
         matter_id: str,
@@ -928,6 +1323,8 @@ class EntityLookupEngineAdapter(EngineAdapter):
         context: dict[str, Any] | None = None,
     ) -> EngineExecutionResult:
         """Execute entity lookup query.
+
+        Handles both specific entity questions and general listing.
 
         Args:
             matter_id: Matter UUID.
@@ -960,28 +1357,82 @@ class EntityLookupEngineAdapter(EngineAdapter):
 
             entities = result.data or []
 
-            # Group entities by type
-            entities_by_type: dict[str, list] = {}
-            for entity in entities:
-                entity_type = entity.get("entity_type", "other")
-                if entity_type not in entities_by_type:
-                    entities_by_type[entity_type] = []
-                entities_by_type[entity_type].append(entity)
-
-            # Build human-readable response
             if not entities:
                 answer = "No entities have been identified in this matter yet."
+                return self._create_success_result(
+                    data={
+                        "answer": answer,
+                        "entities": [],
+                        "entities_by_type": {},
+                        "total_entities": 0,
+                        "query_type": "listing",
+                    },
+                    execution_time_ms=int((time.time() - start_time) * 1000),
+                    confidence=0.9,
+                )
+
+            # Check if this is a specific entity question
+            entity_ref = self._extract_entity_reference(query)
+
+            if entity_ref:
+                # Specific entity lookup
+                matched_entity = self._find_matching_entity(entity_ref, entities)
+
+                if matched_entity:
+                    # Try to get comprehensive context from RAG
+                    rag_answer = await self._get_entity_context_from_rag(
+                        entity=matched_entity,
+                        matter_id=matter_id,
+                        original_query=query,
+                    )
+
+                    if rag_answer:
+                        # Use RAG-synthesized comprehensive answer
+                        # Add entity metadata header for context
+                        entity_name = matched_entity.get("canonical_name", "Unknown")
+                        entity_type = matched_entity.get("entity_type", "UNKNOWN").replace("_", " ").title()
+                        aliases = matched_entity.get("aliases") or []
+                        alias_str = ", ".join(aliases[:3]) if aliases else None
+
+                        header = f"**{entity_name}** ({entity_type})"
+                        if alias_str:
+                            header += f"\n*Also known as: {alias_str}*"
+
+                        answer = f"{header}\n\n{rag_answer}"
+                        query_type = "specific_comprehensive"
+                        confidence = 0.95
+                    else:
+                        # Fall back to basic entity info if RAG fails
+                        answer = self._format_entity_answer(matched_entity, entities)
+                        query_type = "specific"
+                        confidence = 0.85
+                else:
+                    # No match found - provide suggestions
+                    top_entities = [e.get("canonical_name", "Unknown") for e in entities[:5]]
+                    answer = (
+                        f"Could not find an entity matching **\"{entity_ref}\"** in this matter.\n\n"
+                        f"**Available entities include:**\n"
+                        + "\n".join(f"- {name}" for name in top_entities)
+                    )
+                    query_type = "specific_no_match"
+                    confidence = 0.7
             else:
-                # Prioritize PERSON entities for party-related queries
+                # General entity listing
+                entities_by_type: dict[str, list] = {}
+                for entity in entities:
+                    entity_type = entity.get("entity_type", "other")
+                    if entity_type not in entities_by_type:
+                        entities_by_type[entity_type] = []
+                    entities_by_type[entity_type].append(entity)
+
                 sections = []
 
                 # Key parties (persons with roles)
                 persons = entities_by_type.get("PERSON", [])
                 if persons:
                     person_lines = []
-                    for p in persons[:10]:  # Limit to top 10
+                    for p in persons[:10]:
                         name = p.get("canonical_name", "Unknown")
-                        # Role might be in metadata
                         metadata = p.get("metadata") or {}
                         role = metadata.get("role", "") if isinstance(metadata, dict) else ""
                         mentions = p.get("mention_count", 0)
@@ -999,6 +1450,8 @@ class EntityLookupEngineAdapter(EngineAdapter):
                     f"Found **{len(entities)} entities** in this matter:\n\n"
                     + "\n\n".join(sections)
                 )
+                query_type = "listing"
+                confidence = 0.9
 
             execution_time_ms = int((time.time() - start_time) * 1000)
 
@@ -1006,6 +1459,8 @@ class EntityLookupEngineAdapter(EngineAdapter):
                 "entity_lookup_success",
                 matter_id=matter_id,
                 entity_count=len(entities),
+                query_type=query_type,
+                entity_ref=entity_ref,
                 execution_time_ms=execution_time_ms,
             )
 
@@ -1013,11 +1468,11 @@ class EntityLookupEngineAdapter(EngineAdapter):
                 data={
                     "answer": answer,
                     "entities": entities,
-                    "entities_by_type": entities_by_type,
                     "total_entities": len(entities),
+                    "query_type": query_type,
                 },
                 execution_time_ms=execution_time_ms,
-                confidence=0.9,
+                confidence=confidence,
             )
 
         except Exception as e:

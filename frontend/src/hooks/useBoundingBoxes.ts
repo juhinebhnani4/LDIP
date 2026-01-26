@@ -15,6 +15,7 @@ import type { BoundingBox } from '@/types/document';
 import {
   fetchBoundingBoxesForChunk,
   fetchBoundingBoxesForPage,
+  fetchBoundingBoxesByIds,
 } from '@/lib/api/bounding-boxes';
 
 /**
@@ -39,6 +40,8 @@ interface UseBoundingBoxesReturn {
   fetchByChunkId: (chunkId: string) => Promise<BboxFetchResult>;
   /** Fetch bounding boxes by document and page - returns bboxes and page number */
   fetchByPage: (documentId: string, pageNumber: number) => Promise<BboxFetchResult>;
+  /** Fetch bounding boxes by their IDs directly - returns bboxes and page number */
+  fetchByBboxIds: (bboxIds: string[], matterId: string) => Promise<BboxFetchResult>;
   /** Clear all bounding boxes and cache */
   clearBboxes: () => void;
 }
@@ -198,6 +201,64 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
   );
 
   /**
+   * Fetch bounding boxes by their IDs directly.
+   * Uses POST /api/bounding-boxes/by-ids endpoint.
+   * Returns both bboxes and page number for immediate use by caller.
+   */
+  const fetchByBboxIds = useCallback(
+    async (bboxIds: string[], matterId: string): Promise<BboxFetchResult> => {
+      if (!bboxIds.length) {
+        return { bboxes: [], pageNumber: null };
+      }
+
+      const cacheKey = `ids:${bboxIds.slice(0, 3).join(',')}`;
+
+      // Check cache first
+      if (cacheRef.current.has(cacheKey)) {
+        const cached = cacheRef.current.get(cacheKey)!;
+        setBoundingBoxes(cached.bboxes);
+        setBboxPageNumber(cached.pageNumber);
+        return { bboxes: cached.bboxes, pageNumber: cached.pageNumber };
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await fetchBoundingBoxesByIds(bboxIds, matterId);
+        const data = result.data;
+
+        const normalized = data.map(normalizeBbox);
+
+        // Get page number from first bbox
+        const pageNumber = data.length > 0 && data[0] ? data[0].pageNumber ?? null : null;
+
+        // Cache the result
+        cacheRef.current.set(cacheKey, { bboxes: normalized, pageNumber });
+
+        setBoundingBoxes(normalized);
+        setBboxPageNumber(pageNumber);
+        return { bboxes: normalized, pageNumber };
+      } catch (err) {
+        // Handle 404 as empty result, not error
+        if (err && typeof err === 'object' && 'status' in err && err.status === 404) {
+          setBoundingBoxes([]);
+          setBboxPageNumber(null);
+          return { bboxes: [], pageNumber: null };
+        }
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error fetching bounding boxes';
+        setError(errorMessage);
+        setBoundingBoxes([]);
+        setBboxPageNumber(null);
+        return { bboxes: [], pageNumber: null };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  /**
    * Clear all bounding boxes, reset state, and clear cache.
    * Call this when changing documents to prevent stale data.
    */
@@ -216,6 +277,7 @@ export function useBoundingBoxes(): UseBoundingBoxesReturn {
     bboxPageNumber,
     fetchByChunkId,
     fetchByPage,
+    fetchByBboxIds,
     clearBboxes,
   };
 }

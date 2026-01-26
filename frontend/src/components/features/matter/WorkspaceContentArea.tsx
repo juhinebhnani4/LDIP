@@ -61,7 +61,7 @@ export function WorkspaceContentArea({
   );
 
   // Bounding box hook for fetching bbox data (Story 11.7)
-  const { fetchByChunkId } = useBoundingBoxes();
+  const { fetchByChunkId, fetchByBboxIds } = useBoundingBoxes();
 
   /**
    * Handle source reference clicks from Q&A panel.
@@ -86,51 +86,66 @@ export function WorkspaceContentArea({
         // Open PDF split view with document
         openPdfSplitView(source, matterId, documentUrl);
 
-        // Story 11.7: Fetch bounding boxes if chunkId is available
+        // Story 11.7: Fetch bounding boxes for source text highlighting
+        // Priority: 1) Direct bboxIds from source, 2) Fetch by chunkId
         // Bounding box highlighting is optional - don't block or error if unavailable
-        if (source.chunkId) {
-          try {
-            const { bboxes, pageNumber: fetchedPageNumber } = await fetchByChunkId(source.chunkId);
+        try {
+          let bboxes: { x: number; y: number; width: number; height: number }[] = [];
+          let fetchedPageNumber: number | null = null;
 
-            // Verify we're still viewing the same document (race condition guard)
-            const currentDocumentId = usePdfSplitViewStore.getState().documentId;
-            if (currentDocumentId !== targetDocumentId) {
-              // User navigated to different document, discard these bboxes
-              return;
-            }
-
-            if (bboxes.length > 0) {
-              // Use page number from API response, fall back to source.page only if unavailable
-              const pageNumber = fetchedPageNumber ?? source.page ?? 1;
-              setBoundingBoxes(
-                bboxes.map((bbox) => ({
-                  x: bbox.x,
-                  y: bbox.y,
-                  width: bbox.width,
-                  height: bbox.height,
-                })),
-                pageNumber
-              );
-            }
-          } catch {
-            // Bbox highlighting is optional - log but don't fail the operation
-            console.warn('Failed to fetch bounding boxes for source highlight');
+          // Try direct bboxIds first (from SSE response) - avoids extra API call
+          if (source.bboxIds && source.bboxIds.length > 0) {
+            const result = await fetchByBboxIds(source.bboxIds, matterId);
+            bboxes = result.bboxes.map((bbox) => ({
+              x: bbox.x,
+              y: bbox.y,
+              width: bbox.width,
+              height: bbox.height,
+            }));
+            fetchedPageNumber = result.pageNumber;
           }
+          // Fall back to fetching by chunkId if no direct bboxIds
+          else if (source.chunkId) {
+            const result = await fetchByChunkId(source.chunkId);
+            bboxes = result.bboxes.map((bbox) => ({
+              x: bbox.x,
+              y: bbox.y,
+              width: bbox.width,
+              height: bbox.height,
+            }));
+            fetchedPageNumber = result.pageNumber;
+          }
+
+          // Verify we're still viewing the same document (race condition guard)
+          const currentDocumentId = usePdfSplitViewStore.getState().documentId;
+          if (currentDocumentId !== targetDocumentId) {
+            // User navigated to different document, discard these bboxes
+            return;
+          }
+
+          if (bboxes.length > 0) {
+            // Use page number from API response, fall back to source.page only if unavailable
+            const pageNumber = fetchedPageNumber ?? source.page ?? 1;
+            setBoundingBoxes(bboxes, pageNumber);
+          }
+        } catch {
+          // Bbox highlighting is optional - log but don't fail the operation
+          console.warn('Failed to fetch bounding boxes for source highlight');
         }
       } catch {
         toast.error('Unable to open document. Please try again.');
       }
     },
-    [matterId, openPdfSplitView, fetchByChunkId, setBoundingBoxes]
+    [matterId, openPdfSplitView, fetchByChunkId, fetchByBboxIds, setBoundingBoxes]
   );
 
   // Right sidebar layout
   if (position === 'right') {
     return (
       <PDFSplitView>
-        <ResizablePanelGroup direction="horizontal" className="h-full flex-1">
+        <ResizablePanelGroup direction="horizontal" className="h-full flex-1" data-testid="workspace-content-area">
           <ResizablePanel defaultSize={100 - rightWidth} minSize={40}>
-            <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
+            <div className="h-full overflow-y-auto overflow-x-hidden" data-testid="workspace-main-content">{children}</div>
           </ResizablePanel>
           <ResizableHandle withHandle aria-label="Resize Q&A panel" />
           <ResizablePanel
@@ -155,9 +170,9 @@ export function WorkspaceContentArea({
   if (position === 'bottom') {
     return (
       <PDFSplitView>
-        <ResizablePanelGroup direction="vertical" className="h-full flex-1">
+        <ResizablePanelGroup direction="vertical" className="h-full flex-1" data-testid="workspace-content-area">
           <ResizablePanel defaultSize={100 - bottomHeight} minSize={40}>
-            <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
+            <div className="h-full overflow-y-auto overflow-x-hidden" data-testid="workspace-main-content">{children}</div>
           </ResizablePanel>
           <ResizableHandle withHandle aria-label="Resize Q&A panel" />
           <ResizablePanel
@@ -182,8 +197,8 @@ export function WorkspaceContentArea({
   if (position === 'float') {
     return (
       <PDFSplitView>
-        <div className="relative h-full flex-1">
-          <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
+        <div className="relative h-full flex-1" data-testid="workspace-content-area">
+          <div className="h-full overflow-y-auto overflow-x-hidden" data-testid="workspace-main-content">{children}</div>
           <FloatingQAPanel
             matterId={matterId}
             userId={userId}
@@ -197,8 +212,8 @@ export function WorkspaceContentArea({
   // Hidden - just content with expand button
   return (
     <PDFSplitView>
-      <div className="relative h-full flex-1">
-        <div className="h-full overflow-y-auto overflow-x-hidden">{children}</div>
+      <div className="relative h-full flex-1" data-testid="workspace-content-area">
+        <div className="h-full overflow-y-auto overflow-x-hidden" data-testid="workspace-main-content">{children}</div>
         <QAPanelExpandButton />
       </div>
     </PDFSplitView>

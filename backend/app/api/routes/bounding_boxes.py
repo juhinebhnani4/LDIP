@@ -82,6 +82,13 @@ class BoundingBoxPageResponse(BaseModel):
     data: list[BoundingBoxData]
 
 
+class BoundingBoxIdsRequest(BaseModel):
+    """Request model for fetching bboxes by IDs."""
+
+    bbox_ids: list[str] = Field(..., min_length=1, max_length=100, description="List of bbox UUIDs")
+    matter_id: str = Field(..., description="Matter UUID for access control")
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -371,6 +378,75 @@ async def get_chunk_bounding_boxes(
         logger.error(
             "get_chunk_bounding_boxes_failed",
             chunk_id=chunk_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "BOUNDING_BOXES_RETRIEVAL_FAILED",
+                    "message": f"Failed to retrieve bounding boxes: {e!s}",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Bounding Box By IDs Router
+# =============================================================================
+
+bbox_ids_router = APIRouter(prefix="/bounding-boxes", tags=["bounding-boxes"])
+
+
+@bbox_ids_router.post(
+    "/by-ids",
+    response_model=BoundingBoxPageResponse,
+)
+async def get_bboxes_by_ids(
+    request: BoundingBoxIdsRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
+    bbox_service: BoundingBoxService = Depends(get_bounding_box_service),
+) -> BoundingBoxPageResponse:
+    """Get bounding boxes by their IDs directly.
+
+    This endpoint allows fetching bboxes when you already have the IDs
+    (e.g., from Q&A source references with bbox_ids).
+
+    User must have access to the specified matter.
+    """
+    # Verify user has access to the matter
+    role = matter_service.get_user_role(request.matter_id, current_user.id)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "MATTER_NOT_FOUND",
+                    "message": "Matter not found or you don't have access",
+                    "details": {},
+                }
+            },
+        )
+
+    try:
+        # Get bounding boxes by IDs
+        if not request.bbox_ids:
+            return BoundingBoxPageResponse(data=[])
+
+        boxes = bbox_service.get_bounding_boxes_by_ids(request.bbox_ids)
+
+        return BoundingBoxPageResponse(
+            data=[BoundingBoxData(**box) for box in boxes],
+        )
+
+    except BoundingBoxServiceError as e:
+        raise _handle_bbox_service_error(e) from e
+    except Exception as e:
+        logger.error(
+            "get_bboxes_by_ids_failed",
+            bbox_ids_count=len(request.bbox_ids),
             error=str(e),
         )
         raise HTTPException(

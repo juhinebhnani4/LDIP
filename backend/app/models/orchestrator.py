@@ -340,6 +340,7 @@ class SourceReference(BaseModel):
     text_preview: str | None = Field(default=None, description="Preview of source text")
     confidence: float | None = Field(default=None, description="Source relevance score")
     engine: EngineType | None = Field(default=None, description="Engine that found this source")
+    bbox_ids: list[str] | None = Field(default=None, description="Bounding box UUIDs for highlighting")
 
 
 class OrchestratorResult(BaseModel):

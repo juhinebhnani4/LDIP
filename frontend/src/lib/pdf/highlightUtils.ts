@@ -151,7 +151,7 @@ export function getHighlightTypeColor(highlightType: HighlightType): HighlightCo
  * @param ctx - Canvas 2D rendering context
  * @param rect - Rectangle with pixel coordinates
  * @param colors - Background and border colors
- * @param opacity - Fill opacity (0-1), default 0.3
+ * @param opacity - Fill opacity (0-1), default 0.02
  *
  * @example
  * ```ts
@@ -160,7 +160,7 @@ export function getHighlightTypeColor(highlightType: HighlightType): HighlightCo
  *   ctx,
  *   { x: 91.8, y: 356.4, width: 367.2, height: 59.4 },
  *   { background: '#FDE047', border: '#CA8A04' },
- *   0.3
+ *   0.02
  * );
  * ```
  */
@@ -168,7 +168,7 @@ export function renderBboxHighlight(
   ctx: CanvasRenderingContext2D,
   rect: CanvasRect,
   colors: HighlightColors,
-  opacity: number = 0.3
+  opacity: number = 0.02
 ): void {
   // Save current context state
   ctx.save();

@@ -132,3 +132,25 @@ export async function fetchBoundingBoxesForChunk(
 
   return transformPageResponse(response)
 }
+
+/**
+ * Fetch bounding boxes by their IDs directly.
+ *
+ * This allows fetching bboxes when you already have the IDs
+ * (e.g., from Q&A source references with bboxIds).
+ *
+ * @param bboxIds - Array of bbox UUIDs
+ * @param matterId - Matter UUID for access control
+ * @returns Bounding boxes matching the IDs
+ */
+export async function fetchBoundingBoxesByIds(
+  bboxIds: string[],
+  matterId: string
+): Promise<BoundingBoxPageResponse> {
+  const response = await api.post<{ data: Record<string, unknown>[] }>(
+    '/api/bounding-boxes/by-ids',
+    { bbox_ids: bboxIds, matter_id: matterId }
+  )
+
+  return transformPageResponse(response)
+}

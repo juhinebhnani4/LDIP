@@ -106,6 +106,7 @@ class SourceReferenceEvent(BaseModel):
     page: int | None = Field(default=None, description="Page number")
     chunk_id: str | None = Field(default=None, description="Chunk UUID")
     confidence: float | None = Field(default=None, description="Relevance score")
+    bbox_ids: list[str] | None = Field(default=None, description="Bounding box UUIDs for highlighting")
 
 
 class StreamCompleteEvent(BaseModel):

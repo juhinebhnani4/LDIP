@@ -104,6 +104,7 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
       page: s.page,
       chunkId: s.chunkId,
       confidence: s.confidence,
+      bboxIds: s.bboxIds,
     }));
     // DEBUG: Log sources before storing
     if (process.env.NODE_ENV === 'development') {
@@ -119,7 +120,9 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
       sources,
       data.searchNotice,
       data.searchMode,
-      data.embeddingCompletionPct
+      data.embeddingCompletionPct,
+      data.queryWasRewritten,
+      data.originalQuery
     );
     // Story 13.4: Clear error state on success
     setStreamError(null);

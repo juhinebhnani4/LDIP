@@ -91,6 +91,7 @@ export interface SourceReferenceData {
   page?: number;
   chunkId?: string;
   confidence?: number;
+  bboxIds?: string[];
 }
 
 export interface CompleteData {
@@ -316,6 +317,7 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
                   page: s.page as number | undefined,
                   chunkId: (s.chunkId ?? s.chunk_id) as string | undefined,
                   confidence: s.confidence as number | undefined,
+                  bboxIds: (s.bboxIds ?? s.bbox_ids) as string[] | undefined,
                 };
               }
             ),

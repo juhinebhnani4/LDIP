@@ -957,6 +957,7 @@ class ResultAggregator:
                         text_preview=item.get("content", "")[:200],
                         confidence=item.get("relevance_score") or item.get("rrf_score"),
                         engine=result.engine,
+                        bbox_ids=item.get("bbox_ids"),
                     )
                 )
 
@@ -1088,11 +1089,17 @@ class ResultAggregator:
         data = result.data or {}
 
         if result.engine == EngineType.CITATION:
+            # Use lawyer-focused answer from adapter if available
+            answer = data.get("answer")
+            if answer:
+                return answer
+
+            # Fallback to basic summary
             total_acts = data.get("total_acts", 0)
             total_citations = data.get("total_citations", 0)
 
             if total_citations == 0:
-                return "**Citations:** No Act citations found in the documents."
+                return "No Act citations found in the documents."
 
             acts = data.get("acts", [])
             acts_list = ", ".join(
@@ -1101,7 +1108,7 @@ class ResultAggregator:
             )
 
             return (
-                f"**Citations:** Found {total_citations} citation(s) across {total_acts} Act(s).\n"
+                f"Found {total_citations} citation(s) across {total_acts} Act(s).\n"
                 f"Acts referenced: {acts_list}"
             )
 

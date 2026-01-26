@@ -615,6 +615,7 @@ class StreamingOrchestrator:
                     page=source.page_number,
                     chunk_id=source.chunk_id,
                     confidence=source.confidence,
+                    bbox_ids=source.bbox_ids,
                 )
             )
 

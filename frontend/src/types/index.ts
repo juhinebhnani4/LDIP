@@ -249,3 +249,24 @@ export {
   DEFAULT_TIMELINE_FILTERS,
   hasActiveFilters,
 } from './timeline';
+
+// Library types (Phase 2: Shared Legal Library)
+export type {
+  DuplicateCheckRequest,
+  DuplicateCheckResponse,
+  LibraryDocument,
+  LibraryDocumentCreateRequest,
+  LibraryDocumentListItem,
+  LibraryDocumentListResponse,
+  LibraryDocumentSource,
+  LibraryDocumentStatus,
+  LibraryDocumentType,
+  LibraryDuplicate,
+  LibraryLinkRequest,
+  LibraryListOptions,
+  LibraryPaginationMeta,
+  LinkedLibraryDocumentsResponse,
+  LinkSuccessResponse,
+  MatterLibraryLink,
+  UnlinkSuccessResponse,
+} from './library';

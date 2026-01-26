@@ -719,6 +719,57 @@ class LibraryService:
             ) from e
 
     # =========================================================================
+    # Processing Pipeline
+    # =========================================================================
+
+    def trigger_processing(
+        self,
+        library_document_id: str,
+        extracted_text: str,
+    ) -> str:
+        """Trigger the processing pipeline for a library document.
+
+        Enqueues the Celery task chain: chunk -> embed.
+
+        Args:
+            library_document_id: Library document UUID.
+            extracted_text: OCR/extracted text content.
+
+        Returns:
+            Celery task ID for tracking.
+
+        Raises:
+            LibraryServiceError: If triggering fails.
+        """
+        try:
+            from app.workers.tasks.library_tasks import process_library_document
+
+            result = process_library_document.delay(
+                library_document_id=library_document_id,
+                extracted_text=extracted_text,
+            )
+
+            logger.info(
+                "library_processing_triggered",
+                library_document_id=library_document_id,
+                task_id=result.id,
+                text_length=len(extracted_text),
+            )
+
+            return result.id
+
+        except Exception as e:
+            logger.error(
+                "library_processing_trigger_failed",
+                library_document_id=library_document_id,
+                error=str(e),
+            )
+            raise LibraryServiceError(
+                message=f"Failed to trigger processing: {e!s}",
+                code="PROCESSING_TRIGGER_FAILED",
+            ) from e
+
+    # =========================================================================
     # Helpers
     # =========================================================================
 

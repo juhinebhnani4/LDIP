@@ -39,6 +39,7 @@ celery_app.conf.update(
     # Task execution settings
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    task_acks_on_failure_or_timeout=True,  # Explicit: ack failed/timed-out tasks to prevent infinite redelivery
     # Result backend settings
     result_expires=3600,  # 1 hour
     # Worker settings
@@ -51,6 +52,7 @@ celery_app.conf.update(
     broker_heartbeat_checkrate=2,  # Check for heartbeat every 2 iterations
     worker_send_task_events=True,  # Enable task events for monitoring
     worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks (prevents memory leaks)
+    worker_max_memory_per_child=400000,  # 400MB in KB - restart if memory exceeds this (Python high watermark protection)
     task_time_limit=3600,  # Hard timeout: 1 hour per task
     task_soft_time_limit=3300,  # Soft timeout: 55 minutes (gives 5 min cleanup)
     # Priority queues configuration
@@ -68,6 +70,21 @@ celery_app.conf.update(
         "app.workers.tasks.document_tasks.*": {"queue": "default"},
         "app.workers.tasks.chunked_document_tasks.*": {"queue": "default"},
         "app.workers.tasks.engine_tasks.*": {"queue": "default"},
+        "app.workers.tasks.library_tasks.*": {"queue": "default"},
+    },
+    # === BROKER TRANSPORT OPTIONS ===
+    # CRITICAL: visibility_timeout must exceed task_time_limit to prevent duplicate execution
+    # Redis redelivers unacknowledged tasks after visibility_timeout expires
+    # Default is 1 hour; we set 2 hours to handle long-running tasks safely
+    broker_transport_options={
+        'visibility_timeout': 7200,  # 2 hours - must exceed task_time_limit (3600)
+        **(_ssl_config if _uses_tls else {}),  # Merge SSL config if TLS enabled
+    },
+    # Result backend resilience for Redis connection drops
+    result_backend_transport_options={
+        'socket_timeout': 30,
+        'socket_connect_timeout': 30,
+        'retry_on_timeout': True,
     },
     # SSL configuration for Upstash Redis (rediss:// protocol)
     # These settings are required for TLS connections to serverless Redis
@@ -185,6 +202,7 @@ _TASK_MODULES = [
     "app.workers.tasks.chunked_document_tasks",
     "app.workers.tasks.document_tasks",
     "app.workers.tasks.engine_tasks",
+    "app.workers.tasks.library_tasks",
     "app.workers.tasks.maintenance_tasks",
     "app.workers.tasks.verification_tasks",
 ]
@@ -197,6 +215,7 @@ try:
         chunked_document_tasks,
         document_tasks,
         engine_tasks,
+        library_tasks,
         maintenance_tasks,
         verification_tasks,
     )
@@ -231,4 +250,101 @@ if _missing_tasks:
         "celery_missing_critical_tasks",
         missing_tasks=_missing_tasks,
         hint="Some critical tasks are not registered. Check task decorators.",
+    )
+
+
+# =============================================================================
+# Dead Letter Queue (DLQ) Signal Handler
+# =============================================================================
+# Logs permanently failed tasks (after all retries exhausted) for debugging
+# and monitoring. These are tasks that cannot be recovered automatically.
+
+from celery.signals import task_failure, task_retry
+
+
+@task_failure.connect
+def handle_task_failure(
+    sender=None,
+    task_id=None,
+    exception=None,
+    args=None,
+    kwargs=None,
+    traceback=None,
+    einfo=None,
+    **kw,
+):
+    """Log permanently failed tasks to DLQ for investigation.
+
+    This signal fires when a task raises an exception and will NOT be retried.
+    Tasks that exhaust all retries end up here.
+
+    Use this data to:
+    1. Debug recurring failures
+    2. Monitor failure patterns
+    3. Manually retry or fix data issues
+    """
+    # Get retry info from task request if available
+    retries = 0
+    max_retries = 0
+    if sender and hasattr(sender, "request"):
+        retries = getattr(sender.request, "retries", 0)
+    if sender and hasattr(sender, "max_retries"):
+        max_retries = sender.max_retries or 0
+
+    # Determine if this is a permanent failure (exhausted retries)
+    is_permanent = retries >= max_retries if max_retries > 0 else True
+
+    # Sanitize kwargs to avoid logging sensitive data
+    safe_kwargs = {}
+    if kwargs:
+        for key, value in kwargs.items():
+            if "password" in key.lower() or "secret" in key.lower() or "token" in key.lower():
+                safe_kwargs[key] = "[REDACTED]"
+            elif isinstance(value, str) and len(value) > 200:
+                safe_kwargs[key] = f"{value[:200]}...[truncated]"
+            else:
+                safe_kwargs[key] = value
+
+    log_level = "critical" if is_permanent else "error"
+    log_func = _logger.critical if is_permanent else _logger.error
+
+    log_func(
+        "celery_task_failed_dlq" if is_permanent else "celery_task_failed",
+        task_name=sender.name if sender else "unknown",
+        task_id=task_id,
+        retries=retries,
+        max_retries=max_retries,
+        is_permanent_failure=is_permanent,
+        exception_type=type(exception).__name__ if exception else None,
+        exception_message=str(exception)[:500] if exception else None,
+        args=args[:5] if args and len(args) > 5 else args,  # Limit logged args
+        kwargs=safe_kwargs,
+    )
+
+
+@task_retry.connect
+def handle_task_retry(
+    sender=None,
+    request=None,
+    reason=None,
+    einfo=None,
+    **kw,
+):
+    """Log task retries for monitoring retry patterns.
+
+    Helps identify:
+    1. Tasks that frequently need retries (may need optimization)
+    2. Transient failures (network, rate limits, etc.)
+    3. Retry storms that could overwhelm the system
+    """
+    retries = request.retries if request else 0
+    max_retries = sender.max_retries if sender and hasattr(sender, "max_retries") else 0
+
+    _logger.warning(
+        "celery_task_retrying",
+        task_name=sender.name if sender else "unknown",
+        task_id=request.id if request else None,
+        retry_number=retries + 1,  # Current retry attempt (1-based)
+        max_retries=max_retries,
+        reason=str(reason)[:200] if reason else None,
     )

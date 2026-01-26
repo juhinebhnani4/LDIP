@@ -646,7 +646,7 @@ class RAGEngineAdapter(EngineAdapter):
         """Execute RAG search and generate answer.
 
         Pipeline:
-        1. Hybrid search with reranking
+        1. Hybrid search with library integration (searches matter + linked library docs)
         2. Fetch document names for citations
         3. Generate grounded answer with Gemini
 
@@ -661,29 +661,41 @@ class RAGEngineAdapter(EngineAdapter):
         start_time = time.time()
 
         try:
-            # Step 1: Hybrid search with reranking
+            # Step 1: Hybrid search with library integration
+            # Searches both matter documents AND linked library documents
             search = self._get_search()
             settings = get_settings()
-            results = await search.search_with_rerank(
-                matter_id=matter_id,
+            results = await search.search_with_library(
                 query=query,
-                hybrid_limit=settings.rag_search_limit,
-                rerank_top_n=settings.rag_rerank_top_n,
+                matter_id=matter_id,
+                limit=settings.rag_rerank_top_n,  # Final result limit
+                library_limit=10,  # Library results before merge
             )
 
-            # Step 2: Get document names for citations
-            document_ids = list({item.document_id for item in results.results})
-            doc_names = await self._get_document_names(document_ids)
+            # Step 2: Get document names for matter documents
+            # Library documents already have titles in the result
+            matter_doc_ids = list({
+                item.document_id for item in results.results
+                if not item.is_library
+            })
+            doc_names = await self._get_document_names(matter_doc_ids)
 
             # Step 3: Prepare chunks for generation with document names
+            def get_doc_name(item):
+                """Get document name - use library_document_title for library docs."""
+                if item.is_library and item.library_document_title:
+                    return item.library_document_title
+                return doc_names.get(item.document_id, "Unknown Document")
+
             chunks_for_generation = [
                 {
                     "chunk_id": item.id,
                     "document_id": item.document_id,
-                    "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                    "document_name": get_doc_name(item),
                     "content": item.content,
                     "page_number": item.page_number,
-                    "relevance_score": item.relevance_score,
+                    "relevance_score": item.rrf_score,  # RRF score as relevance
+                    "is_library": item.is_library,
                 }
                 for item in results.results
             ]
@@ -695,24 +707,29 @@ class RAGEngineAdapter(EngineAdapter):
                 chunks=chunks_for_generation,
             )
 
+            # Count library results for logging
+            library_count = sum(1 for item in results.results if item.is_library)
+
             # Build response data
             rag_data = {
                 "answer": answer_result.answer,
                 "total_candidates": results.total_candidates,
-                "rerank_used": results.rerank_used,
+                "rerank_used": False,  # RRF fusion, not Cohere rerank
                 "generation_time_ms": answer_result.generation_time_ms,
                 "model_used": answer_result.model_used,
                 # Search mode info for frontend UX (rate limit fallback indicator)
                 "search_mode": results.search_mode,
                 "fallback_reason": results.fallback_reason,
+                "library_results_count": library_count,
                 "results": [
                     {
                         "chunk_id": item.id,
                         "document_id": item.document_id,
-                        "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                        "document_name": get_doc_name(item),
                         "content": item.content[:500],  # Preview for UI
                         "page_number": item.page_number,
-                        "relevance_score": item.relevance_score,
+                        "relevance_score": item.rrf_score,
+                        "is_library": item.is_library,
                     }
                     for item in results.results
                 ],
@@ -722,15 +739,16 @@ class RAGEngineAdapter(EngineAdapter):
 
             # Calculate confidence based on top result relevance
             confidence = 0.7  # Default
-            if results.results and results.results[0].relevance_score:
-                confidence = min(results.results[0].relevance_score, 0.95)
+            if results.results and results.results[0].rrf_score:
+                # RRF scores are typically 0-0.05 range, normalize
+                confidence = min(results.results[0].rrf_score * 10, 0.95)
 
             logger.info(
                 "rag_adapter_success",
                 matter_id=matter_id,
                 total_candidates=results.total_candidates,
                 results_returned=len(results.results),
-                rerank_used=results.rerank_used,
+                library_results=library_count,
                 answer_length=len(answer_result.answer),
                 execution_time_ms=execution_time_ms,
             )

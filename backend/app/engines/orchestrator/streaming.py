@@ -241,6 +241,9 @@ class StreamingOrchestrator:
                 truncated=truncated,
                 more_available=more_available,
                 total_results_hint=total_results_hint,
+                # Query safety rewrite metadata
+                query_was_rewritten=result.query_was_rewritten,
+                original_query=result.original_query if result.query_was_rewritten else None,
             )
 
             yield StreamEvent(

@@ -108,6 +108,9 @@ export interface CompleteData {
   truncated?: boolean;
   moreAvailable?: boolean;
   totalResultsHint?: number;
+  // Query safety rewrite metadata
+  queryWasRewritten?: boolean;
+  originalQuery?: string;
 }
 
 export interface ErrorData {
@@ -336,6 +339,9 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             truncated: (rawData.truncated as boolean) ?? false,
             moreAvailable: (rawData.moreAvailable ?? rawData.more_available) as boolean | undefined,
             totalResultsHint: (rawData.totalResultsHint ?? rawData.total_results_hint) as number | undefined,
+            // Query safety rewrite metadata
+            queryWasRewritten: (rawData.queryWasRewritten ?? rawData.query_was_rewritten) as boolean | undefined,
+            originalQuery: (rawData.originalQuery ?? rawData.original_query) as string | undefined,
           };
           optionsRef.current.onComplete?.(completeData);
           break;

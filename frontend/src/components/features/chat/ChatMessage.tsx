@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, isValid } from 'date-fns';
-import { User, Bot, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { User, Bot, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { SourceReference } from './SourceReference';
@@ -81,9 +81,26 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
           {isUser ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ul:pl-4 prose-li:my-1 prose-strong:text-foreground prose-headings:mt-3 prose-headings:mb-1">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
-            </div>
+            <>
+              {/* Query rewrite notice */}
+              {message.queryWasRewritten && message.originalQuery && (
+                <div
+                  className="mb-2 flex items-start gap-2 rounded-md bg-blue-50 p-2 text-xs text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                  role="status"
+                >
+                  <Edit2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                  <div>
+                    <p className="font-medium">Your question was rephrased for better results:</p>
+                    <p className="mt-0.5 italic text-blue-600 dark:text-blue-400">
+                      &ldquo;{message.originalQuery}&rdquo;
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ul:pl-4 prose-li:my-1 prose-strong:text-foreground prose-headings:mt-3 prose-headings:mb-1">
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              </div>
+            </>
           )}
 
           {/* Source references (assistant only) */}

@@ -16,7 +16,7 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { getConversationHistory, getArchivedMessages } from '@/lib/api/chat';
 import type { ChatMessage, EngineTrace, SourceReference } from '@/types/chat';
 
@@ -24,9 +24,128 @@ import type { ChatMessage, EngineTrace, SourceReference } from '@/types/chat';
 // Constants
 // ============================================================================
 
+/** @deprecated Use getStorageKey() for matter-specific keys */
 export const STORAGE_KEY = 'ldip-chat-history';
+export const STORAGE_KEY_PREFIX = 'ldip-chat-history';
 export const MAX_PERSISTED_MESSAGES = 20;
 export const SLIDING_WINDOW_SIZE = 20;
+
+/**
+ * Generate matter-specific storage key for localStorage.
+ * Ensures chat history is isolated per matter.
+ */
+export const getStorageKey = (matterId: string | null): string =>
+  matterId ? `${STORAGE_KEY_PREFIX}:${matterId}` : STORAGE_KEY_PREFIX;
+
+// ============================================================================
+// Matter-Aware Storage Adapter
+// ============================================================================
+
+/**
+ * Custom storage adapter that uses matter-specific localStorage keys.
+ * This ensures chat histories are isolated per matter, preventing cross-contamination.
+ */
+const createMatterAwareStorage = (): StateStorage => {
+  // Track current matter for storage operations
+  let currentMatterId: string | null = null;
+
+  return {
+    getItem: (name: string): string | null => {
+      if (typeof window === 'undefined') return null;
+
+      // If we have a current matter, try its specific key first
+      if (currentMatterId) {
+        const matterKey = getStorageKey(currentMatterId);
+        const matterData = localStorage.getItem(matterKey);
+        if (matterData) return matterData;
+      }
+
+      // Fallback: check for legacy global key (for migration)
+      const globalData = localStorage.getItem(STORAGE_KEY_PREFIX);
+      if (globalData && currentMatterId) {
+        // Migrate to matter-specific key if it matches
+        try {
+          const parsed = JSON.parse(globalData);
+          const storedMatterId = parsed?.state?.currentMatterId;
+          if (!storedMatterId || storedMatterId === currentMatterId) {
+            // This data belongs to current matter, migrate it
+            const matterKey = getStorageKey(currentMatterId);
+            localStorage.setItem(matterKey, globalData);
+            localStorage.removeItem(STORAGE_KEY_PREFIX);
+            return globalData;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      return null;
+    },
+
+    setItem: (name: string, value: string): void => {
+      if (typeof window === 'undefined') return;
+
+      try {
+        const parsed = JSON.parse(value);
+        const matterId = parsed?.state?.currentMatterId;
+
+        if (matterId) {
+          currentMatterId = matterId;
+          const matterKey = getStorageKey(matterId);
+          localStorage.setItem(matterKey, value);
+        }
+      } catch {
+        // Fallback to global key if parsing fails
+        localStorage.setItem(STORAGE_KEY_PREFIX, value);
+      }
+    },
+
+    removeItem: (name: string): void => {
+      if (typeof window === 'undefined') return;
+
+      if (currentMatterId) {
+        localStorage.removeItem(getStorageKey(currentMatterId));
+      }
+      // Also clean up legacy global key if it exists
+      localStorage.removeItem(STORAGE_KEY_PREFIX);
+    },
+  };
+};
+
+/**
+ * Migrate chat history from global localStorage to matter-specific key.
+ * Call this when loading a matter for the first time after upgrade.
+ */
+export function migrateGlobalChatHistory(matterId: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const globalKey = STORAGE_KEY_PREFIX;
+  const matterKey = getStorageKey(matterId);
+
+  // Skip if matter already has its own data
+  if (localStorage.getItem(matterKey)) {
+    return false;
+  }
+
+  const globalData = localStorage.getItem(globalKey);
+  if (!globalData) return false;
+
+  try {
+    const parsed = JSON.parse(globalData);
+    const storedMatterId = parsed?.state?.currentMatterId;
+
+    // Only migrate if the stored data belongs to this matter or has no matter
+    if (!storedMatterId || storedMatterId === matterId) {
+      localStorage.setItem(matterKey, globalData);
+      localStorage.removeItem(globalKey);
+      return true;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
+  return false;
+}
 
 // ============================================================================
 // Types
@@ -88,7 +207,9 @@ interface ChatActions {
     sources?: SourceReference[],
     searchNotice?: string,
     searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback',
-    embeddingCompletionPct?: number
+    embeddingCompletionPct?: number,
+    queryWasRewritten?: boolean,
+    originalQuery?: string
   ) => void;
   /**
    * Story 2.3: Abort streaming and save incomplete message.
@@ -152,12 +273,29 @@ export const useChatStore = create<ChatStore>()(
           return;
         }
 
+        // CRITICAL: Clear state when switching matters to prevent cross-contamination
+        const isSwitchingMatters = currentMatterId !== null && currentMatterId !== matterId;
+        if (isSwitchingMatters) {
+          set({
+            messages: [],
+            hasMore: false,
+            currentSessionId: null,
+            streamingMessageId: null,
+            streamingContent: '',
+            streamingTraces: [],
+            isTyping: false,
+          });
+        }
+
         set({
           isLoading: true,
           error: null,
           currentMatterId: matterId,
           currentUserId: userId,
         });
+
+        // Attempt migration from global localStorage key (one-time)
+        migrateGlobalChatHistory(matterId);
 
         try {
           const response = await getConversationHistory(matterId, userId);
@@ -249,7 +387,7 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
 
-      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct) => {
+      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct, queryWasRewritten, originalQuery) => {
         const { streamingMessageId, messages } = get();
         if (!streamingMessageId) return;
 
@@ -268,6 +406,9 @@ export const useChatStore = create<ChatStore>()(
           embeddingCompletionPct,
           // Story 2.3: Mark as successfully completed
           isComplete: true,
+          // Query safety rewrite metadata
+          queryWasRewritten,
+          originalQuery,
         };
 
         set({
@@ -319,7 +460,8 @@ export const useChatStore = create<ChatStore>()(
       },
     }),
     {
-      name: STORAGE_KEY,
+      name: STORAGE_KEY_PREFIX, // Base name (actual key is matter-specific)
+      storage: createJSONStorage(() => createMatterAwareStorage()),
       partialize: (state) => ({
         // Only persist essential data for conversation continuity
         messages: state.messages.slice(-MAX_PERSISTED_MESSAGES),

@@ -155,6 +155,15 @@ class StreamCompleteEvent(BaseModel):
         default=None,
         description="Total results available (if more_available is True)"
     )
+    # Query safety rewrite metadata
+    query_was_rewritten: bool = Field(
+        default=False,
+        description="True if query was automatically rewritten for safety"
+    )
+    original_query: str | None = Field(
+        default=None,
+        description="Original query before safety rewrite (if rewritten)"
+    )
 
 
 class ChatStreamRequest(BaseModel):

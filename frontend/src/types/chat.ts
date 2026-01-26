@@ -132,6 +132,10 @@ export interface ChatMessage {
   moreAvailable?: boolean;
   /** Hint showing total results available (if moreAvailable is true) */
   totalResultsHint?: number;
+  /** Whether the query was automatically rewritten for safety */
+  queryWasRewritten?: boolean;
+  /** Original query before safety rewrite (if rewritten) */
+  originalQuery?: string;
 }
 
 /**

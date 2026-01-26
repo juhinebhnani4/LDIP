@@ -58,19 +58,79 @@ class CompiledPattern:
         """
         return self.explanation_template
 
-    def get_rewrite(self, query: str) -> str:  # noqa: ARG002
+    def get_rewrite(self, query: str) -> str:
         """Generate suggested rewrite for blocked query.
 
-        Story 8-1: Task 3.4 - Rewrite suggestion.
+        Story 8-1: Task 3.4 - Rewrite suggestion with topic extraction.
 
         Args:
-            query: The blocked query (unused, but available for future templating).
+            query: The blocked query - used to extract the topic.
 
         Returns:
-            Suggested safe alternative query.
+            Suggested safe alternative query with extracted topic.
 
         """
+        # Extract topic from the query for better rewrites
+        topic = self._extract_topic(query)
+        if topic and "[topic]" in self.rewrite_template:
+            return self.rewrite_template.replace("[topic]", topic)
+        if topic and "[party]" in self.rewrite_template:
+            return self.rewrite_template.replace("[party]", topic)
         return self.rewrite_template
+
+    def _extract_topic(self, query: str) -> str:
+        """Extract the main topic/subject from a query.
+
+        Args:
+            query: The user's query.
+
+        Returns:
+            Extracted topic string or empty string.
+        """
+        import re
+
+        cleaned = query.lower().strip()
+
+        # Remove question marks
+        cleaned = cleaned.rstrip("?")
+
+        # Extract the object/topic from common patterns
+        patterns = [
+            # "Should I file an appeal" -> "the appeal"
+            r"should\s+(?:i|we)\s+(?:file|submit|pursue)\s+(?:an?\s+)?(.+)",
+            # "Should I appeal the decision" -> "the decision"
+            r"should\s+(?:i|we)\s+\w+\s+(.+)",
+            # "Is the defendant liable for X" -> "the defendant and X"
+            r"is\s+(the\s+\w+)\s+(?:liable|guilty|responsible)\s+(?:for\s+)?(.+)?",
+            # "Did the defendant violate X" -> "the defendant's compliance with X"
+            r"did\s+(the\s+\w+)\s+(?:violate|breach)\s+(.+)",
+            # "Will the court rule on X" -> "the court's ruling on X"
+            r"will\s+the\s+\w+\s+(?:rule|decide)\s+(?:on\s+)?(.+)",
+            # "What are my chances of X" -> "X"
+            r"what\s+are\s+(?:my|our|the)\s+chances\s+(?:of\s+)?(.+)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, cleaned, re.IGNORECASE)
+            if match:
+                groups = [g for g in match.groups() if g]
+                if groups:
+                    topic = " ".join(groups).strip()
+                    if topic:
+                        return topic[:100]
+
+        # Fallback: try to extract noun phrases after removing common verbs
+        cleaned = re.sub(
+            r"^(should\s+(?:i|we)\s+|do\s+you\s+|is\s+|did\s+|will\s+|what\s+)",
+            "",
+            cleaned
+        )
+        cleaned = cleaned.strip()
+
+        if len(cleaned) > 100:
+            cleaned = cleaned[:100] + "..."
+
+        return cleaned if cleaned else "this matter"
 
 
 # =============================================================================

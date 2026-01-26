@@ -181,40 +181,82 @@ class QueryOrchestrator:
         )
 
         # Step 0: Safety check (Story 8-1 regex + Story 8-2 LLM)
+        # Instead of blocking, rewrite the query and continue processing
+        original_query = query
+        query_was_rewritten = False
         safety_result = await self._safety_guard.check_query(query)
+
         if not safety_result.is_safe:
-            wall_clock_time_ms = int((time.time() - start_time) * 1000)
-
-            logger.info(
-                "query_blocked_by_safety",
-                matter_id=matter_id,
-                blocked_by=safety_result.blocked_by,
-                violation_type=safety_result.violation_type,
-                wall_clock_time_ms=wall_clock_time_ms,
+            # If we have a suggested rewrite that's actually different, use it
+            rewrite = safety_result.suggested_rewrite
+            rewrite_is_different = (
+                rewrite
+                and rewrite.strip().lower() != original_query.strip().lower()
             )
 
-            # Log to audit trail (non-blocking) - Story 8-2 Task 6.5
-            # NFR24: Always log audit - user_id is required
-            task = asyncio.create_task(
-                self._log_blocked_query_audit(
+            if rewrite_is_different:
+                logger.info(
+                    "query_rewritten_for_safety",
                     matter_id=matter_id,
-                    user_id=user_id,
-                    query=query,
-                    safety_result=safety_result,
+                    blocked_by=safety_result.blocked_by,
+                    violation_type=safety_result.violation_type,
+                    original_query=query[:100],
+                    rewritten_query=rewrite[:100],
                 )
-            )
-            task.add_done_callback(self._handle_audit_task_exception)
+                query = rewrite
+                query_was_rewritten = True
 
-            # M4 Fix: Explicitly set success=False for blocked queries
-            return OrchestratorResult(
-                matter_id=matter_id,
-                query=query,
-                success=False,
-                blocked=True,
-                blocked_reason=safety_result.explanation,
-                suggested_rewrite=safety_result.suggested_rewrite,
-                wall_clock_time_ms=wall_clock_time_ms,
-            )
+                # Log to audit trail (non-blocking)
+                task = asyncio.create_task(
+                    self._log_blocked_query_audit(
+                        matter_id=matter_id,
+                        user_id=user_id,
+                        query=original_query,
+                        safety_result=safety_result,
+                    )
+                )
+                task.add_done_callback(self._handle_audit_task_exception)
+            elif rewrite:
+                # Rewrite is same as original - treat as safe and continue without rewrite notice
+                logger.info(
+                    "query_rewrite_identical_continuing",
+                    matter_id=matter_id,
+                    blocked_by=safety_result.blocked_by,
+                    message="Rewrite identical to original, treating as safe",
+                )
+                # query_was_rewritten stays False, so no notice shown to user
+            else:
+                # No rewrite available - must block
+                wall_clock_time_ms = int((time.time() - start_time) * 1000)
+
+                logger.info(
+                    "query_blocked_by_safety",
+                    matter_id=matter_id,
+                    blocked_by=safety_result.blocked_by,
+                    violation_type=safety_result.violation_type,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                )
+
+                # Log to audit trail (non-blocking) - Story 8-2 Task 6.5
+                task = asyncio.create_task(
+                    self._log_blocked_query_audit(
+                        matter_id=matter_id,
+                        user_id=user_id,
+                        query=query,
+                        safety_result=safety_result,
+                    )
+                )
+                task.add_done_callback(self._handle_audit_task_exception)
+
+                return OrchestratorResult(
+                    matter_id=matter_id,
+                    query=query,
+                    success=False,
+                    blocked=True,
+                    blocked_reason=safety_result.explanation,
+                    suggested_rewrite=safety_result.suggested_rewrite,
+                    wall_clock_time_ms=wall_clock_time_ms,
+                )
 
         # Step 0.5: Check response cache (Cost Optimization)
         if self._use_response_cache:
@@ -364,6 +406,11 @@ class QueryOrchestrator:
                     matter_id=matter_id,
                     error=str(e),
                 )
+
+        # Add query rewrite metadata if query was rewritten
+        if query_was_rewritten:
+            result.query_was_rewritten = True
+            result.original_query = original_query
 
         # Step 4: Audit logging (non-blocking, fire-and-forget)
         # Story 6-3: AC #5 - audit failures should not fail the query

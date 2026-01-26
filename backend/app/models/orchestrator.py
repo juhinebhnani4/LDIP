@@ -417,6 +417,16 @@ class OrchestratorResult(BaseModel):
         description="Suggested safe alternative query",
     )
 
+    # Query rewrite fields: when safety detects issues, auto-rewrite and continue
+    query_was_rewritten: bool = Field(
+        default=False,
+        description="True if query was automatically rewritten to be safe",
+    )
+    original_query: str = Field(
+        default="",
+        description="Original query before safety rewrite (if rewritten)",
+    )
+
     # Story 8-3: Language policing metadata (Task 7.4)
     policing_metadata: dict[str, Any] = Field(
         default_factory=dict,

@@ -133,7 +133,6 @@ export function CitationsContent({
     mutate: refreshCitations,
   } = useCitationsList(matterId, {
     page: currentPage,
-    perPage: 20,
     filters: debouncedFilters,
   });
 

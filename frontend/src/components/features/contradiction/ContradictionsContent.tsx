@@ -150,7 +150,7 @@ export function ContradictionsContent({
   const [entityId, setEntityId] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
 
-  // Fetch contradictions data
+  // Fetch contradictions data - use default perPage=100 from hook for comprehensive view
   const { data, meta, isLoading, error, totalCount, uniqueEntities } = useContradictions(
     matterId,
     {
@@ -158,7 +158,6 @@ export function ContradictionsContent({
       contradictionType,
       entityId,
       page,
-      perPage: 20,
     }
   );
 

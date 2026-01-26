@@ -198,7 +198,7 @@ function DocumentListSkeleton() {
  */
 function DocumentListEmpty() {
   return (
-    <div className="text-center py-12 border rounded-lg bg-muted/50">
+    <div className="text-center py-12 border rounded-lg bg-muted/50" data-testid="document-list-empty">
       <p className="text-muted-foreground">No documents found</p>
       <p className="text-sm text-muted-foreground mt-1">
         Upload documents to get started
@@ -254,7 +254,7 @@ export function DocumentList({
     try {
       const response = await fetchDocuments(matterId, {
         page,
-        perPage: 20,
+        perPage: 100,
         filters,
         sort,
       });
@@ -447,7 +447,7 @@ export function DocumentList({
 
   return (
     <TooltipProvider>
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="document-list">
       {/* Filters and bulk actions */}
       <div className="flex flex-wrap items-center gap-4">
         {/* Type filter */}
@@ -511,8 +511,8 @@ export function DocumentList({
       {documents.length === 0 ? (
         <DocumentListEmpty />
       ) : (
-        <div className="border rounded-lg overflow-x-auto">
-          <Table>
+        <div className="border rounded-lg overflow-x-auto" data-testid="document-table-container">
+          <Table data-testid="document-table">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
@@ -553,6 +553,7 @@ export function DocumentList({
                     selectedIds.has(doc.id) ? 'bg-muted/30' : ''
                   }`}
                   onClick={() => onDocumentClick?.(doc)}
+                  data-testid={`document-row-${doc.id}`}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox

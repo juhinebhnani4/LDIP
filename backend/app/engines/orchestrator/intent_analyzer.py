@@ -273,11 +273,15 @@ class IntentAnalyzer:
         if fast_path_result is not None:
             processing_time = int((time.time() - start_time) * 1000)
 
+            # Apply RAG fallback even for fast-path (always want document context)
+            fast_path_result = self._apply_multi_engine_fallback(fast_path_result)
+
             logger.info(
                 "analyze_intent_fast_path",
                 matter_id=matter_id,
                 intent=fast_path_result.intent.value,
                 confidence=fast_path_result.confidence,
+                required_engines=[e.value for e in fast_path_result.required_engines],
                 processing_time_ms=processing_time,
             )
 
@@ -565,36 +569,47 @@ class IntentAnalyzer:
     def _apply_multi_engine_fallback(
         self, classification: IntentClassification
     ) -> IntentClassification:
-        """Apply multi-engine fallback for low-confidence classifications.
+        """Apply multi-engine fallback to ensure RAG context for all queries.
 
-        Task 4.4: If confidence < 0.7, add RAG fallback.
+        Task 4.4: ALWAYS add RAG for document-grounded answers.
+
+        All queries benefit from RAG context, regardless of confidence:
+        - Entity lookup: RAG provides document context about the entity
+        - Timeline: RAG provides narrative around events
+        - Citation: RAG provides context for legal references
+        - Contradiction: RAG provides surrounding text for analysis
 
         Args:
             classification: Original classification.
 
         Returns:
-            Updated classification with potential additional engines.
+            Updated classification with RAG always included.
         """
-        if classification.confidence >= LOW_CONFIDENCE_THRESHOLD:
-            return classification
-
-        # Low confidence: add RAG fallback if not already present
         engines = list(classification.required_engines)
+
+        # ALWAYS add RAG for document-grounded answers
+        # This ensures all responses include context from the actual documents
         if EngineType.RAG not in engines:
             engines.append(EngineType.RAG)
 
             logger.debug(
-                "multi_engine_fallback_applied",
+                "rag_always_added",
                 original_intent=classification.intent.value,
                 confidence=classification.confidence,
                 engines=[e.value for e in engines],
             )
 
+        # Update reasoning based on confidence
+        if classification.confidence < LOW_CONFIDENCE_THRESHOLD:
+            reasoning = f"{classification.reasoning} (Low confidence + RAG context)"
+        else:
+            reasoning = f"{classification.reasoning} (+ RAG context for document grounding)"
+
         return IntentClassification(
             intent=QueryIntent.MULTI_ENGINE if len(engines) > 1 else classification.intent,
             confidence=classification.confidence,
             required_engines=engines,
-            reasoning=f"{classification.reasoning} (Low confidence: added RAG fallback)",
+            reasoning=reasoning,
         )
 
 
@@ -699,6 +714,13 @@ COMPOUND_INTENTS: dict[frozenset[EngineType], CompoundIntent] = {
     frozenset({EngineType.CONTRADICTION, EngineType.RAG}): CompoundIntent(
         name="contradiction_summary",
         primary_engine=EngineType.CONTRADICTION,
+        supporting_engines=[EngineType.RAG],
+        aggregation_strategy="weave",
+    ),
+    # Entity lookup should use ENTITY_LOOKUP as primary, not RAG
+    frozenset({EngineType.ENTITY_LOOKUP, EngineType.RAG}): CompoundIntent(
+        name="entity_details",
+        primary_engine=EngineType.ENTITY_LOOKUP,
         supporting_engines=[EngineType.RAG],
         aggregation_strategy="weave",
     ),
@@ -1046,26 +1068,33 @@ class MultiIntentAnalyzer:
         return None
 
     def _apply_rag_fallback(self, signals: list[IntentSignal]) -> list[IntentSignal]:
-        """Add RAG as fallback if no high-confidence signal.
+        """ALWAYS add RAG for document-grounded answers.
+
+        Task 4.4: All queries benefit from RAG context, regardless of confidence.
 
         Args:
             signals: Current intent signals.
 
         Returns:
-            Signals with RAG fallback if needed.
+            Signals with RAG always included for document context.
         """
-        max_conf = max((s.confidence for s in signals), default=0)
+        has_rag = any(s.engine == EngineType.RAG for s in signals)
 
-        if max_conf < HIGH_CONFIDENCE_THRESHOLD:
-            has_rag = any(s.engine == EngineType.RAG for s in signals)
-            if not has_rag:
-                signals.append(
-                    IntentSignal(
-                        engine=EngineType.RAG,
-                        confidence=0.6,
-                        source=IntentSource.FALLBACK,
-                    )
+        # ALWAYS add RAG for document-grounded answers
+        if not has_rag:
+            max_conf = max((s.confidence for s in signals), default=0)
+            signals.append(
+                IntentSignal(
+                    engine=EngineType.RAG,
+                    confidence=0.6 if max_conf < HIGH_CONFIDENCE_THRESHOLD else 0.8,
+                    source=IntentSource.FALLBACK,
                 )
+            )
+            logger.debug(
+                "rag_always_added_multi_intent",
+                existing_engines=[s.engine.value for s in signals if s.engine != EngineType.RAG],
+                max_confidence=max_conf,
+            )
 
         return signals
 

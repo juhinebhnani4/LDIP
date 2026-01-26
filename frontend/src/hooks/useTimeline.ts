@@ -30,6 +30,7 @@ function transformEvent(event: Record<string, unknown>): TimelineEvent {
     eventType: (event.eventType ?? event.event_type) as TimelineEvent['eventType'],
     description: event.description as string,
     documentId: ((event.documentId ?? event.document_id) as string | null) ?? null,
+    documentName: ((event.documentName ?? event.document_name) as string | null) ?? null,
     sourcePage: ((event.sourcePage ?? event.source_page) as number | null) ?? null,
     confidence: event.confidence as number,
     entities: Array.isArray(event.entities)
@@ -150,7 +151,9 @@ export interface UseTimelineOptionsWithFilters extends UseTimelineOptions {
  * ```
  */
 export function useTimeline(matterId: string, options: UseTimelineOptionsWithFilters = {}) {
-  const { eventType, entityId, page = 1, perPage = 50, filters } = options;
+  // Default to 500 events to load comprehensive timeline data
+  // This provides better chronological coverage while maintaining reasonable performance
+  const { eventType, entityId, page = 1, perPage = 500, filters } = options;
 
   // Build URL with query params
   const params = new URLSearchParams();

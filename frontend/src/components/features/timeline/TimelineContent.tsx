@@ -106,18 +106,22 @@ export function TimelineContent({ className }: TimelineContentProps) {
   const [anomalyPanelOpen, setAnomalyPanelOpen] = useState(false);
   const [selectedAnomaly, setSelectedAnomaly] = useState<AnomalyListItem | null>(null);
 
+  // Track page for loading more events
+  const [currentPerPage, setCurrentPerPage] = useState(500);
+
   // Fetch timeline data with filters
   const {
     events,
     filteredEvents,
     uniqueEntities,
+    meta: timelineMeta,
     isLoading: eventsLoading,
     isError: eventsError,
     addEvent,
     updateEvent,
     deleteEvent,
     mutate: refreshTimeline,
-  } = useTimeline(matterId, { filters: debouncedFilters });
+  } = useTimeline(matterId, { filters: debouncedFilters, perPage: currentPerPage });
 
   // Fetch timeline stats
   const {
@@ -415,12 +419,26 @@ export function TimelineContent({ className }: TimelineContentProps) {
         className="mt-4"
       />
 
-      {/* Filter results message */}
-      {activeFilterCount > 0 && (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Showing {displayEvents.length} of {events.length} events
+      {/* Events count message and Load More button */}
+      <div className="mt-2 flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {activeFilterCount > 0 ? (
+            <>Showing {displayEvents.length} of {events.length} loaded events</>
+          ) : timelineMeta && events.length < timelineMeta.total ? (
+            <>Showing {events.length} of {timelineMeta.total} events</>
+          ) : (
+            <>{events.length} events</>
+          )}
         </p>
-      )}
+        {timelineMeta && events.length < timelineMeta.total && !eventsLoading && (
+          <button
+            onClick={() => setCurrentPerPage((prev) => Math.min(prev + 500, timelineMeta.total))}
+            className="text-sm text-primary hover:underline"
+          >
+            Load more events ({timelineMeta.total - events.length} remaining)
+          </button>
+        )}
+      </div>
 
       {/* Timeline view based on mode */}
       {renderTimelineView()}

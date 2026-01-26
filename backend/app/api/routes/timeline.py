@@ -980,7 +980,7 @@ async def get_timeline_with_entities(
         description="Include unclassified raw_date events",
     ),
     page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    per_page: int = Query(50, ge=1, le=1000, description="Items per page (max 1000 for comprehensive timelines)"),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),

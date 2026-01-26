@@ -33,6 +33,10 @@ interface TimelineHeaderProps {
   onAddEvent?: () => void;
   /** Whether stats are loading */
   isLoading?: boolean;
+  /** Fallback event count from loaded events (used when stats fail) */
+  fallbackEventCount?: number;
+  /** Total events from pagination meta (used when stats fail) */
+  totalEventsFromMeta?: number;
   /** Optional className for styling */
   className?: string;
 }
@@ -67,13 +71,16 @@ export function TimelineHeader({
   onViewModeChange,
   onAddEvent,
   isLoading,
+  fallbackEventCount,
+  totalEventsFromMeta,
   className,
 }: TimelineHeaderProps) {
   if (isLoading) {
     return <TimelineHeaderSkeleton className={className} />;
   }
 
-  const eventCount = stats?.totalEvents ?? 0;
+  // Use stats if available, otherwise use totalEventsFromMeta, then fallbackEventCount
+  const eventCount = stats?.totalEvents ?? totalEventsFromMeta ?? fallbackEventCount ?? 0;
   const dateRange = formatDateRange(
     stats?.dateRangeStart ?? null,
     stats?.dateRangeEnd ?? null

@@ -373,7 +373,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
           <TimelineList
             events={displayEvents}
             isLoading={eventsLoading}
-            isError={eventsError || statsError}
+            isError={eventsError}
             hasFiltersApplied={activeFilterCount > 0}
             onEditEvent={handleEditEvent}
             onDeleteEvent={handleDeleteEvent}
@@ -400,7 +400,9 @@ export function TimelineContent({ className }: TimelineContentProps) {
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onAddEvent={handleAddEventClick}
-        isLoading={statsLoading}
+        isLoading={statsLoading && eventsLoading}
+        fallbackEventCount={events.length}
+        totalEventsFromMeta={timelineMeta?.total}
       />
 
       {/* Anomalies Banner (Story 14.16) */}

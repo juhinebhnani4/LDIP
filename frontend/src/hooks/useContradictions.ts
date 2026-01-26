@@ -255,6 +255,7 @@ export function useContradictions(
   matterId: string | null,
   options: UseContradictionsOptions = {}
 ): UseContradictionsReturn {
+  // Default to 100 items for comprehensive contradiction view
   const {
     enabled = true,
     severity,
@@ -262,7 +263,7 @@ export function useContradictions(
     entityId,
     documentId,
     page = 1,
-    perPage = 20,
+    perPage = 100,
     sortBy,
     sortOrder,
   } = options;

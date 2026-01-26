@@ -124,7 +124,8 @@ export function useEntityMentions(
   entityId: string | null,
   options: UseEntityMentionsOptions = {}
 ): UseEntityMentionsReturn {
-  const { page = 1, perPage = 20, enabled = true } = options;
+  // Default to 50 items for comprehensive entity mentions view
+  const { page = 1, perPage = 50, enabled = true } = options;
 
   const { data, error, isLoading } = useSWR<EntityMentionsResponse>(
     enabled && matterId && entityId
@@ -172,14 +173,17 @@ export function useEntityRelationships(
       const batchSize = 20;
       for (let i = 0; i < entities.length; i += batchSize) {
         const batch = entities.slice(i, i + batchSize);
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           batch.map((entity) => getEntity(matterId!, entity.id))
         );
 
         for (const result of results) {
-          for (const edge of result.data.relationships) {
-            if (!edgeMap.has(edge.id)) {
-              edgeMap.set(edge.id, edge);
+          // Skip failed fetches (e.g., deleted entities return 404)
+          if (result.status === 'fulfilled') {
+            for (const edge of result.value.data.relationships) {
+              if (!edgeMap.has(edge.id)) {
+                edgeMap.set(edge.id, edge);
+              }
             }
           }
         }

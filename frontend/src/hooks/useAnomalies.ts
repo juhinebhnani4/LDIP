@@ -196,7 +196,8 @@ export interface UseAnomaliesOptions {
  * Hook for fetching list of anomalies for a matter
  */
 export function useAnomalies(matterId: string, options: UseAnomaliesOptions = {}) {
-  const { severity, anomalyType, dismissed, page = 1, perPage = 20 } = options;
+  // Default to 100 items for comprehensive anomaly view
+  const { severity, anomalyType, dismissed, page = 1, perPage = 100 } = options;
 
   // Build URL with query params
   const params = new URLSearchParams();

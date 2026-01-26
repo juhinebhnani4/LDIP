@@ -94,7 +94,8 @@ export interface UseActMutationsResult {
 function buildApiOptions(
   options: UseCitationsListOptions
 ): CitationListOptions {
-  const { page = 1, perPage = 20, filters } = options;
+  // Default to 100 items for comprehensive citation view
+  const { page = 1, perPage = 100, filters } = options;
   const apiOptions: CitationListOptions = {
     page,
     perPage,

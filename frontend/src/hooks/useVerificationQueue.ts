@@ -75,9 +75,10 @@ interface UseVerificationQueueReturn {
 export function useVerificationQueue(
   options: UseVerificationQueueOptions
 ): UseVerificationQueueReturn {
+  // Default to 100 items for comprehensive verification queue view
   const {
     matterId,
-    limit = 50,
+    limit = 100,
     enablePolling = true,
     pollInterval = DEFAULT_POLL_INTERVAL_MS,
   } = options;

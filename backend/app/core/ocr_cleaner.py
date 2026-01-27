@@ -44,6 +44,22 @@ EXCESSIVE_NEWLINES = re.compile(r'\n{4,}')
 # Pattern: Random special characters sequences (OCR garbage)
 SPECIAL_CHAR_GARBAGE = re.compile(r'[^\w\s.,;:!?\-\'\"(){}[\]@#$%&*+=/<>]{3,}')
 
+# Pattern: Repeated punctuation (OCR stutter) - e.g., "***", ":::", "..."
+# These are common OCR artifacts from scanned legal documents
+REPEATED_PUNCTUATION = re.compile(r'([.:*\'\"]{2,}\s*){2,}')
+
+# Pattern: Mixed punctuation gibberish - sequences like "..::.. : *** **"
+# Matches: punctuation-heavy sequences with low alphanumeric ratio
+PUNCTUATION_GIBBERISH = re.compile(
+    r'(?<![a-zA-Z])'  # Not preceded by letter
+    r'[.:*\'\"_\-,;!?\s]{6,}'  # 6+ chars of punctuation/space mix
+    r'(?![a-zA-Z])',  # Not followed by letter
+    re.UNICODE
+)
+
+# Pattern: Asterisk sequences (common OCR artifact)
+ASTERISK_NOISE = re.compile(r'\*{2,}')
+
 # Pattern: Isolated box drawing characters (common OCR error)
 BOX_DRAWING = re.compile(r'[\u2500-\u257F]+')
 
@@ -108,15 +124,21 @@ class OCRCleaner:
         # Step 5: Collapse repeated characters (>5 same char)
         cleaned = REPEATED_CHARS.sub(r'\1\1', cleaned)
 
-        # Step 6: Remove special character garbage sequences
+        # Step 6: Remove punctuation-based OCR artifacts (always applied)
+        # These patterns catch garbage like "...:::... : *** **..'' ****"
+        cleaned = ASTERISK_NOISE.sub(' ', cleaned)
+        cleaned = REPEATED_PUNCTUATION.sub(' ', cleaned)
+        cleaned = PUNCTUATION_GIBBERISH.sub(' ', cleaned)
+
+        # Step 7: Remove special character garbage sequences (aggressive only)
         if self.aggressive:
             cleaned = SPECIAL_CHAR_GARBAGE.sub(' ', cleaned)
 
-        # Step 7: Normalize whitespace
+        # Step 8: Normalize whitespace
         cleaned = EXCESSIVE_WHITESPACE.sub(' ', cleaned)
         cleaned = EXCESSIVE_NEWLINES.sub('\n\n', cleaned)
 
-        # Step 8: Strip and normalize
+        # Step 9: Strip and normalize
         cleaned = cleaned.strip()
 
         # Log if significant cleaning occurred
@@ -176,6 +198,14 @@ class OCRCleaner:
 
         # Check for repeated character patterns
         if REPEATED_CHARS.search(text):
+            return True
+
+        # Check for punctuation-based OCR artifacts
+        if REPEATED_PUNCTUATION.search(text):
+            return True
+        if PUNCTUATION_GIBBERISH.search(text):
+            return True
+        if ASTERISK_NOISE.search(text):
             return True
 
         # Check for box drawing characters

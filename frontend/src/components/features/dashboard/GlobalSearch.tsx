@@ -180,6 +180,7 @@ export function GlobalSearch() {
             aria-label="Search all matters"
             aria-expanded={isOpen}
             aria-haspopup="listbox"
+            data-testid="global-search-input"
           />
           {query && (
             <Button
@@ -225,7 +226,7 @@ export function GlobalSearch() {
           </div>
         )}
         {showResults && (
-          <div className="space-y-1" role="listbox">
+          <div className="space-y-1" role="listbox" data-testid="global-search-results">
             {results.map((result) => (
               <SearchResultItem key={result.id} result={result} onSelect={handleResultSelect} />
             ))}

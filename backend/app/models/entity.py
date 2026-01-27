@@ -79,6 +79,16 @@ class EntityNode(EntityNodeBase):
     aliases: list[str] = Field(default_factory=list, description="Known aliases")
     created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
     updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    # Story 3.3: Soft merge tracking
+    merged_into_id: str | None = Field(
+        None, alias="mergedIntoId", description="If merged, references target entity (Story 3.3)"
+    )
+    merged_at: datetime | None = Field(
+        None, alias="mergedAt", description="When entity was merged (Story 3.3)"
+    )
+    merged_by: str | None = Field(
+        None, alias="mergedBy", description="User who performed merge (Story 3.3)"
+    )
 
     @field_validator("metadata", mode="before")
     @classmethod

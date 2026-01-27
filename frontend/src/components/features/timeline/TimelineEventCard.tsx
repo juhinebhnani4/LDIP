@@ -38,6 +38,7 @@ import {
 import { AnomalyIndicator } from './AnomalyIndicator';
 import type { TimelineEvent } from '@/types/timeline';
 import type { AnomalyListItem } from '@/hooks/useAnomalies';
+import type { CrossEngineCounts } from '@/types/crossEngine';
 
 /**
  * Timeline Event Card Component
@@ -71,6 +72,10 @@ interface TimelineEventCardProps {
   onDelete?: (event: TimelineEvent) => void;
   /** Callback when source document is clicked - opens in PDF split view */
   onSourceClick?: (event: TimelineEvent) => void;
+  /** Cross-engine counts for navigation links (Gap 5-3) */
+  crossEngineCounts?: CrossEngineCounts;
+  /** Whether to show cross-engine links (Gap 5-3) */
+  showCrossEngineLinks?: boolean;
   /** Optional className */
   className?: string;
 }
@@ -108,6 +113,8 @@ export function TimelineEventCard({
   onEdit,
   onDelete,
   onSourceClick,
+  crossEngineCounts,
+  showCrossEngineLinks = false,
   className,
 }: TimelineEventCardProps) {
   const params = useParams<{ matterId: string }>();
@@ -280,6 +287,31 @@ export function TimelineEventCard({
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Cross-Engine Links (Gap 5-3) */}
+        {showCrossEngineLinks && crossEngineCounts && (
+          <div className="flex items-center gap-3 text-xs mt-2">
+            {crossEngineCounts.contradictionCount !== undefined &&
+              crossEngineCounts.contradictionCount > 0 && (
+                <Link
+                  href={`/matter/${matterId}/contradictions?entity=${event.entities[0]?.entityId ?? ''}`}
+                  className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+                >
+                  <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                  <span>
+                    {crossEngineCounts.contradictionCount} contradiction
+                    {crossEngineCounts.contradictionCount !== 1 ? 's' : ''}
+                  </span>
+                  {crossEngineCounts.highSeverityCount !== undefined &&
+                    crossEngineCounts.highSeverityCount > 0 && (
+                      <span className="text-red-500 font-medium">
+                        ({crossEngineCounts.highSeverityCount} high)
+                      </span>
+                    )}
+                </Link>
+              )}
           </div>
         )}
 

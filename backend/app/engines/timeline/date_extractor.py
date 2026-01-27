@@ -812,10 +812,24 @@ class DateExtractor:
                 if detected_page is not None:
                     filtered_page = detected_page
 
+        # Parse event type and description
+        event_type = raw_date.get("event_type", "unclassified")
+        valid_event_types = ["filing", "hearing", "order", "notice", "transaction", "document", "deadline", "incident", "unclassified"]
+        if event_type not in valid_event_types:
+            event_type = "unclassified"
+
+        event_description = raw_date.get("event_description", "")
+        if not event_description:
+            # Fallback: use truncated context as description
+            context = raw_date.get("context_before", "") + " " + raw_date.get("context_after", "")
+            event_description = context.strip()[:100] if context.strip() else ""
+
         return ExtractedDate(
             extracted_date=extracted_date,
             date_text=date_text,
             date_precision=precision_str,  # type: ignore
+            event_type=event_type,
+            event_description=event_description[:200],  # Limit to 200 chars
             context_before=raw_date.get("context_before", "")[:1000],  # Limit size
             context_after=raw_date.get("context_after", "")[:1000],
             page_number=filtered_page,

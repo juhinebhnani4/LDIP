@@ -80,7 +80,7 @@ export function DocumentsHeader({
   isRetryingAll = false,
 }: DocumentsHeaderProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="documents-header">
       {/* Main header with count and add button */}
       <div className="flex items-center justify-between">
         <div>
@@ -92,7 +92,7 @@ export function DocumentsHeader({
         <div className="flex items-center gap-4">
           {/* Celery status indicator */}
           <CeleryStatusIndicator showLabel />
-          <Button onClick={onAddFiles}>
+          <Button onClick={onAddFiles} data-testid="add-files-button">
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             Add Files
           </Button>

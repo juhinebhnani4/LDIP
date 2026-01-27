@@ -404,6 +404,11 @@ class SummaryService:
         Story 14.1: AC #6 - Parties extracted from entity_mentions.
         Story 14.6: AC #9 - Include citation data for CitationLink.
 
+        Improved approach:
+        1. Query identity_nodes for entities with party roles in metadata
+        2. Get first mention for each party entity to find source document
+        3. Filter to only include mentions from active (non-deleted) documents
+
         Args:
             matter_id: Matter UUID.
 
@@ -414,68 +419,99 @@ class SummaryService:
             # First get active document IDs
             docs_result = await asyncio.to_thread(
                 lambda: self.supabase.table("documents")
-                .select("id")
+                .select("id, filename")
                 .eq("matter_id", matter_id)
                 .is_("deleted_at", "null")
                 .execute()
             )
-            active_doc_ids = [d["id"] for d in docs_result.data or []]
+            active_docs = {d["id"]: d["filename"] for d in docs_result.data or []}
+            active_doc_ids = list(active_docs.keys())
 
             if not active_doc_ids:
                 return []
 
-            # Query entity_mentions for parties with role information
-            # Join with identity_nodes and documents for complete info
-            # Filter to only include mentions from active documents
-            result = await asyncio.to_thread(
-                lambda: self.supabase.table("entity_mentions")
-                .select(
-                    "id, entity_id, document_id, page_number, "
-                    "identity_nodes(id, canonical_name, entity_type, metadata), "
-                    "documents(id, name)"
-                )
-                .eq("identity_nodes.matter_id", matter_id)
-                .in_("document_id", active_doc_ids)
-                .limit(10)
+            # Step 1: Get all PERSON entities for this matter (parties are people)
+            # We fetch more entities and filter for party roles in Python
+            # since Supabase doesn't support JSON field contains queries efficiently
+            entities_result = await asyncio.to_thread(
+                lambda: self.supabase.table("identity_nodes")
+                .select("id, canonical_name, entity_type, metadata")
+                .eq("matter_id", matter_id)
+                .in_("entity_type", ["PERSON", "ORG"])
+                .order("mention_count", desc=True)
+                .limit(100)
                 .execute()
             )
 
-            parties = []
-            seen_entity_ids = set()
-
-            for row in result.data or []:
-                entity_data = row.get("identity_nodes")
-                if not entity_data:
-                    continue
-
-                entity_id = entity_data.get("id")
-                if entity_id in seen_entity_ids:
-                    continue
-                seen_entity_ids.add(entity_id)
-
-                # Extract role from metadata if available
-                metadata = entity_data.get("metadata", {}) or {}
+            # Step 2: Filter for entities with party roles
+            party_entities = []
+            for entity in entities_result.data or []:
+                metadata = entity.get("metadata", {}) or {}
                 roles = metadata.get("roles", [])
 
+                # Skip generic placeholder names like "Respondent No.1"
+                name = entity.get("canonical_name", "")
+                if self._is_placeholder_party_name(name):
+                    continue
+
                 # Determine party role
-                role = PartyRole.OTHER
+                role = None
                 for r in roles:
                     r_lower = r.lower() if isinstance(r, str) else ""
-                    if "petitioner" in r_lower or "appellant" in r_lower:
+                    if "petitioner" in r_lower or "appellant" in r_lower or "complainant" in r_lower:
                         role = PartyRole.PETITIONER
                         break
-                    elif "respondent" in r_lower or "defendant" in r_lower:
+                    elif "respondent" in r_lower or "defendant" in r_lower or "accused" in r_lower:
                         role = PartyRole.RESPONDENT
                         break
+                    elif "applicant" in r_lower:
+                        # Applicant could be petitioner in some contexts
+                        role = PartyRole.PETITIONER
+                        break
 
-                doc_data = row.get("documents", {}) or {}
-                source_document = doc_data.get("name", "Unknown")
-                # Don't default to 1 - allow None for unknown pages
-                source_page = row.get("page_number")
-                document_id = doc_data.get("id", "")
+                if role:
+                    party_entities.append({
+                        "entity_id": entity["id"],
+                        "canonical_name": name,
+                        "role": role,
+                    })
+
+            if not party_entities:
+                return []
+
+            # Step 3: Get first mention for each party entity to find source document
+            party_entity_ids = [p["entity_id"] for p in party_entities]
+            mentions_result = await asyncio.to_thread(
+                lambda: self.supabase.table("entity_mentions")
+                .select("entity_id, document_id, page_number")
+                .in_("entity_id", party_entity_ids[:20])  # Limit to top 20 parties
+                .in_("document_id", active_doc_ids)
+                .execute()
+            )
+
+            # Build map of entity_id -> first mention
+            entity_mentions: dict[str, dict] = {}
+            for mention in mentions_result.data or []:
+                entity_id = mention["entity_id"]
+                if entity_id not in entity_mentions:
+                    entity_mentions[entity_id] = mention
+
+            # Step 4: Build PartyInfo objects
+            parties = []
+            for party in party_entities:
+                entity_id = party["entity_id"]
+                mention = entity_mentions.get(entity_id)
+
+                if mention:
+                    document_id = mention["document_id"]
+                    source_document = active_docs.get(document_id, "Unknown")
+                    source_page = mention.get("page_number")
+                else:
+                    document_id = ""
+                    source_document = "Unknown"
+                    source_page = None
 
                 # Check if this party entity has been verified
-                # Party verification comes from finding_verifications table
                 is_verified = await self._check_party_verified(matter_id, entity_id)
 
                 # Story 14.6: Build citation for party source
@@ -491,8 +527,8 @@ class SummaryService:
                 parties.append(
                     PartyInfo(
                         entity_id=entity_id,
-                        entity_name=entity_data.get("canonical_name", "Unknown"),
-                        role=role,
+                        entity_name=party["canonical_name"],
+                        role=party["role"],
                         source_document=source_document,
                         source_page=source_page,
                         is_verified=is_verified,
@@ -513,6 +549,60 @@ class SummaryService:
         except Exception as e:
             logger.warning("get_parties_failed", error=str(e), matter_id=matter_id)
             return []
+
+    def _is_placeholder_party_name(self, name: str) -> bool:
+        """Check if a name is a generic placeholder like 'Respondent No.1'.
+
+        These are extracted from documents but are not actual party names.
+        """
+        if not name:
+            return True
+        name_lower = name.lower().strip()
+
+        # Exact matches for generic terms
+        exact_placeholders = [
+            "respondent",
+            "petitioner",
+            "appellant",
+            "defendant",
+            "applicant",
+            "complainant",
+            "accused",
+            "custodian",
+            "the custodian",
+            "the respondent",
+            "the petitioner",
+            "the appellant",
+            "the defendant",
+        ]
+        if name_lower in exact_placeholders:
+            return True
+
+        # Patterns for numbered placeholders like "Respondent No.1", "Respondent 2"
+        import re
+        numbered_pattern = re.compile(
+            r"^(respondent|petitioner|appellant|defendant|applicant|complainant)\s*(no\.?|nos\.?|number)?\s*\d*$",
+            re.IGNORECASE,
+        )
+        if numbered_pattern.match(name_lower):
+            return True
+
+        # Startswith patterns
+        placeholders = [
+            "respondent no",
+            "petitioner no",
+            "appellant no",
+            "defendant no",
+            "applicant no",
+            "respondent nos",
+            "petitioner nos",
+            "appellant nos",
+        ]
+        for placeholder in placeholders:
+            if name_lower.startswith(placeholder):
+                return True
+
+        return False
 
     async def _check_party_verified(self, matter_id: str, entity_id: str) -> bool:
         """Check if a party entity has been verified.
@@ -730,27 +820,27 @@ class SummaryService:
     async def _get_verification_stats(self, matter_id: str) -> float:
         """Calculate verification percentage from finding_verifications table."""
         try:
-            # Get total verifications
-            total_result = await asyncio.to_thread(
-                lambda: self.supabase.table("finding_verifications")
-                .select("id", count="exact")
-                .eq("matter_id", matter_id)
-                .execute()
+            # LATENCY FIX: Parallelize both count queries
+            total_result, approved_result = await asyncio.gather(
+                asyncio.to_thread(
+                    lambda: self.supabase.table("finding_verifications")
+                    .select("id", count="exact")
+                    .eq("matter_id", matter_id)
+                    .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: self.supabase.table("finding_verifications")
+                    .select("id", count="exact")
+                    .eq("matter_id", matter_id)
+                    .eq("decision", "approved")
+                    .execute()
+                ),
             )
             total = total_result.count or 0
+            approved = approved_result.count or 0
 
             if total == 0:
                 return 0.0
-
-            # Get approved verifications
-            approved_result = await asyncio.to_thread(
-                lambda: self.supabase.table("finding_verifications")
-                .select("id", count="exact")
-                .eq("matter_id", matter_id)
-                .eq("decision", "approved")
-                .execute()
-            )
-            approved = approved_result.count or 0
 
             return round((approved / total) * 100, 1)
         except Exception as e:
@@ -1183,7 +1273,7 @@ class SummaryService:
 
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("events")
-                .select("id, event_date, description, event_type, document_id, documents(name)")
+                .select("id, event_date, description, event_type, document_id, documents(filename)")
                 .eq("matter_id", matter_id)
                 .in_("document_id", active_doc_ids)
                 .order("event_date", desc=True)
@@ -1198,7 +1288,7 @@ class SummaryService:
                     "event_date": row.get("event_date", ""),
                     "description": row.get("description", ""),
                     "event_type": row.get("event_type", ""),
-                    "document_name": doc_data.get("name", ""),
+                    "document_name": doc_data.get("filename", ""),
                 })
 
             return events

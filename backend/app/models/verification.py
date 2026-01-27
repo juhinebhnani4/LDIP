@@ -450,21 +450,27 @@ class ExportEligibilityResult(BaseModel):
 
     Story 8-4: AC #5 - Export blocked if < 70% confidence findings unverified.
     Story 12-3: AC #2 - Warnings for 70-90% confidence unverified findings.
+    Story 3.2: Includes verification_mode for UI display.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
     eligible: bool = Field(..., description="True if export is allowed")
+    verification_mode: str = Field(
+        default="advisory",
+        alias="verificationMode",
+        description="Matter's verification mode: 'advisory' or 'required' (Story 3.2)",
+    )
     blocking_findings: list[ExportBlockingFinding] = Field(
         default_factory=list,
         alias="blockingFindings",
-        description="Findings blocking export (< 70% confidence, unverified)",
+        description="Findings blocking export (< 70% confidence, unverified in advisory; all pending in required)",
     )
     blocking_count: int = Field(0, ge=0, alias="blockingCount", description="Number of blocking findings")
     warning_findings: list[ExportWarningFinding] = Field(
         default_factory=list,
         alias="warningFindings",
-        description="Findings with warnings (70-90% confidence, unverified)",
+        description="Findings with warnings (70-90% confidence, unverified) - empty in required mode",
     )
     warning_count: int = Field(0, ge=0, alias="warningCount", description="Number of warning findings")
     message: str = Field(

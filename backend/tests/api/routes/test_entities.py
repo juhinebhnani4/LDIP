@@ -407,3 +407,129 @@ class TestGetEntityMentionsEndpoint:
             assert response.status_code == 404
         finally:
             app.dependency_overrides.clear()
+
+
+class TestUnmergeEntityEndpoint:
+    """Tests for POST /api/matters/{matter_id}/entities/unmerge endpoint.
+
+    Story 3.4: Entity Split UI - Unmerge API tests.
+    """
+
+    @pytest.mark.anyio
+    async def test_unmerge_requires_owner_role(self) -> None:
+        """Should return 403 when user is not owner."""
+        from app.api.deps import get_matter_service
+        from app.core.config import get_settings
+
+        matter_id = "550e8400-e29b-41d4-a716-446655440000"
+        entity_id = "660e8400-e29b-41d4-a716-446655440111"
+        user_id = "test-user-id"
+
+        # Mock matter access - user is editor, not owner
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    f"/api/matters/{matter_id}/entities/unmerge",
+                    json={"entityId": entity_id},
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            assert response.status_code == 403
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
+    async def test_unmerge_returns_404_for_non_existent_entity(self) -> None:
+        """Should return 404 when entity does not exist or is not merged.
+
+        Note: The endpoint returns 'not found' for both cases (entity not existing
+        and entity existing but not merged) to hide entity existence information.
+        """
+        from app.api.deps import get_matter_service
+        from app.core.config import get_settings
+
+        matter_id = "550e8400-e29b-41d4-a716-446655440000"
+        entity_id = "660e8400-e29b-41d4-a716-446655440111"
+        user_id = "test-user-id"
+
+        # Mock matter access - owner
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    f"/api/matters/{matter_id}/entities/unmerge",
+                    json={"entityId": entity_id},
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            # Returns 404 for non-existent or non-merged entities
+            assert response.status_code == 404
+            data = response.json()
+            assert "not found" in data["error"]["message"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.anyio
+    async def test_unmerge_endpoint_response_format(self) -> None:
+        """Test unmerge endpoint returns proper response format.
+
+        Note: Full success testing requires a merged entity in the database.
+        This test validates the endpoint exists and returns proper error format.
+        """
+        from app.api.deps import get_matter_service
+        from app.core.config import get_settings
+
+        matter_id = "550e8400-e29b-41d4-a716-446655440000"
+        entity_id = "660e8400-e29b-41d4-a716-446655440111"
+        user_id = "test-user-id"
+
+        # Mock matter access - owner
+        mock_matter_service = MagicMock()
+        mock_matter_service.get_user_role.return_value = MatterRole.OWNER
+
+        app.dependency_overrides[get_settings] = get_test_settings
+        app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    f"/api/matters/{matter_id}/entities/unmerge",
+                    json={"entityId": entity_id},
+                    headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                )
+
+            # Endpoint should respond (either 200 if entity was merged or 404 if not)
+            assert response.status_code in [200, 404]
+            data = response.json()
+
+            if response.status_code == 200:
+                # Success response has expected fields
+                assert "restoredEntityId" in data
+                assert "previouslyMergedIntoId" in data
+            else:
+                # Error response has expected format
+                assert "error" in data
+                assert "code" in data["error"]
+                assert "message" in data["error"]
+        finally:
+            app.dependency_overrides.clear()

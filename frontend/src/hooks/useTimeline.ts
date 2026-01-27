@@ -151,9 +151,9 @@ export interface UseTimelineOptionsWithFilters extends UseTimelineOptions {
  * ```
  */
 export function useTimeline(matterId: string, options: UseTimelineOptionsWithFilters = {}) {
-  // Default to 500 events to load comprehensive timeline data
-  // This provides better chronological coverage while maintaining reasonable performance
-  const { eventType, entityId, page = 1, perPage = 500, filters } = options;
+  // OPTIMIZED: Reduced from 500 to 100 for faster initial load
+  // Use pagination or infinite scroll for comprehensive timeline data
+  const { eventType, entityId, page = 1, perPage = 100, filters } = options;
 
   // Build URL with query params
   const params = new URLSearchParams();

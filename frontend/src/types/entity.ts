@@ -345,3 +345,25 @@ export interface MergedEntitiesResponse {
   data: MergedEntityItem[];
   total: number;
 }
+
+
+// =============================================================================
+// Bulk Relationships (Performance Optimization)
+// =============================================================================
+
+/** A single relationship edge from bulk endpoint */
+export interface BulkRelationshipEdge {
+  id: string;
+  sourceEntityId: string;
+  targetEntityId: string;
+  relationshipType: RelationshipType;
+  sourceEntityName: string | null;
+  targetEntityName: string | null;
+  weight: number;
+}
+
+/** Response for bulk relationships endpoint */
+export interface BulkRelationshipsResponse {
+  data: BulkRelationshipEdge[];
+  total: number;
+}

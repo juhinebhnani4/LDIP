@@ -39,6 +39,10 @@ class ChunkCreate(ChunkBase):
     parent_chunk_id: str | None = Field(None, description="Parent chunk UUID (for child chunks)")
     page_number: int | None = Field(None, description="Primary page number")
     bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
+    embedding_model_version: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model version (Story 1.3)"
+    )
 
 
 class Chunk(ChunkBase):
@@ -51,6 +55,10 @@ class Chunk(ChunkBase):
     page_number: int | None = Field(None, description="Primary page number")
     bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
     entity_ids: list[str] | None = Field(None, description="Extracted entity UUIDs")
+    embedding_model_version: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model version (Story 1.3)"
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
 
 

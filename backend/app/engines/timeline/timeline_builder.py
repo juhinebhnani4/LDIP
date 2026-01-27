@@ -281,7 +281,8 @@ class TimelineBuilder:
             # Get document name from fetched map
             doc_name = None
             if event_item.document_id:
-                doc_name = document_names.get(event_item.document_id)
+                doc_id_str = str(event_item.document_id)
+                doc_name = document_names.get(doc_id_str)
 
             timeline_events.append(
                 TimelineEvent(
@@ -300,6 +301,9 @@ class TimelineBuilder:
                     is_verified=getattr(full_event, 'is_manual', False),
                 )
             )
+
+        # Deduplicate similar events on the same date
+        timeline_events = self._deduplicate_events(timeline_events)
 
         # Build segments if grouping requested
         segments = self._build_segments(timeline_events, group_by) if group_by else []
@@ -416,7 +420,8 @@ class TimelineBuilder:
             # Get document name from fetched map
             doc_name = None
             if event_item.document_id:
-                doc_name = document_names.get(event_item.document_id)
+                doc_id_str = str(event_item.document_id)
+                doc_name = document_names.get(doc_id_str)
 
             timeline_events.append(
                 TimelineEvent(
@@ -510,10 +515,17 @@ class TimelineBuilder:
                 if full_event.is_manual:
                     verified_events += 1
 
+        # Filter out invalid dates (beyond 5 years in future)
+        current_year = 2026
+        max_valid_year = current_year + 5
         if all_events_data:
-            dates = [e.event_date for e in all_events_data]
-            date_range_start = min(dates)
-            date_range_end = max(dates)
+            valid_dates = [
+                e.event_date for e in all_events_data
+                if e.event_date.year <= max_valid_year
+            ]
+            if valid_dates:
+                date_range_start = min(valid_dates)
+                date_range_end = max(valid_dates)
 
         return TimelineStatistics(
             total_events=all_events.meta.total,
@@ -552,11 +564,14 @@ class TimelineBuilder:
             return {}
 
         try:
+            # Convert all IDs to strings for consistent lookup
+            str_doc_ids = [str(d) for d in document_ids]
+
             supabase = self._get_supabase()
             result = (
                 supabase.table("documents")
                 .select("id, filename")
-                .in_("id", document_ids)
+                .in_("id", str_doc_ids)
                 .execute()
             )
 
@@ -579,6 +594,137 @@ class TimelineBuilder:
                 document_count=len(document_ids),
             )
             return {}
+
+    def _deduplicate_events(
+        self,
+        events: list[TimelineEvent],
+        similarity_threshold: float = 0.6,
+    ) -> list[TimelineEvent]:
+        """Deduplicate similar events on the same date.
+
+        Groups events by date, then uses text similarity to find and merge
+        duplicate events. Keeps the event with highest confidence, merging
+        source information from duplicates.
+
+        Also filters out events with clearly invalid dates (year > 2030).
+
+        Args:
+            events: List of timeline events to deduplicate.
+            similarity_threshold: Minimum similarity score to consider events
+                as duplicates (0.0-1.0). Default 0.6.
+
+        Returns:
+            Deduplicated list of timeline events.
+        """
+        from difflib import SequenceMatcher
+        from datetime import date as date_type
+
+        if not events:
+            return []
+
+        # Filter out events with invalid future dates (beyond 2030)
+        current_year = 2026  # Current year
+        max_valid_year = current_year + 5  # Allow up to 5 years in future for deadlines
+        valid_events = []
+        for event in events:
+            if isinstance(event.event_date, date_type):
+                if event.event_date.year > max_valid_year:
+                    logger.debug(
+                        "timeline_event_filtered_invalid_year",
+                        event_id=event.event_id,
+                        event_date=str(event.event_date),
+                        year=event.event_date.year,
+                        reason=f"Year {event.event_date.year} > {max_valid_year}",
+                    )
+                    continue
+            valid_events.append(event)
+
+        if not valid_events:
+            return []
+
+        # Group events by date
+        events_by_date: dict[str, list[TimelineEvent]] = {}
+        for event in valid_events:
+            date_key = str(event.event_date)
+            if date_key not in events_by_date:
+                events_by_date[date_key] = []
+            events_by_date[date_key].append(event)
+
+        def text_similarity(text1: str, text2: str) -> float:
+            """Calculate similarity ratio between two texts."""
+            if not text1 or not text2:
+                return 0.0
+            # Normalize: lowercase and remove extra whitespace
+            t1 = " ".join(text1.lower().split())
+            t2 = " ".join(text2.lower().split())
+            return SequenceMatcher(None, t1, t2).ratio()
+
+        def extract_core_text(description: str) -> str:
+            """Extract core meaningful text from description."""
+            # Remove ambiguity markers
+            text = description
+            if text.startswith("[AMBIGUOUS"):
+                bracket_end = text.find("]")
+                if bracket_end > 0:
+                    text = text[bracket_end + 1:].strip()
+            # Remove date text in brackets like [15/01/2024]
+            import re
+            text = re.sub(r'\[\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\]', '', text)
+            text = re.sub(r'\[\d{4}[/.-]\d{1,2}[/.-]\d{1,2}\]', '', text)
+            return text.strip()
+
+        deduplicated: list[TimelineEvent] = []
+        total_merged = 0
+
+        for date_key, date_events in events_by_date.items():
+            if len(date_events) == 1:
+                deduplicated.append(date_events[0])
+                continue
+
+            # Find clusters of similar events
+            used = set()
+            clusters: list[list[TimelineEvent]] = []
+
+            for i, event_i in enumerate(date_events):
+                if i in used:
+                    continue
+
+                cluster = [event_i]
+                used.add(i)
+                core_text_i = extract_core_text(event_i.description)
+
+                for j, event_j in enumerate(date_events):
+                    if j in used or j <= i:
+                        continue
+
+                    core_text_j = extract_core_text(event_j.description)
+                    similarity = text_similarity(core_text_i, core_text_j)
+
+                    if similarity >= similarity_threshold:
+                        cluster.append(event_j)
+                        used.add(j)
+
+                clusters.append(cluster)
+
+            # Merge each cluster into a single event
+            for cluster in clusters:
+                if len(cluster) == 1:
+                    deduplicated.append(cluster[0])
+                else:
+                    # Keep event with highest confidence
+                    best_event = max(cluster, key=lambda e: e.confidence)
+                    total_merged += len(cluster) - 1
+                    deduplicated.append(best_event)
+
+        if total_merged > 0:
+            logger.info(
+                "timeline_events_deduplicated",
+                original_count=len(valid_events),
+                deduplicated_count=len(deduplicated),
+                merged_count=total_merged,
+            )
+
+        return deduplicated
 
     async def _load_entities_paginated(
         self,

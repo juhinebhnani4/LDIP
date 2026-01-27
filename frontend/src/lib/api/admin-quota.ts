@@ -161,10 +161,79 @@ export async function checkAdminStatus(): Promise<AdminStatusData> {
 }
 
 // =============================================================================
+// Monthly Cost Report (Story 7.2)
+// =============================================================================
+
+export interface PracticeGroupCost {
+  practiceGroup: string;
+  matterCount: number;
+  documentCount: number;
+  totalCostInr: number;
+  totalCostUsd: number;
+}
+
+export interface MonthlyCostReport {
+  reportMonth: string;
+  generatedAt: string;
+  totalCostInr: number;
+  totalCostUsd: number;
+  practiceGroups: PracticeGroupCost[];
+}
+
+function transformPracticeGroupCost(data: Record<string, unknown>): PracticeGroupCost {
+  return {
+    practiceGroup: toString(data.practiceGroup ?? data.practice_group, 'Unassigned'),
+    matterCount: toNumber(data.matterCount ?? data.matter_count),
+    documentCount: toNumber(data.documentCount ?? data.document_count),
+    totalCostInr: toNumber(data.totalCostInr ?? data.total_cost_inr),
+    totalCostUsd: toNumber(data.totalCostUsd ?? data.total_cost_usd),
+  };
+}
+
+function transformMonthlyCostReport(data: Record<string, unknown>): MonthlyCostReport {
+  const practiceGroups = (data.practiceGroups ?? data.practice_groups ?? []) as Array<Record<string, unknown>>;
+
+  return {
+    reportMonth: toString(data.reportMonth ?? data.report_month),
+    generatedAt: toString(data.generatedAt ?? data.generated_at),
+    totalCostInr: toNumber(data.totalCostInr ?? data.total_cost_inr),
+    totalCostUsd: toNumber(data.totalCostUsd ?? data.total_cost_usd),
+    practiceGroups: practiceGroups.map(transformPracticeGroupCost),
+  };
+}
+
+/**
+ * Get monthly cost report by practice group.
+ *
+ * Story 7.2: Monthly Cost Report by Practice Group
+ *
+ * @param year - Report year (defaults to current year)
+ * @param month - Report month (defaults to current month)
+ * @returns Monthly cost report with practice group breakdown
+ */
+export async function getMonthlyCostReport(
+  year?: number,
+  month?: number
+): Promise<MonthlyCostReport> {
+  const params = new URLSearchParams();
+  if (year) params.set('year', String(year));
+  if (month) params.set('month', String(month));
+
+  const queryString = params.toString();
+  const endpoint = queryString
+    ? `/api/admin/cost-report?${queryString}`
+    : '/api/admin/cost-report';
+
+  const response = await api.get<{ data: Record<string, unknown> }>(endpoint);
+  return transformMonthlyCostReport(response.data);
+}
+
+// =============================================================================
 // Exported API Object
 // =============================================================================
 
 export const adminQuotaApi = {
   getLLMQuota,
   checkAdminStatus,
+  getMonthlyCostReport,
 };

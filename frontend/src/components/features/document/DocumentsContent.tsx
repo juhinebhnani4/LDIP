@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { DocumentList } from './DocumentList';
 import { DocumentsHeader } from './DocumentsHeader';
 import { AddDocumentsDialog } from './AddDocumentsDialog';
+import { LinkedLibraryPanel } from '../library/LinkedLibraryPanel';
 import { useDocuments } from '@/hooks/useDocuments';
 import { retryAllStuckDocuments } from '@/lib/api/documents';
 import type { DocumentListItem } from '@/types/document';
@@ -204,7 +205,7 @@ export function DocumentsContent({
   }
 
   return (
-    <div className={className}>
+    <div className={className} data-testid="documents-content">
       <div className="space-y-6">
         {/* Header with stats and add button */}
         <DocumentsHeader
@@ -232,6 +233,9 @@ export function DocumentsContent({
           onRefresh={refresh}
           onDocumentClick={onDocumentClick}
         />
+
+        {/* Linked Library Panel - Phase 2: Shared Legal Library */}
+        <LinkedLibraryPanel matterId={matterId} />
 
         {/* Add Documents Dialog */}
         <AddDocumentsDialog

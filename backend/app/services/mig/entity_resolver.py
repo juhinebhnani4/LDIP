@@ -56,6 +56,102 @@ TITLE_NORMALIZATIONS = {
 # Common suffixes to strip
 SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "esq"})
 
+# =============================================================================
+# Numbered Role Entity Detection
+# =============================================================================
+
+# Patterns for numbered role entities (should NEVER merge with different numbers)
+# Examples: "Respondent No. 2", "Applicant No 3", "Defendant No.1", "Petitioner No. 5"
+import re
+
+NUMBERED_ROLE_PATTERN = re.compile(
+    r'^(respondent|applicant|petitioner|defendant|plaintiff|appellant|'
+    r'opposite\s*party|o\.?p\.?|op|opp|claimant|complainant|witness|accused)'
+    r'\s*(?:no\.?|number)?\s*\.?\s*(\d+)$',
+    re.IGNORECASE
+)
+
+# Also match variations like "Respondents No.5" (plural)
+NUMBERED_ROLE_PATTERN_PLURAL = re.compile(
+    r'^(respondents?|applicants?|petitioners?|defendants?|plaintiffs?|appellants?|'
+    r'opposite\s*parties|o\.?p\.?s?|ops?|claimants?|complainants?|witnesses|accused)'
+    r'\s*(?:nos?\.?|numbers?)?\s*\.?\s*(\d+)$',
+    re.IGNORECASE
+)
+
+
+def extract_numbered_role(name: str) -> tuple[str, int] | None:
+    """Extract role and number from numbered role entity names.
+
+    Args:
+        name: Entity name like "Respondent No. 2" or "Applicant No.3"
+
+    Returns:
+        Tuple of (normalized_role, number) or None if not a numbered role.
+
+    Examples:
+        >>> extract_numbered_role("Respondent No. 2")
+        ('respondent', 2)
+        >>> extract_numbered_role("Applicant No.3")
+        ('applicant', 3)
+        >>> extract_numbered_role("John Smith")
+        None
+    """
+    if not name:
+        return None
+
+    # Normalize whitespace
+    normalized = " ".join(name.split())
+
+    # Try singular pattern first
+    match = NUMBERED_ROLE_PATTERN.match(normalized)
+    if match:
+        role = match.group(1).lower().strip()
+        number = int(match.group(2))
+        # Normalize role (remove plurals, standardize)
+        role = role.rstrip('s')  # Remove trailing 's' for plurals
+        return (role, number)
+
+    # Try plural pattern
+    match = NUMBERED_ROLE_PATTERN_PLURAL.match(normalized)
+    if match:
+        role = match.group(1).lower().strip()
+        number = int(match.group(2))
+        # Normalize role (remove plurals, standardize)
+        role = role.rstrip('s')
+        return (role, number)
+
+    return None
+
+
+def should_block_alias(name1: str, name2: str) -> bool:
+    """Check if two entity names should NEVER be merged as aliases.
+
+    CRITICAL: This prevents data corruption from merging different numbered
+    legal parties like "Respondent No. 2" with "Respondent No. 3".
+
+    Args:
+        name1: First entity name.
+        name2: Second entity name.
+
+    Returns:
+        True if these entities should NEVER be merged.
+    """
+    role1 = extract_numbered_role(name1)
+    role2 = extract_numbered_role(name2)
+
+    # If both are numbered roles
+    if role1 is not None and role2 is not None:
+        base_role1, num1 = role1
+        base_role2, num2 = role2
+
+        # Same role type (e.g., both "respondent") but different numbers
+        if base_role1 == base_role2 and num1 != num2:
+            return True
+
+    return False
+
+
 # Similarity thresholds
 HIGH_SIMILARITY_THRESHOLD = 0.85  # Auto-link threshold
 MEDIUM_SIMILARITY_THRESHOLD = 0.60  # Context analysis threshold
@@ -368,6 +464,16 @@ class EntityResolver:
 
             # Skip different entity types (PERSON vs ORG don't alias)
             if entity.entity_type != candidate.entity_type:
+                continue
+
+            # CRITICAL: Block merging numbered role entities with different numbers
+            # e.g., "Respondent No. 2" should NEVER merge with "Respondent No. 3"
+            if should_block_alias(entity.canonical_name, candidate.canonical_name):
+                logger.debug(
+                    "alias_blocked_numbered_role",
+                    entity1=entity.canonical_name,
+                    entity2=candidate.canonical_name,
+                )
                 continue
 
             # Calculate similarity

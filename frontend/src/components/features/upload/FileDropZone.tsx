@@ -187,6 +187,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
         tabIndex={0}
         role="button"
         aria-label="Drop files here or click to browse"
+        data-testid="file-drop-zone"
       >
         <CardContent className="flex flex-col items-center justify-center py-16 px-8 text-center">
           {/* Animated icon container */}
@@ -220,6 +221,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
               handleBrowseClick();
             }}
             className="mb-6"
+            data-testid="file-browse-button"
           >
             Browse Files
           </Button>
@@ -242,6 +244,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
         onChange={handleFileInputChange}
         className="hidden"
         aria-hidden="true"
+        data-testid="file-input"
       />
 
       {/* Validation errors and warnings */}

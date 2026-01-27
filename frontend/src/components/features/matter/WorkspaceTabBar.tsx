@@ -217,6 +217,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
       className="sticky top-14 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       role="tablist"
       aria-label="Matter workspace navigation"
+      data-testid="workspace-tab-bar"
     >
       <div className="container flex h-12 items-center overflow-x-auto px-4 sm:px-6">
         {TAB_CONFIG.map((tab, index) => {
@@ -237,6 +238,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
               aria-controls={`tabpanel-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
               onKeyDown={(e) => handleKeyDown(e, index)}
+              data-testid={`workspace-tab-${tab.id}`}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap',
                 'border-b-2 -mb-[2px] transition-colors',

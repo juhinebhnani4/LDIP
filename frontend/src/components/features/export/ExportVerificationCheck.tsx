@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, Ban, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, ExternalLink, Loader2, Scale } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -202,6 +202,8 @@ export function ExportVerificationCheck({
   const isBlocked = eligibility && !eligibility.eligible;
   const hasWarnings = eligibility && eligibility.warningCount > 0;
   const canProceed = eligibility?.eligible ?? false;
+  // Story 3.2: Check if matter is in court-ready mode
+  const isCourtReady = eligibility?.verificationMode === 'required';
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -222,6 +224,12 @@ export function ExportVerificationCheck({
               <>
                 <Ban className="h-5 w-5 text-destructive" />
                 Export Blocked
+                {isCourtReady && (
+                  <Badge variant="secondary" className="ml-2 gap-1">
+                    <Scale className="h-3 w-3" />
+                    Court-Ready
+                  </Badge>
+                )}
               </>
             ) : hasWarnings ? (
               <>
@@ -232,6 +240,12 @@ export function ExportVerificationCheck({
               <>
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
                 Ready to Export
+                {isCourtReady && (
+                  <Badge variant="secondary" className="ml-2 gap-1">
+                    <Scale className="h-3 w-3" />
+                    Court-Ready
+                  </Badge>
+                )}
               </>
             )}
           </AlertDialogTitle>
@@ -241,11 +255,15 @@ export function ExportVerificationCheck({
             ) : error ? (
               error
             ) : isBlocked ? (
-              `${eligibility.blockingCount} finding(s) with low confidence must be verified before export.`
+              isCourtReady
+                ? `Court-ready mode requires 100% verification. ${eligibility.blockingCount} finding(s) still need verification before export.`
+                : `${eligibility.blockingCount} finding(s) with low confidence must be verified before export.`
             ) : hasWarnings ? (
               `${eligibility.warningCount} finding(s) are suggested for verification but export is allowed.`
             ) : (
-              'All findings meet the verification requirements for export.'
+              isCourtReady
+                ? 'Court-ready: All findings verified. Export is allowed.'
+                : 'All findings meet the verification requirements for export.'
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -265,7 +283,9 @@ export function ExportVerificationCheck({
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium text-destructive flex items-center gap-2">
                     <Ban className="h-4 w-4" />
-                    Requires Verification ({eligibility.blockingCount})
+                    {isCourtReady
+                      ? `Pending Verification (${eligibility.blockingCount})`
+                      : `Requires Verification (${eligibility.blockingCount})`}
                   </h4>
                   <div className="space-y-2">
                     {eligibility.blockingFindings.map((finding, index) => (

@@ -132,6 +132,7 @@ export function MatterNameInput({
             'pr-16',
             error && 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50'
           )}
+          data-testid="matter-name-input"
         />
         <span
           className={cn(

@@ -7,6 +7,7 @@ Provides endpoints for:
 - Managing entity aliases (add, remove, merge)
 """
 
+import asyncio
 import math
 
 import structlog
@@ -269,6 +270,146 @@ async def list_entities(
                 "error": {
                     "code": "INTERNAL_ERROR",
                     "message": "Failed to list entities",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Bulk Relationships Endpoint (Performance Optimization)
+# Returns all entity relationships in a single call to avoid N+1 queries
+# MUST be before /{entity_id} to avoid route conflict
+# =============================================================================
+
+
+class BulkRelationshipEdge(BaseModel):
+    """A single relationship edge between two entities."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(..., description="Relationship UUID")
+    source_entity_id: str = Field(..., alias="sourceEntityId", description="Source entity UUID")
+    target_entity_id: str = Field(..., alias="targetEntityId", description="Target entity UUID")
+    relationship_type: str = Field(..., alias="relationshipType", description="Type of relationship")
+    source_entity_name: str | None = Field(None, alias="sourceEntityName", description="Source entity name")
+    target_entity_name: str | None = Field(None, alias="targetEntityName", description="Target entity name")
+    weight: float = Field(1.0, description="Relationship weight/strength")
+
+
+class BulkRelationshipsResponse(BaseModel):
+    """Response containing all relationships for a matter."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    data: list[BulkRelationshipEdge] = Field(..., description="List of relationship edges")
+    total: int = Field(..., description="Total relationships")
+
+
+@router.get("/relationships", response_model=BulkRelationshipsResponse, response_model_by_alias=True)
+async def get_all_relationships(
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+) -> BulkRelationshipsResponse:
+    """Get all entity relationships for a matter in a single call.
+
+    Performance optimization endpoint that returns all relationship edges
+    at once, avoiding N+1 queries when building entity graphs.
+
+    Args:
+        matter_id: Matter UUID.
+        membership: Validated matter membership.
+
+    Returns:
+        All relationship edges for the matter.
+    """
+    logger.info(
+        "get_all_relationships_request",
+        matter_id=matter_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        from app.services.supabase.client import get_service_client
+
+        client = get_service_client()
+        if client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": {
+                        "code": "DATABASE_NOT_CONFIGURED",
+                        "message": "Database client not configured",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Query all relationships for this matter
+        # Schema: source_node_id, target_node_id, relationship_type, confidence
+        result = client.table("identity_edges").select(
+            "id, source_node_id, target_node_id, relationship_type, confidence"
+        ).eq("matter_id", matter_id).execute()
+
+        if not result.data:
+            return BulkRelationshipsResponse(data=[], total=0)
+
+        # Collect all entity IDs to fetch names in one query
+        entity_ids = set()
+        for row in result.data:
+            entity_ids.add(row["source_node_id"])
+            entity_ids.add(row["target_node_id"])
+
+        # Fetch entity names in a single query
+        entity_names: dict[str, str] = {}
+        if entity_ids:
+            entities_result = client.table("identity_nodes").select(
+                "id, canonical_name"
+            ).in_("id", list(entity_ids)).execute()
+            for e in (entities_result.data or []):
+                entity_names[e["id"]] = e["canonical_name"]
+
+        edges = [
+            BulkRelationshipEdge(
+                id=row["id"],
+                source_entity_id=row["source_node_id"],
+                target_entity_id=row["target_node_id"],
+                relationship_type=row["relationship_type"],
+                source_entity_name=entity_names.get(row["source_node_id"]),
+                target_entity_name=entity_names.get(row["target_node_id"]),
+                weight=row.get("confidence", 1.0) or 1.0,
+            )
+            for row in result.data
+        ]
+
+        logger.info(
+            "get_all_relationships_success",
+            matter_id=matter_id,
+            edge_count=len(edges),
+        )
+
+        return BulkRelationshipsResponse(
+            data=edges,
+            total=len(edges),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "get_all_relationships_error",
+            matter_id=matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to get relationships",
                     "details": {},
                 }
             },
@@ -1071,9 +1212,11 @@ async def merge_entities(
                 },
             )
 
-        # Validate both entities exist
-        source = await mig_service.get_entity(request.source_entity_id, matter_id)
-        target = await mig_service.get_entity(request.target_entity_id, matter_id)
+        # LATENCY FIX: Parallelize independent entity lookups
+        source, target = await asyncio.gather(
+            mig_service.get_entity(request.source_entity_id, matter_id),
+            mig_service.get_entity(request.target_entity_id, matter_id),
+        )
 
         if source is None:
             raise HTTPException(
@@ -1477,3 +1620,4 @@ async def get_merged_entities(
                 }
             },
         ) from e
+

@@ -149,50 +149,45 @@ export function useEntityMentions(
  * Fetch all entity relationships for graph visualization.
  * Returns edges for all entities in a matter.
  *
- * TODO: Optimize with dedicated bulk endpoint (e.g., GET /matters/:id/relationships)
- * to avoid N+1 queries. Current implementation fetches each entity individually.
+ * OPTIMIZED: Uses bulk endpoint (GET /matters/:id/entities/relationships)
+ * to fetch all relationships in a single API call instead of N+1 queries.
+ *
+ * LATENCY FIX: Removed dependency on entities array to enable parallel loading.
+ * Previously waited for entities to load first (sequential waterfall).
  */
 export function useEntityRelationships(
-  matterId: string | null,
-  entities: EntityListItem[]
+  matterId: string | null
 ): {
   edges: EntityEdge[];
   isLoading: boolean;
   error: Error | null;
 } {
   const { data, error, isLoading } = useSWRImmutable<EntityEdge[]>(
-    matterId && entities.length > 0
-      ? ['entityRelationships', matterId, entities.map((e) => e.id).join(',')]
+    matterId
+      ? ['entityRelationships', matterId]
       : null,
     async () => {
-      // Fetch relationships for each entity and deduplicate
-      const edgeMap = new Map<string, EntityEdge>();
+      // OPTIMIZATION: Single bulk API call instead of N+1 queries
+      const { getBulkRelationships } = await import('@/lib/api/entities');
+      const response = await getBulkRelationships(matterId!);
 
-      // Fetch in batches - larger batch size (20) to reduce sequential waits
-      // TODO: Replace with bulk endpoint when available
-      const batchSize = 20;
-      for (let i = 0; i < entities.length; i += batchSize) {
-        const batch = entities.slice(i, i + batchSize);
-        const results = await Promise.allSettled(
-          batch.map((entity) => getEntity(matterId!, entity.id))
-        );
-
-        for (const result of results) {
-          // Skip failed fetches (e.g., deleted entities return 404)
-          if (result.status === 'fulfilled') {
-            for (const edge of result.value.data.relationships) {
-              if (!edgeMap.has(edge.id)) {
-                edgeMap.set(edge.id, edge);
-              }
-            }
-          }
-        }
-      }
-
-      return Array.from(edgeMap.values());
+      // Convert bulk response format to EntityEdge format
+      return response.data.map((edge) => ({
+        id: edge.id,
+        matterId: matterId!,
+        sourceEntityId: edge.sourceEntityId,
+        targetEntityId: edge.targetEntityId,
+        relationshipType: edge.relationshipType as EntityEdge['relationshipType'],
+        confidence: 1.0, // Bulk endpoint doesn't return confidence, default to 1.0
+        metadata: {},
+        createdAt: new Date().toISOString(),
+        sourceEntityName: edge.sourceEntityName ?? undefined,
+        targetEntityName: edge.targetEntityName ?? undefined,
+      }));
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 30000, // 30 second deduping
     }
   );
 
@@ -276,11 +271,14 @@ export function useEntityMerge(matterId: string | null): UseEntityMergeReturn {
       try {
         const result = await mergeEntitiesApi(matterId, request);
 
-        // Invalidate all entity-related caches for this matter
+        // Invalidate all entity-related caches for this matter (including merge suggestions)
         await mutate(
           (key: unknown) =>
             Array.isArray(key) &&
-            (key[0] === 'entities' || key[0] === 'entity' || key[0] === 'entityRelationships') &&
+            (key[0] === 'entities' ||
+              key[0] === 'entity' ||
+              key[0] === 'entityRelationships' ||
+              key[0] === 'mergeSuggestions') &&
             key[1] === matterId,
           undefined,
           { revalidate: true }

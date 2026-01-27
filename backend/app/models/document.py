@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -44,6 +45,7 @@ class DocumentStatus(str, Enum):
     - processing: OCR/extraction in progress
     - ocr_complete: OCR successfully extracted text
     - ocr_failed: OCR processing failed
+    - pending_review: High injection risk detected, requires manual review (Story 1.2)
     - chunking: Creating parent-child chunks for RAG
     - chunking_failed: Chunking process failed
     - embedding: Generating embeddings for semantic search
@@ -57,6 +59,7 @@ class DocumentStatus(str, Enum):
     PROCESSING = "processing"
     OCR_COMPLETE = "ocr_complete"
     OCR_FAILED = "ocr_failed"
+    PENDING_REVIEW = "pending_review"  # Story 1.2: High injection risk
     CHUNKING = "chunking"
     CHUNKING_FAILED = "chunking_failed"
     EMBEDDING = "embedding"
@@ -180,6 +183,17 @@ class Document(DocumentBase):
         None,
         alias="validationStatus",
         description="OCR validation status: 'pending', 'validated', 'requires_human_review'"
+    )
+    # Security fields (Story 1.2)
+    injection_risk: str = Field(
+        default="none",
+        alias="injectionRisk",
+        description="Prompt injection risk level: 'none', 'low', 'medium', 'high'"
+    )
+    injection_scan_result: dict[str, Any] | None = Field(
+        None,
+        alias="injectionScanResult",
+        description="Detailed injection scan results from LLM detection"
     )
     deleted_at: datetime | None = Field(
         None,

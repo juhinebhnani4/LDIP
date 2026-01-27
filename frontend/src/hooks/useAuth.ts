@@ -7,8 +7,12 @@ import type { User, Session } from '@supabase/supabase-js';
 /**
  * Hook to manage and subscribe to session state.
  *
- * Automatically subscribes to auth state changes and handles
- * session refresh when tokens are about to expire.
+ * Story 3.5: Token refresh is handled by the API client (client.ts)
+ * which proactively refreshes tokens before each request when needed.
+ * This hook focuses on subscribing to auth state changes only.
+ *
+ * Code Review Fix: Removed duplicate interval-based refresh that conflicted
+ * with client.ts proactive refresh (different thresholds caused redundant calls).
  *
  * @returns Object containing session, loading state, and error
  */
@@ -30,7 +34,7 @@ export function useSession() {
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes (including refreshes triggered by API client)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
@@ -38,7 +42,9 @@ export function useSession() {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { session, loading, error };

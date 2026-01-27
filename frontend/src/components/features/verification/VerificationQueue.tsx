@@ -9,7 +9,7 @@
  * Implements AC #1: DataTable with columns
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,6 +30,7 @@ import {
   getFindingTypeIcon,
 } from '@/stores/verificationStore';
 import { getVerificationStatus, formatConfidenceTooltip } from '@/lib/utils/confidenceDisplay';
+import { usePowerUserMode } from '@/hooks/usePowerUserMode';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'findingType' | 'findingSummary' | 'confidence' | 'sourceDocument' | null;
@@ -75,6 +76,10 @@ interface VerificationQueueProps {
   onSelectAll: (ids: string[]) => void;
   /** IDs currently being processed */
   processingIds?: string[];
+  /** Story 3.6: Callback when item is clicked/focused */
+  onItemClick?: (id: string) => void;
+  /** Story 3.6: Enable keyboard shortcuts */
+  enableKeyboardShortcuts?: boolean;
 }
 
 /**
@@ -109,10 +114,21 @@ export function VerificationQueue({
   onToggleSelect,
   onSelectAll,
   processingIds = [],
+  onItemClick,
+  enableKeyboardShortcuts = true,
 }: VerificationQueueProps) {
+  // Story 6.1: Gate advanced keyboard shortcuts behind Power User Mode
+  const { isPowerUser } = usePowerUserMode();
+  const effectiveKeyboardShortcuts = enableKeyboardShortcuts && isPowerUser;
+
   // Sorting state - default: confidence ascending (lowest first = highest priority)
   const [sortColumn, setSortColumn] = useState<SortColumn>('confidence');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Story 3.6: Track focused row by ID for keyboard navigation
+  // Code Review Fix: Use ID instead of index to prevent stale references after data changes
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
 
   // Handle column header click for sorting
   const handleSort = (column: SortColumn) => {
@@ -171,6 +187,148 @@ export function VerificationQueue({
     }
   };
 
+  // Story 3.6: Get focused item and its index (from sortedData)
+  // Code Review Fix: Derive index from ID to handle data changes safely
+  const { focusedItem, focusedIndex } = useMemo(() => {
+    if (!focusedId) return { focusedItem: null, focusedIndex: -1 };
+    const index = sortedData.findIndex(item => item.id === focusedId);
+    return {
+      focusedItem: index >= 0 ? sortedData[index] : null,
+      focusedIndex: index,
+    };
+  }, [focusedId, sortedData]);
+
+  // Story 3.6: Keyboard navigation handlers
+  // Code Review Fix: Navigate by ID to handle data changes safely
+  const moveToNextItem = useCallback(() => {
+    if (sortedData.length === 0) return;
+    const currentIndex = focusedId ? sortedData.findIndex(item => item.id === focusedId) : -1;
+    const nextIndex = currentIndex + 1 >= sortedData.length ? 0 : currentIndex + 1;
+    const nextItem = sortedData[nextIndex];
+    if (nextItem) setFocusedId(nextItem.id);
+  }, [sortedData, focusedId]);
+
+  const moveToPrevItem = useCallback(() => {
+    if (sortedData.length === 0) return;
+    const currentIndex = focusedId ? sortedData.findIndex(item => item.id === focusedId) : 0;
+    const prevIndex = currentIndex - 1 < 0 ? sortedData.length - 1 : currentIndex - 1;
+    const prevItem = sortedData[prevIndex];
+    if (prevItem) setFocusedId(prevItem.id);
+  }, [sortedData, focusedId]);
+
+  const approveCurrentItem = useCallback(() => {
+    if (focusedItem && !processingIds.includes(focusedItem.id)) {
+      onApprove(focusedItem.id);
+    }
+  }, [focusedItem, processingIds, onApprove]);
+
+  const rejectCurrentItem = useCallback(() => {
+    if (focusedItem && !processingIds.includes(focusedItem.id)) {
+      onReject(focusedItem.id);
+    }
+  }, [focusedItem, processingIds, onReject]);
+
+  const flagCurrentItem = useCallback(() => {
+    if (focusedItem && !processingIds.includes(focusedItem.id)) {
+      onFlag(focusedItem.id);
+    }
+  }, [focusedItem, processingIds, onFlag]);
+
+  const toggleCurrentSelection = useCallback(() => {
+    if (focusedItem) {
+      onToggleSelect(focusedItem.id);
+    }
+  }, [focusedItem, onToggleSelect]);
+
+  const openCurrentItem = useCallback(() => {
+    if (focusedItem && onItemClick) {
+      onItemClick(focusedItem.id);
+    }
+  }, [focusedItem, onItemClick]);
+
+  // Story 3.6: Keyboard event handler
+  // Story 6.1: Gate keyboard shortcuts behind Power User Mode
+  useEffect(() => {
+    if (!effectiveKeyboardShortcuts || isLoading || sortedData.length === 0) {
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Code Review Fix: Expanded check for form controls to prevent accidental actions
+      const target = e.target as HTMLElement;
+      const formTags = ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'];
+      if (
+        formTags.includes(target.tagName) ||
+        target.isContentEditable ||
+        target.getAttribute('role') === 'textbox' ||
+        target.getAttribute('role') === 'combobox'
+      ) {
+        return;
+      }
+
+      // Initialize focus if not set
+      // Code Review Fix: Use ID-based focus
+      if (!focusedId && sortedData.length > 0) {
+        const firstItem = sortedData[0];
+        if (firstItem) setFocusedId(firstItem.id);
+      }
+
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          e.preventDefault();
+          moveToNextItem();
+          break;
+        case 'k':
+        case 'ArrowUp':
+          e.preventDefault();
+          moveToPrevItem();
+          break;
+        case 'a':
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            approveCurrentItem();
+          }
+          break;
+        case 'r':
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            rejectCurrentItem();
+          }
+          break;
+        case 'f':
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            flagCurrentItem();
+          }
+          break;
+        case ' ': // Space
+          e.preventDefault();
+          toggleCurrentSelection();
+          break;
+        case 'Enter':
+          e.preventDefault();
+          openCurrentItem();
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [
+    effectiveKeyboardShortcuts,
+    isLoading,
+    sortedData,
+    focusedId,
+    moveToNextItem,
+    moveToPrevItem,
+    approveCurrentItem,
+    rejectCurrentItem,
+    flagCurrentItem,
+    toggleCurrentSelection,
+    openCurrentItem,
+  ]);
+
   // Loading skeleton
   if (isLoading) {
     return (
@@ -204,7 +362,20 @@ export function VerificationQueue({
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border" ref={tableRef}>
+      {/* Story 3.6: Keyboard shortcuts hint */}
+      {/* Story 6.1: Only show shortcuts hint in Power User Mode */}
+      {effectiveKeyboardShortcuts && sortedData.length > 0 && (
+        <div className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/30 border-b flex items-center gap-4 flex-wrap">
+          <span className="font-medium">Shortcuts:</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> or <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">j/k</kbd> Navigate</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">a</kbd> Approve</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">r</kbd> Reject</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">f</kbd> Flag</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">Space</kbd> Select</span>
+          <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">Enter</kbd> Open</span>
+        </div>
+      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -264,16 +435,32 @@ export function VerificationQueue({
         </TableHeader>
         <TableBody>
           {sortedData.length > 0 ? (
-            sortedData.map((item) => {
+            sortedData.map((item, index) => {
               const isProcessing = processingIds.includes(item.id);
               const isSelected = selectedIds.includes(item.id);
+              // Code Review Fix: Compare by ID for reliable focus tracking
+              const isFocused = item.id === focusedId;
               const colorClass = getConfidenceColorClass(item.confidence);
 
               return (
                 <TableRow
                   key={item.id}
                   data-state={isSelected ? 'selected' : undefined}
-                  className={isProcessing ? 'opacity-50 pointer-events-none' : ''}
+                  className={`
+                    ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
+                    ${isFocused ? 'ring-2 ring-primary ring-inset bg-primary/5' : ''}
+                    ${!isProcessing ? 'cursor-pointer hover:bg-muted/50' : ''}
+                  `.trim()}
+                  onClick={() => {
+                    setFocusedId(item.id);
+                    onItemClick?.(item.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && onItemClick) {
+                      onItemClick(item.id);
+                    }
+                  }}
+                  tabIndex={isFocused ? 0 : -1}
                 >
                   <TableCell>
                     <Checkbox

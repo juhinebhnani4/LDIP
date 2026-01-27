@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, FolderOpen } from 'lucide-react';
+import { Plus, FolderOpen, FileText, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,7 +17,10 @@ import {
   selectCompletedMatters,
 } from '@/stores/backgroundProcessingStore';
 import { mattersApi } from '@/lib/api/matters';
+import { importSampleCase } from '@/lib/api/samples';
 import { cn } from '@/lib/utils';
+import { usePowerUserMode } from '@/hooks/usePowerUserMode';
+import { Button } from '@/components/ui/button';
 
 /**
  * Matter Cards Grid Component
@@ -43,7 +46,7 @@ interface MatterCardsGridProps {
 /** New Matter card - always first in grid */
 function NewMatterCard() {
   return (
-    <Link href="/upload" aria-label="Create new matter">
+    <Link href="/upload" aria-label="Create new matter" data-testid="new-matter-card">
       <Card className="h-full min-h-[200px] border-dashed hover:border-primary hover:bg-accent/50 transition-colors cursor-pointer">
         <CardContent className="flex flex-col items-center justify-center h-full gap-3 py-8">
           <div className="rounded-full bg-primary/10 p-4">
@@ -59,7 +62,7 @@ function NewMatterCard() {
 /** Loading skeleton for matter cards */
 function MatterCardSkeleton() {
   return (
-    <Card>
+    <Card data-testid="matter-card-skeleton">
       <CardContent className="flex flex-col gap-3 pt-4">
         <Skeleton className="h-5 w-20" />
         <Skeleton className="h-6 w-3/4" />
@@ -77,8 +80,25 @@ function MatterCardSkeleton() {
 
 /** Empty state when no matters exist */
 function EmptyState() {
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportSample = async () => {
+    setIsImporting(true);
+    try {
+      const result = await importSampleCase();
+      toast.success(result.message);
+      // Refresh matters list
+      useMatterStore.getState().fetchMatters();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to import sample case';
+      toast.error(message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
-    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center" data-testid="dashboard-empty-state">
       <div className="rounded-full bg-muted p-4 mb-4">
         <FolderOpen className="size-10 text-muted-foreground" />
       </div>
@@ -86,13 +106,34 @@ function EmptyState() {
       <p className="text-muted-foreground mb-6 max-w-sm">
         Create your first matter to start uploading documents and extracting insights.
       </p>
-      <Link
-        href="/upload"
-        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        <Plus className="size-4" />
-        Create Matter
-      </Link>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Link
+          href="/upload"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="size-4" />
+          Create Matter
+        </Link>
+        {/* Story 6.3: Sample Case Import Button */}
+        <Button
+          variant="outline"
+          onClick={handleImportSample}
+          disabled={isImporting}
+          className="gap-2"
+        >
+          {isImporting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Importing...
+            </>
+          ) : (
+            <>
+              <FileText className="size-4" />
+              Try with Sample Documents
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -104,7 +145,7 @@ function ErrorState({ error }: { error: string }) {
   };
 
   return (
-    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center">
+    <div className="col-span-full flex flex-col items-center justify-center py-16 text-center" data-testid="dashboard-error-state">
       <div className="rounded-full bg-destructive/10 p-4 mb-4">
         <FolderOpen className="size-10 text-destructive" />
       </div>
@@ -128,6 +169,9 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   // useShallow prevents re-renders when array contents are equal
   const sortedMatters = useMatterStore(useShallow(selectSortedMatters));
 
+  // Story 6.1: Power User Mode - gate bulk operations
+  const { isPowerUser } = usePowerUserMode();
+
   // Subscribe to background processing for live updates (Story 9-6)
   const completedBackgroundMatters = useBackgroundProcessingStore(
     useShallow(selectCompletedMatters)
@@ -144,8 +188,9 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
   const deletableMatters = sortedMatters.filter((m) => m.role === 'owner');
   const deletableMatterIds = new Set(deletableMatters.map((m) => m.id));
 
-  // Selection mode is active when there are matters to select
-  const selectionMode = deletableMatters.length > 0;
+  // Selection mode is active when Power User Mode is enabled and there are matters to select
+  // Story 6.1: Gate bulk operations behind Power User Mode
+  const selectionMode = isPowerUser && deletableMatters.length > 0;
 
   // Compute selection states
   const selectedCount = selectedIds.size;
@@ -312,6 +357,7 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
         aria-label="Matter cards"
         aria-busy={isLoading}
         data-tour="matter-cards"
+        data-testid="matter-cards-grid"
       >
         <NewMatterCard />
         {sortedMatters.map((matter) => (

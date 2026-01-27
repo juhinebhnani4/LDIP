@@ -143,3 +143,31 @@ export async function getArchivedMessages(
   };
 }
 
+// ============================================================================
+// Cache Management
+// ============================================================================
+
+interface CacheClearResponse {
+  query_cache_cleared: number;
+  summary_cache_cleared: boolean;
+  timeline_cache_cleared: boolean;
+}
+
+/**
+ * Clear all chat-related caches for a matter.
+ *
+ * Clears query cache, summary cache, and timeline cache to force
+ * fresh results on next query.
+ *
+ * @param matterId - The matter UUID
+ * @returns Cache clear statistics
+ */
+export async function clearChatCache(
+  matterId: string
+): Promise<CacheClearResponse> {
+  const response = await api.delete<{ data: CacheClearResponse }>(
+    `/api/chat/${matterId}/cache`
+  );
+  return response.data;
+}
+

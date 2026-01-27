@@ -11,6 +11,7 @@ Story 3-1: Act Citation Extraction (AC: #4)
 Story 3-3: Citation Verification (AC: #6)
 """
 
+import asyncio
 import math
 
 import structlog
@@ -287,11 +288,11 @@ async def get_citation_stats(
     )
 
     try:
-        # Get discovery stats
-        discovery_stats = await discovery_service.get_discovery_stats(matter_id)
-
-        # Get citation counts for verification breakdown
-        counts = await storage_service.get_citation_counts_by_act(matter_id)
+        # LATENCY FIX: Parallelize independent DB queries with asyncio.gather
+        discovery_stats, counts = await asyncio.gather(
+            discovery_service.get_discovery_stats(matter_id),
+            storage_service.get_citation_counts_by_act(matter_id),
+        )
 
         total_citations = sum(c["citation_count"] for c in counts)
         verified_count = sum(c.get("verified_count", 0) for c in counts)

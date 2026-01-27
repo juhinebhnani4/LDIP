@@ -140,9 +140,9 @@ export function UploadWizard() {
   }, [setError]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" data-testid="upload-wizard">
       {/* Header with back navigation */}
-      <header className="border-b">
+      <header className="border-b" data-testid="upload-wizard-header">
         <div className="container mx-auto px-4 py-4">
           <Link
             href="/"
@@ -163,6 +163,7 @@ export function UploadWizard() {
           <div
             role="alert"
             className="mb-6 flex items-center gap-3 p-4 rounded-md bg-destructive/10 border border-destructive/20 text-destructive"
+            data-testid="upload-wizard-error"
           >
             <AlertCircle className="size-5 flex-shrink-0" />
             <span className="flex-1 text-sm">{error}</span>
@@ -202,12 +203,13 @@ export function UploadWizard() {
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={handleCancel}>
+              <Button variant="outline" onClick={handleCancel} data-testid="upload-wizard-cancel-button">
                 Cancel
               </Button>
               <Button
                 onClick={handleStartProcessing}
                 disabled={!canStartUpload || isLoading}
+                data-testid="upload-wizard-start-button"
               >
                 {isLoading ? (
                   <>

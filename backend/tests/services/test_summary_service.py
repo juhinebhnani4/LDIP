@@ -503,38 +503,60 @@ class TestGetParties:
         service = SummaryService()
         service._supabase_client = mock_supabase_client
 
-        mock_result = MagicMock()
-        mock_result.data = [
+        # Mock documents query (step 1)
+        mock_docs = MagicMock()
+        mock_docs.data = [{"id": "doc-1", "filename": "doc.pdf"}, {"id": "doc-2", "filename": "petition.pdf"}]
+
+        # Mock identity_nodes query (step 2)
+        mock_entities = MagicMock()
+        mock_entities.data = [
             {
-                "id": "mention-1",
-                "entity_id": "entity-1",
-                "page_number": 1,
-                "identity_nodes": {
-                    "id": "entity-1",
-                    "canonical_name": "Respondent Inc",
-                    "entity_type": "organization",
-                    "metadata": {"roles": ["respondent"]},
-                },
-                "documents": {"name": "doc.pdf"},
+                "id": "entity-1",
+                "canonical_name": "Respondent Inc",
+                "entity_type": "ORG",
+                "metadata": {"roles": ["respondent"]},
             },
             {
-                "id": "mention-2",
-                "entity_id": "entity-2",
-                "page_number": 2,
-                "identity_nodes": {
-                    "id": "entity-2",
-                    "canonical_name": "John Petitioner",
-                    "entity_type": "person",
-                    "metadata": {"roles": ["petitioner"]},
-                },
-                "documents": {"name": "petition.pdf"},
+                "id": "entity-2",
+                "canonical_name": "John Petitioner",
+                "entity_type": "PERSON",
+                "metadata": {"roles": ["petitioner"]},
             },
         ]
-        mock_supabase_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_result
+
+        # Mock entity_mentions query (step 3)
+        mock_mentions = MagicMock()
+        mock_mentions.data = [
+            {"entity_id": "entity-1", "document_id": "doc-1", "page_number": 1},
+            {"entity_id": "entity-2", "document_id": "doc-2", "page_number": 2},
+        ]
+
+        # Mock verification check (returns False)
+        mock_verify = MagicMock()
+        mock_verify.data = []
+
+        call_count = [0]
+
+        def mock_execute():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return mock_docs  # documents query
+            elif call_count[0] == 2:
+                return mock_entities  # identity_nodes query
+            elif call_count[0] == 3:
+                return mock_mentions  # entity_mentions query
+            else:
+                return mock_verify  # verification checks
+
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.is_.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.in_.return_value.order.return_value.limit.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.in_.return_value.in_.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute = mock_execute
 
         result = await service.get_parties("matter-123")
 
         # Petitioner should come first
+        assert len(result) >= 2
         assert result[0].role == PartyRole.PETITIONER
         assert result[1].role == PartyRole.RESPONDENT
 
@@ -544,23 +566,50 @@ class TestGetParties:
         service = SummaryService()
         service._supabase_client = mock_supabase_client
 
-        mock_result = MagicMock()
-        mock_result.data = [
+        # Mock documents query
+        mock_docs = MagicMock()
+        mock_docs.data = [{"id": "doc-1", "filename": "doc.pdf"}]
+
+        # Mock identity_nodes query with 10 entities with party roles
+        mock_entities = MagicMock()
+        mock_entities.data = [
             {
-                "id": f"mention-{i}",
-                "entity_id": f"entity-{i}",
-                "page_number": i,
-                "identity_nodes": {
-                    "id": f"entity-{i}",
-                    "canonical_name": f"Party {i}",
-                    "entity_type": "person",
-                    "metadata": {},
-                },
-                "documents": {"name": "doc.pdf"},
+                "id": f"entity-{i}",
+                "canonical_name": f"Party {i}",
+                "entity_type": "PERSON",
+                "metadata": {"roles": ["petitioner"]},  # Give them roles so they're included
             }
             for i in range(1, 10)
         ]
-        mock_supabase_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_result
+
+        # Mock entity_mentions query
+        mock_mentions = MagicMock()
+        mock_mentions.data = [
+            {"entity_id": f"entity-{i}", "document_id": "doc-1", "page_number": i}
+            for i in range(1, 10)
+        ]
+
+        # Mock verification check
+        mock_verify = MagicMock()
+        mock_verify.data = []
+
+        call_count = [0]
+
+        def mock_execute():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return mock_docs
+            elif call_count[0] == 2:
+                return mock_entities
+            elif call_count[0] == 3:
+                return mock_mentions
+            else:
+                return mock_verify
+
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.is_.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.in_.return_value.order.return_value.limit.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.in_.return_value.in_.return_value.execute = mock_execute
+        mock_supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute = mock_execute
 
         result = await service.get_parties("matter-123")
 

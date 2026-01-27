@@ -1,14 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Check,
   EyeOff,
+  Loader2,
   Minus,
   Move,
   PanelBottom,
   PanelRight,
   Settings2,
+  Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { JaanchIcon } from '@/components/ui/jaanch-logo';
 import {
@@ -26,6 +30,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useQAPanelStore } from '@/stores/qaPanelStore';
 import type { QAPanelPosition } from '@/stores/qaPanelStore';
+import { clearChatCache } from '@/lib/api/chat';
 
 /**
  * Q&A Panel Header
@@ -51,12 +56,39 @@ const POSITION_OPTIONS: Array<{
   { value: 'hidden', label: 'Hide Panel', icon: EyeOff, separator: true },
 ];
 
-export function QAPanelHeader() {
+interface QAPanelHeaderProps {
+  /** Matter ID for cache operations */
+  matterId?: string;
+}
+
+export function QAPanelHeader({ matterId }: QAPanelHeaderProps) {
   const position = useQAPanelStore((state) => state.position);
   const setPosition = useQAPanelStore((state) => state.setPosition);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const handleMinimize = () => {
     setPosition('hidden');
+  };
+
+  const handleClearCache = async () => {
+    if (!matterId) {
+      toast.error('No matter selected');
+      return;
+    }
+
+    setIsClearingCache(true);
+    try {
+      const result = await clearChatCache(matterId);
+      toast.success('Cache cleared', {
+        description: `Cleared ${result.query_cache_cleared} cached queries`,
+      });
+    } catch (error) {
+      toast.error('Failed to clear cache', {
+        description: error instanceof Error ? error.message : 'An error occurred',
+      });
+    } finally {
+      setIsClearingCache(false);
+    }
   };
 
   return (
@@ -83,7 +115,7 @@ export function QAPanelHeader() {
         </Tooltip>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Panel position">
+            <Button variant="ghost" size="icon" aria-label="Panel settings">
               <Settings2 className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -102,6 +134,19 @@ export function QAPanelHeader() {
                 </DropdownMenuItem>
               </div>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Cache</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={handleClearCache}
+              disabled={isClearingCache || !matterId}
+            >
+              {isClearingCache ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Clear Cache
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

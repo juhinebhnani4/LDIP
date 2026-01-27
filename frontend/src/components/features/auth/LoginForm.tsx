@@ -239,28 +239,28 @@ export function LoginForm() {
   };
 
   return (
-    <Card>
+    <Card data-testid="login-form">
       <CardHeader>
         <CardTitle className="text-center">Sign In</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {notice && (
-          <div className="rounded-md bg-[var(--success)]/10 p-3 text-sm text-[var(--success)] border border-[var(--success)]/20">
+          <div data-testid="login-notice" className="rounded-md bg-[var(--success)]/10 p-3 text-sm text-[var(--success)] border border-[var(--success)]/20">
             {notice}
           </div>
         )}
         {(authError || errors.general) && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <div data-testid="login-error-message" role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {authError === 'auth_callback_error'
               ? 'Authentication failed. Please try again.'
               : errors.general}
           </div>
         )}
 
-        <Tabs defaultValue="password" className="w-full">
+        <Tabs defaultValue="password" className="w-full" data-testid="login-tabs">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="password">Password</TabsTrigger>
-            <TabsTrigger value="magic-link">Magic Link</TabsTrigger>
+            <TabsTrigger value="password" data-testid="login-tab-password">Password</TabsTrigger>
+            <TabsTrigger value="magic-link" data-testid="login-tab-magic-link">Magic Link</TabsTrigger>
           </TabsList>
 
           <TabsContent value="password" className="space-y-4">
@@ -276,6 +276,7 @@ export function LoginForm() {
                   onChange={handleChange}
                   disabled={isLoading}
                   aria-invalid={!!errors.email}
+                  data-testid="login-email-input"
                 />
                 {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
               </div>
@@ -286,6 +287,7 @@ export function LoginForm() {
                   <Link
                     href="/forgot-password"
                     className="text-sm text-primary hover:underline"
+                    data-testid="login-forgot-password-link"
                   >
                     Forgot password?
                   </Link>
@@ -300,11 +302,12 @@ export function LoginForm() {
                   onChange={handleChange}
                   disabled={isLoading}
                   aria-invalid={!!errors.password}
+                  data-testid="login-password-input"
                 />
                 {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading} data-testid="login-submit-button">
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
@@ -324,11 +327,12 @@ export function LoginForm() {
                     onChange={handleChange}
                     disabled={isLoading}
                     aria-invalid={!!errors.email}
+                    data-testid="login-magic-email-input"
                   />
                   {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading} data-testid="login-magic-submit-button">
                   {isLoading ? 'Sending code...' : 'Send Verification Code'}
                 </Button>
               </form>
@@ -353,11 +357,12 @@ export function LoginForm() {
                     disabled={isLoading}
                     aria-invalid={!!errors.otp}
                     className="text-center text-lg tracking-widest"
+                    data-testid="login-otp-input"
                   />
                   {errors.otp && <p className="text-sm text-destructive">{errors.otp}</p>}
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading} data-testid="login-otp-submit-button">
                   {isLoading ? 'Verifying...' : 'Verify Code'}
                 </Button>
 
@@ -371,6 +376,7 @@ export function LoginForm() {
                     }}
                     className="text-muted-foreground hover:text-foreground"
                     disabled={isLoading}
+                    data-testid="login-otp-change-email-button"
                   >
                     Change email
                   </button>
@@ -379,6 +385,7 @@ export function LoginForm() {
                     onClick={handleResendOtp}
                     className="text-primary hover:underline"
                     disabled={isLoading}
+                    data-testid="login-otp-resend-button"
                   >
                     Resend code
                   </button>
@@ -403,6 +410,7 @@ export function LoginForm() {
           onClick={handleGoogleLogin}
           disabled={isLoading}
           type="button"
+          data-testid="login-google-button"
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
             <path
@@ -429,7 +437,7 @@ export function LoginForm() {
       <CardFooter className="flex flex-col space-y-2">
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline">
+          <Link href="/signup" className="text-primary hover:underline" data-testid="login-signup-link">
             Sign up
           </Link>
         </p>

@@ -153,7 +153,7 @@ export async function getAllEntityMentions(
 }
 
 // =============================================================================
-// Entity Merge & Alias Operations (Story 10C.2)
+// Bulk Relationships (Performance Optimization)
 // =============================================================================
 
 import type {
@@ -163,7 +163,37 @@ import type {
   MergeSuggestionsResponse,
   UnmergeResultResponse,
   MergedEntitiesResponse,
+  BulkRelationshipsResponse,
 } from '@/types/entity';
+
+/**
+ * Get all entity relationships for a matter in a single call.
+ *
+ * Performance optimization: Returns all relationship edges at once,
+ * avoiding N+1 queries when building entity graphs.
+ *
+ * @param matterId - Matter UUID
+ * @returns All relationship edges for the matter
+ *
+ * @example
+ * ```ts
+ * const relationships = await getBulkRelationships('matter-123');
+ * console.log(relationships.total); // 150
+ * console.log(relationships.data[0].sourceEntityName); // "John Doe"
+ * ```
+ */
+export async function getBulkRelationships(
+  matterId: string
+): Promise<BulkRelationshipsResponse> {
+  return api.get<BulkRelationshipsResponse>(
+    `/api/matters/${matterId}/entities/relationships`
+  );
+}
+
+
+// =============================================================================
+// Entity Merge & Alias Operations (Story 10C.2)
+// =============================================================================
 
 /**
  * Merge two entities.

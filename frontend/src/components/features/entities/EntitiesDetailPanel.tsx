@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Split,
   GitMerge,
+  Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -45,7 +46,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
 import { useEntityMentions } from '@/hooks/useEntities';
+import { useEntityJourney, useEntityContradictions } from '@/hooks/useCrossEngine';
 import { entityTypeConfig } from '@/lib/utils/entityConstants';
 import type {
   EntityWithRelations,
@@ -88,6 +91,8 @@ export interface EntitiesDetailPanelProps {
   onUnmerge?: (entityId: string) => Promise<unknown>;
   /** Story 3.4: Whether unmerge is in progress */
   isUnmerging?: boolean;
+  /** Gap 5-3: Whether to show cross-engine links */
+  showCrossEngineLinks?: boolean;
   className?: string;
 }
 
@@ -105,9 +110,33 @@ export function EntitiesDetailPanel({
   mergedEntitiesLoading = false,
   onUnmerge,
   isUnmerging = false,
+  showCrossEngineLinks = false,
   className,
 }: EntitiesDetailPanelProps) {
   const [mentionsPage, setMentionsPage] = useState(1);
+  const [showJourney, setShowJourney] = useState(false);
+  const [showContradictions, setShowContradictions] = useState(false);
+
+  // Gap 5-3: Cross-engine data fetching
+  const {
+    events: journeyEvents,
+    totalEvents,
+    dateRange: journeyDateRange,
+    isLoading: journeyLoading,
+  } = useEntityJourney(matterId, entity?.id ?? null, {
+    enabled: showCrossEngineLinks && showJourney && !!entity,
+    perPage: 5,
+  });
+
+  const {
+    contradictions,
+    totalContradictions,
+    severityCounts,
+    isLoading: contradictionsLoading,
+  } = useEntityContradictions(matterId, entity?.id ?? null, {
+    enabled: showCrossEngineLinks && showContradictions && !!entity,
+    perPage: 5,
+  });
   const [showAllMentions, setShowAllMentions] = useState(false);
   const [newAlias, setNewAlias] = useState('');
   const [isAddingAlias, setIsAddingAlias] = useState(false);
@@ -423,6 +452,150 @@ export function EntitiesDetailPanel({
                       ))}
                     </div>
                   ) : null}
+                </div>
+              </>
+            )}
+
+            {/* Gap 5-3: Cross-Engine Links Section */}
+            {showCrossEngineLinks && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Cross-Engine Links</h4>
+
+                  {/* Timeline Journey Link */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowJourney(!showJourney)}
+                      className="flex items-center justify-between w-full p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-sm"
+                      aria-expanded={showJourney}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <span>Timeline Journey</span>
+                        {totalEvents > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {totalEvents} event{totalEvents !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </div>
+                      {showJourney ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    {showJourney && (
+                      <div className="pl-6 space-y-2">
+                        {journeyLoading ? (
+                          <Skeleton className="h-12 w-full" />
+                        ) : journeyEvents.length > 0 ? (
+                          <>
+                            {journeyDateRange?.start && journeyDateRange?.end && (
+                              <p className="text-xs text-muted-foreground">
+                                Date range: {journeyDateRange.start} to {journeyDateRange.end}
+                              </p>
+                            )}
+                            {journeyEvents.slice(0, 3).map((event) => (
+                              <Link
+                                key={event.eventId}
+                                href={`/matter/${matterId}/timeline?event=${event.eventId}`}
+                                className="block p-2 rounded-md bg-background border text-xs hover:border-blue-500 transition-colors"
+                              >
+                                <p className="font-medium truncate">{event.description}</p>
+                                <p className="text-muted-foreground">
+                                  {event.eventDate} • {event.eventType}
+                                </p>
+                              </Link>
+                            ))}
+                            {totalEvents > 3 && (
+                              <Link
+                                href={`/matter/${matterId}/timeline?entity=${entity.id}`}
+                                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                              >
+                                View all {totalEvents} timeline events →
+                              </Link>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No timeline events</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Contradictions Link */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowContradictions(!showContradictions)}
+                      className="flex items-center justify-between w-full p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-sm"
+                      aria-expanded={showContradictions}
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <span>Contradictions</span>
+                        {totalContradictions > 0 && (
+                          <Badge
+                            variant={severityCounts?.high ? 'destructive' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {totalContradictions}
+                            {severityCounts?.high ? ` (${severityCounts.high} high)` : ''}
+                          </Badge>
+                        )}
+                      </div>
+                      {showContradictions ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    {showContradictions && (
+                      <div className="pl-6 space-y-2">
+                        {contradictionsLoading ? (
+                          <Skeleton className="h-12 w-full" />
+                        ) : contradictions.length > 0 ? (
+                          <>
+                            {contradictions.slice(0, 3).map((c) => (
+                              <Link
+                                key={c.contradictionId}
+                                href={`/matter/${matterId}/contradictions?contradiction=${c.contradictionId}`}
+                                className={cn(
+                                  'block p-2 rounded-md bg-background border text-xs hover:border-amber-500 transition-colors',
+                                  c.severity === 'high' && 'border-red-200 dark:border-red-900'
+                                )}
+                              >
+                                <div className="flex items-center gap-1 mb-1">
+                                  <Badge
+                                    variant={c.severity === 'high' ? 'destructive' : 'secondary'}
+                                    className="text-[10px] px-1 py-0"
+                                  >
+                                    {c.severity}
+                                  </Badge>
+                                  <span className="text-muted-foreground">{c.contradictionType}</span>
+                                </div>
+                                <p className="truncate">{c.explanation}</p>
+                              </Link>
+                            ))}
+                            {totalContradictions > 3 && (
+                              <Link
+                                href={`/matter/${matterId}/contradictions?entity=${entity.id}`}
+                                className="text-xs text-amber-600 hover:underline dark:text-amber-400"
+                              >
+                                View all {totalContradictions} contradictions →
+                              </Link>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No contradictions</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             )}

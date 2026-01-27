@@ -12,6 +12,7 @@ without blocking the event loop.
 """
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from functools import lru_cache
 
@@ -29,6 +30,32 @@ from app.models.entity import (
 )
 from app.services.supabase.client import get_supabase_client
 from app.core.bbox_filter import get_filtered_bbox_ids
+
+
+def _normalize_for_matching(text: str) -> str:
+    """Normalize text for alias matching.
+
+    Handles punctuation variance like:
+    - "Respondent No. 1" → "respondent no 1"
+    - "Respondent No 1" → "respondent no 1"
+    - "Respondent No.1" → "respondent no 1"
+
+    Args:
+        text: Text to normalize.
+
+    Returns:
+        Normalized lowercase text with standardized spacing.
+    """
+    if not text:
+        return ""
+    # Lowercase
+    result = text.lower()
+    # Replace punctuation with space (except apostrophes in names like O'Brien)
+    result = re.sub(r"[.,;:!?()[\]{}<>\"]+", " ", result)
+    # Normalize whitespace (multiple spaces → single space)
+    result = re.sub(r"\s+", " ", result)
+    # Strip leading/trailing
+    return result.strip()
 
 # Import is done lazily to avoid circular dependencies
 _broadcast_entity_streaming = None
@@ -305,9 +332,15 @@ class MIGGraphService:
         matter_id: str,
         lookup_keys: list[tuple[str, str]],
     ) -> dict[tuple[str, str], dict]:
-        """Batch find existing entities by canonical_name and type.
+        """Batch find existing entities by canonical_name, aliases, or metadata.aliases_found.
 
         Story 6.2: Single query instead of N queries.
+        Enhanced: Also checks aliases to prevent duplicate entities when
+        "Respondent No. 1" is extracted separately from "State Bank of India".
+
+        Uses normalized matching to handle punctuation variance:
+        - "Respondent No. 1" matches "Respondent No 1"
+        - "Respondent No.1" matches "Respondent No. 1"
 
         Args:
             matter_id: Matter UUID.
@@ -336,14 +369,61 @@ class MIGGraphService:
         if not response.data:
             return {}
 
-        # Build lookup map
+        # Build lookup maps - both exact and normalized for fuzzy matching
         result: dict[tuple[str, str], dict] = {}
         lookup_set = set(lookup_keys)
+        # Also build normalized lookup: (normalized_name, type) -> original_key
+        normalized_to_original: dict[tuple[str, str], tuple[str, str]] = {}
+        for name, etype in lookup_keys:
+            normalized = _normalize_for_matching(name)
+            normalized_to_original[(normalized, etype)] = (name, etype)
 
         for row in response.data:
-            key = (row["canonical_name"].lower(), row["entity_type"])
-            if key in lookup_set:
-                result[key] = row
+            entity_type = row["entity_type"]
+            canonical_name = row["canonical_name"]
+
+            # Check canonical_name match (exact)
+            canonical_key = (canonical_name.lower(), entity_type)
+            if canonical_key in lookup_set:
+                result[canonical_key] = row
+
+            # Check canonical_name match (normalized)
+            canonical_normalized = (_normalize_for_matching(canonical_name), entity_type)
+            if canonical_normalized in normalized_to_original:
+                original_key = normalized_to_original[canonical_normalized]
+                if original_key not in result:
+                    result[original_key] = row
+
+            # Check aliases array match
+            aliases = row.get("aliases") or []
+            for alias in aliases:
+                if isinstance(alias, str):
+                    # Exact match
+                    alias_key = (alias.lower(), entity_type)
+                    if alias_key in lookup_set and alias_key not in result:
+                        result[alias_key] = row
+                    # Normalized match
+                    alias_normalized = (_normalize_for_matching(alias), entity_type)
+                    if alias_normalized in normalized_to_original:
+                        original_key = normalized_to_original[alias_normalized]
+                        if original_key not in result:
+                            result[original_key] = row
+
+            # Check metadata.aliases_found match (stores mention text variants)
+            metadata = row.get("metadata", {}) or {}
+            aliases_found = metadata.get("aliases_found") or []
+            for alias in aliases_found:
+                if isinstance(alias, str):
+                    # Exact match
+                    alias_key = (alias.lower(), entity_type)
+                    if alias_key in lookup_set and alias_key not in result:
+                        result[alias_key] = row
+                    # Normalized match
+                    alias_normalized = (_normalize_for_matching(alias), entity_type)
+                    if alias_normalized in normalized_to_original:
+                        original_key = normalized_to_original[alias_normalized]
+                        if original_key not in result:
+                            result[original_key] = row
 
         return result
 
@@ -865,13 +945,18 @@ class MIGGraphService:
 
         Returns:
             Tuple of (entities list, total count).
+
+        Note:
+            Story 3.3: Excludes merged entities (merged_into_id IS NOT NULL).
+            This ensures merge suggestions only show active entities.
         """
         def _query():
-            # Build query
+            # Build query - exclude merged entities (Story 3.3)
             query = (
                 self.client.table("identity_nodes")
                 .select("*", count="exact")
                 .eq("matter_id", matter_id)
+                .is_("merged_into_id", "null")  # Only active (non-merged) entities
             )
 
             if entity_type:
@@ -1250,11 +1335,29 @@ class MIGGraphService:
             This method checks for namespace collisions - if the alias matches
             the canonical_name of another entity in the same matter, it logs
             a warning. Consider using merge_entities instead for disambiguation.
+
+            CRITICAL: Blocks adding aliases that would merge different numbered
+            role entities (e.g., "Respondent No.3" as alias to "Respondent No.2").
         """
         # Get current entity
         entity = await self.get_entity(entity_id, matter_id)
         if not entity:
             return None
+
+        # CRITICAL: Block adding conflicting numbered role aliases
+        # Import here to avoid circular dependency
+        from app.services.mig.entity_resolver import should_block_alias
+
+        if should_block_alias(entity.canonical_name, alias):
+            logger.warning(
+                "mig_alias_blocked_numbered_role",
+                entity_id=entity_id,
+                canonical_name=entity.canonical_name,
+                alias=alias,
+                matter_id=matter_id,
+                reason="Cannot alias different numbered role entities",
+            )
+            return entity  # Return unchanged entity, don't add the bad alias
 
         # Check for namespace collision: does another entity have this as canonical_name?
         existing_canonical = await self._find_existing_entity(

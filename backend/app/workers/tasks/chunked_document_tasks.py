@@ -47,6 +47,9 @@ from app.services.pdf_chunker import (
     get_pdf_chunker,
 )
 from app.services.pubsub_service import broadcast_document_status
+from app.services.security.injection_detector import (
+    scan_document_for_injection,
+)
 from app.services.storage_service import (
     StorageService,
     get_storage_service,
@@ -219,6 +222,77 @@ class ChunkProcessingError(Exception):
 def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks."""
     return asyncio.run(coro)
+
+
+def _run_injection_scan(
+    document_id: str,
+    full_text: str,
+    doc_service: DocumentService,
+) -> bool:
+    """Run injection detection scan on document text.
+
+    Story 1.2: Add LLM Detection for Suspicious Documents
+
+    Scans the extracted text for prompt injection patterns using
+    a lightweight LLM check (~$0.001/doc). High-risk documents are
+    flagged for manual review and processing is halted.
+
+    Args:
+        document_id: Document UUID.
+        full_text: OCR-extracted text content.
+        doc_service: Document service instance.
+
+    Returns:
+        True if processing should continue, False if document requires
+        manual review (high injection risk) and processing should halt.
+    """
+    try:
+        # Run async scan in sync context
+        scan_result = _run_async(
+            scan_document_for_injection(
+                text=full_text,
+                document_id=document_id,
+                use_llm=True,
+            )
+        )
+
+        # Update document with scan results
+        doc_service.update_injection_scan(
+            document_id=document_id,
+            injection_risk=scan_result.risk_level.value,
+            scan_result=scan_result.to_dict(),
+        )
+
+        if scan_result.requires_review:
+            logger.warning(
+                "document_high_injection_risk_halting",
+                document_id=document_id,
+                risk_level=scan_result.risk_level.value,
+                patterns_found=scan_result.patterns_found[:5],
+            )
+            # Story 1.2 AC: High-risk documents require manual review before processing
+            # Halt further processing - document stays in pending_review state
+            return False
+
+        return True
+
+    except Exception as e:
+        # Log error but don't fail processing - injection scan is optional
+        logger.error(
+            "injection_scan_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        # Set risk to none on failure - document can still proceed
+        try:
+            doc_service.update_injection_scan(
+                document_id=document_id,
+                injection_risk="none",
+                scan_result={"error": str(e), "scan_completed": False},
+            )
+        except Exception:
+            pass  # Already logged, don't fail on update error
+        return True  # Continue processing on scan failure
 
 
 # =============================================================================
@@ -790,6 +864,45 @@ def _merge_and_store_results(
             page_count=merged.page_count,
             ocr_confidence=merged.overall_confidence,
         )
+
+        # Story 1.2: Scan for prompt injection patterns
+        # High-risk documents require manual review before further processing
+        should_continue = _run_injection_scan(
+            document_id=document_id,
+            full_text=merged.full_text,
+            doc_service=doc_service,
+        )
+
+        if not should_continue:
+            # Story 1.2 AC: High-risk documents halt processing for manual review
+            # Update status to indicate document needs review
+            doc_service.update_status(document_id, DocumentStatus.PENDING_REVIEW)
+            broadcast_document_status(
+                matter_id=matter_id,
+                document_id=document_id,
+                status="pending_review",
+                page_count=merged.page_count,
+                ocr_confidence=merged.overall_confidence,
+            )
+
+            logger.info(
+                "document_halted_for_injection_review",
+                document_id=document_id,
+                chunk_count=merged.chunk_count,
+                page_count=merged.page_count,
+            )
+
+            return {
+                "status": "pending_review",
+                "document_id": document_id,
+                "chunk_count": merged.chunk_count,
+                "page_count": merged.page_count,
+                "bbox_count": saved_count,
+                "overall_confidence": merged.overall_confidence,
+                "job_id": job_id,
+                "halted_reason": "high_injection_risk",
+                "rag_triggered": False,
+            }
 
         # Clean up chunk records (Story 15.4)
         _run_async(cleanup_service.cleanup_document_chunks(document_id))

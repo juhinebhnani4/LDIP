@@ -11,35 +11,36 @@ import useSWR from 'swr';
 import type { TimelineStatsResponse } from '@/types/timeline';
 
 /**
- * Real fetcher - transforms snake_case API response to camelCase
+ * Real fetcher - API returns camelCase due to Pydantic aliases
  * Uses the API client for proper auth handling
  */
 async function fetcher(url: string): Promise<TimelineStatsResponse> {
   const { api } = await import('@/lib/api/client');
   const response = await api.get<{
     data: {
-      total_events: number;
-      events_by_type: Record<string, number>;
-      entities_involved: number;
-      date_range_start: string | null;
-      date_range_end: string | null;
-      events_with_entities: number;
-      events_without_entities: number;
-      verified_events: number;
+      // API returns camelCase due to Pydantic alias configuration
+      totalEvents: number;
+      eventsByType: Record<string, number>;
+      entitiesInvolved: number;
+      dateRangeStart: string | null;
+      dateRangeEnd: string | null;
+      eventsWithEntities: number;
+      eventsWithoutEntities: number;
+      verifiedEvents: number;
     };
   }>(url);
 
-  // Transform snake_case API response to camelCase
+  // API already returns camelCase, pass through directly
   return {
     data: {
-      totalEvents: response.data.total_events,
-      eventsByType: response.data.events_by_type,
-      entitiesInvolved: response.data.entities_involved,
-      dateRangeStart: response.data.date_range_start,
-      dateRangeEnd: response.data.date_range_end,
-      eventsWithEntities: response.data.events_with_entities,
-      eventsWithoutEntities: response.data.events_without_entities,
-      verifiedEvents: response.data.verified_events,
+      totalEvents: response.data.totalEvents,
+      eventsByType: response.data.eventsByType,
+      entitiesInvolved: response.data.entitiesInvolved,
+      dateRangeStart: response.data.dateRangeStart,
+      dateRangeEnd: response.data.dateRangeEnd,
+      eventsWithEntities: response.data.eventsWithEntities,
+      eventsWithoutEntities: response.data.eventsWithoutEntities,
+      verifiedEvents: response.data.verifiedEvents,
     },
   };
 }

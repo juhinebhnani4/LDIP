@@ -115,7 +115,7 @@ export function FileReviewList({
   };
 
   return (
-    <Card className={cn('', className)}>
+    <Card className={cn('', className)} data-testid="file-review-list">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-medium flex items-center justify-between">
           <span>
@@ -136,6 +136,7 @@ export function FileReviewList({
           className="max-h-[300px] overflow-y-auto divide-y divide-border -mx-3"
           role="list"
           aria-label="Selected files"
+          data-testid="file-review-list-items"
         >
           {files.map((file, index) => {
             const fileId = fileIds[index] ?? `fallback-${index}`;
@@ -155,6 +156,7 @@ export function FileReviewList({
             variant="ghost"
             className="mt-4 w-full"
             onClick={handleAddMoreClick}
+            data-testid="file-add-more-button"
           >
             <Plus className="size-4 mr-2" />
             Add More Files

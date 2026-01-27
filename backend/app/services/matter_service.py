@@ -18,6 +18,7 @@ from app.models.matter import (
     MatterStatus,
     MatterUpdate,
     MatterWithMembers,
+    VerificationMode,
 )
 
 logger = structlog.get_logger(__name__)
@@ -167,6 +168,7 @@ class MatterService:
             title=matter_data["title"],
             description=matter_data.get("description"),
             status=MatterStatus(matter_data.get("status", "active")),
+            verification_mode=VerificationMode(matter_data.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(matter_data["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(matter_data["updated_at"].replace("Z", "+00:00")),
             role=MatterRole.OWNER,  # Creator is always owner
@@ -224,6 +226,7 @@ class MatterService:
                 title=row["title"],
                 description=row.get("description"),
                 status=MatterStatus(row.get("status", "active")),
+                verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
                 created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
                 updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
                 role=user_role,
@@ -311,6 +314,7 @@ class MatterService:
             title=row["title"],
             description=row.get("description"),
             status=MatterStatus(row.get("status", "active")),
+            verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             role=user_role,
@@ -374,6 +378,8 @@ class MatterService:
             update_data["description"] = data.description
         if data.status is not None:
             update_data["status"] = data.status.value
+        if data.verification_mode is not None:
+            update_data["verification_mode"] = data.verification_mode.value
 
         if not update_data:
             # No changes, just return current matter
@@ -383,6 +389,7 @@ class MatterService:
                 title=matter.title,
                 description=matter.description,
                 status=matter.status,
+                verification_mode=matter.verification_mode,
                 created_at=matter.created_at,
                 updated_at=matter.updated_at,
                 role=matter.role,
@@ -407,6 +414,7 @@ class MatterService:
             title=row["title"],
             description=row.get("description"),
             status=MatterStatus(row.get("status", "active")),
+            verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             role=role,

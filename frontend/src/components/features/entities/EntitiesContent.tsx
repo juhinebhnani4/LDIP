@@ -81,7 +81,8 @@ export function EntitiesContent({
     mutate: mutateEntities,
   } = useEntities(matterId, { perPage: 100 });
 
-  const { edges, isLoading: edgesLoading } = useEntityRelationships(matterId, entities);
+  // LATENCY FIX: Removed entities dependency - relationships now load in parallel with entities
+  const { edges, isLoading: edgesLoading } = useEntityRelationships(matterId);
 
   const {
     entity: selectedEntity,
@@ -445,6 +446,7 @@ export function EntitiesContent({
             mergedEntitiesLoading={mergedEntitiesLoading}
             onUnmerge={handleUnmerge}
             isUnmerging={unmergeLoading}
+            showCrossEngineLinks={true}
           />
         )}
       </div>

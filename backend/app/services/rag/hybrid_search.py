@@ -15,7 +15,11 @@ from functools import lru_cache
 
 import structlog
 
-from app.services.rag.embedder import EmbeddingService, get_embedding_service
+from app.services.rag.embedder import (
+    EmbeddingService,
+    get_current_embedding_model_version,
+    get_embedding_service,
+)
 from app.services.rag.namespace import validate_namespace, validate_search_results
 from app.services.supabase.client import get_supabase_client
 
@@ -74,6 +78,8 @@ class SearchResult:
         bm25_rank: Rank from BM25 search (None if not in BM25 results).
         semantic_rank: Rank from semantic search (None if not in semantic results).
         rrf_score: Combined RRF fusion score.
+        is_library: True if result is from shared library (not matter documents).
+        library_document_title: Title of library document (only for library results).
     """
     id: str
     matter_id: str
@@ -86,6 +92,8 @@ class SearchResult:
     bm25_rank: int | None
     semantic_rank: int | None
     rrf_score: float
+    is_library: bool = False
+    library_document_title: str | None = None
 
 
 @dataclass
@@ -131,6 +139,8 @@ class RerankedSearchResultItem:
         semantic_rank: Rank from semantic search (None if not in semantic results).
         rrf_score: Combined RRF fusion score.
         relevance_score: Cohere relevance score (None if fallback to RRF).
+        is_library: True if result is from shared library.
+        library_document_title: Title of library document (only for library results).
     """
     id: str
     matter_id: str
@@ -144,6 +154,8 @@ class RerankedSearchResultItem:
     semantic_rank: int | None
     rrf_score: float
     relevance_score: float | None
+    is_library: bool = False
+    library_document_title: str | None = None
 
 
 @dataclass
@@ -409,6 +421,7 @@ class HybridSearchService:
                     "full_text_weight": weights.bm25,
                     "semantic_weight": weights.semantic,
                     "rrf_k": rrf_k,
+                    "filter_model_version": get_current_embedding_model_version(),
                 }
             ).execute()
 
@@ -832,6 +845,8 @@ class HybridSearchService:
                         semantic_rank=original.semantic_rank,
                         rrf_score=original.rrf_score,
                         relevance_score=item.relevance_score,
+                        is_library=original.is_library,
+                        library_document_title=original.library_document_title,
                     )
                 )
 
@@ -881,6 +896,8 @@ class HybridSearchService:
                     semantic_rank=r.semantic_rank,
                     rrf_score=r.rrf_score,
                     relevance_score=None,  # No Cohere score
+                    is_library=r.is_library,
+                    library_document_title=r.library_document_title,
                 )
                 for r in hybrid_result.results[:rerank_top_n]
             ]
@@ -896,6 +913,172 @@ class HybridSearchService:
                 search_mode=hybrid_result.search_mode,
                 embedding_completion_pct=hybrid_result.embedding_completion_pct,
             )
+
+
+    async def search_with_library(
+        self,
+        query: str,
+        matter_id: str,
+        limit: int = 20,
+        library_limit: int = 10,
+        weights: SearchWeights | None = None,
+        rrf_k: int = 60,
+    ) -> HybridSearchResult:
+        """Execute hybrid search on both matter chunks and linked library chunks.
+
+        Combines results from matter documents and linked library documents
+        (Acts, Statutes, Judgments, etc.) using RRF fusion.
+
+        Args:
+            query: Search query text.
+            matter_id: REQUIRED - matter UUID for isolation.
+            limit: Max results from matter chunks (default 20).
+            library_limit: Max results from library chunks (default 10).
+            weights: Optional custom weights for BM25/semantic.
+            rrf_k: RRF smoothing constant (default 60).
+
+        Returns:
+            HybridSearchResult with results from both matter and library.
+            Library results will have is_library=True and library_document_title set.
+
+        Example:
+            >>> result = await service.search_with_library(
+            ...     query="Section 138 NI Act",
+            ...     matter_id="abc-123",
+            ... )
+            >>> library_results = [r for r in result.results if r.is_library]
+        """
+        # CRITICAL: Validate matter_id first (Layer 2 enforcement)
+        try:
+            validate_namespace(matter_id)
+        except ValueError as e:
+            raise HybridSearchServiceError(
+                message=str(e),
+                code="INVALID_PARAMETER",
+                is_retryable=False,
+            ) from e
+
+        weights = weights or SearchWeights()
+
+        logger.info(
+            "search_with_library_start",
+            query_len=len(query),
+            matter_id=matter_id,
+            limit=limit,
+            library_limit=library_limit,
+        )
+
+        try:
+            # Step 1: Generate query embedding for semantic search
+            query_embedding = await self.embedder.embed_text(query)
+
+            # Step 2: Execute matter hybrid search
+            matter_result = await self.search(
+                query=query,
+                matter_id=matter_id,
+                limit=limit,
+                weights=weights,
+                rrf_k=rrf_k,
+            )
+
+            # Step 3: Search linked library chunks (semantic only for now)
+            library_results: list[SearchResult] = []
+
+            if query_embedding is not None:
+                supabase = get_supabase_client()
+                if supabase is not None:
+                    try:
+                        response = supabase.rpc(
+                            "match_library_chunks_for_matter",
+                            {
+                                "query_embedding": query_embedding,
+                                "filter_matter_id": matter_id,
+                                "match_count": library_limit,
+                                "similarity_threshold": 0.5,
+                            }
+                        ).execute()
+
+                        if response.data:
+                            for idx, r in enumerate(response.data):
+                                library_results.append(
+                                    SearchResult(
+                                        id=str(r["id"]),
+                                        matter_id=matter_id,  # Context matter
+                                        document_id=str(r["library_document_id"]),
+                                        content=r["content"],
+                                        page_number=r.get("page_number"),
+                                        bbox_ids=None,  # Library chunks don't have bbox
+                                        chunk_type=r["chunk_type"],
+                                        token_count=0,  # Not tracked for library
+                                        bm25_rank=None,
+                                        semantic_rank=idx + 1,
+                                        rrf_score=r["similarity"],
+                                        is_library=True,
+                                        library_document_title=r.get("document_title"),
+                                    )
+                                )
+
+                            logger.info(
+                                "library_search_results",
+                                matter_id=matter_id,
+                                count=len(library_results),
+                            )
+
+                    except Exception as e:
+                        # Don't fail the whole search if library search fails
+                        logger.warning(
+                            "library_search_failed",
+                            matter_id=matter_id,
+                            error=str(e),
+                        )
+
+            # Step 4: Merge results using RRF
+            all_results = list(matter_result.results)
+
+            if library_results:
+                # Apply RRF to library results
+                for idx, lib_result in enumerate(library_results):
+                    # RRF score: 1 / (k + rank)
+                    lib_rrf = 1.0 / (rrf_k + idx + 1)
+                    lib_result.rrf_score = lib_rrf
+                    all_results.append(lib_result)
+
+                # Re-sort by RRF score
+                all_results.sort(key=lambda r: r.rrf_score, reverse=True)
+
+            logger.info(
+                "search_with_library_complete",
+                matter_id=matter_id,
+                matter_count=len(matter_result.results),
+                library_count=len(library_results),
+                total_count=len(all_results),
+            )
+
+            return HybridSearchResult(
+                results=all_results,
+                query=query,
+                matter_id=matter_id,
+                weights=weights,
+                total_candidates=matter_result.total_candidates + len(library_results),
+                search_mode=matter_result.search_mode,
+                embedding_completion_pct=matter_result.embedding_completion_pct,
+                fallback_reason=matter_result.fallback_reason,
+            )
+
+        except HybridSearchServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "search_with_library_failed",
+                matter_id=matter_id,
+                query_len=len(query),
+                error=str(e),
+            )
+            raise HybridSearchServiceError(
+                message=f"Search with library failed: {e!s}",
+                code="SEARCH_WITH_LIBRARY_FAILED",
+                is_retryable=True,
+            ) from e
 
 
 @lru_cache(maxsize=1)

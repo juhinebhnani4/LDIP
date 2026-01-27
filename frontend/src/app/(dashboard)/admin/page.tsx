@@ -2,15 +2,20 @@ import { redirect } from 'next/navigation';
 import { Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { LLMQuotaWidget } from '@/components/features/admin/LLMQuotaWidget';
+import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
+import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
 
 /**
  * Admin Dashboard Page
  *
  * Story gap-5.2: LLM Quota Monitoring Dashboard
+ * Story 5.6: Queue Depth Visibility Dashboard
+ * Story 7.2: Monthly Cost Report by Practice Group
  *
  * Admin-only page displaying:
  * - LLM quota monitoring widget
- * - Future: Pipeline management, system health, etc.
+ * - Queue depth monitoring widget
+ * - Monthly cost report by practice group
  *
  * Access Control:
  * - F1 fix: Server-side check using NEXT_PUBLIC_ADMIN_EMAILS (set at runtime)
@@ -59,11 +64,13 @@ export default async function AdminPage() {
         {/* Admin widgets grid */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* LLM Quota Monitoring Widget */}
-          <LLMQuotaWidget className="md:col-span-2" />
+          <LLMQuotaWidget />
 
-          {/* Placeholder for future admin widgets */}
-          {/* <SystemHealthWidget /> */}
-          {/* <PipelineStatusWidget /> */}
+          {/* Queue Depth Monitoring Widget (Story 5.6) */}
+          <QueueDepthWidget />
+
+          {/* Monthly Cost Report Widget (Story 7.2) */}
+          <CostReportWidget />
         </div>
 
         {/* Admin info footer */}

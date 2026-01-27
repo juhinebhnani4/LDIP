@@ -54,9 +54,20 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
   const streamingContent = useChatStore((state) => state.streamingContent);
   const streamingTraces = useChatStore((state) => state.streamingTraces);
   const streamingMessageId = useChatStore((state) => state.streamingMessageId);
+  const loadHistory = useChatStore((state) => state.loadHistory);
+  const isHistoryLoading = useChatStore((state) => state.isLoading);
 
   // Story 11.4: Empty state detection for suggested questions
   const isEmpty = useChatStore(selectIsEmpty);
+
+  // BUG FIX: Load chat history on mount/navigation (not just when ConversationHistory renders)
+  // Previously, history only loaded when isEmpty was false (ConversationHistory rendered),
+  // which meant history didn't load until user submitted a question.
+  useEffect(() => {
+    if (matterId && userId && !authLoading) {
+      loadHistory(matterId, userId);
+    }
+  }, [matterId, userId, authLoading, loadHistory]);
 
   // Story 13.4: Track last query and error for retry functionality
   const [lastQuery, setLastQuery] = useState<string | null>(null);
@@ -261,8 +272,13 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
     // Show chat interface
     return (
       <>
-        {/* Story 11.4: Empty state with suggested questions */}
-        {isEmpty && !streamingMessageId ? (
+        {/* Show loading while fetching initial history to avoid empty state flash */}
+        {isHistoryLoading && isEmpty ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : isEmpty && !streamingMessageId ? (
+          /* Story 11.4: Empty state with suggested questions */
           <div className="flex flex-1 flex-col items-center justify-center p-6">
             <SuggestedQuestions onQuestionClick={handleSubmit} />
           </div>
@@ -311,7 +327,7 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      <QAPanelHeader />
+      <QAPanelHeader matterId={matterId} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {renderContent()}

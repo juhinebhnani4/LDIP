@@ -3,18 +3,28 @@
 Story 8-4: Task 8 - Export Eligibility Check
 Epic 8: Safety Layer (Guardrails, Policing, Verification)
 
+Story 3.2: Export Gate Check based on matter verification mode
+Epic 3: Compliance & UX
+
 This service checks if a matter is eligible for export based on:
-- Unverified findings with confidence < 70% block export
-- Unverified findings with confidence 70-90% show warning
-- All findings verified or > 90% confidence allow export
+- Matter verification_mode: 'advisory' or 'required'
+- In 'advisory' mode (default):
+  - Unverified findings with confidence < 70% block export
+  - Unverified findings with confidence 70-90% show warning
+  - All findings verified or > 90% confidence allow export
+- In 'required' mode (court-ready):
+  - ALL pending findings block export (100% verification required)
+  - No warnings, only blocking findings
 
 Implements:
 - AC #5: Findings < 70% confidence require verification before export
 - ADR-004: Verification Tier Thresholds
+- Story 3.2: Configurable verification gates per matter
 """
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -84,6 +94,7 @@ class ExportEligibilityService:
 
         Story 8-4: AC #5, Task 8.2 - Returns True/False + list of blocking findings.
         Story 12-3: AC #2 - Also returns warning findings (70-90% confidence).
+        Story 3.2: Considers matter verification_mode for court-ready mode.
 
         Args:
             matter_id: Matter UUID to check.
@@ -95,74 +106,126 @@ class ExportEligibilityService:
         start_time = time.perf_counter()
 
         try:
-            # Query for pending verifications at or below blocking threshold
-            # Story 8-4: Uses <= to match verification_service.get_verification_requirement()
-            # which returns REQUIRED for confidence <= 70%
-            blocking_result = supabase.table("finding_verifications").select(
-                "id, finding_id, finding_type, finding_summary, confidence_before"
-            ).eq("matter_id", matter_id).eq(
-                "decision", VerificationDecision.PENDING.value
-            ).lte(
-                "confidence_before", self._export_block_threshold
-            ).execute()
+            # Story 3.2: First, fetch matter's verification_mode
+            matter_result = supabase.table("matters").select(
+                "verification_mode"
+            ).eq("id", matter_id).execute()
 
-            blocking_findings = [
-                ExportBlockingFinding(
-                    verification_id=r["id"],
-                    finding_id=r.get("finding_id"),
-                    finding_type=r["finding_type"],
-                    finding_summary=r["finding_summary"],
-                    confidence=r["confidence_before"],
+            verification_mode = "advisory"  # Default
+            if matter_result.data and len(matter_result.data) > 0:
+                verification_mode = matter_result.data[0].get("verification_mode", "advisory")
+
+            is_court_ready = verification_mode == "required"
+
+            if is_court_ready:
+                # Story 3.2: Court-ready mode - ALL pending findings block export
+                blocking_result = supabase.table("finding_verifications").select(
+                    "id, finding_id, finding_type, finding_summary, confidence_before"
+                ).eq("matter_id", matter_id).eq(
+                    "decision", VerificationDecision.PENDING.value
+                ).execute()
+
+                blocking_findings = [
+                    ExportBlockingFinding(
+                        verification_id=r["id"],
+                        finding_id=r.get("finding_id"),
+                        finding_type=r["finding_type"],
+                        finding_summary=r["finding_summary"],
+                        confidence=r["confidence_before"],
+                    )
+                    for r in blocking_result.data
+                ]
+
+                # In court-ready mode, no warnings - everything blocks
+                warning_findings: list[ExportWarningFinding] = []
+
+                blocking_count = len(blocking_findings)
+                warning_count = 0
+                eligible = blocking_count == 0
+
+                # Generate message for court-ready mode
+                if eligible:
+                    message = "Court-ready: All findings verified. Export is allowed."
+                else:
+                    message = (
+                        f"Court-ready mode: {blocking_count} finding(s) require verification "
+                        f"before export. 100% verification is required."
+                    )
+            else:
+                # Story 8-4: Advisory mode - use confidence thresholds
+                # LATENCY FIX: Parallelize both queries with asyncio.gather
+                blocking_result, warning_result = await asyncio.gather(
+                    # Query for pending verifications at or below blocking threshold
+                    asyncio.to_thread(
+                        lambda: supabase.table("finding_verifications").select(
+                            "id, finding_id, finding_type, finding_summary, confidence_before"
+                        ).eq("matter_id", matter_id).eq(
+                            "decision", VerificationDecision.PENDING.value
+                        ).lte(
+                            "confidence_before", self._export_block_threshold
+                        ).execute()
+                    ),
+                    # Story 12-3: Query for warning findings (70-90% confidence, pending)
+                    asyncio.to_thread(
+                        lambda: supabase.table("finding_verifications").select(
+                            "id, finding_id, finding_type, finding_summary, confidence_before"
+                        ).eq("matter_id", matter_id).eq(
+                            "decision", VerificationDecision.PENDING.value
+                        ).gt(
+                            "confidence_before", self._export_block_threshold
+                        ).lte(
+                            "confidence_before", self._warning_upper_threshold
+                        ).execute()
+                    ),
                 )
-                for r in blocking_result.data
-            ]
 
-            # Story 12-3: Query for warning findings (70-90% confidence, pending)
-            warning_result = supabase.table("finding_verifications").select(
-                "id, finding_id, finding_type, finding_summary, confidence_before"
-            ).eq("matter_id", matter_id).eq(
-                "decision", VerificationDecision.PENDING.value
-            ).gt(
-                "confidence_before", self._export_block_threshold
-            ).lte(
-                "confidence_before", self._warning_upper_threshold
-            ).execute()
+                blocking_findings = [
+                    ExportBlockingFinding(
+                        verification_id=r["id"],
+                        finding_id=r.get("finding_id"),
+                        finding_type=r["finding_type"],
+                        finding_summary=r["finding_summary"],
+                        confidence=r["confidence_before"],
+                    )
+                    for r in blocking_result.data
+                ]
 
-            warning_findings = [
-                ExportWarningFinding(
-                    verification_id=r["id"],
-                    finding_id=r.get("finding_id"),
-                    finding_type=r["finding_type"],
-                    finding_summary=r["finding_summary"],
-                    confidence=r["confidence_before"],
-                )
-                for r in warning_result.data
-            ]
+                warning_findings = [
+                    ExportWarningFinding(
+                        verification_id=r["id"],
+                        finding_id=r.get("finding_id"),
+                        finding_type=r["finding_type"],
+                        finding_summary=r["finding_summary"],
+                        confidence=r["confidence_before"],
+                    )
+                    for r in warning_result.data
+                ]
 
-            blocking_count = len(blocking_findings)
-            warning_count = len(warning_findings)
-            eligible = blocking_count == 0
+                blocking_count = len(blocking_findings)
+                warning_count = len(warning_findings)
+                eligible = blocking_count == 0
+
+                # Generate message for advisory mode
+                if eligible:
+                    if warning_count > 0:
+                        message = (
+                            f"Export allowed with {warning_count} warning(s). "
+                            f"Some findings (70-90% confidence) are suggested for verification."
+                        )
+                    else:
+                        message = "All required verifications complete. Export is allowed."
+                else:
+                    message = (
+                        f"Export blocked: {blocking_count} finding(s) with confidence "
+                        f"< {self._export_block_threshold}% require verification before export."
+                    )
 
             elapsed_ms = (time.perf_counter() - start_time) * 1000
-
-            # Generate message
-            if eligible:
-                if warning_count > 0:
-                    message = (
-                        f"Export allowed with {warning_count} warning(s). "
-                        f"Some findings (70-90% confidence) are suggested for verification."
-                    )
-                else:
-                    message = "All required verifications complete. Export is allowed."
-            else:
-                message = (
-                    f"Export blocked: {blocking_count} finding(s) with confidence "
-                    f"< {self._export_block_threshold}% require verification before export."
-                )
 
             logger.info(
                 "export_eligibility_checked",
                 matter_id=matter_id,
+                verification_mode=verification_mode,
                 eligible=eligible,
                 blocking_count=blocking_count,
                 warning_count=warning_count,
@@ -171,6 +234,7 @@ class ExportEligibilityService:
 
             return ExportEligibilityResult(
                 eligible=eligible,
+                verification_mode=verification_mode,
                 blocking_findings=blocking_findings,
                 blocking_count=blocking_count,
                 warning_findings=warning_findings,
@@ -185,8 +249,10 @@ class ExportEligibilityService:
                 error=str(e),
             )
             # On error, default to blocked (fail-safe)
+            # Code Review Fix: Include verification_mode to match TypeScript interface
             return ExportEligibilityResult(
                 eligible=False,
+                verification_mode="advisory",  # Default to advisory on error
                 blocking_findings=[],
                 blocking_count=0,
                 warning_findings=[],

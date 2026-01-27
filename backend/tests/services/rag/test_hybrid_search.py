@@ -64,6 +64,7 @@ class TestSearchResult:
             document_id="doc-1",
             content="Test content",
             page_number=5,
+            bbox_ids=["bbox-1", "bbox-2"],
             chunk_type="child",
             token_count=100,
             bm25_rank=3,
@@ -74,15 +75,17 @@ class TestSearchResult:
         assert result.id == "chunk-1"
         assert result.content == "Test content"
         assert result.rrf_score == 0.025
+        assert result.bbox_ids == ["bbox-1", "bbox-2"]
 
     def test_nullable_ranks(self) -> None:
-        """Should allow None for ranks."""
+        """Should allow None for ranks and bbox_ids."""
         result = SearchResult(
             id="chunk-1",
             matter_id="matter-1",
             document_id="doc-1",
             content="Test",
             page_number=None,
+            bbox_ids=None,
             chunk_type="parent",
             token_count=50,
             bm25_rank=None,
@@ -92,6 +95,7 @@ class TestSearchResult:
 
         assert result.bm25_rank is None
         assert result.semantic_rank == 2
+        assert result.bbox_ids is None
 
 
 class TestHybridSearchServiceInit:
@@ -526,6 +530,7 @@ class TestRerankedSearchResultItem:
             document_id="doc-1",
             content="Test content",
             page_number=5,
+            bbox_ids=["bbox-1"],
             chunk_type="child",
             token_count=100,
             bm25_rank=2,
@@ -537,6 +542,7 @@ class TestRerankedSearchResultItem:
         assert item.id == "chunk-1"
         assert item.relevance_score == 0.987
         assert item.rrf_score == 0.032
+        assert item.bbox_ids == ["bbox-1"]
 
     def test_nullable_relevance_score(self) -> None:
         """Should allow None for relevance_score (fallback case)."""
@@ -546,6 +552,7 @@ class TestRerankedSearchResultItem:
             document_id="doc-1",
             content="Test",
             page_number=None,
+            bbox_ids=None,
             chunk_type="parent",
             token_count=50,
             bm25_rank=1,
@@ -555,6 +562,7 @@ class TestRerankedSearchResultItem:
         )
 
         assert item.relevance_score is None
+        assert item.bbox_ids is None
 
 
 class TestRerankedSearchResult:
@@ -569,6 +577,7 @@ class TestRerankedSearchResult:
                 document_id="doc-1",
                 content="Test",
                 page_number=1,
+                bbox_ids=["bbox-1"],
                 chunk_type="child",
                 token_count=100,
                 bm25_rank=1,

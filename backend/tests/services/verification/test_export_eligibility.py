@@ -134,6 +134,96 @@ class TestExportEligibilityCheck:
         assert blocking.confidence == 65.0
 
 
+class TestCourtReadyMode:
+    """Test court-ready (required) verification mode - Story 3.2."""
+
+    @pytest.mark.asyncio
+    async def test_court_ready_blocks_all_pending_findings(
+        self, export_service, mock_supabase
+    ) -> None:
+        """Court-ready mode should block export when ANY findings are pending."""
+        # Mock matter with required verification mode
+        mock_matter_result = MagicMock()
+        mock_matter_result.data = [{"verification_mode": "required"}]
+
+        # Mock findings - high confidence but still pending
+        mock_blocking_result = MagicMock()
+        mock_blocking_result.data = [
+            {
+                "id": "verification-1",
+                "finding_id": "finding-1",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "High confidence finding",
+                "confidence_before": 95.0,  # Would NOT block in advisory mode
+            },
+        ]
+
+        # Set up the mock chain for court-ready mode
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_matter_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_blocking_result
+
+        result = await export_service.check_export_eligibility(
+            matter_id="test-matter-id",
+            supabase=mock_supabase,
+        )
+
+        assert result.eligible is False
+        assert result.verification_mode == "required"
+        assert result.blocking_count == 1
+        assert "court-ready" in result.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_court_ready_allows_when_all_verified(
+        self, export_service, mock_supabase
+    ) -> None:
+        """Court-ready mode should allow export when all findings are verified."""
+        # Mock matter with required verification mode
+        mock_matter_result = MagicMock()
+        mock_matter_result.data = [{"verification_mode": "required"}]
+
+        # Mock no pending findings
+        mock_blocking_result = MagicMock()
+        mock_blocking_result.data = []
+
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_matter_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_blocking_result
+
+        result = await export_service.check_export_eligibility(
+            matter_id="test-matter-id",
+            supabase=mock_supabase,
+        )
+
+        assert result.eligible is True
+        assert result.verification_mode == "required"
+        assert result.blocking_count == 0
+        assert "court-ready" in result.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_court_ready_no_warnings_category(
+        self, export_service, mock_supabase
+    ) -> None:
+        """Court-ready mode should not have warning findings category."""
+        # Mock matter with required verification mode
+        mock_matter_result = MagicMock()
+        mock_matter_result.data = [{"verification_mode": "required"}]
+
+        # No pending findings
+        mock_blocking_result = MagicMock()
+        mock_blocking_result.data = []
+
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_matter_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_blocking_result
+
+        result = await export_service.check_export_eligibility(
+            matter_id="test-matter-id",
+            supabase=mock_supabase,
+        )
+
+        # In court-ready mode, warnings list should always be empty
+        assert result.warning_count == 0
+        assert len(result.warning_findings) == 0
+
+
 class TestFailSafeBehavior:
     """Test fail-safe behavior on errors."""
 
@@ -142,7 +232,7 @@ class TestFailSafeBehavior:
         self, export_service, mock_supabase
     ) -> None:
         """Export should be blocked on database errors (fail-safe)."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.side_effect = Exception(
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception(
             "Database connection failed"
         )
 
@@ -154,6 +244,23 @@ class TestFailSafeBehavior:
         # Should fail-safe to blocked
         assert result.eligible is False
         assert "failed" in result.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_error_response_includes_verification_mode(
+        self, export_service, mock_supabase
+    ) -> None:
+        """Error response should include verification_mode field (Code Review Fix)."""
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception(
+            "Database error"
+        )
+
+        result = await export_service.check_export_eligibility(
+            matter_id="test-matter-id",
+            supabase=mock_supabase,
+        )
+
+        # Should have verification_mode defaulting to advisory
+        assert result.verification_mode == "advisory"
 
 
 class TestGetBlockingFindings:

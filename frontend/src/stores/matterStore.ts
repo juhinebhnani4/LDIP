@@ -92,6 +92,9 @@ interface MatterActions {
   /** Remove multiple matters from local state after bulk deletion */
   deleteMatters: (matterIds: string[]) => void;
 
+  /** Update matter in local state (Story 3.1) */
+  updateMatter: (matter: Matter) => void;
+
   /** Set sort option */
   setSortBy: (sortBy: MatterSortOption) => void;
 
@@ -227,6 +230,10 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
         title: 'Untitled Matter',
         description: null,
         status: 'active',
+        verificationMode: 'advisory',
+        analysisMode: 'deep_analysis',
+        practiceGroup: null,
+        dataResidency: 'default',
         role: 'owner',
         memberCount: 1,
         createdAt: new Date().toISOString(),
@@ -313,6 +320,26 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
     // Clear currentMatter if it was one of the deleted ones
     if (currentMatter && idsToDelete.has(currentMatter.id)) {
       set({ currentMatter: null });
+    }
+  },
+
+  /**
+   * Update matter in local state (Story 3.1).
+   * Called after successful API update to sync UI immediately.
+   */
+  updateMatter: (matter: Matter) => {
+    const { matters, currentMatter } = get();
+    const matterCardData = transformMatterToCardData(matter);
+
+    // Update in matters list
+    const updatedMatters = matters.map((m) =>
+      m.id === matter.id ? matterCardData : m
+    );
+    set({ matters: updatedMatters });
+
+    // Update currentMatter if it was the updated one
+    if (currentMatter?.id === matter.id) {
+      set({ currentMatter: matterCardData });
     }
   },
 

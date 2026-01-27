@@ -1,9 +1,11 @@
 """Matter API routes with role-based access control."""
 
+import asyncio
 from math import ceil
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from postgrest.exceptions import APIError as PostgrestAPIError
 
 from app.api.deps import (
     AuthenticatedUser,
@@ -15,6 +17,8 @@ from app.api.deps import (
     get_tab_stats_service_dep,
     require_matter_role,
 )
+from app.models.cost import MatterCostResponse, MatterCostSummary
+from app.services.matter_cost_service import MatterCostService, get_matter_cost_service
 from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
 from app.models.matter import (
     MatterCreate,
@@ -266,6 +270,101 @@ async def get_tab_stats(
                 "error": {
                     "code": e.code,
                     "message": e.message,
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Story 7.1: Per-Matter Cost Tracking
+# =============================================================================
+
+
+@router.get(
+    "/{matter_id}/costs",
+    response_model=MatterCostResponse,
+    response_model_by_alias=True,
+    summary="Get Matter Costs",
+    description="""
+    Get cost summary for a matter including:
+    - Total LLM cost (INR and USD)
+    - Breakdown by operation type (embedding, analysis, Q&A)
+    - Breakdown by provider (GPT-4, Gemini)
+    - Daily and weekly rollups
+
+    **Requires any role on the matter.**
+    """,
+)
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def get_matter_costs(
+    request: Request,
+    matter_id: str,
+    days: int = Query(default=30, ge=1, le=365, description="Number of days to include"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    cost_service: MatterCostService = Depends(get_matter_cost_service),
+) -> MatterCostResponse:
+    """Get cost summary for a matter.
+
+    Story 7.1: Per-Matter Cost Tracking Widget
+
+    AC:
+    - Total LLM cost for this matter
+    - Costs broken down by: embedding, analysis, Q&A
+    - Daily and weekly rollups available
+
+    Args:
+        request: FastAPI request for rate limiting binding.
+        matter_id: Matter ID.
+        days: Number of days to include (default 30).
+        membership: User's matter membership (validated by dependency).
+        cost_service: Matter cost service.
+
+    Returns:
+        MatterCostResponse with cost summary data.
+    """
+    try:
+        # Run sync service method in thread pool to avoid blocking event loop
+        summary = await asyncio.to_thread(
+            cost_service.get_matter_cost_summary, matter_id, days
+        )
+        return MatterCostResponse(data=summary)
+    except PostgrestAPIError as e:
+        # Database/API errors - log and return 500
+        logger.error(
+            "matter_cost_query_failed",
+            matter_id=matter_id,
+            user_id=membership.user_id,
+            error=str(e),
+            error_type="database",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "COST_QUERY_FAILED",
+                    "message": "Failed to retrieve cost data",
+                    "details": {},
+                }
+            },
+        ) from e
+    except ValueError as e:
+        # Data parsing errors
+        logger.error(
+            "matter_cost_parse_failed",
+            matter_id=matter_id,
+            user_id=membership.user_id,
+            error=str(e),
+            error_type="parse",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "COST_PARSE_FAILED",
+                    "message": "Failed to parse cost data",
                     "details": {},
                 }
             },

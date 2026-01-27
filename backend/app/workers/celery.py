@@ -280,7 +280,29 @@ if _missing_tasks:
 # Logs permanently failed tasks (after all retries exhausted) for debugging
 # and monitoring. These are tasks that cannot be recovered automatically.
 
-from celery.signals import task_failure, task_retry
+from celery.signals import task_failure, task_retry, worker_ready
+
+
+@worker_ready.connect
+def initialize_cost_service(sender=None, **kwargs):
+    """Initialize cost persistence service when worker starts.
+
+    Story 7.1: Per-Matter Cost Tracking
+    Ensures LLM costs from worker tasks are persisted to the database.
+    """
+    try:
+        from app.core.cost_tracking import get_cost_service
+        from app.services.supabase.client import get_service_client
+
+        supabase = get_service_client()
+        get_cost_service(supabase)
+        _logger.info("cost_persistence_service_initialized_in_worker")
+    except Exception as e:
+        _logger.warning(
+            "cost_persistence_init_failed_in_worker",
+            error=str(e),
+            hint="LLM costs will be logged but not persisted to database",
+        )
 
 
 @task_failure.connect

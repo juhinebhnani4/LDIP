@@ -11,6 +11,43 @@ export type MatterRole = 'owner' | 'editor' | 'viewer';
 /** Status types for matters */
 export type MatterStatus = 'active' | 'archived' | 'closed';
 
+/**
+ * Verification mode for matter exports (Story 3.1)
+ * - advisory: Default mode. Acknowledgment only - exports show warning but allow download.
+ * - required: Court-ready mode. 100% verification required before export is allowed.
+ */
+export type VerificationMode = 'advisory' | 'required';
+
+/**
+ * Data residency region for API routing (Story 7.3)
+ * - default: Auto-select based on firm settings
+ * - us: US regional endpoints
+ * - eu: EU regional endpoints (GDPR compliance)
+ * - asia: Asia regional endpoints
+ */
+export type DataResidency = 'default' | 'us' | 'eu' | 'asia';
+
+/** Data residency options for display */
+export const DATA_RESIDENCY_OPTIONS: { value: DataResidency; label: string; description: string }[] = [
+  { value: 'default', label: 'Auto', description: 'Automatically select based on firm settings' },
+  { value: 'us', label: 'United States', description: 'Route API calls to US regional endpoints' },
+  { value: 'eu', label: 'European Union', description: 'Route API calls to EU regional endpoints (GDPR)' },
+  { value: 'asia', label: 'Asia Pacific', description: 'Route API calls to Asia regional endpoints' },
+] as const;
+
+/**
+ * Analysis mode for document processing (Story 6.4)
+ * - quick_scan: Faster processing, skips contradiction engine, larger chunks
+ * - deep_analysis: Full processing with all engines (default)
+ */
+export type AnalysisMode = 'quick_scan' | 'deep_analysis';
+
+/** Analysis mode options for display */
+export const ANALYSIS_MODE_OPTIONS: { value: AnalysisMode; label: string; description: string }[] = [
+  { value: 'deep_analysis', label: 'Deep Analysis', description: 'Full processing with all engines including contradictions' },
+  { value: 'quick_scan', label: 'Quick Scan', description: 'Faster processing, skips contradiction detection' },
+] as const;
+
 /** A member of a matter with their role assignment */
 export interface MatterMember {
   id: string;
@@ -32,6 +69,12 @@ export interface MatterBase {
 export interface MatterCreateRequest {
   title: string;
   description?: string;
+  /** Practice group for cost reporting (Story 7.2) */
+  practiceGroup?: string;
+  /** Data residency region for API routing (Story 7.3) */
+  dataResidency?: DataResidency;
+  /** Analysis mode for document processing (Story 6.4) */
+  analysisMode?: AnalysisMode;
 }
 
 /** Request model for updating an existing matter */
@@ -39,12 +82,25 @@ export interface MatterUpdateRequest {
   title?: string;
   description?: string | null;
   status?: MatterStatus;
+  verificationMode?: VerificationMode;
+  /** Practice group for cost reporting (Story 7.2) */
+  practiceGroup?: string | null;
+  /** Analysis mode for document processing (Story 6.4) */
+  analysisMode?: AnalysisMode;
+  // Note: dataResidency is NOT updateable after creation (immutable once documents uploaded)
 }
 
 /** Complete matter model returned from API */
 export interface Matter extends MatterBase {
   id: string;
   status: MatterStatus;
+  verificationMode: VerificationMode;
+  /** Analysis mode for document processing (Story 6.4) */
+  analysisMode: AnalysisMode;
+  /** Practice group for cost reporting (Story 7.2) */
+  practiceGroup: string | null;
+  /** Data residency region for API routing (Story 7.3) */
+  dataResidency: DataResidency;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

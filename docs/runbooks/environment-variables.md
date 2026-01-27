@@ -85,7 +85,18 @@ Complete reference for all environment variables used in LDIP.
 | `GOOGLE_CLOUD_LOCATION` | Processing region | `us` | Yes |
 | `GOOGLE_DOCUMENT_AI_PROCESSOR_ID` | OCR processor ID | `abc123def456` | Yes |
 
-**Note:** For production, you may need to mount a service account JSON file or configure Workload Identity.
+**Authentication (choose ONE):**
+
+| Variable | Description | When to Use |
+|----------|-------------|-------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | File path to service account JSON | Local development |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Entire JSON content as string | Production (Railway) |
+
+**For Railway deployment:**
+1. Open your service account JSON file in Notepad
+2. Copy ALL the content (Ctrl+A, Ctrl+C)
+3. In Railway, create env var `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+4. Paste the entire JSON as the value
 
 ### Model Configuration
 

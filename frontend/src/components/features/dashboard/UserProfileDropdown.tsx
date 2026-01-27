@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, HelpCircle, LogOut, ChevronDown } from 'lucide-react';
+import { Settings, HelpCircle, LogOut, ChevronDown, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/supabase/client';
+import { useAdminStatus } from '@/hooks/useAdminStatus';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 /** Get initials from name or email for avatar */
@@ -61,6 +62,9 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
 
+  // F2 fix: Only show admin link to actual admins (runtime check)
+  const { isAdmin } = useAdminStatus();
+
   // Get user data client-side if not provided
   useEffect(() => {
     if (!initialUser) {
@@ -92,6 +96,10 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
 
   const handleSettings = () => {
     router.push('/settings');
+  };
+
+  const handleAdmin = () => {
+    router.push('/admin');
   };
 
   const handleHelp = () => {
@@ -137,6 +145,13 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
           </DropdownMenuItem>
+          {/* F2 fix: Only show Admin link to actual admins */}
+          {isAdmin && (
+            <DropdownMenuItem onClick={handleAdmin}>
+              <Shield className="mr-2 h-4 w-4" />
+              <span>Admin</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleHelp}>
             <HelpCircle className="mr-2 h-4 w-4" />
             <span>Help</span>

@@ -40,6 +40,12 @@ export interface Entity extends EntityListItem {
   aliases: string[];
   createdAt: string;
   updatedAt: string;
+  /** Story 3.3: If merged, references target entity */
+  mergedIntoId?: string | null;
+  /** Story 3.3: When entity was merged */
+  mergedAt?: string | null;
+  /** Story 3.3: User who performed merge */
+  mergedBy?: string | null;
 }
 
 /** Entity with relationships and mentions (detail view) */
@@ -152,6 +158,22 @@ export interface MergeResultResponse {
   keptEntityId: string;
   deletedEntityId: string;
   aliasesAdded: string[];
+}
+
+/**
+ * Story 3.3: Request to unmerge a previously merged entity
+ */
+export interface UnmergeEntityRequest {
+  entityId: string;
+}
+
+/**
+ * Story 3.3: Result of entity unmerge operation
+ */
+export interface UnmergeResultResponse {
+  success: boolean;
+  restoredEntityId: string;
+  previouslyMergedIntoId: string;
 }
 
 
@@ -302,5 +324,24 @@ export interface MergeSuggestionItem {
 /** Response for merge suggestions */
 export interface MergeSuggestionsResponse {
   data: MergeSuggestionItem[];
+  total: number;
+}
+
+
+// =============================================================================
+// Story 3.4: Merged Entities Types (for Unmerge/Split UI)
+// =============================================================================
+
+/** An entity that was merged into another entity */
+export interface MergedEntityItem {
+  id: string;
+  canonicalName: string;
+  entityType: EntityType;
+  mergedAt: string | null;
+}
+
+/** Response containing entities merged into a specific entity */
+export interface MergedEntitiesResponse {
+  data: MergedEntityItem[];
   total: number;
 }

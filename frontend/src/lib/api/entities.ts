@@ -161,6 +161,8 @@ import type {
   MergeResultResponse,
   AliasesListResponse,
   MergeSuggestionsResponse,
+  UnmergeResultResponse,
+  MergedEntitiesResponse,
 } from '@/types/entity';
 
 /**
@@ -286,5 +288,65 @@ export async function getMergeSuggestions(
 
   return api.get<MergeSuggestionsResponse>(
     `/api/matters/${matterId}/entities/merge-suggestions${queryString}`
+  );
+}
+
+
+// =============================================================================
+// Story 3.4: Entity Unmerge (Split)
+// =============================================================================
+
+/**
+ * Unmerge (split) a previously merged entity.
+ *
+ * Story 3.4: Reverses a soft merge operation, restoring the entity
+ * to active status. The entity starts fresh (mentions remain with
+ * the merged-into entity).
+ *
+ * @param matterId - Matter UUID
+ * @param entityId - Entity UUID to unmerge (must be a merged entity)
+ * @returns Unmerge result with restored entity ID
+ *
+ * @example
+ * ```ts
+ * const result = await unmergeEntity('matter-123', 'entity-456');
+ * console.log(result.restoredEntityId); // 'entity-456'
+ * console.log(result.previouslyMergedIntoId); // 'entity-789'
+ * ```
+ */
+export async function unmergeEntity(
+  matterId: string,
+  entityId: string
+): Promise<UnmergeResultResponse> {
+  return api.post<UnmergeResultResponse>(
+    `/api/matters/${matterId}/entities/unmerge`,
+    { entityId }
+  );
+}
+
+/**
+ * Get entities that were merged into a specific entity.
+ *
+ * Story 3.4: Returns entities that can be unmerged (split) from
+ * the target entity.
+ *
+ * @param matterId - Matter UUID
+ * @param entityId - Entity UUID to check for merged entities
+ * @returns List of entities merged into this entity
+ *
+ * @example
+ * ```ts
+ * const merged = await getMergedEntities('matter-123', 'entity-456');
+ * for (const e of merged.data) {
+ *   console.log(`${e.canonicalName} was merged at ${e.mergedAt}`);
+ * }
+ * ```
+ */
+export async function getMergedEntities(
+  matterId: string,
+  entityId: string
+): Promise<MergedEntitiesResponse> {
+  return api.get<MergedEntitiesResponse>(
+    `/api/matters/${matterId}/entities/${entityId}/merged-from`
   );
 }

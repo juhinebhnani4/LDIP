@@ -67,12 +67,16 @@ class RemoveAliasRequest(BaseModel):
 class MergeEntitiesRequest(BaseModel):
     """Request to merge two entities."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     source_entity_id: str = Field(
         ...,
+        alias="sourceEntityId",
         description="Entity ID to merge (will be deleted)",
     )
     target_entity_id: str = Field(
         ...,
+        alias="targetEntityId",
         description="Entity ID to keep (will receive aliases)",
     )
     reason: str | None = Field(
@@ -101,6 +105,30 @@ class MergeResultResponse(BaseModel):
     kept_entity_id: str = Field(..., alias="keptEntityId", description="ID of kept entity")
     deleted_entity_id: str = Field(..., alias="deletedEntityId", description="ID of deleted entity")
     aliases_added: list[str] = Field(..., alias="aliasesAdded", description="Aliases added to kept entity")
+
+
+class UnmergeEntityRequest(BaseModel):
+    """Request to unmerge a previously merged entity (Story 3.4)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    entity_id: str = Field(
+        ...,
+        alias="entityId",
+        description="Entity ID to unmerge (must be a merged entity)",
+    )
+
+
+class UnmergeResultResponse(BaseModel):
+    """Response for entity unmerge operation (Story 3.4)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    success: bool = Field(..., description="Whether unmerge was successful")
+    restored_entity_id: str = Field(..., alias="restoredEntityId", description="ID of restored entity")
+    previously_merged_into_id: str = Field(
+        ..., alias="previouslyMergedIntoId", description="ID of entity it was merged into"
+    )
 
 
 class MergeSuggestionItem(BaseModel):
@@ -1103,13 +1131,14 @@ async def merge_entities(
                 },
             )
 
-        # Call the merge function
+        # Call the merge function with user_id for auth
         client.rpc(
             "merge_entities",
             {
                 "p_matter_id": matter_id,
                 "p_keep_id": request.target_entity_id,
                 "p_merge_id": request.source_entity_id,
+                "p_user_id": membership.user_id,
             },
         ).execute()
 
@@ -1171,3 +1200,280 @@ async def merge_entities(
         ) from e
 
 
+# =============================================================================
+# Story 3.4: Unmerge Entity (Split) Endpoint
+# =============================================================================
+
+
+@router.post("/unmerge", response_model=UnmergeResultResponse, response_model_by_alias=True)
+async def unmerge_entity(
+    request: UnmergeEntityRequest,
+    matter_id: str = Path(..., description="Matter UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER])  # Only owners can unmerge
+    ),
+    mig_service: MIGGraphService = Depends(_get_mig_service),
+    correction_service: CorrectionLearningService = Depends(_get_correction_service),
+) -> UnmergeResultResponse:
+    """Unmerge (split) a previously merged entity.
+
+    Story 3.4: Implement Entity Split UI
+
+    Reverses a soft merge operation:
+    - Restores the entity to active status
+    - Removes the entity's canonical name from the target entity's aliases
+    - Entity starts fresh (mentions remain with the merged-into entity)
+
+    This requires owner permission as it's a significant data change.
+
+    Args:
+        request: Unmerge parameters.
+        matter_id: Matter UUID.
+        membership: Validated matter membership (owner required).
+        mig_service: MIG graph service.
+
+    Returns:
+        Unmerge result with details.
+
+    Raises:
+        HTTPException 404: If entity not found or not merged.
+        HTTPException 400: If entity is not in a merged state.
+    """
+    logger.info(
+        "unmerge_entity_request",
+        matter_id=matter_id,
+        entity_id=request.entity_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        from app.services.supabase.client import get_service_client
+
+        client = get_service_client()
+        if client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": {
+                        "code": "DATABASE_NOT_CONFIGURED",
+                        "message": "Database client not configured",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Check if entity exists and is merged
+        entity_result = client.table("identity_nodes").select(
+            "id, canonical_name, merged_into_id, matter_id"
+        ).eq("id", request.entity_id).eq("matter_id", matter_id).execute()
+
+        if not entity_result.data or len(entity_result.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": {
+                        "code": "ENTITY_NOT_FOUND",
+                        "message": f"Entity {request.entity_id} not found",
+                        "details": {},
+                    }
+                },
+            )
+
+        entity_data = entity_result.data[0]
+        merged_into_id = entity_data.get("merged_into_id")
+
+        if merged_into_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": {
+                        "code": "ENTITY_NOT_MERGED",
+                        "message": "Entity is not in a merged state and cannot be unmerged",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Call the unmerge function with user_id for auth
+        client.rpc(
+            "unmerge_entity",
+            {
+                "p_matter_id": matter_id,
+                "p_merged_id": request.entity_id,
+                "p_user_id": membership.user_id,
+            },
+        ).execute()
+
+        # Code Review Fix: Record the unmerge correction for audit trail
+        try:
+            await correction_service.record_correction(
+                matter_id=matter_id,
+                entity_id=request.entity_id,
+                correction_type="unmerge",
+                merged_entity_id=merged_into_id,  # The entity it was previously merged into
+                merged_entity_name=entity_data.get("canonical_name"),
+                corrected_by=membership.user_id,
+                reason="Entity split/unmerge operation",
+            )
+        except Exception as correction_error:
+            # Log but don't fail the main operation
+            logger.warning(
+                "unmerge_entity_correction_recording_failed",
+                matter_id=matter_id,
+                entity_id=request.entity_id,
+                error=str(correction_error),
+            )
+
+        logger.info(
+            "unmerge_entity_success",
+            matter_id=matter_id,
+            entity_id=request.entity_id,
+            previously_merged_into=merged_into_id,
+        )
+
+        return UnmergeResultResponse(
+            success=True,
+            restored_entity_id=request.entity_id,
+            previously_merged_into_id=merged_into_id,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "unmerge_entity_error",
+            matter_id=matter_id,
+            entity_id=request.entity_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "UNMERGE_FAILED",
+                    "message": "Failed to unmerge entity",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Story 3.4: Get Entities Merged Into This Entity
+# =============================================================================
+
+
+class MergedEntityItem(BaseModel):
+    """An entity that was merged into another entity."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(..., description="Merged entity ID")
+    canonical_name: str = Field(..., alias="canonicalName", description="Entity canonical name")
+    entity_type: str = Field(..., alias="entityType", description="Entity type")
+    merged_at: str | None = Field(None, alias="mergedAt", description="When the merge occurred")
+
+
+class MergedEntitiesResponse(BaseModel):
+    """Response containing entities merged into a specific entity."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    data: list[MergedEntityItem] = Field(..., description="List of merged entities")
+    total: int = Field(..., description="Total merged entities")
+
+
+@router.get("/{entity_id}/merged-from", response_model=MergedEntitiesResponse, response_model_by_alias=True)
+async def get_merged_entities(
+    matter_id: str = Path(..., description="Matter UUID"),
+    entity_id: str = Path(..., description="Entity UUID"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+) -> MergedEntitiesResponse:
+    """Get entities that were merged into this entity.
+
+    Story 3.4: Implement Entity Split UI
+
+    Returns a list of entities that were previously merged into the specified
+    entity. These entities can be unmerged (split) to restore them to active status.
+
+    Args:
+        matter_id: Matter UUID.
+        entity_id: Entity UUID to check for merged entities.
+        membership: Validated matter membership.
+
+    Returns:
+        List of entities merged into this entity.
+    """
+    logger.info(
+        "get_merged_entities_request",
+        matter_id=matter_id,
+        entity_id=entity_id,
+        user_id=membership.user_id,
+    )
+
+    try:
+        from app.services.supabase.client import get_service_client
+
+        client = get_service_client()
+        if client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": {
+                        "code": "DATABASE_NOT_CONFIGURED",
+                        "message": "Database client not configured",
+                        "details": {},
+                    }
+                },
+            )
+
+        # Query entities where merged_into_id = entity_id
+        result = client.table("identity_nodes").select(
+            "id, canonical_name, entity_type, merged_at"
+        ).eq("merged_into_id", entity_id).eq("matter_id", matter_id).execute()
+
+        merged_entities = [
+            MergedEntityItem(
+                id=row["id"],
+                canonical_name=row["canonical_name"],
+                entity_type=row["entity_type"],
+                merged_at=row.get("merged_at"),
+            )
+            for row in (result.data or [])
+        ]
+
+        logger.info(
+            "get_merged_entities_success",
+            matter_id=matter_id,
+            entity_id=entity_id,
+            merged_count=len(merged_entities),
+        )
+
+        return MergedEntitiesResponse(
+            data=merged_entities,
+            total=len(merged_entities),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "get_merged_entities_error",
+            matter_id=matter_id,
+            entity_id=entity_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Failed to get merged entities",
+                    "details": {},
+                }
+            },
+        ) from e

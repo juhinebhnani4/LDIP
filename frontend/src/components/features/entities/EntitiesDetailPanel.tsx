@@ -28,6 +28,8 @@ import {
   ChevronUp,
   Clock,
   AlertTriangle,
+  Split,
+  GitMerge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -49,6 +51,7 @@ import type {
   EntityWithRelations,
   RelationshipType,
   EntityMention,
+  MergedEntityItem,
 } from '@/types/entity';
 
 /**
@@ -77,6 +80,14 @@ export interface EntitiesDetailPanelProps {
   onFocusInGraph: () => void;
   onViewInDocument?: (params: ViewInDocumentParams) => void;
   onAddAlias?: (alias: string) => Promise<void>;
+  /** Story 3.4: Entities that were merged into this entity */
+  mergedEntities?: MergedEntityItem[];
+  /** Story 3.4: Loading state for merged entities */
+  mergedEntitiesLoading?: boolean;
+  /** Story 3.4: Callback to unmerge (split) an entity */
+  onUnmerge?: (entityId: string) => Promise<unknown>;
+  /** Story 3.4: Whether unmerge is in progress */
+  isUnmerging?: boolean;
   className?: string;
 }
 
@@ -90,6 +101,10 @@ export function EntitiesDetailPanel({
   onFocusInGraph,
   onViewInDocument,
   onAddAlias,
+  mergedEntities = [],
+  mergedEntitiesLoading = false,
+  onUnmerge,
+  isUnmerging = false,
   className,
 }: EntitiesDetailPanelProps) {
   const [mentionsPage, setMentionsPage] = useState(1);
@@ -351,6 +366,66 @@ export function EntitiesDetailPanel({
                 </div>
               )}
             </div>
+
+            {/* Story 3.4: Merged Entities Section (for Unmerge/Split) */}
+            {(mergedEntities.length > 0 || mergedEntitiesLoading) && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <GitMerge className="h-4 w-4" />
+                    Merged From ({mergedEntities.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    These entities were merged into this one. You can split them back out.
+                  </p>
+                  {mergedEntitiesLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2].map((i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
+                    </div>
+                  ) : mergedEntities.length > 0 ? (
+                    <div className="space-y-2">
+                      {mergedEntities.map((merged) => (
+                        <div
+                          key={merged.id}
+                          className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">
+                              {merged.canonicalName}
+                            </p>
+                            {merged.mergedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Merged {new Date(merged.mergedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                          {onUnmerge && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 flex-shrink-0"
+                              onClick={() => onUnmerge(merged.id)}
+                              disabled={isUnmerging}
+                              aria-label={`Split ${merged.canonicalName}`}
+                            >
+                              {isUnmerging ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Split className="h-3.5 w-3.5" />
+                              )}
+                              Split
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
 
             <Separator />
 

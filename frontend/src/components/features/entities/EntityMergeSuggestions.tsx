@@ -211,41 +211,43 @@ export function EntityMergeSuggestions({
               <Merge className="h-5 w-5" />
               Merge Entities
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>
-                Which name should be kept as the primary name?
-              </p>
-              {selectedSuggestion && (
-                <div className="space-y-2 mt-4">
-                  <label className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-muted">
-                    <input
-                      type="radio"
-                      name="mergeDirection"
-                      checked={mergeDirection === 'b_to_a'}
-                      onChange={() => setMergeDirection('b_to_a')}
-                    />
-                    <span>
-                      Keep <strong>&quot;{selectedSuggestion.entityAName}&quot;</strong>
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-muted">
-                    <input
-                      type="radio"
-                      name="mergeDirection"
-                      checked={mergeDirection === 'a_to_b'}
-                      onChange={() => setMergeDirection('a_to_b')}
-                    />
-                    <span>
-                      Keep <strong>&quot;{selectedSuggestion.entityBName}&quot;</strong>
-                    </span>
-                  </label>
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground space-y-3">
+                <p>
+                  Which name should be kept as the primary name?
+                </p>
+                {selectedSuggestion && (
+                  <div className="space-y-2 mt-4">
+                    <label className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-muted">
+                      <input
+                        type="radio"
+                        name="mergeDirection"
+                        checked={mergeDirection === 'b_to_a'}
+                        onChange={() => setMergeDirection('b_to_a')}
+                      />
+                      <span>
+                        Keep <strong>&quot;{selectedSuggestion.entityAName}&quot;</strong>
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:bg-muted">
+                      <input
+                        type="radio"
+                        name="mergeDirection"
+                        checked={mergeDirection === 'a_to_b'}
+                        onChange={() => setMergeDirection('a_to_b')}
+                      />
+                      <span>
+                        Keep <strong>&quot;{selectedSuggestion.entityBName}&quot;</strong>
+                      </span>
+                    </label>
+                  </div>
+                )}
+                <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-blue-800 dark:text-blue-200 text-sm mt-4">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    The other name will be added as an alias. This can be undone later via entity settings.
+                  </span>
                 </div>
-              )}
-              <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded text-amber-800 dark:text-amber-200 text-sm mt-4">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>
-                  The other name will be added as an alias. This action cannot be undone.
-                </span>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

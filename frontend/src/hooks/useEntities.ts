@@ -237,11 +237,16 @@ import {
   mergeEntities as mergeEntitiesApi,
   addAlias as addAliasApi,
   removeAlias as removeAliasApi,
+  unmergeEntity as unmergeEntityApi,
+  getMergedEntities,
 } from '@/lib/api/entities';
 import type {
   MergeEntitiesRequest,
   MergeResultResponse,
   AliasesListResponse,
+  UnmergeResultResponse,
+  MergedEntitiesResponse,
+  MergedEntityItem,
 } from '@/types/entity';
 
 export interface UseEntityMergeReturn {
@@ -433,4 +438,126 @@ export function useMergeSuggestions(
     error: error ?? null,
     mutate,
   };
+}
+
+
+// =============================================================================
+// Story 3.4: Merged Entities Hook (for Unmerge/Split UI)
+// =============================================================================
+
+export interface UseMergedEntitiesOptions {
+  enabled?: boolean;
+}
+
+export interface UseMergedEntitiesReturn {
+  mergedEntities: MergedEntityItem[];
+  total: number;
+  isLoading: boolean;
+  error: Error | null;
+  mutate: () => void;
+}
+
+/**
+ * Hook for fetching entities that were merged into a specific entity.
+ *
+ * Story 3.4: Used to display "Merged From" section in entity detail panel,
+ * allowing users to unmerge (split) previously merged entities.
+ *
+ * @example
+ * ```tsx
+ * const { mergedEntities, isLoading } = useMergedEntities(matterId, entityId);
+ *
+ * if (mergedEntities.length > 0) {
+ *   return <MergedEntitiesSection entities={mergedEntities} onUnmerge={handleUnmerge} />;
+ * }
+ * ```
+ */
+export function useMergedEntities(
+  matterId: string | null,
+  entityId: string | null,
+  options: UseMergedEntitiesOptions = {}
+): UseMergedEntitiesReturn {
+  const { enabled = true } = options;
+
+  const { data, error, isLoading, mutate } = useSWR<MergedEntitiesResponse>(
+    enabled && matterId && entityId
+      ? ['mergedEntities', matterId, entityId]
+      : null,
+    () => getMergedEntities(matterId!, entityId!),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  );
+
+  return {
+    mergedEntities: data?.data ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    error: error ?? null,
+    mutate,
+  };
+}
+
+
+// =============================================================================
+// Story 3.4: Entity Unmerge Hook
+// =============================================================================
+
+export interface UseEntityUnmergeReturn {
+  unmerge: (entityId: string) => Promise<UnmergeResultResponse>;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+/**
+ * Hook for unmerging (splitting) a previously merged entity.
+ *
+ * Story 3.4: Reverses a soft merge operation, restoring the entity
+ * to active status.
+ */
+export function useEntityUnmerge(matterId: string | null): UseEntityUnmergeReturn {
+  const { mutate } = useSWRConfig();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const unmerge = useCallback(
+    async (entityId: string): Promise<UnmergeResultResponse> => {
+      if (!matterId) {
+        throw new Error('Matter ID is required');
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await unmergeEntityApi(matterId, entityId);
+
+        // Invalidate all entity-related caches for this matter
+        await mutate(
+          (key: unknown) =>
+            Array.isArray(key) &&
+            (key[0] === 'entities' ||
+              key[0] === 'entity' ||
+              key[0] === 'entityRelationships' ||
+              key[0] === 'mergedEntities' ||
+              key[0] === 'mergeSuggestions') &&
+            key[1] === matterId,
+          undefined,
+          { revalidate: true }
+        );
+
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to unmerge entity');
+        setError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [matterId, mutate]
+  );
+
+  return { unmerge, isLoading, error };
 }

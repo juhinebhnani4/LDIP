@@ -32,6 +32,8 @@ import {
   useEntityMerge,
   useEntityAlias,
   useMergeSuggestions,
+  useMergedEntities,
+  useEntityUnmerge,
 } from '@/hooks/useEntities';
 import {
   transformEntitiesToNodes,
@@ -91,6 +93,14 @@ export function EntitiesContent({
   // Merge and alias hooks
   const { merge, isLoading: mergeLoading } = useEntityMerge(matterId);
   const { addAlias: addAliasApi } = useEntityAlias(matterId);
+
+  // Story 3.4: Merged entities and unmerge hooks
+  const {
+    mergedEntities,
+    isLoading: mergedEntitiesLoading,
+    mutate: mutateMergedEntities,
+  } = useMergedEntities(matterId, selectedEntityId);
+  const { unmerge, isLoading: unmergeLoading } = useEntityUnmerge(matterId);
 
   // Merge suggestions for auto-merge feature (Lawyer UX)
   const { suggestions: mergeSuggestions, mutate: mutateSuggestions } = useMergeSuggestions(
@@ -280,6 +290,32 @@ export function EntitiesContent({
     [selectedEntityId, addAliasApi, mutateDetail]
   );
 
+  // Story 3.4: Handle unmerge (split) entity
+  const handleUnmerge = useCallback(
+    async (entityId: string) => {
+      try {
+        const result = await unmerge(entityId);
+
+        toast.success('Entity has been split successfully.');
+
+        // Refresh data
+        await Promise.all([
+          mutateEntities(),
+          mutateDetail(),
+          mutateMergedEntities(),
+          mutateSuggestions(),
+        ]);
+
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to split entity';
+        toast.error(message);
+        throw error;
+      }
+    },
+    [unmerge, mutateEntities, mutateDetail, mutateMergedEntities, mutateSuggestions]
+  );
+
   const isLoading = entitiesLoading || edgesLoading;
 
   // Handle retry for entity loading errors
@@ -405,6 +441,10 @@ export function EntitiesContent({
             onFocusInGraph={handleFocusInGraph}
             onViewInDocument={onViewInDocument}
             onAddAlias={handleAddAlias}
+            mergedEntities={mergedEntities}
+            mergedEntitiesLoading={mergedEntitiesLoading}
+            onUnmerge={handleUnmerge}
+            isUnmerging={unmergeLoading}
           />
         )}
       </div>

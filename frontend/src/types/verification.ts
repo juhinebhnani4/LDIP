@@ -270,9 +270,12 @@ export interface ExportWarningFinding {
  * Result of export eligibility check.
  *
  * Story 12-3: AC #1, #2 - Export eligibility with blocking and warning findings.
+ * Story 3.2: Includes verificationMode for UI display.
  */
 export interface ExportEligibility {
   eligible: boolean;
+  /** Matter's verification mode: 'advisory' or 'required' (Story 3.2) */
+  verificationMode: 'advisory' | 'required';
   blockingFindings: ExportBlockingFinding[];
   blockingCount: number;
   warningFindings: ExportWarningFinding[];

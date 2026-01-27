@@ -113,7 +113,8 @@ export interface UseDocumentStatusOptions {
 // Constants
 // =============================================================================
 
-const DEFAULT_POLLING_INTERVAL = 2000;
+// Increased from 2000ms to reduce Supabase egress - WebSocket is primary
+const DEFAULT_POLLING_INTERVAL = 5000;
 
 // =============================================================================
 // Helper Functions

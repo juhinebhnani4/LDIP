@@ -116,7 +116,8 @@ export interface LiveDiscoveriesResult {
 // Constants
 // =============================================================================
 
-const DEFAULT_POLLING_INTERVAL = 5000; // Slower fallback since we have WebSocket
+// Increased from 5000ms to 10000ms - WebSocket is primary, this is only fallback
+const DEFAULT_POLLING_INTERVAL = 10000;
 
 // =============================================================================
 // Helper Functions

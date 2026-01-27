@@ -20,6 +20,7 @@ from app.models.document import (
     UploadedDocument,
 )
 from app.services.supabase.client import get_supabase_client
+from app.services.storage_service import get_storage_service, StorageError
 from app.engines.citation.abbreviations import normalize_act_name
 
 logger = structlog.get_logger(__name__)
@@ -303,6 +304,10 @@ class DocumentService:
                 count="exact"
             ).eq("matter_id", matter_id).is_("deleted_at", "null")
 
+            # Exclude documents migrated to library (Acts show in LinkedLibraryPanel instead)
+            # Filter: migrated_to_library IS NULL OR migrated_to_library = FALSE
+            query = query.or_("migrated_to_library.is.null,migrated_to_library.eq.false")
+
             # Apply optional filters
             if document_type is not None:
                 query = query.eq("document_type", document_type.value)
@@ -521,14 +526,12 @@ class DocumentService:
                 code="BULK_UPDATE_FAILED"
             ) from e
 
-    def delete_document(self, document_id: str) -> bool:
-        """Delete a document record.
-
-        Note: This only deletes the database record. The storage file
-        should be deleted separately via StorageService.
+    def delete_document(self, document_id: str, cleanup_storage: bool = True) -> bool:
+        """Delete a document record and optionally its storage file.
 
         Args:
             document_id: Document UUID.
+            cleanup_storage: If True, also delete the storage file (default: True).
 
         Returns:
             True if deleted successfully.
@@ -544,20 +547,42 @@ class DocumentService:
             )
 
         try:
-            # First verify document exists
-            result = self.client.table("documents").select("id").eq(
+            # First fetch document to get storage_path
+            result = self.client.table("documents").select("id, storage_path").eq(
                 "id", document_id
             ).execute()
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
 
-            # Delete the document
+            storage_path = result.data[0].get("storage_path")
+
+            # Delete the document from database
             self.client.table("documents").delete().eq(
                 "id", document_id
             ).execute()
 
             logger.info("document_deleted", document_id=document_id)
+
+            # Clean up storage file if requested
+            if cleanup_storage and storage_path:
+                try:
+                    storage_service = get_storage_service()
+                    storage_service.delete_file(storage_path)
+                    logger.info(
+                        "document_storage_deleted",
+                        document_id=document_id,
+                        storage_path=storage_path,
+                    )
+                except StorageError as e:
+                    # Log but don't fail - DB record is already deleted
+                    logger.warning(
+                        "document_storage_delete_failed",
+                        document_id=document_id,
+                        storage_path=storage_path,
+                        error=str(e),
+                    )
+
             return True
 
         except DocumentNotFoundError:
@@ -898,6 +923,68 @@ class DocumentService:
                 code="OCR_STATUS_UPDATE_FAILED"
             ) from e
 
+    def update_injection_scan(
+        self,
+        document_id: str,
+        injection_risk: str,
+        scan_result: dict | None = None,
+    ) -> None:
+        """Update document with injection scan results.
+
+        Story 1.2: Add LLM Detection for Suspicious Documents
+
+        Args:
+            document_id: Document UUID.
+            injection_risk: Risk level ('none', 'low', 'medium', 'high').
+            scan_result: Detailed scan results (patterns found, confidence, etc.).
+
+        Raises:
+            DocumentServiceError: If update fails.
+        """
+        if self.client is None:
+            raise DocumentServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED"
+            )
+
+        update_data: dict = {
+            "injection_risk": injection_risk,
+        }
+
+        if scan_result is not None:
+            update_data["injection_scan_result"] = scan_result
+
+        try:
+            result = self.client.table("documents").update(
+                update_data
+            ).eq("id", document_id).execute()
+
+            if not result.data:
+                logger.warning(
+                    "document_injection_scan_update_no_rows",
+                    document_id=document_id,
+                    injection_risk=injection_risk,
+                )
+                return
+
+            logger.info(
+                "document_injection_scan_updated",
+                document_id=document_id,
+                injection_risk=injection_risk,
+                requires_review=injection_risk == "high",
+            )
+
+        except Exception as e:
+            logger.error(
+                "document_injection_scan_update_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            raise DocumentServiceError(
+                message=f"Failed to update injection scan: {e!s}",
+                code="INJECTION_SCAN_UPDATE_FAILED"
+            ) from e
+
     def increment_ocr_retry_count(self, document_id: str) -> int:
         """Increment OCR retry count for a document.
 
@@ -994,6 +1081,56 @@ class DocumentService:
                 message=f"Failed to get document for processing: {e!s}",
                 code="GET_FOR_PROCESSING_FAILED"
             ) from e
+
+    def get_pending_documents_for_matter(self, matter_id: str) -> list[dict]:
+        """Get pending documents with page counts for ETA calculation.
+
+        Story 5.7: Processing ETA Display
+
+        Args:
+            matter_id: Matter UUID.
+
+        Returns:
+            List of dicts with {"id": str, "page_count": int, "status": str}
+            for documents that are queued or processing.
+        """
+        if self.client is None:
+            logger.warning("get_pending_documents_no_client")
+            return []
+
+        try:
+            # Get documents that are still processing
+            pending_statuses = [
+                DocumentStatus.UPLOADED.value,
+                DocumentStatus.QUEUED.value,
+                DocumentStatus.PROCESSING.value,
+                DocumentStatus.OCR_PENDING.value,
+                DocumentStatus.OCR_PROCESSING.value,
+            ]
+
+            result = self.client.table("documents").select(
+                "id, page_count, status"
+            ).eq("matter_id", matter_id).in_("status", pending_statuses).execute()
+
+            if not result.data:
+                return []
+
+            return [
+                {
+                    "id": doc["id"],
+                    "page_count": doc.get("page_count") or 1,  # Default to 1 if unknown
+                    "status": doc["status"],
+                }
+                for doc in result.data
+            ]
+
+        except Exception as e:
+            logger.warning(
+                "get_pending_documents_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return []
 
     def sync_act_resolutions_for_matter(self, matter_id: str) -> int:
         """Sync act_resolutions table with existing Act documents.

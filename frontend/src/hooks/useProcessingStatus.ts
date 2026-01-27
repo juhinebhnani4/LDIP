@@ -115,8 +115,8 @@ export interface UseProcessingStatusOptions {
 // Constants
 // =============================================================================
 
-/** Default polling interval during active processing (ms) */
-const DEFAULT_POLLING_INTERVAL = 1000;
+/** Default polling interval during active processing (ms) - increased from 1000 to reduce egress */
+const DEFAULT_POLLING_INTERVAL = 3000;
 
 // =============================================================================
 // Helper Functions
@@ -316,7 +316,7 @@ export function useProcessingStatus(
     await fetchStatus();
   }, [fetchStatus]);
 
-  // Set up polling
+  // Set up polling with visibility handling to reduce egress when tab is hidden
   useEffect(() => {
     isMountedRef.current = true;
     isCompleteRef.current = false;
@@ -329,7 +329,7 @@ export function useProcessingStatus(
     // Initial fetch
     void fetchStatus();
 
-    // Set up polling interval
+    // Set up polling interval with visibility handling
     const poll = () => {
       // Stop polling if complete and stopOnComplete is true
       if (stopOnComplete && isCompleteRef.current) {
@@ -338,6 +338,11 @@ export function useProcessingStatus(
 
       pollingRef.current = setTimeout(async () => {
         if (!isMountedRef.current) return;
+        // Skip fetch if document is hidden (reduces egress)
+        if (document.visibilityState === 'hidden') {
+          poll(); // Continue scheduling but skip fetch
+          return;
+        }
 
         await fetchStatus();
 
@@ -350,6 +355,14 @@ export function useProcessingStatus(
 
     poll();
 
+    // Handle visibility changes - fetch immediately when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isCompleteRef.current) {
+        void fetchStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Cleanup
     return () => {
       isMountedRef.current = false;
@@ -357,6 +370,7 @@ export function useProcessingStatus(
         clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [matterId, enabled, pollingInterval, stopOnComplete, fetchStatus]);
 

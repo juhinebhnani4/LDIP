@@ -236,6 +236,14 @@ class Settings(BaseSettings):
     websocket_max_connections_per_matter: int = 100    # Max connections per matter
     websocket_heartbeat_timeout: int = 60              # Seconds before considering connection dead
 
+    # ==========================================================================
+    # Email Notification Configuration (Gap #19: Processing Completion Emails)
+    # ==========================================================================
+    resend_api_key: str = ""                           # Resend API key (RESEND_API_KEY env var)
+    email_from_address: str = "noreply@jaanch.com"     # Verified sender address
+    email_notifications_enabled: bool = True           # Global feature flag for email notifications
+    email_base_url: str = "https://app.jaanch.com"     # Base URL for deep links in emails
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""
@@ -250,6 +258,11 @@ class Settings(BaseSettings):
     def is_openai_configured(self) -> bool:
         """Check if OpenAI API is configured for embeddings and LLM."""
         return bool(self.openai_api_key)
+
+    @property
+    def is_email_configured(self) -> bool:
+        """Check if email notifications are configured (Resend API)."""
+        return bool(self.resend_api_key and self.email_notifications_enabled)
 
 
 @lru_cache

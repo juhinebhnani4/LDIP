@@ -188,6 +188,13 @@ celery_app.conf.update(
             "schedule": crontab(hour=2, minute=0),  # Daily at 2 AM
             "options": {"queue": "low"},
         },
+        # Story gap-5.2: LLM Quota Monitoring - runs every 5 minutes
+        # Checks quota thresholds and triggers alerts when usage exceeds limits
+        "check-llm-quotas": {
+            "task": "app.workers.tasks.quota_monitoring_tasks.check_llm_quotas",
+            "schedule": 300,  # Every 5 minutes
+            "options": {"queue": "low"},
+        },
     },
 )
 
@@ -213,6 +220,7 @@ _TASK_MODULES = [
     "app.workers.tasks.engine_tasks",
     "app.workers.tasks.library_tasks",
     "app.workers.tasks.maintenance_tasks",
+    "app.workers.tasks.quota_monitoring_tasks",
     "app.workers.tasks.reasoning_archive_tasks",
     "app.workers.tasks.verification_tasks",
 ]
@@ -228,6 +236,7 @@ try:
         engine_tasks,
         library_tasks,
         maintenance_tasks,
+        quota_monitoring_tasks,
         reasoning_archive_tasks,
         verification_tasks,
     )

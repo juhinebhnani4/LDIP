@@ -97,6 +97,7 @@ from app.services.pubsub_service import (
 from app.services.rag.embedder import (
     EmbeddingService,
     EmbeddingServiceError,
+    get_current_embedding_model_version,
     get_embedding_service,
 )
 from app.services.storage_service import (
@@ -625,6 +626,9 @@ def _mark_job_failed(
                     error=str(activity_err),
                 )
 
+            # Gap #19: Check for batch completion and trigger email notification
+            _check_batch_completion_and_notify(matter_id, job_id)
+
         logger.info(
             "job_tracking_job_failed",
             job_id=job_id,
@@ -741,6 +745,9 @@ def _mark_job_completed(
                     error=str(activity_err),
                 )
 
+            # Gap #19: Check for batch completion and trigger email notification
+            _check_batch_completion_and_notify(matter_id, job_id)
+
         logger.info(
             "job_tracking_job_completed",
             job_id=job_id,
@@ -751,6 +758,145 @@ def _mark_job_completed(
             "job_tracking_mark_completed_error",
             job_id=job_id,
             error=str(e),
+        )
+
+
+# =============================================================================
+# Gap #19: Batch Completion Detection and Email Notification
+# =============================================================================
+
+
+def _check_batch_completion_and_notify(matter_id: str, completed_job_id: str) -> None:
+    """Check if all jobs for a matter are complete and trigger email notification.
+
+    Gap #19: AC #1 - Email sent when upload batch completes.
+
+    This function checks if there are any remaining QUEUED or PROCESSING jobs
+    for the matter. If not, it calculates batch statistics and triggers an
+    email notification to all matter members who have email notifications enabled.
+
+    Args:
+        matter_id: Matter UUID.
+        completed_job_id: Job UUID that just completed (for deduplication).
+    """
+    from app.services.supabase.client import get_service_client
+    from app.workers.tasks.email_tasks import send_processing_complete_notification
+
+    try:
+        client = get_service_client()
+        if client is None:
+            logger.warning(
+                "batch_completion_check_skipped",
+                reason="supabase_not_configured",
+                matter_id=matter_id,
+            )
+            return
+
+        # Check if there are any remaining active jobs for this matter
+        active_jobs = (
+            client.table("processing_jobs")
+            .select("id", count="exact")
+            .eq("matter_id", matter_id)
+            .in_("status", ["QUEUED", "PROCESSING"])
+            .execute()
+        )
+
+        active_count = active_jobs.count or 0
+
+        if active_count > 0:
+            logger.debug(
+                "batch_not_complete",
+                matter_id=matter_id,
+                active_jobs=active_count,
+            )
+            return
+
+        # All jobs are complete - calculate batch statistics
+        # Get jobs completed in the last hour (to approximate the batch)
+        from datetime import UTC, datetime, timedelta
+
+        cutoff_time = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+
+        completed_jobs = (
+            client.table("processing_jobs")
+            .select("status")
+            .eq("matter_id", matter_id)
+            .gte("updated_at", cutoff_time)
+            .in_("status", ["COMPLETED", "FAILED", "SKIPPED"])
+            .execute()
+        )
+
+        if not completed_jobs.data:
+            logger.debug(
+                "batch_completion_no_recent_jobs",
+                matter_id=matter_id,
+            )
+            return
+
+        # Calculate statistics
+        doc_count = len(completed_jobs.data)
+        success_count = sum(1 for j in completed_jobs.data if j["status"] == "COMPLETED")
+        failed_count = sum(1 for j in completed_jobs.data if j["status"] in ("FAILED", "SKIPPED"))
+
+        if doc_count == 0:
+            return
+
+        # Get all matter members to send emails
+        matter_members = (
+            client.table("matter_attorneys")
+            .select("user_id")
+            .eq("matter_id", matter_id)
+            .execute()
+        )
+
+        if not matter_members.data:
+            logger.warning(
+                "batch_completion_no_members",
+                matter_id=matter_id,
+            )
+            return
+
+        # Trigger email notification for each member
+        # (The email task will check individual opt-out preferences)
+        for member in matter_members.data:
+            user_id = member["user_id"]
+            try:
+                send_processing_complete_notification.delay(
+                    matter_id=matter_id,
+                    user_id=user_id,
+                    doc_count=doc_count,
+                    success_count=success_count,
+                    failed_count=failed_count,
+                )
+                logger.debug(
+                    "batch_completion_email_queued",
+                    matter_id=matter_id,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "batch_completion_email_queue_failed",
+                    matter_id=matter_id,
+                    user_id=user_id,
+                    error=str(e),
+                )
+
+        logger.info(
+            "batch_completion_emails_triggered",
+            matter_id=matter_id,
+            doc_count=doc_count,
+            success_count=success_count,
+            failed_count=failed_count,
+            member_count=len(matter_members.data),
+        )
+
+    except Exception as e:
+        # Non-fatal: log and continue
+        logger.warning(
+            "batch_completion_check_error",
+            matter_id=matter_id,
+            error=str(e),
+            error_type=type(e).__name__,
         )
 
 
@@ -2826,8 +2972,10 @@ def embed_chunks(
                             continue
 
                         try:
+                            # Story 1.3: Store embedding model version with vectors
                             client.table("chunks").update({
                                 "embedding": embedding,
+                                "embedding_model_version": get_current_embedding_model_version(),
                             }).eq("id", chunk_id).execute()
                             embedded_count += 1
 

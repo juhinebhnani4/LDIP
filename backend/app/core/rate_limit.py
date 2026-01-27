@@ -147,6 +147,9 @@ READONLY_RATE_LIMIT = _get_rate_limit_str(settings.rate_limit_readonly)  # 120/m
 # Health/monitoring endpoints (high frequency polling)
 HEALTH_RATE_LIMIT = _get_rate_limit_str(settings.rate_limit_health)  # 300/minute
 
+# Admin endpoints: quota management, system config (restricted access)
+ADMIN_RATE_LIMIT = _get_rate_limit_str(settings.rate_limit_default)  # 100/minute
+
 # Legacy aliases for backward compatibility
 HUMAN_REVIEW_RATE_LIMIT = CRITICAL_RATE_LIMIT  # 30/minute - OCR validation
 READ_RATE_LIMIT = READONLY_RATE_LIMIT  # 120/minute

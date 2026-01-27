@@ -11,8 +11,11 @@ export default function LandingLayout({
   children: React.ReactNode
 }) {
   // Force light mode CSS variables inline to override dark mode from system preference
+  // Must set BOTH base variables (--background) AND Tailwind theme variables (--color-background)
+  // because Tailwind 4's @theme inline resolves --color-* at :root level
   const lightModeVars = {
     colorScheme: 'light',
+    // Base variables
     '--background': '#f8f6f1',
     '--foreground': '#1a1a1a',
     '--card': '#ffffff',
@@ -32,6 +35,26 @@ export default function LandingLayout({
     '--border': '#e8e4dc',
     '--input': '#e8e4dc',
     '--ring': '#0d1b5e',
+    // Tailwind theme variables (--color-* used by bg-*, text-*, etc.)
+    '--color-background': '#f8f6f1',
+    '--color-foreground': '#1a1a1a',
+    '--color-card': '#ffffff',
+    '--color-card-foreground': '#1a1a1a',
+    '--color-popover': '#ffffff',
+    '--color-popover-foreground': '#1a1a1a',
+    '--color-primary': '#0d1b5e',
+    '--color-primary-foreground': '#ffffff',
+    '--color-secondary': '#f8f6f1',
+    '--color-secondary-foreground': '#1a1a1a',
+    '--color-muted': '#e8e4dc',
+    '--color-muted-foreground': '#64748b',
+    '--color-accent': '#b8973b',
+    '--color-accent-foreground': '#0d1b5e',
+    '--color-destructive': '#8b2635',
+    '--color-destructive-foreground': '#ffffff',
+    '--color-border': '#e8e4dc',
+    '--color-input': '#e8e4dc',
+    '--color-ring': '#0d1b5e',
   } as React.CSSProperties
 
   return (

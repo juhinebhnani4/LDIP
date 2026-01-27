@@ -131,9 +131,11 @@ class ExportService:
             )
 
             # Generate document based on format
+            # Story 4.3: Pass matter_id for certification
             file_bytes = await self._generate_document(
                 request.format,
                 matter_name,
+                matter_id,
                 section_content,
                 verification_summary,
                 request.include_verification_status,
@@ -423,15 +425,29 @@ class ExportService:
         self,
         format: ExportFormat,
         matter_name: str,
+        matter_id: str,
         section_content: dict[str, dict],
         verification_summary: VerificationSummaryForExport,
         include_verification: bool,
+        include_certification: bool = True,
     ) -> bytes:
-        """Generate document in the specified format."""
+        """Generate document in the specified format.
+
+        Story 4.3: Updated to include court-ready certification.
+        """
         # Import generators here to avoid circular imports
         from app.services.export.docx_generator import DocxGenerator
         from app.services.export.pdf_generator import PDFGenerator
         from app.services.export.pptx_generator import PptxGenerator
+
+        # Story 4.3: Generate certification for PDF exports
+        certification = None
+        if include_certification and format == ExportFormat.PDF:
+            certification = await self._generate_certification(
+                matter_id=matter_id,
+                matter_name=matter_name,
+                verification_summary=verification_summary,
+            )
 
         match format:
             case ExportFormat.PDF:
@@ -440,6 +456,7 @@ class ExportService:
                     matter_name,
                     section_content,
                     verification_summary if include_verification else None,
+                    certification=certification,
                 )
             case ExportFormat.WORD:
                 generator = DocxGenerator()
@@ -455,6 +472,52 @@ class ExportService:
                     section_content,
                     verification_summary if include_verification else None,
                 )
+
+    async def _generate_certification(
+        self,
+        matter_id: str,
+        matter_name: str,
+        verification_summary: VerificationSummaryForExport,
+    ):
+        """Generate court-ready certification.
+
+        Story 4.3: Creates certification with verification status snapshot.
+        """
+        from app.services.export.court_certification import (
+            VerificationStatusSnapshot,
+            get_court_certification_service,
+        )
+
+        # Create verification status snapshot
+        total = verification_summary.total_findings
+        verified = verification_summary.verified_count
+        pending = verification_summary.pending_count
+        verification_rate = (verified / total * 100) if total > 0 else 0.0
+
+        status_snapshot = VerificationStatusSnapshot(
+            total_findings=total,
+            verified_count=verified,
+            pending_count=pending,
+            rejected_count=0,  # Not tracked in current model
+            flagged_count=0,  # Not tracked in current model
+            verification_rate=verification_rate,
+        )
+
+        service = get_court_certification_service()
+
+        # Note: We create a placeholder certificate here
+        # The actual hash will be computed on the final content
+        # For now, we use an empty placeholder that will be filled in
+        # by the calling code after content generation
+        return await service.create_certificate(
+            content_bytes=b"",  # Placeholder - computed later
+            matter_id=matter_id,
+            matter_name=matter_name,
+            user_name=verification_summary.exported_by_name,
+            user_email=verification_summary.exported_by_email,
+            user_role="Attorney",  # Default role
+            verification_status=status_snapshot,
+        )
 
     async def _upload_file(
         self,

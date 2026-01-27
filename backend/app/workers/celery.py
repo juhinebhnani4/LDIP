@@ -4,6 +4,7 @@ import ssl
 from pathlib import Path
 
 from celery import Celery
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Load .env file to set GOOGLE_APPLICATION_CREDENTIALS before importing settings
@@ -180,6 +181,13 @@ celery_app.conf.update(
             "schedule": 900,  # Every 15 minutes
             "options": {"queue": "low"},
         },
+        # Story 4.2: Archive reasoning traces - runs daily at 2 AM
+        # Moves traces older than 30 days to Supabase Storage (cold storage)
+        "archive-reasoning-traces": {
+            "task": "app.workers.tasks.reasoning_archive_tasks.archive_reasoning_traces",
+            "schedule": crontab(hour=2, minute=0),  # Daily at 2 AM
+            "options": {"queue": "low"},
+        },
     },
 )
 
@@ -201,9 +209,11 @@ _TASK_MODULES = [
     "app.workers.tasks.act_validation_tasks",
     "app.workers.tasks.chunked_document_tasks",
     "app.workers.tasks.document_tasks",
+    "app.workers.tasks.email_tasks",
     "app.workers.tasks.engine_tasks",
     "app.workers.tasks.library_tasks",
     "app.workers.tasks.maintenance_tasks",
+    "app.workers.tasks.reasoning_archive_tasks",
     "app.workers.tasks.verification_tasks",
 ]
 
@@ -214,9 +224,11 @@ try:
         act_validation_tasks,
         chunked_document_tasks,
         document_tasks,
+        email_tasks,
         engine_tasks,
         library_tasks,
         maintenance_tasks,
+        reasoning_archive_tasks,
         verification_tasks,
     )
     _logger.info(

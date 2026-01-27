@@ -36,6 +36,7 @@ from app.api.routes import (
     matters,
     notifications,
     ocr_validation,
+    reasoning_traces,
     search,
     session,
     summary,
@@ -308,6 +309,7 @@ def create_app() -> FastAPI:
     app.include_router(ocr_validation.matters_router, prefix="/api")
     app.include_router(bounding_boxes.router, prefix="/api")
     app.include_router(bounding_boxes.chunks_router, prefix="/api")
+    app.include_router(bounding_boxes.bbox_ids_router, prefix="/api")
     app.include_router(chunks.router, prefix="/api")
     app.include_router(chunks.chunks_router, prefix="/api")
     app.include_router(search.router, prefix="/api")
@@ -320,6 +322,7 @@ def create_app() -> FastAPI:
     app.include_router(anomalies.router, prefix="/api")
     app.include_router(contradiction.router, prefix="/api")
     app.include_router(verifications.router, prefix="/api")
+    app.include_router(reasoning_traces.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     app.include_router(session.router, prefix="/api")

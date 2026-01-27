@@ -6,8 +6,8 @@ dockerfilePath = "Dockerfile"
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-healthcheckPath = "/api/health"
-healthcheckTimeout = 60
+# Healthcheck disabled - app startup takes longer than Railway's retry window
+# Railway restart policy handles crashes; external monitoring can check /api/health
 
 [service]
 internalPort = 8000

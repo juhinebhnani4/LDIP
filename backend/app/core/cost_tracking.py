@@ -875,3 +875,451 @@ async def persist_cost(tracker: CostTracker) -> str | None:
     if service:
         return await service.save_cost(tracker)
     return None
+
+
+# =============================================================================
+# Quota Monitoring Extensions (Story gap-5.2)
+# =============================================================================
+
+
+@dataclass
+class ProviderQuotaInfo:
+    """Quota information for a single LLM provider.
+
+    Combines usage data, limits, and derived metrics for quota monitoring.
+    """
+
+    provider: str
+    # Current usage (from llm_costs table)
+    daily_tokens_used: int = 0
+    daily_cost_inr: float = 0.0
+    daily_requests: int = 0
+    # Limits (from llm_quota_limits table)
+    daily_token_limit: int | None = None
+    monthly_token_limit: int | None = None
+    daily_cost_limit_inr: float | None = None
+    monthly_cost_limit_inr: float | None = None
+    alert_threshold_pct: int = 80
+    # Real-time RPM (from rate limiter)
+    current_rpm: int = 0
+    rpm_limit: int = 0
+    rate_limited_count: int = 0
+    # Projection
+    projected_exhaustion: str | None = None
+    trend: str = "stable"  # "increasing", "decreasing", "stable"
+    # Derived
+    alert_triggered: bool = False
+
+    @property
+    def token_usage_pct(self) -> float:
+        """Calculate token usage percentage."""
+        if not self.daily_token_limit:
+            return 0.0
+        return (self.daily_tokens_used / self.daily_token_limit) * 100
+
+    @property
+    def cost_usage_pct(self) -> float:
+        """Calculate cost usage percentage."""
+        if not self.daily_cost_limit_inr:
+            return 0.0
+        return (self.daily_cost_inr / self.daily_cost_limit_inr) * 100
+
+    @property
+    def rpm_usage_pct(self) -> float:
+        """Calculate RPM usage percentage."""
+        if not self.rpm_limit:
+            return 0.0
+        return (self.current_rpm / self.rpm_limit) * 100
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to API response format."""
+        return {
+            "provider": self.provider,
+            "currentRpm": self.current_rpm,
+            "rpmLimit": self.rpm_limit,
+            "rpmUsagePct": round(self.rpm_usage_pct, 1),
+            "dailyTokensUsed": self.daily_tokens_used,
+            "dailyTokenLimit": self.daily_token_limit,
+            "dailyCostInr": round(self.daily_cost_inr, 2),
+            "dailyCostLimitInr": self.daily_cost_limit_inr,
+            "rateLimitedCount": self.rate_limited_count,
+            "projectedExhaustion": self.projected_exhaustion,
+            "trend": self.trend,
+            "alertTriggered": self.alert_triggered,
+        }
+
+
+class QuotaMonitoringService:
+    """Service for LLM quota monitoring and alerting.
+
+    Story gap-5.2: LLM Quota Monitoring Dashboard
+
+    Provides methods for:
+    - Aggregating current usage from llm_costs table
+    - Reading quota limits from llm_quota_limits table
+    - Calculating projected exhaustion dates
+    - Checking threshold breaches for alerting
+    """
+
+    def __init__(self, supabase_client: Any):
+        """Initialize the quota monitoring service.
+
+        Args:
+            supabase_client: Supabase client instance.
+        """
+        self.supabase = supabase_client
+
+    async def get_quota_limits(self) -> dict[str, dict[str, Any]]:
+        """Get quota limits for all providers from llm_quota_limits table.
+
+        Returns:
+            Dictionary keyed by provider with limit configurations.
+        """
+        try:
+            result = (
+                self.supabase.table("llm_quota_limits")
+                .select("*")
+                .execute()
+            )
+
+            limits = {}
+            for row in result.data or []:
+                limits[row["provider"]] = {
+                    "daily_token_limit": row.get("daily_token_limit"),
+                    "monthly_token_limit": row.get("monthly_token_limit"),
+                    "daily_cost_limit_inr": float(row["daily_cost_limit_inr"]) if row.get("daily_cost_limit_inr") else None,
+                    "monthly_cost_limit_inr": float(row["monthly_cost_limit_inr"]) if row.get("monthly_cost_limit_inr") else None,
+                    "alert_threshold_pct": row.get("alert_threshold_pct", 80),
+                }
+            return limits
+
+        except Exception as e:
+            logger.error("quota_limits_query_failed", error=str(e))
+            return {}
+
+    async def get_provider_usage_summary(self) -> dict[str, dict[str, Any]]:
+        """Get today's usage summary per provider from llm_costs table.
+
+        Returns:
+            Dictionary keyed by provider with usage aggregations.
+        """
+        try:
+            from datetime import datetime, timezone
+
+            today_start = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+
+            result = (
+                self.supabase.table("llm_costs")
+                .select("provider, input_tokens, output_tokens, total_cost_inr")
+                .gte("created_at", today_start.isoformat())
+                .execute()
+            )
+
+            usage: dict[str, dict[str, Any]] = {}
+            for row in result.data or []:
+                provider = self._normalize_provider(row["provider"])
+                if provider not in usage:
+                    usage[provider] = {
+                        "daily_tokens_used": 0,
+                        "daily_cost_inr": 0.0,
+                        "daily_requests": 0,
+                    }
+                usage[provider]["daily_tokens_used"] += (
+                    row["input_tokens"] + row["output_tokens"]
+                )
+                usage[provider]["daily_cost_inr"] += float(
+                    row.get("total_cost_inr", 0) or 0
+                )
+                usage[provider]["daily_requests"] += 1
+
+            return usage
+
+        except Exception as e:
+            logger.error("provider_usage_query_failed", error=str(e))
+            return {}
+
+    def _normalize_provider(self, provider_value: str) -> str:
+        """Normalize provider name to category (gemini, openai).
+
+        Args:
+            provider_value: Raw provider value from database.
+
+        Returns:
+            Normalized provider category.
+        """
+        provider_lower = provider_value.lower()
+        if "gemini" in provider_lower:
+            return "gemini"
+        if "gpt" in provider_lower or "openai" in provider_lower:
+            return "openai"
+        if "cohere" in provider_lower:
+            return "cohere"
+        return provider_lower
+
+    async def get_7day_daily_usage(self) -> dict[str, list[dict[str, Any]]]:
+        """Get daily usage for the past 7 days per provider.
+
+        Returns:
+            Dictionary keyed by provider with list of daily usage records.
+        """
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            start_date = datetime.now(timezone.utc) - timedelta(days=7)
+
+            # Use the llm_costs_daily view for aggregated data
+            result = (
+                self.supabase.table("llm_costs_daily")
+                .select("*")
+                .gte("cost_date", start_date.date().isoformat())
+                .execute()
+            )
+
+            usage_by_provider: dict[str, list[dict[str, Any]]] = {}
+            for row in result.data or []:
+                provider = self._normalize_provider(row["provider"])
+                if provider not in usage_by_provider:
+                    usage_by_provider[provider] = []
+                usage_by_provider[provider].append({
+                    "date": row["cost_date"],
+                    "tokens": row.get("total_input_tokens", 0) + row.get("total_output_tokens", 0),
+                    "cost_inr": float(row.get("total_cost_inr", 0) or 0),
+                    "requests": row.get("operation_count", 0),
+                })
+
+            return usage_by_provider
+
+        except Exception as e:
+            logger.warning("7day_usage_query_failed", error=str(e))
+            return {}
+
+    def calculate_projection(
+        self,
+        daily_usage_history: list[dict[str, Any]],
+        daily_limit: int | None,
+        current_usage: int,
+    ) -> tuple[str | None, str]:
+        """Calculate projected exhaustion date and trend.
+
+        Uses 7-day rolling average to project when limit will be reached.
+
+        Args:
+            daily_usage_history: List of daily usage records.
+            daily_limit: Daily token/cost limit (None if unlimited).
+            current_usage: Current day's usage.
+
+        Returns:
+            Tuple of (projected_exhaustion_date_iso, trend).
+        """
+        from datetime import datetime, timedelta, timezone
+
+        if not daily_limit:
+            return None, "stable"
+
+        if not daily_usage_history:
+            return None, "stable"
+
+        # Calculate 7-day average
+        total_usage = sum(d.get("tokens", 0) for d in daily_usage_history)
+        avg_daily = total_usage / max(len(daily_usage_history), 1)
+
+        # F13 fix: Determine trend - need at least 4 data points for meaningful comparison
+        # With exactly 3 items, [-3:] and [:3] would be identical, always showing "stable"
+        if len(daily_usage_history) >= 4:
+            # Sort by date to ensure chronological order
+            sorted_history = sorted(daily_usage_history, key=lambda d: d.get("date", ""))
+
+            # Compare first half vs second half for more accurate trend
+            mid = len(sorted_history) // 2
+            older_data = sorted_history[:mid]
+            recent_data = sorted_history[mid:]
+
+            older_avg = sum(d.get("tokens", 0) for d in older_data) / max(len(older_data), 1)
+            recent_avg = sum(d.get("tokens", 0) for d in recent_data) / max(len(recent_data), 1)
+
+            if recent_avg > older_avg * 1.1:
+                trend = "increasing"
+            elif recent_avg < older_avg * 0.9:
+                trend = "decreasing"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
+
+        # Project exhaustion
+        if avg_daily <= 0:
+            return None, trend
+
+        remaining = daily_limit - current_usage
+        if remaining <= 0:
+            # Already exhausted
+            return datetime.now(timezone.utc).isoformat(), trend
+
+        days_remaining = remaining / avg_daily
+        if days_remaining > 365:
+            # More than a year out, not meaningful
+            return None, trend
+
+        exhaustion_date = datetime.now(timezone.utc) + timedelta(days=days_remaining)
+        return exhaustion_date.date().isoformat(), trend
+
+    def check_threshold_breach(
+        self,
+        current_value: float,
+        limit_value: float | None,
+        threshold_pct: int = 80,
+    ) -> bool:
+        """Check if usage has breached the alert threshold.
+
+        Args:
+            current_value: Current usage value.
+            limit_value: Limit value (None if unlimited).
+            threshold_pct: Alert threshold percentage.
+
+        Returns:
+            True if threshold is breached.
+        """
+        if not limit_value or limit_value <= 0:
+            return False
+        usage_pct = (current_value / limit_value) * 100
+        return usage_pct >= threshold_pct
+
+    def get_rate_limiter_stats(self) -> dict[str, dict[str, Any]]:
+        """Get real-time stats from LLM rate limiters.
+
+        Returns:
+            Dictionary keyed by provider with rate limiter stats.
+        """
+        try:
+            from app.core.llm_rate_limiter import LLMRateLimiterRegistry
+            from app.core.config import get_settings
+
+            registry = LLMRateLimiterRegistry()
+            stats = registry.get_all_stats()
+            settings = get_settings()
+
+            result = {}
+            for stat in stats:
+                provider = stat.get("provider", "unknown")
+                result[provider] = {
+                    "current_rpm": stat.get("total_requests", 0),  # Approximate from session
+                    "rate_limited_count": stat.get("rate_limited_count", 0),
+                    "max_concurrent": stat.get("max_concurrent", 0),
+                }
+
+            # Add configured limits
+            if "gemini" in result:
+                result["gemini"]["rpm_limit"] = settings.gemini_requests_per_minute
+            else:
+                result["gemini"] = {
+                    "current_rpm": 0,
+                    "rate_limited_count": 0,
+                    "rpm_limit": settings.gemini_requests_per_minute,
+                }
+
+            if "openai" in result:
+                result["openai"]["rpm_limit"] = settings.openai_requests_per_minute
+            else:
+                result["openai"] = {
+                    "current_rpm": 0,
+                    "rate_limited_count": 0,
+                    "rpm_limit": settings.openai_requests_per_minute,
+                }
+
+            return result
+
+        except Exception as e:
+            logger.warning("rate_limiter_stats_failed", error=str(e))
+            return {}
+
+    async def get_all_provider_quotas(self) -> list[ProviderQuotaInfo]:
+        """Get complete quota information for all providers.
+
+        Combines usage, limits, rate limiter stats, and projections.
+
+        Returns:
+            List of ProviderQuotaInfo for each provider.
+        """
+        # Gather all data in parallel (conceptually - using sequential for simplicity)
+        limits = await self.get_quota_limits()
+        usage = await self.get_provider_usage_summary()
+        history = await self.get_7day_daily_usage()
+        rate_stats = self.get_rate_limiter_stats()
+
+        # Supported providers
+        providers = ["gemini", "openai"]
+        result = []
+
+        for provider in providers:
+            provider_limits = limits.get(provider, {})
+            provider_usage = usage.get(provider, {})
+            provider_history = history.get(provider, [])
+            provider_rate = rate_stats.get(provider, {})
+
+            daily_tokens = provider_usage.get("daily_tokens_used", 0)
+            daily_cost = provider_usage.get("daily_cost_inr", 0.0)
+            daily_token_limit = provider_limits.get("daily_token_limit")
+            threshold_pct = provider_limits.get("alert_threshold_pct", 80)
+
+            # Calculate projection
+            projection, trend = self.calculate_projection(
+                provider_history,
+                daily_token_limit,
+                daily_tokens,
+            )
+
+            # Check alerts
+            token_breach = self.check_threshold_breach(
+                daily_tokens, daily_token_limit, threshold_pct
+            )
+            cost_breach = self.check_threshold_breach(
+                daily_cost,
+                provider_limits.get("daily_cost_limit_inr"),
+                threshold_pct,
+            )
+
+            info = ProviderQuotaInfo(
+                provider=provider,
+                daily_tokens_used=daily_tokens,
+                daily_cost_inr=daily_cost,
+                daily_requests=provider_usage.get("daily_requests", 0),
+                daily_token_limit=daily_token_limit,
+                monthly_token_limit=provider_limits.get("monthly_token_limit"),
+                daily_cost_limit_inr=provider_limits.get("daily_cost_limit_inr"),
+                monthly_cost_limit_inr=provider_limits.get("monthly_cost_limit_inr"),
+                alert_threshold_pct=threshold_pct,
+                current_rpm=provider_rate.get("current_rpm", 0),
+                rpm_limit=provider_rate.get("rpm_limit", 0),
+                rate_limited_count=provider_rate.get("rate_limited_count", 0),
+                projected_exhaustion=projection,
+                trend=trend,
+                alert_triggered=token_breach or cost_breach,
+            )
+            result.append(info)
+
+        return result
+
+
+# Global quota monitoring service instance
+_quota_service: QuotaMonitoringService | None = None
+
+
+def get_quota_monitoring_service(
+    supabase_client: Any | None = None,
+) -> QuotaMonitoringService | None:
+    """Get or create the global quota monitoring service.
+
+    Args:
+        supabase_client: Optional Supabase client to use.
+
+    Returns:
+        QuotaMonitoringService instance, or None if no client available.
+    """
+    global _quota_service
+
+    if _quota_service is None and supabase_client is not None:
+        _quota_service = QuotaMonitoringService(supabase_client)
+
+    return _quota_service

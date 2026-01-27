@@ -36,6 +36,7 @@ from app.api.deps import (
     require_matter_role,
     require_matter_role_from_form,
 )
+from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
 from app.models.document import (
@@ -219,9 +220,12 @@ class ManualReviewResponse(BaseModel):
 
     data: dict[str, str | int | bool]
 
-# File size limits
-MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
-SMALL_DOCUMENT_THRESHOLD_PAGES = 100  # Documents under this use 'high' priority queue
+# File size limits (Story 2.5: Configurable limit with soft-launch mode)
+_settings = get_settings()
+MAX_FILE_SIZE_MB = _settings.file_size_max_mb  # Default: 50MB
+MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024  # Convert to bytes
+LEGACY_MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB absolute max (DoS protection)
+SMALL_DOCUMENT_THRESHOLD_PAGES = 100  # <100 pages -> 'high' priority queue
 
 # Streaming upload configuration
 # Files under this threshold are kept in memory; larger files spill to disk
@@ -380,12 +384,49 @@ def _get_subfolder(document_type: DocumentType) -> str:
     return "uploads"
 
 
+def _is_soft_launch_active() -> bool:
+    """Check if soft-launch period is active for file size validation.
+
+    Story 2.5: During soft-launch, oversized files are allowed but logged.
+    After soft-launch ends, enforcement mode takes over.
+
+    Returns:
+        True if soft-launch is active (warn mode), False otherwise (enforce mode).
+    """
+    from datetime import UTC, datetime
+
+    settings = get_settings()
+
+    # If explicitly set to "warn" mode, soft-launch is active
+    if settings.file_size_enforcement == "warn":
+        return True
+
+    # If soft-launch end date is set and we're before it, soft-launch is active
+    if settings.file_size_soft_launch_until:
+        try:
+            date_str = settings.file_size_soft_launch_until.replace("Z", "+00:00")
+            end_date = datetime.fromisoformat(date_str)
+            if datetime.now(UTC) < end_date:
+                return True
+        except ValueError:
+            # Invalid date format - ignore and use enforce mode
+            logger.warning(
+                "invalid_soft_launch_date",
+                value=settings.file_size_soft_launch_until,
+            )
+
+    return False
+
+
 async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
     """Read uploaded file using streaming to avoid memory exhaustion.
 
     Uses SpooledTemporaryFile to handle large files efficiently:
     - Small files (< SPOOL_MAX_SIZE) stay in memory
     - Large files automatically spill to disk
+
+    Story 2.5: Enforces configurable file size limit (default 50MB) with
+    soft-launch mode support that logs warnings instead of rejecting.
 
     Args:
         file: FastAPI UploadFile object.
@@ -394,8 +435,11 @@ async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
         Tuple of (file_content_bytes, file_size).
 
     Raises:
-        HTTPException: If file exceeds MAX_FILE_SIZE.
+        HTTPException: If file exceeds MAX_FILE_SIZE (unless soft-launch mode).
     """
+    soft_launch = _is_soft_launch_active()
+    size_exceeded_logged = False
+
     # Use SpooledTemporaryFile for memory-efficient streaming
     # Small files stay in RAM, large files spill to disk automatically
     with tempfile.SpooledTemporaryFile(max_size=SPOOL_MAX_SIZE) as spooled:
@@ -410,14 +454,49 @@ async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
 
             total_size += len(chunk)
 
-            # Check size limit during streaming (fail fast)
-            if total_size > MAX_FILE_SIZE:
+            # Story 2.5: Check configurable size limit during streaming (fail fast)
+            if total_size > MAX_FILE_SIZE and not size_exceeded_logged:
+                if soft_launch:
+                    # Soft-launch mode: warn but allow (Story 2.5)
+                    logger.warning(
+                        "file_size_exceeded_soft_launch",
+                        filename=file.filename,
+                        file_size=total_size,
+                        limit_mb=MAX_FILE_SIZE_MB,
+                    )
+                    size_exceeded_logged = True
+                else:
+                    # Enforce mode: reject with 413 Payload Too Large
+                    logger.warning(
+                        "file_size_exceeded_rejected",
+                        filename=file.filename,
+                        file_size=total_size,
+                        limit_mb=MAX_FILE_SIZE_MB,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail={
+                            "error": {
+                                "code": "FILE_TOO_LARGE",
+                                "message": f"Maximum file size is {MAX_FILE_SIZE_MB}MB",
+                                "details": {
+                                    "file_size": total_size,
+                                    "limit_bytes": MAX_FILE_SIZE,
+                                    "limit_mb": MAX_FILE_SIZE_MB,
+                                },
+                            }
+                        },
+                    )
+
+            # Safety limit: absolute maximum regardless of config (DoS protection)
+            if total_size > LEGACY_MAX_FILE_SIZE:
+                max_mb = LEGACY_MAX_FILE_SIZE // (1024 * 1024)
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     detail={
                         "error": {
                             "code": "FILE_TOO_LARGE",
-                            "message": f"File exceeds {MAX_FILE_SIZE // (1024 * 1024)}MB limit",
+                            "message": f"File exceeds absolute maximum of {max_mb}MB",
                             "details": {"file_size": total_size},
                         }
                     },

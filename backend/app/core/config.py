@@ -223,6 +223,13 @@ class Settings(BaseSettings):
     india_code_circuit_breaker_timeout: int = 300      # Seconds before trying again
 
     # ==========================================================================
+    # File Upload Configuration (Story 2.5: File Size Validation)
+    # ==========================================================================
+    file_size_max_mb: int = 50               # Maximum file size in MB (per file)
+    file_size_enforcement: str = "enforce"   # "enforce"=reject, "warn"=log only
+    file_size_soft_launch_until: str = ""    # ISO date for soft-launch end
+
+    # ==========================================================================
     # WebSocket Configuration (Real-time Streaming)
     # ==========================================================================
     websocket_ping_interval: int = 30                  # Seconds between server pings

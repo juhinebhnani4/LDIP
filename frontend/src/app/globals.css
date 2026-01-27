@@ -112,51 +112,76 @@
 }
 
 /* Force light mode for nested .light containers (e.g., landing page) */
-.light, .dark .light {
-  --background: #f8f6f1;              /* Bond Paper - warm off-white */
-  --foreground: #1a1a1a;              /* Ink Black - body text */
-  --card: #ffffff;                    /* Pure White - elevated surface */
-  --card-foreground: #1a1a1a;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
-  --primary: #0d1b5e;                 /* Deep Indigo - brand primary */
-  --primary-foreground: #ffffff;
-  --secondary: #f8f6f1;               /* Bond Paper */
-  --secondary-foreground: #1a1a1a;
-  --muted: #e8e4dc;                   /* Warm Gray - muted backgrounds */
-  --muted-foreground: #64748b;        /* Slate - secondary text */
-  --accent: #b8973b;                  /* Muted Gold */
-  --accent-foreground: #0d1b5e;
-  --destructive: #8b2635;             /* Burgundy - errors/contradictions */
-  --destructive-foreground: #ffffff;
-  --border: #e8e4dc;                  /* Warm Gray - dividers */
-  --input: #e8e4dc;
-  --ring: #0d1b5e;                    /* Deep Indigo for focus rings */
-  --chart-1: #0d1b5e;
-  --chart-2: #2d5a3d;
-  --chart-3: #b8973b;
-  --chart-4: #3b82f6;
-  --chart-5: #8b2635;
-  --sidebar: #f0ede8;
-  --sidebar-foreground: #1a1a1a;
-  --sidebar-primary: #0d1b5e;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f8f6f1;
-  --sidebar-accent-foreground: #1a1a1a;
-  --sidebar-border: #e8e4dc;
-  --sidebar-ring: #0d1b5e;
-  --success: #2d5a3d;
-  --success-foreground: #ffffff;
-  --warning: #d97706;
-  --warning-foreground: #ffffff;
-  --info: #3b82f6;
-  --info-foreground: #ffffff;
-  --seal-red: #8b2635;
-  --legal-pad: #fffef0;
-  --indigo: #0d1b5e;
-  --gold: #b8973b;
-  --burgundy: #8b2635;
-  --forest: #2d5a3d;
+/* Uses higher specificity to override .dark when system prefers dark mode */
+.light, .dark .light, html.dark .light {
+  color-scheme: light !important;
+
+  /* Base variables */
+  --background: #f8f6f1 !important;
+  --foreground: #1a1a1a !important;
+  --card: #ffffff !important;
+  --card-foreground: #1a1a1a !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #1a1a1a !important;
+  --primary: #0d1b5e !important;
+  --primary-foreground: #ffffff !important;
+  --secondary: #f8f6f1 !important;
+  --secondary-foreground: #1a1a1a !important;
+  --muted: #e8e4dc !important;
+  --muted-foreground: #64748b !important;
+  --accent: #b8973b !important;
+  --accent-foreground: #0d1b5e !important;
+  --destructive: #8b2635 !important;
+  --destructive-foreground: #ffffff !important;
+  --border: #e8e4dc !important;
+  --input: #e8e4dc !important;
+  --ring: #0d1b5e !important;
+  --chart-1: #0d1b5e !important;
+  --chart-2: #2d5a3d !important;
+  --chart-3: #b8973b !important;
+  --chart-4: #3b82f6 !important;
+  --chart-5: #8b2635 !important;
+  --sidebar: #f0ede8 !important;
+  --sidebar-foreground: #1a1a1a !important;
+  --sidebar-primary: #0d1b5e !important;
+  --sidebar-primary-foreground: #ffffff !important;
+  --sidebar-accent: #f8f6f1 !important;
+  --sidebar-accent-foreground: #1a1a1a !important;
+  --sidebar-border: #e8e4dc !important;
+  --sidebar-ring: #0d1b5e !important;
+  --success: #2d5a3d !important;
+  --success-foreground: #ffffff !important;
+  --warning: #d97706 !important;
+  --warning-foreground: #ffffff !important;
+  --info: #3b82f6 !important;
+  --info-foreground: #ffffff !important;
+  --seal-red: #8b2635 !important;
+  --legal-pad: #fffef0 !important;
+  --indigo: #0d1b5e !important;
+  --gold: #b8973b !important;
+  --burgundy: #8b2635 !important;
+  --forest: #2d5a3d !important;
+
+  /* Tailwind 4 theme variables - these are what bg-*, text-* actually use */
+  --color-background: #f8f6f1 !important;
+  --color-foreground: #1a1a1a !important;
+  --color-card: #ffffff !important;
+  --color-card-foreground: #1a1a1a !important;
+  --color-popover: #ffffff !important;
+  --color-popover-foreground: #1a1a1a !important;
+  --color-primary: #0d1b5e !important;
+  --color-primary-foreground: #ffffff !important;
+  --color-secondary: #f8f6f1 !important;
+  --color-secondary-foreground: #1a1a1a !important;
+  --color-muted: #e8e4dc !important;
+  --color-muted-foreground: #64748b !important;
+  --color-accent: #b8973b !important;
+  --color-accent-foreground: #0d1b5e !important;
+  --color-destructive: #8b2635 !important;
+  --color-destructive-foreground: #ffffff !important;
+  --color-border: #e8e4dc !important;
+  --color-input: #e8e4dc !important;
+  --color-ring: #0d1b5e !important;
 }
 
 .dark {

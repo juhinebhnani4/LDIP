@@ -1,0 +1,11 @@
+# Test Files Directory
+
+Place your test PDF files here:
+
+- sample-contract.pdf - A sample contract document
+- sample-pleading.pdf - A sample legal pleading
+- sample-act.pdf - A sample legal act (statute)
+- large-document.pdf - A larger document for performance testing
+- poor-ocr-sample.pdf - A document with poor OCR quality for testing
+
+These files are used by the E2E tests to simulate document uploads.

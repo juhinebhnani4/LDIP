@@ -307,6 +307,7 @@ export async function checkExportEligibility(matterId: string): Promise<ExportEl
   // API returns snake_case, convert to camelCase
   const response = await api.get<{
     eligible: boolean;
+    verification_mode: 'advisory' | 'required';
     blocking_findings: Array<{
       verification_id: string;
       finding_id: string | null;
@@ -328,6 +329,7 @@ export async function checkExportEligibility(matterId: string): Promise<ExportEl
 
   return {
     eligible: response.eligible,
+    verificationMode: response.verification_mode,
     blockingFindings: response.blocking_findings.map((f) => ({
       verificationId: f.verification_id,
       findingId: f.finding_id,

@@ -78,6 +78,7 @@ export function groupCitations(citations: CitationListItem[]): GroupedCitation[]
     });
 
     const representative = sorted[0];
+    if (!representative) continue; // Skip empty groups
     const documentIds = [...new Set(sorted.map((c) => c.documentId))];
     const documentNames = [...new Set(sorted.map((c) => c.documentName).filter(Boolean))] as string[];
     const statuses = sorted.map((c) => c.verificationStatus);
@@ -152,7 +153,7 @@ export function getGroupDocumentSummary(group: GroupedCitation): string {
     return `${group.count} occurrence${group.count > 1 ? 's' : ''}`;
   }
   if (group.documentNames.length === 1) {
-    return group.documentNames[0];
+    return group.documentNames[0] ?? `${group.count} occurrence${group.count > 1 ? 's' : ''}`;
   }
   return `${group.documentNames.length} documents`;
 }

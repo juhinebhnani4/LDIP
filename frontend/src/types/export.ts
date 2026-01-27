@@ -175,7 +175,12 @@ export const EXPORT_TEMPLATES: ExportTemplate[] = [
 
 /** Get template by ID */
 export function getExportTemplate(id: ExportTemplateId): ExportTemplate {
-  return EXPORT_TEMPLATES.find((t) => t.id === id) ?? EXPORT_TEMPLATES[0];
+  const template = EXPORT_TEMPLATES.find((t) => t.id === id);
+  if (template) return template;
+  // Fallback to first template (always exists)
+  const defaultTemplate = EXPORT_TEMPLATES[0];
+  if (!defaultTemplate) throw new Error('No export templates configured');
+  return defaultTemplate;
 }
 
 /** Default export sections configuration */

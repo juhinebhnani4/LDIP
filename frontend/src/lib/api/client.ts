@@ -45,6 +45,108 @@ function getSupabaseClient(): ReturnType<typeof createClient> {
   return cachedSupabaseClient
 }
 
+// =============================================================================
+// Story 3.5: Proactive Token Refresh
+// =============================================================================
+
+/**
+ * Story 3.5: Token proactive refresh threshold (in seconds)
+ * Refresh if token expires within this time before making a request
+ */
+const PROACTIVE_REFRESH_THRESHOLD_SECONDS = 60 // 1 minute before expiration
+
+/**
+ * Story 3.5: Check if session token is about to expire
+ */
+function isSessionExpiringSoon(session: { expires_at?: number } | null): boolean {
+  if (!session?.expires_at) return false
+
+  const expiresAt = session.expires_at // Unix timestamp in seconds
+  const now = Math.floor(Date.now() / 1000) // Current time in seconds
+  const timeUntilExpiry = expiresAt - now
+
+  return timeUntilExpiry <= PROACTIVE_REFRESH_THRESHOLD_SECONDS
+}
+
+// =============================================================================
+// Session Cache (Performance Optimization)
+// =============================================================================
+// Avoids repeated getSession() calls on every API request by caching
+// the session in memory. Only refreshes when token is expired or expiring soon.
+// =============================================================================
+
+interface CachedSession {
+  access_token: string
+  expires_at: number
+  user: { id: string }
+}
+
+let cachedSession: CachedSession | null = null
+let sessionFetchPromise: Promise<CachedSession | null> | null = null
+
+/**
+ * Get a valid session, using cache when possible.
+ * Reduces getSession() calls from every request to only when needed.
+ */
+async function getCachedSession(): Promise<CachedSession | null> {
+  const now = Math.floor(Date.now() / 1000)
+
+  // Return cached session if it's still valid (not expiring soon)
+  if (cachedSession && cachedSession.expires_at > now + PROACTIVE_REFRESH_THRESHOLD_SECONDS) {
+    return cachedSession
+  }
+
+  // If there's already a fetch in progress, wait for it (deduplication)
+  if (sessionFetchPromise) {
+    return sessionFetchPromise
+  }
+
+  // Fetch new session
+  sessionFetchPromise = (async () => {
+    try {
+      const supabase = getSupabaseClient()
+      let { data: { session } } = await supabase.auth.getSession()
+
+      // If no session, try refresh
+      if (!session) {
+        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
+        session = refreshedSession
+      }
+      // If session expiring soon, refresh
+      else if (isSessionExpiringSoon(session)) {
+        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
+        if (refreshedSession) {
+          session = refreshedSession
+        }
+      }
+
+      if (session) {
+        cachedSession = {
+          access_token: session.access_token,
+          expires_at: session.expires_at ?? 0,
+          user: { id: session.user?.id ?? '' },
+        }
+        return cachedSession
+      }
+
+      cachedSession = null
+      return null
+    } finally {
+      sessionFetchPromise = null
+    }
+  })()
+
+  return sessionFetchPromise
+}
+
+/**
+ * Clear the session cache (call on logout or session invalidation)
+ */
+export function clearSessionCache(): void {
+  cachedSession = null
+  sessionFetchPromise = null
+}
+
 /** Rate limit details from API response */
 export interface RateLimitDetails {
   /** Seconds to wait before retrying */
@@ -218,15 +320,9 @@ export async function apiClient<T>(endpoint: string, options: ApiClientOptions =
   }
 
   try {
-    // First try getSession() - this works when cookies are accessible
-    let { data: { session } } = await supabase.auth.getSession()
-
-    // If no session from getSession(), try refreshSession() which can recover from cookies
-    // This handles the case where browser storage is empty but cookies exist (incognito, new tabs)
-    if (!session) {
-      const { data: { session: refreshedSession } } = await supabase.auth.refreshSession()
-      session = refreshedSession
-    }
+    // OPTIMIZED: Use cached session to avoid repeated getSession() calls
+    // Only fetches from Supabase when cache is empty or token is expiring
+    const session = await getCachedSession()
 
     if (DEBUG_API) {
       console.log(`[API] ${fetchOptions.method || 'GET'} ${endpoint}`, {
@@ -255,13 +351,23 @@ export async function apiClient<T>(endpoint: string, options: ApiClientOptions =
       console.log(`[API] Response: ${response.status} ${response.statusText}`, endpoint)
     }
 
-    // Handle 401 - try refresh and retry once
+    // Handle 401 - clear cache, try refresh and retry once
     if (response.status === 401) {
+      // Clear cached session since it's invalid
+      clearSessionCache()
+
       const {
         data: { session: newSession },
       } = await supabase.auth.refreshSession()
 
       if (newSession?.access_token) {
+        // Update cache with new session
+        cachedSession = {
+          access_token: newSession.access_token,
+          expires_at: newSession.expires_at ?? 0,
+          user: { id: newSession.user?.id ?? '' },
+        }
+
         headers.set('Authorization', `Bearer ${newSession.access_token}`)
 
         const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -540,6 +646,7 @@ function fromSnakeCaseManualEvent(response: Record<string, unknown>): ManualEven
     eventType: (response.eventType ?? response.event_type) as TimelineEvent['eventType'],
     description: response.description as string,
     documentId: ((response.documentId ?? response.document_id) as string | null) ?? null,
+    documentName: ((response.documentName ?? response.document_name) as string | null) ?? null,
     sourcePage: ((response.sourcePage ?? response.source_page) as number | null) ?? null,
     confidence: response.confidence as number,
     entities: Array.isArray(response.entities)

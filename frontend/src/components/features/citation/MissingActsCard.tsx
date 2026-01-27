@@ -138,7 +138,7 @@ export function MissingActsCard({
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {missingActs.length === 1
+              {missingActs.length === 1 && missingActs[0]
                 ? `Upload "${missingActs[0].actName}" to verify ${missingActs[0].citationCount} citation${missingActs[0].citationCount !== 1 ? 's' : ''}`
                 : missingActs.length <= 3
                   ? `Upload "${missingActs.map(a => a.actName).join('", "')}" to enable citation verification`

@@ -111,6 +111,54 @@
   --forest: #2d5a3d;
 }
 
+/* Force light mode for nested .light containers (e.g., landing page) */
+.light, .dark .light {
+  --background: #f8f6f1;              /* Bond Paper - warm off-white */
+  --foreground: #1a1a1a;              /* Ink Black - body text */
+  --card: #ffffff;                    /* Pure White - elevated surface */
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #0d1b5e;                 /* Deep Indigo - brand primary */
+  --primary-foreground: #ffffff;
+  --secondary: #f8f6f1;               /* Bond Paper */
+  --secondary-foreground: #1a1a1a;
+  --muted: #e8e4dc;                   /* Warm Gray - muted backgrounds */
+  --muted-foreground: #64748b;        /* Slate - secondary text */
+  --accent: #b8973b;                  /* Muted Gold */
+  --accent-foreground: #0d1b5e;
+  --destructive: #8b2635;             /* Burgundy - errors/contradictions */
+  --destructive-foreground: #ffffff;
+  --border: #e8e4dc;                  /* Warm Gray - dividers */
+  --input: #e8e4dc;
+  --ring: #0d1b5e;                    /* Deep Indigo for focus rings */
+  --chart-1: #0d1b5e;
+  --chart-2: #2d5a3d;
+  --chart-3: #b8973b;
+  --chart-4: #3b82f6;
+  --chart-5: #8b2635;
+  --sidebar: #f0ede8;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #0d1b5e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f8f6f1;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e8e4dc;
+  --sidebar-ring: #0d1b5e;
+  --success: #2d5a3d;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #3b82f6;
+  --info-foreground: #ffffff;
+  --seal-red: #8b2635;
+  --legal-pad: #fffef0;
+  --indigo: #0d1b5e;
+  --gold: #b8973b;
+  --burgundy: #8b2635;
+  --forest: #2d5a3d;
+}
+
 .dark {
   /* Jaanch "Chambers Mode" - Dark Theme for late-night document review */
   /* From Landing Page Masterplan v1.0 */

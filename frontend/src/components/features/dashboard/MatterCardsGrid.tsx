@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Plus, FolderOpen, FileText, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -282,18 +282,34 @@ export function MatterCardsGrid({ className }: MatterCardsGridProps) {
     }
   }, [completedBackgroundMatters, removeBackgroundMatter]);
 
-  // Clear selection when matters change (e.g., after deletion)
+  // Track matter IDs to detect deletions
+  const prevMatterIdsRef = useRef<Set<string>>(new Set());
+
+  // Clear selection when matters are deleted (not on every change)
   useEffect(() => {
-    setSelectedIds((prev) => {
-      const currentMatterIds = new Set(sortedMatters.map((m) => m.id));
-      const newSelected = new Set<string>();
-      prev.forEach((id) => {
-        if (currentMatterIds.has(id)) {
-          newSelected.add(id);
-        }
+    const currentMatterIds = new Set(sortedMatters.map((m) => m.id));
+    const prevIds = prevMatterIdsRef.current;
+
+    // Check if any previously selected matters were deleted
+    const hasDeletedMatters = Array.from(prevIds).some(
+      (id) => !currentMatterIds.has(id)
+    );
+
+    // Only update selection if matters were actually deleted
+    if (hasDeletedMatters && prevIds.size > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing selection after deletion is intentional
+      setSelectedIds((prev) => {
+        const newSelected = new Set<string>();
+        prev.forEach((id) => {
+          if (currentMatterIds.has(id)) {
+            newSelected.add(id);
+          }
+        });
+        return newSelected;
       });
-      return newSelected;
-    });
+    }
+
+    prevMatterIdsRef.current = currentMatterIds;
   }, [sortedMatters]);
 
   const gridClasses = cn(

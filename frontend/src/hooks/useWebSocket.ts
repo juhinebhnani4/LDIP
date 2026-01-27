@@ -192,12 +192,14 @@ export function useWebSocket(
     // Disconnect if matterId is null
     if (!matterId) {
       wsClient.disconnect();
-      setError(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clearing error on disconnect is intentional
+      setError((prev) => (prev !== null ? null : prev));
       return;
     }
 
-    // Connect to new matter
-    setError(null);
+    // Connect to new matter - clear any previous error
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clearing error before connect is intentional
+    setError((prev) => (prev !== null ? null : prev));
     void wsClient.connect(matterId);
 
     // Cleanup on unmount

@@ -9,7 +9,7 @@
  * @see Story 12.2 - Export Inline Editing and Preview - Task 4.1
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Pencil, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -59,20 +59,27 @@ export function EditableSectionContent({
 }: EditableSectionContentProps) {
   // Local state for textarea value - controlled sync pattern
   const [localText, setLocalText] = useState(textContent ?? defaultText);
+  const prevTextContentRef = useRef(textContent);
+  const prevIsEditingRef = useRef(isEditing);
 
   // Sync local text when textContent prop changes (controlled component pattern)
-  // This is intentional - we need to sync state when prop changes
+  // Uses ref comparison to avoid cascading renders
   useEffect(() => {
-    if (textContent !== undefined) {
+    if (textContent !== undefined && textContent !== prevTextContentRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Controlled component sync pattern
       setLocalText(textContent);
     }
+    prevTextContentRef.current = textContent;
   }, [textContent]);
 
   // Initialize local text with default when entering edit mode
   useEffect(() => {
-    if (isEditing && !textContent && defaultText) {
+    const wasEditing = prevIsEditingRef.current;
+    if (isEditing && !wasEditing && !textContent && defaultText) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Init on edit mode enter is intentional
       setLocalText(defaultText);
     }
+    prevIsEditingRef.current = isEditing;
   }, [isEditing, textContent, defaultText]);
 
   const handleTextChange = (value: string) => {

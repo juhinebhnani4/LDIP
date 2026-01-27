@@ -324,6 +324,15 @@ export function EntitiesContent({
     await mutateEntities();
   }, [mutateEntities]);
 
+  // Handle merge from suggestion banner (must be before early returns)
+  const handleSuggestionMerge = useCallback(
+    async (sourceId: string, targetId: string) => {
+      await handleMergeConfirm(sourceId, targetId);
+      await mutateSuggestions();
+    },
+    [handleMergeConfirm, mutateSuggestions]
+  );
+
   // Story 3.1: Distinguish error state from empty state
   // Error state: API call failed - show ActionableError with retry
   if (entitiesError) {
@@ -350,15 +359,6 @@ export function EntitiesContent({
       </div>
     );
   }
-
-  // Handle merge from suggestion banner
-  const handleSuggestionMerge = useCallback(
-    async (sourceId: string, targetId: string) => {
-      await handleMergeConfirm(sourceId, targetId);
-      await mutateSuggestions();
-    },
-    [handleMergeConfirm, mutateSuggestions]
-  );
 
   return (
     <div className={cn('flex flex-col h-full', className)}>

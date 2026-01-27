@@ -16,6 +16,7 @@ import {
   ProfileSection,
   NotificationSection,
   AppearanceSection,
+  PowerUserSection,
   AccountSection,
 } from '@/components/features/settings';
 
@@ -44,6 +45,7 @@ export default function SettingsPage() {
         <ProfileSection />
         <NotificationSection />
         <AppearanceSection />
+        <PowerUserSection />
         <AccountSection />
       </div>
     </div>

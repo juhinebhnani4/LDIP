@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { Search, X, ChevronRight, ExternalLink } from 'lucide-react';
+import { Search, X, ChevronRight, ExternalLink, RotateCcw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
@@ -18,6 +19,7 @@ import {
   getHelpEntriesByCategory,
   type HelpEntry,
 } from '@/data/help-content';
+import { useOnboardingTrigger } from '@/components/features/onboarding';
 
 interface HelpPanelProps {
   open: boolean;
@@ -30,6 +32,14 @@ export function HelpPanel({ open, onOpenChange }: HelpPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<HelpEntry | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey | null>(null);
+
+  // Story 6.2: Restart tour functionality
+  const { startOnboarding } = useOnboardingTrigger();
+
+  const handleRestartTour = useCallback(() => {
+    onOpenChange(false);
+    startOnboarding();
+  }, [onOpenChange, startOnboarding]);
 
   const searchResults = useMemo(() => {
     if (searchQuery.trim().length < 2) return [];
@@ -138,7 +148,18 @@ export function HelpPanel({ open, onOpenChange }: HelpPanelProps) {
           </div>
         </ScrollArea>
 
-        <div className="px-6 py-4 border-t bg-muted/50">
+        <div className="px-6 py-4 border-t bg-muted/50 space-y-3">
+          {/* Story 6.2: Restart Tour button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2"
+            onClick={handleRestartTour}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Restart Product Tour
+          </Button>
+          <Separator />
           <p className="text-xs text-muted-foreground">
             Can&apos;t find what you need?{' '}
             <a

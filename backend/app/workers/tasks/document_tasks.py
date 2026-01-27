@@ -47,6 +47,7 @@ from app.services.document_service import (
     DocumentServiceError,
     get_document_service,
 )
+from app.services.eta_calculator import get_eta_calculator
 from app.core.config import get_settings
 from app.services.job_tracking import (
     JobTrackingService,
@@ -648,6 +649,8 @@ def _mark_job_completed(
     matter_id: str | None = None,
     document_id: str | None = None,
     job_tracker: JobTrackingService | None = None,
+    page_count: int | None = None,
+    processing_start_time: float | None = None,
 ) -> None:
     """Mark job as completed successfully and update document status.
 
@@ -656,6 +659,8 @@ def _mark_job_completed(
         matter_id: Matter UUID for broadcasting.
         document_id: Document UUID to update status.
         job_tracker: Optional JobTrackingService instance.
+        page_count: Number of pages (for ETA recording, Story 5.7).
+        processing_start_time: Unix timestamp when processing started (Story 5.7).
     """
     if not job_id:
         return
@@ -747,6 +752,49 @@ def _mark_job_completed(
 
             # Gap #19: Check for batch completion and trigger email notification
             _check_batch_completion_and_notify(matter_id, job_id)
+
+        # Story 5.7: Record completion for ETA calculation
+        if document_id:
+            try:
+                # Fetch page_count from document if not provided
+                doc_page_count = page_count
+                if doc_page_count is None:
+                    doc_service = get_document_service()
+                    doc = doc_service.get_document(document_id)
+                    if doc and doc.page_count:
+                        doc_page_count = doc.page_count
+
+                if doc_page_count and doc_page_count > 0:
+                    # Use provided start time or estimate based on typical processing
+                    import time
+
+                    if processing_start_time:
+                        processing_time_ms = int((time.time() - processing_start_time) * 1000)
+                    else:
+                        # Fallback: estimate 3 seconds per page (conservative)
+                        processing_time_ms = doc_page_count * 3000
+
+                    eta_calculator = get_eta_calculator()
+                    _run_async(
+                        eta_calculator.record_completion(
+                            document_id=document_id,
+                            page_count=doc_page_count,
+                            processing_time_ms=processing_time_ms,
+                        )
+                    )
+                    logger.debug(
+                        "eta_completion_recorded",
+                        document_id=document_id,
+                        page_count=doc_page_count,
+                        processing_time_ms=processing_time_ms,
+                    )
+            except Exception as eta_err:
+                # Non-fatal: log and continue
+                logger.warning(
+                    "eta_completion_record_failed",
+                    document_id=document_id,
+                    error=str(eta_err),
+                )
 
         logger.info(
             "job_tracking_job_completed",
@@ -4718,22 +4766,57 @@ def extract_citations(
             "job_id": job_id,
         }
 
-        # Dispatch contradiction detection task
+        # Story 6.4: Check analysis_mode before dispatching contradiction detection
+        # Quick Scan mode skips contradiction detection for faster processing
+        analysis_mode = "deep_analysis"  # Default to deep_analysis
         try:
-            celery_app.send_task(
-                "app.workers.tasks.document_tasks.detect_contradictions",
-                kwargs={
-                    "prev_result": citation_result,
-                    "document_id": doc_id,
-                },
+            matter_result = (
+                client.table("matters")
+                .select("analysis_mode")
+                .eq("id", matter_id)
+                .single()
+                .execute()
             )
-            logger.debug("detect_contradictions_dispatched", document_id=doc_id)
-        except Exception as dispatch_error:
+            if matter_result.data:
+                analysis_mode = matter_result.data.get("analysis_mode", "deep_analysis")
+        except Exception as mode_error:
             logger.warning(
-                "detect_contradictions_dispatch_failed",
-                document_id=doc_id,
-                error=str(dispatch_error),
+                "analysis_mode_fetch_failed",
+                matter_id=matter_id,
+                error=str(mode_error),
             )
+
+        # Dispatch contradiction detection task (skip for quick_scan mode per AC 6.4.2)
+        if analysis_mode == "quick_scan":
+            logger.info(
+                "detect_contradictions_skipped_quick_scan",
+                document_id=doc_id,
+                matter_id=matter_id,
+                analysis_mode=analysis_mode,
+            )
+            # Mark contradiction stage as skipped in job tracking
+            _update_job_stage_complete(
+                job_id,
+                "contradiction_detection",
+                matter_id,
+                metadata={"skipped": True, "reason": "quick_scan mode"},
+            )
+        else:
+            try:
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.detect_contradictions",
+                    kwargs={
+                        "prev_result": citation_result,
+                        "document_id": doc_id,
+                    },
+                )
+                logger.debug("detect_contradictions_dispatched", document_id=doc_id)
+            except Exception as dispatch_error:
+                logger.warning(
+                    "detect_contradictions_dispatch_failed",
+                    document_id=doc_id,
+                    error=str(dispatch_error),
+                )
 
         # Trigger act validation and auto-fetching (if unique acts were found)
         if total_unique_acts:

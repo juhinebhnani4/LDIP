@@ -38,6 +38,7 @@ from app.api.routes import (
     notifications,
     ocr_validation,
     reasoning_traces,
+    samples,
     search,
     session,
     summary,
@@ -50,6 +51,7 @@ from app.api.routes import (
 from app.api.routes.admin import pipeline as admin_pipeline
 from app.api.routes.admin import quota as admin_quota
 from app.core.config import get_settings
+from app.core.cache_control import CacheControlMiddleware
 from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -122,6 +124,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             hint="WebSocket streaming will be unavailable",
         )
 
+    # Initialize cost persistence service for LLM cost tracking (Story 7.1)
+    from app.core.cost_tracking import get_cost_service
+    from app.services.supabase.client import get_service_client
+
+    try:
+        supabase = get_service_client()
+        get_cost_service(supabase)
+        logger.info("cost_persistence_service_initialized")
+    except Exception as e:
+        # Log but don't fail startup - cost tracking is non-critical
+        logger.warning(
+            "cost_persistence_init_failed",
+            error=str(e),
+            hint="LLM costs will be logged but not persisted to database",
+        )
+
     yield
 
     # Shutdown
@@ -186,6 +204,10 @@ def create_app() -> FastAPI:
         return app.openapi_schema
 
     app.openapi = custom_openapi
+
+    # Add cache control middleware to reduce Supabase egress
+    # This adds Cache-Control headers to GET responses for appropriate endpoints
+    app.add_middleware(CacheControlMiddleware)
 
     # Add correlation ID middleware for distributed tracing (Story 13.1)
     # Middleware execution order is LIFO (last added runs first)
@@ -339,6 +361,9 @@ def create_app() -> FastAPI:
     app.include_router(evaluation.router, prefix="/api")
     app.include_router(inspector.router, prefix="/api")
     app.include_router(users.router)
+
+    # Story 6.3: Sample case import
+    app.include_router(samples.router)
 
     # Admin routes (require admin access)
     app.include_router(admin_pipeline.router, prefix="/api")

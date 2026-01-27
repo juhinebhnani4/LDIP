@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle2, AlertTriangle, Clock, FileText, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, FileText, ArrowRight, Zap, TestTube } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,6 +122,9 @@ function StatusBadge({ status }: { status: MatterCardData['processingStatus'] })
 
 /** Processing state card content */
 function ProcessingContent({ matter }: { matter: MatterCardData }) {
+  const isQuickScan = matter.analysisMode === 'quick_scan';
+  const isSampleCase = matter.practiceGroup === '_sample_case';
+
   return (
     <>
       {/* Progress bar at top */}
@@ -136,7 +139,23 @@ function ProcessingContent({ matter }: { matter: MatterCardData }) {
       {/* Matter title */}
       <div className="space-y-1">
         <h3 className="font-semibold text-lg leading-tight line-clamp-2">{matter.title}</h3>
-        <StatusBadge status={matter.processingStatus} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={matter.processingStatus} />
+          {/* Story 6.4 AC 6.4.5: Quick badge for quick_scan mode */}
+          {isQuickScan && (
+            <Badge variant="outline" className="gap-1 text-xs" aria-label="Quick scan mode">
+              <Zap className="size-3" />
+              Quick
+            </Badge>
+          )}
+          {/* Story 6.3 AC 6.3.7: Sample badge for sample case */}
+          {isSampleCase && (
+            <Badge variant="secondary" className="gap-1 text-xs" aria-label="Sample case">
+              <TestTube className="size-3" />
+              Sample
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Document/page counts */}
@@ -151,7 +170,7 @@ function ProcessingContent({ matter }: { matter: MatterCardData }) {
       </div>
 
       {/* Action button */}
-      <Button variant="outline" className="w-full mt-2" asChild>
+      <Button variant="outline" className="w-full mt-2" asChild data-testid="matter-card-view-progress-button">
         <Link href={`/matter/${matter.id}`}>
           View Progress
           <ArrowRight className="size-4 ml-1" />
@@ -163,10 +182,29 @@ function ProcessingContent({ matter }: { matter: MatterCardData }) {
 
 /** Ready/Needs attention state card content */
 function ReadyContent({ matter }: { matter: MatterCardData }) {
+  const isQuickScan = matter.analysisMode === 'quick_scan';
+  const isSampleCase = matter.practiceGroup === '_sample_case';
+
   return (
     <>
-      {/* Status badge at top */}
-      <StatusBadge status={matter.processingStatus} />
+      {/* Status and mode badges at top */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusBadge status={matter.processingStatus} />
+        {/* Story 6.4 AC 6.4.5: Quick badge for quick_scan mode */}
+        {isQuickScan && (
+          <Badge variant="outline" className="gap-1 text-xs" aria-label="Quick scan mode">
+            <Zap className="size-3" />
+            Quick
+          </Badge>
+        )}
+        {/* Story 6.3 AC 6.3.7: Sample badge for sample case */}
+        {isSampleCase && (
+          <Badge variant="secondary" className="gap-1 text-xs" aria-label="Sample case">
+            <TestTube className="size-3" />
+            Sample
+          </Badge>
+        )}
+      </div>
 
       {/* Matter title */}
       <h3 className="font-semibold text-lg leading-tight line-clamp-2">{matter.title}</h3>
@@ -215,7 +253,7 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
       </div>
 
       {/* Action button */}
-      <Button className="w-full mt-2" asChild>
+      <Button className="w-full mt-2" asChild data-testid="matter-card-resume-button">
         <Link href={`/matter/${matter.id}`}>
           Resume
           <ArrowRight className="size-4 ml-1" />
@@ -251,6 +289,7 @@ export function MatterCard({
       role="article"
       aria-label={`Matter: ${matter.title}`}
       aria-selected={selectionMode ? isSelected : undefined}
+      data-testid={`matter-card-${matter.id}`}
     >
       {/* Selection checkbox - visible in selection mode */}
       {selectionMode && canDelete && (
@@ -260,6 +299,7 @@ export function MatterCard({
             onCheckedChange={handleCheckboxChange}
             aria-label={`Select ${matter.title}`}
             className="h-5 w-5 border-2"
+            data-testid={`matter-card-checkbox-${matter.id}`}
           />
         </div>
       )}

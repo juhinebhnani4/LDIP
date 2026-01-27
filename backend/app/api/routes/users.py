@@ -5,6 +5,8 @@ Story 14.14: Settings Page Implementation
 Endpoints for user profile and preferences management.
 """
 
+from enum import Enum
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
@@ -28,6 +30,21 @@ def get_supabase_client() -> Client | None:
 # =============================================================================
 
 
+class OnboardingStage(str, Enum):
+    """Onboarding wizard stages (Story 6.2)."""
+
+    DASHBOARD = "dashboard"
+    UPLOAD = "upload"
+    SETTINGS = "settings"
+    SUMMARY = "summary"
+    TIMELINE = "timeline"
+    ENTITIES = "entities"
+    CONTRADICTIONS = "contradictions"
+    CITATIONS = "citations"
+    QA = "qa"
+    VERIFICATION = "verification"
+
+
 class UserPreferences(BaseModel):
     """User preferences for notifications and appearance."""
 
@@ -42,6 +59,18 @@ class UserPreferences(BaseModel):
     )
     theme: Literal["light", "dark", "system"] = Field(
         default="system", description="UI theme preference"
+    )
+    # Story 6.1: Progressive Disclosure
+    power_user_mode: bool = Field(
+        default=False,
+        description="When true, shows advanced features (bulk ops, keyboard shortcuts)",
+    )
+    # Story 6.2: Onboarding Wizard
+    onboarding_completed: bool = Field(
+        default=False, description="Whether user has completed the onboarding wizard"
+    )
+    onboarding_stage: Optional[str] = Field(
+        default=None, description="Current onboarding wizard stage"
     )
 
 
@@ -59,6 +88,11 @@ class UpdatePreferencesRequest(BaseModel):
     email_notifications_verification: Optional[bool] = None
     browser_notifications: Optional[bool] = None
     theme: Optional[Literal["light", "dark", "system"]] = None
+    # Story 6.1: Progressive Disclosure
+    power_user_mode: Optional[bool] = None
+    # Story 6.2: Onboarding Wizard
+    onboarding_completed: Optional[bool] = None
+    onboarding_stage: Optional[str] = None
 
 
 class UserProfile(BaseModel):
@@ -124,6 +158,9 @@ async def get_user_preferences(
         email_notifications_verification=result.data["email_notifications_verification"],
         browser_notifications=result.data["browser_notifications"],
         theme=result.data["theme"],
+        power_user_mode=result.data.get("power_user_mode", False),
+        onboarding_completed=result.data.get("onboarding_completed", False),
+        onboarding_stage=result.data.get("onboarding_stage"),
         created_at=result.data["created_at"],
         updated_at=result.data["updated_at"],
     )
@@ -172,6 +209,9 @@ async def update_user_preferences(
         email_notifications_verification=updated["email_notifications_verification"],
         browser_notifications=updated["browser_notifications"],
         theme=updated["theme"],
+        power_user_mode=updated.get("power_user_mode", False),
+        onboarding_completed=updated.get("onboarding_completed", False),
+        onboarding_stage=updated.get("onboarding_stage"),
         created_at=updated["created_at"],
         updated_at=updated["updated_at"],
     )

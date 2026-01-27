@@ -1,7 +1,9 @@
 """Application configuration using Pydantic Settings."""
 
+import json
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -128,6 +130,22 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from comma-separated string or JSON array."""
+        if isinstance(v, str):
+            v = v.strip()
+            # Try JSON array first
+            if v.startswith("["):
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass
+            # Fall back to comma-separated
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Axiom Logging (Story 13.1)
     axiom_token: str = ""  # AXIOM_TOKEN env var

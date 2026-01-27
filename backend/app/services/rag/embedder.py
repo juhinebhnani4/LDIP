@@ -33,9 +33,21 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL_VERSION = "text-embedding-3-small"  # Story 1.3: Version for storage
 EMBEDDING_DIMENSIONS = 1536
 MAX_BATCH_SIZE = 100
 MAX_TOKENS_PER_REQUEST = 8191  # OpenAI limit for text-embedding-3-small
+
+
+def get_current_embedding_model_version() -> str:
+    """Get the current embedding model version string.
+
+    Story 1.3: Store Embedding Model Version with Vectors
+
+    Returns:
+        Current embedding model version (e.g., 'text-embedding-3-small').
+    """
+    return EMBEDDING_MODEL_VERSION
 
 
 class EmbeddingServiceError(Exception):

@@ -10,6 +10,7 @@ export { JobProgressCard } from './JobProgressCard';
 export { FailedJobCard } from './FailedJobCard';
 export { ProcessingQueue } from './ProcessingQueue';
 export { StuckJobsBanner } from './StuckJobsBanner';
+export { ProcessingStatusWidget, ProcessingStatusBadge } from './ProcessingStatusWidget';
 
 // Skeleton loading components for improved perceived performance
 export {

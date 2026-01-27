@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Settings, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -11,8 +11,11 @@ import { EditableMatterName } from './EditableMatterName';
 import { ExportDropdown } from './ExportDropdown';
 import { ShareDialog } from './ShareDialog';
 import { DeleteMatterDialog } from './DeleteMatterDialog';
+import { MatterSettingsDialog } from './MatterSettingsDialog';
 import { useMatterStore } from '@/stores/matterStore';
 import { mattersApi } from '@/lib/api/matters';
+import { ProcessingStatusBadge } from '@/components/features/processing/ProcessingStatusWidget';
+import { ConsistencyWarningBadge } from '@/components/features/crossEngine/ConsistencyWarningBadge';
 
 /**
  * Workspace Header Component
@@ -40,10 +43,6 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
   const currentMatter = useMatterStore((state) => state.currentMatter);
   const deleteMatter = useMatterStore((state) => state.deleteMatter);
 
-  const handleSettingsClick = () => {
-    toast.info('Settings coming soon');
-  };
-
   const handleDeleteMatter = async () => {
     try {
       await mattersApi.delete(matterId);
@@ -58,7 +57,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" data-testid="workspace-header">
       <div className="container flex h-14 items-center gap-4 px-4 sm:px-6">
         {/* Left: Back navigation */}
         <div className="flex items-center gap-2">
@@ -66,6 +65,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
             href="/"
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Back to Dashboard"
+            data-testid="workspace-back-link"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm font-medium">Dashboard</span>
@@ -77,6 +77,12 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
           <EditableMatterName matterId={matterId} />
         </div>
 
+        {/* Status badges: Processing and Consistency (Story 5.4, 5.7) */}
+        <div className="flex items-center gap-2">
+          <ProcessingStatusBadge matterId={matterId} />
+          <ConsistencyWarningBadge matterId={matterId} size="sm" interactive />
+        </div>
+
         {/* Right: Actions */}
         <div className="flex items-center gap-1">
           {/* Export dropdown */}
@@ -85,22 +91,8 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
           {/* Share dialog */}
           <ShareDialog matterId={matterId} />
 
-          {/* Settings button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleSettingsClick}
-                aria-label="Settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Settings</p>
-            </TooltipContent>
-          </Tooltip>
+          {/* Settings dialog (Story 3.1) */}
+          <MatterSettingsDialog matterId={matterId} />
 
           {/* Delete button - only visible to owners */}
           {currentMatter?.role === 'owner' && (
@@ -112,6 +104,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
                   onClick={() => setDeleteDialogOpen(true)}
                   aria-label="Delete matter"
                   className="text-muted-foreground hover:text-destructive"
+                  data-testid="workspace-delete-button"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

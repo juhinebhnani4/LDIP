@@ -36,6 +36,10 @@ from app.engines.orchestrator.streaming import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.chat import ChatStreamRequest, StreamEventType
+from app.services.llm_error_handler import classify_error, format_error_for_response
+from app.services.memory.query_cache_service import get_query_cache_service
+from app.services.summary_service import get_summary_service
+from app.services.timeline_cache import get_timeline_cache_service
 
 logger = structlog.get_logger(__name__)
 
@@ -176,18 +180,23 @@ async def stream_chat(
                 }
 
         except Exception as e:
+            # Story 5.5: Classify error for user-friendly message
+            llm_error = classify_error(e, provider="gemini")
             logger.error(
                 "stream_chat_error",
                 error=str(e),
                 error_type=type(e).__name__,
+                error_code=llm_error.code.value,
                 matter_id=matter_id,
                 user_id=current_user.id,
             )
             yield {
                 "event": StreamEventType.ERROR.value,
                 "data": json.dumps({
-                    "error": "An error occurred during streaming",
-                    "code": "STREAM_ERROR",
+                    "error": llm_error.message,
+                    "code": llm_error.code.value,
+                    "retry_suggested": llm_error.retry_suggested,
+                    "retry_after_seconds": llm_error.retry_after_seconds,
                 }),
             }
 
@@ -263,9 +272,12 @@ async def send_message(
     except HTTPException:
         raise
     except Exception as e:
+        # Story 5.5: Classify error for user-friendly message
+        llm_error = classify_error(e, provider="gemini")
         logger.error(
             "send_message_error",
             error=str(e),
+            error_code=llm_error.code.value,
             matter_id=matter_id,
             user_id=current_user.id,
         )
@@ -273,9 +285,10 @@ async def send_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": {
-                    "code": "PROCESSING_ERROR",
-                    "message": "Failed to process message",
-                    "details": {},
+                    "code": llm_error.code.value,
+                    "message": llm_error.message,
+                    "retry_suggested": llm_error.retry_suggested,
+                    "retry_after_seconds": llm_error.retry_after_seconds,
                 }
             },
         ) from e
@@ -352,3 +365,97 @@ async def report_sse_status(
     )
 
     return {"status": "logged"}
+
+
+# =============================================================================
+# Cache Management Endpoints
+# =============================================================================
+
+
+class CacheClearResponse(BaseModel):
+    """Response model for cache clear operation."""
+
+    query_cache_cleared: int = Field(..., description="Number of query cache entries cleared")
+    summary_cache_cleared: bool = Field(..., description="Whether summary cache was cleared")
+    timeline_cache_cleared: bool = Field(..., description="Whether timeline cache was cleared")
+
+
+@router.delete("/{matter_id}/cache")
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def clear_chat_cache(
+    request: Request,  # Required for rate limiter
+    matter_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    access: MatterAccessContext = Depends(validate_matter_access()),
+) -> dict[str, Any]:
+    """Clear all chat-related caches for a matter.
+
+    Clears:
+    - Query cache (cached Q&A responses)
+    - Summary cache (executive summaries)
+    - Timeline cache (timeline data)
+
+    This forces fresh results on next query.
+
+    Args:
+        matter_id: Matter UUID (from path).
+        current_user: Authenticated user.
+        access: Matter access context.
+
+    Returns:
+        Cache clear statistics.
+    """
+    logger.info(
+        "clear_chat_cache_request",
+        matter_id=matter_id,
+        user_id=current_user.id,
+    )
+
+    try:
+        # Clear query cache
+        query_cache_service = get_query_cache_service()
+        query_cleared = await query_cache_service.invalidate_on_document_upload(matter_id)
+
+        # Clear summary cache
+        summary_service = get_summary_service()
+        summary_cleared = await summary_service.invalidate_cache(matter_id)
+
+        # Clear timeline cache
+        timeline_cache = get_timeline_cache_service()
+        timeline_deleted = await timeline_cache.invalidate_timeline(matter_id)
+        timeline_cleared = timeline_deleted > 0
+
+        logger.info(
+            "clear_chat_cache_complete",
+            matter_id=matter_id,
+            user_id=current_user.id,
+            query_cleared=query_cleared,
+            summary_cleared=summary_cleared,
+            timeline_cleared=timeline_cleared,
+        )
+
+        return {
+            "data": {
+                "query_cache_cleared": query_cleared,
+                "summary_cache_cleared": summary_cleared,
+                "timeline_cache_cleared": timeline_cleared,
+            }
+        }
+
+    except Exception as e:
+        logger.error(
+            "clear_chat_cache_error",
+            error=str(e),
+            matter_id=matter_id,
+            user_id=current_user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "CACHE_CLEAR_ERROR",
+                    "message": "Failed to clear cache",
+                    "details": {},
+                }
+            },
+        ) from e

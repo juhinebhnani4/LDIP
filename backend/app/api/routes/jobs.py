@@ -79,6 +79,21 @@ class JobCancelResponse(BaseModel):
     new_status: str
 
 
+class ETAEstimate(BaseModel):
+    """Estimated completion time with confidence range.
+
+    Story 5.7: Processing ETA Display
+    """
+
+    min_seconds: int = Field(..., description="Optimistic estimate", alias="minSeconds")
+    max_seconds: int = Field(..., description="Pessimistic estimate", alias="maxSeconds")
+    best_guess_seconds: int = Field(..., description="Most likely estimate", alias="bestGuessSeconds")
+    confidence: str = Field(..., description="Confidence level: high, medium, low")
+    pending_pages: int = Field(default=0, description="Total pages pending", alias="pendingPages")
+
+    model_config = {"populate_by_name": True}
+
+
 class JobQueueStats(BaseModel):
     """Queue statistics for a matter."""
 
@@ -91,6 +106,8 @@ class JobQueueStats(BaseModel):
     skipped: int
     stuck: int = 0  # Jobs stuck in PROCESSING for too long
     avg_processing_time_ms: int | None = None
+    # Story 5.7: Processing ETA fields
+    eta: ETAEstimate | None = Field(default=None, description="Estimated completion time")
 
 
 class StuckJobInfo(BaseModel):
@@ -294,15 +311,21 @@ async def list_matter_jobs(
     response_model=JobQueueStats,
     response_model_by_alias=True,
     summary="Get job queue statistics for a matter",
-    description="Get counts of jobs by status for a matter.",
+    description="Get counts of jobs by status for a matter, including estimated completion time.",
 )
 async def get_matter_job_stats(
     access: MatterAccessContext = Depends(validate_matter_access()),
     job_tracker: JobTrackingService = Depends(_get_job_tracker),
 ) -> JobQueueStats:
-    """Get job queue statistics for a matter."""
+    """Get job queue statistics for a matter.
+
+    Story 5.7: Now includes ETA estimate for pending jobs.
+    """
     from datetime import datetime, timezone
     from app.core.config import get_settings
+    from app.services.eta_calculator import get_eta_calculator
+    from app.services.document_service import get_document_service
+
     settings = get_settings()
 
     try:
@@ -327,6 +350,36 @@ async def get_matter_job_stats(
         except Exception:
             pass  # Don't fail stats if stuck count fails
 
+        # Story 5.7: Calculate ETA for pending jobs
+        eta_estimate = None
+        pending_count = stats.queued + stats.processing
+        if pending_count > 0:
+            try:
+                # Get pending documents with page counts
+                doc_service = get_document_service()
+                pending_docs = doc_service.get_pending_documents_for_matter(access.matter_id)
+
+                if pending_docs:
+                    eta_calculator = get_eta_calculator()
+                    eta_result = await eta_calculator.get_processing_eta(
+                        matter_id=access.matter_id,
+                        pending_docs=[{"page_count": d.get("page_count", 1)} for d in pending_docs],
+                    )
+                    eta_estimate = ETAEstimate(
+                        minSeconds=eta_result.min_seconds,
+                        maxSeconds=eta_result.max_seconds,
+                        bestGuessSeconds=eta_result.best_guess_seconds,
+                        confidence=eta_result.confidence,
+                        pendingPages=eta_result.factors.get("total_pages", 0),
+                    )
+            except Exception as eta_err:
+                logger.warning(
+                    "eta_calculation_failed",
+                    matter_id=access.matter_id,
+                    error=str(eta_err),
+                )
+                # Non-fatal: return stats without ETA
+
         return JobQueueStats(
             matter_id=access.matter_id,
             queued=stats.queued,
@@ -337,6 +390,7 @@ async def get_matter_job_stats(
             skipped=stats.skipped,
             stuck=stuck_count,
             avg_processing_time_ms=stats.avg_processing_time_ms,
+            eta=eta_estimate,
         )
 
     except JobTrackingError as e:

@@ -9,6 +9,22 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 
+def get_similarity_ratio(str1: str, str2: str) -> float:
+    """Get similarity ratio between two strings.
+
+    Uses token_set_ratio for word-order-independent matching.
+
+    Args:
+        str1: First string to compare.
+        str2: Second string to compare.
+
+    Returns:
+        Similarity ratio from 0.0 to 1.0.
+    """
+    score = fuzz.token_set_ratio(str1, str2)
+    return score / 100.0  # Convert 0-100 to 0.0-1.0
+
+
 @dataclass
 class FuzzyMatchResult:
     """Result of a fuzzy match operation."""

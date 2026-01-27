@@ -99,6 +99,19 @@ export interface ProcessingJobWithHistory extends ProcessingJob {
   stage_history: JobStageHistory[];
 }
 
+/**
+ * Estimated completion time with confidence range.
+ *
+ * Story 5.7: Processing ETA Display
+ */
+export interface ETAEstimate {
+  minSeconds: number;
+  maxSeconds: number;
+  bestGuessSeconds: number;
+  confidence: 'high' | 'medium' | 'low';
+  pendingPages: number;
+}
+
 /** Queue statistics for a matter */
 export interface JobQueueStats {
   matter_id: string;
@@ -110,6 +123,8 @@ export interface JobQueueStats {
   skipped: number;
   stuck: number;  // Jobs stuck in PROCESSING for too long
   avg_processing_time_ms: number | null;
+  // Story 5.7: ETA estimate for pending jobs
+  eta: ETAEstimate | null;
 }
 
 /** Information about a stuck job */

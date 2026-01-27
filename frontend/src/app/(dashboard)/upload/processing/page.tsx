@@ -26,6 +26,7 @@ import { createMatterAndUpload } from '@/lib/api/upload-orchestration';
 import { useProcessingStatus } from '@/hooks/useProcessingStatus';
 import { useLiveDiscoveries } from '@/hooks/useLiveDiscoveries';
 import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
+import { jobsApi } from '@/lib/api/jobs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 /**
@@ -340,9 +341,7 @@ export default function ProcessingPage() {
       const pollInterval = setInterval(async () => {
         try {
           // Only need stats for progress calculation, jobs list not needed for background polling
-          const statsRes = await fetch(`/api/jobs/matters/${matterId}/stats`).then((r) => r.json());
-
-          const stats = statsRes;
+          const stats = await jobsApi.getStats(matterId);
           const total = stats.queued + stats.processing + stats.completed + stats.failed;
           const done = stats.completed + stats.failed;
           const progress = total > 0 ? Math.round((done / total) * 100) : 0;

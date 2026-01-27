@@ -23,6 +23,7 @@ from app.api.routes import (
     chunks,
     citations,
     contradiction,
+    cross_engine,
     dashboard,
     documents,
     entities,
@@ -47,6 +48,7 @@ from app.api.routes import (
     ws,
 )
 from app.api.routes.admin import pipeline as admin_pipeline
+from app.api.routes.admin import quota as admin_quota
 from app.core.config import get_settings
 from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
@@ -321,6 +323,7 @@ def create_app() -> FastAPI:
     app.include_router(timeline.router, prefix="/api")
     app.include_router(anomalies.router, prefix="/api")
     app.include_router(contradiction.router, prefix="/api")
+    app.include_router(cross_engine.router, prefix="/api")
     app.include_router(verifications.router, prefix="/api")
     app.include_router(reasoning_traces.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
@@ -339,6 +342,7 @@ def create_app() -> FastAPI:
 
     # Admin routes (require admin access)
     app.include_router(admin_pipeline.router, prefix="/api")
+    app.include_router(admin_quota.router, prefix="/api")
 
     # WebSocket routes for real-time streaming
     app.include_router(ws.router, prefix="/api")

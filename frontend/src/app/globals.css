@@ -286,6 +286,58 @@
   opacity: 0.08;
 }
 
+/* Landing page light mode override - uses highest specificity with data attribute */
+[data-theme="light"].landing-light,
+[data-theme="light"].landing-light *,
+.dark [data-theme="light"].landing-light,
+.dark [data-theme="light"].landing-light * {
+  --background: #f8f6f1 !important;
+  --foreground: #1a1a1a !important;
+  --card: #ffffff !important;
+  --card-foreground: #1a1a1a !important;
+  --popover: #ffffff !important;
+  --popover-foreground: #1a1a1a !important;
+  --primary: #0d1b5e !important;
+  --primary-foreground: #ffffff !important;
+  --secondary: #f8f6f1 !important;
+  --secondary-foreground: #1a1a1a !important;
+  --muted: #e8e4dc !important;
+  --muted-foreground: #64748b !important;
+  --accent: #b8973b !important;
+  --accent-foreground: #0d1b5e !important;
+  --destructive: #8b2635 !important;
+  --destructive-foreground: #ffffff !important;
+  --border: #e8e4dc !important;
+  --input: #e8e4dc !important;
+  --ring: #0d1b5e !important;
+  --color-background: #f8f6f1 !important;
+  --color-foreground: #1a1a1a !important;
+  --color-card: #ffffff !important;
+  --color-card-foreground: #1a1a1a !important;
+  --color-popover: #ffffff !important;
+  --color-popover-foreground: #1a1a1a !important;
+  --color-primary: #0d1b5e !important;
+  --color-primary-foreground: #ffffff !important;
+  --color-secondary: #f8f6f1 !important;
+  --color-secondary-foreground: #1a1a1a !important;
+  --color-muted: #e8e4dc !important;
+  --color-muted-foreground: #64748b !important;
+  --color-accent: #b8973b !important;
+  --color-accent-foreground: #0d1b5e !important;
+  --color-destructive: #8b2635 !important;
+  --color-destructive-foreground: #ffffff !important;
+  --color-border: #e8e4dc !important;
+  --color-input: #e8e4dc !important;
+  --color-ring: #0d1b5e !important;
+  color-scheme: light !important;
+}
+
+/* Force light background on landing page container */
+.landing-light {
+  background-color: #f8f6f1 !important;
+  color: #1a1a1a !important;
+}
+
 /* Custom animations for upload/processing UI (Story 9-5) */
 @layer utilities {
   .animate-fade-in {

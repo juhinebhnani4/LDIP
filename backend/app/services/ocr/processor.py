@@ -9,6 +9,9 @@ Story 17.2: Circuit Breaker for Document AI
 - Prevents cascade failures in chunked processing
 """
 
+import json
+import os
+import tempfile
 import time
 from functools import lru_cache
 
@@ -18,6 +21,7 @@ import pypdf
 import structlog
 from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import documentai_v1 as documentai
+from google.oauth2 import service_account
 
 from app.core.circuit_breaker import (
     CircuitOpenError,
@@ -108,6 +112,10 @@ class OCRProcessor:
     def client(self) -> documentai.DocumentProcessorServiceClient:
         """Get or create Document AI client.
 
+        Supports two authentication methods:
+        1. GOOGLE_APPLICATION_CREDENTIALS env var (file path) - for local dev
+        2. GOOGLE_APPLICATION_CREDENTIALS_JSON env var (JSON content) - for production/Railway
+
         Returns:
             Document AI client instance.
 
@@ -116,7 +124,28 @@ class OCRProcessor:
         """
         if self._client is None:
             try:
-                self._client = documentai.DocumentProcessorServiceClient()
+                settings = get_settings()
+                credentials_json = settings.google_application_credentials_json
+
+                if credentials_json:
+                    # Production: Use JSON content directly
+                    logger.info("documentai_using_json_credentials")
+                    credentials_dict = json.loads(credentials_json)
+                    credentials = service_account.Credentials.from_service_account_info(
+                        credentials_dict
+                    )
+                    self._client = documentai.DocumentProcessorServiceClient(
+                        credentials=credentials
+                    )
+                else:
+                    # Local dev: Use GOOGLE_APPLICATION_CREDENTIALS file path
+                    logger.info("documentai_using_file_credentials")
+                    self._client = documentai.DocumentProcessorServiceClient()
+            except json.JSONDecodeError as e:
+                logger.error("documentai_json_parse_failed", error=str(e))
+                raise OCRConfigurationError(
+                    f"Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}"
+                ) from e
             except Exception as e:
                 logger.error("documentai_client_init_failed", error=str(e))
                 raise OCRConfigurationError(

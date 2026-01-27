@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     google_cloud_project_id: str = ""
     google_cloud_location: str = "us"
     google_document_ai_processor_id: str = ""
+    # For production: paste the entire service account JSON here
+    # This is used when GOOGLE_APPLICATION_CREDENTIALS file path isn't available
+    google_application_credentials_json: str = ""
 
     # Gemini Configuration
     gemini_api_key: str = ""

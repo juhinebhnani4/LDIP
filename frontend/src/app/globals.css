@@ -338,6 +338,89 @@
   color: #1a1a1a !important;
 }
 
+/* Force light mode on mobile/small tablets (under lg breakpoint: 1024px) */
+/* Dark mode is disabled on mobile for better UI consistency */
+@media (max-width: 1023px) {
+  html, html.dark {
+    --background: #f8f6f1 !important;
+    --foreground: #1a1a1a !important;
+    --card: #ffffff !important;
+    --card-foreground: #1a1a1a !important;
+    --popover: #ffffff !important;
+    --popover-foreground: #1a1a1a !important;
+    --primary: #0d1b5e !important;
+    --primary-foreground: #ffffff !important;
+    --secondary: #f8f6f1 !important;
+    --secondary-foreground: #1a1a1a !important;
+    --muted: #e8e4dc !important;
+    --muted-foreground: #64748b !important;
+    --accent: #b8973b !important;
+    --accent-foreground: #0d1b5e !important;
+    --destructive: #8b2635 !important;
+    --destructive-foreground: #ffffff !important;
+    --border: #e8e4dc !important;
+    --input: #e8e4dc !important;
+    --ring: #0d1b5e !important;
+    --chart-1: #0d1b5e !important;
+    --chart-2: #2d5a3d !important;
+    --chart-3: #b8973b !important;
+    --chart-4: #3b82f6 !important;
+    --chart-5: #8b2635 !important;
+    --sidebar: #f0ede8 !important;
+    --sidebar-foreground: #1a1a1a !important;
+    --sidebar-primary: #0d1b5e !important;
+    --sidebar-primary-foreground: #ffffff !important;
+    --sidebar-accent: #f8f6f1 !important;
+    --sidebar-accent-foreground: #1a1a1a !important;
+    --sidebar-border: #e8e4dc !important;
+    --sidebar-ring: #0d1b5e !important;
+    --success: #2d5a3d !important;
+    --success-foreground: #ffffff !important;
+    --warning: #d97706 !important;
+    --warning-foreground: #ffffff !important;
+    --info: #3b82f6 !important;
+    --info-foreground: #ffffff !important;
+    --seal-red: #8b2635 !important;
+    --legal-pad: #fffef0 !important;
+    --indigo: #0d1b5e !important;
+    --gold: #b8973b !important;
+    --burgundy: #8b2635 !important;
+    --forest: #2d5a3d !important;
+    color-scheme: light !important;
+  }
+
+  /* Tailwind 4 theme variables for mobile */
+  html, html.dark {
+    --color-background: #f8f6f1 !important;
+    --color-foreground: #1a1a1a !important;
+    --color-card: #ffffff !important;
+    --color-card-foreground: #1a1a1a !important;
+    --color-popover: #ffffff !important;
+    --color-popover-foreground: #1a1a1a !important;
+    --color-primary: #0d1b5e !important;
+    --color-primary-foreground: #ffffff !important;
+    --color-secondary: #f8f6f1 !important;
+    --color-secondary-foreground: #1a1a1a !important;
+    --color-muted: #e8e4dc !important;
+    --color-muted-foreground: #64748b !important;
+    --color-accent: #b8973b !important;
+    --color-accent-foreground: #0d1b5e !important;
+    --color-destructive: #8b2635 !important;
+    --color-destructive-foreground: #ffffff !important;
+    --color-border: #e8e4dc !important;
+    --color-input: #e8e4dc !important;
+    --color-ring: #0d1b5e !important;
+    --color-sidebar: #f0ede8 !important;
+    --color-sidebar-foreground: #1a1a1a !important;
+    --color-sidebar-primary: #0d1b5e !important;
+    --color-sidebar-primary-foreground: #ffffff !important;
+    --color-sidebar-accent: #f8f6f1 !important;
+    --color-sidebar-accent-foreground: #1a1a1a !important;
+    --color-sidebar-border: #e8e4dc !important;
+    --color-sidebar-ring: #0d1b5e !important;
+  }
+}
+
 /* Custom animations for upload/processing UI (Story 9-5) */
 @layer utilities {
   .animate-fade-in {

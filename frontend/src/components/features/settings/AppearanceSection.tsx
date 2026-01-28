@@ -117,7 +117,8 @@ export function AppearanceSection() {
 
         <div className="space-y-2">
           <Label>Theme</Label>
-          <div className="grid grid-cols-3 gap-3">
+          {/* Desktop: show all 3 options */}
+          <div className="hidden lg:grid grid-cols-3 gap-3">
             <ThemeOption
               value="light"
               label="Light"
@@ -142,6 +143,16 @@ export function AppearanceSection() {
               disabled={isUpdating}
               onSelect={handleThemeChange}
             />
+          </div>
+          {/* Mobile: only light mode, dark mode disabled on mobile */}
+          <div className="lg:hidden">
+            <div className="flex items-center gap-3 p-4 rounded-lg border-2 border-primary bg-primary/5">
+              <Sun className="size-6 text-primary" />
+              <div>
+                <span className="text-sm font-medium text-primary">Light Mode</span>
+                <p className="text-xs text-muted-foreground">Dark mode is available on desktop</p>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>

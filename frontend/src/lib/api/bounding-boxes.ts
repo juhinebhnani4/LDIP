@@ -101,17 +101,40 @@ export async function fetchBoundingBoxesForDocument(
  *
  * @param documentId - Document UUID
  * @param pageNumber - Page number (1-indexed)
+ * @param options - Fetch options
+ * @param options.includeText - Include text content (default true). Set false to reduce egress ~80%.
  * @returns Bounding boxes for the page
  */
 export async function fetchBoundingBoxesForPage(
   documentId: string,
-  pageNumber: number
+  pageNumber: number,
+  options?: { includeText?: boolean }
 ): Promise<BoundingBoxPageResponse> {
+  // EGRESS OPTIMIZATION: Allow opting out of text to reduce egress by ~80%
+  const includeText = options?.includeText ?? true  // Default true for backward compatibility
+  const params = includeText ? '' : '?include_text=false'
+
   const response = await api.get<{ data: Record<string, unknown>[] }>(
-    `/api/documents/${documentId}/pages/${pageNumber}/bounding-boxes`
+    `/api/documents/${documentId}/pages/${pageNumber}/bounding-boxes${params}`
   )
 
   return transformPageResponse(response)
+}
+
+/**
+ * Fetch bounding box coordinates only (no text) for a specific page.
+ * EGRESS OPTIMIZATION: Use this for highlighting-only scenarios.
+ * Reduces egress by approximately 80% compared to full fetch.
+ *
+ * @param documentId - Document UUID
+ * @param pageNumber - Page number (1-indexed)
+ * @returns Bounding boxes with coordinates only (text will be empty string)
+ */
+export async function fetchBoundingBoxCoordsForPage(
+  documentId: string,
+  pageNumber: number
+): Promise<BoundingBoxPageResponse> {
+  return fetchBoundingBoxesForPage(documentId, pageNumber, { includeText: false })
 }
 
 /**
@@ -121,16 +144,36 @@ export async function fetchBoundingBoxesForPage(
  * Useful for highlighting search results or citations.
  *
  * @param chunkId - Chunk UUID
+ * @param options - Fetch options
+ * @param options.includeText - Include text content (default true). Set false to reduce egress ~80%.
  * @returns Bounding boxes linked to the chunk
  */
 export async function fetchBoundingBoxesForChunk(
-  chunkId: string
+  chunkId: string,
+  options?: { includeText?: boolean }
 ): Promise<BoundingBoxPageResponse> {
+  const includeText = options?.includeText ?? true
+  const params = includeText ? '' : '?include_text=false'
+
   const response = await api.get<{ data: Record<string, unknown>[] }>(
-    `/api/chunks/${chunkId}/bounding-boxes`
+    `/api/chunks/${chunkId}/bounding-boxes${params}`
   )
 
   return transformPageResponse(response)
+}
+
+/**
+ * Fetch bounding box coordinates only (no text) for a chunk.
+ * EGRESS OPTIMIZATION: Use this for highlighting-only scenarios.
+ * Reduces egress by approximately 80% compared to full fetch.
+ *
+ * @param chunkId - Chunk UUID
+ * @returns Bounding boxes with coordinates only (text will be empty string)
+ */
+export async function fetchBoundingBoxCoordsForChunk(
+  chunkId: string
+): Promise<BoundingBoxPageResponse> {
+  return fetchBoundingBoxesForChunk(chunkId, { includeText: false })
 }
 
 /**
@@ -141,16 +184,37 @@ export async function fetchBoundingBoxesForChunk(
  *
  * @param bboxIds - Array of bbox UUIDs
  * @param matterId - Matter UUID for access control
+ * @param options - Fetch options
+ * @param options.includeText - Include text content (default true). Set false to reduce egress ~80%.
  * @returns Bounding boxes matching the IDs
  */
 export async function fetchBoundingBoxesByIds(
   bboxIds: string[],
-  matterId: string
+  matterId: string,
+  options?: { includeText?: boolean }
 ): Promise<BoundingBoxPageResponse> {
+  const includeText = options?.includeText ?? true
+
   const response = await api.post<{ data: Record<string, unknown>[] }>(
     '/api/bounding-boxes/by-ids',
-    { bbox_ids: bboxIds, matter_id: matterId }
+    { bbox_ids: bboxIds, matter_id: matterId, include_text: includeText }
   )
 
   return transformPageResponse(response)
+}
+
+/**
+ * Fetch bounding box coordinates only (no text) by their IDs.
+ * EGRESS OPTIMIZATION: Use this for highlighting-only scenarios.
+ * Reduces egress by approximately 80% compared to full fetch.
+ *
+ * @param bboxIds - Array of bbox UUIDs
+ * @param matterId - Matter UUID for access control
+ * @returns Bounding boxes with coordinates only (text will be empty string)
+ */
+export async function fetchBoundingBoxCoordsByIds(
+  bboxIds: string[],
+  matterId: string
+): Promise<BoundingBoxPageResponse> {
+  return fetchBoundingBoxesByIds(bboxIds, matterId, { includeText: false })
 }

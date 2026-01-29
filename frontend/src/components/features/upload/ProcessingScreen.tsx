@@ -153,6 +153,7 @@ export function ProcessingScreen({
             <LiveDiscoveriesPanel
               discoveries={liveDiscoveries}
               isProcessing={!uploadsComplete || processingStage !== null}
+              currentStage={processingStage}
             />
           </div>
         </div>

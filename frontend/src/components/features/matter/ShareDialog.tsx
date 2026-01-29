@@ -85,6 +85,12 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface ShareDialogProps {
   /** Matter ID for sharing context */
   matterId: string;
+  /** External open state (controlled mode) */
+  open?: boolean;
+  /** Callback when open state changes (controlled mode) */
+  onOpenChange?: (open: boolean) => void;
+  /** Whether to render the trigger button (set to false when using external trigger) */
+  showTrigger?: boolean;
 }
 
 /**
@@ -99,9 +105,17 @@ interface ShareDialogProps {
  *
  * @param matterId - Matter ID for API calls (used when fetching/inviting collaborators)
  */
-export function ShareDialog({ matterId }: ShareDialogProps) {
+export function ShareDialog({
+  matterId,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  showTrigger = true,
+}: ShareDialogProps) {
   const { user } = useUser();
-  const [isOpen, setIsOpen] = useState(false);
+  // Support both controlled and uncontrolled modes
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
+  const setIsOpen = controlledOnOpenChange ?? setUncontrolledOpen;
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<CollaboratorRole>('editor');
   const [isInviting, setIsInviting] = useState(false);
@@ -235,18 +249,20 @@ export function ShareDialog({ matterId }: ShareDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Share matter">
-              <Users className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Share</p>
-        </TooltipContent>
-      </Tooltip>
+      {showTrigger && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Share matter">
+                <Users className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Share</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
       <DialogContent className="sm:max-w-[425px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>Share Matter</DialogTitle>

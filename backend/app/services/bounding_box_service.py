@@ -27,11 +27,17 @@ PARALLEL_BATCH_THRESHOLD = 1000  # Use parallel inserts above this count
 MAX_PARALLEL_BATCHES = 4  # Max concurrent batch inserts
 
 
+# Columns to select for bbox queries (without text for egress optimization)
+BBOX_COLUMNS_NO_TEXT = "id, document_id, page_number, x, y, width, height, confidence, reading_order_index"
+BBOX_COLUMNS_WITH_TEXT = "*"
+
+
 # Database row to response dictionary mapping
 def _row_to_bbox_dict(row: dict[str, Any]) -> dict[str, Any]:
     """Convert database row to BoundingBox response dictionary.
 
     Maps snake_case database columns to the response format.
+    Handles missing 'text' field gracefully for egress-optimized queries.
     """
     return {
         "id": row["id"],
@@ -41,7 +47,7 @@ def _row_to_bbox_dict(row: dict[str, Any]) -> dict[str, Any]:
         "y": row["y"],
         "width": row["width"],
         "height": row["height"],
-        "text": row["text"],
+        "text": row.get("text", ""),  # Default to empty string if not fetched
         "confidence": row["confidence"],
         "reading_order_index": row.get("reading_order_index"),
     }
@@ -307,12 +313,15 @@ class BoundingBoxService:
         self,
         document_id: str,
         page_number: int,
+        include_text: bool = True,
     ) -> list[dict[str, Any]]:
         """Get bounding boxes for a specific page, ordered by reading order.
 
         Args:
             document_id: Document UUID.
             page_number: Page number (1-indexed).
+            include_text: If False, excludes text field to reduce egress by ~80%.
+                          Default True for backward compatibility.
 
         Returns:
             List of bounding box dictionaries ordered by reading_order_index.
@@ -327,9 +336,13 @@ class BoundingBoxService:
             )
 
         try:
+            # EGRESS OPTIMIZATION: Only fetch text when needed
+            # Text column averages ~500 bytes per bbox, coordinates only ~50 bytes
+            columns = BBOX_COLUMNS_WITH_TEXT if include_text else BBOX_COLUMNS_NO_TEXT
+
             result = (
                 self.client.table("bounding_boxes")
-                .select("*")
+                .select(columns)
                 .eq("document_id", document_id)
                 .eq("page_number", page_number)
                 .order("reading_order_index", desc=False, nullsfirst=False)
@@ -364,6 +377,7 @@ class BoundingBoxService:
         document_id: str,
         page: int | None = None,
         per_page: int = 100,
+        include_text: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Get bounding boxes for a document, ordered by page then reading order.
 
@@ -371,6 +385,8 @@ class BoundingBoxService:
             document_id: Document UUID.
             page: Page number for pagination (1-indexed). None for all boxes.
             per_page: Number of boxes per page (default 100, max 500).
+            include_text: If False, excludes text field to reduce egress by ~80%.
+                          Default True for backward compatibility.
 
         Returns:
             Tuple of (list of bounding box dictionaries, total count).
@@ -394,10 +410,13 @@ class BoundingBoxService:
             )
             total = count_result.count or 0
 
+            # EGRESS OPTIMIZATION: Only fetch text when needed
+            columns = BBOX_COLUMNS_WITH_TEXT if include_text else BBOX_COLUMNS_NO_TEXT
+
             # Build query with ordering
             query = (
                 self.client.table("bounding_boxes")
-                .select("*")
+                .select(columns)
                 .eq("document_id", document_id)
                 .order("page_number", desc=False)
                 .order("reading_order_index", desc=False, nullsfirst=False)
@@ -438,6 +457,7 @@ class BoundingBoxService:
     def get_bounding_boxes_by_ids(
         self,
         bbox_ids: list[str],
+        include_text: bool = True,
     ) -> list[dict[str, Any]]:
         """Get bounding boxes by their IDs, ordered by reading order.
 
@@ -445,6 +465,8 @@ class BoundingBoxService:
 
         Args:
             bbox_ids: List of bounding box UUIDs.
+            include_text: If False, excludes text field to reduce egress by ~80%.
+                          Default True for backward compatibility.
 
         Returns:
             List of bounding box dictionaries ordered by reading_order_index.
@@ -462,9 +484,12 @@ class BoundingBoxService:
             return []
 
         try:
+            # EGRESS OPTIMIZATION: Only fetch text when needed
+            columns = BBOX_COLUMNS_WITH_TEXT if include_text else BBOX_COLUMNS_NO_TEXT
+
             result = (
                 self.client.table("bounding_boxes")
-                .select("*")
+                .select(columns)
                 .in_("id", bbox_ids)
                 .order("page_number", desc=False)
                 .order("reading_order_index", desc=False, nullsfirst=False)

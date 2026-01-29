@@ -56,6 +56,12 @@ const VERIFICATION_MODES: {
 interface MatterSettingsDialogProps {
   /** Matter ID for settings context */
   matterId: string;
+  /** External open state (controlled mode) */
+  open?: boolean;
+  /** Callback when open state changes (controlled mode) */
+  onOpenChange?: (open: boolean) => void;
+  /** Whether to render the trigger button (set to false when using external trigger) */
+  showTrigger?: boolean;
 }
 
 /**
@@ -68,8 +74,16 @@ interface MatterSettingsDialogProps {
  * - Default = advisory (acknowledgment only)
  * - Court-ready = 100% verification required
  */
-export function MatterSettingsDialog({ matterId }: MatterSettingsDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function MatterSettingsDialog({
+  matterId,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  showTrigger = true,
+}: MatterSettingsDialogProps) {
+  // Support both controlled and uncontrolled modes
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
+  const setIsOpen = controlledOnOpenChange ?? setUncontrolledOpen;
   const [isSaving, setIsSaving] = useState(false);
   const currentMatter = useMatterStore((state) => state.currentMatter);
   const updateStoreMatter = useMatterStore((state) => state.updateMatter);
@@ -141,23 +155,25 @@ export function MatterSettingsDialog({ matterId }: MatterSettingsDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Settings"
-              data-testid="workspace-settings-button"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Settings</p>
-        </TooltipContent>
-      </Tooltip>
+      {showTrigger && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Settings"
+                data-testid="workspace-settings-button"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Settings</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Matter Settings</DialogTitle>

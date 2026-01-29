@@ -9,7 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://jaanch-ai.vercel.app/"><img src="https://img.shields.io/badge/Website-jaanch.ai-1a2744?style=for-the-badge" alt="Website"></a>
+  <a href="https://jaanch.ai"><img src="https://img.shields.io/badge/Website-jaanch.ai-1a2744?style=for-the-badge" alt="Website"></a>
+  <a href="https://app.jaanch.com"><img src="https://img.shields.io/badge/App-app.jaanch.com-c9a227?style=for-the-badge" alt="App"></a>
 </p>
 
 **Jaanch** is an *AI-powered legal document intelligence platform* built for Indian lawyers. It reads every page of your case files — 700 pages, 2000 pages, doesn't matter — and finds what humans miss: contradictions, misquoted laws, timeline gaps, and missing documents. Every finding is cited to the exact page and line. No hallucinations. No trust required.
@@ -59,7 +60,7 @@ celery -A app.workers.celery_app beat --loglevel=info
 | **Domain** | Generic | Indian legal documents |
 | **Hallucinations** | Prone to them | Evidence-bound only |
 | **Act verification** | Not supported | Validates against actual statutes |
-| **Documents** | Clean text only | Scanned PDFs, handwritten, multilingual |
+| **Documents** | Clean text only | Scanned PDFs, multilingual (Hindi/English) |
 
 ## The 4 engines
 
@@ -94,8 +95,8 @@ Each engine runs independently on every document and cross-references results vi
                          ▼
               ┌─────────────────────┐
               │ Embedding Pipeline  │
-              │  (OpenAI + Vector   │
-              │   Store Upload)     │
+              │  (OpenAI + pgvector │
+              │   HNSW Upload)      │
               └──────────┬──────────┘
                          │
             ┌────────────┼────────────┐────────────┐
@@ -124,7 +125,7 @@ Each engine runs independently on every document and cross-references results vi
      ┌───────────┐ ┌──────────┐ ┌──────────┐
      │ WebSocket │ │  REST    │ │  Export  │
      │ (live)    │ │  API     │ │  (PDF/   │
-     │           │ │          │ │  DOCX)   │
+     │           │ │          │ │ DOCX/PPT)│
      └───────────┘ └──────────┘ └──────────┘
 ```
 
@@ -140,14 +141,14 @@ Each engine runs independently on every document and cross-references results vi
 ### Document processing pipeline
 
 - **OCR pipeline**: Google Document AI → Gemini-based validation → pattern correction → confidence scoring → bounding box extraction.
-- **Chunking pipeline**: PDF format detection and routing → parent-child hierarchical chunking → bounding box linking → section indexing → token counting.
-- **Embedding pipeline**: text preparation → OpenAI text-embedding-3-small → vector store upload (Pinecone hybrid indexes).
+- **Chunking pipeline**: PDF format detection and routing → parent-child hierarchical chunking → bounding box linking → token counting.
+- **Embedding pipeline**: text preparation → OpenAI text-embedding-3-small → pgvector (PostgreSQL HNSW indexes with hybrid BM25 + semantic search).
 - **Table extraction**: detect and extract structured tables from documents.
-- **Document handling**: scanned PDFs, handwritten notes, mixed Hindi/English, ZIP file extraction, bulk uploads.
+- **Document handling**: scanned PDFs, mixed Hindi/English, ZIP file extraction, bulk uploads.
 
 ### AI engines
 
-- **Timeline engine**: date extraction → event classification (8+ legal event types) → entity linking → anomaly detection → legal sequence validation.
+- **Timeline engine**: date extraction → event classification (7 legal event types) → entity linking → anomaly detection → legal sequence validation.
 - **Entity engine**: named entity extraction → relationship extraction → alias generation → entity consolidation → relationship graph building → correction learning from manual fixes.
 - **Citation engine**: citation pattern matching → India Code format parsing → act index lookup → abbreviation resolution → act validation → cross-reference verification → missing act discovery.
 - **Contradiction engine**: statement extraction → statement comparison → semantic similarity scoring → conflict classification (4+ types) → evidence confidence scoring → severity ranking.
@@ -165,18 +166,18 @@ Each engine runs independently on every document and cross-references results vi
 
 ### AI/ML integrations
 
-- **GPT-4o**: main reasoning, user-facing chat, accuracy-critical tasks.
-- **Gemini 2.0 Flash**: fast inference, OCR validation, screening.
+- **GPT-4 Turbo**: main reasoning, user-facing chat, accuracy-critical tasks.
+- **Gemini 2.5 Flash**: fast inference, OCR validation, contradiction screening.
 - **OpenAI Embeddings**: text-embedding-3-small for vector search.
 - **Cohere Rerank v3.5**: search result reranking.
-- **Multi-model failover**: automatic provider switching on failure.
+- **Circuit breaker resilience**: per-service circuit breakers with exponential backoff, graceful degradation on failure.
 
 ### Frontend application
 
 - **Next.js 16 + React 19** SPA with App Router.
-- **16 Zustand stores**: matter, chat, Q&A panel, upload, upload wizard, workspace, verification, processing, background processing, notifications, activity, split view, PDF split view, features, library, inspector.
-- **370+ components** across: authentication, document management, upload wizard, citations browser, contradiction explorer, entity graph (XY Flow + Dagre), timeline visualization (list + horizontal + multi-track), summary editor, verification workflow, chat/Q&A with streaming, PDF viewer with bounding box overlay, export builder with drag-to-reorder, dashboard, admin panel, settings, help system, onboarding wizard.
-- **Export system**: PDF, DOCX, HTML with template selection, custom section ordering, live preview, and section-specific renderers (summary, findings, timeline, entities, citations, contradictions).
+- **17 Zustand stores**: matter, chat, Q&A panel, upload, upload wizard, workspace, verification, processing, background processing, notifications, activity, split view, PDF split view, features, library, inspector.
+- **258 components** across: authentication, document management, upload wizard, citations browser, contradiction explorer, entity graph (XY Flow + Dagre), timeline visualization (list + horizontal + multi-track), summary editor, verification workflow, chat/Q&A with streaming, PDF viewer with bounding box overlay, export builder with drag-to-reorder, dashboard, admin panel, settings, help system, onboarding wizard.
+- **Export system**: PDF, DOCX, PowerPoint with template selection, custom section ordering, live preview, and section-specific renderers (summary, findings, timeline, entities, citations, contradictions).
 - **PDF viewer**: split-view, fullscreen, bounding box overlay for citation highlighting.
 - **Entity graph**: interactive force-directed graph with XY Flow, Dagre layout, entity merging, and merge suggestions.
 
@@ -187,9 +188,9 @@ Each engine runs independently on every document and cross-references results vi
 - **Health checks**: liveness (`/health`), readiness (`/health/ready`), circuit breaker status, rate limit status, dependency health monitoring.
 - **Caching**: Redis connection pooling, query result caching, session management, matter metadata caching, summary caching (1-hour TTL).
 - **Distributed locking**: Redis-backed locks with expiration for deduplication and rate limit enforcement.
-- **Cost tracking**: per-request LLM cost calculation, provider-level tracking (OpenAI, Gemini, Cohere, Claude), matter-level rollup, batch aggregation, admin dashboard.
+- **Cost tracking**: per-request LLM cost calculation, provider-level tracking (OpenAI, Gemini, Cohere, Document AI), matter-level rollup, batch aggregation, admin dashboard.
 - **Email**: Resend API integration, async Celery-based delivery, HTML templates.
-- **Observability**: structlog structured logging, correlation IDs, SSE error tracking, WebSocket connection metrics, processing stage history.
+- **Observability**: structlog structured logging, correlation IDs, WebSocket connection metrics, processing stage history.
 - **Security**: JWT authentication, matter-level RBAC, WebSocket auth, Supabase RLS multi-tenant isolation.
 
 ### Testing
@@ -205,9 +206,9 @@ jaanch/
 │   ├── src/
 │   │   ├── app/                # App Router pages (auth, dashboard, matter workspace)
 │   │   ├── components/
-│   │   │   ├── ui/             # 48 base UI components (Radix + Tailwind)
-│   │   │   └── features/       # 322 feature components across 26 modules
-│   │   ├── stores/             # 16 Zustand stores
+│   │   │   ├── ui/             # 41 base UI components (Radix + Tailwind)
+│   │   │   └── features/       # 217 feature components across 26 modules
+│   │   ├── stores/             # 17 Zustand stores
 │   │   ├── hooks/              # Custom React hooks
 │   │   ├── lib/                # Utilities, API client, constants
 │   │   └── types/              # TypeScript type definitions

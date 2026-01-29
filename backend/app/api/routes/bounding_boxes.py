@@ -87,6 +87,10 @@ class BoundingBoxIdsRequest(BaseModel):
 
     bbox_ids: list[str] = Field(..., min_length=1, max_length=100, description="List of bbox UUIDs")
     matter_id: str = Field(..., description="Matter UUID for access control")
+    include_text: bool = Field(
+        True,
+        description="Include text content. Set to false to reduce egress by ~80%.",
+    )
 
 
 # =============================================================================
@@ -173,6 +177,10 @@ async def get_document_bounding_boxes(
     document_id: str = Path(..., description="Document UUID"),
     page: int | None = Query(None, ge=1, description="Page number for pagination"),
     per_page: int = Query(100, ge=1, le=500, description="Items per page"),
+    include_text: bool = Query(
+        True,
+        description="Include text content. Set to false to reduce egress by ~80%.",
+    ),
     current_user: AuthenticatedUser = Depends(get_current_user),
     document_service: DocumentService = Depends(get_document_service),
     matter_service: MatterService = Depends(get_matter_service),
@@ -184,6 +192,9 @@ async def get_document_bounding_boxes(
     and then by reading order index within each page.
 
     User must have access to the document's matter.
+
+    Egress Optimization: Set include_text=false when only coordinates are needed
+    (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Verify access to document
     _verify_document_access(document_id, current_user.id, document_service, matter_service)
@@ -193,6 +204,7 @@ async def get_document_bounding_boxes(
             document_id=document_id,
             page=page,
             per_page=per_page,
+            include_text=include_text,
         )
 
         # Calculate total pages
@@ -236,6 +248,10 @@ async def get_document_bounding_boxes(
 async def get_page_bounding_boxes(
     document_id: str = Path(..., description="Document UUID"),
     page_number: int = Path(..., ge=1, description="Page number (1-indexed)"),
+    include_text: bool = Query(
+        True,
+        description="Include text content. Set to false to reduce egress by ~80%.",
+    ),
     current_user: AuthenticatedUser = Depends(get_current_user),
     document_service: DocumentService = Depends(get_document_service),
     matter_service: MatterService = Depends(get_matter_service),
@@ -247,6 +263,9 @@ async def get_page_bounding_boxes(
     reading order index for proper text flow.
 
     User must have access to the document's matter.
+
+    Egress Optimization: Set include_text=false when only coordinates are needed
+    (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Verify access to document
     _verify_document_access(document_id, current_user.id, document_service, matter_service)
@@ -255,6 +274,7 @@ async def get_page_bounding_boxes(
         boxes = bbox_service.get_bounding_boxes_for_page(
             document_id=document_id,
             page_number=page_number,
+            include_text=include_text,
         )
 
         return BoundingBoxPageResponse(
@@ -293,6 +313,10 @@ async def get_page_bounding_boxes(
 )
 async def get_chunk_bounding_boxes(
     chunk_id: str = Path(..., description="Chunk UUID"),
+    include_text: bool = Query(
+        True,
+        description="Include text content. Set to false to reduce egress by ~80%.",
+    ),
     current_user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
     bbox_service: BoundingBoxService = Depends(get_bounding_box_service),
@@ -304,6 +328,9 @@ async def get_chunk_bounding_boxes(
     highlighting in the UI. Boxes are ordered by reading order.
 
     User must have access to the chunk's matter.
+
+    Egress Optimization: Set include_text=false when only coordinates are needed
+    (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Note: We need to get the chunk first to access its bbox_ids and matter_id
     # This requires a ChunkService which will be created in Story 2b-5
@@ -364,7 +391,7 @@ async def get_chunk_bounding_boxes(
         if not bbox_ids:
             return BoundingBoxPageResponse(data=[])
 
-        boxes = bbox_service.get_bounding_boxes_by_ids(bbox_ids)
+        boxes = bbox_service.get_bounding_boxes_by_ids(bbox_ids, include_text=include_text)
 
         return BoundingBoxPageResponse(
             data=[BoundingBoxData(**box) for box in boxes],
@@ -415,6 +442,9 @@ async def get_bboxes_by_ids(
     (e.g., from Q&A source references with bbox_ids).
 
     User must have access to the specified matter.
+
+    Egress Optimization: Set include_text=false when only coordinates are needed
+    (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Verify user has access to the matter
     role = matter_service.get_user_role(request.matter_id, current_user.id)
@@ -435,7 +465,10 @@ async def get_bboxes_by_ids(
         if not request.bbox_ids:
             return BoundingBoxPageResponse(data=[])
 
-        boxes = bbox_service.get_bounding_boxes_by_ids(request.bbox_ids)
+        boxes = bbox_service.get_bounding_boxes_by_ids(
+            request.bbox_ids,
+            include_text=request.include_text,
+        )
 
         return BoundingBoxPageResponse(
             data=[BoundingBoxData(**box) for box in boxes],

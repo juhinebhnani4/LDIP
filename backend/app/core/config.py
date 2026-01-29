@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # Model Routing for Contradiction Detection (Cost Optimization)
     # Two-tier approach: Gemini Flash screens first, GPT-4 only for uncertain/contradictions
     contradiction_model_routing_enabled: bool = True  # Enable two-tier routing
-    contradiction_screening_model: str = "gemini-2.0-flash"  # Fast/cheap for initial screening
+    contradiction_screening_model: str = "gemini-2.5-flash"  # Fast/cheap for initial screening
     contradiction_screening_confidence_threshold: float = 0.85  # Below this -> escalate to GPT-4
     contradiction_escalate_results: list[str] = ["contradiction", "uncertain"]  # Results to escalate
 

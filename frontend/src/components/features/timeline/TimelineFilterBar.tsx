@@ -15,11 +15,13 @@ import {
   X,
   Check,
   ChevronDown,
+  ChevronUp,
   Calendar as CalendarIcon,
   Shield,
   ShieldCheck,
   ShieldOff,
   AlertTriangle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +72,12 @@ interface TimelineFilterBarProps {
   entities: EntityOption[];
   /** Count of unreviewed anomalies (to show badge) */
   anomalyCount?: number;
+  /** Whether the filter bar starts collapsed (default: true for UX density) */
+  defaultCollapsed?: boolean;
+  /** Controlled collapsed state (optional) */
+  collapsed?: boolean;
+  /** Callback when collapsed state changes */
+  onCollapsedChange?: (collapsed: boolean) => void;
   /** Additional CSS classes */
   className?: string;
 }
@@ -476,14 +484,25 @@ function VerificationStatusFilter({
 
 /**
  * TimelineFilterBar component
+ *
+ * UX Optimization: Collapsed by default to reduce visual clutter.
+ * Shows a compact "Filters" button that expands on click.
  */
 export function TimelineFilterBar({
   filters,
   onFiltersChange,
   entities,
   anomalyCount = 0,
+  defaultCollapsed = true,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
   className,
 }: TimelineFilterBarProps) {
+  // Support both controlled and uncontrolled collapse state
+  const [uncontrolledCollapsed, setUncontrolledCollapsed] = useState(defaultCollapsed);
+  const isCollapsed = controlledCollapsed ?? uncontrolledCollapsed;
+  const setIsCollapsed = onCollapsedChange ?? setUncontrolledCollapsed;
+
   const activeFilterCount = useMemo(
     () => countActiveFilters(filters),
     [filters]
@@ -492,6 +511,10 @@ export function TimelineFilterBar({
   const handleClearFilters = useCallback(() => {
     onFiltersChange(DEFAULT_TIMELINE_FILTERS);
   }, [onFiltersChange]);
+
+  const toggleCollapsed = useCallback(() => {
+    setIsCollapsed(!isCollapsed);
+  }, [isCollapsed, setIsCollapsed]);
 
   const handleEventTypesChange = useCallback(
     (eventTypes: TimelineEventType[]) => {
@@ -528,83 +551,148 @@ export function TimelineFilterBar({
     onFiltersChange({ ...filters, showAnomaliesOnly: !filters.showAnomaliesOnly });
   }, [filters, onFiltersChange]);
 
+  // Collapsed view: just a "Filters" button with active count
+  if (isCollapsed) {
+    return (
+      <div
+        className={cn(
+          'flex items-center gap-2 py-2 border-b bg-background',
+          className
+        )}
+        role="toolbar"
+        aria-label="Timeline filters (collapsed)"
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleCollapsed}
+          className="h-8 gap-2 text-muted-foreground hover:text-foreground"
+          aria-expanded={false}
+          aria-label={`Show filters${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ''}`}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span>Filters</span>
+          {activeFilterCount > 0 && (
+            <Badge variant="secondary" className="ml-1 rounded-sm px-1.5 font-normal">
+              {activeFilterCount}
+            </Badge>
+          )}
+          <ChevronDown className="h-4 w-4 ml-1" />
+        </Button>
+
+        {/* Quick clear when collapsed with active filters */}
+        {activeFilterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearFilters}
+            className="h-8 text-muted-foreground hover:text-foreground"
+            aria-label="Clear all filters"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // Expanded view: full filter controls
   return (
     <div
       className={cn(
-        'flex items-center gap-2 flex-wrap py-3 border-b bg-background',
+        'flex flex-col gap-2 py-3 border-b bg-background',
         className
       )}
       role="toolbar"
       aria-label="Timeline filters"
     >
-      {/* Event Type Filter */}
-      <EventTypeFilter
-        selected={filters.eventTypes}
-        onChange={handleEventTypesChange}
-      />
-
-      {/* Actor Filter */}
-      <ActorFilter
-        selected={filters.entityIds}
-        onChange={handleEntityIdsChange}
-        entities={entities}
-      />
-
-      {/* Date Range Filter */}
-      <DateRangeFilter
-        startDate={filters.dateRange.start}
-        endDate={filters.dateRange.end}
-        onChange={handleDateRangeChange}
-      />
-
-      {/* Verification Status Filter */}
-      <VerificationStatusFilter
-        status={filters.verificationStatus}
-        onChange={handleVerificationStatusChange}
-      />
-
-      {/* Anomalies Filter (Story 14.16) */}
-      {anomalyCount > 0 && (
-        <Button
-          variant={filters.showAnomaliesOnly ? 'secondary' : 'outline'}
-          size="sm"
-          className={cn(
-            'h-8 border-dashed gap-1',
-            filters.showAnomaliesOnly && 'border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-          )}
-          onClick={handleAnomaliesToggle}
-          aria-pressed={filters.showAnomaliesOnly}
-          aria-label="Filter to show only events with anomalies"
-        >
-          <AlertTriangle className={cn('h-4 w-4', filters.showAnomaliesOnly && 'text-orange-600')} />
-          Anomalies
-          <Badge
-            variant="secondary"
-            className={cn(
-              'ml-1 rounded-sm px-1 font-normal',
-              filters.showAnomaliesOnly
-                ? 'bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200'
-                : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
-            )}
-          >
-            {anomalyCount}
-          </Badge>
-        </Button>
-      )}
-
-      {/* Clear Filters Button */}
-      {activeFilterCount > 0 && (
+      {/* Collapse toggle row */}
+      <div className="flex items-center justify-between">
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleClearFilters}
-          className="h-8 text-muted-foreground hover:text-foreground"
-          aria-label={`Clear all filters (${activeFilterCount} active)`}
+          onClick={toggleCollapsed}
+          className="h-7 gap-1.5 text-muted-foreground hover:text-foreground px-2"
+          aria-expanded={true}
+          aria-label="Hide filters"
         >
-          <X className="mr-1 h-4 w-4" />
-          Clear ({activeFilterCount})
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="text-xs font-medium">Filters</span>
+          <ChevronUp className="h-4 w-4" />
         </Button>
-      )}
+
+        {/* Clear Filters Button */}
+        {activeFilterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearFilters}
+            className="h-7 text-muted-foreground hover:text-foreground text-xs"
+            aria-label={`Clear all filters (${activeFilterCount} active)`}
+          >
+            <X className="mr-1 h-3 w-3" />
+            Clear ({activeFilterCount})
+          </Button>
+        )}
+      </div>
+
+      {/* Filter controls row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Event Type Filter */}
+        <EventTypeFilter
+          selected={filters.eventTypes}
+          onChange={handleEventTypesChange}
+        />
+
+        {/* Actor Filter */}
+        <ActorFilter
+          selected={filters.entityIds}
+          onChange={handleEntityIdsChange}
+          entities={entities}
+        />
+
+        {/* Date Range Filter */}
+        <DateRangeFilter
+          startDate={filters.dateRange.start}
+          endDate={filters.dateRange.end}
+          onChange={handleDateRangeChange}
+        />
+
+        {/* Verification Status Filter */}
+        <VerificationStatusFilter
+          status={filters.verificationStatus}
+          onChange={handleVerificationStatusChange}
+        />
+
+        {/* Anomalies Filter (Story 14.16) */}
+        {anomalyCount > 0 && (
+          <Button
+            variant={filters.showAnomaliesOnly ? 'secondary' : 'outline'}
+            size="sm"
+            className={cn(
+              'h-8 border-dashed gap-1',
+              filters.showAnomaliesOnly && 'border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+            )}
+            onClick={handleAnomaliesToggle}
+            aria-pressed={filters.showAnomaliesOnly}
+            aria-label="Filter to show only events with anomalies"
+          >
+            <AlertTriangle className={cn('h-4 w-4', filters.showAnomaliesOnly && 'text-orange-600')} />
+            Anomalies
+            <Badge
+              variant="secondary"
+              className={cn(
+                'ml-1 rounded-sm px-1 font-normal',
+                filters.showAnomaliesOnly
+                  ? 'bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200'
+                  : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+              )}
+            >
+              {anomalyCount}
+            </Badge>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

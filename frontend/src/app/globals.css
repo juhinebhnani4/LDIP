@@ -438,3 +438,103 @@
     }
   }
 }
+
+/* =============================================================================
+   UX IMPROVEMENT: "Breathable" Workspace Spacing System
+   Story: Visual Density Fixes - Make the app breathe
+
+   These utilities provide increased whitespace for better visual hierarchy.
+   Apply to workspace containers for more relaxed, scannable layouts.
+   ============================================================================= */
+
+@layer components {
+  /* Workspace content areas - more generous padding */
+  .workspace-content-breathable {
+    padding: 1.5rem; /* 24px instead of 12-16px */
+  }
+
+  /* Cards with breathing room */
+  .card-breathable {
+    padding: 1.25rem; /* 20px instead of 12px */
+  }
+
+  .card-breathable > * + * {
+    margin-top: 0.75rem; /* 12px spacing between children */
+  }
+
+  /* Chat messages with clear separation */
+  .chat-message-breathable {
+    padding: 1.25rem 1rem; /* 20px 16px instead of 8px 12px */
+  }
+
+  .chat-message-breathable + .chat-message-breathable {
+    border-top: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Tab items with comfortable touch targets */
+  .tab-item-breathable {
+    padding: 0.75rem 1.25rem; /* 12px 20px instead of 8px 16px */
+    gap: 0.625rem;
+  }
+
+  /* Filter/toolbar rows with space */
+  .toolbar-breathable {
+    padding: 0.75rem 1rem;
+    gap: 1rem;
+  }
+
+  /* List items with scan-friendly spacing */
+  .list-item-breathable {
+    padding: 1rem;
+  }
+
+  /* Section headers with visual weight */
+  .section-header-breathable {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Grid gaps for card layouts */
+  .grid-breathable {
+    gap: 1.5rem; /* 24px instead of 12-16px */
+  }
+
+  /* Stack gaps for vertical lists */
+  .stack-breathable {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; /* 16px instead of 8px */
+  }
+}
+
+/* =============================================================================
+   Timeline Card Breathable Overrides
+   Applies to event cards in timeline for better scanability
+   ============================================================================= */
+.timeline-card-breathable {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.timeline-card-breathable .card-header {
+  padding-bottom: 0.75rem;
+}
+
+.timeline-card-breathable .card-content {
+  padding-top: 0.5rem;
+}
+
+/* =============================================================================
+   Entity/Citation Card Breathable
+   Consistent card spacing across different tab views
+   ============================================================================= */
+.entity-card-breathable,
+.citation-card-breathable {
+  padding: 1.25rem;
+}
+
+.entity-card-breathable > * + *,
+.citation-card-breathable > * + * {
+  margin-top: 0.75rem;
+}

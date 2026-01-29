@@ -138,7 +138,7 @@ export function TimelineEventCard({
       )}
       data-testid={`timeline-event-${event.id}`}
     >
-      <CardContent className="pt-4">
+      <CardContent className="p-5">
         {/* Actions dropdown */}
         {(onEdit || (onDelete && isManual)) && (
           <div className="absolute top-2 right-2">
@@ -177,7 +177,7 @@ export function TimelineEventCard({
           </div>
         )}
         {/* Date */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
           <span className="font-medium">{formattedDate}</span>
           {event.eventDateText &&
             event.eventDateText !== event.eventDate && (
@@ -193,7 +193,7 @@ export function TimelineEventCard({
         </div>
 
         {/* Event Type Badge + Status Badges */}
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Badge
             variant="secondary"
             className={cn('flex items-center gap-1', typeColor)}
@@ -258,7 +258,7 @@ export function TimelineEventCard({
         </div>
 
         {/* Description */}
-        <p className="text-sm text-foreground mb-3">{event.description}</p>
+        <p className="text-sm text-foreground mb-4">{event.description}</p>
 
         {/* Actors (Entities) */}
         {event.entities.length > 0 && (

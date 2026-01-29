@@ -3,9 +3,21 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Trash2,
+  MoreVertical,
+  Users,
+  Settings,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { EditableMatterName } from './EditableMatterName';
 import { ExportDropdown } from './ExportDropdown';
@@ -20,14 +32,16 @@ import { ConsistencyWarningBadge } from '@/components/features/crossEngine/Consi
 /**
  * Workspace Header Component
  *
- * Layout from UX-Decisions-Log.md:
- * ┌─────────────────────────────────────────────────────────────────────────────────┐
- * │  WORKSPACE HEADER                                                                │
- * │  ┌─────────────────┐                                      ┌────┐ ┌────┐ ┌────┐  │
- * │  │ ← Dashboard     │        [Matter Name]                 │ ⬇  │ │ 👥 │ │ ⚙  │  │
- * │  │                 │                                      │Exp │ │Shr │ │Set │  │
- * │  └─────────────────┘                                      └────┘ └────┘ └────┘  │
- * └─────────────────────────────────────────────────────────────────────────────────┘
+ * Compact layout with overflow menu (UX density optimization):
+ * ┌────────────────────────────────────────────────────────────────┐
+ * │  WORKSPACE HEADER                                              │
+ * │  ┌─────────────────┐                      ┌──────┐ ┌────┐     │
+ * │  │ ← Dashboard     │    [Matter Name]     │Export│ │ ⋮  │     │
+ * │  │                 │                      │  ▾   │ │More│     │
+ * │  └─────────────────┘                      └──────┘ └────┘     │
+ * └────────────────────────────────────────────────────────────────┘
+ *
+ * The ⋮ menu contains: Share, Settings, Delete (owner only)
  *
  * Story 10A.1: Workspace Shell Header
  */
@@ -40,6 +54,8 @@ interface WorkspaceHeaderProps {
 export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const currentMatter = useMatterStore((state) => state.currentMatter);
   const deleteMatter = useMatterStore((state) => state.deleteMatter);
 
@@ -58,7 +74,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" data-testid="workspace-header">
-      <div className="container flex h-14 items-center gap-4 px-4 sm:px-6">
+      <div className="container flex h-16 items-center gap-6 px-4 sm:px-6">
         {/* Left: Back navigation */}
         <div className="flex items-center gap-2">
           <Link
@@ -85,35 +101,58 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1">
-          {/* Export dropdown */}
+          {/* Export dropdown - kept visible as primary action */}
           <ExportDropdown matterId={matterId} />
 
-          {/* Share dialog */}
-          <ShareDialog matterId={matterId} />
+          {/* Overflow menu for secondary actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="More actions"
+                data-testid="workspace-more-actions"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setShareDialogOpen(true)}>
+                <Users className="h-4 w-4 mr-2" />
+                Share
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              {currentMatter?.role === 'owner' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete matter
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* Settings dialog (Story 3.1) */}
-          <MatterSettingsDialog matterId={matterId} />
-
-          {/* Delete button - only visible to owners */}
-          {currentMatter?.role === 'owner' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  aria-label="Delete matter"
-                  className="text-muted-foreground hover:text-destructive"
-                  data-testid="workspace-delete-button"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Delete matter</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {/* Dialogs (rendered without triggers, controlled externally) */}
+          <ShareDialog
+            matterId={matterId}
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+            showTrigger={false}
+          />
+          <MatterSettingsDialog
+            matterId={matterId}
+            open={settingsDialogOpen}
+            onOpenChange={setSettingsDialogOpen}
+            showTrigger={false}
+          />
         </div>
 
         {/* Delete confirmation dialog */}

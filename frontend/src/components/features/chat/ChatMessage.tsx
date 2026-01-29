@@ -46,7 +46,7 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
   return (
     <article
       className={cn(
-        'flex gap-3 px-4 py-3',
+        'flex gap-4 px-4 py-5',
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
       data-testid={`chat-message-${message.role}`}
@@ -105,7 +105,7 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
 
           {/* Source references (assistant only) */}
           {!isUser && message.sources && message.sources.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1 border-t border-border/50 pt-2">
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border/50 pt-3">
               {message.sources.map((source, index) => (
                 <SourceReference
                   key={`${source.documentId}-${index}`}

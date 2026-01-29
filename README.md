@@ -9,8 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://jaanch.ai"><img src="https://img.shields.io/badge/Website-jaanch.ai-1a2744?style=for-the-badge" alt="Website"></a>
-  <a href="https://app.jaanch.com"><img src="https://img.shields.io/badge/App-app.jaanch.com-c9a227?style=for-the-badge" alt="App"></a>
+  <a href="https://jaanch-ai.vercel.app/"><img src="https://img.shields.io/badge/Website-jaanch.ai-1a2744?style=for-the-badge" alt="Website"></a>
 </p>
 
 **Jaanch** is an *AI-powered legal document intelligence platform* built for Indian lawyers. It reads every page of your case files — 700 pages, 2000 pages, doesn't matter — and finds what humans miss: contradictions, misquoted laws, timeline gaps, and missing documents. Every finding is cited to the exact page and line. No hallucinations. No trust required.

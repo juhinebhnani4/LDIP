@@ -49,11 +49,11 @@ describe('LiveDiscoveriesPanel', () => {
       expect(screen.getByText('LIVE DISCOVERIES')).toBeInTheDocument();
     });
 
-    it('shows placeholder when no discoveries', () => {
-      render(<LiveDiscoveriesPanel discoveries={[]} />);
+    it('shows placeholder when no discoveries and not processing', () => {
+      render(<LiveDiscoveriesPanel discoveries={[]} isProcessing={false} />);
 
       expect(
-        screen.getByText(/analyzing documents.*discoveries will appear here/i)
+        screen.getByText(/no discoveries found in these documents/i)
       ).toBeInTheDocument();
     });
 
@@ -90,13 +90,15 @@ describe('LiveDiscoveriesPanel', () => {
       expect(screen.getByText('(Petitioner)')).toBeInTheDocument();
     });
 
-    it('shows only first 3 entities with "more" indicator', () => {
+    it('shows only first 5 entities with "more" indicator', () => {
       const entities: DiscoveredEntity[] = [
         { name: 'Entity 1', role: 'Role 1' },
         { name: 'Entity 2', role: 'Role 2' },
         { name: 'Entity 3', role: 'Role 3' },
         { name: 'Entity 4', role: 'Role 4' },
         { name: 'Entity 5', role: 'Role 5' },
+        { name: 'Entity 6', role: 'Role 6' },
+        { name: 'Entity 7', role: 'Role 7' },
       ];
       const discovery = createEntityDiscovery(entities);
 
@@ -105,7 +107,9 @@ describe('LiveDiscoveriesPanel', () => {
       expect(screen.getByText('Entity 1')).toBeInTheDocument();
       expect(screen.getByText('Entity 2')).toBeInTheDocument();
       expect(screen.getByText('Entity 3')).toBeInTheDocument();
-      expect(screen.queryByText('Entity 4')).not.toBeInTheDocument();
+      expect(screen.getByText('Entity 4')).toBeInTheDocument();
+      expect(screen.getByText('Entity 5')).toBeInTheDocument();
+      expect(screen.queryByText('Entity 6')).not.toBeInTheDocument();
       expect(screen.getByText('+2 more...')).toBeInTheDocument();
     });
   });
@@ -324,6 +328,115 @@ describe('LiveDiscoveriesPanel', () => {
       render(<LiveDiscoveriesPanel discoveries={[entityDiscovery]} />);
 
       expect(screen.queryByText('EARLY INSIGHTS')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('stage-aware messaging', () => {
+    it('shows uploading message during UPLOADING stage', () => {
+      render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage="UPLOADING"
+        />
+      );
+
+      expect(screen.getByText('Uploading documents...')).toBeInTheDocument();
+      expect(screen.getByText(/entities and dates will appear during extraction/i)).toBeInTheDocument();
+    });
+
+    it('shows OCR message during OCR stage', () => {
+      render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage="OCR"
+        />
+      );
+
+      expect(screen.getByText(/reading document text.*discoveries will appear shortly/i)).toBeInTheDocument();
+    });
+
+    it('shows skeleton during ENTITY_EXTRACTION stage with no content', () => {
+      const { container } = render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage="ENTITY_EXTRACTION"
+        />
+      );
+
+      // Skeleton has animate-pulse class
+      expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+    });
+
+    it('shows skeleton during ANALYSIS stage with no content', () => {
+      const { container } = render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage="ANALYSIS"
+        />
+      );
+
+      expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+    });
+
+    it('shows skeleton during INDEXING stage with no content', () => {
+      const { container } = render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage="INDEXING"
+        />
+      );
+
+      expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+    });
+
+    it('shows informative message when currentStage is null (backward compatibility)', () => {
+      render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+          currentStage={null}
+        />
+      );
+
+      // Should show default early stage message, not skeleton
+      expect(screen.getByText(/analyzing documents.*discoveries will appear here/i)).toBeInTheDocument();
+    });
+
+    it('shows informative message when currentStage is not provided (backward compatibility)', () => {
+      render(
+        <LiveDiscoveriesPanel
+          discoveries={[]}
+          isProcessing={true}
+        />
+      );
+
+      // Should show default early stage message, not skeleton
+      expect(screen.getByText(/analyzing documents.*discoveries will appear here/i)).toBeInTheDocument();
+    });
+
+    it('shows actual content instead of skeleton when discoveries exist', () => {
+      const entities: DiscoveredEntity[] = [
+        { name: 'Test Entity', role: 'Petitioner' },
+      ];
+      const discovery = createEntityDiscovery(entities);
+
+      const { container } = render(
+        <LiveDiscoveriesPanel
+          discoveries={[discovery]}
+          isProcessing={true}
+          currentStage="ENTITY_EXTRACTION"
+        />
+      );
+
+      // Should show entities, not skeleton
+      expect(screen.getByText('ENTITIES FOUND (1)')).toBeInTheDocument();
+      expect(screen.getByText('Test Entity')).toBeInTheDocument();
+      expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
     });
   });
 });

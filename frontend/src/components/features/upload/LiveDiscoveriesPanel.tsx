@@ -28,6 +28,7 @@ import type {
   DiscoveredDate,
   DiscoveredCitation,
   EarlyInsight,
+  ProcessingStage,
 } from '@/types/upload';
 
 interface LiveDiscoveriesPanelProps {
@@ -35,6 +36,8 @@ interface LiveDiscoveriesPanelProps {
   discoveries: LiveDiscovery[];
   /** Whether processing is still in progress (shows skeleton if true and no content) */
   isProcessing?: boolean;
+  /** Current processing stage - used to show appropriate waiting messages */
+  currentStage?: ProcessingStage | null;
   /** Optional className */
   className?: string;
 }
@@ -285,9 +288,38 @@ function EarlyInsightsSection({ insights }: { insights: EarlyInsight[] }) {
   );
 }
 
+/** Check if we're in early stages where entities haven't been extracted yet */
+function isEarlyStage(stage: ProcessingStage | null | undefined): boolean {
+  // Treat null/undefined as early stage for backward compatibility
+  // when currentStage prop is not passed
+  if (stage === null || stage === undefined) {
+    return true;
+  }
+  return stage === 'UPLOADING' || stage === 'OCR';
+}
+
+/** Get a helpful message based on current processing stage */
+function getStageMessage(stage: ProcessingStage | null | undefined): string {
+  switch (stage) {
+    case 'UPLOADING':
+      return 'Uploading documents...';
+    case 'OCR':
+      return 'Reading document text... Discoveries will appear shortly.';
+    case 'ENTITY_EXTRACTION':
+      return 'Extracting people, organizations and dates...';
+    case 'ANALYSIS':
+      return 'Analyzing legal citations and relationships...';
+    case 'INDEXING':
+      return 'Indexing for search...';
+    default:
+      return 'Analyzing documents... discoveries will appear here.';
+  }
+}
+
 export function LiveDiscoveriesPanel({
   discoveries,
   isProcessing = false,
+  currentStage,
   className,
 }: LiveDiscoveriesPanelProps) {
   // Extract different discovery types
@@ -352,13 +384,27 @@ export function LiveDiscoveriesPanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Show skeleton when processing and no content yet */}
-          {!hasContent && isProcessing && <DiscoveriesSkeleton />}
+          {/* During early stages (UPLOADING/OCR), show informative message instead of skeleton */}
+          {!hasContent && isProcessing && isEarlyStage(currentStage) && (
+            <div className="text-center py-6">
+              <p className="text-sm text-muted-foreground">
+                {getStageMessage(currentStage)}
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-2">
+                Entities and dates will appear during extraction
+              </p>
+            </div>
+          )}
+
+          {/* Show skeleton when processing in later stages and no content yet */}
+          {!hasContent && isProcessing && !isEarlyStage(currentStage) && (
+            <DiscoveriesSkeleton />
+          )}
 
           {/* Show placeholder text only when not processing and no content */}
           {!hasContent && !isProcessing && (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Analyzing documents... discoveries will appear here.
+              No discoveries found in these documents.
             </p>
           )}
 

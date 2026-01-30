@@ -1,0 +1,48 @@
+[project]
+name = "jaanch-lite"
+version = "0.1.0"
+description = "Simplified Legal Document Intelligence - POC for Jaanch"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Parsing
+    "agentic-doc>=0.1.0",          # Landing AI ADE
+    # Embeddings & Reranking
+    "voyageai>=0.3.0",              # Voyage AI
+    # Vector Store
+    "chromadb>=0.5.0",              # ChromaDB
+    # LLM & Structured Extraction
+    "google-genai>=1.60.0",         # Gemini API (new SDK)
+    "openai>=1.0.0",                # OpenAI API (alternative)
+    "instructor>=1.0.0",            # Structured extraction
+    "pydantic>=2.0.0",              # Schema validation
+    "pydantic-settings>=2.0.0",     # Settings management
+    # PDF Processing
+    "pymupdf>=1.24.0",              # PDF text extraction (fallback)
+    "pillow>=10.0.0",               # Image processing
+    # Utilities
+    "python-dotenv>=1.0.0",         # Environment variables
+    "httpx>=0.27.0",                # HTTP client
+    "structlog>=24.0.0",            # Structured logging
+    "rich>=13.0.0",                 # Pretty console output
+    # UI
+    "streamlit>=1.40.0",            # Web UI
+    "streamlit-pdf-viewer>=0.0.7", # PDF display with highlighting
+    # Data Processing
+    "pandas>=2.0.0",                # Data manipulation
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ipykernel>=6.0.0",
+    "jupyter>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

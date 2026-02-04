@@ -16,6 +16,7 @@ from functools import lru_cache
 from typing import Any
 
 import structlog
+from google.genai import types
 
 from app.core.config import get_settings
 from app.core.cost_tracking import (
@@ -24,11 +25,14 @@ from app.core.cost_tracking import (
     estimate_tokens,
     persist_cost,
 )
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.engines.rag.prompts import (
     MAX_CONTEXT_CHUNKS,
+    SYSTEM_PROMPTS,
     RAG_ANSWER_SYSTEM_PROMPT,
     format_rag_answer_prompt,
 )
+from app.engines.rag.query_profile import QueryProfile
 
 logger = structlog.get_logger(__name__)
 
@@ -124,54 +128,38 @@ class RAGAnswerGenerator:
 
     def __init__(self) -> None:
         """Initialize RAG answer generator."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             RAGConfigurationError: If API key is not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise RAGConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=RAG_ANSWER_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "rag_generator_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
-                logger.error("rag_generator_init_failed", error=str(e))
-                raise RAGConfigurationError(
-                    f"Failed to initialize Gemini for RAG: {e}"
-                ) from e
+            except GeminiClientError as e:
+                raise RAGConfigurationError(str(e)) from e
 
-        return self._model
+        return self._client
 
     async def generate_answer(
         self,
         query: str,
         chunks: list[dict[str, Any]],
         matter_id: str | None = None,
+        query_profile: QueryProfile | None = None,
     ) -> RAGAnswerResult:
         """Generate a grounded answer from retrieved chunks.
 
@@ -199,11 +187,19 @@ class RAGAnswerGenerator:
                 chunks_used=0,
             )
 
-        # Limit chunks to max context
-        chunks_to_use = chunks[:MAX_CONTEXT_CHUNKS]
+        # Use QueryProfile parameters if available, otherwise defaults
+        profile = query_profile or QueryProfile.default()
 
-        # Format prompt
-        user_prompt = format_rag_answer_prompt(query, chunks_to_use)
+        # Limit chunks to max context (profile-aware)
+        chunks_to_use = chunks[:profile.max_context_chunks]
+
+        # Format prompt (with profile-aware chunk content limits)
+        user_prompt = format_rag_answer_prompt(
+            query,
+            chunks_to_use,
+            max_chunks=profile.max_context_chunks,
+            max_chunk_content=profile.max_chunk_content,
+        )
 
         # Initialize cost tracker for Gemini Flash
         cost_tracker = CostTracker(
@@ -218,9 +214,17 @@ class RAGAnswerGenerator:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                response = await asyncio.to_thread(
-                    self.model.generate_content,
-                    user_prompt,
+                # Select system prompt based on QueryProfile
+                system_prompt = SYSTEM_PROMPTS.get(
+                    profile.system_prompt_key, RAG_ANSWER_SYSTEM_PROMPT
+                )
+
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                    ),
                 )
 
                 # Extract answer text
@@ -260,9 +264,10 @@ class RAGAnswerGenerator:
                 cost_tracker.log_cost()
                 await persist_cost(cost_tracker)
 
-                # Truncate if too long
-                if len(answer_text) > MAX_ANSWER_LENGTH:
-                    answer_text = answer_text[:MAX_ANSWER_LENGTH] + "..."
+                # Truncate if too long (profile-aware limit)
+                effective_max_length = profile.max_answer_length
+                if effective_max_length > 0 and len(answer_text) > effective_max_length:
+                    answer_text = answer_text[:effective_max_length] + "..."
 
                 generation_time_ms = int((time.time() - start_time) * 1000)
 
@@ -344,6 +349,7 @@ async def generate_rag_answer(
     query: str,
     chunks: list[dict[str, Any]],
     matter_id: str | None = None,
+    query_profile: QueryProfile | None = None,
 ) -> RAGAnswerResult:
     """Convenience function to generate RAG answer.
 
@@ -351,9 +357,12 @@ async def generate_rag_answer(
         query: User's question.
         chunks: Retrieved document chunks.
         matter_id: Optional matter ID for cost tracking.
+        query_profile: Optional QueryProfile for adaptive parameters.
 
     Returns:
         RAGAnswerResult with generated answer.
     """
     generator = get_rag_generator()
-    return await generator.generate_answer(query, chunks, matter_id=matter_id)
+    return await generator.generate_answer(
+        query, chunks, matter_id=matter_id, query_profile=query_profile
+    )

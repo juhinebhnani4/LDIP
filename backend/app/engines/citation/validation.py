@@ -523,17 +523,11 @@ async def validate_act_name_with_llm(
         )
 
     try:
-        import google.generativeai as genai
+        from google.genai import types
+        from app.core.gemini_client import get_gemini_client
         import json
 
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(
-            "gemini-2.0-flash-exp",  # Fast and cheap
-            generation_config={
-                "temperature": 0.1,
-                "max_output_tokens": 200,
-            },
-        )
+        client = get_gemini_client()
 
         # Build prompt
         context_section = ""
@@ -561,7 +555,14 @@ VALID examples (real Indian statutes):
 
 JSON response:'''
 
-        response = await model.generate_content_async(prompt)
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=200,
+            ),
+        )
         response_text = response.text.strip()
 
         # Parse JSON response

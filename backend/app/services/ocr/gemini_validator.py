@@ -16,6 +16,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.circuit_breaker import (
     CircuitOpenError,
     CircuitService,
@@ -104,40 +105,29 @@ Example response:
 
     def __init__(self) -> None:
         """Initialize Gemini validator."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
         self.batch_size = settings.ocr_validation_batch_size
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             GeminiConfigurationError: If API key is not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise GeminiConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(self.model_name)
+                self._client = get_gemini_client()
                 logger.info(
-                    "gemini_model_initialized",
+                    "gemini_client_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 # SECURITY: Sanitize error to prevent API key leakage in logs
                 error_type = type(e).__name__
                 # Only log error type, not message which may contain sensitive data
@@ -146,7 +136,7 @@ Example response:
                     f"Failed to initialize Gemini: {error_type}"
                 ) from e
 
-        return self._model
+        return self._client
 
     def validate_batch_sync(
         self,
@@ -213,7 +203,10 @@ Example response:
 
         try:
             # Call Gemini synchronously
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
 
             # Parse response
             results = self._parse_response(response.text, words)
@@ -349,7 +342,10 @@ Example response:
         Returns:
             Response text from Gemini.
         """
-        response = await self.model.generate_content_async(prompt)
+        response = await self.client.aio.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+        )
         return response.text
 
     def _parse_response(

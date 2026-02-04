@@ -17,6 +17,8 @@
 
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface StreamingResponseProps {
   /** Accumulated response content */
@@ -68,17 +70,15 @@ export function StreamingResponse({
 
       {/* Task 6.3-6.5: Accumulated tokens with cursor */}
       {content && (
-        <div className="text-sm" data-testid="streaming-content">
-          <p className="whitespace-pre-wrap">
-            {content}
-            {/* Task 6.5: Cursor animation during streaming */}
-            {isStreaming && (
-              <span
-                className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-current"
-                aria-hidden="true"
-              />
-            )}
-          </p>
+        <div className="text-sm prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-ul:pl-5 prose-ol:pl-5 prose-li:my-0.5 prose-li:marker:text-muted-foreground prose-strong:text-foreground prose-strong:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-headings:text-foreground prose-h2:text-base prose-h3:text-sm prose-h2:border-b prose-h2:border-border/50 prose-h2:pb-1" data-testid="streaming-content">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          {/* Task 6.5: Cursor animation during streaming */}
+          {isStreaming && (
+            <span
+              className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-current"
+              aria-hidden="true"
+            />
+          )}
         </div>
       )}
     </div>

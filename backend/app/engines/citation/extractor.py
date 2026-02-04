@@ -18,6 +18,7 @@ from functools import lru_cache
 from typing import Final
 
 import structlog
+from google.genai import types
 
 from app.core.config import get_settings
 from app.core.cost_tracking import (
@@ -26,6 +27,7 @@ from app.core.cost_tracking import (
     estimate_tokens,
     persist_cost,
 )
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.engines.citation.abbreviations import (
     get_canonical_name,
@@ -146,55 +148,34 @@ class CitationExtractor:
 
     def __init__(self) -> None:
         """Initialize citation extractor."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             CitationConfigurationError: If API key is not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise CitationConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-
-                # Configure generation with higher max_output_tokens to avoid truncation
-                generation_config = genai.GenerationConfig(
-                    max_output_tokens=8192,  # Increased from default to avoid JSON truncation
-                    temperature=0.1,  # Low temperature for consistent extraction
-                )
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
-                    generation_config=generation_config,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "citation_extractor_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 logger.error("citation_extractor_init_failed", error=str(e))
                 raise CitationConfigurationError(
                     f"Failed to initialize Gemini for citation extraction: {e}"
                 ) from e
 
-        return self._model
+        return self._client
 
     def _chunk_text(self, text: str) -> list[str]:
         """Split text into overlapping chunks for processing.
@@ -534,7 +515,15 @@ class CitationExtractor:
             try:
                 # Apply rate limiting via semaphore (limits concurrent requests)
                 async with gemini_limiter:
-                    response = await self.model.generate_content_async(prompt)
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
+                            max_output_tokens=8192,
+                            temperature=0.1,
+                        ),
+                    )
 
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)
@@ -608,7 +597,15 @@ class CitationExtractor:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
+                        max_output_tokens=8192,
+                        temperature=0.1,
+                    ),
+                )
 
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)

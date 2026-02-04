@@ -180,6 +180,7 @@ def format_document_excerpt(
     document_name: str | None = None,
     page_number: int | str | None = None,
     index: int | None = None,
+    filed_by: str | None = None,
 ) -> str:
     """Format a document excerpt with proper XML boundaries and metadata.
 
@@ -215,6 +216,8 @@ def format_document_excerpt(
         metadata["document"] = document_name
     if page_number is not None:
         metadata["page"] = page_number
+    if filed_by:
+        metadata["filed_by"] = filed_by
 
     # Open excerpt tag
     if index is not None:

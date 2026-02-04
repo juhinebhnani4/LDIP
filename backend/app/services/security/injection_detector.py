@@ -9,7 +9,6 @@ SECURITY: This is a critical security control. Documents with high injection
 risk are flagged for manual review before proceeding through the pipeline.
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -18,7 +17,10 @@ from typing import Any
 
 import structlog
 
+from google.genai import types
+
 from app.core.config import get_settings
+from app.core.gemini_client import get_gemini_client
 from app.core.prompt_boundaries import detect_injection_patterns, has_injection_patterns
 
 logger = structlog.get_logger(__name__)
@@ -150,35 +152,22 @@ class InjectionDetector:
 
     def __init__(self) -> None:
         """Initialize injection detector."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance."""
-        if self._model is None:
-            if not self.api_key:
-                logger.warning("injection_detector_no_api_key")
-                return None
-
+    def client(self):
+        """Get or create Gemini client instance."""
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=INJECTION_DETECTION_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 logger.info("injection_detector_initialized", model=self.model_name)
             except Exception as e:
                 logger.error("injection_detector_init_failed", error=str(e))
                 return None
 
-        return self._model
+        return self._client
 
     async def scan_document(
         self,
@@ -230,7 +219,7 @@ class InjectionDetector:
             )
 
         # Phase 2: LLM-enhanced detection for ambiguous cases
-        if use_llm and len(scan_text) >= MIN_LLM_SCAN_LENGTH and self.model:
+        if use_llm and len(scan_text) >= MIN_LLM_SCAN_LENGTH and self.client:
             try:
                 llm_result = await self._llm_scan(scan_text)
 
@@ -294,15 +283,18 @@ class InjectionDetector:
         Returns:
             Parsed LLM response or None on failure.
         """
-        if not self.model:
+        if not self.client:
             return None
 
         prompt = INJECTION_DETECTION_USER_PROMPT.format(text=text[:5000])
 
         try:
-            response = await asyncio.to_thread(
-                self.model.generate_content,
-                prompt,
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=INJECTION_DETECTION_SYSTEM_PROMPT,
+                ),
             )
 
             response_text = response.text.strip()

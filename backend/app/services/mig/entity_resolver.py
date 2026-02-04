@@ -21,7 +21,10 @@ from functools import lru_cache
 import structlog
 from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 
+from google.genai import types
+
 from app.core.config import get_settings
+from app.core.gemini_client import get_gemini_client
 from app.models.entity import EntityEdgeCreate, EntityNode, EntityType, RelationshipType
 from app.services.mig.alias_prompts import (
     ALIAS_BATCH_USER_PROMPT,
@@ -534,8 +537,8 @@ class EntityResolver:
             Confidence score (0-1) that names refer to same entity.
         """
         # Initialize Gemini
-        model = self._get_gemini_model()
-        if model is None:
+        client = self._get_gemini_client()
+        if client is None:
             logger.warning("alias_context_gemini_unavailable")
             return 0.5  # Return neutral score if Gemini unavailable
 
@@ -551,7 +554,13 @@ class EntityResolver:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await model.generate_content_async(prompt)
+                response = await client.aio.models.generate_content(
+                    model=self._gemini_model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
+                    ),
+                )
                 result = self._parse_context_response(response.text)
 
                 logger.debug(
@@ -608,8 +617,8 @@ class EntityResolver:
         if not pairs:
             return {}
 
-        model = self._get_gemini_model()
-        if model is None:
+        client = self._get_gemini_client()
+        if client is None:
             return {p["pair_id"]: 0.5 for p in pairs}
 
         # Format pairs for batch prompt
@@ -619,7 +628,13 @@ class EntityResolver:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await model.generate_content_async(prompt)
+                response = await client.aio.models.generate_content(
+                    model=self._gemini_model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
+                    ),
+                )
                 results = self._parse_batch_response(response.text)
 
                 # Map results by pair_id
@@ -808,35 +823,23 @@ class EntityResolver:
     # Private Methods - Gemini Integration
     # =========================================================================
 
-    def _get_gemini_model(self):
-        """Get Gemini model for context analysis.
+    def _get_gemini_client(self):
+        """Get Gemini client for context analysis.
 
         Returns:
-            Gemini GenerativeModel or None if not configured.
+            google.genai.Client or None if not configured.
         """
-        if not hasattr(self, "_gemini_model"):
-            settings = get_settings()
-            api_key = settings.gemini_api_key
-
-            if not api_key:
-                logger.warning("alias_gemini_not_configured")
-                self._gemini_model = None
-                return None
-
+        if not hasattr(self, "_gemini_client"):
             try:
-                import google.generativeai as genai
-
-                genai.configure(api_key=api_key)
-                self._gemini_model = genai.GenerativeModel(
-                    settings.gemini_model,
-                    system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
-                )
-                logger.debug("alias_gemini_initialized", model=settings.gemini_model)
+                self._gemini_client = get_gemini_client()
+                settings = get_settings()
+                self._gemini_model_name = settings.gemini_model
+                logger.debug("alias_gemini_initialized", model=self._gemini_model_name)
             except Exception as e:
                 logger.error("alias_gemini_init_failed", error=str(e))
-                self._gemini_model = None
+                self._gemini_client = None
 
-        return self._gemini_model
+        return self._gemini_client
 
     def _parse_context_response(self, response_text: str) -> dict:
         """Parse Gemini context analysis response.

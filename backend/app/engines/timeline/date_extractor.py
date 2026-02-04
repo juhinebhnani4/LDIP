@@ -27,6 +27,7 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.cost_tracking import (
     CostTracker,
     LLMProvider,
@@ -110,54 +111,34 @@ class DateExtractor:
 
     def __init__(self) -> None:
         """Initialize date extractor."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             DateConfigurationError: If API key is not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise DateConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                # Configure generation with higher max_output_tokens to avoid truncation
-                generation_config = genai.GenerationConfig(
-                    max_output_tokens=8192,  # Increased from default to avoid truncation
-                    temperature=0.1,  # Low temperature for consistent extraction
-                )
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
-                    generation_config=generation_config,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "date_extractor_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 logger.error("date_extractor_init_failed", error=str(e))
                 raise DateConfigurationError(
                     f"Failed to initialize Gemini for date extraction: {e}"
                 ) from e
 
-        return self._model
+        return self._client
 
     async def extract_dates_from_text(
         self,
@@ -323,7 +304,17 @@ class DateExtractor:
         Returns:
             Response text from Gemini.
         """
-        response = await self.model.generate_content_async(prompt)
+        from google.genai import types
+
+        response = await self.client.aio.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                max_output_tokens=8192,
+                temperature=0.1,
+            ),
+        )
         return response.text
 
     async def _extract_from_chunks(
@@ -591,7 +582,17 @@ class DateExtractor:
             return self._empty_result(document_id, matter_id)
 
         try:
-            response = self.model.generate_content(prompt)
+            from google.genai import types
+
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                    max_output_tokens=8192,
+                    temperature=0.1,
+                ),
+            )
 
             # Track costs (Gemini doesn't expose token counts, so estimate)
             response_text = response.text if response.text else ""

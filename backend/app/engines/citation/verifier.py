@@ -17,8 +17,10 @@ from functools import lru_cache
 from typing import Final
 
 import structlog
+from google.genai import types
 
 from app.core.config import get_settings
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.citation.act_indexer import (
     ActIndexer,
@@ -143,49 +145,35 @@ class CitationVerifier:
         Args:
             act_indexer: Optional ActIndexer instance for testing.
         """
-        self._model = None
-        self._genai = None
+        self._client = None
         self._act_indexer = act_indexer
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             VerificationConfigurationError: If API key is not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise VerificationConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=VERIFICATION_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "citation_verifier_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 logger.error("citation_verifier_init_failed", error=str(e))
                 raise VerificationConfigurationError(
                     f"Failed to initialize Gemini for verification: {e}"
                 ) from e
 
-        return self._model
+        return self._client
 
     @property
     def act_indexer(self) -> ActIndexer:
@@ -646,7 +634,13 @@ class CitationVerifier:
             try:
                 # Apply rate limiting via semaphore (limits concurrent requests)
                 async with gemini_limiter:
-                    response = await self.model.generate_content_async(prompt)
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=VERIFICATION_SYSTEM_PROMPT,
+                        ),
+                    )
                 return response.text
 
             except VerificationConfigurationError:

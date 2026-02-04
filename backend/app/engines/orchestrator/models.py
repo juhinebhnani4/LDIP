@@ -10,10 +10,16 @@ Provides data models for:
 CRITICAL: These models enable additive intent detection (vs winner-takes-all).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from app.models.orchestrator import EngineType
+
+if TYPE_CHECKING:
+    from app.engines.rag.query_profile import QueryProfile
 
 
 class IntentSource(str, Enum):
@@ -140,6 +146,7 @@ class MultiIntentClassification:
     compound_intent: CompoundIntent | None = None
     reasoning: str = ""
     llm_was_used: bool = False
+    query_profile: QueryProfile | None = None
 
     @property
     def is_multi_intent(self) -> bool:

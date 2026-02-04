@@ -8,6 +8,7 @@ Each adapter handles the engine-specific call pattern and normalizes results.
 CRITICAL: Adapters must propagate matter_id to ensure matter isolation.
 """
 
+import re
 import time
 from abc import ABC, abstractmethod
 from functools import lru_cache
@@ -614,6 +615,28 @@ class ContradictionEngineAdapter(EngineAdapter):
 # =============================================================================
 
 
+_PARTY_PATTERNS = [
+    (re.compile(r"respondent\s*no\.?\s*(\d+)", re.IGNORECASE), "Respondent No. {}"),
+    (re.compile(r"applicant", re.IGNORECASE), "Applicant"),
+    (re.compile(r"petitioner", re.IGNORECASE), "Petitioner"),
+    (re.compile(r"court\s*order", re.IGNORECASE), "Court"),
+    (re.compile(r"judgment", re.IGNORECASE), "Court"),
+    (re.compile(r"affidavit.+?of\s+(.+?)(?:\s*[-_]|$)", re.IGNORECASE), "{}"),
+]
+
+
+def _infer_party_from_document_name(doc_name: str) -> str | None:
+    """Infer filing party from document filename (best-effort heuristic)."""
+    if not doc_name:
+        return None
+    for pattern, template in _PARTY_PATTERNS:
+        match = pattern.search(doc_name)
+        if match:
+            groups = match.groups()
+            return template.format(*groups) if groups else template
+    return None
+
+
 class RAGEngineAdapter(EngineAdapter):
     """Adapter for RAG Hybrid Search + Answer Generation (Epic 2B, Story 6-2).
 
@@ -744,14 +767,21 @@ class RAGEngineAdapter(EngineAdapter):
         start_time = time.time()
 
         try:
+            # Extract QueryProfile from context (set by orchestrator)
+            query_profile = context.get("query_profile") if context else None
+
             # Step 1: Hybrid search with library integration
             # Searches both matter documents AND linked library documents
             search = self._get_search()
             settings = get_settings()
+
+            # Use QueryProfile parameters if available, otherwise settings defaults
+            search_limit = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
+
             results = await search.search_with_library(
                 query=query,
                 matter_id=matter_id,
-                limit=settings.rag_rerank_top_n,  # Final result limit
+                limit=search_limit,
                 library_limit=10,  # Library results before merge
             )
 
@@ -779,6 +809,7 @@ class RAGEngineAdapter(EngineAdapter):
                     "page_number": item.page_number,
                     "relevance_score": item.rrf_score,  # RRF score as relevance
                     "is_library": item.is_library,
+                    "filed_by": _infer_party_from_document_name(get_doc_name(item)),
                 }
                 for item in results.results
             ]
@@ -788,6 +819,8 @@ class RAGEngineAdapter(EngineAdapter):
             answer_result = await generator.generate_answer(
                 query=query,
                 chunks=chunks_for_generation,
+                matter_id=matter_id,
+                query_profile=query_profile,
             )
 
             # Count library results for logging

@@ -55,13 +55,12 @@ def load_entities_sync(matter_id: str, batch_size: int = 500) -> list[EntityNode
                 entity_type=EntityType(row["entity_type"]) if row.get("entity_type") else EntityType.PERSON,
                 aliases=row.get("aliases") or [],
                 mention_count=row.get("mention_count", 0),
-                confidence=row.get("confidence", 0.0),
-                first_seen_at=row.get("first_seen_at"),
-                last_seen_at=row.get("last_seen_at"),
-                source_documents=row.get("source_documents") or [],
                 metadata=row.get("metadata") or {},
                 created_at=row.get("created_at"),
                 updated_at=row.get("updated_at"),
+                merged_into_id=row.get("merged_into_id"),
+                merged_at=row.get("merged_at"),
+                merged_by=row.get("merged_by"),
             )
             all_entities.append(entity)
 
@@ -112,9 +111,11 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
         print("No events to process!")
         return {"status": "no_events", "processed": 0, "updated": 0}
 
-    # Load all entities for the matter
+    # Load all entities for the matter (exclude merged duplicates)
     print("\nLoading entities from MIG...")
-    entities = load_entities_sync(matter_id)
+    all_entities = load_entities_sync(matter_id)
+    entities = [e for e in all_entities if not e.merged_into_id]
+    print(f"  Using {len(entities)} active entities ({len(all_entities) - len(entities)} merged duplicates excluded)")
 
     if not entities:
         print("No entities found in matter - cannot link events")

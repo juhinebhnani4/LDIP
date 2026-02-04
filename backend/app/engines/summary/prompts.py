@@ -68,9 +68,11 @@ LANGUAGE POLICING RULES (MANDATORY):
 
 Respond with JSON in this exact format:
 {
-  "description": "The formatted case overview with all sections using markdown formatting",
-  "sources": [{"documentName": "filename.pdf", "pageRange": "1-3"}]
-}"""
+  "description": "<YOUR FULL CASE OVERVIEW HERE with all sections using markdown formatting>",
+  "sources": [{"documentName": "actual_document_name.pdf", "pageRange": "1-3"}]
+}
+
+CRITICAL: The "description" field must contain your ACTUAL detailed case analysis — NOT the placeholder text. Write the complete structured brief with Case Type, Forum, Parties, Core Dispute, Background, Relief Sought, and Current Stage sections."""
 
 
 SUBJECT_MATTER_USER_PROMPT = """Based on these document excerpts, create a structured CASE OVERVIEW:

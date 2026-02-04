@@ -908,11 +908,43 @@ class SummaryService:
             response_text = response.choices[0].message.content
             parsed = json.loads(response_text)
 
+            # Validate that GPT-4 didn't echo the schema placeholder
+            raw_description = parsed.get("description", "")
+            _placeholder_markers = [
+                "YOUR FULL CASE OVERVIEW HERE",
+                "formatted case overview with all sections using markdown",
+                "<your complete case overview",
+            ]
+            if any(m.lower() in raw_description.lower() for m in _placeholder_markers):
+                logger.warning(
+                    "subject_matter_placeholder_detected",
+                    matter_id=matter_id,
+                    description_preview=raw_description[:100],
+                )
+                # Re-attempt with stronger instruction
+                retry_response = await self.openai_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": SUBJECT_MATTER_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                        {"role": "assistant", "content": response_text},
+                        {
+                            "role": "user",
+                            "content": "That description is a placeholder, not actual analysis. "
+                            "Re-read the document excerpts and write the REAL case overview "
+                            "with specific details (names, dates, case numbers) from the documents.",
+                        },
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.5,
+                )
+                retry_text = retry_response.choices[0].message.content
+                parsed = json.loads(retry_text)
+                raw_description = parsed.get("description", "")
+
             # Apply language policing
             policing = get_language_policing_service()
-            policed_description = policing.sanitize_text(
-                parsed.get("description", "")
-            ).sanitized_text
+            policed_description = policing.sanitize_text(raw_description).sanitized_text
 
             sources = [
                 SubjectMatterSource(

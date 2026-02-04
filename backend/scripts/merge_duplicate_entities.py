@@ -11,10 +11,10 @@ and merges them into a single canonical entity. It:
 6. Optionally deletes merged duplicates
 
 Usage:
-    python scripts/merge_duplicate_entities.py <matter_id> [--dry-run] [--threshold 0.75] [--delete]
+    python scripts/merge_duplicate_entities.py <matter_id> [--dry-run] [--threshold 0.92] [--delete]
 
     --dry-run:    Show what would be merged without making changes
-    --threshold:  Similarity threshold for merging (default: 0.75)
+    --threshold:  Similarity threshold for merging (default: 0.92, applied to core names after suffix stripping)
     --delete:     Delete duplicate entities after merging (default: soft merge only)
 """
 
@@ -25,6 +25,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import argparse
+import re
 from collections import defaultdict
 
 import structlog
@@ -34,6 +35,61 @@ from app.services.supabase.client import get_service_client
 from app.models.entity import EntityNode, EntityType
 
 logger = structlog.get_logger(__name__)
+
+# ── Suffix / prefix patterns to strip before core-name comparison ────────────
+# Order matters: longer patterns first to avoid partial matches
+ORG_SUFFIX_PATTERNS = [
+    r"\bprivate\s+limited\b\.?",
+    r"\bpvt\.?\s*ltd\.?",
+    r"\blimited\b\.?",
+    r"\bltd\.?",
+    r"\bincorporated\b\.?",
+    r"\binc\.?",
+    r"\bcorporation\b\.?",
+    r"\bcorp\.?",
+    r"\bllc\.?",
+    r"\bllp\.?",
+    r"\b(?:&|and)\s+(?:associates|co\.?|company|sons|partners)\b",
+    r"\benterprises?\b",
+    r"\bindustries\b",
+    r"\bfoundation\b",
+    r"\btrust\b",
+    r"\bsociety\b",
+    r"\bgroup\b",
+    r"\bholdings?\b",
+    r"\binternational\b",
+    r"\bof\s+india\b",
+    r"\bof\s+maharashtra\b",
+    r"\bof\s+gujarat\b",
+    r"\bof\s+rajasthan\b",
+    r"\bof\s+delhi\b",
+    r"\bof\s+mumbai\b",
+    r"\bof\s+chennai\b",
+    r"\bof\s+kolkata\b",
+    r"\bof\s+bangalore\b",
+]
+
+# Compiled single pattern for suffix stripping (case-insensitive)
+_ORG_SUFFIX_RE = re.compile(
+    r"\s*(?:" + "|".join(ORG_SUFFIX_PATTERNS) + r")\s*",
+    re.IGNORECASE,
+)
+
+# Legal party role patterns — these should NEVER be merged across numbers
+ROLE_PATTERNS = re.compile(
+    r"^(?:respondent|petitioner|appellant|complainant|applicant|accused|witness|defendant|plaintiff)"
+    r"\s*(?:no\.?\s*\d+|#\s*\d+)",
+    re.IGNORECASE,
+)
+
+# Case/application number patterns — these should NEVER be merged across numbers
+CASE_NUMBER_PATTERN = re.compile(
+    r"^(?:MA|MP|CA|IA|WP|SLP|CRL|CMP|Miscellaneous\s+Application)\s*\.?\s*(?:No\.?\s*)?\d+",
+    re.IGNORECASE,
+)
+
+# Minimum core name length for org entities (below this, require exact match)
+MIN_ORG_CORE_LENGTH = 4
 
 
 def load_entities(matter_id: str, batch_size: int = 500) -> list[EntityNode]:
@@ -85,7 +141,6 @@ def normalize_name(name: str) -> str:
     """Strip titles and normalize a name for comparison."""
     if not name:
         return ""
-    import re
     title_words = (
         "shri", "smt", "kumari", "dr", "adv", "advocate",
         "hon", "hon'ble", "honourable", "justice",
@@ -98,6 +153,42 @@ def normalize_name(name: str) -> str:
     return cleaned
 
 
+def is_role_pattern(name: str) -> bool:
+    """Check if name is a numbered legal party reference (Respondent No.2, etc.)."""
+    return bool(ROLE_PATTERNS.match(normalize_name(name).strip()))
+
+
+def is_case_number(name: str) -> bool:
+    """Check if name is a case/application number (MA 8 of 2016, etc.)."""
+    return bool(CASE_NUMBER_PATTERN.match(normalize_name(name).strip()))
+
+
+def extract_core_name(name: str, entity_type: EntityType | None = None) -> str:
+    """Extract core name by stripping org suffixes/prefixes.
+
+    For PERSON entities, just normalizes (strips titles).
+    For ORG entities, additionally strips common suffixes like Ltd, Pvt Ltd, etc.
+
+    Returns:
+        Core name string (lowercased, whitespace-normalized).
+        Empty string if name is empty after stripping.
+    """
+    normalized = normalize_name(name)
+    if not normalized:
+        return ""
+
+    # Only strip org suffixes for ORG entities (or unknown type)
+    if entity_type is None or entity_type != EntityType.PERSON:
+        core = _ORG_SUFFIX_RE.sub(" ", normalized)
+        # Clean up leftover punctuation and whitespace
+        core = re.sub(r"[,.\-]+$", "", core.strip())
+        core = " ".join(core.split())
+        if core:
+            return core.lower()
+
+    return normalized.lower()
+
+
 def extract_last_name(name: str) -> str:
     """Extract the last name component from a name."""
     normalized = normalize_name(name)
@@ -108,20 +199,47 @@ def extract_last_name(name: str) -> str:
     return parts[-1].lower().rstrip(".'s")
 
 
-def calculate_similarity(name1: str, name2: str) -> float:
-    """Calculate name similarity using Jaro-Winkler on normalized names."""
-    n1 = normalize_name(name1).lower()
-    n2 = normalize_name(name2).lower()
-    if not n1 or not n2:
+def calculate_similarity(
+    name1: str,
+    name2: str,
+    entity_type: EntityType | None = None,
+) -> float:
+    """Calculate name similarity using Jaro-Winkler on core names (suffix-stripped).
+
+    For ORG entities, strips common suffixes (Ltd, Pvt Ltd, etc.) before comparing
+    so that "Hindustan Lever Ltd" vs "Neeta Enterprises Pvt. Ltd." compares
+    "hindustan lever" vs "neeta enterprises" instead of being inflated by shared suffixes.
+
+    For very short org core names (< 4 chars), requires exact match to prevent
+    false positives like "MCS" vs "ACC".
+
+    Returns 0.0 for numbered role patterns (Respondent No.2 vs No.3).
+    """
+    # Block numbered party patterns and case numbers — never merge these
+    if is_role_pattern(name1) or is_role_pattern(name2):
         return 0.0
-    if n1 == n2:
+    if is_case_number(name1) or is_case_number(name2):
+        return 0.0
+
+    core1 = extract_core_name(name1, entity_type)
+    core2 = extract_core_name(name2, entity_type)
+
+    if not core1 or not core2:
+        return 0.0
+    if core1 == core2:
         return 1.0
-    return JaroWinklerModule.normalized_similarity(n1, n2)
+
+    # For very short org cores, require exact match
+    if entity_type != EntityType.PERSON:
+        if len(core1) < MIN_ORG_CORE_LENGTH or len(core2) < MIN_ORG_CORE_LENGTH:
+            return 1.0 if core1 == core2 else 0.0
+
+    return JaroWinklerModule.normalized_similarity(core1, core2)
 
 
 def find_merge_groups(
     entities: list[EntityNode],
-    threshold: float = 0.75,
+    threshold: float = 0.92,
 ) -> list[list[EntityNode]]:
     """Find groups of duplicate entities that should be merged.
 
@@ -179,7 +297,9 @@ def find_merge_groups(
             # Compare all pairs
             for i, e1 in enumerate(group):
                 for e2 in group[i + 1:]:
-                    sim = calculate_similarity(e1.canonical_name, e2.canonical_name)
+                    sim = calculate_similarity(
+                        e1.canonical_name, e2.canonical_name, entity_type
+                    )
                     if sim >= threshold:
                         union(e1.id, e2.id)
 
@@ -333,8 +453,8 @@ def main():
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.75,
-        help="Similarity threshold for merging (default: 0.75)",
+        default=0.92,
+        help="Similarity threshold for merging (default: 0.92, on core names after suffix stripping)",
     )
     parser.add_argument(
         "--delete",
@@ -370,12 +490,16 @@ def main():
     for i, group in enumerate(merge_groups, 1):
         canonical = group[0]
         duplicates = group[1:]
+        core_canonical = extract_core_name(canonical.canonical_name, canonical.entity_type)
         print(f"  Group {i}: Canonical = '{canonical.canonical_name}' "
-              f"(mentions: {canonical.mention_count})")
+              f"(mentions: {canonical.mention_count}, core: '{core_canonical}')")
         for dupe in duplicates:
-            sim = calculate_similarity(canonical.canonical_name, dupe.canonical_name)
-            print(f"    ↳ Merge '{dupe.canonical_name}' "
-                  f"(mentions: {dupe.mention_count}, sim: {sim:.2f})")
+            sim = calculate_similarity(
+                canonical.canonical_name, dupe.canonical_name, canonical.entity_type
+            )
+            core_dupe = extract_core_name(dupe.canonical_name, dupe.entity_type)
+            print(f"    -> Merge '{dupe.canonical_name}' "
+                  f"(mentions: {dupe.mention_count}, sim: {sim:.2f}, core: '{core_dupe}')")
 
     total_to_merge = sum(len(g) - 1 for g in merge_groups)
     print(f"\nTotal entities to merge: {total_to_merge}")

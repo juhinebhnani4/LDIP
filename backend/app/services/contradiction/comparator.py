@@ -6,6 +6,7 @@ and provides a clean interface for API routes.
 CRITICAL: Validates matter_id on every request (Layer 4 isolation).
 """
 
+import asyncio
 from functools import lru_cache
 
 import structlog
@@ -334,8 +335,8 @@ class StatementComparisonService:
         client = get_supabase_client()
 
         # Get ALL entity_ids with this canonical_name in the matter (ignoring type)
-        entities_resp = (
-            client.table("identity_nodes")
+        entities_resp = await asyncio.to_thread(
+            lambda: client.table("identity_nodes")
             .select("id, canonical_name, entity_type")
             .eq("matter_id", matter_id)
             .eq("canonical_name", canonical_name)
@@ -413,8 +414,8 @@ class StatementComparisonService:
         client = get_supabase_client()
 
         # Query chunks containing ANY of the entity_ids
-        chunks_resp = (
-            client.table("chunks")
+        chunks_resp = await asyncio.to_thread(
+            lambda: client.table("chunks")
             .select("id, document_id, content, page_number, bbox_ids, entity_ids")
             .eq("matter_id", matter_id)
             .overlaps("entity_ids", entity_ids)
@@ -438,8 +439,8 @@ class StatementComparisonService:
 
         # Get document names
         doc_ids = list(set(c["document_id"] for c in chunks))
-        docs_resp = (
-            client.table("documents")
+        docs_resp = await asyncio.to_thread(
+            lambda: client.table("documents")
             .select("id, filename")
             .in_("id", doc_ids)
             .execute()

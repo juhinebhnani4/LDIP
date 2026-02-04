@@ -5231,29 +5231,22 @@ def detect_contradictions(
         entities_skipped = 0
         total_cost_usd = 0.0
 
-        async def _detect_contradictions_async():
-            nonlocal total_contradictions, total_pairs_compared, entities_processed
-            nonlocal entities_skipped, total_cost_usd, total_stored
+        # Semaphore to limit concurrent LLM calls (avoid rate limiting)
+        _contradiction_semaphore = asyncio.Semaphore(5)
 
-            for canonical_name in names_to_process:
+        async def _process_single_name(canonical_name: str) -> dict:
+            """Process a single canonical name with timeout and concurrency control."""
+            async with _contradiction_semaphore:
                 try:
-                    # Compare statements for ALL entities with this canonical_name
-                    # This is the key change: group by name, ignore type
-                    comparison_result = await compare_service.compare_statements_by_canonical_name(
-                        canonical_name=canonical_name,
-                        matter_id=matter_id,
-                        max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
-                        confidence_threshold=0.5,
-                    )
-
-                    # Aggregate results
-                    total_contradictions += comparison_result.meta.contradictions_found
-                    total_pairs_compared += comparison_result.meta.pairs_compared
-                    total_cost_usd += comparison_result.meta.total_cost_usd
-                    entities_processed += 1
+                    async with asyncio.timeout(120):  # 2-minute timeout per entity
+                        comparison_result = await compare_service.compare_statements_by_canonical_name(
+                            canonical_name=canonical_name,
+                            matter_id=matter_id,
+                            max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
+                            confidence_threshold=0.5,
+                        )
 
                     # Store contradictions to database (Epic 5 requirement)
-                    # Uses entity_id from the comparison result (primary entity for merged names)
                     stored = 0
                     if comparison_result.meta.contradictions_found > 0:
                         stored = _store_comparison_results(
@@ -5261,7 +5254,6 @@ def detect_contradictions(
                             matter_id=matter_id,
                             entity_id=comparison_result.data.entity_id,
                         )
-                        total_stored += stored
 
                     logger.debug(
                         "detect_contradictions_name_complete",
@@ -5272,18 +5264,62 @@ def detect_contradictions(
                         stored=stored,
                     )
 
+                    return {
+                        "status": "ok",
+                        "contradictions": comparison_result.meta.contradictions_found,
+                        "pairs_compared": comparison_result.meta.pairs_compared,
+                        "cost_usd": comparison_result.meta.total_cost_usd,
+                        "stored": stored,
+                    }
+
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "detect_contradictions_name_timeout",
+                        document_id=doc_id,
+                        canonical_name=canonical_name,
+                        timeout_seconds=120,
+                    )
+                    return {"status": "skipped", "reason": "timeout"}
+
                 except Exception as e:
-                    # Log but continue with other entities
                     logger.warning(
                         "detect_contradictions_name_failed",
                         document_id=doc_id,
                         canonical_name=canonical_name,
                         error=str(e),
+                        error_type=type(e).__name__,
                     )
+                    return {"status": "skipped", "reason": str(e)}
+
+        async def _detect_contradictions_async():
+            nonlocal total_contradictions, total_pairs_compared, entities_processed
+            nonlocal entities_skipped, total_cost_usd, total_stored
+
+            # Process entities concurrently with semaphore-controlled parallelism
+            results = await asyncio.gather(
+                *[_process_single_name(name) for name in names_to_process],
+                return_exceptions=True,
+            )
+
+            for result in results:
+                if isinstance(result, Exception):
+                    entities_skipped += 1
+                    continue
+                if result.get("status") == "ok":
+                    total_contradictions += result["contradictions"]
+                    total_pairs_compared += result["pairs_compared"]
+                    total_cost_usd += result["cost_usd"]
+                    total_stored += result.get("stored", 0)
+                    entities_processed += 1
+                else:
                     entities_skipped += 1
 
-        # Run async comparison
-        asyncio.run(_detect_contradictions_async())
+        # Run async comparison using a new event loop (safe for Celery workers)
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_detect_contradictions_async())
+        finally:
+            loop.close()
 
         # Broadcast contradiction detection completion
         broadcast_document_status(

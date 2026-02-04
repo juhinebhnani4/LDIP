@@ -20,7 +20,10 @@ from functools import lru_cache
 
 import structlog
 
+from google.genai import types
+
 from app.core.config import get_settings
+from app.core.gemini_client import get_gemini_client
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import RawEvent
 from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver
@@ -189,12 +192,10 @@ class EventEntityLinker:
 
     def __init__(self) -> None:
         """Initialize event entity linker."""
-        self._model = None
-        self._genai = None
+        self._client = None
         self._resolver: EntityResolver | None = None
         self._mig_service: MIGGraphService | None = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
@@ -212,26 +213,15 @@ class EventEntityLinker:
         return self._mig_service
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance or None if not configured.
+            Gemini client instance or None if not configured.
         """
-        if self._model is None:
-            if not self.api_key:
-                logger.debug("entity_linker_gemini_not_configured")
-                return None
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "entity_linker_initialized",
                     model=self.model_name,
@@ -240,7 +230,7 @@ class EventEntityLinker:
                 logger.warning("entity_linker_gemini_init_failed", error=str(e))
                 return None
 
-        return self._model
+        return self._client
 
     # =========================================================================
     # Public Methods
@@ -273,7 +263,7 @@ class EventEntityLinker:
         mentions = self._extract_entity_mentions(description)
 
         # Optionally use Gemini for additional extraction
-        if use_gemini and self.model:
+        if use_gemini and self.client:
             gemini_mentions = await self._extract_mentions_with_gemini(description)
             # Merge mentions, avoiding duplicates
             existing_texts = {m.text.lower() for m in mentions}
@@ -361,7 +351,7 @@ class EventEntityLinker:
             # Extract mentions
             mentions = self._extract_entity_mentions(event.description)
 
-            if use_gemini and self.model:
+            if use_gemini and self.client:
                 gemini_mentions = await self._extract_mentions_with_gemini(
                     event.description
                 )
@@ -672,7 +662,7 @@ class EventEntityLinker:
         Returns:
             List of EntityMention objects.
         """
-        if not self.model:
+        if not self.client:
             return []
 
         prompt = ENTITY_EXTRACTION_USER_PROMPT.format(description=description)
@@ -680,7 +670,13 @@ class EventEntityLinker:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await self.model.generate_content_async(prompt)
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                    ),
+                )
                 return self._parse_gemini_extraction(response.text)
 
             except Exception as e:

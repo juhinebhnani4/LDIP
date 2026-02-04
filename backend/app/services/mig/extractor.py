@@ -16,7 +16,10 @@ from functools import lru_cache
 
 import structlog
 
+from google.genai import types
+
 from app.core.config import get_settings
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.reliability_logging import log_entity_extraction_result
 from app.models.entity import (
     EntityExtractionResult,
@@ -103,11 +106,9 @@ class MIGEntityExtractor:
 
     def __init__(self) -> None:
         """Initialize MIG entity extractor."""
-        self._model = None
-        self._genai = None
+        self._client = None
         self._event_loop_id: int | None = None  # Track event loop to detect changes
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     def _get_current_loop_id(self) -> int | None:
@@ -119,69 +120,56 @@ class MIGEntityExtractor:
             # No running event loop
             return None
 
-    def _reset_model(self) -> None:
-        """Reset the model instance.
+    def _reset_client(self) -> None:
+        """Reset the client instance.
 
         This is needed when the event loop changes (e.g., new asyncio.run() call)
-        because the google.generativeai library maintains internal gRPC connections
+        because the client may maintain internal gRPC connections
         that hold references to the event loop.
         """
-        self._model = None
-        self._genai = None
+        self._client = None
         self._event_loop_id = None
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
-        IMPORTANT: Automatically resets the model when a new event loop is detected.
+        IMPORTANT: Automatically resets the client when a new event loop is detected.
         This prevents "Event loop is closed" errors when multiple Celery tasks
         run entity extraction in sequence (each asyncio.run() creates a new loop).
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
             MIGConfigurationError: If API key is not configured.
         """
-        # Check if event loop has changed - if so, we need a fresh model
+        # Check if event loop has changed - if so, we need a fresh client
         current_loop_id = self._get_current_loop_id()
-        if self._model is not None and self._event_loop_id != current_loop_id:
+        if self._client is not None and self._event_loop_id != current_loop_id:
             logger.debug(
                 "mig_extractor_loop_changed",
                 old_loop_id=self._event_loop_id,
                 new_loop_id=current_loop_id,
             )
-            self._reset_model()
+            self._reset_client()
 
-        if self._model is None:
-            if not self.api_key:
-                raise MIGConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 self._event_loop_id = current_loop_id
                 logger.info(
                     "mig_extractor_initialized",
                     model=self.model_name,
                     event_loop_id=current_loop_id,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 logger.error("mig_extractor_init_failed", error=str(e))
                 raise MIGConfigurationError(
                     f"Failed to initialize Gemini for MIG: {e}"
                 ) from e
 
-        return self._model
+        return self._client
 
     async def extract_entities(
         self,
@@ -252,7 +240,13 @@ class MIGEntityExtractor:
         for attempt in range(MAX_RETRIES):
             try:
                 # Call Gemini asynchronously
-                response = await self.model.generate_content_async(prompt)
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                    ),
+                )
 
                 # Parse response
                 result = self._parse_response(
@@ -420,7 +414,13 @@ class MIGEntityExtractor:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                    ),
+                )
 
                 result = self._parse_response(
                     response.text,
@@ -811,7 +811,13 @@ class MIGEntityExtractor:
         results: list[EntityExtractionResult] = []
 
         try:
-            response = await self.model.generate_content_async(prompt)
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                ),
+            )
             parsed_sections = self._parse_batch_response(
                 response.text,
                 document_id=document_id,

@@ -834,11 +834,17 @@ class MultiIntentAnalyzer:
         # Stage 4: Ensure RAG fallback for ambiguous queries
         signals = self._apply_rag_fallback(signals)
 
+        # Stage 5: Derive QueryProfile from signals + query text
+        from app.engines.rag.query_profile import QueryProfile
+
+        profile = QueryProfile.from_intent_signals(signals, query)
+
         result = MultiIntentClassification(
             signals=signals,
             compound_intent=compound,
             reasoning=self._build_reasoning(signals, compound),
             llm_was_used=needs_llm and self.client is not None,
+            query_profile=profile,
         )
 
         processing_time = int((time.time() - start_time) * 1000)

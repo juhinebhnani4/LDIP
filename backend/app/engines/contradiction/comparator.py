@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import structlog
+from google.genai import types
 
 from app.core.circuit_breaker import (
     CircuitOpenError,
@@ -28,6 +29,7 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.gemini_client import get_gemini_client
 from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.contradiction.prompts import (
     GEMINI_SCREENING_SYSTEM_PROMPT,
@@ -242,7 +244,7 @@ class StatementComparator:
     def __init__(self) -> None:
         """Initialize statement comparator with two-tier model routing."""
         self._openai_client = None
-        self._gemini_model = None
+        self._gemini_client = None
         settings = get_settings()
 
         # OpenAI (GPT-4) config
@@ -292,16 +294,16 @@ class StatementComparator:
         return self._openai_client
 
     @property
-    def gemini_model(self):
-        """Get or create Gemini model for screening.
+    def gemini_client(self):
+        """Get or create Gemini client for screening.
 
         Returns:
-            Gemini GenerativeModel instance.
+            Gemini client instance from shared client factory.
 
         Raises:
             ComparatorError: If Gemini API key is not configured.
         """
-        if self._gemini_model is None:
+        if self._gemini_client is None:
             if not self.gemini_api_key:
                 logger.warning(
                     "gemini_not_configured_for_screening",
@@ -310,10 +312,7 @@ class StatementComparator:
                 return None
 
             try:
-                import google.generativeai as genai
-
-                genai.configure(api_key=self.gemini_api_key)
-                self._gemini_model = genai.GenerativeModel(self.screening_model)
+                self._gemini_client = get_gemini_client()
                 logger.info(
                     "gemini_screening_initialized",
                     model=self.screening_model,
@@ -322,7 +321,7 @@ class StatementComparator:
                 logger.error("gemini_screening_init_failed", error=str(e))
                 return None
 
-        return self._gemini_model
+        return self._gemini_client
 
     async def compare_statement_pair(
         self,
@@ -357,7 +356,7 @@ class StatementComparator:
 
         try:
             # === TIER 1: Gemini Screening (if enabled) ===
-            if self.routing_enabled and self.gemini_model:
+            if self.routing_enabled and self.gemini_client:
                 screening_result = await self._call_gemini_screening(
                     entity_name=entity_name,
                     content_a=statement_a.content,
@@ -526,13 +525,13 @@ class StatementComparator:
             # Apply rate limiting to prevent 429 errors
             gemini_limiter = get_rate_limiter(LLMProvider.GEMINI)
             async with gemini_limiter:
-                response = await asyncio.to_thread(
-                    self.gemini_model.generate_content,
-                    full_prompt,
-                    generation_config={
-                        "response_mime_type": "application/json",
-                        "temperature": 0.1,
-                    },
+                response = await self.gemini_client.aio.models.generate_content(
+                    model=self.screening_model,
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                    ),
                 )
 
             response_text = response.text

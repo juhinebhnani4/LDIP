@@ -343,6 +343,11 @@ class QueryOrchestrator:
                 fast_path_used=intent_result.fast_path_used,
             )
 
+        # Step 1.5: Pass QueryProfile through context for RAG engine
+        if multi_classification and multi_classification.query_profile:
+            context = dict(context) if context else {}
+            context["query_profile"] = multi_classification.query_profile
+
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(
             matter_id=matter_id,

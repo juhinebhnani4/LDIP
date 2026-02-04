@@ -5,6 +5,7 @@ import { formatDistanceToNow, isValid } from 'date-fns';
 import { User, Bot, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { SourceReference } from './SourceReference';
 import { EngineTrace } from './EngineTrace';
 import type { ChatMessage as ChatMessageType, SourceReference as SourceReferenceType } from '@/types/chat';
@@ -97,8 +98,8 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
                   </div>
                 </div>
               )}
-              <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ul:pl-4 prose-li:my-1 prose-strong:text-foreground prose-headings:mt-3 prose-headings:mb-1">
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+              <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-ul:pl-5 prose-ol:pl-5 prose-li:my-0.5 prose-li:marker:text-muted-foreground prose-strong:text-foreground prose-strong:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-headings:text-foreground prose-h2:text-base prose-h3:text-sm prose-h2:border-b prose-h2:border-border/50 prose-h2:pb-1">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
               </div>
             </>
           )}

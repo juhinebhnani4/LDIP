@@ -15,8 +15,10 @@ import time
 from functools import lru_cache
 
 import structlog
+from google.genai import types
 
 from app.core.config import get_settings
+from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.engines.timeline.classification_prompts import (
     EVENT_CLASSIFICATION_BATCH_PROMPT,
     EVENT_CLASSIFICATION_SYSTEM_PROMPT,
@@ -92,48 +94,34 @@ class EventClassifier:
 
     def __init__(self) -> None:
         """Initialize event classifier."""
-        self._model = None
-        self._genai = None
+        self._client = None
         settings = get_settings()
-        self.api_key = settings.gemini_api_key
         self.model_name = settings.gemini_model
 
     @property
-    def model(self):
-        """Get or create Gemini model instance.
+    def client(self):
+        """Get or create Gemini client instance.
 
         Returns:
-            Gemini GenerativeModel instance.
+            google.genai.Client instance.
 
         Raises:
-            ClassifierConfigurationError: If API key is not configured.
+            ClassifierConfigurationError: If client cannot be created.
         """
-        if self._model is None:
-            if not self.api_key:
-                raise ClassifierConfigurationError(
-                    "Gemini API key not configured. Set GEMINI_API_KEY environment variable."
-                )
-
+        if self._client is None:
             try:
-                import google.generativeai as genai
-
-                self._genai = genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    self.model_name,
-                    system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-                )
+                self._client = get_gemini_client()
                 logger.info(
                     "event_classifier_initialized",
                     model=self.model_name,
                 )
-            except Exception as e:
+            except GeminiClientError as e:
                 logger.error("event_classifier_init_failed", error=str(e))
                 raise ClassifierConfigurationError(
                     f"Failed to initialize Gemini for event classification: {e}"
                 ) from e
 
-        return self._model
+        return self._client
 
     async def classify_event(
         self,
@@ -183,7 +171,13 @@ class EventClassifier:
         for attempt in range(MAX_RETRIES):
             try:
                 # Call Gemini asynchronously
-                response = await self.model.generate_content_async(prompt)
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                    ),
+                )
 
                 # Parse response
                 result = self._parse_single_response(
@@ -317,7 +311,13 @@ class EventClassifier:
         for attempt in range(MAX_RETRIES):
             try:
                 # Call Gemini
-                response = await self.model.generate_content_async(prompt)
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                    ),
+                )
 
                 # Parse response
                 results = self._parse_batch_response(response.text, events)
@@ -416,7 +416,13 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                    ),
+                )
                 return self._parse_single_response(response.text, event_id)
 
             except ClassifierConfigurationError:
@@ -507,7 +513,13 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                    ),
+                )
                 return self._parse_batch_response(response.text, events)
 
             except ClassifierConfigurationError:

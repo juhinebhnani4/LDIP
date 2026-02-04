@@ -2,7 +2,7 @@
 # Start Celery beat scheduler in background, then worker in foreground.
 # -B flag is incompatible with gevent pool, so beat runs as a separate process.
 
-celery -A app.workers.celery:celery_app beat --loglevel=info &
+celery -A app.workers.celery:celery_app beat --loglevel=info -s /tmp/celerybeat-schedule &
 BEAT_PID=$!
 
 # Trap signals to clean up beat when worker exits

@@ -9,7 +9,7 @@ dockerfilePath = "Dockerfile"
 # Celery worker start command - override the default uvicorn
 # Using gevent pool for I/O-bound tasks (API calls to LLMs) with high concurrency
 # gevent is preferred over prefork for I/O-heavy workloads - see research doc
-startCommand = "celery -A app.workers.celery:celery_app worker --loglevel=info --pool=gevent --concurrency=50"
+startCommand = "celery -A app.workers.celery:celery_app worker -B --loglevel=info --pool=gevent --concurrency=50"
 # Workers don't need health checks via HTTP (Celery has internal heartbeat)
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"

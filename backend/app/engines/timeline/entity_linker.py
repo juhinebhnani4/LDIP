@@ -41,7 +41,7 @@ logger = structlog.get_logger(__name__)
 import os as _os
 
 LINK_CONFIDENCE_THRESHOLD = float(
-    _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.7")
+    _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.85")
 )
 
 # Maximum retries for Gemini calls

@@ -1407,3 +1407,125 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
     except Exception as e:
         logger.error("sync_citation_statuses_with_resolutions_failed", error=str(e))
         return {"error": str(e)}
+
+
+# =============================================================================
+# Hard Delete Expired Documents Task
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.hard_delete_expired_documents",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def hard_delete_expired_documents(self, retention_days: int = 30) -> dict:
+    """Permanently delete documents that were soft-deleted more than retention_days ago.
+
+    Documents are soft-deleted (deleted_at timestamp set) when users delete them
+    from the UI. This task runs daily and permanently removes documents that have
+    been in the trash for longer than the retention period.
+
+    Also cleans up the associated storage files.
+
+    Args:
+        retention_days: Days to retain soft-deleted documents before permanent deletion.
+
+    Returns:
+        Dictionary with deletion results.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.supabase.client import get_service_client
+
+    logger.info("hard_delete_expired_documents_started", retention_days=retention_days)
+
+    results = {
+        "checked": 0,
+        "deleted": 0,
+        "storage_cleaned": 0,
+        "errors": [],
+    }
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return {"error": "Database client not configured"}
+
+        # Find documents where deleted_at is older than retention period
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+
+        expired_docs = (
+            client.table("documents")
+            .select("id, matter_id, filename, storage_path, deleted_at")
+            .not_.is_("deleted_at", "null")
+            .lt("deleted_at", cutoff.isoformat())
+            .execute()
+        )
+
+        if not expired_docs.data:
+            logger.info("hard_delete_expired_documents_none_found")
+            return results
+
+        results["checked"] = len(expired_docs.data)
+
+        for doc in expired_docs.data:
+            doc_id = doc["id"]
+            storage_path = doc.get("storage_path")
+
+            try:
+                # Delete storage file if path exists
+                if storage_path:
+                    try:
+                        client.storage.from_("documents").remove([storage_path])
+                        results["storage_cleaned"] += 1
+                    except Exception as storage_err:
+                        logger.warning(
+                            "hard_delete_storage_cleanup_failed",
+                            document_id=doc_id,
+                            storage_path=storage_path,
+                            error=str(storage_err),
+                        )
+
+                # Hard delete the document row (cascade cleanup already ran on soft-delete,
+                # but delete any stragglers that may have been created after soft-delete)
+                client.table("chunks").delete().eq("document_id", doc_id).execute()
+                client.table("citations").delete().eq("source_document_id", doc_id).execute()
+                client.table("entity_mentions").delete().eq("document_id", doc_id).execute()
+                client.table("processing_jobs").delete().eq("document_id", doc_id).execute()
+                client.table("events").update({"document_id": None}).eq("document_id", doc_id).execute()
+                client.table("bounding_boxes").delete().eq("document_id", doc_id).execute()
+
+                # Finally delete the document itself
+                client.table("documents").delete().eq("id", doc_id).execute()
+
+                results["deleted"] += 1
+                logger.info(
+                    "document_hard_deleted",
+                    document_id=doc_id,
+                    filename=doc.get("filename"),
+                    deleted_at=doc.get("deleted_at"),
+                )
+
+            except Exception as e:
+                logger.error(
+                    "hard_delete_document_failed",
+                    document_id=doc_id,
+                    error=str(e),
+                )
+                results["errors"].append({"document_id": doc_id, "error": str(e)})
+
+        logger.info(
+            "hard_delete_expired_documents_completed",
+            checked=results["checked"],
+            deleted=results["deleted"],
+            storage_cleaned=results["storage_cleaned"],
+            errors=len(results["errors"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error("hard_delete_expired_documents_failed", error=str(e))
+        return {"error": str(e)}

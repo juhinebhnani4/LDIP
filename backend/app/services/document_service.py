@@ -731,6 +731,8 @@ class DocumentService:
             "chunks_deleted": 0,
             "citations_deleted": 0,
             "events_nullified": 0,
+            "processing_jobs_deleted": 0,
+            "entity_mentions_deleted": 0,
         }
 
         try:
@@ -752,6 +754,18 @@ class DocumentService:
                 "document_id": None
             }).eq("document_id", document_id).execute()
             affected["events_nullified"] = len(events_result.data) if events_result.data else 0
+
+            # Delete processing jobs for this document
+            jobs_result = self.client.table("processing_jobs").delete().eq(
+                "document_id", document_id
+            ).execute()
+            affected["processing_jobs_deleted"] = len(jobs_result.data) if jobs_result.data else 0
+
+            # Delete entity mentions for this document
+            mentions_result = self.client.table("entity_mentions").delete().eq(
+                "document_id", document_id
+            ).execute()
+            affected["entity_mentions_deleted"] = len(mentions_result.data) if mentions_result.data else 0
 
             logger.info(
                 "cascade_soft_delete_completed",

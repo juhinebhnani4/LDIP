@@ -195,6 +195,14 @@ celery_app.conf.update(
             "schedule": 300,  # Every 5 minutes
             "options": {"queue": "low"},
         },
+        # Hard delete expired documents - runs daily at 3 AM
+        # Permanently removes documents soft-deleted more than 30 days ago
+        "hard-delete-expired-documents": {
+            "task": "app.workers.tasks.maintenance_tasks.hard_delete_expired_documents",
+            "schedule": crontab(hour=3, minute=0),  # Daily at 3 AM
+            "args": [30],  # 30-day retention period
+            "options": {"queue": "low"},
+        },
     },
 )
 

@@ -4311,9 +4311,6 @@ def resolve_aliases(
             },
         )
 
-        # Mark the entire job as COMPLETED since this is the final stage
-        _mark_job_completed(job_id, matter_id, document_id=doc_id)
-
         logger.info(
             "resolve_aliases_task_completed",
             document_id=doc_id,
@@ -5335,6 +5332,9 @@ def detect_contradictions(
                 "entities_analyzed": entities_processed,
             },
         )
+
+        # Mark the entire job as COMPLETED — contradiction_detection is the final stage
+        _mark_job_completed(job_id, matter_id, document_id=doc_id)
 
         logger.info(
             "detect_contradictions_task_completed",

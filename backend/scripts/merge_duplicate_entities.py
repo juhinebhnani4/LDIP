@@ -119,13 +119,12 @@ def load_entities(matter_id: str, batch_size: int = 500) -> list[EntityNode]:
                 entity_type=EntityType(row["entity_type"]) if row.get("entity_type") else EntityType.PERSON,
                 aliases=row.get("aliases") or [],
                 mention_count=row.get("mention_count", 0),
-                confidence=row.get("confidence", 0.0),
-                first_seen_at=row.get("first_seen_at"),
-                last_seen_at=row.get("last_seen_at"),
-                source_documents=row.get("source_documents") or [],
                 metadata=row.get("metadata") or {},
                 created_at=row.get("created_at"),
                 updated_at=row.get("updated_at"),
+                merged_into_id=row.get("merged_into_id"),
+                merged_at=row.get("merged_at"),
+                merged_by=row.get("merged_by"),
             )
             all_entities.append(entity)
 
@@ -352,15 +351,12 @@ def execute_merge(
         all_aliases = set(canonical.aliases or [])
         all_aliases.add(canonical.canonical_name)
         total_mentions = canonical.mention_count or 0
-        all_source_docs = set(canonical.source_documents or [])
 
         for dupe in duplicates:
             all_aliases.add(dupe.canonical_name)
             for alias in (dupe.aliases or []):
                 all_aliases.add(alias)
             total_mentions += dupe.mention_count or 0
-            for doc in (dupe.source_documents or []):
-                all_source_docs.add(doc)
 
         # Remove canonical name from aliases
         all_aliases.discard(canonical.canonical_name)
@@ -369,7 +365,6 @@ def execute_merge(
         client.table("identity_nodes").update({
             "aliases": list(all_aliases),
             "mention_count": total_mentions,
-            "source_documents": list(all_source_docs),
         }).eq("id", canonical.id).execute()
 
         print(f"  Updated canonical '{canonical.canonical_name}' ({canonical.id})")

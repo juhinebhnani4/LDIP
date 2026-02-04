@@ -119,9 +119,12 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
 
         # Import tasks here to avoid circular imports
         from app.workers.tasks.document_tasks import (
+            detect_contradictions,
             embed_chunks,
+            extract_citations,
             extract_entities,
             process_document,
+            resolve_aliases,
         )
 
         dispatched = 0
@@ -137,7 +140,8 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                 continue
 
             try:
-                # Dispatch based on current stage
+                # Dispatch based on current stage — targeted dispatch avoids
+                # restarting the full pipeline which breaks on idempotency guards
                 if stage == "embedding":
                     embed_chunks.apply_async(
                         kwargs={"document_id": doc_id, "force": True},
@@ -146,6 +150,21 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                 elif stage == "entity_extraction":
                     extract_entities.apply_async(
                         kwargs={"document_id": doc_id, "force": True},
+                        countdown=2,
+                    )
+                elif stage == "alias_resolution":
+                    resolve_aliases.apply_async(
+                        kwargs={"document_id": doc_id},
+                        countdown=2,
+                    )
+                elif stage == "citation_extraction":
+                    extract_citations.apply_async(
+                        kwargs={"document_id": doc_id},
+                        countdown=2,
+                    )
+                elif stage == "contradiction_detection":
+                    detect_contradictions.apply_async(
+                        kwargs={"document_id": doc_id},
                         countdown=2,
                     )
                 elif stage is None or stage == "":

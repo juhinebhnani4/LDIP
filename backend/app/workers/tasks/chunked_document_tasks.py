@@ -8,7 +8,6 @@ Processes large PDFs (>30 pages) by splitting into chunks and
 processing each chunk in parallel using Celery group().
 """
 
-import asyncio
 import hashlib
 import json
 import signal
@@ -55,6 +54,7 @@ from app.services.storage_service import (
     get_storage_service,
 )
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -221,7 +221,7 @@ class ChunkProcessingError(Exception):
 
 def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks."""
-    return asyncio.run(coro)
+    return run_async(coro)
 
 
 def _run_injection_scan(

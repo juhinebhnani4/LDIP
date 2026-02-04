@@ -9,7 +9,6 @@ This module provides async tasks for:
 Part of Act Validation and Auto-Fetching feature.
 """
 
-import asyncio
 from typing import Any
 from uuid import uuid4
 
@@ -27,6 +26,7 @@ from app.engines.citation.validation import (
 from app.services.act_cache_service import get_act_cache_service
 from app.services.supabase.client import get_service_client
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -548,7 +548,7 @@ def fetch_acts_from_india_code(self) -> dict:
                     results["errors"] += 1
 
     # Run the async function
-    asyncio.run(_fetch_all())
+    run_async(_fetch_all())
 
     # Update act resolutions for fetched acts
     _update_matter_resolutions_from_cache(client)

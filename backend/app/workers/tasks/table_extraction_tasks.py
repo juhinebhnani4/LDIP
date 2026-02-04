@@ -9,7 +9,6 @@ This task can run in parallel with chunking for efficiency.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 import structlog
@@ -19,6 +18,7 @@ from app.core.config import get_settings
 from app.services.document_service import DocumentService, get_document_service
 from app.services.storage_service import StorageService, get_storage_service
 from app.services.supabase.client import get_supabase_client as get_supabase
+from app.workers.utils import run_async
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -153,7 +153,7 @@ def extract_tables(
                     document_id=doc_id,
                 )
 
-            result = asyncio.run(_extract_async())
+            result = run_async(_extract_async())
 
             # Store tables in database
             if result.has_tables:

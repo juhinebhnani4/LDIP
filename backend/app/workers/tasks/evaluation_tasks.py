@@ -6,7 +6,6 @@ Runs batch evaluation of golden dataset items using RAGAS metrics.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +14,7 @@ import structlog
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.services.supabase.client import get_supabase_client as get_supabase
+from app.workers.utils import run_async
 
 if TYPE_CHECKING:
     pass
@@ -188,7 +188,7 @@ def run_batch_evaluation(
                 "errors": errors[:5],  # First 5 errors
             }
 
-        result = asyncio.run(_evaluate_async())
+        result = run_async(_evaluate_async())
 
         logger.info(
             "batch_evaluation_completed",
@@ -304,7 +304,7 @@ def evaluate_chat_response(
                 "scores": result.scores.model_dump(),
             }
 
-        result = asyncio.run(_evaluate_async())
+        result = run_async(_evaluate_async())
 
         logger.debug(
             "auto_evaluation_completed",

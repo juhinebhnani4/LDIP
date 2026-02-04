@@ -11,6 +11,7 @@ Provides periodic tasks for:
 import structlog
 
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -40,14 +41,10 @@ def check_llm_quotas(self) -> dict:
     Raises:
         Exception: F11 fix - Re-raises exceptions so Celery can track failures.
     """
-    import asyncio
-
     logger.info("llm_quota_check_started", task_id=self.request.id)
 
     try:
-        # F4 fix: Use asyncio.run() instead of manual event loop management
-        # This properly handles loop creation/cleanup and is the recommended approach
-        result = asyncio.run(_check_quotas_async())
+        result = run_async(_check_quotas_async())
         return result
 
     except Exception as e:

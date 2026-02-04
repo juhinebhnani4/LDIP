@@ -121,6 +121,7 @@ from app.models.contradiction import (
     EntityComparisonsResponse,
 )
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -281,25 +282,9 @@ STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
 def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks.
 
-    Creates a new event loop to run async operations from sync Celery tasks.
-    This is necessary because Celery workers run synchronously, but our
-    database operations use asyncio.
-
-    Note:
-        Uses asyncio.run() which properly creates and cleans up an event loop.
-        For batch operations, prefer wrapping all async calls in a single
-        async function and calling asyncio.run() once.
-
-    Args:
-        coro: An awaitable coroutine to execute.
-
-    Returns:
-        The result of the coroutine execution.
-
-    Example:
-        >>> result = _run_async(some_async_function(arg1, arg2))
+    Delegates to shared gevent-compatible run_async utility.
     """
-    return asyncio.run(coro)
+    return run_async(coro)
 
 
 def _get_or_create_job(
@@ -2441,7 +2426,7 @@ def chunk_document(
 
             return is_complete, parent_count, child_count
 
-        is_chunking_complete, parent_count, child_count = asyncio.run(
+        is_chunking_complete, parent_count, child_count = _run_async(
             _check_chunking_complete()
         )
 
@@ -2515,7 +2500,7 @@ def chunk_document(
                 child_chunks=result.child_chunks,
             )
 
-        saved_count = asyncio.run(_save_chunks_async())
+        saved_count = _run_async(_save_chunks_async())
 
         # Record stage completion for job tracking (Story 2c-3)
         _update_job_stage_complete(job_id, "chunking", matter_id)
@@ -2726,7 +2711,7 @@ def link_chunks_to_bboxes_task(
 
             return len(chunks), matter_id
 
-        linked_count, matter_id = asyncio.run(_get_and_link_chunks())
+        linked_count, matter_id = _run_async(_get_and_link_chunks())
 
         logger.info(
             "link_chunks_to_bboxes_task_completed",
@@ -3074,7 +3059,7 @@ def embed_chunks(
                         raise  # Let Celery retry
 
         try:
-            asyncio.run(_embed_all_batches())
+            _run_async(_embed_all_batches())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -3900,7 +3885,7 @@ def extract_entities(
                     )
 
         try:
-            asyncio.run(_extract_entities_async())
+            _run_async(_extract_entities_async())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -4284,7 +4269,7 @@ def resolve_aliases(
 
             return resolution_result, aliases_created
 
-        result = asyncio.run(_resolve_aliases_async())
+        result = _run_async(_resolve_aliases_async())
 
         if result[0] is None:
             # No entities to resolve - mark stage and job complete
@@ -4706,7 +4691,7 @@ def extract_citations(
                 )
 
         try:
-            asyncio.run(_extract_citations_async())
+            _run_async(_extract_citations_async())
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -5314,12 +5299,8 @@ def detect_contradictions(
                 else:
                     entities_skipped += 1
 
-        # Run async comparison using a new event loop (safe for Celery workers)
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(_detect_contradictions_async())
-        finally:
-            loop.close()
+        # Run async comparison (gevent-compatible via _run_async)
+        _run_async(_detect_contradictions_async())
 
         # Broadcast contradiction detection completion
         broadcast_document_status(

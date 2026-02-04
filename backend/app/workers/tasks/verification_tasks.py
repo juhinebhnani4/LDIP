@@ -6,8 +6,6 @@ Runs verification asynchronously and broadcasts real-time progress updates.
 Story 3-3: Citation Verification (AC: #5)
 """
 
-import asyncio
-
 import structlog
 
 from app.engines.citation import (
@@ -21,6 +19,7 @@ from app.services.pubsub_service import (
     broadcast_verification_progress,
 )
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -33,9 +32,9 @@ RETRY_DELAYS = [30, 60, 120]  # Exponential backoff
 def _run_async(coro):
     """Run async coroutine in sync context for Celery tasks.
 
-    Uses asyncio.run() which creates a single event loop per call and
-    properly cleans up. For batch operations, prefer using the async
-    batch functions directly with a single asyncio.run() call.
+    Delegates to shared run_async utility which handles gevent
+    compatibility. For batch operations, prefer using the async
+    batch functions directly with a single run_async() call.
 
     Args:
         coro: An awaitable coroutine to execute.
@@ -43,7 +42,7 @@ def _run_async(coro):
     Returns:
         The result of the coroutine execution.
     """
-    return asyncio.run(coro)
+    return run_async(coro)
 
 
 async def _verify_citations_batch_async(
@@ -236,7 +235,7 @@ def verify_citations_for_act(
 
     try:
         # Run entire batch in a single event loop (Event Loop Storm fix)
-        results = asyncio.run(
+        results = run_async(
             _verify_citations_batch_async(
                 task_id=task_id,
                 matter_id=matter_id,
@@ -392,7 +391,7 @@ def verify_single_citation(
 
     try:
         # Run in a single event loop
-        result_dict = asyncio.run(
+        result_dict = run_async(
             _verify_single_citation_async(
                 matter_id=matter_id,
                 citation_id=citation_id,

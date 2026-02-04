@@ -9,8 +9,6 @@ don't need: bounding boxes, entity extraction, citation detection, etc.
 They just need to be chunked and embedded for RAG search.
 """
 
-import asyncio
-
 import structlog
 
 from app.models.library import LibraryDocumentStatus
@@ -19,6 +17,7 @@ from app.services.library_service import get_library_service, LibraryService
 from app.services.rag.embedder import EmbeddingService, get_embedding_service
 from app.services.supabase.client import get_service_client
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -334,7 +333,7 @@ def embed_library_chunks(
             async def _embed_batch():
                 return await embedder.embed_batch(batch_texts)
 
-            embeddings = asyncio.run(_embed_batch())
+            embeddings = run_async(_embed_batch())
 
             if embeddings is None:
                 logger.warning(

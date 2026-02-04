@@ -10,11 +10,10 @@ Implements:
 - AC 4.2.3: Retry on failure, alert if failures exceed threshold
 """
 
-import asyncio
-
 import structlog
 
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -86,7 +85,7 @@ def archive_reasoning_traces(self) -> dict[str, int]:
         return {"total_archived": total_archived, "total_failed": total_failed}
 
     try:
-        result = asyncio.run(run_archival())
+        result = run_async(run_archival())
         logger.info(
             "reasoning_archival_task_complete",
             total_archived=result["total_archived"],
@@ -127,7 +126,7 @@ def restore_reasoning_trace(self, trace_id: str, matter_id: str) -> bool:
         return await service.restore_trace(trace_id, matter_id)
 
     try:
-        result = asyncio.run(run_restore())
+        result = run_async(run_restore())
         logger.info(
             "reasoning_trace_restoration_complete",
             trace_id=trace_id,

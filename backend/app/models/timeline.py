@@ -270,6 +270,10 @@ class RawDateListItem(BaseModel):
     source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
     confidence: float = Field(..., description="Extraction confidence")
     is_ambiguous: bool = Field(default=False, alias="isAmbiguous", description="Whether date is ambiguous")
+    entities_involved: list[str] = Field(
+        default_factory=list, alias="entitiesInvolved", description="Related entity UUIDs"
+    )
+    is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
 
 
 class RawDatesListResponse(BaseModel):

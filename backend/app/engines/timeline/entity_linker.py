@@ -533,6 +533,33 @@ class EventEntityLinker:
     # Entity Mention Extraction
     # =========================================================================
 
+    @staticmethod
+    def _normalize_mention_text(text: str) -> str:
+        """Strip titles/honorifics and normalize whitespace from mention text.
+
+        Removes Indian titles (Shri, Smt, etc.) and standard titles (Mr, Mrs, etc.)
+        so that downstream matching compares clean names.
+
+        Args:
+            text: Raw mention text, e.g. "Shri Nirav D Jobalia"
+
+        Returns:
+            Cleaned text, e.g. "Nirav D Jobalia"
+        """
+        if not text:
+            return text
+        # Build pattern to strip leading titles
+        title_words = (
+            "shri", "smt", "kumari", "dr", "adv", "advocate",
+            "hon", "hon'ble", "honourable", "justice",
+            "mr", "mrs", "ms", "miss", "prof", "professor",
+        )
+        pattern = r"^(?:" + "|".join(re.escape(t) for t in title_words) + r")\.?\s+"
+        cleaned = re.sub(pattern, "", text.strip(), flags=re.IGNORECASE)
+        # Normalize whitespace
+        cleaned = " ".join(cleaned.split())
+        return cleaned
+
     def _extract_entity_mentions(self, text: str) -> list[EntityMention]:
         """Extract potential entity mentions using pattern matching.
 
@@ -540,6 +567,8 @@ class EventEntityLinker:
         - Names with Indian titles (Shri, Smt, Adv, etc.)
         - Organization indicators (Ltd, Bank, etc.)
         - Capitalized proper nouns
+        - ALL CAPS names (common in legal documents)
+        - Names with single-letter initials (e.g., "Nirav D Jobalia")
 
         Args:
             text: Text to extract mentions from.
@@ -553,23 +582,25 @@ class EventEntityLinker:
         mentions: list[EntityMention] = []
         seen_texts: set[str] = set()
 
-        # Pattern 1: Title + Name (e.g., "Shri Nirav Jobalia")
+        # Pattern 1: Title + Name — now handles mixed case, ALL CAPS, and initials
+        # Matches: "Shri Nirav Jobalia", "Shri NIRAV D JOBALIA", "Dr. N.D. Jobalia"
         try:
             title_pattern = (
                 r"(?:" + "|".join(INDIAN_TITLE_PATTERNS) + r")\s+"
-                r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})"
+                r"([A-Z][A-Za-z]*(?:\.?\s+[A-Z][A-Za-z]*){0,4})"
             )
             for match in re.finditer(title_pattern, text, re.IGNORECASE):
-                full_match = match.group(0).strip()
-                if full_match.lower() not in seen_texts:
+                # Extract only the name part (group 1), NOT the title
+                name_part = match.group(1).strip()
+                if name_part.lower() not in seen_texts and len(name_part) > 2:
                     mentions.append(
                         EntityMention(
-                            text=full_match,
+                            text=name_part,
                             entity_type=EntityType.PERSON,
                             confidence=0.9,
                         )
                     )
-                    seen_texts.add(full_match.lower())
+                    seen_texts.add(name_part.lower())
         except re.error as e:
             logger.warning("entity_extraction_title_pattern_error", error=str(e))
 
@@ -616,12 +647,12 @@ class EventEntityLinker:
             logger.warning("entity_extraction_court_pattern_error", error=str(e))
 
         # Pattern 4: Capitalized proper nouns (potential person names)
-        # Match 2-4 consecutive capitalized words
+        # Match 2-4 consecutive capitalized words, including ALL CAPS and single-letter initials
         try:
-            proper_noun_pattern = r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b"
+            # Standard Title Case: "Nirav Jobalia", "Nirav D Jobalia"
+            proper_noun_pattern = r"\b([A-Z][a-z]+(?:\s+[A-Z]\.?(?:\s+|$))*(?:\s*[A-Z][a-z]+){0,3})\b"
             for match in re.finditer(proper_noun_pattern, text):
                 name = match.group(1).strip()
-                # Filter out common false positives
                 lower_name = name.lower()
                 if (
                     lower_name not in seen_texts
@@ -632,7 +663,28 @@ class EventEntityLinker:
                         EntityMention(
                             text=name,
                             entity_type=EntityType.PERSON,
-                            confidence=0.6,  # Lower confidence for bare proper nouns
+                            confidence=0.6,
+                        )
+                    )
+                    seen_texts.add(lower_name)
+
+            # ALL CAPS names: "NIRAV D JOBALIA", "NIRAV JOBALIA"
+            allcaps_pattern = r"\b([A-Z]{2,}(?:\s+[A-Z]\.?)*(?:\s+[A-Z]{2,}){0,3})\b"
+            for match in re.finditer(allcaps_pattern, text):
+                name = match.group(1).strip()
+                # Convert to Title Case for normalization
+                name_title = name.title()
+                lower_name = name.lower()
+                if (
+                    lower_name not in seen_texts
+                    and len(name) > 5
+                    and not self._is_common_phrase(lower_name)
+                ):
+                    mentions.append(
+                        EntityMention(
+                            text=name_title,
+                            entity_type=EntityType.PERSON,
+                            confidence=0.55,
                         )
                     )
                     seen_texts.add(lower_name)
@@ -774,6 +826,7 @@ class EventEntityLinker:
         """Find the best matching entity for a mention.
 
         Uses EntityResolver for name similarity calculation.
+        Normalizes mention text (strips titles) before matching.
 
         Args:
             mention: Entity mention to match.
@@ -785,6 +838,9 @@ class EventEntityLinker:
         best_match: EntityLinkResult | None = None
         best_score = 0.0
 
+        # Normalize mention text — strip titles so "Shri Nirav Jobalia" becomes "Nirav Jobalia"
+        normalized_mention = self._normalize_mention_text(mention.text)
+
         for entity in entities:
             # Skip different entity types (PERSON won't match ORG)
             # But allow flexible matching since extraction might be wrong
@@ -794,9 +850,12 @@ class EventEntityLinker:
             ):
                 continue
 
-            # Check canonical name
+            # Normalize entity name too for fair comparison
+            normalized_entity = self._normalize_mention_text(entity.canonical_name)
+
+            # Check canonical name (use normalized versions)
             canonical_score = self.resolver.calculate_name_similarity(
-                mention.text, entity.canonical_name
+                normalized_mention, normalized_entity
             )
 
             if canonical_score > best_score and canonical_score >= LINK_CONFIDENCE_THRESHOLD:
@@ -812,8 +871,9 @@ class EventEntityLinker:
 
             # Check aliases
             for alias in entity.aliases or []:
+                normalized_alias = self._normalize_mention_text(alias)
                 alias_score = self.resolver.calculate_name_similarity(
-                    mention.text, alias
+                    normalized_mention, normalized_alias
                 )
 
                 if alias_score > best_score and alias_score >= LINK_CONFIDENCE_THRESHOLD:

@@ -879,32 +879,55 @@ class TimelineService:
         self,
         matter_id: str,
         limit: int = 10000,
+        batch_size: int = 1000,
     ) -> list[RawEvent]:
         """Get ALL events for reclassification (force_reclassify mode).
 
         Unlike get_events_for_classification_sync which only returns raw_date events,
         this returns all events regardless of current type for re-classification.
+        Uses pagination to handle Supabase's per-request row limit.
 
         Args:
             matter_id: Matter UUID.
-            limit: Maximum events to return.
+            limit: Maximum total events to return.
+            batch_size: Number of events per page (default 1000).
 
         Returns:
             List of RawEvent objects (all types, not just raw_date).
         """
         try:
-            response = (
-                self.client.table("events")
-                .select("*")
-                .eq("matter_id", matter_id)
-                .order("event_date", desc=False)
-                .limit(limit)
-                .execute()
-            )
+            all_events: list[RawEvent] = []
+            page = 0
 
-            if response.data:
-                return [self._db_row_to_raw_event(row) for row in response.data]
-            return []
+            while len(all_events) < limit:
+                offset = page * batch_size
+                response = (
+                    self.client.table("events")
+                    .select("*")
+                    .eq("matter_id", matter_id)
+                    .order("event_date", desc=False)
+                    .range(offset, offset + batch_size - 1)
+                    .execute()
+                )
+
+                if not response.data:
+                    break
+
+                all_events.extend(
+                    self._db_row_to_raw_event(row) for row in response.data
+                )
+
+                if len(response.data) < batch_size:
+                    break
+                page += 1
+
+            logger.info(
+                "get_all_events_paginated",
+                matter_id=matter_id,
+                total_events=len(all_events),
+                pages=page + 1,
+            )
+            return all_events[:limit]
 
         except Exception as e:
             logger.error(
@@ -1312,6 +1335,8 @@ class TimelineService:
             source_page=row.get("source_page"),
             confidence=row.get("confidence", 0.8),
             is_ambiguous=is_ambiguous,
+            entities_involved=row.get("entities_involved") or [],
+            is_manual=row.get("is_manual", False),
         )
 
     def _db_row_to_classification_list_item(self, row: dict) -> EventClassificationListItem:
@@ -1646,31 +1671,55 @@ class TimelineService:
     def get_events_for_entity_linking_sync(
         self,
         matter_id: str,
-        limit: int = 100,
+        limit: int = 10000,
+        batch_size: int = 1000,
     ) -> list[RawEvent]:
         """Synchronous version for Celery tasks.
 
+        Uses pagination to handle Supabase's per-request row limit.
+
         Args:
             matter_id: Matter UUID.
-            limit: Maximum events to return.
+            limit: Maximum total events to return.
+            batch_size: Number of events per page (default 1000).
 
         Returns:
             List of RawEvent objects without entity links.
         """
         try:
-            response = (
-                self.client.table("events")
-                .select("*")
-                .eq("matter_id", matter_id)
-                .or_("entities_involved.is.null,entities_involved.eq.{}")
-                .order("event_date", desc=False)
-                .limit(limit)
-                .execute()
-            )
+            all_events: list[RawEvent] = []
+            page = 0
 
-            if response.data:
-                return [self._db_row_to_raw_event(row) for row in response.data]
-            return []
+            while len(all_events) < limit:
+                offset = page * batch_size
+                response = (
+                    self.client.table("events")
+                    .select("*")
+                    .eq("matter_id", matter_id)
+                    .or_("entities_involved.is.null,entities_involved.eq.{}")
+                    .order("event_date", desc=False)
+                    .range(offset, offset + batch_size - 1)
+                    .execute()
+                )
+
+                if not response.data:
+                    break
+
+                all_events.extend(
+                    self._db_row_to_raw_event(row) for row in response.data
+                )
+
+                if len(response.data) < batch_size:
+                    break
+                page += 1
+
+            logger.info(
+                "get_events_for_entity_linking_paginated",
+                matter_id=matter_id,
+                total_events=len(all_events),
+                pages=page + 1,
+            )
+            return all_events[:limit]
 
         except Exception as e:
             logger.error(

@@ -240,28 +240,19 @@ class TimelineBuilder:
         all_entity_ids: set[str] = set()
 
         for event_item in events_response.data:
-            # Get full event details for entity_ids
-            full_event = await self.timeline_service.get_event_by_id(
-                event_id=event_item.id,
-                matter_id=matter_id,
-            )
-
-            if not full_event:
-                continue
-
             # Track event type statistics
             event_type_str = getattr(event_item, 'event_type', 'raw_date')
             events_by_type[event_type_str] = events_by_type.get(event_type_str, 0) + 1
 
-            # Build entity references
+            # Build entity references from list item data (avoids N+1 query)
             entity_refs: list[EntityReference] = []
-            if include_entities and full_event.entities_involved:
+            event_entity_ids = getattr(event_item, 'entities_involved', []) or []
+            if include_entities and event_entity_ids:
                 events_with_entities += 1
-                for eid in full_event.entities_involved:
+                for eid in event_entity_ids:
                     all_entity_ids.add(eid)
                     if eid in entities_map:
                         entity = entities_map[eid]
-                        # Get role from metadata if available
                         role = entity.metadata.get("role") if entity.metadata else None
                         entity_refs.append(
                             EntityReference(
@@ -298,7 +289,7 @@ class TimelineBuilder:
                     confidence=getattr(event_item, 'confidence', 0.8),
                     entities=entity_refs,
                     is_ambiguous=getattr(event_item, 'is_ambiguous', False),
-                    is_verified=getattr(full_event, 'is_manual', False),
+                    is_verified=getattr(event_item, 'is_manual', False),
                 )
             )
 
@@ -502,18 +493,13 @@ class TimelineBuilder:
             event_type = getattr(event_item, 'event_type', 'raw_date')
             events_by_type[event_type] = events_by_type.get(event_type, 0) + 1
 
-            # Get full event for entity info
-            full_event = await self.timeline_service.get_event_by_id(
-                event_id=event_item.id,
-                matter_id=matter_id,
-            )
-
-            if full_event:
-                if full_event.entities_involved:
-                    events_with_entities += 1
-                    all_entity_ids.update(full_event.entities_involved)
-                if full_event.is_manual:
-                    verified_events += 1
+            # Use entities_involved and is_manual from list item (avoids N+1 query)
+            event_entity_ids = getattr(event_item, 'entities_involved', []) or []
+            if event_entity_ids:
+                events_with_entities += 1
+                all_entity_ids.update(event_entity_ids)
+            if getattr(event_item, 'is_manual', False):
+                verified_events += 1
 
         # Filter out invalid dates (beyond 5 years in future)
         current_year = 2026

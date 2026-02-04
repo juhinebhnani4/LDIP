@@ -12,6 +12,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { AlertTriangle, FileWarning } from 'lucide-react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EntityContradictionGroup } from './EntityContradictionGroup';
@@ -22,6 +23,9 @@ import {
   type ContradictionSeverity,
   type ContradictionType,
 } from '@/hooks/useContradictions';
+import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
+import { useBoundingBoxes } from '@/hooks';
+import { fetchDocument } from '@/lib/api/documents';
 
 interface ContradictionsContentProps {
   /** Matter ID */
@@ -128,13 +132,11 @@ function ContradictionsEmpty() {
  * - Filter controls for severity, type, and entity
  * - Entity-grouped contradiction cards
  * - Pagination controls
+ * - PDF split view integration for evidence source viewing
  *
  * @example
  * ```tsx
- * <ContradictionsContent
- *   matterId="matter-123"
- *   onDocumentClick={(docId, page) => openPdfViewer(docId, page)}
- * />
+ * <ContradictionsContent matterId="matter-123" />
  * ```
  */
 export function ContradictionsContent({
@@ -149,6 +151,11 @@ export function ContradictionsContent({
   );
   const [entityId, setEntityId] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
+
+  // PDF split view integration
+  const openPdfSplitView = usePdfSplitViewStore((state) => state.openPdfSplitView);
+  const setBoundingBoxes = usePdfSplitViewStore((state) => state.setBoundingBoxes);
+  const { fetchByBboxIds } = useBoundingBoxes();
 
   // Fetch contradictions data - use default perPage=100 from hook for comprehensive view
   const { data, meta, isLoading, error, totalCount, uniqueEntities } = useContradictions(
@@ -196,6 +203,97 @@ export function ContradictionsContent({
     setEntityId(newEntityId);
     setPage(1); // Reset to first page on filter change
   }, []);
+
+  /**
+   * Handle document click from contradiction statements.
+   * Opens PDF split view at the specified page.
+   */
+  const handleDocumentClick = useCallback(
+    async (documentId: string, documentPage: number | null) => {
+      if (onDocumentClick) {
+        onDocumentClick(documentId, documentPage);
+        return;
+      }
+
+      try {
+        const document = await fetchDocument(documentId);
+        const documentUrl = document.storagePath;
+
+        if (!documentUrl) {
+          throw new Error('Document URL not found');
+        }
+
+        openPdfSplitView(
+          {
+            documentId,
+            documentName: document.filename || 'Document',
+            page: documentPage ?? undefined,
+          },
+          matterId,
+          documentUrl
+        );
+      } catch {
+        toast.error('Unable to open document. Please try again.');
+      }
+    },
+    [matterId, onDocumentClick, openPdfSplitView]
+  );
+
+  /**
+   * Handle evidence click from contradiction cards.
+   * Opens PDF split view with bounding box highlighting.
+   */
+  const handleEvidenceClick = useCallback(
+    async (documentId: string, documentPage: number | null, bboxIds: string[]) => {
+      if (onEvidenceClick) {
+        onEvidenceClick(documentId, documentPage, bboxIds);
+        return;
+      }
+
+      try {
+        const document = await fetchDocument(documentId);
+        const documentUrl = document.storagePath;
+
+        if (!documentUrl) {
+          throw new Error('Document URL not found');
+        }
+
+        openPdfSplitView(
+          {
+            documentId,
+            documentName: document.filename || 'Document',
+            page: documentPage ?? undefined,
+            bboxIds: bboxIds || [],
+          },
+          matterId,
+          documentUrl
+        );
+
+        // Fetch bounding boxes for highlighting
+        if (bboxIds && bboxIds.length > 0) {
+          try {
+            const result = await fetchByBboxIds(bboxIds, matterId);
+            const bboxes = result.bboxes.map((bbox) => ({
+              x: bbox.x,
+              y: bbox.y,
+              width: bbox.width,
+              height: bbox.height,
+            }));
+
+            if (bboxes.length > 0) {
+              const pageNumber = result.pageNumber ?? documentPage ?? 1;
+              setBoundingBoxes(bboxes, pageNumber);
+            }
+          } catch {
+            console.warn('Failed to fetch bounding boxes for evidence highlight');
+          }
+        }
+      } catch {
+        toast.error('Unable to open document. Please try again.');
+      }
+    },
+    [matterId, onEvidenceClick, openPdfSplitView, fetchByBboxIds, setBoundingBoxes]
+  );
 
   // Show loading state
   if (isLoading && data.length === 0) {
@@ -251,8 +349,8 @@ export function ContradictionsContent({
             key={group.entityId}
             group={group}
             defaultExpanded={index < 3}
-            onDocumentClick={onDocumentClick}
-            onEvidenceClick={onEvidenceClick}
+            onDocumentClick={handleDocumentClick}
+            onEvidenceClick={handleEvidenceClick}
           />
         ))}
       </div>

@@ -1195,7 +1195,7 @@ def sync_act_resolutions_with_documents(self) -> dict:
                 # Get all act documents for this matter
                 docs_response = (
                     client.table("documents")
-                    .select("id, filename, act_name")
+                    .select("id, filename")
                     .eq("matter_id", matter_id)
                     .eq("document_type", "act")
                     .execute()
@@ -1206,8 +1206,8 @@ def sync_act_resolutions_with_documents(self) -> dict:
                 # Build map of normalized act name -> document
                 act_doc_map: dict[str, dict] = {}
                 for doc in act_docs:
-                    # Use act_name if available, otherwise extract from filename
-                    act_name = doc.get("act_name") or doc.get("filename", "")
+                    # Extract act name from filename
+                    act_name = doc.get("filename", "")
                     if act_name:
                         normalized = normalize_act_name(act_name)
                         act_doc_map[normalized] = doc

@@ -245,6 +245,9 @@ class CitationStorageService:
                             section=citation.section,
                             detection_attempted=bbox_index is not None,
                         )
+                        # Default to page 1 when unknown - DB requires NOT NULL
+                        # Better to have citation with estimated page than no citation
+                        source_page = 1
 
                     record = {
                         "matter_id": matter_id,

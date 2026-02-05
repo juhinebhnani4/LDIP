@@ -198,6 +198,12 @@ class Settings(BaseSettings):
     table_extraction_enabled: bool = True  # Master switch for table extraction
     table_detection_confidence_threshold: float = 0.70  # Min confidence to include table
 
+    # Layout-Aware Chunking Configuration (Docling Integration)
+    layout_aware_chunking_enabled: bool = True  # Use Docling layout detection for chunking
+    # When enabled, chunks respect document structure (paragraphs, headings, tables)
+    # and get page/bbox info at creation time (no fuzzy matching needed)
+    # Can be disabled via LAYOUT_AWARE_CHUNKING_ENABLED=false environment variable
+
     # Evaluation Framework Configuration (RAG Production Gaps - Feature 2)
     auto_evaluation_enabled: bool = False  # Auto-evaluate after ingestion (cost warning)
     openai_evaluation_model: str = "gpt-4"  # Model for RAGAS evaluation

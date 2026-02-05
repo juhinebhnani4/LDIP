@@ -1,7 +1,9 @@
-"""Table extraction data models.
+"""Table extraction and layout detection data models.
 
-Pydantic models for table extraction results and metadata.
+Pydantic models for table extraction results, layout detection, and metadata.
 """
+
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -58,3 +60,78 @@ class TableExtractionResult(BaseModel):
     def success(self) -> bool:
         """Check if extraction completed without errors."""
         return self.error is None
+
+
+# Layout detection models for layout-aware chunking
+
+
+class LayoutBlock(BaseModel):
+    """A structural block detected by Docling's layout analysis.
+
+    Represents a single semantic element (paragraph, heading, table, etc.)
+    with its position and type information.
+    """
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique identifier for this block (used for source tracking in chunks)",
+    )
+    block_type: str = Field(
+        ...,
+        description="Type of block: paragraph, heading, table, figure, stamp, caption, list, code, footer, header",
+    )
+    page_number: int = Field(..., ge=1, description="Page number (1-indexed)")
+    bbox: BoundingBox = Field(..., description="Bounding box of the block")
+    text_start: int | None = Field(
+        None, ge=0, description="Character offset start in full document text"
+    )
+    text_end: int | None = Field(
+        None, ge=0, description="Character offset end in full document text"
+    )
+    reading_order: int = Field(
+        ..., ge=0, description="Reading order index within document"
+    )
+    confidence: float = Field(
+        default=0.9, ge=0.0, le=1.0, description="Detection confidence score"
+    )
+    text_content: str | None = Field(
+        None, description="Text content of this block (if extracted by Docling)"
+    )
+
+
+class DocumentLayout(BaseModel):
+    """Layout map for a document extracted by Docling.
+
+    Contains all detected structural blocks with their positions,
+    enabling layout-aware chunking that respects document structure.
+    """
+
+    document_id: str = Field(..., description="UUID of the source document")
+    blocks: list[LayoutBlock] = Field(
+        default_factory=list, description="All detected layout blocks"
+    )
+    page_count: int = Field(default=0, ge=0, description="Total number of pages")
+    processing_time_ms: int | None = Field(
+        None, description="Time taken for layout extraction in milliseconds"
+    )
+    error: str | None = Field(
+        None, description="Error message if extraction failed"
+    )
+
+    @property
+    def success(self) -> bool:
+        """Check if layout extraction completed without errors."""
+        return self.error is None
+
+    @property
+    def has_blocks(self) -> bool:
+        """Check if any blocks were detected."""
+        return len(self.blocks) > 0
+
+    def get_blocks_for_page(self, page_number: int) -> list[LayoutBlock]:
+        """Get all blocks on a specific page."""
+        return [b for b in self.blocks if b.page_number == page_number]
+
+    def get_blocks_by_type(self, block_type: str) -> list[LayoutBlock]:
+        """Get all blocks of a specific type."""
+        return [b for b in self.blocks if b.block_type == block_type]

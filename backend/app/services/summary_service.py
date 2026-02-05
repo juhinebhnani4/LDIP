@@ -776,12 +776,17 @@ class SummaryService:
             return 0
 
     async def _get_entities_count(self, matter_id: str) -> int:
-        """Count entities from identity_nodes table."""
+        """Count entities from identity_nodes table.
+
+        Only counts non-merged entities (merged_into_id IS NULL) to match
+        what the Entities tab displays.
+        """
         try:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("identity_nodes")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
+                .is_("merged_into_id", "null")  # Only active (non-merged) entities
                 .execute()
             )
             return result.count or 0

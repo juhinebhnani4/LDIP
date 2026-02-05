@@ -1054,28 +1054,34 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
 
 
 def _dispatch_from_chunking(document_id: str, matter_id: str) -> None:
-    """Dispatch pipeline from chunking stage onwards."""
-    from celery import chain
+    """Dispatch unified post-OCR pipeline from the beginning.
 
-    from app.workers.tasks.document_tasks import (
-        chunk_document,
-        embed_chunks,
-        extract_entities,
-        resolve_aliases,
-    )
+    Uses create_post_ocr_chain for consistency with normal document processing.
+    The unified chain starts with validate_ocr → chunk_document → etc.
+    """
+    from app.workers.tasks.pipeline_chains import create_post_ocr_chain
 
-    task_chain = chain(
-        chunk_document.s({"document_id": document_id, "status": "ocr_complete"}),
-        embed_chunks.s(),
-        extract_entities.s(),
-        resolve_aliases.s(),
+    # Use the unified chain - same as normal document processing
+    # This ensures feature parity and consistent behavior
+    chain = create_post_ocr_chain(
+        document_id=document_id,
+        matter_id=matter_id,
+        job_id=None,  # No job tracking for recovery
+        skip_downstream_dispatch=False,
     )
-    task_chain.apply_async()
+    chain.apply_async(queue="default")
+
+    logger.info(
+        "recovery_pipeline_dispatched",
+        document_id=document_id,
+        matter_id=matter_id,
+        stage="from_chunking",
+    )
 
 
 def _dispatch_from_embedding(document_id: str, matter_id: str) -> None:
     """Dispatch pipeline from embedding stage onwards."""
-    from celery import chain
+    from celery import chain as celery_chain
 
     from app.workers.tasks.document_tasks import (
         embed_chunks,
@@ -1083,28 +1089,48 @@ def _dispatch_from_embedding(document_id: str, matter_id: str) -> None:
         resolve_aliases,
     )
 
-    task_chain = chain(
-        embed_chunks.s({"document_id": document_id, "status": "chunked"}),
+    # Pass prev_result dict with document_id for chain tasks
+    prev_result = {"document_id": document_id, "status": "chunked"}
+
+    task_chain = celery_chain(
+        embed_chunks.s(prev_result),
         extract_entities.s(),
-        resolve_aliases.s(),
+        resolve_aliases.s(skip_downstream_dispatch=False),
     )
-    task_chain.apply_async()
+    task_chain.apply_async(queue="default")
+
+    logger.info(
+        "recovery_pipeline_dispatched",
+        document_id=document_id,
+        matter_id=matter_id,
+        stage="from_embedding",
+    )
 
 
 def _dispatch_from_entities(document_id: str, matter_id: str) -> None:
     """Dispatch pipeline from entity extraction stage onwards."""
-    from celery import chain
+    from celery import chain as celery_chain
 
     from app.workers.tasks.document_tasks import (
         extract_entities,
         resolve_aliases,
     )
 
-    task_chain = chain(
-        extract_entities.s({"document_id": document_id, "status": "embedded"}),
-        resolve_aliases.s(),
+    # Pass prev_result dict with document_id for chain tasks
+    prev_result = {"document_id": document_id, "status": "embedded"}
+
+    task_chain = celery_chain(
+        extract_entities.s(prev_result),
+        resolve_aliases.s(skip_downstream_dispatch=False),
     )
-    task_chain.apply_async()
+    task_chain.apply_async(queue="default")
+
+    logger.info(
+        "recovery_pipeline_dispatched",
+        document_id=document_id,
+        matter_id=matter_id,
+        stage="from_entities",
+    )
 
 
 # =============================================================================
@@ -1547,4 +1573,167 @@ def hard_delete_expired_documents(self, retention_days: int = 30) -> dict:
 
     except Exception as e:
         logger.error("hard_delete_expired_documents_failed", error=str(e))
+        return {"error": str(e)}
+
+
+# =============================================================================
+# Stuck Document Recovery Task (Auto-fix OCR_COMPLETE with 0 chunks)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.recover_stuck_documents",
+    bind=True,
+    max_retries=1,
+)
+def recover_stuck_documents(self) -> dict:
+    """Periodic task to recover documents stuck at OCR_COMPLETE with 0 chunks.
+
+    Finds documents where:
+    - status = 'ocr_complete' or 'completed'
+    - chunk count = 0 (in chunks table)
+
+    These documents got stuck due to the finalize_chunked_document race condition
+    where OCR_COMPLETE was set but downstream processing never triggered.
+
+    Triggers downstream processing chain to create chunks and complete pipeline.
+
+    Returns:
+        Dictionary with recovery results.
+    """
+    from app.services.supabase.client import get_service_client
+
+    logger.info("recover_stuck_documents_started")
+
+    results = {
+        "checked": 0,
+        "recovered": 0,
+        "skipped": 0,
+        "errors": [],
+    }
+
+    try:
+        client = get_service_client()
+
+        # Find documents with OCR_COMPLETE status but 0 chunks
+        # Use a subquery approach via raw SQL for efficiency
+        stuck_docs_response = client.rpc(
+            "find_stuck_documents",
+            {}
+        ).execute()
+
+        # If RPC doesn't exist, fall back to manual query
+        if not stuck_docs_response.data:
+            # Manual approach: get all OCR_COMPLETE documents
+            docs_response = (
+                client.table("documents")
+                .select("id, matter_id, filename, status, extracted_text, page_count")
+                .in_("status", ["ocr_complete", "completed"])
+                .execute()
+            )
+
+            if not docs_response.data:
+                logger.info("recover_stuck_documents_no_documents_found")
+                return results
+
+            stuck_docs = []
+            for doc in docs_response.data:
+                # Check chunk count for each document
+                chunk_count_response = (
+                    client.table("chunks")
+                    .select("id", count="exact")
+                    .eq("document_id", doc["id"])
+                    .execute()
+                )
+                chunk_count = chunk_count_response.count or 0
+
+                if chunk_count == 0:
+                    stuck_docs.append({
+                        **doc,
+                        "chunk_count": chunk_count,
+                    })
+        else:
+            stuck_docs = stuck_docs_response.data
+
+        results["checked"] = len(stuck_docs)
+
+        if not stuck_docs:
+            logger.info("recover_stuck_documents_none_stuck")
+            return results
+
+        logger.info(
+            "recover_stuck_documents_found",
+            stuck_count=len(stuck_docs),
+        )
+
+        # Trigger recovery for each stuck document
+        from app.workers.tasks.chunked_document_tasks import finalize_chunked_document
+
+        for doc in stuck_docs:
+            document_id = doc["id"]
+            matter_id = doc.get("matter_id")
+
+            if not matter_id:
+                logger.warning(
+                    "recover_stuck_document_no_matter_id",
+                    document_id=document_id,
+                )
+                results["skipped"] += 1
+                continue
+
+            try:
+                # Get job_id if available
+                job_response = (
+                    client.table("processing_jobs")
+                    .select("id")
+                    .eq("document_id", document_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                job_id = job_response.data[0]["id"] if job_response.data else None
+
+                # Trigger finalize_chunked_document which has recovery logic built-in
+                # It will detect 0 chunks and trigger downstream processing
+                finalize_chunked_document.apply_async(
+                    kwargs={
+                        "document_id": document_id,
+                        "matter_id": matter_id,
+                        "job_id": job_id,
+                    },
+                    queue="default",
+                    countdown=2,  # Small delay to avoid overwhelming
+                )
+
+                results["recovered"] += 1
+                logger.info(
+                    "recover_stuck_document_triggered",
+                    document_id=document_id,
+                    matter_id=matter_id,
+                    filename=doc.get("filename"),
+                )
+
+            except Exception as e:
+                logger.error(
+                    "recover_stuck_document_failed",
+                    document_id=document_id,
+                    error=str(e),
+                )
+                results["errors"].append({
+                    "document_id": document_id,
+                    "error": str(e),
+                })
+
+        logger.info(
+            "recover_stuck_documents_completed",
+            checked=results["checked"],
+            recovered=results["recovered"],
+            skipped=results["skipped"],
+            errors=len(results["errors"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error("recover_stuck_documents_failed", error=str(e))
         return {"error": str(e)}

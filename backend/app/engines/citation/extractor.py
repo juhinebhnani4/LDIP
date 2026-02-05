@@ -28,7 +28,12 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import GeminiClientError, get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+    get_sync_rate_limiter,
+)
 from app.engines.citation.abbreviations import (
     get_canonical_name,
     normalize_act_name,
@@ -595,17 +600,23 @@ class CitationExtractor:
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
+        # Use distributed rate limiter for cross-worker coordination
+        # This ensures we don't exceed global Gemini quota across all Celery workers
+        distributed_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
-                        max_output_tokens=8192,
-                        temperature=0.1,
-                    ),
-                )
+                # Use distributed rate limiter to coordinate across all workers
+                with distributed_limiter:
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
+                            max_output_tokens=8192,
+                            temperature=0.1,
+                        ),
+                    )
 
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)

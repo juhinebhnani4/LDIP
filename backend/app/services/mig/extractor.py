@@ -20,6 +20,12 @@ from google.genai import types
 
 from app.core.config import get_settings
 from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+    get_sync_rate_limiter,
+)
 from app.core.reliability_logging import log_entity_extraction_result
 from app.models.entity import (
     EntityExtractionResult,
@@ -237,16 +243,20 @@ class MIGEntityExtractor:
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
+        # Get rate limiter to enforce minimum delay between requests
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+
         for attempt in range(MAX_RETRIES):
             try:
-                # Call Gemini asynchronously
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                    ),
-                )
+                # Use rate limiter to enforce delay between API calls
+                async with gemini_limiter:
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 # Parse response
                 result = self._parse_response(
@@ -412,15 +422,21 @@ class MIGEntityExtractor:
         last_error: Exception | None = None
         retry_delay = INITIAL_RETRY_DELAY
 
+        # Use distributed rate limiter for cross-worker coordination
+        # This ensures we don't exceed global Gemini quota across all Celery workers
+        distributed_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                    ),
-                )
+                # Use distributed rate limiter to coordinate across all workers
+                with distributed_limiter:
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 result = self._parse_response(
                     response.text,
@@ -810,14 +826,19 @@ class MIGEntityExtractor:
         start_time = time.time()
         results: list[EntityExtractionResult] = []
 
+        # Get rate limiter to enforce minimum delay between requests
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                ),
-            )
+            # Use rate limiter to enforce delay between API calls
+            async with gemini_limiter:
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                    ),
+                )
             parsed_sections = self._parse_batch_response(
                 response.text,
                 document_id=document_id,

@@ -46,7 +46,10 @@ celery_app.conf.update(
     # Worker settings
     # Using gevent pool for I/O-bound tasks (LLM API calls)
     # Higher concurrency is safe since tasks are mostly waiting on network I/O
-    worker_prefetch_multiplier=1,
+    # NOTE: prefetch_multiplier=4 allows worker to prefetch tasks for concurrent execution
+    # With gevent pool, we need prefetch > 1 to utilize concurrency effectively
+    # Without this, only 1 task executes at a time despite concurrency=50
+    worker_prefetch_multiplier=4,
     worker_concurrency=50,  # Increased from 4 - gevent handles 50+ concurrent I/O tasks efficiently
     # Heartbeat and health settings
     broker_heartbeat=30,  # Send heartbeat every 30 seconds
@@ -120,6 +123,13 @@ celery_app.conf.update(
         "recover-skipped-large-documents": {
             "task": "app.workers.tasks.maintenance_tasks.recover_skipped_large_documents",
             "schedule": 3600,  # Every hour
+            "options": {"queue": "low"},
+        },
+        # Stuck document recovery - runs every 5 minutes
+        # Detects documents stuck at OCR_COMPLETE with 0 chunks and triggers recovery
+        "recover-stuck-documents": {
+            "task": "app.workers.tasks.maintenance_tasks.recover_stuck_documents",
+            "schedule": 300,  # Every 5 minutes
             "options": {"queue": "low"},
         },
         # Auto-fix missing extracted_text - runs every 5 minutes

@@ -312,6 +312,26 @@ development_status:
   epic-18-retrospective: optional
 
 # =============================================================================
+# GAP REMEDIATION EPICS (From epics-gap-remediation.md)
+# =============================================================================
+# SOURCE: _bmad-output/project-planning-artifacts/epics-gap-remediation.md
+# PURPOSE: Address 58 gaps identified in First Principles Gap Analysis (2026-01-26)
+# SCOPE: Security Gate + Phases 1-6 (MVP) + Phases 7-9 (Optional)
+
+  # Gap Epic 5: Operational Excellence (Phase 4, Week 7-8)
+  # FRs: FR4.1, FR4.2, FR4.3, FR4.4, FR4.5, FR4.6, FR4.7
+  # Gaps: #14, #15, #19, #39, #41, #42, #50
+  gap-epic-5: in-progress  # First story created 2026-01-27
+  gap-5-1-email-notification-processing-completion: backlog   # FR4.1, Gap #19 - SendGrid/Resend integration
+  gap-5-2-llm-quota-monitoring-dashboard: ready-for-dev       # FR4.2, Gap #14 - Usage vs limits widget, 80% alert - Story created 2026-01-27
+  gap-5-3-cross-engine-correlation-links: ready-for-dev       # FR4.3, Gap #15 - Timeline↔Contradiction↔Entity links - Story created 2026-01-27
+  gap-5-4-cross-engine-consistency-checking: backlog          # FR4.4, Gap #50 - Auto-flag date conflicts between engines
+  gap-5-5-user-friendly-llm-error-messages: backlog           # FR4.5, Gap #39 - Contextual errors, recovery suggestions
+  gap-5-6-queue-depth-visibility-dashboard: backlog           # FR4.6, Gap #41 - Jobs per queue, backlog metrics
+  gap-5-7-processing-eta-display: backlog                     # FR4.7, Gap #42 - ETA based on queue depth × avg time
+  gap-epic-5-retrospective: optional
+
+# =============================================================================
 # PHASE 2 BACKLOG (NOT IN MVP SCOPE)
 # =============================================================================
 # These items are tracked in Phase-2-Backlog.md with full details and triggers.

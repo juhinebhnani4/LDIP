@@ -16,7 +16,8 @@ from io import BytesIO
 
 import pypdf
 import structlog
-from celery import group
+from celery import chord, group
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.core.circuit_breaker import CircuitOpenError
 from app.models.document import DocumentStatus
@@ -305,6 +306,8 @@ def _run_injection_scan(
     bind=True,
     max_retries=3,
     default_retry_delay=60,
+    soft_time_limit=1800,  # 30 minutes - orchestrating many chunks
+    time_limit=2100,  # 35 minutes - hard kill
 )
 def process_document_chunked(
     self,
@@ -384,97 +387,78 @@ def process_document_chunked(
             )
             chunk_tasks.append(task)
 
-        # Dispatch all chunks in parallel using Celery group()
-        chunk_group = group(chunk_tasks)
-        group_result = chunk_group.apply_async()
-
-        # Wait for all chunks to complete (with timeout)
-        try:
-            results = group_result.get(
-                timeout=CHUNK_GROUP_TIMEOUT,
-                propagate=False,  # Don't raise on individual failures
-            )
-        except TimeoutError:
-            logger.error("chunk_group_timeout", document_id=document_id)
-            docs_svc.update_ocr_status(
-                document_id=document_id,
-                status=DocumentStatus.OCR_FAILED,
-            )
-            broadcast_document_status(
-                matter_id=matter_id,
-                document_id=document_id,
-                status="ocr_failed",
-                error_message="Processing timeout",
-            )
-            return {
-                "status": "timeout",
-                "document_id": document_id,
-                "message": "Chunk processing timed out",
-            }
-
-        # Analyze results - separate successes from failures
-        successful_results = []
-        failed_chunks = []
-
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                failed_chunks.append({
-                    "chunk_index": chunks[i].chunk_index,
-                    "error": str(result),
-                })
-                logger.error(
-                    "chunk_failed",
-                    document_id=document_id,
-                    chunk_index=chunks[i].chunk_index,
-                    error=str(result),
-                )
-            elif isinstance(result, dict) and result.get("status") == "success":
-                successful_results.append(result)
-            else:
-                # Unexpected result format
-                failed_chunks.append({
-                    "chunk_index": chunks[i].chunk_index,
-                    "error": f"Unexpected result: {result}",
-                })
-
-        # If any chunks failed, document is not fully processed
-        if failed_chunks:
-            logger.warning(
-                "partial_chunk_failures",
-                document_id=document_id,
-                failed_count=len(failed_chunks),
-                successful_count=len(successful_results),
-            )
-
-            # Update progress with failure info
-            if job_id:
-                _run_async(
-                    progress_tracker.report_chunk_failure(
-                        job_id=job_id,
-                        document_id=document_id,
-                        matter_id=matter_id,
-                        chunk_index=failed_chunks[0]["chunk_index"],
-                        page_start=chunks[failed_chunks[0]["chunk_index"]].page_start,
-                        page_end=chunks[failed_chunks[0]["chunk_index"]].page_end,
-                        error_message=failed_chunks[0]["error"],
-                    )
-                )
-
-            return {
-                "status": "partial_failure",
-                "document_id": document_id,
-                "failed_chunks": failed_chunks,
-                "successful_count": len(successful_results),
-                "message": f"{len(failed_chunks)} chunks failed, retry possible",
-            }
-
-        # All chunks successful - merge results
-        return _merge_and_store_results(
+        # Dispatch all chunks in parallel using Celery chord()
+        # The callback (finalize_chunked_document) runs after all chunks complete
+        # This avoids the anti-pattern of calling result.get() within a task
+        callback = finalize_chunked_document.s(
             document_id=document_id,
             matter_id=matter_id,
-            successful_results=successful_results,
             job_id=job_id,
         )
+
+        # Use chord: group of chunk tasks -> finalize callback
+        # The callback receives chunk results as first argument
+        result = chord(chunk_tasks)(callback)
+
+        logger.info(
+            "chunk_chord_dispatched",
+            document_id=document_id,
+            chunk_count=len(chunks),
+            chord_id=result.id,
+        )
+
+        return {
+            "status": "dispatched",
+            "document_id": document_id,
+            "chunk_count": len(chunks),
+            "chord_id": result.id,
+            "message": "Chunks dispatched for parallel processing, finalize will run on completion",
+        }
+
+    except SoftTimeLimitExceeded:
+        # Task timeout - mark document as failed so it can be recovered
+        logger.error(
+            "process_document_chunked_timeout",
+            document_id=document_id,
+            matter_id=matter_id,
+            timeout_seconds=1800,  # soft_time_limit value
+        )
+
+        # Mark document as failed with timeout error
+        if doc_service is None:
+            doc_service = get_document_service()
+        try:
+            doc_service.update_ocr_status(
+                document_id=document_id,
+                status=DocumentStatus.OCR_FAILED,
+                ocr_error="Chunked processing timeout exceeded (30 minutes) - document may be too large",
+            )
+        except Exception as update_error:
+            logger.error(
+                "timeout_status_update_failed",
+                document_id=document_id,
+                error=str(update_error),
+            )
+
+        # Mark job as failed
+        if job_id:
+            try:
+                from app.services.job_tracking import get_job_tracking_service
+                job_svc = get_job_tracking_service()
+                job_svc.fail_job(
+                    job_id=job_id,
+                    error_message="Processing timeout exceeded (30 minutes)",
+                    error_code="TIMEOUT",
+                )
+            except Exception:
+                pass  # Already logged
+
+        return {
+            "status": "ocr_failed",
+            "document_id": document_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Chunked processing timeout exceeded (30 minutes)",
+        }
 
     except Exception as e:
         logger.error(
@@ -713,6 +697,50 @@ def process_single_chunk(
                 confidence=ocr_result.overall_confidence,
                 processing_time_seconds=round(processing_time, 2),
             )
+
+            # =================================================================
+            # AUTO-FINALIZATION: Check if all chunks are complete
+            # This handles the case where chunks are processed individually
+            # (not via chord) and finalization never gets triggered.
+            # =================================================================
+            try:
+                progress = _run_async(chunks_svc.get_chunk_progress(document_id))
+                if progress.is_complete and not progress.has_failures:
+                    logger.info(
+                        "all_chunks_complete_triggering_finalization",
+                        document_id=document_id,
+                        completed=progress.completed,
+                        total=progress.total,
+                    )
+                    # Trigger finalization asynchronously
+                    finalize_chunked_document.delay(
+                        document_id=document_id,
+                        matter_id=matter_id,
+                        job_id=job_id,
+                        chunk_results=[],  # Empty - will query DB for results
+                    )
+                elif progress.is_complete and progress.has_failures:
+                    logger.warning(
+                        "all_chunks_complete_but_has_failures",
+                        document_id=document_id,
+                        completed=progress.completed,
+                        failed=progress.failed,
+                        total=progress.total,
+                    )
+                    # Still trigger finalization to handle partial success
+                    finalize_chunked_document.delay(
+                        document_id=document_id,
+                        matter_id=matter_id,
+                        job_id=job_id,
+                        chunk_results=[],
+                    )
+            except Exception as finalize_check_error:
+                # Don't fail the chunk if finalization check fails
+                logger.warning(
+                    "auto_finalization_check_failed",
+                    document_id=document_id,
+                    error=str(finalize_check_error),
+                )
 
             return {
                 "status": "success",
@@ -975,23 +1003,28 @@ def _trigger_parallel_processing(
     page_count: int,
     job_id: str | None = None,
 ) -> dict[str, list[str]]:
-    """Trigger downstream processing tasks in parallel after OCR completes.
+    """Trigger unified post-OCR processing chain after OCR completes.
 
-    Story 2.1: Dispatches independent tasks in parallel using Celery group()
-    for faster overall processing. Tasks that can work on raw text are
-    dispatched immediately without waiting for chunking.
+    Uses the same unified chain as small documents, ensuring feature parity:
+        validate_ocr → calculate_confidence → chunk_document → embed_chunks
+        → extract_entities → resolve_aliases → (dispatch citations + dates)
 
-    Parallel tasks dispatched:
-    1. chunk_document - Creates semantic chunks for search (REQUIRED for search)
-    2. extract_entities - Extracts people, organizations, dates (can use raw text)
-    3. extract_dates_from_document - Extracts timeline events (can use raw text)
-    4. extract_citations - Extracts legal citations (can use raw text)
+    This replaces the previous parallel chain approach which caused:
+    - Duplicate task dispatch (extract_citations ran twice)
+    - No Docling for large docs (now runs in chunk_document)
+    - Different code paths for small vs large docs
+
+    The unified chain ensures:
+    - Same processing as small documents
+    - Docling layout-aware chunking for all documents
+    - No duplicate task execution
+    - Proper task sequencing
 
     Args:
         document_id: Document UUID.
         matter_id: Matter UUID for namespace isolation.
-        full_text: Extracted OCR text.
-        page_count: Total pages in document.
+        full_text: Extracted OCR text (used for logging only now).
+        page_count: Total pages in document (used for logging only now).
         job_id: Optional job tracking UUID.
 
     Returns:
@@ -1002,7 +1035,7 @@ def _trigger_parallel_processing(
     word_count = len(full_text.split()) if full_text else 0
 
     logger.info(
-        "parallel_processing_triggered",
+        "unified_chain_triggered",
         document_id=document_id,
         matter_id=matter_id,
         page_count=page_count,
@@ -1010,95 +1043,66 @@ def _trigger_parallel_processing(
         word_count=word_count,
     )
 
-    # Build prev_result for task chain simulation
-    prev_result = {
-        "document_id": document_id,
-        "status": "ocr_complete",
-        "job_id": job_id,
-    }
-
     triggered_tasks: list[str] = []
     failed_tasks: list[str] = []
 
-    # Task 1: Chunking (REQUIRED for search - dispatched first for priority)
+    # ==========================================================================
+    # Unified Post-OCR Chain (same as small documents)
+    # This ensures feature parity between small and large document processing.
+    # Docling runs synchronously in chunk_document (fast: 2-4 sec for 400 pages).
+    # ==========================================================================
     try:
-        from app.workers.tasks.document_tasks import chunk_document
+        from app.workers.tasks.pipeline_chains import create_post_ocr_chain
 
-        # Enable bbox linking to populate page_number on chunks
-        # This is needed for citation split-view to show correct pages
-        chunk_document.delay(
-            prev_result=prev_result,
-            document_id=document_id,
-            skip_bbox_linking=False,  # Required for citation page navigation
-        )
-        triggered_tasks.append("chunk_document")
-        logger.debug("chunk_document_dispatched", document_id=document_id)
-    except Exception as e:
-        failed_tasks.append("chunk_document")
-        logger.warning(
-            "chunk_document_dispatch_failed",
-            document_id=document_id,
-            error=str(e),
-        )
-
-    # Task 2: Entity extraction (can work on raw text)
-    try:
-        from app.workers.tasks.document_tasks import extract_entities
-
-        extract_entities.delay(
-            prev_result=prev_result,
-            document_id=document_id,
-            force=True,  # Skip status check - we know OCR is complete
-        )
-        triggered_tasks.append("extract_entities")
-        logger.debug("extract_entities_dispatched", document_id=document_id)
-    except Exception as e:
-        failed_tasks.append("extract_entities")
-        logger.warning(
-            "extract_entities_dispatch_failed",
-            document_id=document_id,
-            error=str(e),
-        )
-
-    # Task 3: Date extraction (with auto-classification enabled)
-    try:
-        from app.workers.tasks.engine_tasks import extract_dates_from_document
-
-        extract_dates_from_document.delay(
+        # Create unified chain - same as small docs
+        # skip_downstream_dispatch=False means resolve_aliases will dispatch
+        # extract_citations + extract_dates when it completes
+        unified_chain = create_post_ocr_chain(
             document_id=document_id,
             matter_id=matter_id,
-            auto_classify=True,  # Enable automatic event classification
-        )
-        triggered_tasks.append("extract_dates_from_document")
-        logger.debug("extract_dates_dispatched", document_id=document_id)
-    except Exception as e:
-        failed_tasks.append("extract_dates_from_document")
-        logger.warning(
-            "extract_dates_dispatch_failed",
-            document_id=document_id,
-            error=str(e),
+            job_id=job_id,
+            skip_downstream_dispatch=False,  # Let resolve_aliases dispatch downstream
         )
 
-    # Task 4: Citation extraction (can work on raw text)
-    try:
-        from app.workers.tasks.document_tasks import extract_citations
+        # Explicit queue routing - task_routes don't apply to chains dispatched from workers
+        unified_chain.apply_async(queue="default")
 
-        extract_citations.delay(
-            prev_result=prev_result,
+        triggered_tasks.extend([
+            "validate_ocr",
+            "calculate_confidence",
+            "chunk_document",
+            "embed_chunks",
+            "extract_entities",
+            "resolve_aliases",
+            # These are dispatched by resolve_aliases:
+            "extract_citations",
+            "extract_dates_from_document",
+            "detect_contradictions",
+        ])
+
+        logger.info(
+            "unified_chain_dispatched",
             document_id=document_id,
+            chain="validate_ocr → calculate_confidence → chunk_document → embed_chunks → extract_entities → resolve_aliases → (citations + dates)",
         )
-        triggered_tasks.append("extract_citations")
-        logger.debug("extract_citations_dispatched", document_id=document_id)
+
     except Exception as e:
-        failed_tasks.append("extract_citations")
-        logger.warning(
-            "extract_citations_dispatch_failed",
+        failed_tasks.extend([
+            "validate_ocr",
+            "calculate_confidence",
+            "chunk_document",
+            "embed_chunks",
+            "extract_entities",
+            "resolve_aliases",
+        ])
+        logger.error(
+            "unified_chain_dispatch_failed",
             document_id=document_id,
             error=str(e),
         )
 
     logger.info(
-        "parallel_processing_tasks_dispatched",
+        "post_ocr_processing_triggered",
         document_id=document_id,
         triggered=triggered_tasks,
         failed=failed_tasks,
@@ -1139,6 +1143,8 @@ def _trigger_rag_reprocessing(
     name="app.workers.tasks.chunked_document_tasks.retry_failed_chunks",
     bind=True,
     max_retries=1,
+    soft_time_limit=900,  # 15 minutes - retrying multiple chunks
+    time_limit=960,  # 16 minutes - hard kill
 )
 def retry_failed_chunks(
     self,
@@ -1195,10 +1201,13 @@ def retry_failed_chunks(
         )
 
         # Dispatch chunked processing again
-        process_document_chunked.delay(
-            document_id=document_id,
-            matter_id=matter_id,
-            job_id=job_id,
+        process_document_chunked.apply_async(
+            kwargs={
+                "document_id": document_id,
+                "matter_id": matter_id,
+                "job_id": job_id,
+            },
+            queue="default",  # Explicit queue routing - workers listen on default, not celery
         )
 
         return {
@@ -1226,11 +1235,14 @@ def retry_failed_chunks(
     bind=True,
     max_retries=2,
     default_retry_delay=30,
+    soft_time_limit=300,  # 5 minutes - finalization
+    time_limit=360,  # 6 minutes - hard kill
 )
 def finalize_chunked_document(
     self,
-    document_id: str,
-    matter_id: str,
+    chunk_results: list[dict] | None = None,
+    document_id: str | None = None,
+    matter_id: str | None = None,
     job_id: str | None = None,
 ) -> dict:
     """Finalize a chunked document by completing OCR stage.
@@ -1238,19 +1250,23 @@ def finalize_chunked_document(
     Story 19.2: Auto-merge trigger safety net.
 
     This task is triggered either:
-    1. By process_document_chunked after all chunks complete
-    2. By the periodic merge trigger as a safety net
+    1. By chord callback after all chunks complete (receives chunk_results)
+    2. By the periodic merge trigger as a safety net (no chunk_results)
+
+    When called via chord, chunk_results contains the results from all
+    process_single_chunk tasks, including full_text for proper merging.
 
     Since bounding boxes are already saved by process_single_chunk,
-    this task just:
-    1. Verifies all chunks are completed
-    2. Updates document status to OCR_COMPLETE
+    this task:
+    1. Merges full_text from chunk results (if provided)
+    2. Updates document with extracted_text and OCR status
     3. Triggers downstream RAG processing
     4. Cleans up chunk records
 
     Uses idempotency check to prevent double processing.
 
     Args:
+        chunk_results: Results from chord callback (list of chunk dicts).
         document_id: Document UUID.
         matter_id: Matter UUID.
         job_id: Optional job tracking UUID.
@@ -1267,6 +1283,8 @@ def finalize_chunked_document(
         document_id=document_id,
         matter_id=matter_id,
         job_id=job_id,
+        has_chunk_results=chunk_results is not None,
+        chunk_results_count=len(chunk_results) if chunk_results else 0,
     )
 
     # Idempotency check - skip if already finalized
@@ -1286,49 +1304,128 @@ def finalize_chunked_document(
         DocumentStatus.OCR_COMPLETE,
         DocumentStatus.COMPLETED,
     ):
+        # Check if document has chunks - if not, downstream may have failed
+        # and we should trigger it again (recovery mechanism)
+        from app.services.supabase.client import get_service_client
+        client = get_service_client()
+        chunk_count_response = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        chunk_count = chunk_count_response.count or 0
+
+        if chunk_count == 0:
+            # Document is OCR_COMPLETE but has 0 chunks - trigger downstream recovery
+            logger.warning(
+                "finalize_triggering_downstream_recovery",
+                document_id=document_id,
+                status=document.status.value,
+                chunk_count=0,
+                reason="Document has OCR_COMPLETE status but 0 chunks - likely downstream failed",
+            )
+            # Trigger downstream processing to recover
+            recovery_result = _trigger_parallel_processing(
+                document_id=document_id,
+                matter_id=matter_id,
+                full_text=document.extracted_text or "",
+                page_count=document.page_count or 0,
+                job_id=job_id,
+            )
+            return {
+                "status": "recovery_triggered",
+                "document_id": document_id,
+                "current_status": document.status.value,
+                "triggered_tasks": recovery_result["triggered"],
+                "failed_tasks": recovery_result["failed"],
+            }
+
         logger.info(
             "finalize_chunked_document_already_done",
             document_id=document_id,
             status=document.status.value,
+            chunk_count=chunk_count,
         )
         return {
             "status": "already_complete",
             "document_id": document_id,
             "current_status": document.status.value,
+            "chunk_count": chunk_count,
         }
 
-    # Get chunk progress
-    progress = _run_async(chunks_svc.get_chunk_progress(document_id))
+    # Analyze chunk results if provided (from chord callback)
+    successful_results = []
+    failed_chunks = []
 
-    if not progress.is_complete:
-        logger.warning(
-            "finalize_called_with_incomplete_chunks",
-            document_id=document_id,
-            completed=progress.completed,
-            total=progress.total,
-            pending=progress.pending,
-            processing=progress.processing,
-        )
-        return {
-            "status": "not_ready",
-            "document_id": document_id,
-            "message": f"Chunks not complete: {progress.completed}/{progress.total}",
-            "pending": progress.pending,
-            "processing": progress.processing,
-        }
+    if chunk_results:
+        for i, result in enumerate(chunk_results):
+            if isinstance(result, Exception):
+                failed_chunks.append({
+                    "chunk_index": i,
+                    "error": str(result),
+                })
+                logger.error(
+                    "chunk_failed_in_finalize",
+                    document_id=document_id,
+                    chunk_index=i,
+                    error=str(result),
+                )
+            elif isinstance(result, dict) and result.get("status") == "success":
+                successful_results.append(result)
+            else:
+                failed_chunks.append({
+                    "chunk_index": i,
+                    "error": f"Unexpected result: {result}",
+                })
 
-    if progress.has_failures:
-        logger.warning(
-            "finalize_has_failed_chunks",
-            document_id=document_id,
-            failed=progress.failed,
-        )
-        return {
-            "status": "has_failures",
-            "document_id": document_id,
-            "failed_count": progress.failed,
-            "message": f"{progress.failed} chunk(s) failed - use retry_failed_chunks to recover",
-        }
+        if failed_chunks:
+            logger.warning(
+                "finalize_has_failed_chunk_results",
+                document_id=document_id,
+                failed_count=len(failed_chunks),
+                successful_count=len(successful_results),
+            )
+            return {
+                "status": "partial_failure",
+                "document_id": document_id,
+                "failed_chunks": failed_chunks,
+                "successful_count": len(successful_results),
+                "message": f"{len(failed_chunks)} chunks failed, retry possible",
+            }
+    else:
+        # Fallback: check chunk progress from DB (for safety net trigger)
+        progress = _run_async(chunks_svc.get_chunk_progress(document_id))
+
+        if not progress.is_complete:
+            logger.warning(
+                "finalize_called_with_incomplete_chunks",
+                document_id=document_id,
+                completed=progress.completed,
+                total=progress.total,
+                pending=progress.pending,
+                processing=progress.processing,
+            )
+            return {
+                "status": "not_ready",
+                "document_id": document_id,
+                "message": f"Chunks not complete: {progress.completed}/{progress.total}",
+                "pending": progress.pending,
+                "processing": progress.processing,
+            }
+
+        if progress.has_failures:
+            logger.warning(
+                "finalize_has_failed_chunks",
+                document_id=document_id,
+                failed=progress.failed,
+            )
+            return {
+                "status": "has_failures",
+                "document_id": document_id,
+                "failed_count": progress.failed,
+                "message": f"{progress.failed} chunk(s) failed - use retry_failed_chunks to recover",
+            }
 
     # Get all completed chunks to aggregate stats
     chunks = _run_async(chunks_svc.get_chunks_by_document(document_id))
@@ -1343,41 +1440,54 @@ def finalize_chunked_document(
     bbox_service = get_bounding_box_service()
     bboxes, bbox_count = bbox_service.get_bounding_boxes_for_document(document_id)
 
-    # Update document status to OCR_COMPLETE
-    doc_service.update_ocr_status(
-        document_id=document_id,
-        status=DocumentStatus.OCR_COMPLETE,
-    )
-
-    # Broadcast status update
-    broadcast_document_status(
-        matter_id=matter_id,
-        document_id=document_id,
-        status="ocr_complete",
-    )
-
-    # Update job tracking if available
-    if job_id:
-        from app.services.job_tracking import get_job_tracking_service
-        from app.models.job import ProcessingJobUpdate
-        job_tracker = get_job_tracking_service()
-        update = ProcessingJobUpdate(
-            status=JobStatus.PROCESSING,
-            current_stage="ocr_complete",
-            progress_pct=100,
-            completed_stages=1,
+    # Merge full_text from chunk results (if provided) or from bboxes
+    if successful_results:
+        # Sort by chunk_index and merge full_text
+        sorted_results = sorted(successful_results, key=lambda x: x.get("chunk_index", 0))
+        full_text = "\n\n".join(
+            result.get("full_text", "") for result in sorted_results if result.get("full_text")
         )
-        _run_async(job_tracker.update_job(job_id, update))
+        # Calculate confidence as weighted average
+        total_pages = sum(r.get("page_count", 0) for r in sorted_results)
+        if total_pages > 0:
+            overall_confidence = sum(
+                r.get("confidence", 0) * r.get("page_count", 0) for r in sorted_results
+            ) / total_pages
+        else:
+            overall_confidence = sum(r.get("confidence", 0) for r in sorted_results) / len(sorted_results)
 
-    # Clean up chunk records (Story 15.4)
-    _run_async(cleanup_service.cleanup_document_chunks(document_id))
+        logger.info(
+            "merged_chunk_text",
+            document_id=document_id,
+            chunk_count=len(sorted_results),
+            text_length=len(full_text),
+            overall_confidence=round(overall_confidence, 4),
+        )
+    else:
+        # Fallback: Get full text from bounding boxes
+        full_text = " ".join(bbox["text"] for bbox in bboxes if bbox.get("text"))
+        overall_confidence = None
 
-    # Get full text for RAG processing from bounding boxes
-    # Note: bboxes is a list of dicts from get_bounding_boxes_for_document
-    full_text = " ".join(bbox["text"] for bbox in bboxes if bbox.get("text"))
+    # Update document status to OCR_COMPLETE with extracted text
+    update_kwargs = {
+        "document_id": document_id,
+        "status": DocumentStatus.OCR_COMPLETE,
+        "extracted_text": full_text,
+        "page_count": total_page_count,
+    }
+    if overall_confidence is not None:
+        update_kwargs["ocr_confidence"] = overall_confidence
 
-    # Story 2.1: Trigger downstream processing tasks in parallel
-    # (replaces sequential RAG processing trigger)
+    doc_service.update_ocr_status(**update_kwargs)
+
+    # =========================================================================
+    # CRITICAL: Trigger downstream processing IMMEDIATELY after setting status
+    # This prevents a race condition where:
+    # - OCR_COMPLETE is set
+    # - Non-critical operations below fail (broadcast, cleanup, etc.)
+    # - Task retries, finds OCR_COMPLETE, returns early without triggering
+    # - Document is stuck with 0 chunks
+    # =========================================================================
     parallel_result = _trigger_parallel_processing(
         document_id=document_id,
         matter_id=matter_id,
@@ -1386,12 +1496,64 @@ def finalize_chunked_document(
         job_id=job_id,
     )
 
+    # =========================================================================
+    # Non-critical operations below - wrapped in try/except to prevent
+    # failures from affecting the main processing pipeline
+    # =========================================================================
+
+    # Broadcast status update (non-critical - UI convenience)
+    try:
+        broadcast_document_status(
+            matter_id=matter_id,
+            document_id=document_id,
+            status="ocr_complete",
+            page_count=total_page_count,
+        )
+    except Exception as e:
+        logger.warning(
+            "finalize_broadcast_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
+    # Update job tracking if available (non-critical - progress tracking)
+    try:
+        if job_id:
+            from app.services.job_tracking import get_job_tracking_service
+            from app.models.job import ProcessingJobUpdate
+            job_tracker = get_job_tracking_service()
+            update = ProcessingJobUpdate(
+                status=JobStatus.PROCESSING,
+                current_stage="ocr_complete",
+                progress_pct=100,
+                completed_stages=1,
+            )
+            _run_async(job_tracker.update_job(job_id, update))
+    except Exception as e:
+        logger.warning(
+            "finalize_job_tracking_failed",
+            document_id=document_id,
+            job_id=job_id,
+            error=str(e),
+        )
+
+    # Clean up chunk records (non-critical - storage optimization)
+    try:
+        _run_async(cleanup_service.cleanup_document_chunks(document_id))
+    except Exception as e:
+        logger.warning(
+            "finalize_chunk_cleanup_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
     logger.info(
         "finalize_chunked_document_complete",
         document_id=document_id,
         chunk_count=len(chunks),
         page_count=total_page_count,
         bbox_count=bbox_count,
+        text_length=len(full_text),
         triggered_tasks=parallel_result["triggered"],
     )
 
@@ -1401,6 +1563,7 @@ def finalize_chunked_document(
         "chunk_count": len(chunks),
         "page_count": total_page_count,
         "bbox_count": bbox_count,
+        "text_length": len(full_text),
         "job_id": job_id,
         "parallel_tasks_triggered": parallel_result["triggered"],
         "parallel_tasks_failed": parallel_result["failed"],

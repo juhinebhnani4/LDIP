@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 
 import structlog
-from celery.exceptions import MaxRetriesExceededError
+from celery.exceptions import Ignore, MaxRetriesExceededError, SoftTimeLimitExceeded
 
 from app.engines.citation import (
     CitationExtractor,
@@ -42,6 +42,12 @@ from app.services.chunk_service import (
 )
 from app.services.chunking.bbox_linker import link_chunks_to_bboxes
 from app.services.chunking.parent_child_chunker import ParentChildChunker
+from app.services.table_extraction.layout_extractor import (
+    LayoutExtractor,
+    LayoutExtractorError,
+    get_layout_extractor,
+)
+from app.services.table_extraction.models import DocumentLayout
 from app.services.document_service import (
     DocumentService,
     DocumentServiceError,
@@ -894,12 +900,15 @@ def _check_batch_completion_and_notify(matter_id: str, completed_job_id: str) ->
         for member in matter_members.data:
             user_id = member["user_id"]
             try:
-                send_processing_complete_notification.delay(
-                    matter_id=matter_id,
-                    user_id=user_id,
-                    doc_count=doc_count,
-                    success_count=success_count,
-                    failed_count=failed_count,
+                send_processing_complete_notification.apply_async(
+                    kwargs={
+                        "matter_id": matter_id,
+                        "user_id": user_id,
+                        "doc_count": doc_count,
+                        "success_count": success_count,
+                        "failed_count": failed_count,
+                    },
+                    queue="low",  # Email notifications are low priority
                 )
                 logger.debug(
                     "batch_completion_email_queued",
@@ -1217,6 +1226,122 @@ def _sync_entity_ids_to_chunks(document_id: str) -> int:
         return 0
 
 
+def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLayout | None:
+    """Extract document layout using Docling for layout-aware chunking.
+
+    This function downloads the PDF and runs Docling's layout extraction
+    to detect structural elements (paragraphs, headings, tables, stamps).
+
+    Args:
+        document_id: Document UUID.
+        matter_id: Matter UUID for logging.
+
+    Returns:
+        DocumentLayout with detected blocks, or None on failure.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from app.services.storage_service import StorageService, get_storage_service
+    from app.services.supabase.client import get_service_client
+
+    try:
+        # Get document info to find the storage path
+        client = get_service_client()
+        if client is None:
+            logger.warning(
+                "layout_extraction_no_client",
+                document_id=document_id,
+            )
+            return None
+
+        doc_response = (
+            client.table("documents")
+            .select("filename, storage_path")
+            .eq("id", document_id)
+            .limit(1)
+            .execute()
+        )
+
+        if not doc_response.data:
+            logger.warning(
+                "layout_extraction_document_not_found",
+                document_id=document_id,
+            )
+            return None
+
+        doc = doc_response.data[0]
+        storage_path = doc.get("storage_path")
+
+        if not storage_path:
+            logger.warning(
+                "layout_extraction_no_storage_path",
+                document_id=document_id,
+            )
+            return None
+
+        # Download PDF to temp file
+        storage_service = get_storage_service()
+        pdf_content = storage_service.download_file(storage_path)
+
+        if not pdf_content:
+            logger.warning(
+                "layout_extraction_download_failed",
+                document_id=document_id,
+                storage_path=storage_path,
+            )
+            return None
+
+        # Write to temp file (Docling requires file path)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+            tmp_file.write(pdf_content)
+            tmp_path = Path(tmp_file.name)
+
+        try:
+            # Extract layout using Docling (sync operation - Issue #6 fix)
+            layout_extractor = get_layout_extractor()
+            layout = layout_extractor.extract_layout(tmp_path, document_id)
+
+            logger.info(
+                "layout_extraction_complete",
+                document_id=document_id,
+                matter_id=matter_id,
+                block_count=len(layout.blocks) if layout else 0,
+                success=layout.success if layout else False,
+            )
+
+            return layout
+
+        finally:
+            # Clean up temp file
+            try:
+                tmp_path.unlink()
+            except Exception as cleanup_error:
+                logger.debug(
+                    "layout_extraction_temp_file_cleanup_failed",
+                    document_id=document_id,
+                    error=str(cleanup_error),
+                )
+
+    except LayoutExtractorError as e:
+        logger.warning(
+            "layout_extraction_error",
+            document_id=document_id,
+            error=str(e),
+            code=e.code,
+        )
+        return None
+
+    except Exception as e:
+        logger.warning(
+            "layout_extraction_unexpected_error",
+            document_id=document_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return None
+
+
 @celery_app.task(
     name="app.workers.tasks.document_tasks.process_document",
     bind=True,
@@ -1225,6 +1350,8 @@ def _sync_entity_ids_to_chunks(document_id: str) -> int:
     retry_backoff_max=120,
     max_retries=MAX_RETRIES,
     retry_jitter=True,
+    soft_time_limit=900,  # 15 minutes - allows cleanup on timeout
+    time_limit=960,  # 16 minutes - hard kill
 )  # type: ignore[misc]
 def process_document(
     self,  # type: ignore[no-untyped-def]
@@ -1333,10 +1460,13 @@ def process_document(
             from app.workers.tasks.chunked_document_tasks import process_document_chunked
 
             # Dispatch to chunked processing task
-            process_document_chunked.delay(
-                document_id=document_id,
-                matter_id=matter_id,
-                job_id=job_id,
+            process_document_chunked.apply_async(
+                kwargs={
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "job_id": job_id,
+                },
+                queue="default",  # Explicit queue routing - workers listen on default, not celery
             )
 
             logger.info(
@@ -1346,13 +1476,11 @@ def process_document(
                 job_id=job_id,
             )
 
-            return {
-                "status": "chunked_processing_dispatched",
-                "document_id": document_id,
-                "page_count": page_count,
-                "job_id": job_id,
-                "message": f"Document with {page_count} pages routed to chunked processing",
-            }
+            # Stop the original chain - chunked processing handles everything
+            # This prevents the chain from racing through and marking job COMPLETED
+            # before the actual work finishes. The job_id is passed to chunked
+            # processing which will update progress and mark complete when done.
+            raise Ignore()
 
         # Small document (≤30 pages) - process with sync Document AI call
         logger.info(
@@ -1498,6 +1626,51 @@ def process_document(
             doc_service, document_id, e.__cause__ or e, _matter_id
         )
 
+    except SoftTimeLimitExceeded:
+        # Task timeout - mark as failed so it can be retried later
+        logger.error(
+            "document_processing_task_timeout",
+            document_id=document_id,
+            timeout_seconds=900,  # soft_time_limit value
+        )
+
+        _matter_id = matter_id
+        if not _matter_id:
+            with contextlib.suppress(Exception):
+                _, _matter_id = doc_service.get_document_for_processing(document_id)
+
+        # Mark job as failed with timeout error
+        _mark_job_failed(
+            job_id,
+            "Processing timeout exceeded (15 minutes)",
+            "TIMEOUT",
+            _matter_id,
+        )
+
+        with contextlib.suppress(DocumentServiceError):
+            doc_service.update_ocr_status(
+                document_id=document_id,
+                status=DocumentStatus.OCR_FAILED,
+                ocr_error="Processing timeout exceeded - document may be too large or service unavailable",
+            )
+
+        # Broadcast failure
+        if _matter_id:
+            broadcast_document_status(
+                matter_id=_matter_id,
+                document_id=document_id,
+                status="ocr_failed",
+                error_message="Processing timeout",
+            )
+
+        return {
+            "status": "ocr_failed",
+            "document_id": document_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Processing timeout exceeded (15 minutes)",
+            "job_id": job_id,
+        }
+
     except DocumentServiceError as e:
         # Document service errors are not retryable
         logger.error(
@@ -1524,6 +1697,11 @@ def process_document(
             "error_message": e.message,
             "job_id": job_id,
         }
+
+    except Ignore:
+        # Large document handoff - let Celery handle this properly
+        # Do NOT mark as failed, do NOT catch in generic handler
+        raise
 
     except Exception as e:
         # Unexpected errors
@@ -1635,7 +1813,10 @@ def retry_ocr(document_id: str) -> dict[str, str]:
         )
 
         # Queue for processing
-        process_document.delay(document_id)
+        process_document.apply_async(
+            args=[document_id],
+            queue="default",  # Explicit queue routing - workers listen on default, not celery
+        )
 
         logger.info("document_manual_retry_queued", document_id=document_id)
 
@@ -1666,6 +1847,8 @@ def retry_ocr(document_id: str) -> dict[str, str]:
     retry_backoff_max=120,
     max_retries=MAX_RETRIES,
     retry_jitter=True,
+    soft_time_limit=300,  # 5 minutes - Gemini validation
+    time_limit=360,  # 6 minutes - hard kill
 )  # type: ignore[misc]
 def validate_ocr(
     self,  # type: ignore[no-untyped-def]
@@ -2080,6 +2263,8 @@ def _handle_validation_failure(
     retry_backoff_max=60,
     max_retries=2,
     retry_jitter=True,
+    soft_time_limit=120,  # 2 minutes
+    time_limit=180,  # 3 minutes - hard kill
 )  # type: ignore[misc]
 def calculate_confidence(
     self,  # type: ignore[no-untyped-def]
@@ -2269,6 +2454,8 @@ def calculate_confidence(
     retry_backoff_max=60,
     max_retries=2,
     retry_jitter=True,
+    soft_time_limit=300,  # 5 minutes - chunking can be slow for large docs
+    time_limit=360,  # 6 minutes - hard kill
 )  # type: ignore[misc]
 def chunk_document(
     self,  # type: ignore[no-untyped-def]
@@ -2472,9 +2659,39 @@ def chunk_document(
         # Record stage start for job tracking (Story 2c-3)
         _update_job_stage_start(job_id, "chunking", matter_id)
 
+        # Layout-aware chunking: Extract layout structure if enabled
+        settings = get_settings()
+        layout: DocumentLayout | None = None
+        layout_used = False
+
+        if settings.layout_aware_chunking_enabled:
+            try:
+                layout = _extract_layout_for_chunking(doc_id, matter_id)
+                if layout and layout.success and layout.has_blocks:
+                    layout_used = True
+                    logger.info(
+                        "layout_extraction_for_chunking_success",
+                        document_id=doc_id,
+                        block_count=len(layout.blocks),
+                        page_count=layout.page_count,
+                    )
+                else:
+                    logger.info(
+                        "layout_extraction_for_chunking_fallback",
+                        document_id=doc_id,
+                        reason=layout.error if layout else "No layout returned",
+                    )
+            except Exception as e:
+                logger.warning(
+                    "layout_extraction_for_chunking_failed",
+                    document_id=doc_id,
+                    error=str(e),
+                    action="falling_back_to_text_chunking",
+                )
+
         # Create chunker and process document
         chunker = ParentChildChunker()
-        result = chunker.chunk_document(doc_id, doc.extracted_text)
+        result = chunker.chunk_document(doc_id, doc.extracted_text, layout=layout)
 
         # Prepare all chunks for saving
         all_chunks = result.parent_chunks + result.child_chunks
@@ -2482,15 +2699,15 @@ def chunk_document(
         # Run async operations in sync context
         async def _save_chunks_async():
             # Link chunks to bounding boxes (can be slow for large documents)
-            # Skip if requested - bbox linking can be done later via background task
-            if not skip_bbox_linking:
+            # Skip if layout was used (chunks already have page info) or if explicitly skipped
+            if not skip_bbox_linking and not layout_used:
                 await link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
             else:
                 logger.info(
                     "chunk_document_bbox_linking_skipped",
                     document_id=doc_id,
                     chunk_count=len(all_chunks),
-                    reason="skip_bbox_linking=True",
+                    reason="layout_derived" if layout_used else "skip_bbox_linking=True",
                 )
 
             return await chunks_service.save_chunks(
@@ -2777,6 +2994,8 @@ EMBEDDING_RATE_LIMIT_DELAY = 0.5  # Seconds between batches to respect rate limi
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=600,  # 10 minutes - embedding large docs
+    time_limit=660,  # 11 minutes - hard kill
 )  # type: ignore[misc]
 def embed_chunks(
     self,  # type: ignore[no-untyped-def]
@@ -3135,6 +3354,7 @@ def embed_chunks(
                         },
                         "document_id": doc_id,
                     },
+                    queue="default",  # Explicit queue routing - workers listen on default, not celery
                 )
                 logger.info(
                     "index_act_sections_dispatched",
@@ -3153,6 +3373,7 @@ def embed_chunks(
                         },
                         "document_id": doc_id,
                     },
+                    queue="default",  # Explicit queue routing - workers listen on default, not celery
                 )
                 logger.info(
                     "extract_citations_dispatched_after_embedding",
@@ -3174,6 +3395,26 @@ def embed_chunks(
             "failed_count": failed_count,
             "skipped_count": skipped_count,
             "total_chunks": len(chunks),
+            "job_id": job_id,
+        }
+
+    except SoftTimeLimitExceeded:
+        # Task timeout - save progress and mark as failed
+        logger.error(
+            "embed_chunks_task_timeout",
+            document_id=doc_id,
+            timeout_seconds=600,
+            embedded_count=embedded_count,
+        )
+        # Save progress so we can resume from where we left off
+        if progress_tracker and stage_progress:
+            progress_tracker.save_progress(stage_progress, force=True)
+        return {
+            "status": "embedding_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Embedding timeout exceeded (10 minutes)",
+            "embedded_count": embedded_count,
             "job_id": job_id,
         }
 
@@ -3398,6 +3639,8 @@ ENTITY_EXTRACTION_RATE_LIMIT_DELAY = 0.3  # Seconds between batches
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=600,  # 10 minutes - LLM entity extraction
+    time_limit=660,  # 11 minutes - hard kill
 )  # type: ignore[misc]
 def extract_entities(
     self,  # type: ignore[no-untyped-def]
@@ -3938,6 +4181,24 @@ def extract_entities(
             "chunks_synced_entity_ids": chunks_synced,
         }
 
+    except SoftTimeLimitExceeded:
+        # Task timeout - mark as failed for retry later
+        logger.error(
+            "extract_entities_task_timeout",
+            document_id=doc_id,
+            timeout_seconds=600,
+        )
+        # Save progress so we can resume from where we left off
+        if progress_tracker and stage_progress:
+            progress_tracker.save_progress(stage_progress, force=True)
+        return {
+            "status": "entity_extraction_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Entity extraction timeout exceeded (10 minutes)",
+            "job_id": job_id,
+        }
+
     except MIGExtractorError as e:
         retry_count = self.request.retries
 
@@ -4036,6 +4297,7 @@ def _dispatch_downstream_tasks(
                 "prev_result": prev_result,
                 "document_id": document_id,
             },
+            queue="default",  # Explicit queue routing - workers listen on default, not celery
         )
         triggered_tasks.append("extract_citations")
         logger.debug("extract_citations_dispatched", document_id=document_id)
@@ -4049,10 +4311,13 @@ def _dispatch_downstream_tasks(
 
     # Task 2: Date extraction (with auto-classification enabled)
     try:
-        extract_dates_from_document.delay(
-            document_id=document_id,
-            matter_id=matter_id,
-            auto_classify=True,  # Enable automatic event classification
+        extract_dates_from_document.apply_async(
+            kwargs={
+                "document_id": document_id,
+                "matter_id": matter_id,
+                "auto_classify": True,  # Enable automatic event classification
+            },
+            queue="default",  # Explicit queue routing - workers listen on default, not celery
         )
         triggered_tasks.append("extract_dates_from_document")
         logger.debug("extract_dates_dispatched", document_id=document_id)
@@ -4099,6 +4364,7 @@ def resolve_aliases(
     entity_resolver: EntityResolver | None = None,
     mig_graph_service: MIGGraphService | None = None,
     job_tracker: JobTrackingService | None = None,
+    skip_downstream_dispatch: bool = False,  # For unified pipeline - prevents duplicate dispatch
 ) -> dict[str, str | int | float | None]:
     """Resolve entity aliases after extraction.
 
@@ -4272,9 +4538,11 @@ def resolve_aliases(
         result = _run_async(_resolve_aliases_async())
 
         if result[0] is None:
-            # No entities to resolve - mark stage and job complete
+            # No entities to resolve - mark stage complete but NOT job complete.
+            # Job completion is handled by detect_contradictions (final stage).
+            # Previously this marked job COMPLETED, causing premature redirect
+            # while citations/contradictions were still processing.
             _update_job_stage_complete(job_id, "alias_resolution", matter_id)
-            _mark_job_completed(job_id, matter_id, document_id=doc_id)
             logger.info(
                 "resolve_aliases_no_entities",
                 document_id=doc_id,
@@ -4325,11 +4593,21 @@ def resolve_aliases(
 
         # Dispatch downstream tasks in parallel (citations and dates)
         # These tasks can run independently after alias resolution
-        downstream_triggered = _dispatch_downstream_tasks(
-            document_id=doc_id,
-            matter_id=matter_id,
-            job_id=job_id,
-        )
+        # Skip if called from unified pipeline (large doc path already dispatches these)
+        if skip_downstream_dispatch:
+            logger.info(
+                "resolve_aliases_skip_downstream",
+                document_id=doc_id,
+                matter_id=matter_id,
+                reason="skip_downstream_dispatch=True (unified chain handles dispatch)",
+            )
+            downstream_triggered = {"skipped": True, "reason": "unified_chain"}
+        else:
+            downstream_triggered = _dispatch_downstream_tasks(
+                document_id=doc_id,
+                matter_id=matter_id,
+                job_id=job_id,
+            )
 
         return {
             "status": "aliases_resolved",
@@ -4424,6 +4702,8 @@ CITATION_EXTRACTION_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=600,  # 10 minutes - LLM citation extraction
+    time_limit=660,  # 11 minutes - hard kill
 )  # type: ignore[misc]
 def extract_citations(
     self,  # type: ignore[no-untyped-def]
@@ -4791,6 +5071,7 @@ def extract_citations(
                         "prev_result": citation_result,
                         "document_id": doc_id,
                     },
+                    queue="default",  # Explicit queue routing - workers listen on default, not celery
                 )
                 logger.debug("detect_contradictions_dispatched", document_id=doc_id)
             except Exception as dispatch_error:
@@ -4823,6 +5104,24 @@ def extract_citations(
                 )
 
         return citation_result
+
+    except SoftTimeLimitExceeded:
+        # Task timeout - mark as failed for retry later
+        logger.error(
+            "extract_citations_task_timeout",
+            document_id=doc_id,
+            timeout_seconds=600,
+        )
+        # Save progress so we can resume from where we left off
+        if progress_tracker and stage_progress:
+            progress_tracker.save_progress(stage_progress, force=True)
+        return {
+            "status": "citation_extraction_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Citation extraction timeout exceeded (10 minutes)",
+            "job_id": job_id,
+        }
 
     except CitationExtractorError as e:
         retry_count = self.request.retries
@@ -4997,6 +5296,8 @@ def _store_comparison_results(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=300,  # 5 minutes - contradiction detection
+    time_limit=360,  # 6 minutes - hard kill
 )  # type: ignore[misc]
 def detect_contradictions(
     self,  # type: ignore[no-untyped-def]
@@ -5131,6 +5432,8 @@ def detect_contradictions(
                 matter_id,
                 metadata={"entities_processed": 0, "contradictions_found": 0},
             )
+            # Mark job as COMPLETED even with no entities - this is the final stage
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_complete",
                 "document_id": doc_id,
@@ -5175,6 +5478,8 @@ def detect_contradictions(
                 matter_id,
                 metadata={"entities_processed": 0, "contradictions_found": 0},
             )
+            # Mark job as COMPLETED even with no canonical names - this is the final stage
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_complete",
                 "document_id": doc_id,
@@ -5356,6 +5661,25 @@ def detect_contradictions(
             "contradictions_stored": total_stored,
             "pairs_compared": total_pairs_compared,
             "cost_usd": total_cost_usd,
+            "job_id": job_id,
+        }
+
+    except SoftTimeLimitExceeded:
+        # Task timeout - mark as failed with partial results
+        logger.error(
+            "detect_contradictions_task_timeout",
+            document_id=doc_id,
+            timeout_seconds=300,
+            entities_processed=entities_processed,
+            contradictions_found=total_contradictions,
+        )
+        return {
+            "status": "contradiction_detection_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Contradiction detection timeout exceeded (5 minutes)",
+            "entities_processed": entities_processed,
+            "contradictions_found": total_contradictions,
             "job_id": job_id,
         }
 

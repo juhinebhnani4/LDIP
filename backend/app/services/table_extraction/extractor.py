@@ -6,6 +6,9 @@ and links to parent chunks for retrieval.
 
 CRITICAL: This service is designed to NOT fail document ingestion.
 If table extraction fails, it returns an empty result with error info.
+
+Fix Log:
+- Issue #4: Uses shared Docling converter via docling_provider
 """
 
 from __future__ import annotations
@@ -13,20 +16,20 @@ from __future__ import annotations
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import structlog
 
 from app.core.config import get_settings
+from app.services.table_extraction.docling_provider import (
+    DoclingProviderError,
+    get_docling_converter,
+)
 from app.services.table_extraction.formatter import TableFormatter
 from app.services.table_extraction.models import (
     BoundingBox,
     ExtractedTable,
     TableExtractionResult,
 )
-
-if TYPE_CHECKING:
-    from docling.document_converter import DocumentConverter
 
 logger = structlog.get_logger(__name__)
 
@@ -67,44 +70,29 @@ class TableExtractor:
 
     def __init__(self) -> None:
         """Initialize table extractor."""
-        self._converter: DocumentConverter | None = None
         self._formatter = TableFormatter()
         self._settings = get_settings()
 
     @property
-    def converter(self) -> DocumentConverter:
-        """Lazy-load Docling converter to avoid import cost at startup."""
-        if self._converter is None:
-            try:
-                from docling.datamodel.base_models import InputFormat
-                from docling.datamodel.pipeline_options import PdfPipelineOptions
-                from docling.document_converter import DocumentConverter
+    def converter(self):
+        """Get shared Docling converter from provider.
 
-                pipeline_options = PdfPipelineOptions()
-                pipeline_options.do_table_structure = True
-                # We use Google Document AI for OCR, so disable Docling's OCR
-                pipeline_options.do_ocr = False
+        Issue #4 fix: Uses shared converter to avoid duplicate ML model loading.
 
-                self._converter = DocumentConverter(
-                    allowed_formats=[InputFormat.PDF],
-                    pdf_pipeline_options=pipeline_options,
-                )
-                logger.info("table_extractor_initialized")
-            except ImportError as e:
-                logger.error("docling_import_failed", error=str(e))
-                raise TableExtractorError(
-                    "Docling not installed. Run: pip install docling",
-                    code="DOCLING_NOT_INSTALLED",
-                    is_retryable=False,
-                ) from e
-            except Exception as e:
-                logger.error("table_extractor_init_failed", error=str(e))
-                raise TableExtractorError(
-                    f"Failed to initialize Docling: {e}",
-                    code="INIT_FAILED",
-                ) from e
+        Returns:
+            DocumentConverter from shared provider.
 
-        return self._converter
+        Raises:
+            TableExtractorError: If Docling cannot be initialized.
+        """
+        try:
+            return get_docling_converter()
+        except DoclingProviderError as e:
+            raise TableExtractorError(
+                e.message,
+                code=e.code,
+                is_retryable=e.is_retryable,
+            ) from e
 
     async def extract_tables(
         self,

@@ -39,6 +39,10 @@ class ChunkCreate(ChunkBase):
     parent_chunk_id: str | None = Field(None, description="Parent chunk UUID (for child chunks)")
     page_number: int | None = Field(None, description="Primary page number")
     bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
+    layout_derived: bool = Field(
+        default=False,
+        description="Whether chunk was derived from Docling layout extraction (vs text-based fallback)"
+    )
     embedding_model_version: str = Field(
         default="text-embedding-3-small",
         description="Embedding model version (Story 1.3)"
@@ -55,6 +59,10 @@ class Chunk(ChunkBase):
     page_number: int | None = Field(None, description="Primary page number")
     bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
     entity_ids: list[str] | None = Field(None, description="Extracted entity UUIDs")
+    layout_derived: bool = Field(
+        default=False,
+        description="Whether chunk was derived from Docling layout extraction"
+    )
     embedding_model_version: str = Field(
         default="text-embedding-3-small",
         description="Embedding model version (Story 1.3)"
@@ -73,6 +81,7 @@ class ChunkListItem(BaseModel):
     parent_chunk_id: str | None = Field(None, description="Parent chunk UUID")
     page_number: int | None = Field(None, description="Primary page number")
     bbox_ids: list[str] | None = Field(None, description="Linked bounding box UUIDs")
+    layout_derived: bool = Field(default=False, description="Whether chunk was derived from Docling layout")
 
 
 class ChunkWithContent(ChunkListItem):

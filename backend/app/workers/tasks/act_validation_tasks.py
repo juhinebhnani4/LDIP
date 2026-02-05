@@ -382,7 +382,9 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
     # Trigger auto-fetch for valid acts if enabled
     settings = get_settings()
     if results["valid"] > 0 and settings.india_code_auto_fetch_enabled:
-        fetch_acts_from_india_code.delay()
+        fetch_acts_from_india_code.apply_async(
+            queue="low",  # Background processing, low priority
+        )
 
     logger.info("validate_acts_complete", **results)
     return results
@@ -647,10 +649,13 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                         from app.workers.tasks.verification_tasks import (
                             trigger_verification_on_act_upload,
                         )
-                        trigger_verification_on_act_upload.delay(
-                            matter_id=matter_id,
-                            act_name=canonical or normalized,
-                            act_document_id=doc_id,
+                        trigger_verification_on_act_upload.apply_async(
+                            kwargs={
+                                "matter_id": matter_id,
+                                "act_name": canonical or normalized,
+                                "act_document_id": doc_id,
+                            },
+                            queue="default",  # Explicit queue routing - workers listen on default, not celery
                         )
                         logger.info(
                             "verification_triggered_for_auto_fetched_act",
@@ -755,7 +760,10 @@ def process_pending_validations() -> dict:
 
     # Trigger validation for each matter
     for matter_id in matters:
-        validate_acts_for_matter.delay(matter_id)
+        validate_acts_for_matter.apply_async(
+            args=[matter_id],
+            queue="low",  # Background processing, low priority
+        )
 
     logger.info("process_pending_validations_complete", **results)
     return results

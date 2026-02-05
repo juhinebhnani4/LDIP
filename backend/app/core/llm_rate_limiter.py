@@ -267,3 +267,337 @@ def with_rate_limit(
         return wrapper
 
     return decorator
+
+
+# =============================================================================
+# Sync Rate Limiter (for non-async code paths)
+# =============================================================================
+
+
+@dataclass
+class SyncRateLimiter:
+    """Synchronous rate limiter for blocking code paths.
+
+    Uses threading.Lock for concurrency limiting and tracks request timing
+    to add delays between requests.
+
+    Example:
+        >>> limiter = SyncRateLimiter(LLMProvider.GEMINI)
+        >>> with limiter:
+        ...     result = call_gemini_api()  # blocking call
+    """
+
+    provider: LLMProvider
+    config: RateLimiterConfig = field(default_factory=RateLimiterConfig)
+    _semaphore: "threading.Semaphore" = field(init=False)
+    _last_request_time: float = field(default=0.0, init=False)
+    _request_count: int = field(default=0, init=False)
+    _rate_limited_count: int = field(default=0, init=False)
+    _lock: "threading.Lock" = field(init=False)
+
+    def __post_init__(self):
+        """Initialize semaphore and lock after dataclass init."""
+        import threading
+
+        self._semaphore = threading.Semaphore(self.config.max_concurrent)
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        """Acquire semaphore and enforce minimum delay."""
+        self._semaphore.acquire()
+
+        # Enforce minimum delay between requests
+        with self._lock:
+            now = time.time()
+            elapsed = now - self._last_request_time
+            if elapsed < self.config.min_delay_seconds:
+                delay = self.config.min_delay_seconds - elapsed
+                time.sleep(delay)
+
+            self._last_request_time = time.time()
+            self._request_count += 1
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Release semaphore."""
+        self._semaphore.release()
+
+        # Track rate limit errors
+        if exc_type is not None:
+            error_str = str(exc_val).lower() if exc_val else ""
+            if "429" in error_str or "rate" in error_str or "exhausted" in error_str:
+                self._rate_limited_count += 1
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get rate limiter statistics."""
+        return {
+            "provider": self.provider.value,
+            "type": "sync",
+            "max_concurrent": self.config.max_concurrent,
+            "min_delay_seconds": self.config.min_delay_seconds,
+            "total_requests": self._request_count,
+            "rate_limited_count": self._rate_limited_count,
+        }
+
+
+class SyncRateLimiterRegistry:
+    """Singleton registry for sync LLM rate limiters."""
+
+    _instance: "SyncRateLimiterRegistry | None" = None
+    _lock: "threading.Lock | None" = None
+
+    def __new__(cls) -> "SyncRateLimiterRegistry":
+        """Create singleton instance."""
+        if cls._instance is None:
+            import threading
+
+            cls._instance = super().__new__(cls)
+            cls._instance._limiters: dict[LLMProvider, SyncRateLimiter] = {}
+            cls._lock = threading.Lock()
+        return cls._instance
+
+    def _get_config(self, provider: LLMProvider) -> RateLimiterConfig:
+        """Get configuration for a provider from settings or defaults."""
+        settings = get_settings()
+
+        if provider == LLMProvider.GEMINI:
+            return RateLimiterConfig(
+                max_concurrent=settings.gemini_max_concurrent_requests,
+                min_delay_seconds=settings.gemini_min_request_delay,
+                requests_per_minute=settings.gemini_requests_per_minute,
+            )
+        elif provider == LLMProvider.OPENAI:
+            return RateLimiterConfig(
+                max_concurrent=settings.openai_max_concurrent_requests,
+                min_delay_seconds=settings.openai_min_request_delay,
+                requests_per_minute=settings.openai_requests_per_minute,
+            )
+
+        return DEFAULT_CONFIGS.get(provider, RateLimiterConfig())
+
+    def get(self, provider: LLMProvider) -> SyncRateLimiter:
+        """Get or create sync rate limiter for a provider."""
+        with self._lock:
+            if provider not in self._limiters:
+                config = self._get_config(provider)
+                self._limiters[provider] = SyncRateLimiter(provider=provider, config=config)
+                logger.info(
+                    "sync_llm_rate_limiter_created",
+                    provider=provider.value,
+                    max_concurrent=config.max_concurrent,
+                    min_delay_seconds=config.min_delay_seconds,
+                )
+            return self._limiters[provider]
+
+
+# Global sync registry instance
+_sync_registry = SyncRateLimiterRegistry()
+
+
+def get_sync_rate_limiter(provider: LLMProvider) -> SyncRateLimiter:
+    """Get sync rate limiter for a provider.
+
+    Args:
+        provider: The LLM provider.
+
+    Returns:
+        SyncRateLimiter instance.
+    """
+    return _sync_registry.get(provider)
+
+
+def get_gemini_sync_rate_limiter() -> SyncRateLimiter:
+    """Get sync rate limiter for Gemini API calls.
+
+    Returns:
+        SyncRateLimiter configured for Gemini.
+    """
+    return get_sync_rate_limiter(LLMProvider.GEMINI)
+
+
+# =============================================================================
+# Distributed Rate Limiter (Redis-based for cross-worker coordination)
+# =============================================================================
+
+
+@dataclass
+class DistributedRateLimiter:
+    """Redis-based distributed rate limiter for LLM API calls.
+
+    Uses Redis sorted sets for sliding window rate limiting across all workers.
+    This ensures the global API quota is respected even with multiple Celery workers.
+
+    Example:
+        >>> limiter = DistributedRateLimiter(LLMProvider.GEMINI)
+        >>> with limiter:
+        ...     result = call_gemini_api()  # Blocks if rate limit exceeded
+    """
+
+    provider: LLMProvider
+    max_requests_per_minute: int = 60  # Default for Gemini free tier
+    _redis_key_prefix: str = "llm_rate_limit"
+
+    def __post_init__(self):
+        """Initialize rate limiter with provider-specific settings."""
+        settings = get_settings()
+
+        if self.provider == LLMProvider.GEMINI:
+            self.max_requests_per_minute = settings.gemini_requests_per_minute
+        elif self.provider == LLMProvider.OPENAI:
+            self.max_requests_per_minute = settings.openai_requests_per_minute
+
+    @property
+    def _redis_key(self) -> str:
+        """Redis key for this provider's rate limit."""
+        return f"{self._redis_key_prefix}:{self.provider.value}"
+
+    def _get_redis_client(self):
+        """Get Redis client for distributed coordination."""
+        from app.services.distributed_lock import get_sync_redis_client
+        return get_sync_redis_client()
+
+    def acquire(self, timeout: float = 30.0) -> bool:
+        """Try to acquire a rate limit token, blocking if necessary.
+
+        Uses sliding window algorithm with Redis sorted set.
+
+        Args:
+            timeout: Maximum seconds to wait for a token.
+
+        Returns:
+            True if token acquired, False if timeout exceeded.
+        """
+        import uuid
+
+        try:
+            redis_client = self._get_redis_client()
+            start_time = time.time()
+            window_seconds = 60  # 1 minute sliding window
+
+            while time.time() - start_time < timeout:
+                current_time = time.time()
+                window_start = current_time - window_seconds
+
+                # Remove old entries outside window
+                redis_client.zremrangebyscore(self._redis_key, "-inf", window_start)
+
+                # Count current entries in window
+                current_count = redis_client.zcard(self._redis_key)
+
+                if current_count < self.max_requests_per_minute:
+                    # Add new entry with current timestamp as score
+                    request_id = f"{current_time}:{uuid.uuid4().hex[:8]}"
+                    redis_client.zadd(self._redis_key, {request_id: current_time})
+
+                    # Set expiry on the key (cleanup for safety)
+                    redis_client.expire(self._redis_key, window_seconds + 10)
+
+                    logger.debug(
+                        "distributed_rate_limit_acquired",
+                        provider=self.provider.value,
+                        current_count=current_count + 1,
+                        max_rpm=self.max_requests_per_minute,
+                    )
+                    return True
+                else:
+                    # Get oldest entry to calculate wait time
+                    oldest = redis_client.zrange(self._redis_key, 0, 0, withscores=True)
+                    if oldest:
+                        oldest_time = oldest[0][1]
+                        wait_time = max(0.1, oldest_time + window_seconds - current_time)
+                        wait_time = min(wait_time, 2.0)  # Cap wait to 2 seconds per iteration
+
+                        logger.debug(
+                            "distributed_rate_limit_waiting",
+                            provider=self.provider.value,
+                            current_count=current_count,
+                            wait_time=wait_time,
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        time.sleep(0.1)
+
+            logger.warning(
+                "distributed_rate_limit_timeout",
+                provider=self.provider.value,
+                timeout=timeout,
+            )
+            return False
+
+        except Exception as e:
+            # If Redis is unavailable, fall back to allowing the request
+            # (better to risk rate limiting than block all requests)
+            logger.warning(
+                "distributed_rate_limit_redis_error",
+                provider=self.provider.value,
+                error=str(e),
+            )
+            return True
+
+    def __enter__(self):
+        """Acquire rate limit token on context enter."""
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """No cleanup needed on exit."""
+        pass
+
+
+class DistributedRateLimiterRegistry:
+    """Singleton registry for distributed rate limiters."""
+
+    _instance: "DistributedRateLimiterRegistry | None" = None
+    _lock = None
+
+    def __new__(cls) -> "DistributedRateLimiterRegistry":
+        """Create singleton instance."""
+        if cls._instance is None:
+            import threading
+
+            cls._instance = super().__new__(cls)
+            cls._instance._limiters: dict[LLMProvider, DistributedRateLimiter] = {}
+            cls._lock = threading.Lock()
+        return cls._instance
+
+    def get(self, provider: LLMProvider) -> DistributedRateLimiter:
+        """Get or create distributed rate limiter for a provider."""
+        with self._lock:
+            if provider not in self._limiters:
+                self._limiters[provider] = DistributedRateLimiter(provider=provider)
+                logger.info(
+                    "distributed_rate_limiter_created",
+                    provider=provider.value,
+                    max_rpm=self._limiters[provider].max_requests_per_minute,
+                )
+            return self._limiters[provider]
+
+
+# Global distributed registry instance
+_distributed_registry = DistributedRateLimiterRegistry()
+
+
+def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimiter:
+    """Get distributed rate limiter for a provider.
+
+    Use this for cross-worker rate limiting (e.g., in Celery tasks).
+
+    Args:
+        provider: The LLM provider.
+
+    Returns:
+        DistributedRateLimiter instance.
+    """
+    return _distributed_registry.get(provider)
+
+
+def get_gemini_distributed_rate_limiter() -> DistributedRateLimiter:
+    """Get distributed rate limiter for Gemini API calls.
+
+    Use this in Celery tasks to coordinate rate limiting across workers.
+
+    Returns:
+        DistributedRateLimiter configured for Gemini.
+    """
+    return get_distributed_rate_limiter(LLMProvider.GEMINI)

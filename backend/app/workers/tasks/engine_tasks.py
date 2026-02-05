@@ -39,48 +39,14 @@ from app.services.pubsub_service import (
 from app.services.timeline_cache import get_timeline_cache_service
 from app.services.timeline_service import get_timeline_service
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
 
-# Thread-local storage for reusing event loops within a task
-import threading
-
-_task_loop_storage = threading.local()
-
-
-def _get_task_event_loop() -> asyncio.AbstractEventLoop:
-    """Get or create an event loop for the current Celery task.
-
-    Reuses event loop within a single task to avoid overhead of
-    creating/destroying loops for each async call.
-
-    Returns:
-        Event loop for the current task.
-    """
-    loop = getattr(_task_loop_storage, "loop", None)
-    if loop is None or loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        _task_loop_storage.loop = loop
-    return loop
-
-
-def _run_async(coro):
-    """Run async coroutine in sync context for Celery tasks.
-
-    Uses a per-task event loop to reduce overhead from repeated async calls.
-    """
-    loop = _get_task_event_loop()
-    return loop.run_until_complete(coro)
-
-
-def _cleanup_task_loop():
-    """Clean up event loop at end of task execution."""
-    loop = getattr(_task_loop_storage, "loop", None)
-    if loop is not None and not loop.is_closed():
-        loop.close()
-        _task_loop_storage.loop = None
+# NOTE: Custom event loop management (_run_async, _cleanup_task_loop) was removed.
+# Now using shared run_async() from app.workers.utils which handles both
+# gevent pool and solo pool correctly without "Event loop is closed" errors.
 
 
 @celery_app.task(name="app.workers.tasks.engine_tasks.run_engine")  # type: ignore[untyped-decorator]
@@ -190,7 +156,7 @@ def extract_dates_from_document(
     try:
         # Update job status if job exists
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -213,7 +179,7 @@ def extract_dates_from_document(
                     reason="already_processed",
                 )
                 if job_id:
-                    _run_async(
+                    run_async(
                         job_tracker.update_job_status(
                             job_id=job_id,
                             status=JobStatus.COMPLETED,
@@ -230,7 +196,7 @@ def extract_dates_from_document(
 
         # Delete existing dates if force reprocess
         if force_reprocess:
-            _run_async(
+            run_async(
                 timeline_service.delete_raw_dates_for_document(
                     document_id=document_id,
                     matter_id=matter_id,
@@ -249,7 +215,7 @@ def extract_dates_from_document(
                 document_id=document_id,
             )
             if job_id:
-                _run_async(
+                run_async(
                     job_tracker.update_job_status(
                         job_id=job_id,
                         status=JobStatus.COMPLETED,
@@ -272,7 +238,7 @@ def extract_dates_from_document(
         chunks_to_process = parent_chunks if parent_chunks else chunks
 
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -301,7 +267,7 @@ def extract_dates_from_document(
             # Update progress proportionally
             if job_id and total_chunks > 1:
                 progress = 30 + int((idx + 1) / total_chunks * 40)  # 30-70%
-                _run_async(
+                run_async(
                     job_tracker.update_job_status(
                         job_id=job_id,
                         status=JobStatus.PROCESSING,
@@ -323,7 +289,7 @@ def extract_dates_from_document(
         )
 
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -342,7 +308,7 @@ def extract_dates_from_document(
 
         # Mark job complete
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.COMPLETED,
@@ -406,10 +372,13 @@ def extract_dates_from_document(
                 document_id=document_id,
                 events_to_classify=len(event_ids),
             )
-            classify_events_for_document.delay(
-                document_id=document_id,
-                matter_id=matter_id,
-                job_id=None,
+            classify_events_for_document.apply_async(
+                kwargs={
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "job_id": None,
+                },
+                queue="default",  # Explicit queue routing - workers listen on default, not celery
             )
             result["classification_queued"] = True
 
@@ -425,7 +394,7 @@ def extract_dates_from_document(
 
         # Update job to failed
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.FAILED,
@@ -488,7 +457,7 @@ def extract_dates_from_matter(
 
     try:
         # Create master job for tracking
-        master_job = _run_async(
+        master_job = run_async(
             job_tracker.create_job(
                 matter_id=matter_id,
                 job_type=JobType.DATE_EXTRACTION,
@@ -503,7 +472,7 @@ def extract_dates_from_matter(
             docs_to_process = document_ids
         else:
             # Get all case_file documents for the matter
-            documents = _run_async(
+            documents = run_async(
                 document_service.get_documents_by_matter(
                     matter_id=matter_id,
                     page=1,
@@ -535,7 +504,7 @@ def extract_dates_from_matter(
                 matter_id=matter_id,
                 reason="all_processed",
             )
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.COMPLETED,
@@ -554,18 +523,21 @@ def extract_dates_from_matter(
         # Queue extraction for each document
         queued_tasks = []
         for i, doc_id in enumerate(docs_to_process):
-            task = extract_dates_from_document.delay(
-                document_id=doc_id,
-                matter_id=matter_id,
-                job_id=None,  # Individual jobs not tracked separately
-                force_reprocess=force_reprocess,
-                auto_classify=auto_classify,  # Pass through to document task
+            task = extract_dates_from_document.apply_async(
+                kwargs={
+                    "document_id": doc_id,
+                    "matter_id": matter_id,
+                    "job_id": None,  # Individual jobs not tracked separately
+                    "force_reprocess": force_reprocess,
+                    "auto_classify": auto_classify,  # Pass through to document task
+                },
+                queue="default",  # Explicit queue routing - workers listen on default, not celery
             )
             queued_tasks.append({"document_id": doc_id, "task_id": task.id})
 
             # Update progress
             progress = int((i + 1) / len(docs_to_process) * 100)
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.PROCESSING,
@@ -642,7 +614,7 @@ def classify_events_for_document(
     try:
         # Update job status if job exists
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -666,7 +638,7 @@ def classify_events_for_document(
                 reason="no_raw_date_events",
             )
             if job_id:
-                _run_async(
+                run_async(
                     job_tracker.update_job_status(
                         job_id=job_id,
                         status=JobStatus.COMPLETED,
@@ -683,7 +655,7 @@ def classify_events_for_document(
             }
 
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -709,7 +681,7 @@ def classify_events_for_document(
         )
 
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.PROCESSING,
@@ -727,7 +699,7 @@ def classify_events_for_document(
 
         # Mark job complete
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.COMPLETED,
@@ -752,9 +724,12 @@ def classify_events_for_document(
                 document_id=document_id,
                 matter_id=matter_id,
             )
-            link_entities_after_extraction.delay(
-                document_id=document_id,
-                matter_id=matter_id,
+            link_entities_after_extraction.apply_async(
+                kwargs={
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                },
+                queue="default",  # Explicit queue routing - workers listen on default, not celery
             )
 
         return {
@@ -775,7 +750,7 @@ def classify_events_for_document(
         )
 
         if job_id:
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.FAILED,
@@ -835,7 +810,7 @@ def classify_events_for_matter(
 
     try:
         # Create master job for tracking
-        master_job = _run_async(
+        master_job = run_async(
             job_tracker.create_job(
                 matter_id=matter_id,
                 job_type=JobType.EVENT_CLASSIFICATION,
@@ -872,7 +847,7 @@ def classify_events_for_matter(
                 matter_id=matter_id,
                 reason="no_raw_date_events",
             )
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.COMPLETED,
@@ -888,7 +863,7 @@ def classify_events_for_matter(
                 "reason": "no_raw_date_events",
             }
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=master_job.id,
                 status=JobStatus.PROCESSING,
@@ -930,7 +905,7 @@ def classify_events_for_matter(
 
             # Update progress
             progress = min(10 + int((i + batch_size) / total_events * 85), 95)
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.PROCESSING,
@@ -941,7 +916,7 @@ def classify_events_for_matter(
             )
 
         # Mark complete
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=master_job.id,
                 status=JobStatus.COMPLETED,
@@ -1018,7 +993,7 @@ def link_entities_for_matter(
 
     try:
         # Create job for tracking
-        master_job = _run_async(
+        master_job = run_async(
             job_tracker.create_job(
                 matter_id=matter_id,
                 job_type=JobType.ENTITY_LINKING,
@@ -1050,7 +1025,7 @@ def link_entities_for_matter(
                 matter_id=matter_id,
                 reason="no_unlinked_events" if not force_relink else "no_events",
             )
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.COMPLETED,
@@ -1067,7 +1042,7 @@ def link_entities_for_matter(
                 "reason": "no_events_to_process",
             }
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=master_job.id,
                 status=JobStatus.PROCESSING,
@@ -1083,7 +1058,7 @@ def link_entities_for_matter(
         page = 1
         per_page = 500  # Reasonable page size
         while True:
-            page_entities, total = _run_async(
+            page_entities, total = run_async(
                 mig_service.get_entities_by_matter(
                     matter_id=matter_id,
                     page=page,
@@ -1111,7 +1086,7 @@ def link_entities_for_matter(
                 "entity_linking_matter_no_mig_entities",
                 matter_id=matter_id,
             )
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.COMPLETED,
@@ -1164,7 +1139,7 @@ def link_entities_for_matter(
 
             # Update progress
             progress = min(10 + int((i + batch_size) / total_events * 85), 95)
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=master_job.id,
                     status=JobStatus.PROCESSING,
@@ -1175,10 +1150,10 @@ def link_entities_for_matter(
             )
 
         # Invalidate timeline cache since entity links changed
-        _run_async(cache_service.invalidate_timeline(matter_id))
+        run_async(cache_service.invalidate_timeline(matter_id))
 
         # Mark complete
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=master_job.id,
                 status=JobStatus.COMPLETED,
@@ -1216,10 +1191,13 @@ def link_entities_for_matter(
                     events_processed=total_events,
                     events_linked=events_with_links,
                 )
-                detect_timeline_anomalies.delay(
-                    matter_id=matter_id,
-                    force_redetect=False,
-                    job_id=None,  # Creates own job
+                detect_timeline_anomalies.apply_async(
+                    kwargs={
+                        "matter_id": matter_id,
+                        "force_redetect": False,
+                        "job_id": None,  # Creates own job
+                    },
+                    queue="default",  # Explicit queue routing - workers listen on default, not celery
                 )
                 result["anomaly_detection_queued"] = True
             except Exception as e:
@@ -1251,9 +1229,7 @@ def link_entities_for_matter(
 
         raise
 
-    finally:
-        # Clean up event loop at end of task (Issue #4/#8 fix)
-        _cleanup_task_loop()
+    # NOTE: _cleanup_task_loop() removed - shared run_async() handles loop cleanup
 
 
 @celery_app.task(
@@ -1319,7 +1295,7 @@ def link_entities_after_extraction(
         batch_size = 500
 
         while True:
-            entities_batch, total = _run_async(
+            entities_batch, total = run_async(
                 mig_service.get_entities_by_matter(
                     matter_id=matter_id,
                     page=entity_page,
@@ -1355,10 +1331,13 @@ def link_entities_after_extraction(
                         events_linked=0,
                         reason="no_mig_entities_but_events_exist",
                     )
-                    detect_timeline_anomalies.delay(
-                        matter_id=matter_id,
-                        force_redetect=False,
-                        job_id=None,
+                    detect_timeline_anomalies.apply_async(
+                        kwargs={
+                            "matter_id": matter_id,
+                            "force_redetect": False,
+                            "job_id": None,
+                        },
+                        queue="default",  # Explicit queue routing - workers listen on default, not celery
                     )
                     result["anomaly_detection_queued"] = True
                 except Exception as e:
@@ -1390,7 +1369,7 @@ def link_entities_after_extraction(
                 matter_id=matter_id,
             )
             # Invalidate cache
-            _run_async(cache_service.invalidate_timeline(matter_id))
+            run_async(cache_service.invalidate_timeline(matter_id))
 
         logger.info(
             "entity_linking_doc_complete",
@@ -1419,10 +1398,13 @@ def link_entities_after_extraction(
                     events_processed=len(events),
                     events_linked=events_linked,
                 )
-                detect_timeline_anomalies.delay(
-                    matter_id=matter_id,
-                    force_redetect=False,  # Incremental - don't delete existing
-                    job_id=None,
+                detect_timeline_anomalies.apply_async(
+                    kwargs={
+                        "matter_id": matter_id,
+                        "force_redetect": False,  # Incremental - don't delete existing
+                        "job_id": None,
+                    },
+                    queue="default",  # Explicit queue routing - workers listen on default, not celery
                 )
                 result["anomaly_detection_queued"] = True
             except Exception as e:
@@ -1455,9 +1437,7 @@ def link_entities_after_extraction(
 
         raise
 
-    finally:
-        # Clean up event loop at end of task (consistency with link_entities_for_matter)
-        _cleanup_task_loop()
+    # NOTE: _cleanup_task_loop() removed - shared run_async() handles loop cleanup
 
 
 # =============================================================================
@@ -1506,7 +1486,7 @@ def detect_timeline_anomalies(
     try:
         # Create job if not provided (auto-trigger case - Story 14-7)
         if not job_id:
-            master_job = _run_async(
+            master_job = run_async(
                 job_tracker.create_job(
                     matter_id=matter_id,
                     job_type=JobType.ANOMALY_DETECTION,
@@ -1523,7 +1503,7 @@ def detect_timeline_anomalies(
             )
 
         # Update job status
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.PROCESSING,
@@ -1542,7 +1522,7 @@ def detect_timeline_anomalies(
                 deleted_count=deleted,
             )
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.PROCESSING,
@@ -1558,7 +1538,7 @@ def detect_timeline_anomalies(
         batch_size = 500
 
         while True:
-            timeline = _run_async(
+            timeline = run_async(
                 timeline_builder.build_timeline(
                     matter_id=matter_id,
                     include_entities=True,
@@ -1580,7 +1560,7 @@ def detect_timeline_anomalies(
                 "anomaly_detection_no_events",
                 matter_id=matter_id,
             )
-            _run_async(
+            run_async(
                 job_tracker.update_job_status(
                     job_id=job_id,
                     status=JobStatus.COMPLETED,
@@ -1597,7 +1577,7 @@ def detect_timeline_anomalies(
                 "reason": "no_events",
             }
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.PROCESSING,
@@ -1608,14 +1588,14 @@ def detect_timeline_anomalies(
         )
 
         # Run anomaly detection
-        anomalies = _run_async(
+        anomalies = run_async(
             anomaly_detector.detect_anomalies(
                 matter_id=matter_id,
                 events=events,
             )
         )
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.PROCESSING,
@@ -1630,7 +1610,7 @@ def detect_timeline_anomalies(
         if anomalies:
             anomaly_ids = anomaly_service.save_anomalies_sync(anomalies)
 
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.PROCESSING,
@@ -1641,10 +1621,10 @@ def detect_timeline_anomalies(
         )
 
         # Invalidate timeline cache since anomalies may affect display
-        _run_async(cache_service.invalidate_timeline(matter_id))
+        run_async(cache_service.invalidate_timeline(matter_id))
 
         # Mark job complete
-        _run_async(
+        run_async(
             job_tracker.update_job_status(
                 job_id=job_id,
                 status=JobStatus.COMPLETED,
@@ -1681,7 +1661,7 @@ def detect_timeline_anomalies(
             import contextlib
 
             with contextlib.suppress(Exception):
-                _run_async(
+                run_async(
                     job_tracker.update_job_status(
                         job_id=job_id,
                         status=JobStatus.FAILED,
@@ -1703,5 +1683,4 @@ def detect_timeline_anomalies(
 
         raise
 
-    finally:
-        _cleanup_task_loop()
+    # NOTE: _cleanup_task_loop() removed - shared run_async() handles loop cleanup

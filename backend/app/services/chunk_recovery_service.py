@@ -40,6 +40,25 @@ class ChunkRecoveryService:
         """Find chunks stuck in PROCESSING state beyond threshold."""
         return await self.chunk_service.detect_stale_chunks()
 
+    async def find_orphaned_pending_chunks(
+        self,
+        orphan_threshold_seconds: int = 300,
+    ) -> list[DocumentOCRChunk]:
+        """Find PENDING chunks that were never picked up by a worker.
+
+        This catches Celery task delivery failures (e.g., chord tasks lost
+        due to broker issues).
+
+        Args:
+            orphan_threshold_seconds: Time after which PENDING chunk is orphaned.
+
+        Returns:
+            List of orphaned PENDING chunks.
+        """
+        return await self.chunk_service.detect_orphaned_pending_chunks(
+            orphan_threshold_seconds=orphan_threshold_seconds
+        )
+
     async def recover_stale_chunk(self, chunk: DocumentOCRChunk) -> dict:
         """Recover a single stale chunk.
 
@@ -132,6 +151,61 @@ class ChunkRecoveryService:
             )
             return {"success": False, "error": str(e), "chunk_id": chunk.id}
 
+    async def recover_orphaned_chunk(self, chunk: DocumentOCRChunk) -> dict:
+        """Recover a single orphaned PENDING chunk by re-dispatching it.
+
+        Unlike stale PROCESSING chunks, orphaned PENDING chunks just need
+        to be re-dispatched - they never started processing.
+
+        Args:
+            chunk: The orphaned PENDING chunk.
+
+        Returns:
+            Dictionary with recovery result.
+        """
+        try:
+            # Get fresh chunk state
+            current_chunk = await self.chunk_service.get_chunk(chunk.id)
+            if not current_chunk:
+                return {
+                    "success": False,
+                    "error": "Chunk not found",
+                    "chunk_id": chunk.id,
+                }
+
+            if current_chunk.status != ChunkStatus.PENDING:
+                return {
+                    "success": False,
+                    "error": f"Chunk no longer pending (current: {current_chunk.status.value})",
+                    "chunk_id": chunk.id,
+                }
+
+            # Re-dispatch the chunk task
+            self._redispatch_chunk_task(current_chunk)
+
+            logger.info(
+                "orphaned_chunk_redispatched",
+                chunk_id=chunk.id,
+                document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
+            )
+
+            return {
+                "success": True,
+                "chunk_id": chunk.id,
+                "document_id": chunk.document_id,
+                "chunk_index": chunk.chunk_index,
+                "action": "redispatched",
+            }
+
+        except Exception as e:
+            logger.error(
+                "orphaned_chunk_recovery_failed",
+                chunk_id=chunk.id,
+                error=str(e),
+            )
+            return {"success": False, "error": str(e), "chunk_id": chunk.id}
+
     def _get_recovery_attempts(self, chunk: DocumentOCRChunk) -> int:
         """Extract recovery attempts from error_message metadata."""
         if not chunk.error_message:
@@ -188,39 +262,72 @@ class ChunkRecoveryService:
         return None
 
     async def recover_all_stale_chunks(self) -> dict:
-        """Find and recover all stale chunks."""
+        """Find and recover all stale chunks (PROCESSING and orphaned PENDING)."""
+        # 1. Recover chunks stuck in PROCESSING
         stale_chunks = await self.find_stale_chunks()
+        stale_results = []
 
-        if not stale_chunks:
-            logger.debug("no_stale_chunks_found")
-            return {"recovered": 0, "failed": 0, "total": 0, "chunks": []}
+        if stale_chunks:
+            logger.info(
+                "stale_processing_chunks_found",
+                count=len(stale_chunks),
+                chunk_ids=[c.id for c in stale_chunks],
+            )
+            for chunk in stale_chunks:
+                result = await self.recover_stale_chunk(chunk)
+                result["recovery_type"] = "stale_processing"
+                stale_results.append(result)
 
-        logger.info(
-            "stale_chunks_found",
-            count=len(stale_chunks),
-            chunk_ids=[c.id for c in stale_chunks],
-        )
+        # 2. Recover orphaned PENDING chunks (never picked up by worker)
+        orphaned_chunks = await self.find_orphaned_pending_chunks()
+        orphan_results = []
 
-        results = []
-        for chunk in stale_chunks:
-            result = await self.recover_stale_chunk(chunk)
-            results.append(result)
+        if orphaned_chunks:
+            logger.info(
+                "orphaned_pending_chunks_found",
+                count=len(orphaned_chunks),
+                chunk_ids=[c.id for c in orphaned_chunks],
+            )
+            for chunk in orphaned_chunks:
+                result = await self.recover_orphaned_chunk(chunk)
+                result["recovery_type"] = "orphaned_pending"
+                orphan_results.append(result)
 
-        recovered = sum(1 for r in results if r.get("success"))
-        failed = sum(1 for r in results if not r.get("success"))
+        # Combine results
+        all_results = stale_results + orphan_results
+
+        if not all_results:
+            logger.debug("no_chunks_to_recover")
+            return {
+                "recovered": 0,
+                "failed": 0,
+                "total": 0,
+                "stale_processing": 0,
+                "orphaned_pending": 0,
+                "chunks": [],
+            }
+
+        recovered = sum(1 for r in all_results if r.get("success"))
+        failed = sum(1 for r in all_results if not r.get("success"))
+        stale_recovered = sum(1 for r in stale_results if r.get("success"))
+        orphan_recovered = sum(1 for r in orphan_results if r.get("success"))
 
         logger.info(
             "batch_chunk_recovery_complete",
-            total=len(stale_chunks),
+            total=len(all_results),
             recovered=recovered,
             failed=failed,
+            stale_processing_recovered=stale_recovered,
+            orphaned_pending_recovered=orphan_recovered,
         )
 
         return {
             "recovered": recovered,
             "failed": failed,
-            "total": len(stale_chunks),
-            "chunks": results,
+            "total": len(all_results),
+            "stale_processing": stale_recovered,
+            "orphaned_pending": orphan_recovered,
+            "chunks": all_results,
         }
 
 

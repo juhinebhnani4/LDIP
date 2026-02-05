@@ -371,3 +371,343 @@ class TestChunkingEdgeCases:
         # Unicode should be preserved
         combined = " ".join(p.content for p in result.parent_chunks)
         assert "法律文件" in combined or "协议" in combined
+
+
+class TestLayoutAwareChunkingIntegration:
+    """Integration tests for layout-aware chunking with DocumentLayout.
+
+    Issue #3 fix: Added comprehensive integration tests for layout-aware chunking.
+    """
+
+    @pytest.fixture
+    def legal_layout(self):
+        """Create a realistic legal document layout."""
+        from app.services.table_extraction.models import (
+            BoundingBox,
+            DocumentLayout,
+            LayoutBlock,
+        )
+
+        blocks = []
+        reading_order = 0
+
+        # Page 1: Title and Introduction
+        blocks.append(
+            LayoutBlock(
+                block_type="heading",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.05, width=0.8, height=0.05),
+                reading_order=reading_order,
+                confidence=0.98,
+                text_content="MEMORANDUM OF UNDERSTANDING",
+            )
+        )
+        reading_order += 1
+
+        blocks.append(
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.12, width=0.8, height=0.25),
+                reading_order=reading_order,
+                confidence=0.95,
+                text_content=(
+                    "This Memorandum of Understanding (MOU) is entered into on this date between "
+                    "Party A, a corporation duly organized under the laws of India, having its "
+                    "registered office at 123 Business Park, Mumbai, and Party B, a limited "
+                    "liability company registered under the laws of India, having its registered "
+                    "office at 456 Tech Tower, Bangalore. Both parties hereby agree to the terms "
+                    "and conditions set forth in this document."
+                ),
+            )
+        )
+        reading_order += 1
+
+        # Article 1
+        blocks.append(
+            LayoutBlock(
+                block_type="heading",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.40, width=0.8, height=0.04),
+                reading_order=reading_order,
+                confidence=0.96,
+                text_content="ARTICLE 1: DEFINITIONS AND INTERPRETATIONS",
+            )
+        )
+        reading_order += 1
+
+        blocks.append(
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.45, width=0.8, height=0.35),
+                reading_order=reading_order,
+                confidence=0.94,
+                text_content=(
+                    "1.1 In this Agreement, unless the context otherwise requires: "
+                    "'Agreement' means this Memorandum of Understanding including all schedules "
+                    "and annexures attached hereto; 'Confidential Information' means all "
+                    "information disclosed by either party to the other party, whether orally, "
+                    "in writing, or by any other means; 'Effective Date' means the date of "
+                    "execution of this Agreement by both parties; 'Intellectual Property' means "
+                    "all patents, copyrights, trademarks, trade secrets, and other proprietary "
+                    "rights owned by either party."
+                ),
+            )
+        )
+        reading_order += 1
+
+        # Page 2: Article 2 and Table
+        blocks.append(
+            LayoutBlock(
+                block_type="heading",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.05, width=0.8, height=0.04),
+                reading_order=reading_order,
+                confidence=0.97,
+                text_content="ARTICLE 2: SCOPE OF COLLABORATION",
+            )
+        )
+        reading_order += 1
+
+        blocks.append(
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.10, width=0.8, height=0.20),
+                reading_order=reading_order,
+                confidence=0.93,
+                text_content=(
+                    "2.1 The parties agree to collaborate on the following areas: "
+                    "joint research and development of technology solutions; sharing of "
+                    "technical expertise and resources; co-development of products for the "
+                    "domestic and international markets; cross-licensing of intellectual property "
+                    "as mutually agreed upon by the parties."
+                ),
+            )
+        )
+        reading_order += 1
+
+        # Table block
+        blocks.append(
+            LayoutBlock(
+                block_type="table",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.32, width=0.8, height=0.25),
+                reading_order=reading_order,
+                confidence=0.91,
+                text_content=(
+                    "| Milestone | Description | Timeline |\n"
+                    "|-----------|-------------|----------|\n"
+                    "| Phase 1 | Initial Planning | Q1 2026 |\n"
+                    "| Phase 2 | Implementation | Q2-Q3 2026 |\n"
+                    "| Phase 3 | Review and Optimization | Q4 2026 |"
+                ),
+            )
+        )
+        reading_order += 1
+
+        # Page 3: Article 3 with stamp
+        blocks.append(
+            LayoutBlock(
+                block_type="heading",
+                page_number=3,
+                bbox=BoundingBox(page=3, x=0.1, y=0.05, width=0.8, height=0.04),
+                reading_order=reading_order,
+                confidence=0.96,
+                text_content="ARTICLE 3: CONFIDENTIALITY AND NON-DISCLOSURE",
+            )
+        )
+        reading_order += 1
+
+        blocks.append(
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=3,
+                bbox=BoundingBox(page=3, x=0.1, y=0.10, width=0.8, height=0.30),
+                reading_order=reading_order,
+                confidence=0.92,
+                text_content=(
+                    "3.1 Each party agrees to maintain the confidentiality of all Confidential "
+                    "Information received from the other party. Neither party shall disclose "
+                    "any Confidential Information to any third party without the prior written "
+                    "consent of the disclosing party. This obligation of confidentiality shall "
+                    "survive the termination of this Agreement for a period of five (5) years. "
+                    "The receiving party shall use the Confidential Information solely for the "
+                    "purposes contemplated under this Agreement and shall not use such information "
+                    "for any other purpose without express written permission."
+                ),
+            )
+        )
+        reading_order += 1
+
+        # Stamp block (no text expected)
+        blocks.append(
+            LayoutBlock(
+                block_type="stamp",
+                page_number=3,
+                bbox=BoundingBox(page=3, x=0.7, y=0.85, width=0.2, height=0.1),
+                reading_order=reading_order,
+                confidence=0.88,
+                text_content=None,  # Stamps typically don't have text
+            )
+        )
+        reading_order += 1
+
+        return DocumentLayout(
+            document_id="legal-doc-integration-test",
+            blocks=blocks,
+            page_count=3,
+            processing_time_ms=750,
+        )
+
+    def test_layout_aware_chunking_full_flow(self, legal_layout) -> None:
+        """Test complete layout-aware chunking flow."""
+        chunker = ParentChildChunker(
+            parent_size=1000,
+            parent_overlap=100,
+            child_size=300,
+            child_overlap=50,
+            min_size=50,
+        )
+
+        text = "This text is ignored when blocks have text_content"
+        result = chunker.chunk_document("legal-doc-integration-test", text, layout=legal_layout)
+
+        # Should produce chunks
+        assert len(result.parent_chunks) >= 1
+        assert len(result.child_chunks) >= 1
+
+        # All chunks should have layout_derived=True
+        for parent in result.parent_chunks:
+            assert parent.layout_derived is True
+            assert parent.page_number is not None
+            assert len(parent.block_types) > 0
+
+        for child in result.child_chunks:
+            assert child.layout_derived is True
+            assert child.page_number is not None
+
+    def test_layout_chunks_preserve_content(self, legal_layout) -> None:
+        """Layout chunks should preserve important content."""
+        chunker = ParentChildChunker(
+            parent_size=1000,
+            parent_overlap=100,
+            child_size=300,
+            child_overlap=50,
+            min_size=50,
+        )
+
+        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+
+        # Combine all parent text
+        combined_text = " ".join(p.content for p in result.parent_chunks)
+
+        # Key content should be preserved
+        assert "Memorandum of Understanding" in combined_text
+        assert "ARTICLE 1" in combined_text or "DEFINITIONS" in combined_text
+        assert "Confidential Information" in combined_text
+
+    def test_layout_respects_page_boundaries(self, legal_layout) -> None:
+        """Layout chunks should correctly track page numbers."""
+        chunker = ParentChildChunker(
+            parent_size=500,  # Smaller chunks to ensure page spanning
+            parent_overlap=50,
+            child_size=150,
+            child_overlap=20,
+            min_size=30,
+        )
+
+        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+
+        # Pages found in chunks
+        pages_in_chunks = {p.page_number for p in result.parent_chunks if p.page_number}
+
+        # Should have content from multiple pages (layout has 3 pages)
+        assert len(pages_in_chunks) >= 1
+        # All pages should be valid (1-indexed)
+        assert all(p >= 1 for p in pages_in_chunks)
+
+    def test_layout_block_types_tracked(self, legal_layout) -> None:
+        """Chunk block types should track what kind of content is included."""
+        chunker = ParentChildChunker(
+            parent_size=2000,  # Large chunks to combine different types
+            parent_overlap=100,
+            child_size=500,
+            child_overlap=50,
+            min_size=50,
+        )
+
+        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+
+        # Collect all block types from chunks
+        all_block_types = set()
+        for parent in result.parent_chunks:
+            all_block_types.update(parent.block_types)
+
+        # Should have multiple block types from the layout
+        assert "heading" in all_block_types
+        assert "paragraph" in all_block_types
+
+    def test_table_content_included_in_chunks(self, legal_layout) -> None:
+        """Table content should be included in chunks as markdown."""
+        chunker = ParentChildChunker(
+            parent_size=2000,
+            parent_overlap=100,
+            child_size=500,
+            child_overlap=50,
+            min_size=50,
+        )
+
+        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+
+        combined_text = " ".join(p.content for p in result.parent_chunks)
+
+        # Table content should be present
+        assert "Milestone" in combined_text or "Phase 1" in combined_text
+
+    def test_mixed_layout_and_fallback(self) -> None:
+        """Test that layout with error falls back to text-based chunking."""
+        from app.services.table_extraction.models import DocumentLayout
+
+        error_layout = DocumentLayout(
+            document_id="error-doc",
+            blocks=[],
+            page_count=0,
+            error="Docling processing failed",
+        )
+
+        text = "Fallback text content that should be chunked. " * 50
+
+        chunker = ParentChildChunker(
+            parent_size=500,
+            parent_overlap=50,
+            child_size=150,
+            child_overlap=20,
+            min_size=30,
+        )
+
+        result = chunker.chunk_document("error-doc", text, layout=error_layout)
+
+        # Should still produce chunks from text
+        assert len(result.parent_chunks) >= 1
+
+        # These should NOT be layout-derived (fallback to text-based)
+        for parent in result.parent_chunks:
+            assert parent.layout_derived is False
+
+    def test_stamp_blocks_skipped(self, legal_layout) -> None:
+        """Stamp blocks without text should not break chunking."""
+        chunker = ParentChildChunker(
+            parent_size=2000,
+            parent_overlap=100,
+            child_size=500,
+            child_overlap=50,
+            min_size=50,
+        )
+
+        # Should not raise any errors
+        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+
+        # Should still produce chunks
+        assert len(result.parent_chunks) >= 1

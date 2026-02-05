@@ -554,6 +554,52 @@ class OCRChunkService:
 
         return stale_chunks
 
+    async def detect_orphaned_pending_chunks(
+        self,
+        orphan_threshold_seconds: int = 300,  # 5 minutes default
+    ) -> list[DocumentOCRChunk]:
+        """Find PENDING chunks that were never picked up by a worker.
+
+        These are chunks that:
+        1. Have status 'pending'
+        2. Were created more than orphan_threshold_seconds ago
+        3. Belong to a job that is still in PROCESSING state
+
+        This catches the case where Celery chord() tasks are lost due to
+        broker issues (e.g., prefetch_multiplier=1 causing task starvation).
+
+        Args:
+            orphan_threshold_seconds: Time in seconds after which a PENDING
+                chunk is considered orphaned. Default is 5 minutes.
+
+        Returns:
+            List of orphaned DocumentOCRChunk records.
+        """
+        threshold = datetime.now(UTC) - timedelta(seconds=orphan_threshold_seconds)
+
+        def _query():
+            return (
+                self.client.table("document_ocr_chunks")
+                .select("*")
+                .eq("status", ChunkStatus.PENDING.value)
+                .lt("created_at", threshold.isoformat())
+                .execute()
+            )
+
+        response = await asyncio.to_thread(_query)
+
+        orphaned_chunks = [self._db_row_to_chunk(row) for row in (response.data or [])]
+
+        if orphaned_chunks:
+            logger.warning(
+                "orphaned_pending_chunks_detected",
+                count=len(orphaned_chunks),
+                threshold_seconds=orphan_threshold_seconds,
+                chunk_ids=[c.id for c in orphaned_chunks],
+            )
+
+        return orphaned_chunks
+
     async def mark_chunk_stale(self, chunk_id: str) -> DocumentOCRChunk:
         """Mark a chunk as failed due to worker timeout.
 

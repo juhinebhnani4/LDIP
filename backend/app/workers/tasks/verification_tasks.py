@@ -505,10 +505,13 @@ def trigger_verification_on_act_upload(
                 return result
 
         # Start the verification task
-        verification_task = verify_citations_for_act.delay(
-            matter_id=matter_id,
-            act_name=act_name,
-            act_document_id=act_document_id,
+        verification_task = verify_citations_for_act.apply_async(
+            kwargs={
+                "matter_id": matter_id,
+                "act_name": act_name,
+                "act_document_id": act_document_id,
+            },
+            queue="default",  # Explicit queue routing - workers listen on default, not celery
         )
 
         result["task_id"] = verification_task.id

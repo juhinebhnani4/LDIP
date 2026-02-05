@@ -75,7 +75,17 @@
       "Bash(pip install:*)",
       "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import pypdf; print\\(f''pypdf version: {pypdf.__version__}''\\)\")",
       "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\python.exe\" -c \"from app.workers.celery import celery_app; print\\(''Celery app loaded successfully''\\)\")",
-      "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\pip.exe\" install:*)"
+      "Bash(\"E:\\\\Career coaching\\\\100x\\\\LDIP\\\\.venv\\\\Scripts\\\\pip.exe\" install:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(git rev-parse:*)",
+      "mcp__playwright__browser_evaluate",
+      "Bash(git checkout:*)",
+      "Bash(uv export:*)",
+      "Bash(nslookup:*)",
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "WebFetch(domain:www.youtube.com)",
+      "Bash(supabase migration:*)",
+      "Bash(npm test:*)"
     ]
   }
 }

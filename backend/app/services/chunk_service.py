@@ -129,6 +129,7 @@ class ChunkService:
                     "bbox_ids": [str(bid) for bid in chunk.bbox_ids] if chunk.bbox_ids else None,
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
+                    "layout_derived": chunk.layout_derived,
                 }
                 for chunk in parent_chunks
             ]
@@ -157,6 +158,7 @@ class ChunkService:
                     "bbox_ids": [str(bid) for bid in chunk.bbox_ids] if chunk.bbox_ids else None,
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
+                    "layout_derived": chunk.layout_derived,
                 }
                 for chunk in child_chunks
             ]

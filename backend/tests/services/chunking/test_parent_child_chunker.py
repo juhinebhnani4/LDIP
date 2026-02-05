@@ -302,3 +302,359 @@ class TestChunkingResult:
         assert len(result.parent_chunks) == 1
         assert len(result.child_chunks) == 1
         assert result.total_tokens == 15
+
+
+class TestLayoutAwareChunking:
+    """Tests for layout-aware chunking with DocumentLayout.
+
+    Issue #2 fix: Added comprehensive tests for layout-aware chunking.
+    """
+
+    @pytest.fixture
+    def chunker(self) -> ParentChildChunker:
+        """Create a chunker with test settings."""
+        return ParentChildChunker(
+            parent_size=500,
+            parent_overlap=50,
+            child_size=150,
+            child_overlap=20,
+            min_size=20,
+        )
+
+    @pytest.fixture
+    def sample_layout(self):
+        """Create a sample DocumentLayout for testing."""
+        from app.services.table_extraction.models import (
+            BoundingBox,
+            DocumentLayout,
+            LayoutBlock,
+        )
+
+        blocks = [
+            LayoutBlock(
+                block_type="heading",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.05),
+                reading_order=0,
+                confidence=0.95,
+                text_content="ARTICLE 1 - DEFINITIONS",
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.2, width=0.8, height=0.3),
+                reading_order=1,
+                confidence=0.92,
+                text_content="This agreement defines the terms and conditions for the parties involved. "
+                "All parties must comply with these provisions in their entirety without exception. "
+                "The following definitions shall apply throughout this document.",
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.55, width=0.8, height=0.2),
+                reading_order=2,
+                confidence=0.90,
+                text_content="Party A refers to the first signatory of this agreement. "
+                "Party B refers to the second signatory of this agreement. "
+                "Effective Date means the date on which this agreement is signed by all parties.",
+            ),
+            LayoutBlock(
+                block_type="heading",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.1, width=0.8, height=0.05),
+                reading_order=3,
+                confidence=0.95,
+                text_content="ARTICLE 2 - OBLIGATIONS",
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.2, width=0.8, height=0.4),
+                reading_order=4,
+                confidence=0.91,
+                text_content="Each party shall perform its obligations as specified in this agreement. "
+                "Neither party shall be liable for failure to perform due to circumstances beyond control. "
+                "All obligations shall remain in effect for the duration of this agreement.",
+            ),
+        ]
+
+        return DocumentLayout(
+            document_id="test-doc-123",
+            blocks=blocks,
+            page_count=2,
+            processing_time_ms=500,
+        )
+
+    def test_layout_aware_chunking_creates_chunks(
+        self, chunker: ParentChildChunker, sample_layout
+    ) -> None:
+        """Layout-aware chunking should create chunks from layout blocks."""
+        text = "Full document text (not used when blocks have text_content)"
+        result = chunker.chunk_document("test-doc-123", text, layout=sample_layout)
+
+        assert len(result.parent_chunks) >= 1
+        assert len(result.child_chunks) >= 1
+        assert result.total_tokens > 0
+
+    def test_layout_chunks_have_layout_derived_true(
+        self, chunker: ParentChildChunker, sample_layout
+    ) -> None:
+        """Chunks from layout should have layout_derived=True."""
+        text = "Full document text"
+        result = chunker.chunk_document("test-doc-123", text, layout=sample_layout)
+
+        for parent in result.parent_chunks:
+            assert parent.layout_derived is True
+
+        for child in result.child_chunks:
+            assert child.layout_derived is True
+
+    def test_layout_chunks_have_page_numbers(
+        self, chunker: ParentChildChunker, sample_layout
+    ) -> None:
+        """Chunks from layout should have page numbers set."""
+        text = "Full document text"
+        result = chunker.chunk_document("test-doc-123", text, layout=sample_layout)
+
+        for parent in result.parent_chunks:
+            assert parent.page_number is not None
+            assert parent.page_number >= 1
+
+        for child in result.child_chunks:
+            assert child.page_number is not None
+            assert child.page_number >= 1
+
+    def test_layout_chunks_have_block_types(
+        self, chunker: ParentChildChunker, sample_layout
+    ) -> None:
+        """Chunks from layout should have block_types populated."""
+        text = "Full document text"
+        result = chunker.chunk_document("test-doc-123", text, layout=sample_layout)
+
+        for parent in result.parent_chunks:
+            assert len(parent.block_types) > 0
+            # Block types should be valid
+            for bt in parent.block_types:
+                assert bt in ("paragraph", "heading", "table", "figure", "list", "code", "caption", "footer", "header", "stamp")
+
+    def test_fallback_to_text_based_when_no_layout(
+        self, chunker: ParentChildChunker
+    ) -> None:
+        """Should fall back to text-based chunking when no layout provided."""
+        text = "This is test content. " * 50
+        result = chunker.chunk_document("test-doc-123", text, layout=None)
+
+        assert len(result.parent_chunks) >= 1
+        # Without layout, layout_derived should be False
+        for parent in result.parent_chunks:
+            assert parent.layout_derived is False
+
+    def test_fallback_when_layout_has_no_blocks(
+        self, chunker: ParentChildChunker
+    ) -> None:
+        """Should fall back to text-based when layout has no blocks."""
+        from app.services.table_extraction.models import DocumentLayout
+
+        empty_layout = DocumentLayout(
+            document_id="test-doc-123",
+            blocks=[],
+            page_count=0,
+        )
+
+        text = "This is test content. " * 50
+        result = chunker.chunk_document("test-doc-123", text, layout=empty_layout)
+
+        assert len(result.parent_chunks) >= 1
+        # Without blocks, should fall back to text-based
+        for parent in result.parent_chunks:
+            assert parent.layout_derived is False
+
+    def test_fallback_when_layout_has_error(
+        self, chunker: ParentChildChunker
+    ) -> None:
+        """Should fall back to text-based when layout has an error."""
+        from app.services.table_extraction.models import DocumentLayout
+
+        error_layout = DocumentLayout(
+            document_id="test-doc-123",
+            blocks=[],
+            page_count=0,
+            error="Docling failed to process document",
+        )
+
+        text = "This is test content. " * 50
+        result = chunker.chunk_document("test-doc-123", text, layout=error_layout)
+
+        assert len(result.parent_chunks) >= 1
+
+    def test_child_inherits_page_from_parent(
+        self, chunker: ParentChildChunker, sample_layout
+    ) -> None:
+        """Child chunks should inherit page number from their parent."""
+        text = "Full document text"
+        result = chunker.chunk_document("test-doc-123", text, layout=sample_layout)
+
+        # Map parent IDs to page numbers
+        parent_pages = {p.id: p.page_number for p in result.parent_chunks}
+
+        for child in result.child_chunks:
+            assert child.parent_id in parent_pages
+            assert child.page_number == parent_pages[child.parent_id]
+
+
+class TestGetBlockText:
+    """Tests for _get_block_text helper method."""
+
+    @pytest.fixture
+    def chunker(self) -> ParentChildChunker:
+        """Create a chunker for testing."""
+        return ParentChildChunker()
+
+    def test_prefers_block_text_content(self, chunker: ParentChildChunker) -> None:
+        """Should use block.text_content when available."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        block = LayoutBlock(
+            block_type="paragraph",
+            page_number=1,
+            bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+            reading_order=0,
+            text_content="Block's own text content",
+        )
+
+        result = chunker._get_block_text(block, "Full document text that differs")
+        assert result == "Block's own text content"
+
+    def test_uses_text_offsets_when_no_content(self, chunker: ParentChildChunker) -> None:
+        """Should use text_start/text_end when text_content is None."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        block = LayoutBlock(
+            block_type="paragraph",
+            page_number=1,
+            bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+            reading_order=0,
+            text_start=5,
+            text_end=15,
+        )
+
+        result = chunker._get_block_text(block, "XXXXX0123456789XXXXX")
+        assert result == "0123456789"
+
+    def test_returns_empty_for_figures(self, chunker: ParentChildChunker) -> None:
+        """Should return empty string for figure blocks without text."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        block = LayoutBlock(
+            block_type="figure",
+            page_number=1,
+            bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+            reading_order=0,
+        )
+
+        result = chunker._get_block_text(block, "Full document text")
+        assert result == ""
+
+    def test_returns_empty_when_no_text_info(self, chunker: ParentChildChunker) -> None:
+        """Should return empty when no text_content and no offsets."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        block = LayoutBlock(
+            block_type="paragraph",
+            page_number=1,
+            bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+            reading_order=0,
+        )
+
+        result = chunker._get_block_text(block, "Full document text")
+        assert result == ""
+
+
+class TestCreateParentChunkFromBlocks:
+    """Tests for _create_parent_chunk_from_blocks helper method."""
+
+    @pytest.fixture
+    def chunker(self) -> ParentChildChunker:
+        """Create a chunker for testing."""
+        return ParentChildChunker(min_size=10)
+
+    def test_creates_chunk_with_correct_page(self, chunker: ParentChildChunker) -> None:
+        """Should set primary page from most common page among blocks."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        blocks = [
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+                reading_order=0,
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.1, width=0.8, height=0.2),
+                reading_order=1,
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=2,
+                bbox=BoundingBox(page=2, x=0.1, y=0.3, width=0.8, height=0.2),
+                reading_order=2,
+            ),
+        ]
+        text_parts = ["First paragraph text.", "Second paragraph text.", "Third paragraph text."]
+
+        result = chunker._create_parent_chunk_from_blocks(blocks, text_parts, 0)
+
+        assert result is not None
+        assert result.page_number == 2  # Most common page
+
+    def test_collects_unique_block_types(self, chunker: ParentChildChunker) -> None:
+        """Should collect unique block types from all blocks."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        blocks = [
+            LayoutBlock(
+                block_type="heading",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.1),
+                reading_order=0,
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.2, width=0.8, height=0.2),
+                reading_order=1,
+            ),
+            LayoutBlock(
+                block_type="paragraph",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.5, width=0.8, height=0.2),
+                reading_order=2,
+            ),
+        ]
+        text_parts = ["Section Title", "First paragraph content.", "Second paragraph content."]
+
+        result = chunker._create_parent_chunk_from_blocks(blocks, text_parts, 0)
+
+        assert result is not None
+        assert set(result.block_types) == {"heading", "paragraph"}
+
+    def test_returns_none_for_empty_content(self, chunker: ParentChildChunker) -> None:
+        """Should return None when text parts are all empty."""
+        from app.services.table_extraction.models import BoundingBox, LayoutBlock
+
+        blocks = [
+            LayoutBlock(
+                block_type="figure",
+                page_number=1,
+                bbox=BoundingBox(page=1, x=0.1, y=0.1, width=0.8, height=0.2),
+                reading_order=0,
+            ),
+        ]
+        text_parts = ["", "   ", ""]
+
+        result = chunker._create_parent_chunk_from_blocks(blocks, text_parts, 0)
+
+        assert result is None

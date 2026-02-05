@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { LLMQuotaWidget } from '@/components/features/admin/LLMQuotaWidget';
 import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
 import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
+import { CleanupWidget } from '@/components/features/admin/CleanupWidget';
 
 /**
  * Admin Dashboard Page
@@ -71,6 +72,9 @@ export default async function AdminPage() {
 
           {/* Monthly Cost Report Widget (Story 7.2) */}
           <CostReportWidget />
+
+          {/* Data Cleanup Widget */}
+          <CleanupWidget />
         </div>
 
         {/* Admin info footer */}

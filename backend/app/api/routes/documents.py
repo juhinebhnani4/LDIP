@@ -60,6 +60,16 @@ from app.services.document_service import (
     DocumentServiceError,
     get_document_service,
 )
+from app.services.library_service import (
+    LibraryService,
+    LibraryServiceError,
+    get_library_service,
+)
+from app.models.library import (
+    LibraryDocumentCreate,
+    LibraryDocumentSource,
+    LibraryDocumentType,
+)
 from app.services.matter_service import MatterService
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -382,6 +392,132 @@ def _get_subfolder(document_type: DocumentType) -> str:
     if document_type == DocumentType.ACT:
         return "acts"
     return "uploads"
+
+
+def _extract_year_from_filename(filename: str) -> int | None:
+    """Extract year from filename like 'Indian Contract Act, 1872.pdf'."""
+    import re
+    match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', filename)
+    return int(match.group(1)) if match else None
+
+
+async def _upload_act_to_library(
+    file_content: bytes,
+    filename: str,
+    file_size: int,
+    matter_id: str,
+    user_id: str,
+    storage_service: StorageService,
+    library_service: LibraryService,
+) -> dict:
+    """Upload an Act to the shared library and link to matter.
+
+    Acts go to the global library (library_documents table) instead of
+    matter-specific documents. They are then linked to the matter via
+    matter_library_links.
+
+    Args:
+        file_content: PDF file bytes.
+        filename: Original filename.
+        file_size: File size in bytes.
+        matter_id: Matter to link the Act to.
+        user_id: User uploading the Act.
+        storage_service: Storage service for file operations.
+        library_service: Library service for database operations.
+
+    Returns:
+        Dictionary with library_document_id and link_id.
+
+    Raises:
+        HTTPException: If upload or linking fails.
+    """
+    # Generate title from filename (remove .pdf extension)
+    title = filename.rsplit(".", 1)[0] if "." in filename else filename
+    year = _extract_year_from_filename(filename)
+
+    # Upload to global acts storage (not matter-specific)
+    # Use normalized filename for storage path
+    import re
+    normalized_name = re.sub(r'[^\w\s-]', '', title.lower())
+    normalized_name = re.sub(r'\s+', '_', normalized_name)
+    storage_path = f"global/acts/{normalized_name}.pdf"
+
+    # Check if this Act already exists in the library by title
+    existing_docs, _ = library_service.list_documents(
+        search_query=title,
+        document_type=LibraryDocumentType.ACT,
+        per_page=5,
+    )
+
+    # If exact title match exists, link that instead of creating new
+    for existing in existing_docs:
+        if existing.title.lower() == title.lower():
+            logger.info(
+                "act_already_in_library",
+                existing_id=existing.id,
+                title=title,
+            )
+            # Just link the existing library document
+            link = library_service.link_to_matter(
+                matter_id=matter_id,
+                library_document_id=existing.id,
+                linked_by=user_id,
+            )
+            return {
+                "library_document_id": existing.id,
+                "link_id": link.id,
+                "is_new": False,
+                "title": existing.title,
+            }
+
+    # Upload file to global storage
+    # Use "global" as pseudo-matter_id to get path: global/acts/{filename}
+    actual_storage_path, _ = storage_service.upload_file(
+        matter_id="global",  # Global storage, not matter-specific
+        subfolder="acts",
+        file_content=file_content,
+        filename=f"{normalized_name}.pdf",
+        content_type="application/pdf",
+    )
+
+    # Create library document record
+    create_data = LibraryDocumentCreate(
+        filename=filename,
+        title=title,
+        document_type=LibraryDocumentType.ACT,
+        year=year,
+        jurisdiction="central",  # Default to central for uploaded Acts
+    )
+
+    library_doc = library_service.create_document(
+        create_data=create_data,
+        storage_path=actual_storage_path,
+        file_size=file_size,
+        added_by=user_id,
+        source=LibraryDocumentSource.USER_UPLOAD,
+    )
+
+    # Link to the matter
+    link = library_service.link_to_matter(
+        matter_id=matter_id,
+        library_document_id=library_doc.id,
+        linked_by=user_id,
+    )
+
+    logger.info(
+        "act_uploaded_to_library",
+        library_document_id=library_doc.id,
+        matter_id=matter_id,
+        title=title,
+        link_id=link.id,
+    )
+
+    return {
+        "library_document_id": library_doc.id,
+        "link_id": link.id,
+        "is_new": True,
+        "title": library_doc.title,
+    }
 
 
 def _is_soft_launch_active() -> bool:
@@ -922,6 +1058,62 @@ async def upload_document(
 
         else:
             # Single PDF upload
+            # Route Acts to the shared library instead of matter-specific documents
+            if document_type == DocumentType.ACT:
+                library_service = get_library_service()
+                try:
+                    result = await _upload_act_to_library(
+                        file_content=file_content,
+                        filename=file.filename or "document.pdf",
+                        file_size=file_size,
+                        matter_id=matter_id,
+                        user_id=membership.user_id,
+                        storage_service=storage_service,
+                        library_service=library_service,
+                    )
+
+                    logger.info(
+                        "act_upload_to_library_complete",
+                        library_document_id=result["library_document_id"],
+                        matter_id=matter_id,
+                        is_new=result["is_new"],
+                    )
+
+                    # Return a document-like response for frontend compatibility
+                    # Create a minimal Document-like object from library document
+                    from app.models.library import LibraryDocument
+                    lib_doc = library_service.get_document(result["library_document_id"])
+
+                    # Return as UploadedDocument to maintain API compatibility
+                    uploaded_doc = UploadedDocument(
+                        document_id=lib_doc.id,
+                        filename=lib_doc.filename,
+                        storage_path=lib_doc.storage_path,
+                        file_size=lib_doc.file_size,
+                        document_type=DocumentType.ACT,
+                        matter_id=matter_id,
+                        ocr_queued=False,  # Acts from library don't need OCR
+                    )
+                    return DocumentResponse(data=uploaded_doc)
+
+                except LibraryServiceError as e:
+                    logger.error(
+                        "act_library_upload_failed",
+                        matter_id=matter_id,
+                        error=str(e),
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail={
+                            "error": {
+                                "code": "LIBRARY_UPLOAD_FAILED",
+                                "message": f"Failed to upload Act to library: {e.message}",
+                                "details": {},
+                            }
+                        },
+                    ) from e
+
+            # Regular document upload (non-Act)
             subfolder = _get_subfolder(document_type)
 
             # Upload to storage

@@ -64,45 +64,74 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
     # Try to apply nest_asyncio for nested loop support
     _ensure_nest_asyncio()
 
-    # Check if there's a running loop
+    # Check if there's a running loop that's still open
+    loop = None
     try:
         loop = asyncio.get_running_loop()
+        # Check if the loop is closed
+        if loop.is_closed():
+            loop = None
     except RuntimeError:
         loop = None
 
     if loop is None:
-        # No running loop - just use asyncio.run()
-        return asyncio.run(coro)
+        # No running loop or loop is closed - create a fresh event loop
+        # This handles the gevent case where loops get closed between tasks
+        try:
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(coro)
+            finally:
+                # Don't close the loop - keep it available for subsequent calls
+                # Closing causes issues with gevent workers
+                pass
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                # Last resort: run in thread to isolate the event loop
+                return _run_in_thread(coro)
+            raise
     else:
-        # Running loop exists - use run_until_complete if nest_asyncio is active
+        # Running loop exists and is open - use run_until_complete if nest_asyncio is active
         if _nest_asyncio_applied:
-            return loop.run_until_complete(coro)
+            try:
+                return loop.run_until_complete(coro)
+            except RuntimeError as e:
+                if "Event loop is closed" in str(e):
+                    # Loop was closed between check and use - retry with new loop
+                    return run_async(coro)
+                raise
         else:
             # Fallback: create new loop in thread (slower but works without nest_asyncio)
-            import threading
+            return _run_in_thread(coro)
 
-            result_container: dict[str, Any] = {}
-            exception_container: dict[str, BaseException] = {}
 
-            def _run_in_thread() -> None:
-                try:
-                    new_loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(new_loop)
-                    try:
-                        result_container["value"] = new_loop.run_until_complete(coro)
-                    finally:
-                        new_loop.close()
-                except BaseException as e:
-                    exception_container["error"] = e
+def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
+    """Run coroutine in a separate thread with its own event loop."""
+    import threading
 
-            thread = threading.Thread(target=_run_in_thread, daemon=True)
-            thread.start()
-            thread.join(timeout=300)
+    result_container: dict[str, Any] = {}
+    exception_container: dict[str, BaseException] = {}
 
-            if thread.is_alive():
-                raise TimeoutError("Async operation timed out after 300 seconds")
+    def _thread_target() -> None:
+        try:
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                result_container["value"] = new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        except BaseException as e:
+            exception_container["error"] = e
 
-            if "error" in exception_container:
-                raise exception_container["error"]
+    thread = threading.Thread(target=_thread_target, daemon=True)
+    thread.start()
+    thread.join(timeout=300)
 
-            return result_container.get("value")  # type: ignore[return-value]
+    if thread.is_alive():
+        raise TimeoutError("Async operation timed out after 300 seconds")
+
+    if "error" in exception_container:
+        raise exception_container["error"]
+
+    return result_container.get("value")  # type: ignore[return-value]

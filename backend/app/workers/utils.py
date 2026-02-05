@@ -58,9 +58,27 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
             # Create a fresh event loop in this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
+            # CRITICAL: Clear the global running loop marker
+            # Gevent's threading patch may share asyncio state across greenlets,
+            # causing `_get_running_loop()` to return non-None even in new "threads".
+            # We must clear this before run_until_complete() which checks it.
+            try:
+                from asyncio import events as asyncio_events
+
+                old_running_loop = asyncio_events._get_running_loop()
+                asyncio_events._set_running_loop(None)
+            except (ImportError, AttributeError):
+                old_running_loop = None
+
             try:
                 result_container["value"] = loop.run_until_complete(coro)
             finally:
+                # Restore the running loop marker
+                try:
+                    asyncio_events._set_running_loop(old_running_loop)
+                except (NameError, AttributeError):
+                    pass
                 loop.close()
         except BaseException as e:
             exception_container["error"] = e

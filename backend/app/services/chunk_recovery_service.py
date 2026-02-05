@@ -96,6 +96,7 @@ class ChunkRecoveryService:
             "worker_timeout",
             "no running",
             "no current",
+            "already awaited",  # "cannot reuse already awaited coroutine"
         ]
 
         retriable = []

@@ -213,6 +213,15 @@ celery_app.conf.update(
             "args": [30],  # 30-day retention period
             "options": {"queue": "low"},
         },
+        # Hard delete expired matters - runs daily at 3:30 AM
+        # Permanently removes matters soft-deleted more than 30 days ago
+        # CASCADE delete handles all related records (documents, chunks, entities, etc.)
+        "hard-delete-expired-matters": {
+            "task": "app.workers.tasks.maintenance_tasks.hard_delete_expired_matters",
+            "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM (after documents)
+            "args": [30],  # 30-day retention period
+            "options": {"queue": "low"},
+        },
     },
 )
 

@@ -1577,6 +1577,137 @@ def hard_delete_expired_documents(self, retention_days: int = 30) -> dict:
 
 
 # =============================================================================
+# Hard Delete Expired Matters Task
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.hard_delete_expired_matters",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def hard_delete_expired_matters(self, retention_days: int = 30) -> dict:
+    """Permanently delete matters that were soft-deleted more than retention_days ago.
+
+    Matters are soft-deleted (deleted_at timestamp set) when users delete them
+    from the UI. This task runs daily and permanently removes matters that have
+    been in the trash for longer than the retention period.
+
+    When a matter is deleted, PostgreSQL CASCADE deletes all related records:
+    - documents, chunks, bounding_boxes, entities, citations, events, etc.
+
+    This task also cleans up storage files before deleting the matter.
+
+    Args:
+        retention_days: Days to keep soft-deleted matters before permanent deletion.
+
+    Returns:
+        Dictionary with deletion results.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.supabase.client import get_service_client
+
+    logger.info("hard_delete_expired_matters_started", retention_days=retention_days)
+
+    results = {
+        "checked": 0,
+        "deleted": 0,
+        "storage_cleaned": 0,
+        "errors": [],
+    }
+
+    try:
+        client = get_service_client()
+        if not client:
+            logger.error("hard_delete_expired_matters_no_client")
+            return {"error": "Database client not configured"}
+
+        # Find matters where deleted_at is older than retention period
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+
+        expired_matters = (
+            client.table("matters")
+            .select("id, name, deleted_at")
+            .not_.is_("deleted_at", "null")
+            .lt("deleted_at", cutoff.isoformat())
+            .execute()
+        )
+
+        if not expired_matters.data:
+            logger.info("hard_delete_expired_matters_none_found")
+            return results
+
+        results["checked"] = len(expired_matters.data)
+
+        for matter in expired_matters.data:
+            matter_id = matter["id"]
+            matter_name = matter.get("name", "unknown")
+
+            try:
+                # Get all documents in this matter to clean up storage
+                docs_response = (
+                    client.table("documents")
+                    .select("id, storage_path")
+                    .eq("matter_id", matter_id)
+                    .execute()
+                )
+
+                documents = docs_response.data or []
+
+                # Clean up storage files for all documents
+                for doc in documents:
+                    storage_path = doc.get("storage_path")
+                    if storage_path:
+                        try:
+                            client.storage.from_("documents").remove([storage_path])
+                            results["storage_cleaned"] += 1
+                        except Exception as storage_err:
+                            logger.warning(
+                                "hard_delete_matter_storage_cleanup_failed",
+                                matter_id=matter_id,
+                                document_id=doc["id"],
+                                storage_path=storage_path,
+                                error=str(storage_err),
+                            )
+
+                # Delete the matter row - CASCADE will handle all related records
+                client.table("matters").delete().eq("id", matter_id).execute()
+
+                results["deleted"] += 1
+                logger.info(
+                    "matter_hard_deleted",
+                    matter_id=matter_id,
+                    matter_name=matter_name,
+                    documents_cleaned=len(documents),
+                    deleted_at=matter.get("deleted_at"),
+                )
+
+            except Exception as e:
+                logger.error(
+                    "hard_delete_matter_failed",
+                    matter_id=matter_id,
+                    error=str(e),
+                )
+                results["errors"].append({"matter_id": matter_id, "error": str(e)})
+
+        logger.info(
+            "hard_delete_expired_matters_completed",
+            checked=results["checked"],
+            deleted=results["deleted"],
+            storage_cleaned=results["storage_cleaned"],
+            errors=len(results["errors"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error("hard_delete_expired_matters_failed", error=str(e))
+        return {"error": str(e)}
+
+
+# =============================================================================
 # Stuck Document Recovery Task (Auto-fix OCR_COMPLETE with 0 chunks)
 # =============================================================================
 

@@ -96,6 +96,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
                     "no running event loop",
                     "no current event loop",
                     "cannot be called from a running event loop",
+                    "attached to a different loop",  # Future/Task on wrong loop
                 ]
             ):
                 # Last resort: run in thread to isolate the event loop
@@ -115,6 +116,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
                         "event loop is closed",
                         "no running event loop",
                         "no current event loop",
+                        "attached to a different loop",  # Future/Task on wrong loop
                     ]
                 ):
                     # Fall back to thread-based execution

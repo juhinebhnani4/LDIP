@@ -59,6 +59,55 @@ class ChunkRecoveryService:
             orphan_threshold_seconds=orphan_threshold_seconds
         )
 
+    async def find_retriable_failed_chunks(self) -> list[DocumentOCRChunk]:
+        """Find FAILED chunks that can be auto-retried.
+
+        Story 19.1+: Auto-retry chunks that failed due to transient errors
+        like asyncio event loop issues.
+
+        Only retries chunks with known transient error patterns:
+        - event loop is closed
+        - no running event loop
+        - attached to a different loop
+        - worker_timeout
+
+        Returns:
+            List of FAILED chunks eligible for retry.
+        """
+        from app.services.supabase.client import get_service_client
+
+        client = get_service_client()
+
+        # Find all failed chunks
+        response = (
+            client.table("document_ocr_chunks")
+            .select("*")
+            .eq("status", "failed")
+            .execute()
+        )
+
+        if not response.data:
+            return []
+
+        # Filter to only retryable errors (transient asyncio/worker issues)
+        retryable_patterns = [
+            "event loop",
+            "different loop",
+            "worker_timeout",
+            "no running",
+            "no current",
+        ]
+
+        retriable = []
+        for chunk_data in response.data:
+            error_msg = (chunk_data.get("error_message") or "").lower()
+            # Check if error matches any retryable pattern
+            if any(pattern in error_msg for pattern in retryable_patterns):
+                chunk = DocumentOCRChunk.model_validate(chunk_data)
+                retriable.append(chunk)
+
+        return retriable
+
     async def recover_stale_chunk(self, chunk: DocumentOCRChunk) -> dict:
         """Recover a single stale chunk.
 
@@ -206,6 +255,105 @@ class ChunkRecoveryService:
             )
             return {"success": False, "error": str(e), "chunk_id": chunk.id}
 
+    async def recover_failed_chunk(self, chunk: DocumentOCRChunk) -> dict:
+        """Recover a single FAILED chunk by resetting to PENDING and re-dispatching.
+
+        Story 19.1+: Auto-retry chunks that failed due to transient errors.
+
+        Args:
+            chunk: The FAILED chunk to retry.
+
+        Returns:
+            Dictionary with recovery result.
+        """
+        try:
+            # Get fresh chunk state
+            current_chunk = await self.chunk_service.get_chunk(chunk.id)
+            if not current_chunk:
+                return {
+                    "success": False,
+                    "error": "Chunk not found",
+                    "chunk_id": chunk.id,
+                }
+
+            if current_chunk.status != ChunkStatus.FAILED:
+                return {
+                    "success": False,
+                    "error": f"Chunk no longer failed (current: {current_chunk.status.value})",
+                    "chunk_id": chunk.id,
+                }
+
+            # Parse recovery attempts
+            recovery_attempts = self._get_failed_recovery_attempts(current_chunk)
+
+            # Max retries for failed chunks (separate from stale recovery)
+            max_failed_retries = 3
+
+            if recovery_attempts >= max_failed_retries:
+                logger.warning(
+                    "failed_chunk_max_retries_exceeded",
+                    chunk_id=chunk.id,
+                    document_id=chunk.document_id,
+                    chunk_index=chunk.chunk_index,
+                    recovery_attempts=recovery_attempts,
+                )
+                return {
+                    "success": False,
+                    "error": f"Max failed retries ({max_failed_retries}) exceeded",
+                    "chunk_id": chunk.id,
+                    "action": "skipped",
+                }
+
+            # Reset to pending for retry
+            await self.chunk_service.reset_chunk_for_retry(chunk.id)
+
+            # Update error message to track recovery attempts
+            await self.chunk_service.update_status(
+                chunk.id,
+                ChunkStatus.PENDING,
+                error_message=f"failed_auto_retry_{recovery_attempts + 1}",
+            )
+
+            # Re-dispatch the chunk task
+            self._redispatch_chunk_task(current_chunk)
+
+            logger.info(
+                "failed_chunk_recovered",
+                chunk_id=chunk.id,
+                document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
+                recovery_attempt=recovery_attempts + 1,
+                original_error=chunk.error_message[:100] if chunk.error_message else None,
+            )
+
+            return {
+                "success": True,
+                "chunk_id": chunk.id,
+                "document_id": chunk.document_id,
+                "chunk_index": chunk.chunk_index,
+                "recovery_attempt": recovery_attempts + 1,
+                "action": "reset_and_redispatched",
+            }
+
+        except Exception as e:
+            logger.error(
+                "failed_chunk_recovery_error",
+                chunk_id=chunk.id,
+                error=str(e),
+            )
+            return {"success": False, "error": str(e), "chunk_id": chunk.id}
+
+    def _get_failed_recovery_attempts(self, chunk: DocumentOCRChunk) -> int:
+        """Extract failed recovery attempts from error_message metadata."""
+        if not chunk.error_message:
+            return 0
+        if "failed_auto_retry_" in chunk.error_message:
+            try:
+                return int(chunk.error_message.split("_")[-1])
+            except (ValueError, IndexError):
+                pass
+        return 0
+
     def _get_recovery_attempts(self, chunk: DocumentOCRChunk) -> int:
         """Extract recovery attempts from error_message metadata."""
         if not chunk.error_message:
@@ -262,7 +410,7 @@ class ChunkRecoveryService:
         return None
 
     async def recover_all_stale_chunks(self) -> dict:
-        """Find and recover all stale chunks (PROCESSING and orphaned PENDING)."""
+        """Find and recover all stale chunks (PROCESSING, orphaned PENDING, and retriable FAILED)."""
         # 1. Recover chunks stuck in PROCESSING
         stale_chunks = await self.find_stale_chunks()
         stale_results = []
@@ -293,8 +441,23 @@ class ChunkRecoveryService:
                 result["recovery_type"] = "orphaned_pending"
                 orphan_results.append(result)
 
+        # 3. Recover FAILED chunks with retriable errors (asyncio/event loop issues)
+        failed_chunks = await self.find_retriable_failed_chunks()
+        failed_results = []
+
+        if failed_chunks:
+            logger.info(
+                "retriable_failed_chunks_found",
+                count=len(failed_chunks),
+                chunk_ids=[c.id for c in failed_chunks],
+            )
+            for chunk in failed_chunks:
+                result = await self.recover_failed_chunk(chunk)
+                result["recovery_type"] = "failed_retry"
+                failed_results.append(result)
+
         # Combine results
-        all_results = stale_results + orphan_results
+        all_results = stale_results + orphan_results + failed_results
 
         if not all_results:
             logger.debug("no_chunks_to_recover")
@@ -304,6 +467,7 @@ class ChunkRecoveryService:
                 "total": 0,
                 "stale_processing": 0,
                 "orphaned_pending": 0,
+                "failed_retry": 0,
                 "chunks": [],
             }
 
@@ -311,6 +475,7 @@ class ChunkRecoveryService:
         failed = sum(1 for r in all_results if not r.get("success"))
         stale_recovered = sum(1 for r in stale_results if r.get("success"))
         orphan_recovered = sum(1 for r in orphan_results if r.get("success"))
+        failed_recovered = sum(1 for r in failed_results if r.get("success"))
 
         logger.info(
             "batch_chunk_recovery_complete",
@@ -319,6 +484,7 @@ class ChunkRecoveryService:
             failed=failed,
             stale_processing_recovered=stale_recovered,
             orphaned_pending_recovered=orphan_recovered,
+            failed_retry_recovered=failed_recovered,
         )
 
         return {
@@ -327,6 +493,7 @@ class ChunkRecoveryService:
             "total": len(all_results),
             "stale_processing": stale_recovered,
             "orphaned_pending": orphan_recovered,
+            "failed_retry": failed_recovered,
             "chunks": all_results,
         }
 

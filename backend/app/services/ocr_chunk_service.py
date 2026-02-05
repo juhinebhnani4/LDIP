@@ -1118,10 +1118,12 @@ class OCRChunkService:
     # =========================================================================
 
     async def reset_chunk_for_retry(self, chunk_id: str) -> DocumentOCRChunk:
-        """Reset a failed chunk back to pending for retry.
+        """Reset a failed or stale chunk back to pending for retry.
 
         Clears error message and result data, allowing the chunk
-        to be reprocessed.
+        to be reprocessed. Supports both:
+        - FAILED chunks (normal retry after error)
+        - PROCESSING chunks (recovery after worker crash/timeout)
 
         Args:
             chunk_id: Chunk UUID.
@@ -1131,13 +1133,14 @@ class OCRChunkService:
 
         Raises:
             ChunkNotFoundError: If chunk doesn't exist.
-            InvalidStatusTransitionError: If chunk is not in 'failed' status.
+            InvalidStatusTransitionError: If chunk is not in 'failed' or 'processing' status.
         """
         chunk = await self.get_chunk(chunk_id)
         if not chunk:
             raise ChunkNotFoundError(chunk_id)
 
-        if chunk.status != ChunkStatus.FAILED:
+        # Allow reset from FAILED (retry) or PROCESSING (worker crash recovery)
+        if chunk.status not in (ChunkStatus.FAILED, ChunkStatus.PROCESSING):
             raise InvalidStatusTransitionError(
                 chunk.status.value,
                 ChunkStatus.PENDING.value,

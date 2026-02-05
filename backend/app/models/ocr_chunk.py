@@ -29,7 +29,8 @@ class ChunkStatus(str, Enum):
 # Valid status transitions for state machine validation
 VALID_STATUS_TRANSITIONS: dict[ChunkStatus, set[ChunkStatus]] = {
     ChunkStatus.PENDING: {ChunkStatus.PROCESSING},
-    ChunkStatus.PROCESSING: {ChunkStatus.COMPLETED, ChunkStatus.FAILED},
+    # PROCESSING can go to COMPLETED, FAILED, or PENDING (for recovery when worker crashes)
+    ChunkStatus.PROCESSING: {ChunkStatus.COMPLETED, ChunkStatus.FAILED, ChunkStatus.PENDING},
     ChunkStatus.FAILED: {ChunkStatus.PENDING},  # Retry resets to pending
     ChunkStatus.COMPLETED: set(),  # Terminal state
 }

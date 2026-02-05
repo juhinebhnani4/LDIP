@@ -1115,11 +1115,10 @@ class DocumentService:
         try:
             # Get documents that are still processing
             pending_statuses = [
-                DocumentStatus.UPLOADED.value,
-                DocumentStatus.QUEUED.value,
+                DocumentStatus.PENDING.value,
                 DocumentStatus.PROCESSING.value,
-                DocumentStatus.OCR_PENDING.value,
-                DocumentStatus.OCR_PROCESSING.value,
+                DocumentStatus.CHUNKING.value,
+                DocumentStatus.EMBEDDING.value,
             ]
 
             result = self.client.table("documents").select(

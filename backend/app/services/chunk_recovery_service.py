@@ -304,15 +304,8 @@ class ChunkRecoveryService:
                     "action": "skipped",
                 }
 
-            # Reset to pending for retry
+            # Reset to pending for retry (this already updates status to PENDING)
             await self.chunk_service.reset_chunk_for_retry(chunk.id)
-
-            # Update error message to track recovery attempts
-            await self.chunk_service.update_status(
-                chunk.id,
-                ChunkStatus.PENDING,
-                error_message=f"failed_auto_retry_{recovery_attempts + 1}",
-            )
 
             # Re-dispatch the chunk task
             self._redispatch_chunk_task(current_chunk)

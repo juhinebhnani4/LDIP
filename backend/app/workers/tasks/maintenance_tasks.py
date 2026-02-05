@@ -1747,14 +1747,24 @@ def recover_stuck_documents(self) -> dict:
         client = get_service_client()
 
         # Find documents with OCR_COMPLETE status but 0 chunks
-        # Use a subquery approach via raw SQL for efficiency
-        stuck_docs_response = client.rpc(
-            "find_stuck_documents",
-            {}
-        ).execute()
+        # Try RPC first, fall back to manual query if function doesn't exist
+        stuck_docs = None
+        try:
+            stuck_docs_response = client.rpc(
+                "find_stuck_documents",
+                {}
+            ).execute()
+            if stuck_docs_response.data:
+                stuck_docs = stuck_docs_response.data
+        except Exception as rpc_error:
+            # RPC function doesn't exist - use manual fallback
+            logger.debug(
+                "find_stuck_documents_rpc_unavailable",
+                error=str(rpc_error)[:100],
+            )
 
-        # If RPC doesn't exist, fall back to manual query
-        if not stuck_docs_response.data:
+        # If RPC failed or returned no data, fall back to manual query
+        if stuck_docs is None:
             # Manual approach: get all OCR_COMPLETE documents
             docs_response = (
                 client.table("documents")
@@ -1783,8 +1793,6 @@ def recover_stuck_documents(self) -> dict:
                         **doc,
                         "chunk_count": chunk_count,
                     })
-        else:
-            stuck_docs = stuck_docs_response.data
 
         results["checked"] = len(stuck_docs)
 

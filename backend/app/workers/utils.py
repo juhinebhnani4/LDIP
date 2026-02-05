@@ -87,7 +87,17 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
                 # Closing causes issues with gevent workers
                 pass
         except RuntimeError as e:
-            if "Event loop is closed" in str(e):
+            error_msg = str(e).lower()
+            # Catch any event loop related errors and fall back to thread
+            if any(
+                pattern in error_msg
+                for pattern in [
+                    "event loop is closed",
+                    "no running event loop",
+                    "no current event loop",
+                    "cannot be called from a running event loop",
+                ]
+            ):
                 # Last resort: run in thread to isolate the event loop
                 return _run_in_thread(coro)
             raise
@@ -97,9 +107,18 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
             try:
                 return loop.run_until_complete(coro)
             except RuntimeError as e:
-                if "Event loop is closed" in str(e):
-                    # Loop was closed between check and use - retry with new loop
-                    return run_async(coro)
+                error_msg = str(e).lower()
+                # Catch any event loop related errors and fall back to thread
+                if any(
+                    pattern in error_msg
+                    for pattern in [
+                        "event loop is closed",
+                        "no running event loop",
+                        "no current event loop",
+                    ]
+                ):
+                    # Fall back to thread-based execution
+                    return _run_in_thread(coro)
                 raise
         else:
             # Fallback: create new loop in thread (slower but works without nest_asyncio)

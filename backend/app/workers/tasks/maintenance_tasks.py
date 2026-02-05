@@ -1629,7 +1629,7 @@ def hard_delete_expired_matters(self, retention_days: int = 30) -> dict:
 
         expired_matters = (
             client.table("matters")
-            .select("id, name, deleted_at")
+            .select("id, title, deleted_at")
             .not_.is_("deleted_at", "null")
             .lt("deleted_at", cutoff.isoformat())
             .execute()
@@ -1643,7 +1643,7 @@ def hard_delete_expired_matters(self, retention_days: int = 30) -> dict:
 
         for matter in expired_matters.data:
             matter_id = matter["id"]
-            matter_name = matter.get("name", "unknown")
+            matter_name = matter.get("title", "unknown")
 
             try:
                 # Get all documents in this matter to clean up storage

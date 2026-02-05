@@ -20,6 +20,7 @@ from celery import chord, group
 from celery.exceptions import SoftTimeLimitExceeded
 
 from app.core.circuit_breaker import CircuitOpenError
+from app.core.config import get_settings
 from app.models.document import DocumentStatus
 from app.models.job import JobStatus
 from app.models.ocr_chunk import ChunkStatus
@@ -1188,10 +1189,32 @@ def retry_failed_chunks(
                 "message": "No failed chunks to retry",
             }
 
-        # Reset failed chunks to pending
+        # Parse retry count from error_message before reset (e.g., "auto_retry_2")
+        def _get_retry_count(chunk) -> int:
+            if not chunk.error_message:
+                return 0
+            # Handle both formats: "auto_retry_N" and "recovery_N"
+            for prefix in ["auto_retry_", "recovery_"]:
+                if prefix in chunk.error_message:
+                    try:
+                        return int(chunk.error_message.split(prefix)[-1].split("_")[0])
+                    except (ValueError, IndexError):
+                        pass
+            return 0
+
+        # Reset failed chunks to pending and track retry count
         for chunk in failed_chunks:
+            retry_count = _get_retry_count(chunk) + 1
             _run_async(
                 chunks_svc.reset_chunk_for_retry(chunk.id)
+            )
+            # Update with new retry count (reset clears error_message, so we set it after)
+            _run_async(
+                chunks_svc.update_status(
+                    chunk.id,
+                    ChunkStatus.PENDING,
+                    error_message=f"auto_retry_{retry_count}",
+                )
             )
 
         logger.info(
@@ -1415,16 +1438,71 @@ def finalize_chunked_document(
             }
 
         if progress.has_failures:
-            logger.warning(
-                "finalize_has_failed_chunks",
+            # Story 19.1: Automatic retry of failed chunks
+            # Check if we should auto-retry or give up
+            settings = get_settings()
+            max_retries = settings.chunk_max_recovery_retries
+
+            # Get failed chunks to check their retry counts
+            failed_chunks = _run_async(chunks_svc.get_failed_chunks(document_id))
+
+            # Parse retry count from error_message (e.g., "auto_retry_2" or "recovery_2")
+            def _get_retry_count(chunk) -> int:
+                if not chunk.error_message:
+                    return 0
+                # Handle formats: "auto_retry_N", "recovery_N", "worker_timeout_recovery_N"
+                for prefix in ["auto_retry_", "recovery_"]:
+                    if prefix in chunk.error_message:
+                        try:
+                            return int(chunk.error_message.split(prefix)[-1].split("_")[0])
+                        except (ValueError, IndexError):
+                            pass
+                return 0
+
+            max_chunk_retries = max(_get_retry_count(c) for c in failed_chunks) if failed_chunks else 0
+
+            if max_chunk_retries >= max_retries:
+                # Exceeded max retries - give up and mark as permanently failed
+                logger.error(
+                    "finalize_max_retries_exceeded",
+                    document_id=document_id,
+                    failed=progress.failed,
+                    max_retries=max_retries,
+                    max_chunk_retries=max_chunk_retries,
+                )
+                # Update document status to FAILED
+                doc_service.update_ocr_status(
+                    document_id=document_id,
+                    status=DocumentStatus.FAILED,
+                    error_message=f"Chunked OCR failed after {max_retries} retry attempts",
+                )
+                return {
+                    "status": "permanently_failed",
+                    "document_id": document_id,
+                    "failed_count": progress.failed,
+                    "retries_exhausted": max_chunk_retries,
+                    "message": f"{progress.failed} chunk(s) failed after {max_retries} retry attempts - document marked as FAILED",
+                }
+
+            # Auto-retry: dispatch retry_failed_chunks task
+            logger.info(
+                "finalize_auto_retry_triggered",
                 document_id=document_id,
                 failed=progress.failed,
+                current_retries=max_chunk_retries,
+                max_retries=max_retries,
+            )
+            retry_failed_chunks.delay(
+                document_id=document_id,
+                matter_id=matter_id,
+                job_id=job_id,
             )
             return {
-                "status": "has_failures",
+                "status": "auto_retry_dispatched",
                 "document_id": document_id,
                 "failed_count": progress.failed,
-                "message": f"{progress.failed} chunk(s) failed - use retry_failed_chunks to recover",
+                "retry_attempt": max_chunk_retries + 1,
+                "message": f"Auto-retrying {progress.failed} failed chunk(s) (attempt {max_chunk_retries + 1}/{max_retries})",
             }
 
     # Get all completed chunks to aggregate stats

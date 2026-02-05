@@ -127,6 +127,171 @@ def _update_act_resolution(
         return False
 
 
+def _extract_year_from_name(name: str) -> int | None:
+    """Extract year from act name like 'Indian Contract Act, 1872'."""
+    import re
+    match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', name)
+    return int(match.group(1)) if match else None
+
+
+def _find_library_document_by_title(client: Any, title: str) -> dict | None:
+    """Find a library document by title (case-insensitive fuzzy match)."""
+    try:
+        # Try exact match first
+        result = client.table("library_documents").select(
+            "id, title, storage_path"
+        ).ilike("title", title).limit(1).execute()
+
+        if result.data:
+            return result.data[0]
+
+        # Try without year suffix
+        base_title = title.rsplit(",", 1)[0].strip() if "," in title else title
+        result = client.table("library_documents").select(
+            "id, title, storage_path"
+        ).ilike("title", f"{base_title}%").limit(1).execute()
+
+        if result.data:
+            return result.data[0]
+
+        return None
+    except Exception as e:
+        logger.warning("find_library_document_error", title=title, error=str(e))
+        return None
+
+
+def _link_act_from_library(
+    client: Any,
+    matter_id: str,
+    normalized_name: str,
+    canonical_name: str | None,
+    storage_path: str,
+    india_code_url: str | None,
+    file_size: int,
+) -> str | None:
+    """Link an Act from the shared library to a matter.
+
+    This is the preferred approach for Acts - they go into the shared library
+    and are linked to matters via matter_library_links.
+
+    Args:
+        client: Supabase client.
+        matter_id: Matter UUID where this Act is referenced.
+        normalized_name: Normalized act name.
+        canonical_name: Display name for the Act.
+        storage_path: Global storage path to the cached Act PDF.
+        india_code_url: Original URL from India Code.
+        file_size: Size of the PDF in bytes.
+
+    Returns:
+        Library document UUID if linked/created, None on error.
+    """
+    try:
+        display_name = canonical_name or normalized_name.replace("_", " ").title()
+        filename = f"{display_name}.pdf"
+        year = _extract_year_from_name(display_name)
+
+        # 1. Check if this Act already exists in the library
+        library_doc = _find_library_document_by_title(client, display_name)
+
+        if library_doc:
+            library_doc_id = library_doc["id"]
+            logger.info(
+                "act_found_in_library",
+                library_document_id=library_doc_id,
+                title=display_name,
+            )
+        else:
+            # 2. Create new library document
+            library_doc_id = str(uuid4())
+            result = client.table("library_documents").insert({
+                "id": library_doc_id,
+                "filename": filename,
+                "storage_path": storage_path,
+                "file_size": file_size,
+                "document_type": "act",
+                "title": display_name,
+                "short_title": normalized_name.replace("_", " ").title(),
+                "year": year,
+                "jurisdiction": "central",
+                "source": "india_code",
+                "source_url": india_code_url,
+                "status": "completed",
+                "added_by": None,  # System-added
+            }).execute()
+
+            if not result.data:
+                logger.error(
+                    "library_document_create_failed",
+                    title=display_name,
+                )
+                return None
+
+            logger.info(
+                "library_document_created_for_act",
+                library_document_id=library_doc_id,
+                title=display_name,
+            )
+
+        # 3. Check if already linked to this matter
+        existing_link = client.table("matter_library_links").select("id").eq(
+            "matter_id", matter_id
+        ).eq(
+            "library_document_id", library_doc_id
+        ).execute()
+
+        if existing_link.data:
+            logger.info(
+                "act_already_linked_to_matter",
+                matter_id=matter_id,
+                library_document_id=library_doc_id,
+            )
+            return library_doc_id
+
+        # 4. Get a user_id for linked_by (from any document in this matter)
+        user_result = client.table("documents").select("uploaded_by").eq(
+            "matter_id", matter_id
+        ).not_.is_("uploaded_by", "null").limit(1).execute()
+        linked_by = user_result.data[0]["uploaded_by"] if user_result.data else None
+
+        if not linked_by:
+            # Fall back to any user who has access to this matter
+            # This is a system operation, so we need some valid user
+            logger.warning(
+                "no_user_found_for_library_link",
+                matter_id=matter_id,
+            )
+            # Try to get from matter_members or similar
+            # For now, skip linking if no user available (edge case)
+            return library_doc_id
+
+        # 5. Create the link
+        link_result = client.table("matter_library_links").insert({
+            "matter_id": matter_id,
+            "library_document_id": library_doc_id,
+            "linked_by": linked_by,
+        }).execute()
+
+        if link_result.data:
+            logger.info(
+                "act_linked_to_matter_from_library",
+                matter_id=matter_id,
+                library_document_id=library_doc_id,
+                title=display_name,
+            )
+
+        return library_doc_id
+
+    except Exception as e:
+        logger.error(
+            "link_act_from_library_error",
+            matter_id=matter_id,
+            normalized_name=normalized_name,
+            error=str(e),
+        )
+        return None
+
+
 def _create_document_for_auto_fetched_act(
     client: Any,
     matter_id: str,
@@ -136,7 +301,11 @@ def _create_document_for_auto_fetched_act(
     india_code_url: str | None,
     file_size: int,
 ) -> str | None:
-    """Create a document record for an auto-fetched Act.
+    """Link an auto-fetched Act from the shared library to a matter.
+
+    NOTE: This function now routes Acts through the shared library instead of
+    creating documents directly in the matter. Acts are shared resources that
+    should be in library_documents and linked via matter_library_links.
 
     Args:
         client: Supabase client.
@@ -148,59 +317,18 @@ def _create_document_for_auto_fetched_act(
         file_size: Size of the PDF in bytes.
 
     Returns:
-        Document UUID if created, None if already exists or on error.
+        Library document UUID if linked, None on error.
     """
-    try:
-        # Check if document already exists for this matter + act
-        existing = client.table("documents").select("id").eq(
-            "matter_id", matter_id
-        ).eq(
-            "storage_path", storage_path
-        ).execute()
-
-        if existing.data:
-            # Already exists
-            return existing.data[0]["id"]
-
-        # Build filename from canonical name
-        display_name = canonical_name or normalized_name.replace("_", " ").title()
-        filename = f"{display_name}.pdf"
-
-        # Create document record
-        doc_id = str(uuid4())
-        result = client.table("documents").insert({
-            "id": doc_id,
-            "matter_id": matter_id,
-            "filename": filename,
-            "storage_path": storage_path,
-            "file_size": file_size,
-            "document_type": "act",
-            "is_reference_material": True,
-            "source": "auto_fetched",
-            "uploaded_by": None,  # System-fetched, no user
-            "india_code_url": india_code_url,
-            "status": "completed",  # Already processed (cached PDF)
-        }).execute()
-
-        if result.data:
-            logger.info(
-                "document_created_for_auto_fetched_act",
-                matter_id=matter_id,
-                document_id=doc_id,
-                act_name=normalized_name,
-            )
-            return doc_id
-
-        return None
-
-    except Exception as e:
-        logger.error(
-            "create_document_for_auto_fetched_act_error",
-            matter_id=matter_id,
-            normalized_name=normalized_name,
-            error=str(e),
-        )
-        return None
+    # Use the library-based approach for Acts
+    return _link_act_from_library(
+        client=client,
+        matter_id=matter_id,
+        normalized_name=normalized_name,
+        canonical_name=canonical_name,
+        storage_path=storage_path,
+        india_code_url=india_code_url,
+        file_size=file_size,
+    )
 
 
 def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int = 50) -> list[dict]:

@@ -203,25 +203,6 @@ class StreamingOrchestrator:
             # Convert sources to event format (needed for both save and SSE event)
             sources = self._convert_sources(result)
 
-            # Task 4.4: Save assistant response to session (with sources)
-            await self._save_assistant_response(
-                matter_id=matter_id,
-                user_id=user_id,
-                response=response_text,
-                message_id=message_id,
-                sources=sources,
-            )
-
-            # RAG Production Gaps - Feature 2: Auto-evaluation hook
-            # Trigger async evaluation if enabled (non-blocking)
-            await self._trigger_auto_evaluation(
-                matter_id=matter_id,
-                query=query,
-                response=response_text,
-                result=result,
-                message_id=message_id,
-            )
-
             # Extract search mode from RAG engine results (if applicable)
             search_mode, search_notice = self._extract_search_mode(result)
 
@@ -229,6 +210,8 @@ class StreamingOrchestrator:
             truncated, more_available, total_results_hint = self._extract_completeness(result)
 
             # Task 3.7: Emit complete event with full trace summary
+            # IMPORTANT: Yield COMPLETE before save/eval so failures there
+            # don't prevent the client from receiving the response.
             complete_event = StreamCompleteEvent(
                 response=response_text,
                 sources=sources,
@@ -258,6 +241,42 @@ class StreamingOrchestrator:
                 engines_count=len(engine_traces),
                 response_length=len(response_text),
             )
+
+            # Task 4.4: Save assistant response to session (with sources)
+            # Done AFTER yielding COMPLETE so save failures don't block the response.
+            try:
+                await self._save_assistant_response(
+                    matter_id=matter_id,
+                    user_id=user_id,
+                    response=response_text,
+                    message_id=message_id,
+                    sources=sources,
+                )
+            except Exception as save_err:
+                logger.error(
+                    "post_complete_save_failed",
+                    error=str(save_err),
+                    matter_id=matter_id,
+                    message_id=message_id,
+                )
+
+            # RAG Production Gaps - Feature 2: Auto-evaluation hook
+            # Trigger async evaluation if enabled (non-blocking)
+            try:
+                await self._trigger_auto_evaluation(
+                    matter_id=matter_id,
+                    query=query,
+                    response=response_text,
+                    result=result,
+                    message_id=message_id,
+                )
+            except Exception as eval_err:
+                logger.error(
+                    "post_complete_evaluation_failed",
+                    error=str(eval_err),
+                    matter_id=matter_id,
+                    message_id=message_id,
+                )
 
         except Exception as e:
             # Task 3.8: Handle errors with error event type

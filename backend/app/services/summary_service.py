@@ -268,8 +268,16 @@ class SummaryService:
             generated_at=datetime.now(UTC).isoformat(),
         )
 
-        # Cache the summary
-        await self._cache_summary(matter_id, summary)
+        # Only cache if summary generation actually succeeded
+        if self._is_summary_valid(summary):
+            await self._cache_summary(matter_id, summary)
+        else:
+            logger.warning(
+                "summary_not_cached_due_to_failures",
+                matter_id=matter_id,
+                subject_matter_failed=summary.subject_matter.description == "Unable to generate summary at this time.",
+                key_issues_empty=len(summary.key_issues) == 0,
+            )
 
         logger.info(
             "summary_generated",
@@ -990,7 +998,9 @@ class SummaryService:
             logger.error(
                 "generate_subject_matter_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 matter_id=matter_id,
+                exc_info=True,
             )
             return SubjectMatter(
                 description="Unable to generate summary at this time.",
@@ -1081,7 +1091,9 @@ class SummaryService:
             logger.error(
                 "get_key_issues_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 matter_id=matter_id,
+                exc_info=True,
             )
             return []
 
@@ -1107,7 +1119,7 @@ class SummaryService:
         """
         # Default status if no data
         default_status = CurrentStatus(
-            last_order_date=datetime.now(UTC).isoformat(),
+            last_order_date=None,
             description="No orders found in the uploaded documents.",
             source_document="N/A",
             source_page=1,
@@ -1158,7 +1170,7 @@ class SummaryService:
             # Parse date
             last_order_date = parsed.get("lastOrderDate", "Unknown")
             if last_order_date == "Unknown":
-                last_order_date = datetime.now(UTC).isoformat()
+                last_order_date = None
 
             source_document = parsed.get("sourceDocument", "Unknown")
             source_page = parsed.get("sourcePage", 1)
@@ -1198,7 +1210,9 @@ class SummaryService:
             logger.error(
                 "get_current_status_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 matter_id=matter_id,
+                exc_info=True,
             )
             return default_status
 
@@ -1449,6 +1463,35 @@ class SummaryService:
                 error=str(e),
             )
             return None
+
+    # =========================================================================
+    # Summary Validation
+    # =========================================================================
+
+    def _is_summary_valid(self, summary: MatterSummary) -> bool:
+        """Check if summary generation actually succeeded.
+
+        Returns False if all GPT-4 sections failed, indicating the summary
+        should NOT be cached (so users can retry immediately).
+
+        Args:
+            summary: The generated summary to validate.
+
+        Returns:
+            True if at least one GPT-4 section succeeded.
+        """
+        subject_matter_ok = (
+            summary.subject_matter.description
+            != "Unable to generate summary at this time."
+        )
+        key_issues_ok = len(summary.key_issues) > 0
+        current_status_ok = (
+            summary.current_status.description
+            != "No orders found in the uploaded documents."
+            or summary.current_status.last_order_date is not None
+        )
+
+        return subject_matter_ok or key_issues_ok or current_status_ok
 
     # =========================================================================
     # Redis Caching (Task 2.8) - AC #4

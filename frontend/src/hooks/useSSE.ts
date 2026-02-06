@@ -67,6 +67,9 @@ export interface SSEParseErrorContext {
 // F10: Maximum parse errors before aborting stream
 const MAX_PARSE_ERRORS = 5;
 
+// Stream timeout: abort if no TOKEN events received within this duration (ms)
+const STREAM_TOKEN_TIMEOUT_MS = 90_000;
+
 export interface StreamEvent<T = unknown> {
   type: StreamEventType;
   data: T;
@@ -210,6 +213,8 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   // Story 6.2: Track stream metrics for accurate reporting
   const streamStartTimeRef = useRef<number>(0);
   const eventCountRef = useRef<number>(0);
+  // Fix 1C: Stream timeout ref
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep options ref updated
   useEffect(() => {
@@ -401,6 +406,28 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
       let receivedComplete = false;
       // Track local parse error count for this stream
       let localParseErrorCount = 0;
+      // Track accumulated text locally for close-without-COMPLETE handling
+      let localAccumulatedText = '';
+      // Track if we received any token events
+      let receivedTokens = false;
+
+      // Fix 1C: Helper to reset the stream timeout
+      const resetStreamTimeout = () => {
+        if (streamTimeoutRef.current) {
+          clearTimeout(streamTimeoutRef.current);
+        }
+        streamTimeoutRef.current = setTimeout(() => {
+          if (!receivedComplete) {
+            const timeoutErr = new Error(
+              'Stream timed out — no response received within 90 seconds. Please try again.'
+            );
+            setError(timeoutErr);
+            setWasInterrupted(true);
+            optionsRef.current.onError?.(timeoutErr);
+            abortControllerRef.current?.abort();
+          }
+        }, STREAM_TOKEN_TIMEOUT_MS);
+      };
 
       try {
         // Get auth token and user ID
@@ -475,6 +502,24 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
                 // Track if we received a complete event
                 if (currentEventType === 'complete') {
                   receivedComplete = true;
+                  // Clear timeout on completion
+                  if (streamTimeoutRef.current) {
+                    clearTimeout(streamTimeoutRef.current);
+                    streamTimeoutRef.current = null;
+                  }
+                }
+                // Fix 1C: Start/reset timeout on typing, reset on token
+                if (currentEventType === 'typing') {
+                  resetStreamTimeout();
+                }
+                if (currentEventType === 'token') {
+                  receivedTokens = true;
+                  resetStreamTimeout();
+                  // Track accumulated text locally
+                  const acc = (data as Record<string, unknown>).accumulated;
+                  if (typeof acc === 'string') {
+                    localAccumulatedText = acc;
+                  }
                 }
               } catch (parseError) {
                 // Story 2.1: Log malformed JSON with context
@@ -542,6 +587,12 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
           }
         }
 
+        // Clear stream timeout since stream has ended
+        if (streamTimeoutRef.current) {
+          clearTimeout(streamTimeoutRef.current);
+          streamTimeoutRef.current = null;
+        }
+
         // Story 2.3: Check if stream ended without complete event
         // Story 6.2: Calculate stream duration for reporting
         const streamDurationMs = Date.now() - streamStartTimeRef.current;
@@ -556,6 +607,44 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             totalChunks: eventCountRef.current,
             durationMs: streamDurationMs,
           });
+        } else if (!receivedComplete && localParseErrorCount === 0) {
+          // Fix 1B: Stream closed without COMPLETE and without parse errors
+          if (receivedTokens && localAccumulatedText) {
+            // We have content — treat as completed with what we have
+            const syntheticComplete: CompleteData = {
+              response: localAccumulatedText,
+              sources: [],
+              engineTraces: [],
+              totalTimeMs: streamDurationMs,
+              confidence: 0,
+            };
+            optionsRef.current.onComplete?.(syntheticComplete);
+            setWasInterrupted(true);
+            void sseReportingApi.reportStatus({
+              sessionId: sessionIdRef.current,
+              matterId,
+              status: 'interrupted',
+              parseErrorCount: 0,
+              totalChunks: eventCountRef.current,
+              durationMs: streamDurationMs,
+            });
+          } else {
+            // No content at all — treat as error
+            const disconnectErr = new Error(
+              'Connection lost — no response received. Please try again.'
+            );
+            setError(disconnectErr);
+            setWasInterrupted(true);
+            optionsRef.current.onError?.(disconnectErr);
+            void sseReportingApi.reportStatus({
+              sessionId: sessionIdRef.current,
+              matterId,
+              status: 'interrupted',
+              parseErrorCount: 0,
+              totalChunks: eventCountRef.current,
+              durationMs: streamDurationMs,
+            });
+          }
         } else if (receivedComplete) {
           // Story 6.2: Report successful stream completion
           void sseReportingApi.reportStatus({
@@ -568,6 +657,11 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
           });
         }
       } catch (err) {
+        // Clear stream timeout on error
+        if (streamTimeoutRef.current) {
+          clearTimeout(streamTimeoutRef.current);
+          streamTimeoutRef.current = null;
+        }
         // Story 6.2: Calculate stream duration for error reporting
         const errorDurationMs = Date.now() - streamStartTimeRef.current;
         if (err instanceof Error && err.name === 'AbortError') {
@@ -617,6 +711,10 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+      if (streamTimeoutRef.current) {
+        clearTimeout(streamTimeoutRef.current);
+        streamTimeoutRef.current = null;
+      }
     };
   }, []);
 

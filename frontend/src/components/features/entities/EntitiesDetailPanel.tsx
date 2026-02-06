@@ -499,20 +499,39 @@ export function EntitiesDetailPanel({
                               </p>
                             )}
                             {journeyEvents.slice(0, 3).map((event) => (
-                              <Link
+                              <div
                                 key={event.eventId}
-                                href={`/matter/${matterId}/timeline?event=${event.eventId}`}
-                                className="block p-2 rounded-md bg-background border text-xs hover:border-blue-500 transition-colors"
+                                className="block p-2 rounded-md bg-background border text-xs"
                               >
                                 <p className="font-medium truncate">{event.description}</p>
                                 <p className="text-muted-foreground">
                                   {event.eventDate} • {event.eventType}
                                 </p>
-                              </Link>
+                                <div className="flex gap-2 mt-1">
+                                  {event.documentId && onViewInDocument && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onViewInDocument({
+                                        documentId: event.documentId!,
+                                        pageNumber: event.sourcePage ?? undefined,
+                                      })}
+                                      className="text-blue-600 hover:underline dark:text-blue-400"
+                                    >
+                                      {event.documentName ? `View in ${event.documentName.slice(0, 25)}` : 'View source'}
+                                    </button>
+                                  )}
+                                  <Link
+                                    href={`/matter/${matterId}/timeline?event=${event.eventId}&from=entities`}
+                                    className="text-muted-foreground hover:text-foreground hover:underline"
+                                  >
+                                    View in timeline
+                                  </Link>
+                                </div>
+                              </div>
                             ))}
                             {totalEvents > 3 && (
                               <Link
-                                href={`/matter/${matterId}/timeline?entity=${entity.id}`}
+                                href={`/matter/${matterId}/timeline?entity=${entity.id}&from=entities`}
                                 className="text-xs text-blue-600 hover:underline dark:text-blue-400"
                               >
                                 View all {totalEvents} timeline events →

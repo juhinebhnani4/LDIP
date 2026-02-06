@@ -10,7 +10,8 @@
  * @see Story 10C.2 - Entities Tab Detail Panel and Merge Dialog
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,10 +63,23 @@ export function EntitiesContent({
   className,
 }: EntitiesContentProps) {
   // View state
+  const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<EntityViewMode>('graph');
   const [filters, setFilters] = useState<EntityFilterState>(DEFAULT_ENTITY_FILTERS);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+
+  // Cross-tab navigation: auto-select entity from URL query param (?entity=...)
+  useEffect(() => {
+    const entityParam = searchParams.get('entity');
+    if (entityParam && entityParam !== selectedEntityId) {
+      setSelectedEntityId(entityParam);
+      setFocusNodeId(entityParam);
+      // Clear focus after animation
+      const timer = setTimeout(() => setFocusNodeId(null), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Multi-select merge state
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);

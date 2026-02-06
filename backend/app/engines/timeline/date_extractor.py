@@ -759,6 +759,10 @@ class DateExtractor:
         if not extracted_date_str:
             return None
 
+        # Sanitize date_text: fix OCR artifacts like extra digits in years (e.g., "8/10/20214" → "8/10/2021")
+        # Match year-like sequences of 5+ digits and truncate to 4
+        date_text = re.sub(r'(\d{4})\d+', r'\1', date_text)
+
         # Parse date string
         try:
             date_parts = extracted_date_str.split("-")

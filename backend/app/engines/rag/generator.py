@@ -278,6 +278,7 @@ class RAGAnswerGenerator:
                         "document_id": c.get("document_id") or c.get("documentId"),
                         "page_number": c.get("page_number") or c.get("pageNumber"),
                         "chunk_id": c.get("chunk_id") or c.get("chunkId") or c.get("id"),
+                        "bbox_ids": c.get("bbox_ids"),
                     }
                     for c in chunks_to_use
                 ]

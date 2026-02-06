@@ -71,6 +71,7 @@ from app.services.mig import (
 )
 from app.services.mig.entity_resolver import AliasResolutionError
 from app.services.mig.extractor import MIGExtractorError
+from app.models.entity import EntityEdgeCreate
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -3951,6 +3952,31 @@ def extract_entities(
                                 )
                                 batch_entities += len(saved)
 
+                                # Save relationship edges (name→ID resolution)
+                                if result.relationships and saved:
+                                    name_to_id = {
+                                        node.canonical_name.lower(): node.id
+                                        for node in saved
+                                    }
+                                    edges = []
+                                    for rel in result.relationships:
+                                        src_id = name_to_id.get(rel.source.lower())
+                                        tgt_id = name_to_id.get(rel.target.lower())
+                                        if src_id and tgt_id:
+                                            edges.append(EntityEdgeCreate(
+                                                source_entity_id=src_id,
+                                                target_entity_id=tgt_id,
+                                                relationship_type=rel.type,
+                                                matter_id=matter_id,
+                                                confidence=rel.confidence,
+                                                metadata={"description": rel.description} if rel.description else {},
+                                            ))
+                                    if edges:
+                                        await graph_service.save_edges(
+                                            matter_id=matter_id,
+                                            edges=edges,
+                                        )
+
                             if result.relationships:
                                 batch_relationships += len(result.relationships)
 
@@ -4005,6 +4031,31 @@ def extract_entities(
                                 extraction_result=extraction_result,
                             )
                             entities_count = len(saved_entities)
+
+                            # Save relationship edges (name→ID resolution)
+                            if extraction_result.relationships and saved_entities:
+                                name_to_id = {
+                                    node.canonical_name.lower(): node.id
+                                    for node in saved_entities
+                                }
+                                edges = []
+                                for rel in extraction_result.relationships:
+                                    src_id = name_to_id.get(rel.source.lower())
+                                    tgt_id = name_to_id.get(rel.target.lower())
+                                    if src_id and tgt_id:
+                                        edges.append(EntityEdgeCreate(
+                                            source_entity_id=src_id,
+                                            target_entity_id=tgt_id,
+                                            relationship_type=rel.type,
+                                            matter_id=matter_id,
+                                            confidence=rel.confidence,
+                                            metadata={"description": rel.description} if rel.description else {},
+                                        ))
+                                if edges:
+                                    await graph_service.save_edges(
+                                        matter_id=matter_id,
+                                        edges=edges,
+                                    )
 
                         if extraction_result.relationships:
                             relationships_count = len(extraction_result.relationships)

@@ -810,6 +810,7 @@ class RAGEngineAdapter(EngineAdapter):
                     "relevance_score": item.rrf_score,  # RRF score as relevance
                     "is_library": item.is_library,
                     "filed_by": _infer_party_from_document_name(get_doc_name(item)),
+                    "bbox_ids": item.bbox_ids,
                 }
                 for item in results.results
             ]
@@ -846,6 +847,7 @@ class RAGEngineAdapter(EngineAdapter):
                         "page_number": item.page_number,
                         "relevance_score": item.rrf_score,
                         "is_library": item.is_library,
+                        "bbox_ids": item.bbox_ids,
                     }
                     for item in results.results
                 ],
@@ -1303,6 +1305,7 @@ class EntityLookupEngineAdapter(EngineAdapter):
                     "page_number": item.page_number,
                     "relevance_score": item.rrf_score,
                     "is_library": False,
+                    "bbox_ids": item.bbox_ids,
                 }
                 for item in results.results
             ]

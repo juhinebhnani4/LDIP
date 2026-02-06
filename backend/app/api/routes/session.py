@@ -73,7 +73,6 @@ def get_session_service() -> SessionMemoryService:
 @limiter.limit(READONLY_RATE_LIMIT)
 async def get_conversation_history(
     request: Request,  # Required for rate limiter
-    matter_id: str = Path(..., description="Matter UUID"),
     user_id: str = Path(..., description="User UUID"),
     current_user: AuthenticatedUser = Depends(get_current_user),
     access: MatterAccessContext = Depends(validate_matter_access()),
@@ -82,10 +81,9 @@ async def get_conversation_history(
     """Get conversation history for a matter/user session.
 
     Args:
-        matter_id: Matter UUID (from path).
         user_id: User UUID (from path).
         current_user: Authenticated user (from JWT).
-        access: Matter access context (validates access).
+        access: Matter access context (validates access, extracts matter_id).
         session_service: Session memory service instance.
 
     Returns:
@@ -96,6 +94,8 @@ async def get_conversation_history(
         HTTPException: 403 if user_id doesn't match current user.
         HTTPException: 404 if matter not found or no access.
     """
+    matter_id = access.matter_id
+
     # Security: User can only access their own session
     if user_id != current_user.id:
         logger.warning(
@@ -243,7 +243,6 @@ async def get_conversation_history(
 @limiter.limit(READONLY_RATE_LIMIT)
 async def get_archived_messages(
     request: Request,  # Required for rate limiter
-    matter_id: str = Path(..., description="Matter UUID"),
     user_id: str = Path(..., description="User UUID"),
     current_user: AuthenticatedUser = Depends(get_current_user),
     access: MatterAccessContext = Depends(validate_matter_access()),
@@ -252,10 +251,9 @@ async def get_archived_messages(
     """Get archived messages from Matter Memory.
 
     Args:
-        matter_id: Matter UUID (from path).
         user_id: User UUID (from path).
         current_user: Authenticated user (from JWT).
-        access: Matter access context (validates access).
+        access: Matter access context (validates access, extracts matter_id).
         session_service: Session memory service instance.
 
     Returns:
@@ -266,6 +264,8 @@ async def get_archived_messages(
         HTTPException: 403 if user_id doesn't match current user.
         HTTPException: 404 if matter not found or no access.
     """
+    matter_id = access.matter_id
+
     # Security: User can only access their own session
     if user_id != current_user.id:
         logger.warning(

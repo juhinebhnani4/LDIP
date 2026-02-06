@@ -584,7 +584,7 @@ class TimelineBuilder:
     def _deduplicate_events(
         self,
         events: list[TimelineEvent],
-        similarity_threshold: float = 0.6,
+        similarity_threshold: float = 0.75,
     ) -> list[TimelineEvent]:
         """Deduplicate similar events on the same date.
 
@@ -597,7 +597,7 @@ class TimelineBuilder:
         Args:
             events: List of timeline events to deduplicate.
             similarity_threshold: Minimum similarity score to consider events
-                as duplicates (0.0-1.0). Default 0.6.
+                as duplicates (0.0-1.0). Default 0.75.
 
         Returns:
             Deduplicated list of timeline events.

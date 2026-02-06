@@ -69,7 +69,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
   const matterId = params.matterId;
 
   // Cross-tab navigation: detect event/entity params from URL
-  const { context, clearHighlights } = useCrossTabNavigation(matterId);
+  const { context } = useCrossTabNavigation(matterId);
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
 
   // View mode state
@@ -359,7 +359,8 @@ export function TimelineContent({ className }: TimelineContentProps) {
   useEffect(() => {
     if (!highlightedEventId || eventsLoading || displayEvents.length === 0) return;
 
-    const rafId = requestAnimationFrame(() => {
+    // Use setTimeout to ensure DOM has fully rendered after React commit
+    const timerId = setTimeout(() => {
       const el = document.querySelector(
         `[data-testid="timeline-event-${highlightedEventId}"]`
       );
@@ -369,13 +370,14 @@ export function TimelineContent({ className }: TimelineContentProps) {
         setTimeout(() => {
           (el as HTMLElement).style.boxShadow = '';
           setHighlightedEventId(null);
-          clearHighlights();
+          // Clean URL without triggering Next.js re-render (which resets scroll)
+          window.history.replaceState({}, '', window.location.pathname);
         }, 3000);
       }
-    });
+    }, 100);
 
-    return () => cancelAnimationFrame(rafId);
-  }, [highlightedEventId, eventsLoading, displayEvents.length, clearHighlights]);
+    return () => clearTimeout(timerId);
+  }, [highlightedEventId, eventsLoading, displayEvents.length]);
 
   // Render the appropriate view based on mode
   const renderTimelineView = () => {

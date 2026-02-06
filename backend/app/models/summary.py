@@ -193,10 +193,10 @@ class CurrentStatus(BaseModel):
     Story 14.6: AC #9 - Include citation data for CitationLink.
     """
 
-    last_order_date: str = Field(
-        ...,
+    last_order_date: str | None = Field(
+        None,
         alias="lastOrderDate",
-        description="Date of last order (ISO format)",
+        description="Date of last order (ISO format), or null if unknown",
     )
     description: str = Field(
         ...,

@@ -69,12 +69,31 @@ def run_engine(matter_id: str, engine: str) -> dict[str, str]:
 # =============================================================================
 
 
+def _dedup_key(d) -> str:
+    """Build a dedup key from date + event_type + description hash.
+
+    Same date but different event type or description → kept as separate events.
+    Only true duplicates (same date, type, and near-identical description) merge.
+    """
+    import hashlib
+
+    date_str = d.extracted_date.isoformat() if d.extracted_date else "unknown"
+    event_type = getattr(d, "event_type", "") or ""
+    desc = getattr(d, "event_description", "") or ""
+    # Normalize: lowercase, collapse whitespace, first 50 chars
+    desc_norm = " ".join(desc.lower().split())[:50]
+    desc_hash = hashlib.md5(desc_norm.encode()).hexdigest()[:8]
+    return f"{date_str}:{event_type}:{desc_hash}"
+
+
 def _deduplicate_extracted_dates(dates: list) -> list:
     """Deduplicate dates extracted from multiple chunks.
 
-    Dates are considered duplicates if they have the same extracted_date
-    and similar context. Keeps the date with higher confidence or more
-    complete metadata (page_number, bbox_ids).
+    Dates are considered duplicates if they share the same extracted_date,
+    event_type, AND similar description. This preserves distinct events that
+    happen to fall on the same date (e.g., a filing and a hearing on Jan 15).
+
+    Keeps the date with higher confidence or more complete metadata.
 
     Args:
         dates: List of ExtractedDate objects from multiple chunks.
@@ -85,10 +104,10 @@ def _deduplicate_extracted_dates(dates: list) -> list:
     if not dates:
         return []
 
-    # Group by extracted_date
+    # Group by (date, event_type, description_hash) — not just date
     date_groups: dict[str, list] = {}
     for d in dates:
-        key = d.extracted_date.isoformat() if d.extracted_date else "unknown"
+        key = _dedup_key(d)
         if key not in date_groups:
             date_groups[key] = []
         date_groups[key].append(d)
@@ -231,11 +250,11 @@ def extract_dates_from_document(
                 "reason": "no_chunks",
             }
 
-        # Process per-chunk to preserve page_number and bbox_ids
-        # Using parent chunks if available (they have better context), otherwise child chunks
-        # ChunkWithContent is a Pydantic model, access attributes directly
-        parent_chunks = [c for c in chunks if c.parent_chunk_id is None]
-        chunks_to_process = parent_chunks if parent_chunks else chunks
+        # Process ALL chunks (parent + child) to capture dense text in child chunks.
+        # The improved dedup (_dedup_key) groups by (date, type, description_hash)
+        # so overlapping extractions from parent/child merge correctly while
+        # genuinely distinct events on the same date are preserved.
+        chunks_to_process = chunks
 
         if job_id:
             run_async(
@@ -717,12 +736,18 @@ def classify_events_for_document(
             events_updated=updated_count,
         )
 
-        # Auto-trigger entity linking after classification
-        if updated_count > 0:
+        # Auto-trigger entity linking after classification.
+        # Trigger when ANY events exist (not just when classification changed them),
+        # because events may already have correct types from extraction but still
+        # need entity linking to populate entities_involved.
+        total_events = len(doc_events)
+        should_link = updated_count > 0 or total_events > 0
+        if should_link:
             logger.info(
                 "entity_linking_auto_triggered",
                 document_id=document_id,
                 matter_id=matter_id,
+                reason="events_updated" if updated_count > 0 else "events_exist",
             )
             link_entities_after_extraction.apply_async(
                 kwargs={
@@ -736,9 +761,9 @@ def classify_events_for_document(
             "status": "completed",
             "document_id": document_id,
             "matter_id": matter_id,
-            "events_processed": len(doc_events),
+            "events_processed": total_events,
             "events_updated": updated_count,
-            "entity_linking_queued": updated_count > 0,
+            "entity_linking_queued": should_link,
         }
 
     except Exception as e:

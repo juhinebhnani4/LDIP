@@ -212,6 +212,46 @@ class CrossEngineService:
 
         total_events = events_result.count if events_result.count else 0
 
+        # Fallback: if entities_involved array is empty (linking hasn't run or
+        # threshold was too strict), search event descriptions for the entity's
+        # canonical name and aliases using PostgreSQL full-text search.
+        if not events_result.data or total_events == 0:
+            search_terms = [entity_data.get("canonical_name", "")]
+            search_terms.extend(entity_data.get("aliases") or [])
+            # Build tsquery: "Nirav Jobalia" → "Nirav & Jobalia", joined by OR
+            search_query = " | ".join(
+                term.replace(" ", " & ") for term in search_terms if term and term.strip()
+            )
+            if search_query:
+                logger.info(
+                    "entity_journey_text_search_fallback",
+                    entity_id=entity_id,
+                    matter_id=matter_id,
+                    search_query=search_query,
+                )
+                events_result = (
+                    self._supabase.table("events")
+                    .select(
+                        """
+                        id,
+                        event_date,
+                        event_type,
+                        description,
+                        document_id,
+                        source_page,
+                        confidence,
+                        documents(filename)
+                        """,
+                        count="exact",
+                    )
+                    .eq("matter_id", matter_id)
+                    .text_search("description", search_query, config="english")
+                    .order("event_date", desc=False)
+                    .range(offset, offset + per_page - 1)
+                    .execute()
+                )
+                total_events = events_result.count if events_result.count else 0
+
         events: list[CrossLinkedTimelineEvent] = []
         date_range_start: str | None = None
         date_range_end: str | None = None

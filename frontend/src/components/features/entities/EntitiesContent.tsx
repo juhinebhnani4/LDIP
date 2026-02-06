@@ -71,7 +71,7 @@ export function EntitiesContent({
 
   // Cross-tab navigation: auto-select entity from URL query param (?entity=...)
   useEffect(() => {
-    const entityParam = searchParams.get('entity');
+    const entityParam = searchParams.get('entity') || searchParams.get('entityId');
     if (entityParam && entityParam !== selectedEntityId) {
       setSelectedEntityId(entityParam);
       setFocusNodeId(entityParam);

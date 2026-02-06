@@ -169,7 +169,7 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
           </div>
           <div className="flex gap-2 mt-4">
             <Button asChild variant="outline" size="sm" className="flex-1">
-              <Link href={`/matter/${matterId}/entities?entityId=${party.entityId}`}>
+              <Link href={`/matter/${matterId}/entities?entity=${party.entityId}`}>
                 <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 View Entity
               </Link>

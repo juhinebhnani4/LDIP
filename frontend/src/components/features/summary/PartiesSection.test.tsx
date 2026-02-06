@@ -104,7 +104,7 @@ describe('PartiesSection', () => {
       const viewEntityLinks = screen.getAllByRole('link', { name: /View Entity/i });
       expect(viewEntityLinks[0]).toHaveAttribute(
         'href',
-        '/matters/test-matter-id/entities?entityId=petitioner-1'
+        '/matters/test-matter-id/entities?entity=petitioner-1'
       );
     });
 

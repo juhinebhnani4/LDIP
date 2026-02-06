@@ -1067,11 +1067,38 @@ class MIGGraphService:
 
         edges = []
         seen_ids = set()
+        related_entity_ids = set()
 
         for row in (source_response.data or []) + (target_response.data or []):
             if row["id"] not in seen_ids:
                 edges.append(self._db_row_to_entity_edge(row))
                 seen_ids.add(row["id"])
+                related_entity_ids.add(row["source_node_id"])
+                related_entity_ids.add(row["target_node_id"])
+
+        # Resolve entity names for relationship display
+        if edges and related_entity_ids:
+            related_entity_ids.discard(entity_id)  # We already know this entity
+            if related_entity_ids:
+                def _fetch_names():
+                    return (
+                        self.client.table("identity_nodes")
+                        .select("id, canonical_name")
+                        .in_("id", list(related_entity_ids))
+                        .execute()
+                    )
+
+                names_response = await asyncio.to_thread(_fetch_names)
+                name_map = {
+                    r["id"]: r["canonical_name"]
+                    for r in (names_response.data or [])
+                }
+                # Also add current entity name
+                name_map[entity_id] = entity.canonical_name
+
+                for edge in edges:
+                    edge.source_entity_name = name_map.get(edge.source_entity_id)
+                    edge.target_entity_name = name_map.get(edge.target_entity_id)
 
         return edges
 

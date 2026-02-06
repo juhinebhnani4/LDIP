@@ -245,9 +245,9 @@ class CrossEngineService:
                         count="exact",
                     )
                     .eq("matter_id", matter_id)
-                    .text_search("description", search_query, options={"config": "english"})
                     .order("event_date", desc=False)
                     .range(offset, offset + per_page - 1)
+                    .text_search("description", search_query, options={"config": "english"})
                     .execute()
                 )
                 total_events = events_result.count if events_result.count else 0

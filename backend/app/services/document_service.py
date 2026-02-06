@@ -247,7 +247,7 @@ class DocumentService:
                 "matter_id", matter_id
             ).order("created_at", desc=True).execute()
 
-            return [self._to_document(doc) for doc in result.data]
+            return [self._parse_document(doc) for doc in result.data]
 
         except Exception as e:
             logger.error(
@@ -455,7 +455,7 @@ class DocumentService:
                 updated_fields=list(update_data.keys()),
             )
 
-            return self._to_document(doc_data)
+            return self._parse_document(doc_data)
 
         except DocumentNotFoundError:
             raise

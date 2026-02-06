@@ -61,7 +61,7 @@ CITATION_LIST_COLUMNS: Final[str] = (
 )
 
 # Columns needed for citation stats/aggregation
-CITATION_STATS_COLUMNS: Final[str] = "act_name, verification_status"
+CITATION_STATS_COLUMNS: Final[str] = "act_name, verification_status, source_document_id"
 
 
 # =============================================================================
@@ -793,15 +793,18 @@ class CitationStorageService:
         self,
         matter_id: str,
         filter_invalid: bool = True,
+        filter_act_sources: bool = True,
     ) -> list[dict]:
         """Get citation counts grouped by Act name.
 
-        EGRESS OPTIMIZATION: Selects only act_name and verification_status
-        instead of all columns, reducing egress by ~90%.
+        EGRESS OPTIMIZATION: Selects only act_name, verification_status,
+        and source_document_id instead of all columns, reducing egress by ~90%.
 
         Args:
             matter_id: Matter UUID.
             filter_invalid: If True, filters out garbage/invalid act names.
+            filter_act_sources: If True, filters out citations from Act documents
+                (citations should come from case files, not from Acts themselves).
 
         Returns:
             List of dicts with act_name, citation_count, verified_count, pending_count.
@@ -823,11 +826,18 @@ class CitationStorageService:
             # Get validation service for filtering
             validation_service = get_validation_service() if filter_invalid else None
 
+            # Get Act document IDs to filter out citations from Acts
+            act_doc_ids = await self._get_act_document_ids_for_matter(matter_id) if filter_act_sources else set()
+
             # Aggregate counts
             counts: dict[str, dict] = {}
             for row in (result.data or []):
                 act_name = row["act_name"]
                 status = row["verification_status"]
+
+                # Skip citations from Act documents
+                if filter_act_sources and row.get("source_document_id") in act_doc_ids:
+                    continue
 
                 # Skip invalid/garbage act names
                 if filter_invalid and validation_service:

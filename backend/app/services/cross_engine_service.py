@@ -245,7 +245,7 @@ class CrossEngineService:
                         count="exact",
                     )
                     .eq("matter_id", matter_id)
-                    .text_search("description", search_query, config="english")
+                    .text_search("description", search_query, options={"config": "english"})
                     .order("event_date", desc=False)
                     .range(offset, offset + per_page - 1)
                     .execute()

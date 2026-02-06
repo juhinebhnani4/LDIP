@@ -105,7 +105,7 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
 
         response = (
             client.table("processing_jobs")
-            .select("id, document_id, current_stage, updated_at")
+            .select("id, document_id, matter_id, job_type, current_stage, updated_at")
             .eq("status", "QUEUED")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
@@ -127,14 +127,82 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             resolve_aliases,
         )
 
+        # Engine task job types that need special dispatch
+        ENGINE_JOB_TYPES = {
+            "DATE_EXTRACTION",
+            "EVENT_CLASSIFICATION",
+            "ENTITY_LINKING",
+            "ANOMALY_DETECTION",
+        }
+
         dispatched = 0
+        skipped = 0
         errors = []
 
         for job in stuck_jobs:
             job_id = job["id"]
             doc_id = job.get("document_id")
+            matter_id = job.get("matter_id")
+            job_type = job.get("job_type")
             stage = job.get("current_stage")
 
+            # Handle engine task job types (DATE_EXTRACTION, etc.)
+            # These are matter-level jobs that may not have a document_id
+            if job_type in ENGINE_JOB_TYPES:
+                if not matter_id:
+                    errors.append({"job_id": job_id, "error": "engine job missing matter_id"})
+                    continue
+
+                try:
+                    if job_type == "DATE_EXTRACTION":
+                        from app.workers.tasks.engine_tasks import extract_dates_from_matter
+
+                        extract_dates_from_matter.apply_async(
+                            kwargs={
+                                "matter_id": matter_id,
+                                "force_reprocess": False,
+                            },
+                            countdown=2,
+                        )
+                    else:
+                        # Other engine types — mark as completed since the
+                        # data likely already exists from document processing
+                        logger.info(
+                            "stuck_engine_job_completed",
+                            job_id=job_id,
+                            job_type=job_type,
+                            reason="engine job auto-completed, data exists from pipeline",
+                        )
+                        client.table("processing_jobs").update({
+                            "status": "COMPLETED",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }).eq("id", job_id).execute()
+                        skipped += 1
+                        continue
+
+                    dispatched += 1
+                    logger.info(
+                        "stuck_engine_job_dispatched",
+                        job_id=job_id,
+                        job_type=job_type,
+                        matter_id=matter_id,
+                    )
+
+                    # Update job timestamp to prevent re-dispatch
+                    client.table("processing_jobs").update(
+                        {"updated_at": datetime.now(UTC).isoformat()}
+                    ).eq("id", job_id).execute()
+
+                except Exception as e:
+                    errors.append({"job_id": job_id, "error": str(e)})
+                    logger.warning(
+                        "stuck_engine_job_dispatch_failed",
+                        job_id=job_id,
+                        error=str(e),
+                    )
+                continue
+
+            # Document pipeline jobs require document_id
             if not doc_id:
                 errors.append({"job_id": job_id, "error": "no document_id"})
                 continue

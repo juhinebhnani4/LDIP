@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useCrossTabNavigation } from '@/hooks/useCrossTabNavigation';
 import { useTimeline } from '@/hooks/useTimeline';
 import { useTimelineStats } from '@/hooks/useTimelineStats';
 import {
@@ -67,6 +68,10 @@ export function TimelineContent({ className }: TimelineContentProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
 
+  // Cross-tab navigation: detect event/entity params from URL
+  const { context, clearHighlights } = useCrossTabNavigation(matterId);
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
+
   // View mode state
   const [viewMode, setViewMode] = useState<TimelineViewMode>('list');
 
@@ -94,6 +99,13 @@ export function TimelineContent({ className }: TimelineContentProps) {
       }
     };
   }, [filters]);
+
+  // Cross-tab navigation: set highlighted event from URL param
+  useEffect(() => {
+    if (context.highlightedEventId) {
+      setHighlightedEventId(context.highlightedEventId);
+    }
+  }, [context.highlightedEventId]);
 
   // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -342,6 +354,28 @@ export function TimelineContent({ className }: TimelineContentProps) {
       return eventAnomalies.length > 0;
     });
   }, [filteredEvents, filters.showAnomaliesOnly, getAnomaliesForEvent]);
+
+  // Cross-tab navigation: scroll to highlighted event after data loads
+  useEffect(() => {
+    if (!highlightedEventId || eventsLoading || displayEvents.length === 0) return;
+
+    const rafId = requestAnimationFrame(() => {
+      const el = document.querySelector(
+        `[data-testid="timeline-event-${highlightedEventId}"]`
+      );
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (el as HTMLElement).style.boxShadow = '0 0 0 2px hsl(var(--primary))';
+        setTimeout(() => {
+          (el as HTMLElement).style.boxShadow = '';
+          setHighlightedEventId(null);
+          clearHighlights();
+        }, 3000);
+      }
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [highlightedEventId, eventsLoading, displayEvents.length, clearHighlights]);
 
   // Render the appropriate view based on mode
   const renderTimelineView = () => {

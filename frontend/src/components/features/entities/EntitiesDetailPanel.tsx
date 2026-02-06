@@ -521,7 +521,7 @@ export function EntitiesDetailPanel({
                                     </button>
                                   )}
                                   <Link
-                                    href={`/matter/${matterId}/timeline?event=${event.eventId}&from=entities`}
+                                    href={`/matter/${matterId}/timeline?event=${event.eventId}&from=entities&scroll=true`}
                                     className="text-muted-foreground hover:text-foreground hover:underline"
                                   >
                                     View in timeline
@@ -531,7 +531,7 @@ export function EntitiesDetailPanel({
                             ))}
                             {totalEvents > 3 && (
                               <Link
-                                href={`/matter/${matterId}/timeline?entity=${entity.id}&from=entities`}
+                                href={`/matter/${matterId}/timeline?entity=${entity.id}&from=entities&scroll=true`}
                                 className="text-xs text-blue-600 hover:underline dark:text-blue-400"
                               >
                                 View all {totalEvents} timeline events →

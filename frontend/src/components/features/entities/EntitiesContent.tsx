@@ -66,8 +66,12 @@ export function EntitiesContent({
   const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<EntityViewMode>('graph');
   const [filters, setFilters] = useState<EntityFilterState>(DEFAULT_ENTITY_FILTERS);
-  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
-  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(() => {
+    return searchParams.get('entity') || searchParams.get('entityId') || null;
+  });
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(() => {
+    return searchParams.get('entity') || searchParams.get('entityId') || null;
+  });
 
   // Cross-tab navigation: auto-select entity from URL query param (?entity=...)
   useEffect(() => {

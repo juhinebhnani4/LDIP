@@ -491,17 +491,13 @@ def extract_dates_from_matter(
             docs_to_process = document_ids
         else:
             # Get all case_file documents for the matter
-            documents = run_async(
-                document_service.get_documents_by_matter(
-                    matter_id=matter_id,
-                    page=1,
-                    per_page=1000,  # Get all documents
-                )
+            documents = document_service.get_documents_by_matter(
+                matter_id=matter_id,
             )
 
             # Filter to case files only (not Acts)
             docs_to_process = [
-                doc.id for doc in documents[0]
+                doc.id for doc in documents
                 if doc.document_type == "case_file" and doc.status == "completed"
             ]
 

@@ -660,8 +660,8 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             .eq("result", "contradiction") \
             .execute()
 
-        # 2. Fetch failed citations from act_citations
-        failed_citations = client.table("act_citations") \
+        # 2. Fetch failed citations from citations
+        failed_citations = client.table("citations") \
             .select("id, raw_citation_text, confidence, verification_status") \
             .eq("matter_id", matter_id) \
             .in_("verification_status", ["mismatch", "section_not_found"]) \

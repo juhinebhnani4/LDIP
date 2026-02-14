@@ -944,6 +944,10 @@ class TimelineService:
     ) -> int:
         """Update multiple events with classification results.
 
+        Groups events by (event_type, confidence) and issues one UPDATE
+        per group using .in_() filter, reducing ~100 individual UPDATEs
+        to ~3-5 grouped UPDATEs.
+
         Args:
             classifications: List of classification results.
             matter_id: Matter UUID for validation.
@@ -957,32 +961,61 @@ class TimelineService:
         if not classifications:
             return 0
 
+        from collections import defaultdict
+
+        # Group by (event_type, confidence) for batch updates
+        type_groups: dict[tuple[str, float], list[str]] = defaultdict(list)
+        for result in classifications:
+            key = (result.event_type.value, result.classification_confidence)
+            type_groups[key].append(result.event_id)
+
         updated_count = 0
 
-        for result in classifications:
+        for (event_type, confidence), event_ids in type_groups.items():
             try:
-                success = await self.update_event_classification(
-                    event_id=result.event_id,
-                    matter_id=matter_id,
-                    event_type=result.event_type.value,
-                    confidence=result.classification_confidence,
-                )
-                if success:
-                    updated_count += 1
+                def _batch_update(et=event_type, conf=confidence, ids=event_ids):
+                    return (
+                        self.client.table("events")
+                        .update({
+                            "event_type": et,
+                            "confidence": conf,
+                            "is_manual": False,
+                        })
+                        .in_("id", ids)
+                        .eq("matter_id", matter_id)
+                        .execute()
+                    )
+
+                response = await asyncio.to_thread(_batch_update)
+                updated_count += len(response.data) if response.data else 0
 
             except Exception as e:
                 logger.warning(
-                    "bulk_classification_item_failed",
-                    event_id=result.event_id,
+                    "bulk_classification_batch_failed",
+                    event_type=event_type,
+                    batch_size=len(event_ids),
                     error=str(e),
                 )
-                continue
+                # Fall back to individual updates for this group
+                for event_id in event_ids:
+                    try:
+                        success = await self.update_event_classification(
+                            event_id=event_id,
+                            matter_id=matter_id,
+                            event_type=event_type,
+                            confidence=confidence,
+                        )
+                        if success:
+                            updated_count += 1
+                    except Exception:
+                        continue
 
         logger.info(
             "bulk_classifications_updated",
             matter_id=matter_id,
             total=len(classifications),
             updated=updated_count,
+            batch_groups=len(type_groups),
         )
 
         return updated_count
@@ -994,6 +1027,10 @@ class TimelineService:
     ) -> int:
         """Synchronous bulk update for Celery tasks.
 
+        Groups events by (event_type, confidence) and issues one UPDATE
+        per group using .in_() filter, reducing ~100 individual UPDATEs
+        to ~3-5 grouped UPDATEs.
+
         Args:
             classifications: List of classification results.
             matter_id: Matter UUID.
@@ -1004,32 +1041,58 @@ class TimelineService:
         if not classifications:
             return 0
 
+        from collections import defaultdict
+
+        # Group by (event_type, confidence) for batch updates
+        type_groups: dict[tuple[str, float], list[str]] = defaultdict(list)
+        for result in classifications:
+            key = (result.event_type.value, result.classification_confidence)
+            type_groups[key].append(result.event_id)
+
         updated_count = 0
 
-        for result in classifications:
+        for (event_type, confidence), event_ids in type_groups.items():
             try:
-                success = self.update_event_classification_sync(
-                    event_id=result.event_id,
-                    matter_id=matter_id,
-                    event_type=result.event_type.value,
-                    confidence=result.classification_confidence,
+                response = (
+                    self.client.table("events")
+                    .update({
+                        "event_type": event_type,
+                        "confidence": confidence,
+                        "is_manual": False,
+                    })
+                    .in_("id", event_ids)
+                    .eq("matter_id", matter_id)
+                    .execute()
                 )
-                if success:
-                    updated_count += 1
+                updated_count += len(response.data) if response.data else 0
 
             except Exception as e:
                 logger.warning(
-                    "bulk_classification_sync_item_failed",
-                    event_id=result.event_id,
+                    "bulk_classification_sync_batch_failed",
+                    event_type=event_type,
+                    batch_size=len(event_ids),
                     error=str(e),
                 )
-                continue
+                # Fall back to individual updates for this group
+                for event_id in event_ids:
+                    try:
+                        success = self.update_event_classification_sync(
+                            event_id=event_id,
+                            matter_id=matter_id,
+                            event_type=event_type,
+                            confidence=confidence,
+                        )
+                        if success:
+                            updated_count += 1
+                    except Exception:
+                        continue
 
         logger.info(
             "bulk_classifications_updated_sync",
             matter_id=matter_id,
             total=len(classifications),
             updated=updated_count,
+            batch_groups=len(type_groups),
         )
 
         return updated_count

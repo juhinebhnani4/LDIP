@@ -64,3 +64,6 @@ docs/sample_files/
 # Claude Code temporary directories
 tmpclaude-*/
 **/tmpclaude-*/
+
+.vercel
+.env*.local

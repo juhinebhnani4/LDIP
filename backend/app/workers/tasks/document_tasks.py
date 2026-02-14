@@ -3437,9 +3437,9 @@ def embed_chunks(
             total_chunks=len(chunks),
         )
 
-        # Dispatch downstream tasks based on document type
+        # Dispatch act-specific tasks after embedding
         # - Act documents: index sections for split-view navigation
-        # - Case files: extract citations with source bbox_ids
+        # - Citations are dispatched later from resolve_aliases -> _dispatch_downstream_tasks()
         try:
             from app.workers.celery import celery_app
 
@@ -3468,25 +3468,6 @@ def embed_chunks(
                 )
                 logger.info(
                     "index_act_sections_dispatched",
-                    document_id=doc_id,
-                    document_type=document_type,
-                )
-            else:
-                # Extract citations after chunks with bbox_ids are ready
-                celery_app.send_task(
-                    "app.workers.tasks.document_tasks.extract_citations",
-                    kwargs={
-                        "prev_result": {
-                            "document_id": doc_id,
-                            "status": "searchable",
-                            "job_id": job_id,
-                        },
-                        "document_id": doc_id,
-                    },
-                    queue="default",  # Explicit queue routing - workers listen on default, not celery
-                )
-                logger.info(
-                    "extract_citations_dispatched_after_embedding",
                     document_id=doc_id,
                     document_type=document_type,
                 )
@@ -4877,10 +4858,10 @@ def extract_citations(
 ) -> dict[str, str | int | float | None]:
     """Extract Act citations from document chunks using Gemini.
 
-    This task runs after embed_chunks to identify Act references.
-    Can run in parallel with entity extraction.
+    This task runs after alias resolution to identify Act references.
+    Dispatched from resolve_aliases -> _dispatch_downstream_tasks().
 
-    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> **Extract Citations**
+    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> Entities -> Aliases -> **Extract Citations**
 
     Args:
         prev_result: Result from previous task in chain (contains document_id).
@@ -5458,8 +5439,8 @@ def _store_comparison_results(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=300,  # 5 minutes - contradiction detection
-    time_limit=360,  # 6 minutes - hard kill
+    soft_time_limit=900,  # 15 minutes - up to 50 entities × LLM calls
+    time_limit=960,  # 16 minutes - hard kill
 )  # type: ignore[misc]
 def detect_contradictions(
     self,  # type: ignore[no-untyped-def]
@@ -5552,6 +5533,8 @@ def detect_contradictions(
         document_id=doc_id,
         retry_count=self.request.retries,
     )
+
+    matter_id: str | None = None
 
     try:
         # Get matter_id for the document
@@ -5830,19 +5813,23 @@ def detect_contradictions(
         }
 
     except SoftTimeLimitExceeded:
-        # Task timeout - mark as failed with partial results
+        # Task timeout - complete pipeline with partial results
         logger.error(
             "detect_contradictions_task_timeout",
             document_id=doc_id,
-            timeout_seconds=300,
+            timeout_seconds=900,
             entities_processed=entities_processed,
             contradictions_found=total_contradictions,
         )
+        # Still complete the pipeline — contradiction detection is the final stage
+        if matter_id and doc_id:
+            _populate_verification_records(matter_id, doc_id)
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "TIMEOUT",
-            "error_message": "Contradiction detection timeout exceeded (5 minutes)",
+            "error_message": "Contradiction detection timeout exceeded (15 minutes)",
             "entities_processed": entities_processed,
             "contradictions_found": total_contradictions,
             "job_id": job_id,
@@ -5894,6 +5881,10 @@ def detect_contradictions(
             error=str(e),
             error_type=type(e).__name__,
         )
+        # Still complete the pipeline — contradiction detection is the final stage
+        if matter_id and doc_id:
+            _populate_verification_records(matter_id, doc_id)
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",
             "document_id": doc_id,

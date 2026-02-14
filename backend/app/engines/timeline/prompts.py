@@ -68,6 +68,7 @@ OUTPUT FORMAT (JSON):
       "event_description": "Clear, action-oriented summary of what happened (10-20 words)",
       "context_before": "Up to 30 words before the date",
       "context_after": "Up to 30 words after the date",
+      "event_source": "primary|referenced",
       "is_ambiguous": true/false,
       "ambiguity_reason": "Reason if ambiguous, null otherwise",
       "confidence": 0.0-1.0
@@ -96,6 +97,7 @@ Output:
       "event_description": "Petitioner filed writ petition before High Court",
       "context_before": "The petitioner filed this writ petition on",
       "context_after": "before the Hon'ble High Court.",
+      "event_source": "primary",
       "is_ambiguous": false,
       "ambiguity_reason": null,
       "confidence": 0.95
@@ -108,6 +110,7 @@ Output:
       "event_description": "Case listed for hearing before High Court",
       "context_before": "The case was listed for hearing on",
       "context_after": "",
+      "event_source": "primary",
       "is_ambiguous": false,
       "ambiguity_reason": null,
       "confidence": 0.92
@@ -127,6 +130,7 @@ Output:
       "event_description": "Demand notice under Section 138 issued to respondent",
       "context_before": "Demand notice under Section 138 was issued on",
       "context_after": "The respondent failed to make payment within 15 days.",
+      "event_source": "primary",
       "is_ambiguous": false,
       "ambiguity_reason": null,
       "confidence": 0.95
@@ -140,10 +144,39 @@ DATE FORMAT RULES:
 - "Month DD, YYYY" or "DD Month YYYY"
 - For partial dates: use first day of month/year
 
+PRIMARY vs REFERENCED EVENTS:
+
+Legal documents both CREATE events and REFERENCE historical events. You MUST distinguish them.
+
+PRIMARY EVENT — The document itself IS the event or directly records it:
+- "This petition was filed on 15/01/2024" → PRIMARY, confidence 0.90+
+- "Court order dated 20/03/2024" → PRIMARY, confidence 0.90+
+- "Hearing held on 05/02/2024" → PRIMARY, confidence 0.90+
+
+REFERENCED EVENT — The document merely MENTIONS another event from the past:
+- "With reference to the letter dated 28/09/1999..." → REFERENCED, confidence 0.65-0.75
+- "As per the agreement dated 15/03/2001..." → REFERENCED, confidence 0.65-0.75
+- "Vide order dated 10/05/2010..." → REFERENCED, confidence 0.65-0.75
+
+SIGNALS that indicate REFERENCED (use lower confidence):
+- "with reference to", "as per", "relying upon", "the said", "aforementioned"
+- "in reply to", "in response to", "pursuant to"
+- "vide letter dated", "vide order dated"
+- "mentioned in", "referred to in", "as stated in"
+
+For REFERENCED events: Set confidence 0.65-0.75, is_ambiguous=true,
+ambiguity_reason="Referenced in document, not a primary event",
+event_source="referenced"
+
+For PRIMARY events: Set event_source="primary"
+
+ALWAYS extract the document's OWN filing/creation date as a PRIMARY event.
+
 CONFIDENCE SCORING:
-- 0.90-1.0: Clear event with explicit action and date
-- 0.75-0.90: Event type inferable from context
-- 0.60-0.75: Date present but event type uncertain
+- 0.90-1.0: Clear PRIMARY event with explicit action and date
+- 0.75-0.90: PRIMARY event with type inferable from context
+- 0.65-0.75: REFERENCED event mentioned in document
+- 0.60-0.65: Date present but event type uncertain
 - Below 0.60: Skip - not a clear event
 
 IMPORTANT:

@@ -829,6 +829,22 @@ class DateExtractor:
             context = raw_date.get("context_before", "") + " " + raw_date.get("context_after", "")
             event_description = context.strip()[:100] if context.strip() else ""
 
+        # Parse event_source (primary vs referenced) from LLM response
+        event_source = raw_date.get("event_source", "primary")
+        is_ambiguous = raw_date.get("is_ambiguous", False)
+        ambiguity_reason = raw_date.get("ambiguity_reason")
+
+        # If event is referenced, enforce ambiguity flags
+        if event_source == "referenced":
+            is_ambiguous = True
+            if not ambiguity_reason:
+                ambiguity_reason = "Referenced in document, not a primary event"
+            # Cap confidence for referenced events
+            confidence = float(raw_date.get("confidence", 0.7))
+            confidence = min(confidence, 0.75)
+        else:
+            confidence = float(raw_date.get("confidence", 0.8))
+
         return ExtractedDate(
             extracted_date=extracted_date,
             date_text=date_text,
@@ -839,9 +855,9 @@ class DateExtractor:
             context_after=raw_date.get("context_after", "")[:1000],
             page_number=filtered_page,
             bbox_ids=filtered_bbox_ids,
-            is_ambiguous=raw_date.get("is_ambiguous", False),
-            ambiguity_reason=raw_date.get("ambiguity_reason"),
-            confidence=float(raw_date.get("confidence", 0.8)),
+            is_ambiguous=is_ambiguous,
+            ambiguity_reason=ambiguity_reason,
+            confidence=confidence,
         )
 
     def _empty_result(

@@ -608,7 +608,7 @@ class StatementComparator:
         entity_statements: EntityStatements,
         max_pairs: int = 50,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        cross_document_only: bool = True,
+        cross_document_only: bool = False,
     ) -> ComparisonBatchResult:
         """Compare all statement pairs for an entity.
 
@@ -708,7 +708,7 @@ class StatementComparator:
         self,
         entity_statements: EntityStatements,
         max_pairs: int,
-        cross_document_only: bool = True,
+        cross_document_only: bool = False,
     ) -> list[StatementPair]:
         """Generate unique statement pairs for comparison.
 

@@ -256,6 +256,46 @@ def extract_dates_from_document(
         # genuinely distinct events on the same date are preserved.
         chunks_to_process = chunks
 
+        # Pre-cache bounding boxes for accurate page number detection
+        # Same pattern used by citation engine — load all bboxes once,
+        # then per-date bbox filtering happens inside date_extractor._parse_single_date
+        from app.core.bbox_filter import set_document_bboxes, clear_document_bboxes
+
+        try:
+            from app.services.bounding_box_service import get_bounding_box_service
+
+            bbox_service = get_bounding_box_service()
+            all_bboxes: list[dict] = []
+            bbox_page = 1
+
+            while True:
+                batch, total = bbox_service.get_bounding_boxes_for_document(
+                    document_id=document_id,
+                    page=bbox_page,
+                    per_page=1000,
+                    include_text=True,  # Needed for text matching in bbox filter
+                )
+                all_bboxes.extend(batch)
+                if len(all_bboxes) >= total or not batch:
+                    break
+                bbox_page += 1
+                if bbox_page > 500:  # Safety limit
+                    break
+
+            if all_bboxes:
+                set_document_bboxes(document_id, all_bboxes)
+                logger.info(
+                    "timeline_bbox_cache_loaded",
+                    document_id=document_id,
+                    bbox_count=len(all_bboxes),
+                )
+        except Exception as e:
+            logger.warning(
+                "timeline_bbox_cache_preload_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+
         if job_id:
             run_async(
                 job_tracker.update_job_status(
@@ -317,6 +357,9 @@ def extract_dates_from_document(
                     matter_id=matter_id,
                 )
             )
+
+        # Clean up bbox cache now that extraction is done
+        clear_document_bboxes(document_id)
 
         # Save extracted dates to events table
         event_ids = timeline_service.save_extracted_dates_sync(
@@ -404,6 +447,9 @@ def extract_dates_from_document(
         return result
 
     except Exception as e:
+        # Clean up bbox cache on error
+        clear_document_bboxes(document_id)
+
         logger.error(
             "date_extraction_failed",
             document_id=document_id,

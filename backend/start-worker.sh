@@ -8,4 +8,10 @@ BEAT_PID=$!
 # Trap signals to clean up beat when worker exits
 trap "kill $BEAT_PID 2>/dev/null" EXIT
 
-celery -A app.workers.celery:celery_app worker --loglevel=info --pool=gevent --concurrency=50
+celery -A app.workers.celery:celery_app worker \
+    --loglevel=info \
+    --pool=gevent \
+    --concurrency=50 \
+    --without-gossip \
+    --without-mingle \
+    --without-heartbeat

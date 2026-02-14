@@ -478,6 +478,7 @@ def process_document_chunked(
 @celery_app.task(
     name="app.workers.tasks.chunked_document_tasks.process_single_chunk",
     bind=True,
+    ignore_result=False,  # Required — used in chord() for parallel chunk processing
     max_retries=2,
     default_retry_delay=30,
     soft_time_limit=CHUNK_OCR_TIMEOUT,  # Story 17.3: Soft timeout
@@ -1256,6 +1257,7 @@ def retry_failed_chunks(
 @celery_app.task(
     name="app.workers.tasks.chunked_document_tasks.finalize_chunked_document",
     bind=True,
+    ignore_result=False,  # Required — used as chord callback
     max_retries=2,
     default_retry_delay=30,
     soft_time_limit=300,  # 5 minutes - finalization

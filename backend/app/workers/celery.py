@@ -41,8 +41,11 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_acks_on_failure_or_timeout=True,  # Explicit: ack failed/timed-out tasks to prevent infinite redelivery
-    # Result backend settings
-    result_expires=3600,  # 1 hour
+    # Result backend settings - ignore results by default to reduce Redis commands
+    # Periodic maintenance tasks are fire-and-forget; nobody reads their results
+    task_ignore_result=True,
+    task_store_errors_even_if_ignored=True,  # Still log errors for debugging
+    result_expires=3600,  # 1 hour (for tasks that explicitly need results)
     # Worker settings
     # Using gevent pool for I/O-bound tasks (LLM API calls)
     # Higher concurrency is safe since tasks are mostly waiting on network I/O
@@ -52,9 +55,9 @@ celery_app.conf.update(
     worker_prefetch_multiplier=4,
     worker_concurrency=50,  # Increased from 4 - gevent handles 50+ concurrent I/O tasks efficiently
     # Heartbeat and health settings
-    broker_heartbeat=30,  # Send heartbeat every 30 seconds
-    broker_heartbeat_checkrate=2,  # Check for heartbeat every 2 iterations
-    worker_send_task_events=True,  # Enable task events for monitoring
+    # broker_heartbeat only matters for AMQP (RabbitMQ), not Redis transport
+    broker_heartbeat=0,  # Disabled — not needed for Redis broker
+    worker_send_task_events=False,  # Disabled — saves 2-5 Redis commands per task execution
     worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks (prevents memory leaks)
     worker_max_memory_per_child=400000,  # 400MB in KB - restart if memory exceeds this (Python high watermark protection)
     task_time_limit=3600,  # Hard timeout: 1 hour per task
@@ -82,6 +85,7 @@ celery_app.conf.update(
     # Default is 1 hour; we set 2 hours to handle long-running tasks safely
     broker_transport_options={
         'visibility_timeout': 7200,  # 2 hours - must exceed task_time_limit (3600)
+        'polling_interval': 10,  # BRPOP every 10s instead of 1s — saves ~233K Redis cmds/day
         **(_ssl_config if _uses_tls else {}),  # Merge SSL config if TLS enabled
     },
     # Result backend resilience for Redis connection drops
@@ -107,16 +111,16 @@ celery_app.conf.update(
             "args": [24],  # 24 hour retention period
             "options": {"queue": "low"},  # Low priority queue
         },
-        # Story 19.1: Stale chunk recovery - runs every 60 seconds
+        # Story 19.1: Stale chunk recovery - checks for stuck chunks
         "recover-stale-chunks": {
             "task": "app.workers.tasks.maintenance_tasks.recover_stale_chunks",
-            "schedule": 60,  # Every minute
+            "schedule": 300,  # Every 5 minutes (was 60s — reduced to save Redis commands)
             "options": {"queue": "low"},
         },
-        # Story 19.2: Auto-merge trigger - runs every 2 minutes
+        # Story 19.2: Auto-merge trigger - detects completed chunks ready to merge
         "trigger-pending-merges": {
             "task": "app.workers.tasks.maintenance_tasks.trigger_pending_merges",
-            "schedule": 120,  # Every 2 minutes
+            "schedule": 300,  # Every 5 minutes (was 120s — reduced to save Redis commands)
             "options": {"queue": "low"},
         },
         # Story 19.3: SKIPPED large document recovery - runs every hour
@@ -125,17 +129,16 @@ celery_app.conf.update(
             "schedule": 3600,  # Every hour
             "options": {"queue": "low"},
         },
-        # Stuck document recovery - runs every 5 minutes
-        # Detects documents stuck at OCR_COMPLETE with 0 chunks and triggers recovery
+        # Stuck document recovery - detects docs stuck at OCR_COMPLETE with 0 chunks
         "recover-stuck-documents": {
             "task": "app.workers.tasks.maintenance_tasks.recover_stuck_documents",
-            "schedule": 300,  # Every 5 minutes
+            "schedule": 900,  # Every 15 minutes (was 5min — recovery can wait)
             "options": {"queue": "low"},
         },
-        # Auto-fix missing extracted_text - runs every 5 minutes
+        # Auto-fix missing extracted_text
         "fix-missing-extracted-text": {
             "task": "app.workers.tasks.maintenance_tasks.fix_missing_extracted_text",
-            "schedule": 300,  # Every 5 minutes
+            "schedule": 900,  # Every 15 minutes (was 5min — repair task, not urgent)
             "options": {"queue": "low"},
         },
         # Act validation - process pending validations every 30 minutes
@@ -144,27 +147,24 @@ celery_app.conf.update(
             "schedule": 1800,  # Every 30 minutes
             "options": {"queue": "low"},
         },
-        # Dispatch stuck QUEUED jobs - runs every 5 minutes
-        # This handles jobs that were set to QUEUED but no Celery task was dispatched
+        # Dispatch stuck QUEUED jobs - re-dispatches jobs that weren't picked up
         "dispatch-stuck-queued-jobs": {
             "task": "app.workers.tasks.maintenance_tasks.dispatch_stuck_queued_jobs",
-            "schedule": 300,  # Every 5 minutes
+            "schedule": 600,  # Every 10 minutes (was 5min)
             "args": [10],  # Jobs QUEUED for more than 10 minutes
             "options": {"queue": "low"},
         },
-        # Sync stale job status - runs every 15 minutes
-        # This handles cases where tasks complete but job status wasn't updated
+        # Sync stale job status - fixes cases where task completed but job status wasn't updated
         "sync-stale-job-status": {
             "task": "app.workers.tasks.maintenance_tasks.sync_stale_job_status",
-            "schedule": 900,  # Every 15 minutes
+            "schedule": 1800,  # Every 30 minutes (was 15min)
             "args": [30],  # Jobs stale for more than 30 minutes
             "options": {"queue": "low"},
         },
-        # Sync missing entity_ids - runs every 10 minutes
-        # Ensures chunks.entity_ids is populated from entity_mentions
+        # Sync missing entity_ids - ensures chunks.entity_ids is populated
         "sync-missing-entity-ids": {
             "task": "app.workers.tasks.maintenance_tasks.sync_missing_entity_ids",
-            "schedule": 600,  # Every 10 minutes
+            "schedule": 1800,  # Every 30 minutes (was 10min — not time-sensitive)
             "options": {"queue": "low"},
         },
         # Resume stuck pipelines - runs every 30 minutes
@@ -198,11 +198,10 @@ celery_app.conf.update(
             "schedule": crontab(hour=2, minute=0),  # Daily at 2 AM
             "options": {"queue": "low"},
         },
-        # Story gap-5.2: LLM Quota Monitoring - runs every 5 minutes
-        # Checks quota thresholds and triggers alerts when usage exceeds limits
+        # LLM Quota Monitoring - checks quota thresholds and triggers alerts
         "check-llm-quotas": {
             "task": "app.workers.tasks.quota_monitoring_tasks.check_llm_quotas",
-            "schedule": 300,  # Every 5 minutes
+            "schedule": 900,  # Every 15 minutes (was 5min — quotas don't change that fast)
             "options": {"queue": "low"},
         },
         # Hard delete expired documents - runs daily at 3 AM

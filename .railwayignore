@@ -1,0 +1,43 @@
+# Windows reserved name artifacts
+nul
+backend/nul
+frontend/nul
+
+# Screenshots and images
+*.png
+
+# Debug/utility scripts in backend root
+backend/=*
+backend/*.json
+backend/*.txt
+backend/backfill_embeddings.py
+backend/check_*.py
+backend/cleanup_*.py
+backend/debug_*.py
+backend/dispatch_*.py
+backend/fix_*.py
+backend/invalidate_*.py
+backend/list_*.py
+backend/run_migration.py
+backend/send_test_email.py
+backend/sync_job_status.py
+backend/test_library_data.py
+backend/test_summary_parties.py
+backend/test_api_keys.py
+backend/appapiroutesentities.py
+backend/celerybeat-schedule.*
+backend/.env.prod.bak
+
+# Frontend test artifacts
+frontend/playwright-report/
+frontend/test-results/
+frontend/tests/e2e/.auth/
+frontend/nul
+
+# Docs and analysis
+docs/
+_bmad-output/
+
+# Other
+.playwright-mcp/
+railway_logs.bat

@@ -53,9 +53,9 @@ def test_google_gemini():
     """Test Google Gemini API key"""
     print("\n[GEMINI] Testing...")
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        models = genai.list_models()
+        from google import genai
+        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        models = client.models.list()
         list(models)[:1]
         print("   [OK] Google Gemini: Valid API key")
         return True

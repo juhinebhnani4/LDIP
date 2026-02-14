@@ -355,28 +355,72 @@ export function TimelineContent({ className }: TimelineContentProps) {
     });
   }, [filteredEvents, filters.showAnomaliesOnly, getAnomaliesForEvent]);
 
-  // Cross-tab navigation: scroll to highlighted event after data loads
+  // Cross-tab navigation: scroll to highlighted event after data loads.
+  // Uses setInterval with fresh DOM queries on each tick to handle
+  // Suspense swaps and layout shifts that reset scrollTop.
   useEffect(() => {
     if (!highlightedEventId || eventsLoading || displayEvents.length === 0) return;
 
-    // Use setTimeout to ensure DOM has fully rendered after React commit
-    const timerId = setTimeout(() => {
+    let stableCount = 0;
+    let highlighted = false;
+
+    const intervalId = setInterval(() => {
+      // Re-query DOM each tick to handle element replacement (Suspense swaps)
       const el = document.querySelector(
         `[data-testid="timeline-event-${highlightedEventId}"]`
-      );
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        (el as HTMLElement).style.boxShadow = '0 0 0 2px hsl(var(--primary))';
-        setTimeout(() => {
-          (el as HTMLElement).style.boxShadow = '';
-          setHighlightedEventId(null);
-          // Clean URL without triggering Next.js re-render (which resets scroll)
-          window.history.replaceState({}, '', window.location.pathname);
-        }, 3000);
-      }
-    }, 100);
+      ) as HTMLElement | null;
+      if (!el) return;
 
-    return () => clearTimeout(timerId);
+      const scrollContainer = document.querySelector(
+        '[data-testid="workspace-main-content"]'
+      );
+      if (!scrollContainer) return;
+
+      // Add highlight ring on first successful find
+      if (!highlighted) {
+        el.style.boxShadow = '0 0 0 2px hsl(var(--primary))';
+        highlighted = true;
+      }
+
+      // Calculate target scroll position (center element in viewport)
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const offsetTop = elRect.top - containerRect.top + scrollContainer.scrollTop;
+      const targetScrollTop = Math.max(0, offsetTop - containerRect.height / 2 + elRect.height / 2);
+
+      // Check if scroll is already near target
+      if (Math.abs(scrollContainer.scrollTop - targetScrollTop) < 50) {
+        stableCount++;
+        if (stableCount >= 3) {
+          // Scroll has been stable for 3 ticks - stop polling
+          clearInterval(intervalId);
+        }
+      } else {
+        stableCount = 0;
+        // Set scroll position directly (instant, not cancellable like smooth)
+        scrollContainer.scrollTop = targetScrollTop;
+      }
+    }, 150);
+
+    // Stop polling after 6 seconds max
+    const maxTimer = setTimeout(() => {
+      clearInterval(intervalId);
+    }, 6000);
+
+    // Clean up highlight after 7 seconds
+    const cleanupTimer = setTimeout(() => {
+      const el = document.querySelector(
+        `[data-testid="timeline-event-${highlightedEventId}"]`
+      ) as HTMLElement | null;
+      if (el) el.style.boxShadow = '';
+      setHighlightedEventId(null);
+    }, 7000);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(maxTimer);
+      clearTimeout(cleanupTimer);
+    };
   }, [highlightedEventId, eventsLoading, displayEvents.length]);
 
   // Render the appropriate view based on mode

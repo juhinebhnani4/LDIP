@@ -636,6 +636,115 @@ def _mark_job_failed(
         )
 
 
+def _populate_verification_records(matter_id: str, document_id: str) -> None:
+    """Create finding_verifications records from engine results.
+
+    Runs BEFORE _mark_job_completed(). Non-blocking — failures logged but don't break pipeline.
+    SAFETY: Entire function wrapped in try/except — cannot prevent job completion.
+    """
+    from app.services.supabase.client import get_service_client
+    from app.services.verification.verification_service import get_verification_service
+    from app.models.verification import FindingVerificationCreate
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return
+
+        verification_service = get_verification_service()
+
+        # 1. Fetch contradictions from statement_comparisons
+        contradictions = client.table("statement_comparisons") \
+            .select("id, explanation, confidence") \
+            .eq("matter_id", matter_id) \
+            .eq("result", "contradiction") \
+            .execute()
+
+        # 2. Fetch failed citations from act_citations
+        failed_citations = client.table("act_citations") \
+            .select("id, raw_citation_text, confidence, verification_status") \
+            .eq("matter_id", matter_id) \
+            .in_("verification_status", ["mismatch", "section_not_found"]) \
+            .execute()
+
+        # 3. Get existing finding_ids to skip duplicates (no UNIQUE constraint on table)
+        existing = client.table("finding_verifications") \
+            .select("finding_id") \
+            .eq("matter_id", matter_id) \
+            .execute()
+        existing_ids = {r["finding_id"] for r in (existing.data or [])}
+
+        # 4. Build list of records to create
+        records_to_create: list[FindingVerificationCreate] = []
+
+        for row in (contradictions.data or []):
+            if row["id"] in existing_ids:
+                continue
+            records_to_create.append(FindingVerificationCreate(
+                matter_id=matter_id,
+                finding_id=row["id"],
+                finding_type="contradiction_detected",
+                finding_summary=(row.get("explanation") or "Contradiction between statements")[:500],
+                confidence_before=row.get("confidence") or 50.0,
+            ))
+
+        for row in (failed_citations.data or []):
+            if row["id"] in existing_ids:
+                continue
+            records_to_create.append(FindingVerificationCreate(
+                matter_id=matter_id,
+                finding_id=row["id"],
+                finding_type="citation_verification_failed",
+                finding_summary=(row.get("raw_citation_text") or f"Citation {row.get('verification_status', 'issue')}")[:500],
+                confidence_before=row.get("confidence") or 60.0,
+            ))
+
+        if not records_to_create:
+            logger.debug("verification_records_none_needed", matter_id=matter_id)
+            return
+
+        # 5. Batch-create all records in ONE _run_async() call (gevent-safe)
+        async def _create_all():
+            created = 0
+            failed = 0
+            for record in records_to_create:
+                try:
+                    await verification_service.create_verification_record(
+                        create_data=record,
+                        supabase=client,
+                    )
+                    created += 1
+                except Exception as e:
+                    failed += 1
+                    logger.warning(
+                        "verification_record_create_failed",
+                        finding_id=str(record.finding_id),
+                        finding_type=record.finding_type,
+                        error=str(e),
+                    )
+            return created, failed
+
+        created_count, failed_count = _run_async(_create_all())
+
+        logger.info(
+            "verification_records_populated",
+            matter_id=matter_id,
+            document_id=document_id,
+            records_created=created_count,
+            records_failed=failed_count,
+            records_attempted=len(records_to_create),
+        )
+
+    except Exception as e:
+        # CRITICAL: Catch-all — cannot prevent job completion or trigger Celery retry
+        logger.error(
+            "verification_records_population_failed",
+            matter_id=matter_id,
+            document_id=document_id,
+            error=str(e),
+        )
+
+
 def _mark_job_completed(
     job_id: str | None,
     matter_id: str | None = None,
@@ -3720,7 +3829,9 @@ def extract_entities(
             "ocr_failed",
             "validation_failed",
             "chunking_failed",
+            "chunking_skipped",
             "embedding_failed",
+            "embedding_skipped",
             "entity_extraction_failed",
         )
         if prev_status in failed_statuses:
@@ -5484,6 +5595,7 @@ def detect_contradictions(
                 metadata={"entities_processed": 0, "contradictions_found": 0},
             )
             # Mark job as COMPLETED even with no entities - this is the final stage
+            _populate_verification_records(matter_id, doc_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_complete",
@@ -5530,6 +5642,7 @@ def detect_contradictions(
                 metadata={"entities_processed": 0, "contradictions_found": 0},
             )
             # Mark job as COMPLETED even with no canonical names - this is the final stage
+            _populate_verification_records(matter_id, doc_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_complete",
@@ -5690,6 +5803,7 @@ def detect_contradictions(
         )
 
         # Mark the entire job as COMPLETED — contradiction_detection is the final stage
+        _populate_verification_records(matter_id, doc_id)
         _mark_job_completed(job_id, matter_id, document_id=doc_id)
 
         logger.info(

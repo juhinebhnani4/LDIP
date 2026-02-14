@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useUploadWizardStore } from '@/stores/uploadWizardStore';
+import { fetchTabStats } from '@/lib/api/tabStats';
 import type { LiveDiscovery } from '@/types/upload';
 import styles from './CompletionScreen.module.css';
 
@@ -50,13 +51,39 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
   const liveDiscoveries = useUploadWizardStore((state) => state.liveDiscoveries);
   const reset = useUploadWizardStore((state) => state.reset);
 
-  // Get discovery counts from live discoveries
-  const entityCount = getDiscoveryCount(liveDiscoveries, 'entity');
-  const dateCount = getDiscoveryCount(liveDiscoveries, 'date');
-  const citationCount = getDiscoveryCount(liveDiscoveries, 'citation');
-
   // Get matter ID for redirect to workspace
   const matterId = useUploadWizardStore((state) => state.matterId);
+
+  // Fetch real stats from backend when local state is empty (recovery mode)
+  const [backendStats, setBackendStats] = useState<{
+    documentCount: number; entityCount: number; dateCount: number; citationCount: number;
+  } | null>(null);
+
+  const localEmpty = files.length === 0 && liveDiscoveries.length === 0;
+
+  useEffect(() => {
+    if (!matterId || !localEmpty) return;
+    let cancelled = false;
+
+    fetchTabStats(matterId).then((response) => {
+      if (cancelled) return;
+      const tc = response.data.tabCounts;
+      setBackendStats({
+        documentCount: tc.documents.count,
+        entityCount: tc.entities.count,
+        dateCount: tc.timeline.count,
+        citationCount: tc.citations.count,
+      });
+    }).catch(() => { /* stats will stay at 0 */ });
+
+    return () => { cancelled = true; };
+  }, [matterId, localEmpty]);
+
+  // Get discovery counts - prefer backend stats in recovery mode
+  const entityCount = backendStats?.entityCount ?? getDiscoveryCount(liveDiscoveries, 'entity');
+  const dateCount = backendStats?.dateCount ?? getDiscoveryCount(liveDiscoveries, 'date');
+  const citationCount = backendStats?.citationCount ?? getDiscoveryCount(liveDiscoveries, 'citation');
+  const documentCount = backendStats?.documentCount ?? files.length;
 
   // Handle redirect to workspace
   const handleRedirect = useCallback(() => {
@@ -140,7 +167,7 @@ export function CompletionScreen({ className, onRedirect }: CompletionScreenProp
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <FileText className="size-4" aria-hidden="true" />
-                <span>{files.length} documents</span>
+                <span>{documentCount} documents</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Users className="size-4" aria-hidden="true" />

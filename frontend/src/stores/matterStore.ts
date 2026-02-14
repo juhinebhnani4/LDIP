@@ -23,6 +23,7 @@ import type {
 } from '@/types/matter';
 import { VIEW_PREFERENCE_KEY } from '@/types/matter';
 import { mattersApi } from '@/lib/api/matters';
+import { fetchTabStats } from '@/lib/api/tabStats';
 
 /**
  * Transform backend Matter to frontend MatterCardData.
@@ -39,6 +40,43 @@ function transformMatterToCardData(matter: Matter): MatterCardData {
     issueCount: 0,
     processingStatus: 'ready',
   };
+}
+
+/**
+ * Enrich matters with real stats from the tab-stats API.
+ * Fetches stats for all matters in parallel (fire-and-forget).
+ */
+async function enrichMattersWithStats(
+  matters: MatterCardData[],
+  set: (partial: Partial<MatterState>) => void
+): Promise<void> {
+  const results = await Promise.allSettled(
+    matters.map(async (matter) => {
+      const response = await fetchTabStats(matter.id);
+      const tabCounts = response.data.tabCounts;
+      return {
+        id: matter.id,
+        documentCount: tabCounts.documents.count,
+        issueCount: tabCounts.contradictions.count,
+      };
+    })
+  );
+
+  const statsMap = new Map<string, { documentCount: number; issueCount: number }>();
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      statsMap.set(result.value.id, result.value);
+    }
+  }
+
+  if (statsMap.size > 0) {
+    set({
+      matters: matters.map((m) => {
+        const stats = statsMap.get(m.id);
+        return stats ? { ...m, ...stats } : m;
+      }),
+    });
+  }
 }
 
 /** Stale time in milliseconds - data older than this will be refetched */
@@ -162,6 +200,9 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
         isLoading: false,
         lastFetchTime: Date.now(),
       });
+
+      // Fire-and-forget: enrich with real stats from tab-stats API
+      void enrichMattersWithStats(transformedMatters, set);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch matters';
       set({ error: message, isLoading: false });
@@ -190,6 +231,9 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
         isLoading: false,
         lastFetchTime: Date.now(),
       });
+
+      // Fire-and-forget: enrich with real stats from tab-stats API
+      void enrichMattersWithStats(transformedMatters, set);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch matters';
       set({ error: message, isLoading: false });

@@ -169,9 +169,9 @@ class JobRecoveryService:
                 "error_message": None,  # Clear previous error
             }).eq("id", job_id).execute()
 
-            # Reset document status to PENDING if document exists
+            # Reset document status to PENDING if document exists (skip for late stages)
             if job.get("document_id"):
-                await self._reset_document_status(job["document_id"])
+                await self._reset_document_status(job["document_id"], stage=job.get("current_stage"))
 
             # Re-dispatch the Celery task
             await self._redispatch_task(job)
@@ -232,12 +232,26 @@ class JobRecoveryService:
             "jobs": results,
         }
 
-    async def _reset_document_status(self, document_id: str) -> None:
+    async def _reset_document_status(self, document_id: str, stage: str | None = None) -> None:
         """Reset document status to PENDING for re-processing.
+
+        For late-stage recovery (citation_extraction, contradiction_detection,
+        alias_resolution), the document is already OCR-complete/searchable so
+        resetting to PENDING would be wrong. Only reset for early stages.
 
         Args:
             document_id: The document ID to reset.
+            stage: The current pipeline stage of the stuck job.
         """
+        late_stages = {"citation_extraction", "contradiction_detection", "alias_resolution"}
+        if stage in late_stages:
+            logger.debug(
+                "document_status_reset_skipped_late_stage",
+                document_id=document_id,
+                stage=stage,
+            )
+            return
+
         try:
             self.supabase.table("documents").update({
                 "status": DocumentStatus.PENDING.value,
@@ -291,24 +305,63 @@ class JobRecoveryService:
     async def _redispatch_task(self, job: dict) -> None:
         """Re-dispatch the Celery task for a recovered job.
 
+        Uses stage-aware dispatch: if the job was stuck at a late pipeline stage,
+        dispatch only that stage's task instead of restarting the full pipeline
+        from OCR (which wastes cost and time).
+
         Args:
             job: The job record to redispatch.
         """
         try:
-            from app.workers.tasks.document_tasks import process_document
+            from app.workers.tasks.document_tasks import (
+                process_document, embed_chunks, extract_entities,
+                resolve_aliases, extract_citations, detect_contradictions,
+            )
 
             document_id = job.get("document_id")
-            if document_id:
-                # Dispatch with countdown to avoid immediate retry storm
+            if not document_id:
+                return
+
+            stage = job.get("current_stage")
+
+            if stage == "embedding":
+                embed_chunks.apply_async(
+                    kwargs={"document_id": document_id, "force": True},
+                    countdown=5,
+                )
+            elif stage == "entity_extraction":
+                extract_entities.apply_async(
+                    kwargs={"document_id": document_id, "force": True},
+                    countdown=5,
+                )
+            elif stage == "alias_resolution":
+                resolve_aliases.apply_async(
+                    kwargs={"document_id": document_id},
+                    countdown=5,
+                )
+            elif stage == "citation_extraction":
+                extract_citations.apply_async(
+                    kwargs={"document_id": document_id},
+                    countdown=5,
+                )
+            elif stage == "contradiction_detection":
+                detect_contradictions.apply_async(
+                    kwargs={"document_id": document_id},
+                    countdown=5,
+                )
+            else:
+                # Early stages or unknown — restart full pipeline
                 process_document.apply_async(
                     args=[document_id],
-                    countdown=5,  # 5 second delay
+                    countdown=5,
                 )
-                logger.debug(
-                    "task_redispatched",
-                    job_id=job["id"],
-                    document_id=document_id,
-                )
+
+            logger.debug(
+                "task_redispatched",
+                job_id=job["id"],
+                document_id=document_id,
+                stage=stage or "full_pipeline",
+            )
 
         except Exception as e:
             logger.error(

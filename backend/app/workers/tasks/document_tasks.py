@@ -641,6 +641,9 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
 
     Runs BEFORE _mark_job_completed(). Non-blocking — failures logged but don't break pipeline.
     SAFETY: Entire function wrapped in try/except — cannot prevent job completion.
+
+    Creates a `findings` row for each contradiction/failed citation first (FK requirement),
+    then creates the `finding_verifications` record pointing to that `findings` row.
     """
     from app.services.supabase.client import get_service_client
     from app.services.verification.verification_service import get_verification_service
@@ -667,33 +670,113 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             .in_("verification_status", ["mismatch", "section_not_found"]) \
             .execute()
 
-        # 3. Get existing finding_ids to skip duplicates (no UNIQUE constraint on table)
-        existing = client.table("finding_verifications") \
+        # 3. Get existing findings (by source_id in content JSONB) to skip duplicates on re-runs
+        existing_findings = client.table("findings") \
+            .select("id, content") \
+            .eq("matter_id", matter_id) \
+            .in_("engine_type", ["contradiction", "citation"]) \
+            .execute()
+
+        # Build set of source IDs that already have findings rows
+        existing_source_ids: set[str] = set()
+        finding_id_by_source: dict[str, str] = {}
+        for f in (existing_findings.data or []):
+            content = f.get("content") or {}
+            src_id = content.get("statement_comparison_id") or content.get("citation_id")
+            if src_id:
+                existing_source_ids.add(src_id)
+                finding_id_by_source[src_id] = f["id"]
+
+        # 4. Get existing finding_verifications to skip duplicates
+        existing_verifications = client.table("finding_verifications") \
             .select("finding_id") \
             .eq("matter_id", matter_id) \
             .execute()
-        existing_ids = {r["finding_id"] for r in (existing.data or [])}
+        existing_verification_finding_ids = {r["finding_id"] for r in (existing_verifications.data or [])}
 
-        # 4. Build list of records to create
+        # 5. Create findings rows and build verification records
         records_to_create: list[FindingVerificationCreate] = []
 
         for row in (contradictions.data or []):
-            if row["id"] in existing_ids:
+            source_id = row["id"]
+
+            # Create findings row if not already exists
+            if source_id not in existing_source_ids:
+                try:
+                    confidence_raw = row.get("confidence") or 50.0
+                    finding_result = client.table("findings").insert({
+                        "matter_id": matter_id,
+                        "engine_type": "contradiction",
+                        "finding_type": "contradiction_detected",
+                        "content": {
+                            "statement_comparison_id": source_id,
+                            "explanation": row.get("explanation"),
+                        },
+                        "confidence": min(confidence_raw / 100.0, 1.0),
+                        "status": "pending",
+                    }).execute()
+                    if finding_result.data:
+                        finding_id = finding_result.data[0]["id"]
+                        finding_id_by_source[source_id] = finding_id
+                except Exception as e:
+                    logger.warning(
+                        "finding_create_failed",
+                        source_type="contradiction",
+                        source_id=source_id,
+                        error=str(e),
+                    )
+                    continue
+
+            finding_id = finding_id_by_source.get(source_id)
+            if not finding_id or finding_id in existing_verification_finding_ids:
                 continue
+
             records_to_create.append(FindingVerificationCreate(
                 matter_id=matter_id,
-                finding_id=row["id"],
+                finding_id=finding_id,
                 finding_type="contradiction_detected",
                 finding_summary=(row.get("explanation") or "Contradiction between statements")[:500],
                 confidence_before=row.get("confidence") or 50.0,
             ))
 
         for row in (failed_citations.data or []):
-            if row["id"] in existing_ids:
+            source_id = row["id"]
+
+            # Create findings row if not already exists
+            if source_id not in existing_source_ids:
+                try:
+                    confidence_raw = row.get("confidence") or 60.0
+                    finding_result = client.table("findings").insert({
+                        "matter_id": matter_id,
+                        "engine_type": "citation",
+                        "finding_type": "citation_verification_failed",
+                        "content": {
+                            "citation_id": source_id,
+                            "raw_citation_text": row.get("raw_citation_text"),
+                            "verification_status": row.get("verification_status"),
+                        },
+                        "confidence": min(confidence_raw / 100.0, 1.0),
+                        "status": "pending",
+                    }).execute()
+                    if finding_result.data:
+                        finding_id = finding_result.data[0]["id"]
+                        finding_id_by_source[source_id] = finding_id
+                except Exception as e:
+                    logger.warning(
+                        "finding_create_failed",
+                        source_type="citation",
+                        source_id=source_id,
+                        error=str(e),
+                    )
+                    continue
+
+            finding_id = finding_id_by_source.get(source_id)
+            if not finding_id or finding_id in existing_verification_finding_ids:
                 continue
+
             records_to_create.append(FindingVerificationCreate(
                 matter_id=matter_id,
-                finding_id=row["id"],
+                finding_id=finding_id,
                 finding_type="citation_verification_failed",
                 finding_summary=(row.get("raw_citation_text") or f"Citation {row.get('verification_status', 'issue')}")[:500],
                 confidence_before=row.get("confidence") or 60.0,
@@ -703,7 +786,7 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             logger.debug("verification_records_none_needed", matter_id=matter_id)
             return
 
-        # 5. Batch-create all records in ONE _run_async() call (gevent-safe)
+        # 6. Batch-create all verification records in ONE _run_async() call (gevent-safe)
         async def _create_all():
             created = 0
             failed = 0

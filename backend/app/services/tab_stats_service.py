@@ -325,9 +325,10 @@ class TabStatsService:
         """
         try:
             result = await asyncio.to_thread(
-                lambda: self.supabase.table("contradictions")
+                lambda: self.supabase.table("statement_comparisons")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
+                .eq("result", "contradiction")
                 .execute()
             )
 

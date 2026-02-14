@@ -29,7 +29,7 @@ import {
   formatFindingType,
   getFindingTypeIcon,
 } from '@/stores/verificationStore';
-import { getVerificationStatus, formatConfidenceTooltip } from '@/lib/utils/confidenceDisplay';
+import { getDecisionStatusDisplay, formatConfidenceTooltip } from '@/lib/utils/confidenceDisplay';
 import { usePowerUserMode } from '@/hooks/usePowerUserMode';
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -488,8 +488,13 @@ export function VerificationQueue({
                   </TableCell>
                   <TableCell>
                     {(() => {
-                      const status = getVerificationStatus(item.confidence);
-                      const StatusIcon = status.level === 'verified' ? CheckCircle2 : status.level === 'likely_correct' ? AlertCircle : XCircle;
+                      const status = getDecisionStatusDisplay(item.decision, item.confidence);
+                      const StatusIcon =
+                        status.level === 'approved' ? CheckCircle2 :
+                        status.level === 'rejected' || status.level === 'review_required' ? XCircle :
+                        status.level === 'flagged' ? AlertCircle :
+                        status.level === 'review_suggested' ? AlertCircle :
+                        AlertCircle; // pending
                       return (
                         <div
                           className="flex items-center gap-2"

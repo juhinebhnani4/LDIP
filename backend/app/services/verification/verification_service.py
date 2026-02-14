@@ -460,7 +460,15 @@ class VerificationService:
                 "created_at", desc=False  # Oldest first
             ).limit(limit).execute()
 
-            items = [self._to_queue_item(r) for r in result.data]
+            # Batch-fetch source document names via findings → documents
+            doc_name_map = self._batch_fetch_document_names(
+                result.data, supabase
+            )
+
+            items = [
+                self._to_queue_item(r, doc_name_map.get(r.get("finding_id")))
+                for r in result.data
+            ]
 
             elapsed_ms = (time.perf_counter() - start_time) * 1000
 
@@ -704,13 +712,87 @@ class VerificationService:
         # Fallback: use first word before underscore
         return finding_type.split("_")[0] if "_" in finding_type else finding_type
 
-    def _to_queue_item(self, record: dict) -> VerificationQueueItem:
+    def _batch_fetch_document_names(
+        self,
+        records: list[dict],
+        supabase: Client,
+    ) -> dict[str, str]:
+        """Batch-fetch document filenames for finding IDs.
+
+        Joins findings → documents to resolve source document names.
+
+        Args:
+            records: Verification records containing finding_id.
+            supabase: Supabase client.
+
+        Returns:
+            Dict mapping finding_id → document filename.
+        """
+        finding_ids = [
+            r["finding_id"] for r in records
+            if r.get("finding_id")
+        ]
+        if not finding_ids:
+            return {}
+
+        try:
+            # Get source_document_ids (uuid[]) for each finding
+            findings_result = supabase.table("findings").select(
+                "id, source_document_ids"
+            ).in_("id", finding_ids).execute()
+
+            if not findings_result.data:
+                return {}
+
+            # Collect all unique document IDs from the arrays
+            doc_ids: list[str] = []
+            for f in findings_result.data:
+                ids = f.get("source_document_ids") or []
+                doc_ids.extend(ids)
+            doc_ids = list(set(doc_ids))
+
+            if not doc_ids:
+                return {}
+
+            # Get filenames for document IDs
+            docs_result = supabase.table("documents").select(
+                "id, filename"
+            ).in_("id", doc_ids).execute()
+
+            doc_id_to_name: dict[str, str] = {
+                d["id"]: d["filename"]
+                for d in (docs_result.data or [])
+                if d.get("filename")
+            }
+
+            # Map finding_id → filename (use first document in the array)
+            result_map: dict[str, str] = {}
+            for f in findings_result.data:
+                src_ids = f.get("source_document_ids") or []
+                for doc_id in src_ids:
+                    if doc_id in doc_id_to_name:
+                        result_map[f["id"]] = doc_id_to_name[doc_id]
+                        break
+            return result_map
+
+        except Exception as e:
+            logger.warning(
+                "batch_fetch_document_names_failed",
+                finding_count=len(finding_ids),
+                error=str(e),
+            )
+            return {}
+
+    def _to_queue_item(
+        self, record: dict, source_document: str | None = None
+    ) -> VerificationQueueItem:
         """Convert database record to queue item for UI.
 
         Story 8-4: Internal helper for queue item conversion.
 
         Args:
             record: Database record dict.
+            source_document: Pre-resolved document filename.
 
         Returns:
             VerificationQueueItem for queue UI.
@@ -727,7 +809,7 @@ class VerificationService:
             requirement=self.get_verification_requirement(record["confidence_before"]),
             decision=VerificationDecision(record["decision"]),
             created_at=record["created_at"],
-            source_document=None,  # Would require join with findings table
+            source_document=source_document,
             engine=engine,
         )
 

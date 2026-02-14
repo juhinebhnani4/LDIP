@@ -209,9 +209,13 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
       {/* Matter title */}
       <h3 className="font-semibold text-lg leading-tight line-clamp-2">{matter.title}</h3>
 
-      {/* Page count and last opened */}
+      {/* Document/page count and last opened */}
       <div className="space-y-1 text-sm text-muted-foreground">
-        <div>{matter.pageCount.toLocaleString()} pages</div>
+        <div>
+          {matter.documentCount > 0
+            ? `${matter.documentCount} documents`
+            : `${matter.pageCount.toLocaleString()} pages`}
+        </div>
         <div>Last opened: {formatRelativeTime(matter.lastOpened)}</div>
       </div>
 

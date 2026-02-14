@@ -6,11 +6,10 @@ Periodic tasks for:
 - System health monitoring
 """
 
-import asyncio
-
 import structlog
 
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -49,12 +48,7 @@ def recover_stale_jobs(self) -> dict:
         recovery_service = get_job_recovery_service(supabase)
 
         # Run recovery asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(recovery_service.recover_all_stale_jobs())
-        finally:
-            loop.close()
+        result = run_async(recovery_service.recover_all_stale_jobs())
 
         logger.info(
             "job_recovery_task_completed",
@@ -471,14 +465,9 @@ def cleanup_stale_chunks(self, retention_hours: int = 24) -> dict:
         cleanup_service = get_chunk_cleanup_service()
 
         # Run cleanup asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                cleanup_service.cleanup_stale_chunks(retention_hours=retention_hours)
-            )
-        finally:
-            loop.close()
+        result = run_async(
+            cleanup_service.cleanup_stale_chunks(retention_hours=retention_hours)
+        )
 
         logger.info(
             "chunk_cleanup_task_completed",
@@ -525,12 +514,7 @@ def recover_stale_chunks(self) -> dict:
         recovery_service = get_chunk_recovery_service()
 
         # Run recovery asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(recovery_service.recover_all_stale_chunks())
-        finally:
-            loop.close()
+        result = run_async(recovery_service.recover_all_stale_chunks())
 
         logger.info(
             "chunk_recovery_task_completed",
@@ -577,12 +561,7 @@ def trigger_pending_merges(self) -> dict:
         trigger_service = get_merge_trigger_service()
 
         # Run trigger check asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(trigger_service.check_and_trigger_merges())
-        finally:
-            loop.close()
+        result = run_async(trigger_service.check_and_trigger_merges())
 
         logger.info(
             "merge_trigger_task_completed",
@@ -664,28 +643,23 @@ def recover_skipped_large_documents(self) -> dict:
                 continue
 
             # Attempt recovery with chunked processing
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(
-                    recovery_service.recover_with_chunked_processing(job)
+            result = run_async(
+                recovery_service.recover_with_chunked_processing(job)
+            )
+            if result.get("success"):
+                results["converted"] += 1
+                logger.info(
+                    "skipped_job_converted_to_chunked",
+                    job_id=job["id"],
+                    document_id=job.get("document_id"),
+                    page_count=result.get("page_count"),
+                    chunk_count=result.get("chunk_count"),
                 )
-                if result.get("success"):
-                    results["converted"] += 1
-                    logger.info(
-                        "skipped_job_converted_to_chunked",
-                        job_id=job["id"],
-                        document_id=job.get("document_id"),
-                        page_count=result.get("page_count"),
-                        chunk_count=result.get("chunk_count"),
-                    )
-                else:
-                    results["errors"].append({
-                        "job_id": job["id"],
-                        "error": result.get("error"),
-                    })
-            finally:
-                loop.close()
+            else:
+                results["errors"].append({
+                    "job_id": job["id"],
+                    "error": result.get("error"),
+                })
 
         logger.info(
             "recover_skipped_large_documents_completed",

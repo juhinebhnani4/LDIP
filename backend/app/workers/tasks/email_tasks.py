@@ -6,11 +6,10 @@ Celery tasks for sending email notifications asynchronously.
 Email failures are isolated from the document processing pipeline.
 """
 
-import asyncio
-
 import structlog
 
 from app.workers.celery import celery_app
+from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
 
@@ -127,21 +126,16 @@ def send_processing_complete_notification(
 
         # Send email
         email_service = get_email_service()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            success = loop.run_until_complete(
-                email_service.send_processing_complete_email(
-                    user_email=user_email,
-                    matter_name=matter_name,
-                    doc_count=doc_count,
-                    success_count=success_count,
-                    failed_count=failed_count,
-                    workspace_url=workspace_url,
-                )
+        success = run_async(
+            email_service.send_processing_complete_email(
+                user_email=user_email,
+                matter_name=matter_name,
+                doc_count=doc_count,
+                success_count=success_count,
+                failed_count=failed_count,
+                workspace_url=workspace_url,
             )
-        finally:
-            loop.close()
+        )
 
         if success:
             logger.info(

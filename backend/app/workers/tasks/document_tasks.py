@@ -3249,7 +3249,7 @@ def embed_chunks(
 
                     # Persist partial progress periodically
                     if progress_tracker and stage_progress:
-                        progress_tracker.save_progress(stage_progress)
+                        await progress_tracker.save_progress_async(stage_progress)
 
                     logger.debug(
                         "embed_chunks_batch_complete",
@@ -3273,7 +3273,7 @@ def embed_chunks(
 
                     # Save progress before retry
                     if progress_tracker and stage_progress:
-                        progress_tracker.save_progress(stage_progress, force=True)
+                        await progress_tracker.save_progress_async(stage_progress, force=True)
 
                     if e.is_retryable:
                         raise  # Let Celery retry
@@ -4070,7 +4070,7 @@ def extract_entities(
                             stage_progress.mark_failed(chunk_id, str(e))
                         if e.is_retryable:
                             if progress_tracker and stage_progress:
-                                progress_tracker.save_progress(stage_progress, force=True)
+                                await progress_tracker.save_progress_async(stage_progress, force=True)
                             raise
                         return (0, 0, False)
                     except Exception as e:
@@ -4116,7 +4116,7 @@ def extract_entities(
 
                     # Persist progress periodically
                     if progress_tracker and stage_progress:
-                        progress_tracker.save_progress(stage_progress)
+                        await progress_tracker.save_progress_async(stage_progress)
 
                     # Broadcast progressive entity discovery for real-time UI updates
                     if total_entities > 0:
@@ -4158,7 +4158,7 @@ def extract_entities(
                                 failed_chunks += 1
 
                     if progress_tracker and stage_progress:
-                        progress_tracker.save_progress(stage_progress)
+                        await progress_tracker.save_progress_async(stage_progress)
 
                     # Broadcast progressive entity discovery for real-time UI updates
                     if total_entities > 0:
@@ -4983,7 +4983,7 @@ def extract_citations(
                         if e.is_retryable:
                             # Save progress before retry
                             if progress_tracker and stage_progress:
-                                progress_tracker.save_progress(stage_progress, force=True)
+                                await progress_tracker.save_progress_async(stage_progress, force=True)
                             raise  # Let Celery retry
                         logger.warning(
                             "extract_citations_chunk_failed",
@@ -5005,7 +5005,7 @@ def extract_citations(
 
                 # Persist partial progress periodically
                 if progress_tracker and stage_progress:
-                    progress_tracker.save_progress(stage_progress)
+                    await progress_tracker.save_progress_async(stage_progress)
 
                 # Rate limit delay between batches
                 if i + CITATION_EXTRACTION_BATCH_SIZE < len(chunks):

@@ -174,6 +174,27 @@ class PartialProgressTracker:
 
         self._loaded = True
 
+    async def _load_from_job_metadata_async(self) -> None:
+        """Load progress from job metadata (async variant)."""
+        if self._loaded:
+            return
+
+        try:
+            job = await self.job_tracker.get_job(self.job_id)
+            if job and job.metadata:
+                partial_progress = job.metadata.get("partial_progress", {})
+                for stage_name, stage_data in partial_progress.items():
+                    self._stages[stage_name] = StageProgress.from_dict(stage_data)
+
+        except Exception as e:
+            logger.warning(
+                "partial_progress_load_failed",
+                job_id=self.job_id,
+                error=str(e),
+            )
+
+        self._loaded = True
+
     def get_or_create_stage(self, stage_name: str) -> StageProgress:
         """Get or create progress tracking for a stage.
 
@@ -244,6 +265,82 @@ class PartialProgressTracker:
                 "partial_progress_save_failed",
                 job_id=self.job_id,
                 stage=stage.stage_name,
+                error=str(e),
+            )
+
+    async def save_progress_async(self, stage: StageProgress, force: bool = False) -> None:
+        """Persist stage progress to job metadata (async variant).
+
+        For use inside async functions to avoid nested sync->async bridging.
+
+        Args:
+            stage: StageProgress to persist.
+            force: If True, save immediately regardless of count.
+        """
+        processed_count = len(stage.processed_items)
+        if not force and processed_count % 10 != 0:
+            return
+
+        try:
+            job = await self.job_tracker.get_job(self.job_id)
+            if not job:
+                return
+
+            metadata = job.metadata or {}
+            if "partial_progress" not in metadata:
+                metadata["partial_progress"] = {}
+
+            metadata["partial_progress"][stage.stage_name] = stage.to_dict()
+
+            from app.models.job import ProcessingJobUpdate
+
+            update = ProcessingJobUpdate(metadata=metadata)
+            await self.job_tracker.update_job(self.job_id, update)
+
+            logger.debug(
+                "partial_progress_saved",
+                job_id=self.job_id,
+                stage=stage.stage_name,
+                processed=processed_count,
+                total=stage.total_items,
+            )
+
+        except Exception as e:
+            logger.warning(
+                "partial_progress_save_failed",
+                job_id=self.job_id,
+                stage=stage.stage_name,
+                error=str(e),
+            )
+
+    async def clear_stage_async(self, stage_name: str) -> None:
+        """Clear progress for a stage (async variant).
+
+        For use inside async functions to avoid nested sync->async bridging.
+
+        Args:
+            stage_name: Name of the stage to clear.
+        """
+        if stage_name in self._stages:
+            del self._stages[stage_name]
+
+        try:
+            job = await self.job_tracker.get_job(self.job_id)
+            if job and job.metadata:
+                metadata = job.metadata
+                if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
+                    del metadata["partial_progress"][stage_name]
+
+                    from app.models.job import ProcessingJobUpdate
+
+                    update = ProcessingJobUpdate(metadata=metadata)
+                    await self.job_tracker.update_job(self.job_id, update)
+
+        except Exception as e:
+            logger.warning(
+                "partial_progress_clear_failed",
+                job_id=self.job_id,
+                stage=stage_name,
                 error=str(e),
             )
 

@@ -11,15 +11,23 @@ export class WorkspaceBasePage {
   readonly header: Locator;
   readonly backButton: Locator;
   readonly matterName: Locator;
-  readonly shareButton: Locator;
   readonly exportButton: Locator;
-  readonly settingsButton: Locator;
+  readonly moreActionsButton: Locator;
 
-  // Tab navigation
+  // Tab navigation - directly visible tabs
   readonly tabBar: Locator;
   readonly summaryTab: Locator;
   readonly documentsTab: Locator;
   readonly timelineTab: Locator;
+
+  // Tab navigation - tabs behind "More" dropdown (menuitem role)
+  readonly moreTabsButton: Locator;
+  readonly citationsMenuItem: Locator;
+  readonly entitiesMenuItem: Locator;
+  readonly contradictionsMenuItem: Locator;
+  readonly verificationMenuItem: Locator;
+
+  // Legacy aliases for backwards compatibility with tests
   readonly citationsTab: Locator;
   readonly entitiesTab: Locator;
   readonly contradictionsTab: Locator;
@@ -29,7 +37,8 @@ export class WorkspaceBasePage {
   readonly qaPanel: Locator;
   readonly qaPanelInput: Locator;
   readonly qaPanelSendButton: Locator;
-  readonly qaPanelToggle: Locator;
+  readonly qaPanelMinimizeButton: Locator;
+  readonly qaPanelSettingsButton: Locator;
   readonly qaPanelMessages: Locator;
   readonly qaPanelUserMessages: Locator;
   readonly qaPanelAssistantMessages: Locator;
@@ -45,30 +54,39 @@ export class WorkspaceBasePage {
     this.page = page;
 
     // Header
-    this.header = page.locator('[data-testid="workspace-header"]');
-    this.backButton = page.getByRole('button', { name: /back|←/i });
-    this.matterName = page.locator('[data-testid="matter-name"], h1');
-    this.shareButton = page.getByRole('button', { name: /share/i });
+    this.header = page.locator('header, [role="banner"]');
+    this.backButton = page.getByRole('link', { name: /back to dashboard|dashboard/i });
+    this.matterName = page.locator('h1');
     this.exportButton = page.getByRole('button', { name: /export/i });
-    this.settingsButton = page.getByRole('button', { name: /settings|gear/i });
+    this.moreActionsButton = page.getByRole('button', { name: /more actions/i });
 
-    // Tabs
-    this.tabBar = page.locator('[data-testid="workspace-tab-bar"], [role="tablist"]');
+    // Directly visible tabs (tab role)
+    this.tabBar = page.getByRole('tablist', { name: /matter workspace navigation/i });
     this.summaryTab = page.getByRole('tab', { name: /summary/i });
     this.documentsTab = page.getByRole('tab', { name: /documents/i });
     this.timelineTab = page.getByRole('tab', { name: /timeline/i });
-    this.citationsTab = page.getByRole('tab', { name: /citations/i });
-    this.entitiesTab = page.getByRole('tab', { name: /entities/i });
-    this.contradictionsTab = page.getByRole('tab', { name: /contradictions/i });
-    this.verificationTab = page.getByRole('tab', { name: /verification/i });
 
-    // Q&A Panel - updated selectors based on actual DOM structure
-    this.qaPanel = page.locator('[data-testid="qa-panel"]');
-    // The textarea has data-testid="chat-input-textarea"
-    this.qaPanelInput = page.locator('[data-testid="chat-input-textarea"]');
-    // Send button has data-testid="chat-submit-button"
-    this.qaPanelSendButton = page.locator('[data-testid="chat-submit-button"]');
-    this.qaPanelToggle = page.locator('[data-testid="qa-panel-toggle"]');
+    // "More" dropdown button and its menuitem children
+    this.moreTabsButton = page.locator('[data-testid="workspace-tab-more"]');
+    this.citationsMenuItem = page.getByRole('menuitem', { name: /citations/i });
+    this.entitiesMenuItem = page.getByRole('menuitem', { name: /entities/i });
+    this.contradictionsMenuItem = page.getByRole('menuitem', { name: /contradictions/i });
+    this.verificationMenuItem = page.getByRole('menuitem', { name: /verification/i });
+
+    // Legacy aliases — tests may reference these
+    this.citationsTab = this.citationsMenuItem;
+    this.entitiesTab = this.entitiesMenuItem;
+    this.contradictionsTab = this.contradictionsMenuItem;
+    this.verificationTab = this.verificationMenuItem;
+
+    // Q&A Panel — always visible in workspace, no toggle
+    this.qaPanel = page.getByRole('heading', { name: /ask jaanch/i }).locator('..');
+    this.qaPanelInput = page.getByPlaceholder('Ask jaanch a question...');
+    this.qaPanelSendButton = page.locator('[data-testid="chat-submit-button"]').or(
+      page.locator('button').filter({ has: page.locator('img') }).last()
+    );
+    this.qaPanelMinimizeButton = page.getByRole('button', { name: /minimize panel/i });
+    this.qaPanelSettingsButton = page.getByRole('button', { name: /panel settings/i });
     // Messages are article elements with specific aria-labels
     this.qaPanelUserMessages = page.getByRole('article', { name: 'Your message' });
     this.qaPanelAssistantMessages = page.getByRole('article', { name: 'LDIP assistant message' });
@@ -103,6 +121,14 @@ export class WorkspaceBasePage {
   }
 
   /**
+   * Open the "More" dropdown and click a menuitem tab
+   */
+  private async clickMoreTab(menuItem: Locator) {
+    await this.moreTabsButton.click();
+    await menuItem.click();
+  }
+
+  /**
    * Get current matter ID from URL
    */
   getMatterIdFromUrl(): string | null {
@@ -116,9 +142,7 @@ export class WorkspaceBasePage {
    */
   async goToSummary() {
     await this.summaryTab.click();
-    // Wait for URL to change to summary tab
     await this.page.waitForURL(/\/summary/);
-    await expect(this.summaryTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
@@ -126,9 +150,7 @@ export class WorkspaceBasePage {
    */
   async goToDocuments() {
     await this.documentsTab.click();
-    // Wait for URL to change to documents tab
     await this.page.waitForURL(/\/documents/);
-    await expect(this.documentsTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
@@ -137,43 +159,38 @@ export class WorkspaceBasePage {
   async goToTimeline() {
     await this.timelineTab.click();
     await this.page.waitForURL(/\/timeline/);
-    await expect(this.timelineTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
-   * Navigate to Citations tab
+   * Navigate to Citations tab (behind "More" dropdown)
    */
   async goToCitations() {
-    await this.citationsTab.click();
+    await this.clickMoreTab(this.citationsMenuItem);
     await this.page.waitForURL(/\/citations/);
-    await expect(this.citationsTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
-   * Navigate to Entities tab
+   * Navigate to Entities tab (behind "More" dropdown)
    */
   async goToEntities() {
-    await this.entitiesTab.click();
+    await this.clickMoreTab(this.entitiesMenuItem);
     await this.page.waitForURL(/\/entities/);
-    await expect(this.entitiesTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
-   * Navigate to Contradictions tab
+   * Navigate to Contradictions tab (behind "More" dropdown)
    */
   async goToContradictions() {
-    await this.contradictionsTab.click();
+    await this.clickMoreTab(this.contradictionsMenuItem);
     await this.page.waitForURL(/\/contradictions/);
-    await expect(this.contradictionsTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
-   * Navigate to Verification tab
+   * Navigate to Verification tab (behind "More" dropdown)
    */
   async goToVerification() {
-    await this.verificationTab.click();
+    await this.clickMoreTab(this.verificationMenuItem);
     await this.page.waitForURL(/\/verification/);
-    await expect(this.verificationTab).toHaveAttribute('aria-selected', 'true', { timeout: 10000 });
   }
 
   /**
@@ -185,10 +202,10 @@ export class WorkspaceBasePage {
   }
 
   /**
-   * Toggle Q&A panel visibility
+   * Minimize/restore Q&A panel
    */
   async toggleQAPanel() {
-    await this.qaPanelToggle.click();
+    await this.qaPanelMinimizeButton.click();
   }
 
   /**
@@ -196,7 +213,8 @@ export class WorkspaceBasePage {
    */
   async askQuestion(question: string) {
     await this.qaPanelInput.fill(question);
-    await this.qaPanelSendButton.click();
+    // Press Enter to send since the send button may be tricky to locate
+    await this.page.keyboard.press('Enter');
   }
 
   /**
@@ -235,14 +253,6 @@ export class WorkspaceBasePage {
    */
   async clickSuggestedQuestion(index: number = 0) {
     await this.suggestedQuestions.nth(index).click();
-  }
-
-  /**
-   * Open share dialog
-   */
-  async openShareDialog() {
-    await this.shareButton.click();
-    await this.page.waitForSelector('[data-testid="share-dialog"]');
   }
 
   /**

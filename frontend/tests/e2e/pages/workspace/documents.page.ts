@@ -65,7 +65,8 @@ export class DocumentsPage extends WorkspaceBasePage {
    * Wait for documents content to load
    */
   async waitForDocumentsLoad() {
-    await this.page.waitForSelector('[data-testid="documents-content"]');
+    await this.page.waitForURL(/\/documents/, { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

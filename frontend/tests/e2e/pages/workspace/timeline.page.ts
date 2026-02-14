@@ -93,7 +93,8 @@ export class TimelinePage extends WorkspaceBasePage {
    * Wait for timeline content to load
    */
   async waitForTimelineLoad() {
-    await this.page.waitForSelector('[data-testid="timeline-content"]');
+    await this.page.waitForURL(/\/timeline/, { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

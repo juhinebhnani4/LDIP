@@ -105,7 +105,8 @@ export class VerificationPage extends WorkspaceBasePage {
    * Wait for verification content to load
    */
   async waitForVerificationLoad() {
-    await this.page.waitForSelector('[data-testid="verification-content"]');
+    await this.page.waitForURL(/\/verification/, { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

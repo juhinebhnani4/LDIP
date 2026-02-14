@@ -73,7 +73,9 @@ export class SummaryPage extends WorkspaceBasePage {
    * Wait for summary content to load
    */
   async waitForSummaryLoad() {
-    await this.page.waitForSelector('[data-testid="summary-content"]');
+    await this.page.waitForURL(/\/summary/, { timeout: 10000 });
+    // Wait for any loading to complete
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

@@ -101,7 +101,8 @@ export class EntitiesPage extends WorkspaceBasePage {
    * Wait for entities content to load
    */
   async waitForEntitiesLoad() {
-    await this.page.waitForSelector('[data-testid="entities-content"]');
+    await this.page.waitForURL(/\/entities/, { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

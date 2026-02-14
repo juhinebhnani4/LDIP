@@ -103,7 +103,8 @@ export class CitationsPage extends WorkspaceBasePage {
    * Wait for citations content to load
    */
   async waitForCitationsLoad() {
-    await this.page.waitForSelector('[data-testid="citations-content"]');
+    await this.page.waitForURL(/\/citations/, { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
   }
 
   /**

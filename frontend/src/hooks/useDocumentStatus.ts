@@ -113,8 +113,8 @@ export interface UseDocumentStatusOptions {
 // Constants
 // =============================================================================
 
-// Increased from 2000ms to reduce Supabase egress - WebSocket is primary
-const DEFAULT_POLLING_INTERVAL = 5000;
+// Increased to 30s - WebSocket is primary, polling is only fallback
+const DEFAULT_POLLING_INTERVAL = 30000;
 
 // =============================================================================
 // Helper Functions
@@ -395,6 +395,11 @@ export function useDocumentStatus(
 
         pollingRef.current = setTimeout(async () => {
           if (!isMountedRef.current) return;
+          // Skip fetch if tab is hidden (reduces egress)
+          if (document.visibilityState === 'hidden') {
+            poll();
+            return;
+          }
 
           await fetchStatus();
 
@@ -407,12 +412,21 @@ export function useDocumentStatus(
       poll();
     }
 
+    // Fetch immediately when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isCompleteRef.current) {
+        void fetchStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       isMountedRef.current = false;
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [matterId, enabled, pollingInterval, stopOnComplete, isRealTime, fetchStatus]);
 

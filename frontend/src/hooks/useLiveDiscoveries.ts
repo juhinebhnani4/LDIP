@@ -116,8 +116,8 @@ export interface LiveDiscoveriesResult {
 // Constants
 // =============================================================================
 
-// Increased from 5000ms to 10000ms - WebSocket is primary, this is only fallback
-const DEFAULT_POLLING_INTERVAL = 10000;
+// Increased to 30s - WebSocket is primary, polling is only fallback
+const DEFAULT_POLLING_INTERVAL = 30000;
 
 // =============================================================================
 // Helper Functions
@@ -576,6 +576,11 @@ export function useLiveDiscoveries(
 
         pollingRef.current = setTimeout(async () => {
           if (!isMountedRef.current) return;
+          // Skip fetch if tab is hidden (reduces egress)
+          if (document.visibilityState === 'hidden') {
+            poll();
+            return;
+          }
 
           await fetchDiscoveries();
 
@@ -588,6 +593,14 @@ export function useLiveDiscoveries(
       poll();
     }
 
+    // Fetch immediately when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isCompleteRef.current) {
+        void fetchDiscoveries();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Cleanup
     return () => {
       isMountedRef.current = false;
@@ -595,6 +608,7 @@ export function useLiveDiscoveries(
         clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [matterId, enabled, pollingInterval, stopOnComplete, isRealTime, fetchDiscoveries]);
 

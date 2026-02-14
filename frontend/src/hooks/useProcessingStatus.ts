@@ -115,8 +115,8 @@ export interface UseProcessingStatusOptions {
 // Constants
 // =============================================================================
 
-/** Default polling interval during active processing (ms) - increased from 1000 to reduce egress */
-const DEFAULT_POLLING_INTERVAL = 3000;
+/** Default polling interval (ms) - increased to 10s, visibility check skips when tab hidden */
+const DEFAULT_POLLING_INTERVAL = 10000;
 
 // =============================================================================
 // Helper Functions

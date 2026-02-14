@@ -9,6 +9,8 @@ Storage path structure:
 - documents/{matter_id}/exports/{filename}  - Generated exports
 """
 
+import threading
+import time
 import uuid
 from functools import lru_cache
 
@@ -24,6 +26,10 @@ VALID_SUBFOLDERS = {"uploads", "acts", "exports", "chunks"}
 
 # Default signed URL expiration (1 hour)
 DEFAULT_SIGNED_URL_EXPIRES = 3600
+
+# Download cache settings
+DOWNLOAD_CACHE_TTL_SECONDS = 600  # 10 minutes
+DOWNLOAD_CACHE_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
 class StorageError(Exception):
@@ -51,6 +57,11 @@ class StorageService:
         """
         self.client = client or get_service_client()
         self.bucket = "documents"
+
+        # In-memory download cache: {storage_path: (bytes, expiry_timestamp)}
+        self._download_cache: dict[str, tuple[bytes, float]] = {}
+        self._cache_lock = threading.Lock()
+        self._cache_total_bytes = 0
 
     def _generate_unique_filename(self, filename: str) -> str:
         """Generate a unique filename by appending UUID suffix.
@@ -244,8 +255,48 @@ class StorageService:
                 code="SIGNED_URL_FAILED"
             ) from e
 
+    def _evict_expired_cache(self) -> None:
+        """Remove expired entries from cache. Must be called with _cache_lock held."""
+        now = time.monotonic()
+        expired = [k for k, (_, exp) in self._download_cache.items() if now >= exp]
+        for key in expired:
+            data, _ = self._download_cache.pop(key)
+            self._cache_total_bytes -= len(data)
+            logger.debug("storage_download_cache_expired", storage_path=key)
+
+    def _evict_lru_until_fits(self, new_size: int) -> None:
+        """Evict oldest entries until new_size fits within max. Must be called with _cache_lock held."""
+        while self._cache_total_bytes + new_size > DOWNLOAD_CACHE_MAX_BYTES and self._download_cache:
+            # dict preserves insertion order; pop the first (oldest) entry
+            oldest_key = next(iter(self._download_cache))
+            data, _ = self._download_cache.pop(oldest_key)
+            self._cache_total_bytes -= len(data)
+            logger.debug("storage_download_cache_evicted_lru", storage_path=oldest_key)
+
+    def _cache_file(self, storage_path: str, data: bytes) -> None:
+        """Store downloaded file in cache with TTL."""
+        file_size = len(data)
+        if file_size > DOWNLOAD_CACHE_MAX_BYTES:
+            return  # Don't cache files larger than the entire cache
+
+        with self._cache_lock:
+            self._evict_expired_cache()
+            self._evict_lru_until_fits(file_size)
+            self._download_cache[storage_path] = (data, time.monotonic() + DOWNLOAD_CACHE_TTL_SECONDS)
+            self._cache_total_bytes += file_size
+
+    def clear_download_cache(self) -> None:
+        """Clear the entire download cache. Useful for testing."""
+        with self._cache_lock:
+            self._download_cache.clear()
+            self._cache_total_bytes = 0
+            logger.info("storage_download_cache_cleared")
+
     def download_file(self, storage_path: str) -> bytes:
-        """Download a file from Supabase Storage.
+        """Download a file from Supabase Storage with in-memory TTL caching.
+
+        Files are cached for 10 minutes (covers full pipeline processing).
+        Max cache size is 500 MB with LRU eviction.
 
         Args:
             storage_path: Full storage path to download.
@@ -262,6 +313,27 @@ class StorageService:
                 code="STORAGE_NOT_CONFIGURED"
             )
 
+        # Check cache first
+        with self._cache_lock:
+            cached = self._download_cache.get(storage_path)
+            if cached is not None:
+                data, expiry = cached
+                if time.monotonic() < expiry:
+                    # Move to end for LRU (re-insert)
+                    del self._download_cache[storage_path]
+                    self._download_cache[storage_path] = (data, expiry)
+                    logger.info(
+                        "storage_download_cache_hit",
+                        storage_path=storage_path,
+                        file_size=len(data),
+                        cache_entries=len(self._download_cache),
+                    )
+                    return data
+                else:
+                    # Expired — remove it
+                    del self._download_cache[storage_path]
+                    self._cache_total_bytes -= len(data)
+
         logger.info("storage_download_starting", storage_path=storage_path)
 
         try:
@@ -272,6 +344,9 @@ class StorageService:
                 storage_path=storage_path,
                 file_size=len(response),
             )
+
+            # Cache the downloaded file
+            self._cache_file(storage_path, response)
 
             return response
 

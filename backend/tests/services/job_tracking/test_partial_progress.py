@@ -4,7 +4,7 @@ Story 2c-3: Background Job Status Tracking and Retry
 """
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -161,68 +161,71 @@ class TestPartialProgressTracker:
 
     def test_creates_new_stage_progress(self, mock_job_tracker) -> None:
         """Should create new StageProgress for unknown stage."""
-        with patch("app.services.job_tracking.partial_progress.get_job_tracking_service") as mock_get:
-            mock_get.return_value = mock_job_tracker
-            mock_job_tracker.get_job = AsyncMock(return_value=None)
+        # Mock the sync Supabase client chain used by _load_from_job_metadata
+        mock_execute = MagicMock()
+        mock_execute.data = []  # No existing job metadata
+        mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_execute
+        mock_job_tracker.client = mock_client
 
-            tracker = PartialProgressTracker(
-                job_id="job-123",
-                matter_id="matter-456",
-                job_tracker=mock_job_tracker,
-            )
+        tracker = PartialProgressTracker(
+            job_id="job-123",
+            matter_id="matter-456",
+            job_tracker=mock_job_tracker,
+        )
 
-            with patch("asyncio.new_event_loop") as mock_loop:
-                mock_event_loop = MagicMock()
-                mock_event_loop.run_until_complete.return_value = None
-                mock_loop.return_value = mock_event_loop
+        progress = tracker.get_or_create_stage("embedding")
 
-                progress = tracker.get_or_create_stage("embedding")
-
-            assert progress.stage_name == "embedding"
-            assert progress.started_at is not None
+        assert progress.stage_name == "embedding"
+        assert progress.started_at is not None
 
     def test_loads_progress_from_job_metadata(self, mock_job_tracker) -> None:
         """Should load existing progress from job metadata."""
-        mock_job = MagicMock()
-        mock_job.metadata = {
-            "partial_progress": {
-                "embedding": {
-                    "stage_name": "embedding",
-                    "total_items": 100,
-                    "processed_items": ["chunk-1", "chunk-2"],
-                    "failed_items": {},
-                    "last_item_id": "chunk-2",
-                    "started_at": "2026-01-12T10:00:00",
+        # Mock the sync Supabase client to return existing metadata
+        mock_execute = MagicMock()
+        mock_execute.data = [
+            {
+                "metadata": {
+                    "partial_progress": {
+                        "embedding": {
+                            "stage_name": "embedding",
+                            "total_items": 100,
+                            "processed_items": ["chunk-1", "chunk-2"],
+                            "failed_items": {},
+                            "last_item_id": "chunk-2",
+                            "started_at": "2026-01-12T10:00:00",
+                        }
+                    }
                 }
             }
-        }
+        ]
+        mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_execute
+        mock_job_tracker.client = mock_client
 
-        with (
-            patch("asyncio.new_event_loop") as mock_loop,
-            patch("asyncio.set_event_loop"),
-        ):
-            mock_event_loop = MagicMock()
-            mock_event_loop.run_until_complete.return_value = mock_job
-            mock_loop.return_value = mock_event_loop
+        tracker = PartialProgressTracker(
+            job_id="job-123",
+            job_tracker=mock_job_tracker,
+        )
 
-            tracker = PartialProgressTracker(
-                job_id="job-123",
-                job_tracker=mock_job_tracker,
-            )
-            mock_job_tracker.get_job = AsyncMock(return_value=mock_job)
+        progress = tracker.get_or_create_stage("embedding")
 
-            progress = tracker.get_or_create_stage("embedding")
-
-            assert len(progress.processed_items) == 2
-            assert "chunk-1" in progress.processed_items
-            assert "chunk-2" in progress.processed_items
+        assert len(progress.processed_items) == 2
+        assert "chunk-1" in progress.processed_items
+        assert "chunk-2" in progress.processed_items
 
     def test_save_progress_every_10_items(self, mock_job_tracker) -> None:
         """Should only save progress every 10 items by default."""
-        mock_job = MagicMock()
-        mock_job.metadata = {}
-        mock_job_tracker.get_job = AsyncMock(return_value=mock_job)
-        mock_job_tracker.update_job = AsyncMock()
+        # Mock the sync Supabase client for save_progress
+        mock_select_execute = MagicMock()
+        mock_select_execute.data = [{"metadata": {}}]
+        mock_update_execute = MagicMock()
+        mock_update_execute.data = [{"id": "job-123"}]
+
+        mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_select_execute
+        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_execute
+        mock_job_tracker.client = mock_client
 
         tracker = PartialProgressTracker(
             job_id="job-123",
@@ -233,27 +236,28 @@ class TestPartialProgressTracker:
         progress = StageProgress(stage_name="embedding")
         progress.total_items = 100
 
-        with patch("asyncio.new_event_loop") as mock_loop:
-            mock_event_loop = MagicMock()
-            mock_event_loop.run_until_complete.return_value = mock_job
-            mock_loop.return_value = mock_event_loop
+        # Add 5 items - should not save (5 % 10 != 0)
+        for i in range(5):
+            progress.mark_processed(f"chunk-{i}")
+        tracker.save_progress(progress)
 
-            # Add 5 items - should not save
-            for i in range(5):
-                progress.mark_processed(f"chunk-{i}")
-            tracker.save_progress(progress)
-
-            # Add 5 more items (total 10) - should save
-            for i in range(5, 10):
-                progress.mark_processed(f"chunk-{i}")
-            tracker.save_progress(progress)
+        # Add 5 more items (total 10) - should save (10 % 10 == 0)
+        for i in range(5, 10):
+            progress.mark_processed(f"chunk-{i}")
+        tracker.save_progress(progress)
 
     def test_save_progress_force(self, mock_job_tracker) -> None:
         """Should save immediately when force=True."""
-        mock_job = MagicMock()
-        mock_job.metadata = {}
-        mock_job_tracker.get_job = AsyncMock(return_value=mock_job)
-        mock_job_tracker.update_job = AsyncMock()
+        # Mock the sync Supabase client for save_progress
+        mock_select_execute = MagicMock()
+        mock_select_execute.data = [{"metadata": {}}]
+        mock_update_execute = MagicMock()
+        mock_update_execute.data = [{"id": "job-123"}]
+
+        mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = mock_select_execute
+        mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_update_execute
+        mock_job_tracker.client = mock_client
 
         tracker = PartialProgressTracker(
             job_id="job-123",
@@ -264,19 +268,13 @@ class TestPartialProgressTracker:
         progress = StageProgress(stage_name="embedding")
         progress.mark_processed("chunk-1")
 
-        with (
-            patch("asyncio.new_event_loop") as mock_loop,
-            patch("asyncio.set_event_loop"),
-        ):
-            mock_event_loop = MagicMock()
-            mock_event_loop.run_until_complete.return_value = mock_job
-            mock_loop.return_value = mock_event_loop
+        # Force save with only 1 item
+        tracker.save_progress(progress, force=True)
 
-            # Force save with only 1 item
-            tracker.save_progress(progress, force=True)
-
-            # Verify save was attempted
-            assert mock_event_loop.run_until_complete.called
+        # Verify save was attempted via sync Supabase client
+        mock_client.table.assert_called()
+        # Should have called update (the write operation)
+        mock_client.table.return_value.update.assert_called()
 
 
 # =============================================================================

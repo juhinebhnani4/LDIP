@@ -152,16 +152,25 @@ class PartialProgressTracker:
         return self._job_tracker
 
     def _load_from_job_metadata(self) -> None:
-        """Load progress from job metadata."""
+        """Load progress from job metadata.
+
+        Uses direct sync Supabase client calls to avoid run_async() overhead
+        and gevent event loop conflicts.
+        """
         if self._loaded:
             return
 
         try:
-            from app.workers.utils import run_async
-
-            job = run_async(self.job_tracker.get_job(self.job_id))
-            if job and job.metadata:
-                partial_progress = job.metadata.get("partial_progress", {})
+            response = (
+                self.job_tracker.client.table("processing_jobs")
+                .select("metadata")
+                .eq("id", self.job_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                metadata = response.data[0].get("metadata") or {}
+                partial_progress = metadata.get("partial_progress", {})
                 for stage_name, stage_data in partial_progress.items():
                     self._stages[stage_name] = StageProgress.from_dict(stage_data)
 
@@ -217,6 +226,9 @@ class PartialProgressTracker:
     def save_progress(self, stage: StageProgress, force: bool = False) -> None:
         """Persist stage progress to job metadata.
 
+        Uses direct sync Supabase client calls to avoid run_async() overhead
+        and gevent event loop conflicts.
+
         By default, only saves every 10th item to reduce database writes.
         Use force=True to save immediately (e.g., on stage completion).
 
@@ -230,35 +242,39 @@ class PartialProgressTracker:
             return
 
         try:
-            from app.workers.utils import run_async
+            # Read current metadata
+            response = (
+                self.job_tracker.client.table("processing_jobs")
+                .select("metadata")
+                .eq("id", self.job_id)
+                .limit(1)
+                .execute()
+            )
+            if not response.data:
+                return
 
-            async def _save_progress_async():
-                job = await self.job_tracker.get_job(self.job_id)
-                if not job:
-                    return
+            metadata = response.data[0].get("metadata") or {}
+            if "partial_progress" not in metadata:
+                metadata["partial_progress"] = {}
 
-                # Update metadata with partial progress
-                metadata = job.metadata or {}
-                if "partial_progress" not in metadata:
-                    metadata["partial_progress"] = {}
+            metadata["partial_progress"][stage.stage_name] = stage.to_dict()
 
-                metadata["partial_progress"][stage.stage_name] = stage.to_dict()
+            # Write updated metadata
+            now = datetime.now(UTC).isoformat()
+            (
+                self.job_tracker.client.table("processing_jobs")
+                .update({"metadata": metadata, "updated_at": now})
+                .eq("id", self.job_id)
+                .execute()
+            )
 
-                # Save updated metadata
-                from app.models.job import ProcessingJobUpdate
-
-                update = ProcessingJobUpdate(metadata=metadata)
-                await self.job_tracker.update_job(self.job_id, update)
-
-                logger.debug(
-                    "partial_progress_saved",
-                    job_id=self.job_id,
-                    stage=stage.stage_name,
-                    processed=processed_count,
-                    total=stage.total_items,
-                )
-
-            run_async(_save_progress_async())
+            logger.debug(
+                "partial_progress_saved",
+                job_id=self.job_id,
+                stage=stage.stage_name,
+                processed=processed_count,
+                total=stage.total_items,
+            )
 
         except Exception as e:
             logger.warning(
@@ -347,6 +363,9 @@ class PartialProgressTracker:
     def clear_stage(self, stage_name: str) -> None:
         """Clear progress for a stage (e.g., when starting fresh).
 
+        Uses direct sync Supabase client calls to avoid run_async() overhead
+        and gevent event loop conflicts.
+
         Args:
             stage_name: Name of the stage to clear.
         """
@@ -354,21 +373,25 @@ class PartialProgressTracker:
             del self._stages[stage_name]
 
         try:
-            from app.workers.utils import run_async
+            response = (
+                self.job_tracker.client.table("processing_jobs")
+                .select("metadata")
+                .eq("id", self.job_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                metadata = response.data[0].get("metadata") or {}
+                if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
+                    del metadata["partial_progress"][stage_name]
 
-            async def _clear_stage_async():
-                job = await self.job_tracker.get_job(self.job_id)
-                if job and job.metadata:
-                    metadata = job.metadata
-                    if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
-                        del metadata["partial_progress"][stage_name]
-
-                        from app.models.job import ProcessingJobUpdate
-
-                        update = ProcessingJobUpdate(metadata=metadata)
-                        await self.job_tracker.update_job(self.job_id, update)
-
-            run_async(_clear_stage_async())
+                    now = datetime.now(UTC).isoformat()
+                    (
+                        self.job_tracker.client.table("processing_jobs")
+                        .update({"metadata": metadata, "updated_at": now})
+                        .eq("id", self.job_id)
+                        .execute()
+                    )
 
         except Exception as e:
             logger.warning(

@@ -2,9 +2,14 @@
 
 import asyncio
 import sys
+import threading
 from typing import Any, Coroutine, TypeVar
 
 T = TypeVar("T")
+
+# Module-level singleton for gevent shared event loop
+_shared_loop: asyncio.AbstractEventLoop | None = None
+_shared_loop_lock = threading.Lock()  # Fine even if patched - just protects init
 
 # Flag to track if nest_asyncio has been applied
 _nest_asyncio_applied = False
@@ -133,9 +138,59 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
             return _run_in_thread(coro)
 
 
+def _get_or_create_shared_loop() -> asyncio.AbstractEventLoop:
+    """Get or create a persistent event loop in a native OS thread.
+
+    Uses _thread (C module, NOT monkey-patched by gevent) to run the loop,
+    avoiding all gevent/asyncio conflicts. Multiple greenlets dispatch
+    coroutines via run_coroutine_threadsafe() to this single loop.
+    """
+    global _shared_loop
+    if _shared_loop is not None and _shared_loop.is_running():
+        return _shared_loop
+
+    with _shared_loop_lock:
+        # Double-check after acquiring lock
+        if _shared_loop is not None and _shared_loop.is_running():
+            return _shared_loop
+
+        loop = asyncio.new_event_loop()
+
+        def _run_loop():
+            asyncio.set_event_loop(loop)
+            loop.run_forever()
+
+        # _thread is a C module, NOT monkey-patched by gevent
+        import _thread
+        _thread.start_new_thread(_run_loop, ())
+
+        # Wait for loop to start (brief spin)
+        import time
+        for _ in range(500):
+            if loop.is_running():
+                break
+            time.sleep(0.001)
+
+        _shared_loop = loop
+        return loop
+
+
 def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
-    """Run coroutine in a separate thread with its own event loop."""
-    import threading
+    """Run coroutine in a thread-safe manner.
+
+    In gevent: dispatches to a shared persistent event loop via
+    run_coroutine_threadsafe (no new event loop, no run_until_complete).
+
+    In non-gevent: creates a new thread with its own event loop (original approach).
+    """
+    # In gevent: dispatch to shared loop (no new event loop, no run_until_complete)
+    if _is_gevent_worker():
+        loop = _get_or_create_shared_loop()
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result(timeout=300)
+
+    # Non-gevent fallback: existing threading.Thread approach (unchanged)
+    import threading as _threading
 
     result_container: dict[str, Any] = {}
     exception_container: dict[str, BaseException] = {}
@@ -151,7 +206,7 @@ def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
         except BaseException as e:
             exception_container["error"] = e
 
-    thread = threading.Thread(target=_thread_target, daemon=True)
+    thread = _threading.Thread(target=_thread_target, daemon=True)
     thread.start()
     thread.join(timeout=300)
 

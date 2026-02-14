@@ -14,6 +14,39 @@ from app.workers.utils import run_async
 logger = structlog.get_logger(__name__)
 
 
+def _get_effective_stage_from_job(job: dict) -> str | None:
+    """Determine actual resume stage from partial_progress metadata.
+
+    current_stage can be wrong (reset to 'ocr' by previous recovery restarts).
+    partial_progress accurately records which stages completed at 100%.
+    """
+    metadata = job.get("metadata") or {}
+    partial_progress = metadata.get("partial_progress", {})
+
+    if not partial_progress:
+        return job.get("current_stage")
+
+    dispatchable_stages = [
+        "embedding", "entity_extraction", "alias_resolution",
+        "citation_extraction", "contradiction_detection",
+    ]
+
+    last_completed_idx = -1
+    for i, stage in enumerate(dispatchable_stages):
+        stage_data = partial_progress.get(stage, {})
+        if stage_data.get("progress_pct", 0) >= 100:
+            last_completed_idx = i
+
+    if last_completed_idx < 0:
+        return job.get("current_stage")
+
+    next_idx = last_completed_idx + 1
+    if next_idx < len(dispatchable_stages):
+        return dispatchable_stages[next_idx]
+
+    return job.get("current_stage")
+
+
 @celery_app.task(
     name="app.workers.tasks.maintenance_tasks.recover_stale_jobs",
     bind=True,
@@ -99,7 +132,7 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
 
         response = (
             client.table("processing_jobs")
-            .select("id, document_id, matter_id, job_type, current_stage, updated_at")
+            .select("id, document_id, matter_id, job_type, current_stage, updated_at, metadata")
             .eq("status", "QUEUED")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
@@ -138,7 +171,7 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             doc_id = job.get("document_id")
             matter_id = job.get("matter_id")
             job_type = job.get("job_type")
-            stage = job.get("current_stage")
+            stage = _get_effective_stage_from_job(job)
 
             # Handle engine task job types (DATE_EXTRACTION, etc.)
             # These are matter-level jobs that may not have a document_id

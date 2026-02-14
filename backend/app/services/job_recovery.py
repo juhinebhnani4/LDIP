@@ -170,8 +170,9 @@ class JobRecoveryService:
             }).eq("id", job_id).execute()
 
             # Reset document status to PENDING if document exists (skip for late stages)
+            effective_stage = self._get_effective_stage(job)
             if job.get("document_id"):
-                await self._reset_document_status(job["document_id"], stage=job.get("current_stage"))
+                await self._reset_document_status(job["document_id"], stage=effective_stage)
 
             # Re-dispatch the Celery task
             await self._redispatch_task(job)
@@ -302,6 +303,42 @@ class JobRecoveryService:
                 error=str(e),
             )
 
+    def _get_effective_stage(self, job: dict) -> str | None:
+        """Determine the actual stage to resume from using partial_progress metadata.
+
+        current_stage can be wrong (reset to 'ocr' by previous recovery restarts).
+        partial_progress accurately records which stages completed at 100%.
+        """
+        metadata = job.get("metadata") or {}
+        partial_progress = metadata.get("partial_progress", {})
+
+        if not partial_progress:
+            return job.get("current_stage")  # No progress data, trust current_stage
+
+        # Ordered stages that have targeted dispatch tasks
+        dispatchable_stages = [
+            "embedding", "entity_extraction", "alias_resolution",
+            "citation_extraction", "contradiction_detection",
+        ]
+
+        # Find the last completed stage (progress_pct == 100)
+        last_completed_idx = -1
+        for i, stage in enumerate(dispatchable_stages):
+            stage_data = partial_progress.get(stage, {})
+            if stage_data.get("progress_pct", 0) >= 100:
+                last_completed_idx = i
+
+        if last_completed_idx < 0:
+            return job.get("current_stage")  # No completed stages, trust current_stage
+
+        # Return the NEXT stage after the last completed one
+        next_idx = last_completed_idx + 1
+        if next_idx < len(dispatchable_stages):
+            return dispatchable_stages[next_idx]
+
+        # All stages complete — shouldn't need recovery, but fall through
+        return job.get("current_stage")
+
     async def _redispatch_task(self, job: dict) -> None:
         """Re-dispatch the Celery task for a recovered job.
 
@@ -322,7 +359,7 @@ class JobRecoveryService:
             if not document_id:
                 return
 
-            stage = job.get("current_stage")
+            stage = self._get_effective_stage(job)
 
             if stage == "embedding":
                 embed_chunks.apply_async(
@@ -361,6 +398,7 @@ class JobRecoveryService:
                 job_id=job["id"],
                 document_id=document_id,
                 stage=stage or "full_pipeline",
+                current_stage=job.get("current_stage"),  # For comparison in logs
             )
 
         except Exception as e:

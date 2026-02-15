@@ -186,12 +186,15 @@ export class ApiError extends Error {
   public readonly userMessage: string
   /** Rate limit details (only present for 429 errors) */
   public readonly rateLimitDetails?: RateLimitDetails
+  /** Correlation ID from backend for distributed tracing */
+  public readonly correlationId?: string
 
   constructor(
     public code: string,
     message: string,
     public status: number,
-    details?: { retryAfter?: number; limit?: number; remaining?: number }
+    details?: { retryAfter?: number; limit?: number; remaining?: number },
+    correlationId?: string
   ) {
     super(message)
     this.name = 'ApiError'
@@ -199,6 +202,9 @@ export class ApiError extends Error {
     // Derive isRetryable and userMessage from error code
     this.isRetryable = isRetryableError(code)
     this.userMessage = getErrorMessage(code).description
+
+    // Store correlation ID for support context
+    this.correlationId = correlationId
 
     // Store rate limit details if present
     if (details?.retryAfter !== undefined) {
@@ -238,7 +244,10 @@ function createApiError(response: Response, errorBody: Record<string, unknown>):
     }
   }
 
-  return new ApiError(code, message, response.status, rateLimitDetails)
+  // Extract correlation ID from response headers for support context
+  const correlationId = response.headers.get('X-Correlation-ID') ?? undefined
+
+  return new ApiError(code, message, response.status, rateLimitDetails, correlationId)
 }
 
 /** Options for API client requests */

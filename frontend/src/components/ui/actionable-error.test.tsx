@@ -154,20 +154,76 @@ describe('ActionableError', () => {
       expect(onContactSupport).toHaveBeenCalledTimes(1)
       const context = onContactSupport.mock.calls[0]![0] as ErrorContext
       expect(context.errorCode).toBe('INSUFFICIENT_PERMISSIONS')
-      expect(context.matterId).toBe('matter-123')
+      // buildErrorContext masks IDs to first 8 chars
+      expect(context.matterId).toBe('matter-1...')
     })
 
-    it('opens mailto link as fallback', async () => {
+    it('opens embedded ContactSupport modal when no onContactSupport prop', async () => {
       const user = userEvent.setup()
       const error = new ApiError('INSUFFICIENT_PERMISSIONS', 'Permission denied', 403)
       render(<ActionableError error={error} />)
 
       await user.click(screen.getByRole('button', { name: /request access/i }))
 
-      expect(mockWindowOpen).toHaveBeenCalledWith(
-        expect.stringContaining('mailto:support@jaanch.ai'),
-        '_blank'
+      // ContactSupport modal should open
+      expect(screen.getByText('Contact Support')).toBeInTheDocument()
+      // Modal renders error code in multiple places; verify the dialog is present
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    it('onContactSupport prop takes precedence over embedded modal', async () => {
+      const user = userEvent.setup()
+      const onContactSupport = vi.fn()
+      const error = new ApiError('INSUFFICIENT_PERMISSIONS', 'Permission denied', 403)
+      render(
+        <ActionableError
+          error={error}
+          onContactSupport={onContactSupport}
+        />
       )
+
+      await user.click(screen.getByRole('button', { name: /request access/i }))
+
+      // Callback should be invoked, not the modal
+      expect(onContactSupport).toHaveBeenCalledTimes(1)
+      expect(screen.queryByText('Contact Support')).not.toBeInTheDocument()
+    })
+
+    it('error context includes browserInfo', async () => {
+      const user = userEvent.setup()
+      const onContactSupport = vi.fn()
+      const error = new ApiError('INSUFFICIENT_PERMISSIONS', 'Permission denied', 403)
+      render(
+        <ActionableError
+          error={error}
+          onContactSupport={onContactSupport}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /request access/i }))
+
+      const context = onContactSupport.mock.calls[0]![0] as ErrorContext
+      expect(context.browserInfo).toBeDefined()
+      expect(context.browserInfo).not.toBe('')
+    })
+
+    it('passes userId through to error context when provided', async () => {
+      const user = userEvent.setup()
+      const onContactSupport = vi.fn()
+      const error = new ApiError('INSUFFICIENT_PERMISSIONS', 'Permission denied', 403)
+      render(
+        <ActionableError
+          error={error}
+          onContactSupport={onContactSupport}
+          userId="user-abc-12345678-xyz"
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /request access/i }))
+
+      const context = onContactSupport.mock.calls[0]![0] as ErrorContext
+      // buildErrorContext masks the userId to first 8 chars
+      expect(context.userId).toBe('user-abc...')
     })
   })
 

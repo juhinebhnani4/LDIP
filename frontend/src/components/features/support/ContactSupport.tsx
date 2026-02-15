@@ -12,19 +12,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import type { ErrorContext } from '@/types/error'
 
-/** Error context for support requests */
-export interface ErrorContext {
-  errorCode: string
-  errorMessage: string
-  timestamp: string
-  userId?: string
-  matterId?: string
-  matterTitle?: string
-  browserInfo: string
-  currentUrl: string
-  correlationId?: string
-}
+export type { ErrorContext }
 
 interface ContactSupportProps {
   /** Error context to include in support request */

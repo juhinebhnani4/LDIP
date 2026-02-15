@@ -14,6 +14,7 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ContactSupport, buildErrorContext } from '@/components/features/support'
 import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import {
@@ -23,6 +24,9 @@ import {
   type ActionType,
   type ErrorAction,
 } from '@/lib/utils/error-messages'
+import type { ErrorContext } from '@/types/error'
+
+export type { ErrorContext }
 
 export interface ActionableErrorProps {
   /** The error to display - can be ApiError, Error, or string */
@@ -37,17 +41,10 @@ export interface ActionableErrorProps {
   className?: string
   /** Matter ID for support context */
   matterId?: string
+  /** Optional user ID for support context (avoids coupling to auth hook) */
+  userId?: string
   /** Callback for opening contact support dialog */
   onContactSupport?: (context: ErrorContext) => void
-}
-
-/** Context passed to contact support */
-export interface ErrorContext {
-  errorCode: string
-  errorMessage: string
-  timestamp: string
-  matterId?: string
-  currentUrl: string
 }
 
 /** Icon map for action types */
@@ -78,10 +75,13 @@ export function ActionableError({
   onDismiss,
   className,
   matterId,
+  userId,
   onContactSupport,
 }: ActionableErrorProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
+  const [supportErrorContext, setSupportErrorContext] = useState<ErrorContext | null>(null)
 
   // Extract error code and details
   const errorCode =
@@ -100,13 +100,14 @@ export function ActionableError({
         : error.message || errorInfo.description
 
   // Build error context for support
-  const buildErrorContext = (): ErrorContext => ({
-    errorCode,
-    errorMessage: description,
-    timestamp: new Date().toISOString(),
-    matterId,
-    currentUrl: typeof window !== 'undefined' ? window.location.href : '',
-  })
+  const buildLocalErrorContext = (): ErrorContext =>
+    buildErrorContext({
+      errorCode,
+      errorMessage: description,
+      userId,
+      matterId,
+      correlationId: error instanceof ApiError ? error.correlationId : undefined,
+    })
 
   // Handle action button click
   const handleAction = async (action: ErrorAction) => {
@@ -135,23 +136,17 @@ export function ActionableError({
         }
         break
 
-      case 'contact_support':
+      case 'contact_support': {
+        const context = buildLocalErrorContext()
         if (onContactSupport) {
-          onContactSupport(buildErrorContext())
+          onContactSupport(context)
         } else {
-          // Fallback: open mailto link
-          const context = buildErrorContext()
-          const subject = encodeURIComponent(`Error Report: ${errorCode}`)
-          const body = encodeURIComponent(
-            `Error Code: ${context.errorCode}\n` +
-              `Time: ${context.timestamp}\n` +
-              `URL: ${context.currentUrl}\n` +
-              `Matter: ${context.matterId ?? 'N/A'}\n\n` +
-              `Description: ${context.errorMessage}`
-          )
-          window.open(`mailto:support@jaanch.ai?subject=${subject}&body=${body}`, '_blank')
+          // Open embedded ContactSupport modal
+          setSupportErrorContext(context)
+          setSupportModalOpen(true)
         }
         break
+      }
 
       case 'login':
         // Store return URL before redirect
@@ -196,6 +191,7 @@ export function ActionableError({
         : primaryAction.type !== 'retry' && primaryAction.type !== 'wait'
 
   return (
+    <>
     <Alert
       variant="destructive"
       className={cn('relative', className)}
@@ -251,5 +247,15 @@ export function ActionableError({
         )}
       </AlertDescription>
     </Alert>
+
+    {/* Embedded ContactSupport modal — opens when contact_support action is triggered without onContactSupport prop */}
+    {supportErrorContext && (
+      <ContactSupport
+        errorContext={supportErrorContext}
+        open={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+      />
+    )}
+    </>
   )
 }

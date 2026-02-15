@@ -1,1 +1,2 @@
-export { ContactSupport, buildErrorContext, type ErrorContext } from './ContactSupport'
+export { ContactSupport, buildErrorContext } from './ContactSupport'
+export type { ErrorContext } from '@/types/error'

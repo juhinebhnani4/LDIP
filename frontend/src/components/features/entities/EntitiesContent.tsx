@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActionableError } from '@/components/ui/actionable-error';
 import { ApiError } from '@/lib/api/client';
+import { useUser } from '@/hooks';
 import { EntitiesHeader } from './EntitiesHeader';
 import { EntitiesGraph } from './EntitiesGraph';
 import { EntitiesDetailPanel } from './EntitiesDetailPanel';
@@ -62,6 +63,8 @@ export function EntitiesContent({
   onViewInDocument,
   className,
 }: EntitiesContentProps) {
+  const { user } = useUser();
+
   // View state
   const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<EntityViewMode>('graph');
@@ -372,6 +375,7 @@ export function EntitiesContent({
           errorCode={errorCode}
           onRetry={handleRetry}
           matterId={matterId}
+          userId={user?.id}
           className="max-w-md"
         />
       </div>

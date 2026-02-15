@@ -271,6 +271,30 @@ class Settings(BaseSettings):
     email_notifications_enabled: bool = True           # Global feature flag for email notifications
     email_base_url: str = "https://app.jaanch.com"     # Base URL for deep links in emails
 
+    # ==========================================================================
+    # Pipeline Optimization Settings
+    # ==========================================================================
+
+    # A3: Parent-only chunks for timeline (skip children = ~250 fewer LLM calls)
+    timeline_parent_only: bool = True                  # TIMELINE_PARENT_ONLY=false to disable
+
+    # Rate limiter: in-process vs distributed (1 = in-process, 2+ = Redis distributed)
+    worker_count: int = 1                              # WORKER_COUNT=2 for multi-worker
+
+    # D1: Contradiction cache (48h TTL, cache by content hash)
+    contradiction_cache_enabled: bool = True           # CONTRADICTION_CACHE_ENABLED=false to disable
+    contradiction_cache_ttl: int = 172800              # 48 hours in seconds
+    contradiction_prompt_version: str = "v1"           # Bump to invalidate cache on prompt changes
+
+    # B1: Citation mega-batching (3 chunks per Gemini call)
+    citation_batch_size: int = 3                       # Chunks per batch Gemini call
+    citation_batching_enabled: bool = True             # CITATION_BATCHING_ENABLED=false to disable
+
+    # F1: Shared chunk loading (cache chunks in Redis after chunking)
+    shared_chunk_cache_enabled: bool = True            # SHARED_CHUNK_CACHE_ENABLED=false to disable
+    shared_chunk_cache_ttl: int = 600                  # 10 minutes
+    shared_chunk_cache_max_bytes: int = 204800         # 200KB compressed max
+
     @property
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""

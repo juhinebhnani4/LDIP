@@ -23,6 +23,7 @@ from app.services.memory.redis_keys import (
     CACHE_TTL,
     cache_key,
     cache_pattern,
+    query_version_key,
     validate_key_access,
 )
 
@@ -60,6 +61,18 @@ class QueryCacheRepository:
         if self._redis is None:
             self._redis = await get_redis_client()
 
+    async def _get_query_version(self, matter_id: str) -> str:
+        """Get current query cache version for a matter.
+
+        A5 optimization: version is embedded in cache keys so INCR
+        effectively invalidates all old entries without SCAN+DELETE.
+        """
+        try:
+            version = await self._redis.get(query_version_key(matter_id))
+            return version or "0"
+        except Exception:
+            return "0"
+
     async def get_cached_result(
         self,
         matter_id: str,
@@ -82,7 +95,9 @@ class QueryCacheRepository:
         """
         await self._ensure_client()
 
-        key = cache_key(matter_id, query_hash)
+        # A5: Embed version in key for version-based invalidation
+        version = await self._get_query_version(matter_id)
+        key = cache_key(matter_id, query_hash) + f":v{version}"
 
         # Defense-in-depth: validate key belongs to requested matter
         if not validate_key_access(key, matter_id):
@@ -150,7 +165,9 @@ class QueryCacheRepository:
         """
         await self._ensure_client()
 
-        key = cache_key(result.matter_id, result.query_hash)
+        # A5: Embed version in key for version-based invalidation
+        version = await self._get_query_version(result.matter_id)
+        key = cache_key(result.matter_id, result.query_hash) + f":v{version}"
 
         try:
             await self._redis.setex(
@@ -196,7 +213,9 @@ class QueryCacheRepository:
         """
         await self._ensure_client()
 
-        key = cache_key(matter_id, query_hash)
+        # A5: Include version suffix to match versioned keys
+        version = await self._get_query_version(matter_id)
+        key = cache_key(matter_id, query_hash) + f":v{version}"
 
         try:
             deleted = await self._redis.delete(key)
@@ -222,43 +241,29 @@ class QueryCacheRepository:
         self,
         matter_id: str,
     ) -> int:
-        """Delete all cache entries for a matter.
+        """Invalidate all cache entries for a matter.
 
-        Story 7-5: Task 2.5 - Bulk invalidation.
-        AC #4: Invalidate on document upload.
-
-        Uses SCAN to find and delete all matching keys safely
-        (doesn't block like KEYS command).
+        A5 optimization: Instead of SCAN+DELETE (~10 Redis ops per invalidation),
+        increments a version counter (1 INCR). Old versioned keys become invisible
+        and expire via their existing 1-hour TTL.
 
         Args:
             matter_id: Matter UUID.
 
         Returns:
-            Number of keys deleted.
+            New version number (acts as invalidation count).
 
         Raises:
             RuntimeError: If Redis operation fails.
         """
         await self._ensure_client()
 
-        pattern = cache_pattern(matter_id)  # "cache:query:{matter_id}:*"
-        deleted_count = 0
-
         try:
-            # Use SCAN for safe iteration (non-blocking)
-            cursor = 0
-            while True:
-                cursor, keys = await self._redis.scan(cursor, match=pattern, count=100)
-                if keys:
-                    await self._redis.delete(*keys)
-                    deleted_count += len(keys)
-                if cursor == 0:
-                    break
+            new_version = await self._redis.incr(query_version_key(matter_id))
         except Exception as e:
             logger.error(
                 "redis_invalidate_matter_cache_failed",
                 matter_id=matter_id,
-                deleted_before_error=deleted_count,
                 error=str(e),
             )
             raise RuntimeError(f"Failed to invalidate matter cache: {e}") from e
@@ -266,10 +271,10 @@ class QueryCacheRepository:
         logger.info(
             "matter_cache_invalidated",
             matter_id=matter_id,
-            keys_deleted=deleted_count,
+            new_version=new_version,
         )
 
-        return deleted_count
+        return new_version
 
     async def get_cache_stats(
         self,
@@ -277,39 +282,29 @@ class QueryCacheRepository:
     ) -> dict[str, Any]:
         """Get cache statistics for a matter.
 
-        Returns count and estimated size of cached entries.
-        Useful for monitoring and debugging.
+        A5 optimization: Returns version number instead of SCAN-counting keys.
 
         Args:
             matter_id: Matter UUID.
 
         Returns:
-            Dict with 'count', 'keys' list.
+            Dict with 'version' and 'matter_id'.
         """
         await self._ensure_client()
 
-        pattern = cache_pattern(matter_id)
-        keys: list[str] = []
-
         try:
-            cursor = 0
-            while True:
-                cursor, batch = await self._redis.scan(cursor, match=pattern, count=100)
-                keys.extend(batch)
-                if cursor == 0:
-                    break
+            version = await self._get_query_version(matter_id)
+            return {
+                "version": int(version),
+                "matter_id": matter_id,
+            }
         except Exception as e:
             logger.error(
                 "redis_get_cache_stats_failed",
                 matter_id=matter_id,
                 error=str(e),
             )
-            return {"count": 0, "keys": [], "error": str(e)}
-
-        return {
-            "count": len(keys),
-            "keys": keys,
-        }
+            return {"version": 0, "matter_id": matter_id, "error": str(e)}
 
 
 # =============================================================================

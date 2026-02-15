@@ -36,7 +36,7 @@ EMBEDDING_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 # =============================================================================
 
 SessionKeyType = Literal["messages", "entities", "context", "metadata"]
-MatterKeyType = Literal["timeline", "entity_graph", "findings", "stats"]
+MatterKeyType = Literal["timeline", "entity_graph", "findings", "stats", "timeline_version"]
 
 # =============================================================================
 # UUID Validation
@@ -381,6 +381,41 @@ def embedding_cache_key(text_hash: str) -> str:
         raise ValueError("text_hash must be a valid hex hash (32-64 characters)")
 
     return f"embedding:{text_hash}"
+
+
+# =============================================================================
+# Version-Based Cache Invalidation Keys (A5 optimization)
+# =============================================================================
+
+def timeline_version_key(matter_id: str) -> str:
+    """Generate a Redis key for timeline cache version counter.
+
+    Incrementing this key effectively invalidates all timeline cache entries
+    for the matter without SCAN+DELETE (1 INCR vs ~10 ops).
+
+    Args:
+        matter_id: The matter UUID.
+
+    Returns:
+        Redis key in format: matter:{matter_id}:timeline_version
+    """
+    return matter_key(matter_id, "timeline_version")
+
+
+def query_version_key(matter_id: str) -> str:
+    """Generate a Redis key for query cache version counter.
+
+    Incrementing this key effectively invalidates all query cache entries
+    for the matter without SCAN+DELETE.
+
+    Args:
+        matter_id: The matter UUID.
+
+    Returns:
+        Redis key in format: cache:query:{matter_id}:version
+    """
+    _validate_uuid(matter_id, "matter_id")
+    return f"cache:query:{matter_id}:version"
 
 
 # =============================================================================

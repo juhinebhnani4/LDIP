@@ -349,7 +349,7 @@ class CitationExtractor:
         """Synchronous wrapper for citation extraction.
 
         For use in Celery tasks or other synchronous contexts.
-        Processes large documents in chunks to avoid data loss.
+        Delegates to extract_from_batch_sync with a single chunk.
 
         Args:
             text: Document text to extract citations from.
@@ -372,59 +372,263 @@ class CitationExtractor:
                 extraction_timestamp=datetime.now(UTC),
             )
 
-        start_time = time.time()
-
-        # Split into chunks if text is too long (fixes silent data loss issue)
-        chunks = self._chunk_text(text)
-        total_chunks = len(chunks)
-
-        if total_chunks > 1:
-            logger.info(
-                "citation_extraction_sync_chunked",
-                document_id=document_id,
-                original_length=len(text),
-                chunk_count=total_chunks,
-            )
-
-        all_regex_citations: list[ExtractedCitation] = []
-        all_gemini_citations: list[ExtractedCitation] = []
-
-        # Process each chunk
-        for chunk_text in chunks:
-            # Step 1: Extract with regex first
-            regex_citations = self._extract_with_regex(chunk_text)
-            all_regex_citations.extend(regex_citations)
-
-            # Step 2: Extract with Gemini (sync)
-            gemini_citations = self._extract_with_gemini_sync(chunk_text, document_id)
-            all_gemini_citations.extend(gemini_citations)
-
-        # Step 3: Merge and deduplicate
-        all_citations = self._merge_citations(all_regex_citations, all_gemini_citations)
-
-        # Step 4: Get unique acts
-        unique_acts = self._get_unique_acts(all_citations)
-
-        processing_time = int((time.time() - start_time) * 1000)
-
-        logger.info(
-            "citation_extraction_sync_complete",
+        # Delegate to batch method with single chunk
+        batch_chunk = {
+            "id": chunk_id or "single",
+            "content": text,
+            "page_number": page_number,
+        }
+        results = self.extract_from_batch_sync(
+            chunks=[batch_chunk],
             document_id=document_id,
             matter_id=matter_id,
-            citation_count=len(all_citations),
-            unique_act_count=len(unique_acts),
-            chunks_processed=total_chunks,
-            processing_time_ms=processing_time,
         )
+        if results:
+            return results[0]
 
         return CitationExtractionResult(
-            citations=all_citations,
-            unique_acts=unique_acts,
+            citations=[],
+            unique_acts=[],
             source_document_id=document_id,
             source_chunk_id=chunk_id,
             page_number=page_number,
             extraction_timestamp=datetime.now(UTC),
         )
+
+    def extract_from_batch_sync(
+        self,
+        chunks: list[dict],
+        document_id: str,
+        matter_id: str,
+    ) -> list[CitationExtractionResult]:
+        """Extract citations from multiple chunks in a single Gemini call.
+
+        B1 optimization: Batches N chunks (default 3) per Gemini call using
+        [CHUNK:id] markers, reducing LLM calls by ~66%.
+
+        Falls back to regex-only extraction on parse failure (no second LLM call).
+
+        Args:
+            chunks: List of chunk dicts with 'id', 'content', and optional 'page_number'.
+            document_id: Source document UUID.
+            matter_id: Matter UUID for context.
+
+        Returns:
+            List of CitationExtractionResult, one per input chunk.
+        """
+        start_time = time.time()
+
+        # Build combined text with chunk markers
+        marked_sections = []
+        for chunk in chunks:
+            chunk_id = chunk["id"]
+            content = chunk.get("content", "")
+            if content and content.strip():
+                marked_sections.append(f"[CHUNK:{chunk_id}]\n{content}")
+
+        if not marked_sections:
+            return [
+                CitationExtractionResult(
+                    citations=[],
+                    unique_acts=[],
+                    source_document_id=document_id,
+                    source_chunk_id=chunk.get("id"),
+                    page_number=chunk.get("page_number"),
+                    extraction_timestamp=datetime.now(UTC),
+                )
+                for chunk in chunks
+            ]
+
+        combined_text = "\n\n".join(marked_sections)
+
+        # Step 1: Regex extraction per chunk (always runs)
+        regex_by_chunk: dict[str, list[ExtractedCitation]] = {}
+        for chunk in chunks:
+            chunk_id = chunk["id"]
+            content = chunk.get("content", "")
+            regex_by_chunk[chunk_id] = self._extract_with_regex(content) if content else []
+
+        # Step 2: Gemini batch extraction (single LLM call for all chunks)
+        gemini_by_chunk: dict[str, list[ExtractedCitation]] = {c["id"]: [] for c in chunks}
+
+        prompt = CITATION_EXTRACTION_PROMPT.format(text=combined_text)
+
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="citation_extraction_batch",
+            document_id=document_id,
+        )
+
+        distributed_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+
+        try:
+            with distributed_limiter:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=CITATION_EXTRACTION_SYSTEM_PROMPT,
+                        max_output_tokens=8192,
+                        temperature=0.1,
+                    ),
+                )
+
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(response.text) if response.text else 0
+            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.log_cost()
+
+            # Parse batch response
+            gemini_by_chunk = self._parse_batch_gemini_response(
+                response.text, [c["id"] for c in chunks]
+            )
+
+        except Exception as e:
+            logger.warning(
+                "citation_batch_gemini_failed",
+                document_id=document_id,
+                chunk_count=len(chunks),
+                error=str(e),
+            )
+            # Fall back to regex-only (already computed above)
+
+        # Step 3: Merge per chunk and build results
+        results = []
+        for chunk in chunks:
+            chunk_id = chunk["id"]
+            regex_cites = regex_by_chunk.get(chunk_id, [])
+            gemini_cites = gemini_by_chunk.get(chunk_id, [])
+            merged = self._merge_citations(regex_cites, gemini_cites)
+            unique_acts = self._get_unique_acts(merged)
+
+            results.append(CitationExtractionResult(
+                citations=merged,
+                unique_acts=unique_acts,
+                source_document_id=document_id,
+                source_chunk_id=chunk_id,
+                page_number=chunk.get("page_number"),
+                extraction_timestamp=datetime.now(UTC),
+            ))
+
+        processing_time = int((time.time() - start_time) * 1000)
+        total_citations = sum(len(r.citations) for r in results)
+
+        logger.info(
+            "citation_batch_extraction_complete",
+            document_id=document_id,
+            matter_id=matter_id,
+            chunk_count=len(chunks),
+            total_citations=total_citations,
+            processing_time_ms=processing_time,
+        )
+
+        return results
+
+    def _parse_batch_gemini_response(
+        self,
+        response_text: str,
+        chunk_ids: list[str],
+    ) -> dict[str, list[ExtractedCitation]]:
+        """Parse Gemini batch response with per-chunk grouping.
+
+        Expected format: {"chunks": {"chunk_id": {"citations": [...]}}}
+        Falls back to flat format for backwards compatibility.
+
+        Args:
+            response_text: Raw Gemini response.
+            chunk_ids: Expected chunk IDs.
+
+        Returns:
+            Dict mapping chunk_id -> list of citations.
+        """
+        result: dict[str, list[ExtractedCitation]] = {cid: [] for cid in chunk_ids}
+
+        try:
+            json_text = response_text.strip()
+            if json_text.startswith("```"):
+                lines = json_text.split("\n")
+                json_lines = []
+                in_block = False
+                for line in lines:
+                    if line.strip().startswith("```"):
+                        in_block = not in_block
+                        continue
+                    if in_block:
+                        json_lines.append(line)
+                json_text = "\n".join(json_lines)
+
+            parsed = json.loads(json_text)
+
+            # New batch format: {"chunks": {"id": {"citations": [...]}}}
+            if "chunks" in parsed and isinstance(parsed["chunks"], dict):
+                for chunk_id, chunk_data in parsed["chunks"].items():
+                    if chunk_id in result:
+                        citations_data = chunk_data.get("citations", [])
+                        result[chunk_id] = self._parse_citations_list(citations_data)
+                return result
+
+            # Fallback: flat format {"citations": [...]} — assign all to first chunk
+            if "citations" in parsed and chunk_ids:
+                result[chunk_ids[0]] = self._parse_citations_list(parsed["citations"])
+                return result
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(
+                "citation_batch_parse_failed",
+                error=str(e),
+                response_preview=response_text[:200] if response_text else "",
+            )
+
+        return result
+
+    def _parse_citations_list(self, citations_data: list) -> list[ExtractedCitation]:
+        """Parse a list of citation dicts into ExtractedCitation objects.
+
+        Args:
+            citations_data: List of citation dicts from Gemini response.
+
+        Returns:
+            List of ExtractedCitation objects.
+        """
+        citations = []
+        for item in citations_data:
+            try:
+                if not isinstance(item, dict):
+                    continue
+                act_name = item.get("act_name", "").strip()
+                if not act_name:
+                    continue
+
+                # Skip Act mentions without section refs (matches _parse_gemini_response)
+                section = item.get("section") or ""
+                if not section:
+                    logger.debug(
+                        "citation_batch_skipped_no_section",
+                        act_name=act_name,
+                    )
+                    continue
+
+                # Normalize act name
+                canonical = get_canonical_name(act_name)
+                if canonical:
+                    name, year = canonical
+                    act_name = f"{name}, {year}" if year else name
+                else:
+                    act_name = normalize_act_name(act_name)
+
+                citations.append(ExtractedCitation(
+                    act_name=act_name,
+                    section=section,
+                    subsection=item.get("subsection"),
+                    clause=item.get("clause"),
+                    raw_text=item.get("raw_text", ""),
+                    quoted_text=item.get("quoted_text"),
+                    confidence=float(item.get("confidence", 80)),
+                ))
+            except Exception as e:
+                logger.debug("citation_batch_item_parse_error", error=str(e))
+                continue
+        return citations
 
     def _extract_with_regex(self, text: str) -> list[ExtractedCitation]:
         """Extract citations using regex patterns.

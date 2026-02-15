@@ -545,8 +545,74 @@ class DistributedRateLimiter:
         pass
 
 
+@dataclass
+class InProcessRateLimiter:
+    """In-memory sliding window rate limiter for single-worker deployments.
+
+    Eliminates ~3,000 Redis sorted-set ops per document by using a local
+    deque instead of Redis for rate limiting. Same interface as DistributedRateLimiter.
+
+    Rollback: Set WORKER_COUNT=2 to switch back to distributed mode.
+    """
+
+    provider: LLMProvider
+    max_requests_per_minute: int = 60
+
+    def __post_init__(self):
+        """Initialize with provider-specific RPM from settings."""
+        import threading
+        from collections import deque
+
+        settings = get_settings()
+
+        if self.provider == LLMProvider.GEMINI:
+            self.max_requests_per_minute = settings.gemini_requests_per_minute
+        elif self.provider == LLMProvider.OPENAI:
+            self.max_requests_per_minute = settings.openai_requests_per_minute
+
+        self._lock = threading.Lock()
+        self._timestamps: deque = deque()
+
+    def acquire(self, timeout: float = 30.0) -> bool:
+        """Acquire a rate limit token using in-memory sliding window.
+
+        Args:
+            timeout: Maximum seconds to wait for a token.
+
+        Returns:
+            True if token acquired, False if timeout exceeded.
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            with self._lock:
+                now = time.time()
+                # Remove entries outside the 60s window
+                while self._timestamps and self._timestamps[0] < now - 60:
+                    self._timestamps.popleft()
+                if len(self._timestamps) < self.max_requests_per_minute:
+                    self._timestamps.append(now)
+                    return True
+            time.sleep(0.1)
+
+        logger.warning(
+            "in_process_rate_limit_timeout",
+            provider=self.provider.value,
+            timeout=timeout,
+        )
+        return False
+
+    def __enter__(self):
+        """Acquire rate limit token on context enter."""
+        self.acquire()
+        return self
+
+    def __exit__(self, *args):
+        """No cleanup needed on exit."""
+        pass
+
+
 class DistributedRateLimiterRegistry:
-    """Singleton registry for distributed rate limiters."""
+    """Singleton registry for rate limiters (distributed or in-process)."""
 
     _instance: "DistributedRateLimiterRegistry | None" = None
     _lock = None
@@ -557,20 +623,37 @@ class DistributedRateLimiterRegistry:
             import threading
 
             cls._instance = super().__new__(cls)
-            cls._instance._limiters: dict[LLMProvider, DistributedRateLimiter] = {}
+            cls._instance._limiters: dict[LLMProvider, DistributedRateLimiter | InProcessRateLimiter] = {}
             cls._lock = threading.Lock()
         return cls._instance
 
-    def get(self, provider: LLMProvider) -> DistributedRateLimiter:
-        """Get or create distributed rate limiter for a provider."""
+    def get(self, provider: LLMProvider) -> DistributedRateLimiter | InProcessRateLimiter:
+        """Get or create rate limiter for a provider.
+
+        Uses in-process limiter when worker_count <= 1 (saves ~3,000 Redis ops/doc).
+        Falls back to distributed limiter for multi-worker deployments.
+        """
         with self._lock:
             if provider not in self._limiters:
-                self._limiters[provider] = DistributedRateLimiter(provider=provider)
-                logger.info(
-                    "distributed_rate_limiter_created",
-                    provider=provider.value,
-                    max_rpm=self._limiters[provider].max_requests_per_minute,
-                )
+                settings = get_settings()
+                use_in_process = settings.worker_count <= 1
+
+                if use_in_process:
+                    self._limiters[provider] = InProcessRateLimiter(provider=provider)
+                    logger.info(
+                        "in_process_rate_limiter_created",
+                        provider=provider.value,
+                        max_rpm=self._limiters[provider].max_requests_per_minute,
+                        reason="worker_count<=1",
+                    )
+                else:
+                    self._limiters[provider] = DistributedRateLimiter(provider=provider)
+                    logger.info(
+                        "distributed_rate_limiter_created",
+                        provider=provider.value,
+                        max_rpm=self._limiters[provider].max_requests_per_minute,
+                        worker_count=settings.worker_count,
+                    )
             return self._limiters[provider]
 
 
@@ -578,8 +661,11 @@ class DistributedRateLimiterRegistry:
 _distributed_registry = DistributedRateLimiterRegistry()
 
 
-def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimiter:
-    """Get distributed rate limiter for a provider.
+def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimiter | InProcessRateLimiter:
+    """Get rate limiter for a provider (distributed or in-process).
+
+    Automatically selects in-process mode when WORKER_COUNT<=1
+    to eliminate ~3,000 Redis ops per document.
 
     Use this for cross-worker rate limiting (e.g., in Celery tasks).
 
@@ -587,17 +673,17 @@ def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimite
         provider: The LLM provider.
 
     Returns:
-        DistributedRateLimiter instance.
+        Rate limiter instance (DistributedRateLimiter or InProcessRateLimiter).
     """
     return _distributed_registry.get(provider)
 
 
-def get_gemini_distributed_rate_limiter() -> DistributedRateLimiter:
-    """Get distributed rate limiter for Gemini API calls.
+def get_gemini_distributed_rate_limiter() -> DistributedRateLimiter | InProcessRateLimiter:
+    """Get rate limiter for Gemini API calls.
 
     Use this in Celery tasks to coordinate rate limiting across workers.
 
     Returns:
-        DistributedRateLimiter configured for Gemini.
+        Rate limiter configured for Gemini.
     """
     return get_distributed_rate_limiter(LLMProvider.GEMINI)

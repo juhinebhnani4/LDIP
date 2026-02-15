@@ -223,10 +223,40 @@ def extract_dates_from_document(
             )
 
         # Load document chunks to get text
-        # ChunkService.get_chunks_for_document is synchronous, returns (chunks, parent_count, child_count)
-        chunks, _, _ = chunk_service.get_chunks_for_document(
-            document_id=document_id,
-        )
+        # A3: When timeline_parent_only=True, only load parent chunks.
+        # Parents contain all child text, so we get same results with ~250 fewer LLM calls.
+        from app.core.config import get_settings
+        from app.models.chunk import ChunkType
+
+        settings = get_settings()
+        chunk_type_str = "parent" if settings.timeline_parent_only else None
+        chunk_type_filter = ChunkType.PARENT if settings.timeline_parent_only else None
+
+        # F1: Try shared chunk cache first (avoids Supabase read)
+        from app.services.chunk_service import get_cached_chunks
+        cached = get_cached_chunks(document_id, chunk_type_filter=chunk_type_str)
+
+        if cached is not None:
+            # Convert cache dicts to simple objects with .content attribute
+            from types import SimpleNamespace
+            chunks = [SimpleNamespace(**c) for c in cached]
+            parent_count = sum(1 for c in chunks if c.chunk_type == "parent")
+            child_count = sum(1 for c in chunks if c.chunk_type == "child")
+        else:
+            # Cache miss — fall back to Supabase
+            # ChunkService.get_chunks_for_document is synchronous, returns (chunks, parent_count, child_count)
+            chunks, parent_count, child_count = chunk_service.get_chunks_for_document(
+                document_id=document_id,
+                chunk_type=chunk_type_filter,
+            )
+
+        if chunk_type_filter:
+            logger.info(
+                "date_extraction_parent_only",
+                document_id=document_id,
+                parent_chunks=parent_count,
+                skipped_children=child_count,
+            )
 
         if not chunks:
             logger.warning(
@@ -250,10 +280,6 @@ def extract_dates_from_document(
                 "reason": "no_chunks",
             }
 
-        # Process ALL chunks (parent + child) to capture dense text in child chunks.
-        # The improved dedup (_dedup_key) groups by (date, type, description_hash)
-        # so overlapping extractions from parent/child merge correctly while
-        # genuinely distinct events on the same date are preserved.
         chunks_to_process = chunks
 
         # Pre-cache bounding boxes for accurate page number detection

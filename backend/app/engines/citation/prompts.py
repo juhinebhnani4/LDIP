@@ -22,6 +22,9 @@ CITATION_EXTRACTION_PROMPT: Final[str] = """You are a legal citation extraction 
 Your task is to extract ALL Act/statute citations from the provided legal text.
 Be thorough - missing a citation is worse than a false positive.
 
+The text may contain one or more chunks, each marked with [CHUNK:chunk_id].
+You MUST group your output by chunk_id.
+
 ## What to Extract
 
 Find references to Indian Acts, Codes, and Statutes including:
@@ -45,20 +48,27 @@ Find references to Indian Acts, Codes, and Statutes including:
 
 ## Output Format
 
-Return a JSON object with this exact structure:
+Return a JSON object with results grouped by chunk_id:
 ```json
 {{
-  "citations": [
-    {{
-      "act_name": "ONLY the Act name with optional year - nothing else (e.g., 'Negotiable Instruments Act, 1881' or 'NI Act')",
-      "section": "Section number (e.g., '138')",
-      "subsection": "Subsection if present (e.g., '(1)') or null",
-      "clause": "Clause if present (e.g., '(a)') or null",
-      "raw_text": "Exact text as it appears in the document",
-      "quoted_text": "If any text is quoted from the Act, include it here, or null",
-      "confidence": 85
+  "chunks": {{
+    "chunk_id_1": {{
+      "citations": [
+        {{
+          "act_name": "ONLY the Act name with optional year",
+          "section": "Section number (e.g., '138')",
+          "subsection": "Subsection if present (e.g., '(1)') or null",
+          "clause": "Clause if present (e.g., '(a)') or null",
+          "raw_text": "Exact text as it appears in the document",
+          "quoted_text": "If any text is quoted from the Act, include it here, or null",
+          "confidence": 85
+        }}
+      ]
+    }},
+    "chunk_id_2": {{
+      "citations": []
     }}
-  ]
+  }}
 }}
 ```
 
@@ -92,66 +102,7 @@ INCORRECT examples (DO NOT DO THIS):
 6. Include provisos, explanations, and amendments as part of the section reference
 7. If the same section is cited multiple times, include each occurrence
 8. Extract citations from footnotes and case citations too
-
-## Example Input
-
-"The petitioner filed a complaint under Section 138 of the Negotiable Instruments Act, 1881 (hereinafter referred to as 'NI Act').
-The respondent argued that the provisions of Section 138 read with Section 139 and Section 141 of the NI Act were not attracted.
-Further reliance was placed on Section 200 of the Code of Criminal Procedure, 1973."
-
-## Example Output
-
-```json
-{{
-  "citations": [
-    {{
-      "act_name": "Negotiable Instruments Act, 1881",
-      "section": "138",
-      "subsection": null,
-      "clause": null,
-      "raw_text": "Section 138 of the Negotiable Instruments Act, 1881",
-      "quoted_text": null,
-      "confidence": 95
-    }},
-    {{
-      "act_name": "NI Act",
-      "section": "138",
-      "subsection": null,
-      "clause": null,
-      "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
-      "quoted_text": null,
-      "confidence": 90
-    }},
-    {{
-      "act_name": "NI Act",
-      "section": "139",
-      "subsection": null,
-      "clause": null,
-      "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
-      "quoted_text": null,
-      "confidence": 90
-    }},
-    {{
-      "act_name": "NI Act",
-      "section": "141",
-      "subsection": null,
-      "clause": null,
-      "raw_text": "Section 138 read with Section 139 and Section 141 of the NI Act",
-      "quoted_text": null,
-      "confidence": 90
-    }},
-    {{
-      "act_name": "Code of Criminal Procedure, 1973",
-      "section": "200",
-      "subsection": null,
-      "clause": null,
-      "raw_text": "Section 200 of the Code of Criminal Procedure, 1973",
-      "quoted_text": null,
-      "confidence": 95
-    }}
-  ]
-}}
-```
+9. Every chunk_id from the input MUST appear in your output (use empty citations array if none found)
 
 Now extract ALL citations from the following text:
 

@@ -14,6 +14,7 @@ high-stakes contradiction detection (user must be aware of degraded state).
 """
 
 import asyncio
+import hashlib
 import itertools
 import json
 import time
@@ -65,6 +66,75 @@ GEMINI_OUTPUT_COST_PER_1K = 0.0003  # $0.30 per 1M output tokens
 
 # Rate limiting
 DEFAULT_BATCH_SIZE = 5  # Process 5 pairs in parallel (rate limit safe)
+
+
+# =============================================================================
+# D1: Contradiction Cache Helpers
+# =============================================================================
+
+
+def _comparison_cache_key(content_a: str, content_b: str, entity_name: str) -> str:
+    """Generate a deterministic cache key for a comparison pair.
+
+    Sorts content strings so (A,B) and (B,A) produce the same key.
+    Includes prompt version so cache auto-invalidates on prompt changes.
+
+    Args:
+        content_a: Content of statement A.
+        content_b: Content of statement B.
+        entity_name: Entity being compared.
+
+    Returns:
+        Redis key string.
+    """
+    settings = get_settings()
+    # Sort to make key order-independent
+    sorted_contents = sorted([content_a, content_b])
+    payload = f"{sorted_contents[0]}||{sorted_contents[1]}||{entity_name}"
+    content_hash = hashlib.sha256(payload.encode()).hexdigest()
+    return f"contradiction_cache:{settings.contradiction_prompt_version}:{content_hash}"
+
+
+def _get_cached_comparison(cache_key: str) -> str | None:
+    """Check Redis for a cached contradiction comparison result.
+
+    Returns:
+        Cached response_text string or None on miss.
+    """
+    try:
+        from app.services.distributed_lock import get_sync_redis_client
+        redis_client = get_sync_redis_client()
+        if redis_client is None:
+            return None
+        cached = redis_client.get(cache_key)
+        if cached:
+            data = json.loads(cached)
+            return data.get("response_text")
+    except Exception as e:
+        logger.debug("contradiction_cache_read_error", error=str(e))
+    return None
+
+
+def _set_cached_comparison(cache_key: str, response_text: str) -> None:
+    """Write a contradiction comparison result to Redis cache.
+
+    Args:
+        cache_key: Redis key.
+        response_text: Raw GPT-4 response to cache.
+    """
+    try:
+        settings = get_settings()
+        from app.services.distributed_lock import get_sync_redis_client
+        redis_client = get_sync_redis_client()
+        if redis_client is None:
+            return
+        redis_client.setex(
+            cache_key,
+            settings.contradiction_cache_ttl,
+            json.dumps({"response_text": response_text}),
+        )
+    except Exception as e:
+        logger.debug("contradiction_cache_write_error", error=str(e))
 
 
 # =============================================================================
@@ -426,6 +496,32 @@ class StatementComparator:
                     )
 
             # === TIER 2: GPT-4 Full Analysis ===
+
+            # D1: Check contradiction cache before GPT-4 call
+            settings = get_settings()
+            cache_key = None
+            if settings.contradiction_cache_enabled:
+                cache_key = _comparison_cache_key(
+                    statement_a.content, statement_b.content, entity_name
+                )
+                cached_response = _get_cached_comparison(cache_key)
+                if cached_response is not None:
+                    # Cache hit — 0 tokens, 0 cost
+                    comparison = self._parse_comparison_response(
+                        response_text=cached_response,
+                        statement_a=statement_a,
+                        statement_b=statement_b,
+                    )
+                    processing_time = int((time.time() - start_time) * 1000)
+                    logger.info(
+                        "statement_comparison_cache_hit",
+                        entity_name=entity_name,
+                        result=comparison.result.value,
+                        confidence=comparison.confidence,
+                        processing_time_ms=processing_time,
+                    )
+                    return comparison, cost_tracker
+
             user_prompt = format_comparison_prompt(
                 entity_name=entity_name,
                 content_a=statement_a.content,
@@ -443,6 +539,10 @@ class StatementComparator:
             # Track GPT-4 tokens
             cost_tracker.input_tokens = input_tokens
             cost_tracker.output_tokens = output_tokens
+
+            # D1: Cache successful GPT-4 response
+            if cache_key and response_text:
+                _set_cached_comparison(cache_key, response_text)
 
             # Parse response
             comparison = self._parse_comparison_response(

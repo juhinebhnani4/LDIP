@@ -586,6 +586,132 @@ class ChunkService:
         )
 
 
+# =============================================================================
+# F1: Shared Chunk Cache (Redis) — eliminates 2 extra Supabase reads/doc
+# =============================================================================
+
+
+def cache_chunks_to_redis(document_id: str, chunks: list[dict]) -> bool:
+    """Cache document chunks to Redis after chunking completes.
+
+    Serializes, gzips, and stores chunks with a short TTL so downstream
+    engines (entity, citation, timeline) can read from cache instead of
+    hitting Supabase again.
+
+    Args:
+        document_id: Document UUID.
+        chunks: List of chunk dicts (from Supabase response.data).
+
+    Returns:
+        True if cached successfully, False on skip/error.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if not settings.shared_chunk_cache_enabled:
+        return False
+
+    try:
+        import gzip
+        import json
+
+        from app.services.distributed_lock import get_sync_redis_client
+        redis_client = get_sync_redis_client()
+        if redis_client is None:
+            return False
+
+        import base64
+
+        serialized = json.dumps(chunks).encode()
+        compressed = gzip.compress(serialized)
+
+        # Skip if too large (avoid Redis memory issues)
+        if len(compressed) > settings.shared_chunk_cache_max_bytes:
+            logger.info(
+                "shared_chunk_cache_skip_too_large",
+                document_id=document_id,
+                compressed_bytes=len(compressed),
+                max_bytes=settings.shared_chunk_cache_max_bytes,
+            )
+            return False
+
+        # Base64-encode because Redis client uses decode_responses=True (can't store raw bytes)
+        encoded = base64.b64encode(compressed).decode("ascii")
+
+        key = f"pipeline:chunks:{document_id}"
+        redis_client.setex(key, settings.shared_chunk_cache_ttl, encoded)
+
+        logger.info(
+            "shared_chunk_cache_written",
+            document_id=document_id,
+            chunk_count=len(chunks),
+            compressed_bytes=len(compressed),
+            ttl=settings.shared_chunk_cache_ttl,
+        )
+        return True
+
+    except Exception as e:
+        logger.debug("shared_chunk_cache_write_error", document_id=document_id, error=str(e))
+        return False
+
+
+def get_cached_chunks(
+    document_id: str,
+    chunk_type_filter: str | None = None,
+) -> list[dict] | None:
+    """Read cached chunks from Redis.
+
+    Args:
+        document_id: Document UUID.
+        chunk_type_filter: Optional filter (e.g., "child", "parent").
+
+    Returns:
+        List of chunk dicts if cache hit, None on miss/error.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if not settings.shared_chunk_cache_enabled:
+        return None
+
+    try:
+        import gzip
+        import json
+
+        from app.services.distributed_lock import get_sync_redis_client
+        redis_client = get_sync_redis_client()
+        if redis_client is None:
+            return None
+
+        import base64
+
+        key = f"pipeline:chunks:{document_id}"
+        encoded = redis_client.get(key)
+        if encoded is None:
+            return None
+
+        # Decode base64 -> decompress gzip
+        compressed = base64.b64decode(encoded)
+        serialized = gzip.decompress(compressed)
+        chunks = json.loads(serialized)
+
+        # Apply type filter if requested
+        if chunk_type_filter:
+            chunks = [c for c in chunks if c.get("chunk_type") == chunk_type_filter]
+
+        logger.info(
+            "shared_chunk_cache_hit",
+            document_id=document_id,
+            chunk_count=len(chunks),
+            filter=chunk_type_filter,
+        )
+        return chunks
+
+    except Exception as e:
+        logger.debug("shared_chunk_cache_read_error", document_id=document_id, error=str(e))
+        return None
+
+
 @lru_cache(maxsize=1)
 def get_chunk_service() -> ChunkService:
     """Get singleton chunk service instance.

@@ -25,6 +25,7 @@ from app.engines.timeline.timeline_builder import (
 from app.models.entity import EntityType
 from app.models.timeline import EventType
 from app.services.memory import matter_key
+from app.services.memory.redis_keys import timeline_version_key
 
 logger = structlog.get_logger(__name__)
 
@@ -337,6 +338,17 @@ class TimelineCacheService:
     # Timeline Cache Operations
     # =========================================================================
 
+    def _get_timeline_version(self, matter_id: str) -> str:
+        """Get current timeline cache version for a matter.
+
+        Returns "0" if no version key exists (first use).
+        """
+        try:
+            version = self.redis.get(timeline_version_key(matter_id))
+            return version or "0"
+        except Exception:
+            return "0"
+
     async def get_timeline(
         self,
         matter_id: str,
@@ -357,7 +369,8 @@ class TimelineCacheService:
             return None
 
         try:
-            key = f"{matter_key(matter_id, 'timeline')}:{page}:{per_page}"
+            version = self._get_timeline_version(matter_id)
+            key = f"{matter_key(matter_id, 'timeline')}:v{version}:{page}:{per_page}"
             cached = self.redis.get(key)
 
             if cached:
@@ -403,7 +416,8 @@ class TimelineCacheService:
             return False
 
         try:
-            key = f"{matter_key(matter_id, 'timeline')}:{timeline.page}:{timeline.per_page}"
+            version = self._get_timeline_version(matter_id)
+            key = f"{matter_key(matter_id, 'timeline')}:v{version}:{timeline.page}:{timeline.per_page}"
             serialized = _serialize_timeline(timeline)
             self.redis.setex(key, ttl, serialized)
 
@@ -521,7 +535,8 @@ class TimelineCacheService:
             return None
 
         try:
-            key = f"{matter_key(matter_id, 'timeline')}:entity:{entity_id}"
+            version = self._get_timeline_version(matter_id)
+            key = f"{matter_key(matter_id, 'timeline')}:v{version}:entity:{entity_id}"
             cached = self.redis.get(key)
 
             if cached:
@@ -561,7 +576,8 @@ class TimelineCacheService:
             return False
 
         try:
-            key = f"{matter_key(matter_id, 'timeline')}:entity:{entity_id}"
+            version = self._get_timeline_version(matter_id)
+            key = f"{matter_key(matter_id, 'timeline')}:v{version}:entity:{entity_id}"
             serialized = json.dumps(_entity_view_to_dict(view), cls=TimelineCacheEncoder)
             self.redis.setex(key, ttl, serialized)
 
@@ -589,44 +605,37 @@ class TimelineCacheService:
     async def invalidate_timeline(self, matter_id: str) -> int:
         """Invalidate all timeline cache entries for a matter.
 
+        A5 optimization: Instead of SCAN+DELETE (~10 Redis ops), increments a
+        version counter (1 INCR). Old versioned keys become invisible and
+        expire via their existing TTL.
+
         Call this when events are added, updated, or entity links change.
 
         Args:
             matter_id: Matter UUID.
 
         Returns:
-            Number of cache entries deleted.
+            New version number (acts as invalidation count).
         """
         if not self.redis:
             return 0
 
         try:
-            # Use SCAN to find all timeline-related keys
-            pattern = f"{matter_key(matter_id, 'timeline')}:*"
+            # Increment version counter — all old keys become stale
+            version_key = timeline_version_key(matter_id)
+            new_version = self.redis.incr(version_key)
+
+            # Also delete the stats key (not versioned, small cost)
             stats_key = f"{matter_key(matter_id, 'stats')}:timeline"
-
-            deleted = 0
-            cursor = 0
-
-            # Delete timeline keys
-            while True:
-                cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
-                if keys:
-                    deleted += self.redis.delete(*keys)
-                if cursor == 0:
-                    break
-
-            # Delete stats key
-            if self.redis.delete(stats_key):
-                deleted += 1
+            self.redis.delete(stats_key)
 
             logger.info(
                 "timeline_cache_invalidated",
                 matter_id=matter_id,
-                keys_deleted=deleted,
+                new_version=new_version,
             )
 
-            return deleted
+            return new_version
 
         except Exception as e:
             logger.warning(
@@ -654,7 +663,8 @@ class TimelineCacheService:
             return False
 
         try:
-            key = f"{matter_key(matter_id, 'timeline')}:entity:{entity_id}"
+            version = self._get_timeline_version(matter_id)
+            key = f"{matter_key(matter_id, 'timeline')}:v{version}:entity:{entity_id}"
             deleted = self.redis.delete(key)
 
             if deleted:

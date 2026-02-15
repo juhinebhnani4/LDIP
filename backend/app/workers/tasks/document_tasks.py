@@ -2932,6 +2932,25 @@ def chunk_document(
             metadata={"chunk_count": saved_count},
         )
 
+        # F1: Cache chunks to Redis for downstream engines (entity, citation, timeline)
+        # This eliminates 2 extra Supabase reads per document
+        try:
+            from app.services.chunk_service import cache_chunks_to_redis
+            # Build chunk dicts matching the format downstream tasks expect
+            chunk_dicts = []
+            for chunk_data in result.parent_chunks + result.child_chunks:
+                chunk_dicts.append({
+                    "id": str(chunk_data.id),
+                    "content": chunk_data.content,
+                    "chunk_type": chunk_data.chunk_type,
+                    "page_number": chunk_data.page_number,
+                    "chunk_index": chunk_data.chunk_index,
+                    "bbox_ids": [str(b) for b in chunk_data.bbox_ids] if chunk_data.bbox_ids else [],
+                })
+            cache_chunks_to_redis(doc_id, chunk_dicts)
+        except Exception as e:
+            logger.debug("shared_chunk_cache_after_chunking_error", error=str(e))
+
         logger.info(
             "chunk_document_task_completed",
             document_id=doc_id,
@@ -3972,18 +3991,23 @@ def extract_entities(
                 "job_id": job_id,
             }
 
-        # Get all chunks for this document (child chunks for more granular extraction)
-        # Include bbox_ids for spatial data passthrough (gold standard pattern)
-        response = (
-            client.table("chunks")
-            .select("id, content, chunk_type, page_number, bbox_ids")
-            .eq("document_id", doc_id)
-            .eq("chunk_type", "child")  # Extract from child chunks for precision
-            .order("chunk_index", desc=False)
-            .execute()
-        )
+        # F1: Try shared chunk cache first (avoids Supabase read)
+        from app.services.chunk_service import get_cached_chunks
+        chunks = get_cached_chunks(doc_id, chunk_type_filter="child")
 
-        chunks = response.data or []
+        if chunks is None:
+            # Cache miss — fall back to Supabase
+            # Get all chunks for this document (child chunks for more granular extraction)
+            # Include bbox_ids for spatial data passthrough (gold standard pattern)
+            response = (
+                client.table("chunks")
+                .select("id, content, chunk_type, page_number, bbox_ids")
+                .eq("document_id", doc_id)
+                .eq("chunk_type", "child")  # Extract from child chunks for precision
+                .order("chunk_index", desc=False)
+                .execute()
+            )
+            chunks = response.data or []
 
         # Story 2.2: Fallback to raw extracted_text if no chunks available
         # This allows entity extraction to run in parallel with chunking
@@ -5054,18 +5078,23 @@ def extract_citations(
         # Track citation extraction stage start (Story 2c-3)
         _update_job_stage_start(job_id, "citation_extraction", matter_id)
 
-        # Get all chunks for this document (child chunks for granular extraction)
-        # Include bbox_ids for linking citations to source bounding boxes
-        response = (
-            client.table("chunks")
-            .select("id, content, chunk_type, page_number, bbox_ids")
-            .eq("document_id", doc_id)
-            .eq("chunk_type", "child")  # Extract from child chunks for precision
-            .order("chunk_index", desc=False)
-            .execute()
-        )
+        # F1: Try shared chunk cache first (avoids Supabase read)
+        from app.services.chunk_service import get_cached_chunks
+        chunks = get_cached_chunks(doc_id, chunk_type_filter="child")
 
-        chunks = response.data or []
+        if chunks is None:
+            # Cache miss — fall back to Supabase
+            # Get all chunks for this document (child chunks for granular extraction)
+            # Include bbox_ids for linking citations to source bounding boxes
+            response = (
+                client.table("chunks")
+                .select("id, content, chunk_type, page_number, bbox_ids")
+                .eq("document_id", doc_id)
+                .eq("chunk_type", "child")  # Extract from child chunks for precision
+                .order("chunk_index", desc=False)
+                .execute()
+            )
+            chunks = response.data or []
 
         if not chunks:
             logger.info(
@@ -5107,6 +5136,11 @@ def extract_citations(
         failed_chunks = 0
         skipped_chunks = 0
 
+        # B1: Determine LLM batch size (citation_batch_size chunks per Gemini call)
+        from app.core.config import get_settings as _get_settings
+        _citation_settings = _get_settings()
+        llm_batch_size = _citation_settings.citation_batch_size if _citation_settings.citation_batching_enabled else 1
+
         # Process all batches in a single async context
         async def _extract_citations_async():
             nonlocal total_citations, failed_chunks, skipped_chunks
@@ -5114,69 +5148,74 @@ def extract_citations(
             for i in range(0, len(chunks), CITATION_EXTRACTION_BATCH_SIZE):
                 batch = chunks[i : i + CITATION_EXTRACTION_BATCH_SIZE]
 
+                # Filter out already-processed chunks
+                pending_chunks = []
                 for chunk in batch:
                     chunk_id = chunk["id"]
-
-                    # Skip already-processed chunks (partial progress)
                     if chunk_id in already_processed:
                         skipped_chunks += 1
-                        continue
+                    else:
+                        pending_chunks.append(chunk)
+
+                # B1: Process pending chunks in LLM batches of citation_batch_size
+                for j in range(0, len(pending_chunks), llm_batch_size):
+                    llm_batch = pending_chunks[j : j + llm_batch_size]
 
                     try:
-                        # Extract citations from chunk
-                        extraction_result = extractor.extract_from_text_sync(
-                            text=chunk["content"],
+                        # Extract citations from batch (single Gemini call for N chunks)
+                        batch_results = extractor.extract_from_batch_sync(
+                            chunks=llm_batch,
                             document_id=doc_id,
                             matter_id=matter_id,
-                            chunk_id=chunk_id,
-                            page_number=chunk.get("page_number"),
                         )
 
-                        if extraction_result.citations:
-                            # Save citations to database with source bbox IDs for highlighting
-                            # bbox_ids come from the chunk's bbox linking step
-                            chunk_bbox_ids = chunk.get("bbox_ids") or []
-                            saved_count = await storage.save_citations(
-                                matter_id=matter_id,
-                                document_id=doc_id,
-                                extraction_result=extraction_result,
-                                source_bbox_ids=chunk_bbox_ids,
-                            )
-                            total_citations += saved_count
+                        # Process each result
+                        for chunk, extraction_result in zip(llm_batch, batch_results):
+                            chunk_id = chunk["id"]
 
-                        if extraction_result.unique_acts:
-                            total_unique_acts.update(extraction_result.unique_acts)
+                            if extraction_result.citations:
+                                chunk_bbox_ids = chunk.get("bbox_ids") or []
+                                saved_count = await storage.save_citations(
+                                    matter_id=matter_id,
+                                    document_id=doc_id,
+                                    extraction_result=extraction_result,
+                                    source_bbox_ids=chunk_bbox_ids,
+                                )
+                                total_citations += saved_count
 
-                        # Track partial progress
-                        if stage_progress:
-                            stage_progress.mark_processed(chunk_id)
+                            if extraction_result.unique_acts:
+                                total_unique_acts.update(extraction_result.unique_acts)
+
+                            if stage_progress:
+                                stage_progress.mark_processed(chunk_id)
 
                     except CitationExtractorError as e:
-                        if stage_progress:
-                            stage_progress.mark_failed(chunk_id, str(e))
+                        for chunk in llm_batch:
+                            if stage_progress:
+                                stage_progress.mark_failed(chunk["id"], str(e))
 
                         if e.is_retryable:
-                            # Save progress before retry
                             if progress_tracker and stage_progress:
                                 await progress_tracker.save_progress_async(stage_progress, force=True)
-                            raise  # Let Celery retry
+                            raise
                         logger.warning(
-                            "extract_citations_chunk_failed",
+                            "extract_citations_batch_failed",
                             document_id=doc_id,
-                            chunk_id=chunk_id,
+                            batch_chunk_count=len(llm_batch),
                             error=str(e),
                         )
-                        failed_chunks += 1
+                        failed_chunks += len(llm_batch)
                     except Exception as e:
                         logger.warning(
-                            "extract_citations_chunk_error",
+                            "extract_citations_batch_error",
                             document_id=doc_id,
-                            chunk_id=chunk_id,
+                            batch_chunk_count=len(llm_batch),
                             error=str(e),
                         )
-                        failed_chunks += 1
-                        if stage_progress:
-                            stage_progress.mark_failed(chunk_id, str(e))
+                        failed_chunks += len(llm_batch)
+                        for chunk in llm_batch:
+                            if stage_progress:
+                                stage_progress.mark_failed(chunk["id"], str(e))
 
                 # Persist partial progress periodically
                 if progress_tracker and stage_progress:

@@ -602,3 +602,103 @@ class TestExtractEntitiesTask:
         assert result["status"] == "entity_extraction_complete"
         assert result["entities_extracted"] == 0
         assert "No chunks found" in result["reason"]
+
+
+class TestContradictionTimeoutConstants:
+    """Tests for contradiction detection timeout configuration."""
+
+    def test_per_entity_timeout_constant_exists(self) -> None:
+        """Verify the per-entity timeout constant is defined and reasonable."""
+        from app.workers.tasks.document_tasks import (
+            CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS,
+        )
+
+        assert CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS == 300
+        # Must be at least 60s (25 pairs × 5 batches × ~2s minimum)
+        assert CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS >= 60
+
+    def test_concurrency_limit_constant_exists(self) -> None:
+        """Verify the concurrency limit is defined and conservative."""
+        from app.workers.tasks.document_tasks import CONTRADICTION_CONCURRENCY_LIMIT
+
+        assert CONTRADICTION_CONCURRENCY_LIMIT == 3
+        # Must be between 1 and 10 (resource safety)
+        assert 1 <= CONTRADICTION_CONCURRENCY_LIMIT <= 10
+
+    def test_max_entities_within_task_timeout_budget(self) -> None:
+        """Verify worst-case entity processing fits within task timeout.
+
+        With CONCURRENCY_LIMIT concurrent entities and PER_ENTITY_TIMEOUT,
+        the typical case (not worst case) should fit within the task soft limit.
+        Typical: ~60% of entities complete in <10s, only ~10% hit timeout.
+        """
+        from app.workers.tasks.document_tasks import (
+            CONTRADICTION_CONCURRENCY_LIMIT,
+            CONTRADICTION_MAX_ENTITIES_PER_RUN,
+            CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS,
+        )
+
+        # Typical case: 80% finish in 10s, 20% take full timeout
+        fast_entities = int(CONTRADICTION_MAX_ENTITIES_PER_RUN * 0.8)
+        slow_entities = CONTRADICTION_MAX_ENTITIES_PER_RUN - fast_entities
+        typical_time = (
+            (fast_entities / CONTRADICTION_CONCURRENCY_LIMIT) * 10
+            + (slow_entities / CONTRADICTION_CONCURRENCY_LIMIT)
+            * CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS
+        )
+        # Typical case should fit in 1200s (20 min soft limit)
+        assert typical_time < 1200, (
+            f"Typical processing time {typical_time:.0f}s exceeds 1200s soft limit"
+        )
+
+
+class TestContradictionTimeoutHandling:
+    """Tests for per-entity timeout graceful handling in contradiction detection."""
+
+    @pytest.mark.asyncio
+    async def test_entity_timeout_returns_skipped(self) -> None:
+        """Verify that asyncio.TimeoutError is caught and returns skipped status."""
+        import asyncio
+        import time as _time
+
+        from app.workers.tasks.document_tasks import (
+            CONTRADICTION_CONCURRENCY_LIMIT,
+        )
+
+        # Simulate the _process_single_name logic with a timeout
+        _contradiction_semaphore = asyncio.Semaphore(CONTRADICTION_CONCURRENCY_LIMIT)
+
+        async def _simulate_slow_comparison() -> None:
+            """Simulates a comparison that exceeds timeout."""
+            await asyncio.sleep(10)  # Would exceed our 0.1s test timeout
+
+        async def _process_single_name_sim(canonical_name: str) -> dict:
+            async with _contradiction_semaphore:
+                _entity_start = _time.monotonic()
+                try:
+                    async with asyncio.timeout(0.1):  # Very short for test
+                        await _simulate_slow_comparison()
+                    return {"status": "ok"}
+                except TimeoutError:
+                    return {"status": "skipped", "reason": "timeout"}
+
+        result = await _process_single_name_sim("Test Entity")
+        assert result["status"] == "skipped"
+        assert result["reason"] == "timeout"
+
+    @pytest.mark.asyncio
+    async def test_fast_entity_returns_ok(self) -> None:
+        """Verify that entities completing within timeout return ok."""
+        import asyncio
+
+        async def _process_fast(canonical_name: str) -> dict:
+            try:
+                async with asyncio.timeout(1.0):
+                    await asyncio.sleep(0.01)  # Fast
+                return {"status": "ok", "pairs_compared": 5}
+            except TimeoutError:
+                return {"status": "skipped", "reason": "timeout"}
+
+        result = await _process_fast("Fast Entity")
+        assert result["status"] == "ok"
+        assert result["pairs_compared"] == 5

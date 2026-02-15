@@ -5449,6 +5449,8 @@ def extract_citations(
 # Configuration
 CONTRADICTION_MAX_ENTITIES_PER_RUN = 50  # Max entities to process per task run
 CONTRADICTION_MAX_PAIRS_PER_ENTITY = 25  # Max pairs per entity (cost control)
+CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS = 300  # 5 min per entity (25 pairs × 5 batch × ~10s GPT-4)
+CONTRADICTION_CONCURRENCY_LIMIT = 3  # Concurrent entity LLM streams (Railway resource safe)
 
 
 def _store_comparison_results(
@@ -5561,8 +5563,8 @@ def _store_comparison_results(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=900,  # 15 minutes - up to 50 entities × LLM calls
-    time_limit=960,  # 16 minutes - hard kill
+    soft_time_limit=1200,  # 20 minutes - typical: ~30 entities finish in <10min
+    time_limit=1260,  # 21 minutes - hard kill
 )  # type: ignore[misc]
 def detect_contradictions(
     self,  # type: ignore[no-untyped-def]
@@ -5787,20 +5789,25 @@ def detect_contradictions(
         entities_skipped = 0
         total_cost_usd = 0.0
 
-        # Semaphore to limit concurrent LLM calls (avoid rate limiting)
-        _contradiction_semaphore = asyncio.Semaphore(5)
+        # Semaphore to limit concurrent LLM calls (avoid rate limiting + Railway resource safety)
+        _contradiction_semaphore = asyncio.Semaphore(CONTRADICTION_CONCURRENCY_LIMIT)
 
         async def _process_single_name(canonical_name: str) -> dict:
             """Process a single canonical name with timeout and concurrency control."""
+            import time as _time
+
             async with _contradiction_semaphore:
+                _entity_start = _time.monotonic()
                 try:
-                    async with asyncio.timeout(120):  # 2-minute timeout per entity
+                    async with asyncio.timeout(CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS):
                         comparison_result = await compare_service.compare_statements_by_canonical_name(
                             canonical_name=canonical_name,
                             matter_id=matter_id,
                             max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
                             confidence_threshold=0.5,
                         )
+
+                    _entity_elapsed = _time.monotonic() - _entity_start
 
                     # Store contradictions to database (Epic 5 requirement)
                     stored = 0
@@ -5811,12 +5818,14 @@ def detect_contradictions(
                             entity_id=comparison_result.data.entity_id,
                         )
 
-                    logger.debug(
+                    logger.info(
                         "detect_contradictions_name_complete",
                         document_id=doc_id,
                         canonical_name=canonical_name,
                         contradictions=comparison_result.meta.contradictions_found,
                         pairs_compared=comparison_result.meta.pairs_compared,
+                        elapsed_seconds=round(_entity_elapsed, 1),
+                        cost_usd=comparison_result.meta.total_cost_usd,
                         stored=stored,
                     )
 
@@ -5828,12 +5837,14 @@ def detect_contradictions(
                         "stored": stored,
                     }
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
+                    _entity_elapsed = _time.monotonic() - _entity_start
                     logger.warning(
                         "detect_contradictions_name_timeout",
                         document_id=doc_id,
                         canonical_name=canonical_name,
-                        timeout_seconds=120,
+                        timeout_seconds=CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS,
+                        elapsed_seconds=round(_entity_elapsed, 1),
                     )
                     return {"status": "skipped", "reason": "timeout"}
 
@@ -5939,7 +5950,7 @@ def detect_contradictions(
         logger.error(
             "detect_contradictions_task_timeout",
             document_id=doc_id,
-            timeout_seconds=900,
+            timeout_seconds=1200,
             entities_processed=entities_processed,
             contradictions_found=total_contradictions,
         )
@@ -5951,7 +5962,7 @@ def detect_contradictions(
             "status": "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "TIMEOUT",
-            "error_message": "Contradiction detection timeout exceeded (15 minutes)",
+            "error_message": "Contradiction detection timeout exceeded (20 minutes)",
             "entities_processed": entities_processed,
             "contradictions_found": total_contradictions,
             "job_id": job_id,

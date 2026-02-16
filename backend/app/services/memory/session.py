@@ -325,6 +325,7 @@ class SessionMemoryService:
         content: str,
         entity_refs: list[str] | None = None,
         source_refs: list[dict] | None = None,
+        engine_traces: list[dict] | None = None,
     ) -> SessionContext:
         """Add a message to session history with sliding window (AC #2, #3).
 
@@ -335,6 +336,7 @@ class SessionMemoryService:
             content: Message content.
             entity_refs: Optional entity IDs mentioned.
             source_refs: Optional source references (for assistant messages).
+            engine_traces: Optional engine execution traces (for assistant messages).
 
         Returns:
             Updated SessionContext.
@@ -373,6 +375,7 @@ class SessionMemoryService:
             timestamp=now,
             entity_refs=entity_refs or [],
             source_refs=source_ref_models,
+            engine_traces=engine_traces or [],
         )
 
         # Add to messages list

@@ -213,7 +213,10 @@ MULTI_INTENT_CLASSIFICATION_PROMPT = """You are a legal query intent classifier.
   "reasoning": "Overall explanation of classification"
 }}
 
-IMPORTANT:
+## IMPORTANT Classification Rules:
+- "What is the dispute about?" or "core dispute" = RAG (asking ABOUT the case, not asking to FIND contradictions)
+- Only use CONTRADICTION when the user explicitly wants to find inconsistencies BETWEEN different statements/parties
+- Words like "dispute", "issue", "matter", "case" describe the case itself, NOT contradictions
 - Return ALL intents with confidence > 0.5, not just the highest one
 - Engine values must be: RAG, CITATION, TIMELINE, or CONTRADICTION
 - If query mentions multiple distinct topics, include ALL relevant engines

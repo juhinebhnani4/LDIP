@@ -152,6 +152,8 @@ async def get_conversation_history(
                     }
                     for ref in msg.source_refs
                 ]
+            if msg.engine_traces:
+                message_data["engine_traces"] = msg.engine_traces
             messages.append(message_data)
 
         # Check if there's archived content
@@ -328,6 +330,8 @@ async def get_archived_messages(
                     }
                     for ref in msg.source_refs
                 ]
+            if msg.engine_traces:
+                message_data["engine_traces"] = msg.engine_traces
             messages.append(message_data)
 
         return {

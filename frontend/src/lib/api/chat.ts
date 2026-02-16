@@ -8,7 +8,8 @@
  */
 
 import { api } from './client';
-import type { ChatMessage, SessionContext } from '@/types/chat';
+import type { ChatMessage, SessionContext, EngineTraceAPI } from '@/types/chat';
+import { transformEngineTrace } from '@/types/chat';
 
 // ============================================================================
 // Response Types (Backend API format)
@@ -26,6 +27,7 @@ interface BackendSessionMessage {
     page?: number;
     bbox_ids?: string[];
   }>;
+  engine_traces?: EngineTraceAPI[];
 }
 
 interface BackendSessionContext {
@@ -63,6 +65,9 @@ function transformMessage(backendMessage: BackendSessionMessage): ChatMessage {
   const msg = backendMessage as unknown as Record<string, unknown>;
   const sourceRefs = backendMessage.source_refs ?? msg.sourceRefs as typeof backendMessage.source_refs;
 
+  // Handle both snake_case and camelCase engine traces
+  const engineTraceRefs = backendMessage.engine_traces ?? (msg.engineTraces as typeof backendMessage.engine_traces);
+
   return {
     id: messageId,
     role: backendMessage.role,
@@ -77,6 +82,7 @@ function transformMessage(backendMessage: BackendSessionMessage): ChatMessage {
         bboxIds: (r.bboxIds as string[]) ?? ref.bbox_ids,
       };
     }),
+    engineTraces: engineTraceRefs?.map(transformEngineTrace),
   };
 }
 

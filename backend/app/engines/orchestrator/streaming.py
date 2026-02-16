@@ -252,6 +252,7 @@ class StreamingOrchestrator:
                     response=response_text,
                     message_id=message_id,
                     sources=sources,
+                    engine_traces=engine_traces,
                 )
             except Exception as save_err:
                 logger.error(
@@ -356,6 +357,7 @@ class StreamingOrchestrator:
         response: str,
         message_id: str,
         sources: list[SourceReferenceEvent] | None = None,
+        engine_traces: list[EngineTraceEvent] | None = None,
     ) -> None:
         """Save assistant response to session memory.
 
@@ -367,6 +369,7 @@ class StreamingOrchestrator:
             response: Full assistant response.
             message_id: Message ID for tracking.
             sources: Optional source references from engine results.
+            engine_traces: Optional engine execution traces.
         """
         try:
             # Convert SourceReferenceEvent to dicts for session storage
@@ -381,18 +384,34 @@ class StreamingOrchestrator:
                     for s in sources
                 ]
 
+            # Convert EngineTraceEvent to dicts for session storage
+            trace_dicts = None
+            if engine_traces:
+                trace_dicts = [
+                    {
+                        "engine": t.engine,
+                        "execution_time_ms": t.execution_time_ms,
+                        "findings_count": t.findings_count,
+                        "success": t.success,
+                        "error": t.error,
+                    }
+                    for t in engine_traces
+                ]
+
             await self.session_service.add_message(
                 matter_id=matter_id,
                 user_id=user_id,
                 role="assistant",
                 content=response,
                 source_refs=source_refs,
+                engine_traces=trace_dicts,
             )
             logger.debug(
                 "assistant_response_saved",
                 matter_id=matter_id,
                 message_id=message_id,
                 sources_count=len(sources) if sources else 0,
+                traces_count=len(engine_traces) if engine_traces else 0,
             )
         except Exception as e:
             logger.warning(

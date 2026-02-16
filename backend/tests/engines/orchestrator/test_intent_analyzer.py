@@ -135,8 +135,8 @@ class TestFastPathClassification:
         test_cases = [
             "Are there any contradictions about the loan amount?",
             "Find inconsistencies in the statements",
-            "Do the documents conflict on any dates?",
-            "What do the parties disagree on?",
+            "Are there conflicting statements about the dates?",
+            "What do the parties disagree about?",
             "Is there a mismatch in the amounts?",
         ]
 

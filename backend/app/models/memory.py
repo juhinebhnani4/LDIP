@@ -74,6 +74,10 @@ class SessionMessage(BaseModel):
         default_factory=list,
         description="Source references for assistant messages",
     )
+    engine_traces: list[dict] = Field(
+        default_factory=list,
+        description="Engine execution traces for assistant messages",
+    )
 
 
 class SessionEntityMention(BaseModel):

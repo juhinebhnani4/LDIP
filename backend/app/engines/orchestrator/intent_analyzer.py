@@ -674,12 +674,16 @@ INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
     EngineType.CONTRADICTION: [
         (re.compile(r"\bcontradictions?\b", re.IGNORECASE), 0.9),
         (re.compile(r"\binconsisten(t|cy|cies)\b", re.IGNORECASE), 0.9),
-        (re.compile(r"\bconflicts?\b", re.IGNORECASE), 0.8),
-        (re.compile(r"\b(differ|dispute|discrepanc)", re.IGNORECASE), 0.7),
-        (re.compile(r"\bdisagree", re.IGNORECASE), 0.7),
+        (re.compile(r"\bconflicting\s+(statements?|accounts?|claims?|versions?|testimon)", re.IGNORECASE), 0.85),
+        (re.compile(r"\bconflict\s+between\b", re.IGNORECASE), 0.85),
+        (re.compile(r"\bdiscrepanc(y|ies)\b", re.IGNORECASE), 0.8),
+        (re.compile(r"\bdisagree(ment|s)?\s+(about|on|between|regarding|with)\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\bmismatche?s?\b", re.IGNORECASE), 0.7),
+        (re.compile(r"\bconflicts?\b", re.IGNORECASE), 0.6),  # Low confidence — contributes as signal but won't dominate RAG
     ],
     EngineType.RAG: [
         (re.compile(r"\b(summarize|summary)\b", re.IGNORECASE), 0.8),
+        (re.compile(r"\bwhat\s+(is|are|was|were)\s+(the\s+)?(core|main|central|key|primary)?\s*(dispute|issue|case|matter|claim)\b", re.IGNORECASE), 0.9),
         (re.compile(r"\bwhat\s+(is|are|was|were)\b", re.IGNORECASE), 0.7),
         (re.compile(r"\bexplain\b", re.IGNORECASE), 0.7),
         (re.compile(r"\btell\s+me\s+about\b", re.IGNORECASE), 0.7),
@@ -1088,8 +1092,24 @@ class MultiIntentAnalyzer:
             s.engine for s in signals if s.confidence >= INCLUSION_THRESHOLD
         )
 
+        # Build confidence lookup for compound intent priority decisions
+        conf_by_engine = {s.engine: s.confidence for s in signals}
+
         for engine_combo, compound in COMPOUND_INTENTS.items():
             if engine_combo <= active_engines:
+                # For contradiction_summary: only use CONTRADICTION as primary
+                # if it has high confidence. Otherwise, swap to RAG-primary.
+                if (
+                    compound.name == "contradiction_summary"
+                    and conf_by_engine.get(EngineType.CONTRADICTION, 0)
+                    < HIGH_CONFIDENCE_THRESHOLD
+                ):
+                    return CompoundIntent(
+                        name="general_with_contradiction_check",
+                        primary_engine=EngineType.RAG,
+                        supporting_engines=[EngineType.CONTRADICTION],
+                        aggregation_strategy="weave",
+                    )
                 return compound
 
         return None

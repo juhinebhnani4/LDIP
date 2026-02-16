@@ -24,6 +24,7 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost, persist_cost_sync
 from app.models.ocr_validation import (
     CorrectionType,
     LowConfidenceWord,
@@ -213,6 +214,18 @@ Example response:
 
             processing_time = int((time.time() - start_time) * 1000)
 
+            # Track cost
+            tracker = CostTracker(
+                provider=LLMProvider.GEMINI_FLASH,
+                operation="ocr_validation",
+            )
+            tracker.add_tokens(
+                input_tokens=estimate_tokens(prompt),
+                output_tokens=estimate_tokens(response.text or ""),
+            )
+            tracker.log_cost()
+            persist_cost_sync(tracker)
+
             # Record success
             breaker.record_success()
 
@@ -346,6 +359,17 @@ Example response:
             model=self.model_name,
             contents=prompt,
         )
+        # Track cost
+        tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="ocr_validation",
+        )
+        tracker.add_tokens(
+            input_tokens=estimate_tokens(prompt),
+            output_tokens=estimate_tokens(response.text or ""),
+        )
+        tracker.log_cost()
+        await persist_cost(tracker)
         return response.text
 
     def _parse_response(

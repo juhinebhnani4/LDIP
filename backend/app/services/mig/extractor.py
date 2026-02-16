@@ -19,6 +19,8 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost, persist_cost_sync
+from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import (
     LLMProvider as RateLimitProvider,
@@ -275,6 +277,20 @@ class MIGEntityExtractor:
 
                 processing_time = int((time.time() - start_time) * 1000)
 
+                # Track Gemini cost
+                cost_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="entity_extraction",
+                    matter_id=matter_id,
+                    document_id=document_id,
+                )
+                cost_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                cost_tracker.log_cost()
+                await persist_cost(cost_tracker)
+
                 # Story 6.4: Build entity type counts safely before logging
                 entity_type_counts: dict[str, int] = {}
                 try:
@@ -447,6 +463,20 @@ class MIGEntityExtractor:
                 )
 
                 processing_time = int((time.time() - start_time) * 1000)
+
+                # Track Gemini cost (sync path)
+                cost_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="entity_extraction",
+                    matter_id=matter_id,
+                    document_id=document_id,
+                )
+                cost_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                cost_tracker.log_cost()
+                persist_cost_sync(cost_tracker)
 
                 # Story 6.4: Build entity type counts safely before logging
                 entity_type_counts: dict[str, int] = {}

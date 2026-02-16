@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     verification_threshold_suggested: float = 70.0  # > 70% confidence = suggested verification
     verification_export_block_below: float = 70.0   # < 70% unverified = blocks export
 
+    # Monthly Cost Budget (Usage Dashboard)
+    monthly_cost_budget_usd: float = 120.0  # $120/month budget for LLM costs
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 

@@ -1,0 +1,26 @@
+{
+  "summary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "endpoint": "/api/matters",
+      "method": "GET",
+      "status_code": 401,
+      "success": false,
+      "response_time_ms": 2106.5073013305664,
+      "error": null
+    },
+    {
+      "endpoint": "/api/matters",
+      "method": "GET",
+      "status_code": 401,
+      "success": false,
+      "response_time_ms": 2087.381362915039,
+      "error": null
+    }
+  ]
+}

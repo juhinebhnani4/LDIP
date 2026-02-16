@@ -877,6 +877,52 @@ async def persist_cost(tracker: CostTracker) -> str | None:
     return None
 
 
+def persist_cost_sync(tracker: CostTracker) -> str | None:
+    """Sync version of persist_cost for Celery worker contexts.
+
+    The Supabase client's table().insert().execute() is blocking,
+    so this works without async/await.
+
+    Args:
+        tracker: CostTracker instance to persist.
+
+    Returns:
+        Record ID if saved, None otherwise.
+    """
+    service = get_cost_service()
+    if not service:
+        return None
+    try:
+        record = {
+            "matter_id": tracker.matter_id,
+            "document_id": tracker.document_id,
+            "entity_id": tracker.entity_id,
+            "provider": tracker.provider.value,
+            "operation": tracker.operation,
+            "input_tokens": tracker.input_tokens,
+            "output_tokens": tracker.output_tokens,
+            "input_cost_inr": round(tracker.input_cost_inr, 4),
+            "output_cost_inr": round(tracker.output_cost_inr, 4),
+            "total_cost_inr": round(tracker.total_cost_inr, 4),
+            "input_cost_usd": tracker.input_cost_usd,
+            "output_cost_usd": tracker.output_cost_usd,
+            "total_cost_usd": tracker.total_cost_usd,
+            "usd_to_inr_rate": USD_TO_INR_RATE,
+            "duration_ms": tracker.duration_ms,
+            "metadata": {},
+        }
+        result = service.supabase.table("llm_costs").insert(record).execute()
+        return result.data[0].get("id") if result.data else None
+    except Exception as e:
+        logger.error(
+            "cost_persistence_sync_failed",
+            error=str(e),
+            operation=tracker.operation,
+            provider=tracker.provider.value,
+        )
+        return None
+
+
 # =============================================================================
 # Quota Monitoring Extensions (Story gap-5.2)
 # =============================================================================

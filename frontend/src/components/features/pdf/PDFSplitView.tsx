@@ -12,15 +12,20 @@
  */
 
 import { useEffect, useCallback, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
-import { PdfViewerPanel } from './PdfViewerPanel';
 import { PDFSplitViewHeader } from './PDFSplitViewHeader';
 import { PdfErrorBoundary } from './PdfErrorBoundary';
 import { PDFFullScreenModal } from './PDFFullScreenModal';
+
+const PdfViewerPanel = dynamic(
+  () => import('./PdfViewerPanel').then((m) => ({ default: m.PdfViewerPanel })),
+  { ssr: false },
+);
 import {
   usePdfSplitViewStore,
   selectPdfSplitViewIsOpen,

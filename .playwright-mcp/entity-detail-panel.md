@@ -1,0 +1,1645 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e20]:
+    - banner [ref=e22]:
+      - generic [ref=e23]:
+        - link "Back to Dashboard" [ref=e25] [cursor=pointer]:
+          - /url: /
+          - img [ref=e26]
+          - generic [ref=e28]: Dashboard
+        - 'button "Edit matter name: Nirav Jobalia" [ref=e30] [cursor=pointer]':
+          - heading "Nirav Jobalia" [level=1] [ref=e31]
+          - img [ref=e32]
+        - generic [ref=e35]:
+          - button "Export options" [ref=e36]:
+            - img
+          - button "Share matter" [ref=e37]:
+            - img
+          - button "Settings" [ref=e38]:
+            - img
+          - button "Delete matter" [ref=e39]:
+            - img
+    - tablist "Matter workspace navigation" [ref=e41]:
+      - generic [ref=e42]:
+        - tab "Summary" [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+          - generic [ref=e47]: Summary
+        - tab "Timeline" [ref=e48] [cursor=pointer]:
+          - img [ref=e49]
+          - generic [ref=e52]: Timeline
+        - tab "Entities" [selected] [ref=e53] [cursor=pointer]:
+          - img [ref=e54]
+          - generic [ref=e59]: Entities
+        - tab "Citations" [ref=e60] [cursor=pointer]:
+          - img [ref=e61]
+          - generic [ref=e64]: Citations
+        - tab "Contradictions" [ref=e65] [cursor=pointer]:
+          - img [ref=e66]
+          - generic [ref=e68]: Contradictions
+        - tab "Verification" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e73]: Verification
+        - tab "Documents" [ref=e74] [cursor=pointer]:
+          - img [ref=e75]
+          - generic [ref=e77]: Documents
+    - main [ref=e78]:
+      - generic [ref=e81]:
+        - tabpanel "Entities" [ref=e541]:
+          - generic [ref=e542]:
+            - generic [ref=e598]:
+              - generic [ref=e599] [cursor=pointer]:
+                - generic [ref=e600]:
+                  - generic [ref=e601]:
+                    - img [ref=e602]
+                    - generic [ref=e606]: Potential Duplicates Found
+                    - generic [ref=e607]: "10"
+                  - img [ref=e608]
+                - paragraph [ref=e610]: Review these entities that may refer to the same person or organization
+              - generic [ref=e612]:
+                - button "Select all" [ref=e615]:
+                  - img [ref=e616]
+                  - text: Select all
+                - generic [ref=e618]:
+                  - checkbox [ref=e619]
+                  - generic [ref=e620]:
+                    - generic [ref=e621]:
+                      - generic "Ashwin S Mehta" [ref=e622]: "\"Ashwin S Mehta\""
+                      - generic [ref=e623]: "&"
+                      - generic "Ashwin S. Mehta" [ref=e624]: "\"Ashwin S. Mehta\""
+                    - paragraph [ref=e625]: "\"Ashwin S Mehta\" and \"Ashwin S. Mehta\" appear to be the same person"
+                  - generic [ref=e626]: 99% match
+                  - generic [ref=e627]:
+                    - button "Merge" [ref=e628]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e629]:
+                      - img
+                - generic [ref=e630]:
+                  - checkbox [ref=e631]
+                  - generic [ref=e632]:
+                    - generic [ref=e633]:
+                      - generic "Alpa Jobalia" [ref=e634]: "\"Alpa Jobalia\""
+                      - generic [ref=e635]: "&"
+                      - generic "Alpan Jobalia" [ref=e636]: "\"Alpan Jobalia\""
+                    - paragraph [ref=e637]: "\"Alpa Jobalia\" and \"Alpan Jobalia\" appear to be the same person"
+                  - generic [ref=e638]: 99% match
+                  - generic [ref=e639]:
+                    - button "Merge" [ref=e640]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e641]:
+                      - img
+                - generic [ref=e642]:
+                  - checkbox [ref=e643]
+                  - generic [ref=e644]:
+                    - generic [ref=e645]:
+                      - generic "Alpa Jobalia" [ref=e646]: "\"Alpa Jobalia\""
+                      - generic [ref=e647]: "&"
+                      - generic "Alpa Jobali" [ref=e648]: "\"Alpa Jobali\""
+                    - paragraph [ref=e649]: "\"Alpa Jobalia\" and \"Alpa Jobali\" appear to be the same person"
+                  - generic [ref=e650]: 99% match
+                  - generic [ref=e651]:
+                    - button "Merge" [ref=e652]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e653]:
+                      - img
+                - generic [ref=e654]:
+                  - checkbox [ref=e655]
+                  - generic [ref=e656]:
+                    - generic [ref=e657]:
+                      - generic "Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992" [ref=e658]: "\"Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992\""
+                      - generic [ref=e659]: "&"
+                      - generic "Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992" [ref=e660]: "\"Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992\""
+                    - paragraph [ref=e661]: "\"Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992\" and \"Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992\" appear to be the same institution"
+                  - generic [ref=e662]: 99% match
+                  - generic [ref=e663]:
+                    - button "Merge" [ref=e664]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e665]:
+                      - img
+                - generic [ref=e666]:
+                  - checkbox [ref=e667]
+                  - generic [ref=e668]:
+                    - generic [ref=e669]:
+                      - generic "Applicant" [ref=e670]: "\"Applicant\""
+                      - generic [ref=e671]: "&"
+                      - generic "Applicants" [ref=e672]: "\"Applicants\""
+                    - paragraph [ref=e673]: "\"Applicant\" and \"Applicants\" appear to be the same org"
+                  - generic [ref=e674]: 99% match
+                  - generic [ref=e675]:
+                    - button "Merge" [ref=e676]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e677]:
+                      - img
+                - generic [ref=e678]:
+                  - checkbox [ref=e679]
+                  - generic [ref=e680]:
+                    - generic [ref=e681]:
+                      - generic "Jyoti H. Mehta" [ref=e682]: "\"Jyoti H. Mehta\""
+                      - generic [ref=e683]: "&"
+                      - generic "Jyoti H Mehta" [ref=e684]: "\"Jyoti H Mehta\""
+                    - paragraph [ref=e685]: "\"Jyoti H. Mehta\" and \"Jyoti H Mehta\" appear to be the same person"
+                  - generic [ref=e686]: 99% match
+                  - generic [ref=e687]:
+                    - button "Merge" [ref=e688]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e689]:
+                      - img
+                - generic [ref=e690]:
+                  - checkbox [ref=e691]
+                  - generic [ref=e692]:
+                    - generic [ref=e693]:
+                      - generic "Shilpa Bhate & Associates" [ref=e694]: "\"Shilpa Bhate & Associates\""
+                      - generic [ref=e695]: "&"
+                      - generic "Shilpa Bhate Associates" [ref=e696]: "\"Shilpa Bhate Associates\""
+                    - paragraph [ref=e697]: "\"Shilpa Bhate & Associates\" and \"Shilpa Bhate Associates\" appear to be the same org"
+                  - generic [ref=e698]: 99% match
+                  - generic [ref=e699]:
+                    - button "Merge" [ref=e700]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e701]:
+                      - img
+                - generic [ref=e702]:
+                  - checkbox [ref=e703]
+                  - generic [ref=e704]:
+                    - generic [ref=e705]:
+                      - generic "Respondent No. 2" [ref=e706]: "\"Respondent No. 2\""
+                      - generic [ref=e707]: "&"
+                      - generic "Respondent Nos. 2" [ref=e708]: "\"Respondent Nos. 2\""
+                    - paragraph [ref=e709]: "\"Respondent No. 2\" and \"Respondent Nos. 2\" appear to be the same org"
+                  - generic [ref=e710]: 99% match
+                  - generic [ref=e711]:
+                    - button "Merge" [ref=e712]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e713]:
+                      - img
+                - generic [ref=e714]:
+                  - checkbox [ref=e715]
+                  - generic [ref=e716]:
+                    - generic [ref=e717]:
+                      - generic "L.S. Synthetics" [ref=e718]: "\"L.S. Synthetics\""
+                      - generic [ref=e719]: "&"
+                      - generic "L. S. Synthetics" [ref=e720]: "\"L. S. Synthetics\""
+                    - paragraph [ref=e721]: "\"L.S. Synthetics\" and \"L. S. Synthetics\" appear to be the same org"
+                  - generic [ref=e722]: 99% match
+                  - generic [ref=e723]:
+                    - button "Merge" [ref=e724]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e725]:
+                      - img
+                - generic [ref=e726]:
+                  - checkbox [ref=e727]
+                  - generic [ref=e728]:
+                    - generic [ref=e729]:
+                      - generic "Hindustan Lever Ltd." [ref=e730]: "\"Hindustan Lever Ltd.\""
+                      - generic [ref=e731]: "&"
+                      - generic "Hindustan Lever Ltd" [ref=e732]: "\"Hindustan Lever Ltd\""
+                    - paragraph [ref=e733]: "\"Hindustan Lever Ltd.\" and \"Hindustan Lever Ltd\" appear to be the same org"
+                  - generic [ref=e734]: 99% match
+                  - generic [ref=e735]:
+                    - button "Merge" [ref=e736]:
+                      - img
+                      - text: Merge
+                    - button "Dismiss suggestion" [ref=e737]:
+                      - img
+            - generic [ref=e543]:
+              - generic [ref=e544]:
+                - generic [ref=e545]:
+                  - heading "Entities" [level=2] [ref=e546]
+                  - generic [ref=e547]:
+                    - generic [ref=e548]: 100 total
+                    - generic [ref=e549]: "|"
+                    - generic [ref=e550]:
+                      - img [ref=e551]
+                      - text: "41"
+                    - generic [ref=e554]:
+                      - img [ref=e555]
+                      - text: "33"
+                    - generic [ref=e559]:
+                      - img [ref=e560]
+                      - text: "21"
+                    - generic [ref=e562]:
+                      - img [ref=e563]
+                      - text: "5"
+                - generic [ref=e567]:
+                  - button "Select entities for merge" [ref=e568]:
+                    - img
+                    - text: Select for Merge
+                  - group "View mode" [ref=e569]:
+                    - radio "Graph view" [ref=e570]:
+                      - img [ref=e571]
+                    - radio "List view" [checked] [ref=e576]:
+                      - img [ref=e577]
+                    - radio "Grid view" [ref=e578]:
+                      - img [ref=e579]
+              - generic [ref=e584]:
+                - generic [ref=e585]:
+                  - img [ref=e586]
+                  - textbox "Search entities" [ref=e589]:
+                    - /placeholder: Search entities...
+                - button "Filter by entity type" [ref=e590]:
+                  - img
+                  - text: Entity Type
+            - generic:
+              - table [ref=e1835]:
+                - rowgroup [ref=e1836]:
+                  - row "Name Type Mentions Status Roles" [ref=e1837]:
+                    - columnheader "Name" [ref=e1838]:
+                      - button "Name" [ref=e1839]
+                    - columnheader "Type" [ref=e1840]:
+                      - button "Type" [ref=e1841]
+                    - columnheader "Mentions" [ref=e1842]:
+                      - button "Mentions" [ref=e1843]:
+                        - text: Mentions
+                        - img
+                    - columnheader "Status" [ref=e1844]
+                    - columnheader "Roles" [ref=e1845]
+                - rowgroup [ref=e1846]:
+                  - row "Custodian Person 1219 Respondent" [ref=e1847] [cursor=pointer]:
+                    - cell "Custodian" [ref=e1848]:
+                      - generic [ref=e1849]:
+                        - img [ref=e1850]
+                        - text: Custodian
+                    - cell "Person" [ref=e1853]:
+                      - generic [ref=e1854]: Person
+                    - cell "1219" [ref=e1855]
+                    - cell [ref=e1856]:
+                      - img [ref=e1857]
+                    - cell "Respondent" [ref=e1860]:
+                      - generic [ref=e1862]: Respondent
+                  - row "Court Institution 550 -" [ref=e1863] [cursor=pointer]:
+                    - cell "Court" [ref=e1864]:
+                      - generic [ref=e1865]:
+                        - img [ref=e1866]
+                        - text: Court
+                    - cell "Institution" [ref=e1868]:
+                      - generic [ref=e1869]: Institution
+                    - cell "550" [ref=e1870]
+                    - cell [ref=e1871]:
+                      - img [ref=e1872]
+                    - cell "-" [ref=e1875]
+                  - row "Hero MotoCorp Organization 472 -" [ref=e1876] [cursor=pointer]:
+                    - cell "Hero MotoCorp" [ref=e1877]:
+                      - generic [ref=e1878]:
+                        - img [ref=e1879]
+                        - text: Hero MotoCorp
+                    - cell "Organization" [ref=e1883]:
+                      - generic [ref=e1884]: Organization
+                    - cell "472" [ref=e1885]
+                    - cell [ref=e1886]:
+                      - img [ref=e1887]
+                    - cell "-" [ref=e1890]
+                  - row "Custodian Organization 339 -" [ref=e1891] [cursor=pointer]:
+                    - cell "Custodian" [ref=e1892]:
+                      - generic [ref=e1893]:
+                        - img [ref=e1894]
+                        - text: Custodian
+                    - cell "Organization" [ref=e1898]:
+                      - generic [ref=e1899]: Organization
+                    - cell "339" [ref=e1900]
+                    - cell [ref=e1901]:
+                      - img [ref=e1902]
+                    - cell "-" [ref=e1905]
+                  - row "Respondent No.2 Organization 312 respondent" [ref=e1906] [cursor=pointer]:
+                    - cell "Respondent No.2" [ref=e1907]:
+                      - generic [ref=e1908]:
+                        - img [ref=e1909]
+                        - text: Respondent No.2
+                    - cell "Organization" [ref=e1913]:
+                      - generic [ref=e1914]: Organization
+                    - cell "312" [ref=e1915]
+                    - cell [ref=e1916]:
+                      - img [ref=e1917]
+                    - cell "respondent" [ref=e1920]:
+                      - generic [ref=e1922]: respondent
+                  - row "Applicant Person 253 -" [ref=e1923] [cursor=pointer]:
+                    - cell "Applicant" [ref=e1924]:
+                      - generic [ref=e1925]:
+                        - img [ref=e1926]
+                        - text: Applicant
+                    - cell "Person" [ref=e1929]:
+                      - generic [ref=e1930]: Person
+                    - cell "253" [ref=e1931]
+                    - cell [ref=e1932]:
+                      - img [ref=e1933]
+                    - cell "-" [ref=e1936]
+                  - row "Jobalia's Person 250 -" [ref=e1937] [cursor=pointer]:
+                    - cell "Jobalia's" [ref=e1938]:
+                      - generic [ref=e1939]:
+                        - img [ref=e1940]
+                        - text: Jobalia's
+                    - cell "Person" [ref=e1943]:
+                      - generic [ref=e1944]: Person
+                    - cell "250" [ref=e1945]
+                    - cell [ref=e1946]:
+                      - img [ref=e1947]
+                    - cell "-" [ref=e1950]
+                  - row "Harshad Mehta Person 223 -" [ref=e1951] [cursor=pointer]:
+                    - cell "Harshad Mehta" [ref=e1952]:
+                      - generic [ref=e1953]:
+                        - img [ref=e1954]
+                        - text: Harshad Mehta
+                    - cell "Person" [ref=e1957]:
+                      - generic [ref=e1958]: Person
+                    - cell "223" [ref=e1959]
+                    - cell [ref=e1960]:
+                      - img [ref=e1961]
+                    - cell "-" [ref=e1964]
+                  - row "Mehtas Person 182 -" [ref=e1965] [cursor=pointer]:
+                    - cell "Mehtas" [ref=e1966]:
+                      - generic [ref=e1967]:
+                        - img [ref=e1968]
+                        - text: Mehtas
+                    - cell "Person" [ref=e1971]:
+                      - generic [ref=e1972]: Person
+                    - cell "182" [ref=e1973]
+                    - cell [ref=e1974]:
+                      - img [ref=e1975]
+                    - cell "-" [ref=e1978]
+                  - row "Custodian Institution 181 -" [ref=e1979] [cursor=pointer]:
+                    - cell "Custodian" [ref=e1980]:
+                      - generic [ref=e1981]:
+                        - img [ref=e1982]
+                        - text: Custodian
+                    - cell "Institution" [ref=e1984]:
+                      - generic [ref=e1985]: Institution
+                    - cell "181" [ref=e1986]
+                    - cell [ref=e1987]:
+                      - img [ref=e1988]
+                    - cell "-" [ref=e1991]
+                  - row "Investor Education and Protection Fund Institution 164 -" [ref=e1992] [cursor=pointer]:
+                    - cell "Investor Education and Protection Fund" [ref=e1993]:
+                      - generic [ref=e1994]:
+                        - img [ref=e1995]
+                        - text: Investor Education and Protection Fund
+                    - cell "Institution" [ref=e1997]:
+                      - generic [ref=e1998]: Institution
+                    - cell "164" [ref=e1999]
+                    - cell [ref=e2000]:
+                      - img [ref=e2001]
+                    - cell "-" [ref=e2004]
+                  - row "Income Tax Department Institution 163 -" [ref=e2005] [cursor=pointer]:
+                    - cell "Income Tax Department" [ref=e2006]:
+                      - generic [ref=e2007]:
+                        - img [ref=e2008]
+                        - text: Income Tax Department
+                    - cell "Institution" [ref=e2010]:
+                      - generic [ref=e2011]: Institution
+                    - cell "163" [ref=e2012]
+                    - cell [ref=e2013]:
+                      - img [ref=e2014]
+                    - cell "-" [ref=e2017]
+                  - row "Special Court Institution 158 -" [ref=e2018] [cursor=pointer]:
+                    - cell "Special Court" [ref=e2019]:
+                      - generic [ref=e2020]:
+                        - img [ref=e2021]
+                        - text: Special Court
+                    - cell "Institution" [ref=e2023]:
+                      - generic [ref=e2024]: Institution
+                    - cell "158" [ref=e2025]
+                    - cell [ref=e2026]:
+                      - img [ref=e2027]
+                    - cell "-" [ref=e2030]
+                  - row "Honorable Court Institution 138 -" [ref=e2031] [cursor=pointer]:
+                    - cell "Honorable Court" [ref=e2032]:
+                      - generic [ref=e2033]:
+                        - img [ref=e2034]
+                        - text: Honorable Court
+                    - cell "Institution" [ref=e2036]:
+                      - generic [ref=e2037]: Institution
+                    - cell "138" [ref=e2038]
+                    - cell [ref=e2039]:
+                      - img [ref=e2040]
+                    - cell "-" [ref=e2043]
+                  - row "Nirav Jobalia Person 131 -" [ref=e2044] [cursor=pointer]:
+                    - cell "Nirav Jobalia" [ref=e2045]:
+                      - generic [ref=e2046]:
+                        - img [ref=e2047]
+                        - text: Nirav Jobalia
+                    - cell "Person" [ref=e2050]:
+                      - generic [ref=e2051]: Person
+                    - cell "131" [ref=e2052]
+                    - cell [ref=e2053]:
+                      - img [ref=e2054]
+                    - cell "-" [ref=e2057]
+                  - row "Bidhu Panicker Person 123 -" [ref=e2058] [cursor=pointer]:
+                    - cell "Bidhu Panicker" [ref=e2059]:
+                      - generic [ref=e2060]:
+                        - img [ref=e2061]
+                        - text: Bidhu Panicker
+                    - cell "Person" [ref=e2064]:
+                      - generic [ref=e2065]: Person
+                    - cell "123" [ref=e2066]
+                    - cell [ref=e2067]:
+                      - img [ref=e2068]
+                    - cell "-" [ref=e2071]
+                  - row "Ashwin S Mehta Person 121 advocate applicant" [ref=e2072] [cursor=pointer]:
+                    - cell "Ashwin S Mehta" [ref=e2073]:
+                      - generic [ref=e2074]:
+                        - img [ref=e2075]
+                        - text: Ashwin S Mehta
+                    - cell "Person" [ref=e2078]:
+                      - generic [ref=e2079]: Person
+                    - cell "121" [ref=e2080]
+                    - cell [ref=e2081]:
+                      - img [ref=e2082]
+                    - cell "advocate applicant" [ref=e2085]:
+                      - generic [ref=e2086]:
+                        - generic [ref=e2087]: advocate
+                        - generic [ref=e2088]: applicant
+                  - row "Torts Act Institution 111 -" [ref=e2089] [cursor=pointer]:
+                    - cell "Torts Act" [ref=e2090]:
+                      - generic [ref=e2091]:
+                        - img [ref=e2092]
+                        - text: Torts Act
+                    - cell "Institution" [ref=e2094]:
+                      - generic [ref=e2095]: Institution
+                    - cell "111" [ref=e2096]
+                    - cell [ref=e2097]:
+                      - img [ref=e2098]
+                    - cell "-" [ref=e2101]
+                  - row "Jobalia Person 105 -" [ref=e2102] [cursor=pointer]:
+                    - cell "Jobalia" [ref=e2103]:
+                      - generic [ref=e2104]:
+                        - img [ref=e2105]
+                        - text: Jobalia
+                    - cell "Person" [ref=e2108]:
+                      - generic [ref=e2109]: Person
+                    - cell "105" [ref=e2110]
+                    - cell [ref=e2111]:
+                      - img [ref=e2112]
+                    - cell "-" [ref=e2115]
+                  - row "IEPF Organization 99 -" [ref=e2116] [cursor=pointer]:
+                    - cell "IEPF" [ref=e2117]:
+                      - generic [ref=e2118]:
+                        - img [ref=e2119]
+                        - text: IEPF
+                    - cell "Organization" [ref=e2123]:
+                      - generic [ref=e2124]: Organization
+                    - cell "99" [ref=e2125]
+                    - cell [ref=e2126]:
+                      - img [ref=e2127]
+                    - cell "-" [ref=e2130]
+                  - row "Mehta Person 94 -" [ref=e2131] [cursor=pointer]:
+                    - cell "Mehta" [ref=e2132]:
+                      - generic [ref=e2133]:
+                        - img [ref=e2134]
+                        - text: Mehta
+                    - cell "Person" [ref=e2137]:
+                      - generic [ref=e2138]: Person
+                    - cell "94" [ref=e2139]
+                    - cell [ref=e2140]:
+                      - img [ref=e2141]
+                    - cell "-" [ref=e2144]
+                  - row "Jyoti Mehta Person 85 applicant" [ref=e2145] [cursor=pointer]:
+                    - cell "Jyoti Mehta" [ref=e2146]:
+                      - generic [ref=e2147]:
+                        - img [ref=e2148]
+                        - text: Jyoti Mehta
+                    - cell "Person" [ref=e2151]:
+                      - generic [ref=e2152]: Person
+                    - cell "85" [ref=e2153]
+                    - cell [ref=e2154]:
+                      - img [ref=e2155]
+                    - cell "applicant" [ref=e2158]:
+                      - generic [ref=e2160]: applicant
+                  - row "Respondent Nos.5 Person 85 respondent" [ref=e2161] [cursor=pointer]:
+                    - cell "Respondent Nos.5" [ref=e2162]:
+                      - generic [ref=e2163]:
+                        - img [ref=e2164]
+                        - text: Respondent Nos.5
+                    - cell "Person" [ref=e2167]:
+                      - generic [ref=e2168]: Person
+                    - cell "85" [ref=e2169]
+                    - cell [ref=e2170]:
+                      - img [ref=e2171]
+                    - cell "respondent" [ref=e2174]:
+                      - generic [ref=e2176]: respondent
+                  - row "Supreme Court of India Institution 83 -" [ref=e2177] [cursor=pointer]:
+                    - cell "Supreme Court of India" [ref=e2178]:
+                      - generic [ref=e2179]:
+                        - img [ref=e2180]
+                        - text: Supreme Court of India
+                    - cell "Institution" [ref=e2182]:
+                      - generic [ref=e2183]: Institution
+                    - cell "83" [ref=e2184]
+                    - cell [ref=e2185]:
+                      - img [ref=e2186]
+                    - cell "-" [ref=e2189]
+                  - row "IEPF Institution 73 -" [ref=e2190] [cursor=pointer]:
+                    - cell "IEPF" [ref=e2191]:
+                      - generic [ref=e2192]:
+                        - img [ref=e2193]
+                        - text: IEPF
+                    - cell "Institution" [ref=e2195]:
+                      - generic [ref=e2196]: Institution
+                    - cell "73" [ref=e2197]
+                    - cell [ref=e2198]:
+                      - img [ref=e2199]
+                    - cell "-" [ref=e2202]
+                  - row "Kalpana Jobalia Person 70 -" [ref=e2203] [cursor=pointer]:
+                    - cell "Kalpana Jobalia" [ref=e2204]:
+                      - generic [ref=e2205]:
+                        - img [ref=e2206]
+                        - text: Kalpana Jobalia
+                    - cell "Person" [ref=e2209]:
+                      - generic [ref=e2210]: Person
+                    - cell "70" [ref=e2211]
+                    - cell [ref=e2212]:
+                      - img [ref=e2213]
+                    - cell "-" [ref=e2216]
+                  - row "Investor Education and Protection Fund Organization 62 -" [ref=e2217] [cursor=pointer]:
+                    - cell "Investor Education and Protection Fund" [ref=e2218]:
+                      - generic [ref=e2219]:
+                        - img [ref=e2220]
+                        - text: Investor Education and Protection Fund
+                    - cell "Organization" [ref=e2224]:
+                      - generic [ref=e2225]: Organization
+                    - cell "62" [ref=e2226]
+                    - cell [ref=e2227]:
+                      - img [ref=e2228]
+                    - cell "-" [ref=e2231]
+                  - row "Nilesh Jobalia Person 61 -" [ref=e2232] [cursor=pointer]:
+                    - cell "Nilesh Jobalia" [ref=e2233]:
+                      - generic [ref=e2234]:
+                        - img [ref=e2235]
+                        - text: Nilesh Jobalia
+                    - cell "Person" [ref=e2238]:
+                      - generic [ref=e2239]: Person
+                    - cell "61" [ref=e2240]
+                    - cell [ref=e2241]:
+                      - img [ref=e2242]
+                    - cell "-" [ref=e2245]
+                  - row "Alpa Jobalia Person 54 -" [ref=e2246] [cursor=pointer]:
+                    - cell "Alpa Jobalia" [ref=e2247]:
+                      - generic [ref=e2248]:
+                        - img [ref=e2249]
+                        - text: Alpa Jobalia
+                    - cell "Person" [ref=e2252]:
+                      - generic [ref=e2253]: Person
+                    - cell "54" [ref=e2254]
+                    - cell [ref=e2255]:
+                      - img [ref=e2256]
+                    - cell "-" [ref=e2259]
+                  - row "Hon'ble Court Institution 49 -" [ref=e2260] [cursor=pointer]:
+                    - cell "Hon'ble Court" [ref=e2261]:
+                      - generic [ref=e2262]:
+                        - img [ref=e2263]
+                        - text: Hon'ble Court
+                    - cell "Institution" [ref=e2265]:
+                      - generic [ref=e2266]: Institution
+                    - cell "49" [ref=e2267]
+                    - cell [ref=e2268]:
+                      - img [ref=e2269]
+                    - cell "-" [ref=e2272]
+                  - row "Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992 Institution 41 -" [ref=e2273] [cursor=pointer]:
+                    - cell "Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992" [ref=e2274]:
+                      - generic [ref=e2275]:
+                        - img [ref=e2276]
+                        - text: Special Court [Trial of Offences Relating to Transactions in Securities] Act, 1992
+                    - cell "Institution" [ref=e2278]:
+                      - generic [ref=e2279]: Institution
+                    - cell "41" [ref=e2280]
+                    - cell [ref=e2281]:
+                      - img [ref=e2282]
+                    - cell "-" [ref=e2285]
+                  - row "Investor Education Protection Fund Organization 34 -" [ref=e2286] [cursor=pointer]:
+                    - cell "Investor Education Protection Fund" [ref=e2287]:
+                      - generic [ref=e2288]:
+                        - img [ref=e2289]
+                        - text: Investor Education Protection Fund
+                    - cell "Organization" [ref=e2293]:
+                      - generic [ref=e2294]: Organization
+                    - cell "34" [ref=e2295]
+                    - cell [ref=e2296]:
+                      - img [ref=e2297]
+                    - cell "-" [ref=e2300]
+                  - row "A.K. Menon Person 34 custodian petitioner" [ref=e2301] [cursor=pointer]:
+                    - cell "A.K. Menon" [ref=e2302]:
+                      - generic [ref=e2303]:
+                        - img [ref=e2304]
+                        - text: A.K. Menon
+                    - cell "Person" [ref=e2307]:
+                      - generic [ref=e2308]: Person
+                    - cell "34" [ref=e2309]
+                    - cell [ref=e2310]:
+                      - img [ref=e2311]
+                    - cell "custodian petitioner" [ref=e2314]:
+                      - generic [ref=e2315]:
+                        - generic [ref=e2316]: custodian
+                        - generic [ref=e2317]: petitioner
+                  - row "ACC Organization 31 -" [ref=e2318] [cursor=pointer]:
+                    - cell "ACC" [ref=e2319]:
+                      - generic [ref=e2320]:
+                        - img [ref=e2321]
+                        - text: ACC
+                    - cell "Organization" [ref=e2325]:
+                      - generic [ref=e2326]: Organization
+                    - cell "31" [ref=e2327]
+                    - cell [ref=e2328]:
+                      - img [ref=e2329]
+                    - cell "-" [ref=e2332]
+                  - row "Respondent 2 Person 30 respondent" [ref=e2333] [cursor=pointer]:
+                    - cell "Respondent 2" [ref=e2334]:
+                      - generic [ref=e2335]:
+                        - img [ref=e2336]
+                        - text: Respondent 2
+                    - cell "Person" [ref=e2339]:
+                      - generic [ref=e2340]: Person
+                    - cell "30" [ref=e2341]
+                    - cell [ref=e2342]:
+                      - img [ref=e2343]
+                    - cell "respondent" [ref=e2346]:
+                      - generic [ref=e2348]: respondent
+                  - row "Jayesh Jobalia Person 29 -" [ref=e2349] [cursor=pointer]:
+                    - cell "Jayesh Jobalia" [ref=e2350]:
+                      - generic [ref=e2351]:
+                        - img [ref=e2352]
+                        - text: Jayesh Jobalia
+                    - cell "Person" [ref=e2355]:
+                      - generic [ref=e2356]: Person
+                    - cell "29" [ref=e2357]
+                    - cell [ref=e2358]:
+                      - img [ref=e2359]
+                    - cell "-" [ref=e2362]
+                  - row "Companies Act Institution 28 -" [ref=e2363] [cursor=pointer]:
+                    - cell "Companies Act" [ref=e2364]:
+                      - generic [ref=e2365]:
+                        - img [ref=e2366]
+                        - text: Companies Act
+                    - cell "Institution" [ref=e2368]:
+                      - generic [ref=e2369]: Institution
+                    - cell "28" [ref=e2370]
+                    - cell [ref=e2371]:
+                      - img [ref=e2372]
+                    - cell "-" [ref=e2375]
+                  - row "Jobalias Organization 28 -" [ref=e2376] [cursor=pointer]:
+                    - cell "Jobalias" [ref=e2377]:
+                      - generic [ref=e2378]:
+                        - img [ref=e2379]
+                        - text: Jobalias
+                    - cell "Organization" [ref=e2383]:
+                      - generic [ref=e2384]: Organization
+                    - cell "28" [ref=e2385]
+                    - cell [ref=e2386]:
+                      - img [ref=e2387]
+                    - cell "-" [ref=e2390]
+                  - row "MCS Ltd. Organization 28 -" [ref=e2391] [cursor=pointer]:
+                    - cell "MCS Ltd." [ref=e2392]:
+                      - generic [ref=e2393]:
+                        - img [ref=e2394]
+                        - text: MCS Ltd.
+                    - cell "Organization" [ref=e2398]:
+                      - generic [ref=e2399]: Organization
+                    - cell "28" [ref=e2400]
+                    - cell [ref=e2401]:
+                      - img [ref=e2402]
+                    - cell "-" [ref=e2405]
+                  - row "Respondent 2 Organization 28 respondent" [ref=e2406] [cursor=pointer]:
+                    - cell "Respondent 2" [ref=e2407]:
+                      - generic [ref=e2408]:
+                        - img [ref=e2409]
+                        - text: Respondent 2
+                    - cell "Organization" [ref=e2413]:
+                      - generic [ref=e2414]: Organization
+                    - cell "28" [ref=e2415]
+                    - cell [ref=e2416]:
+                      - img [ref=e2417]
+                    - cell "respondent" [ref=e2420]:
+                      - generic [ref=e2422]: respondent
+                  - row "Piramal Enterprises Ltd. Organization 27 -" [ref=e2423] [cursor=pointer]:
+                    - cell "Piramal Enterprises Ltd." [ref=e2424]:
+                      - generic [ref=e2425]:
+                        - img [ref=e2426]
+                        - text: Piramal Enterprises Ltd.
+                    - cell "Organization" [ref=e2430]:
+                      - generic [ref=e2431]: Organization
+                    - cell "27" [ref=e2432]
+                    - cell [ref=e2433]:
+                      - img [ref=e2434]
+                    - cell "-" [ref=e2437]
+                  - row "Respondent No.2 Person 27 respondent" [ref=e2438] [cursor=pointer]:
+                    - cell "Respondent No.2" [ref=e2439]:
+                      - generic [ref=e2440]:
+                        - img [ref=e2441]
+                        - text: Respondent No.2
+                    - cell "Person" [ref=e2444]:
+                      - generic [ref=e2445]: Person
+                    - cell "27" [ref=e2446]
+                    - cell [ref=e2447]:
+                      - img [ref=e2448]
+                    - cell "respondent" [ref=e2451]:
+                      - generic [ref=e2453]: respondent
+                  - row "Applicant Organization 27 -" [ref=e2454] [cursor=pointer]:
+                    - cell "Applicant" [ref=e2455]:
+                      - generic [ref=e2456]:
+                        - img [ref=e2457]
+                        - text: Applicant
+                    - cell "Organization" [ref=e2461]:
+                      - generic [ref=e2462]: Organization
+                    - cell "27" [ref=e2463]
+                    - cell [ref=e2464]:
+                      - img [ref=e2465]
+                    - cell "-" [ref=e2468]
+                  - row "Jyoti H. Mehta Person 27 -" [ref=e2469] [cursor=pointer]:
+                    - cell "Jyoti H. Mehta" [ref=e2470]:
+                      - generic [ref=e2471]:
+                        - img [ref=e2472]
+                        - text: Jyoti H. Mehta
+                    - cell "Person" [ref=e2475]:
+                      - generic [ref=e2476]: Person
+                    - cell "27" [ref=e2477]
+                    - cell [ref=e2478]:
+                      - img [ref=e2479]
+                    - cell "-" [ref=e2482]
+                  - row "Rasila Mehta Person 27 -" [ref=e2483] [cursor=pointer]:
+                    - cell "Rasila Mehta" [ref=e2484]:
+                      - generic [ref=e2485]:
+                        - img [ref=e2486]
+                        - text: Rasila Mehta
+                    - cell "Person" [ref=e2489]:
+                      - generic [ref=e2490]: Person
+                    - cell "27" [ref=e2491]
+                    - cell [ref=e2492]:
+                      - img [ref=e2493]
+                    - cell "-" [ref=e2496]
+                  - row "Government of India Institution 27 -" [ref=e2497] [cursor=pointer]:
+                    - cell "Government of India" [ref=e2498]:
+                      - generic [ref=e2499]:
+                        - img [ref=e2500]
+                        - text: Government of India
+                    - cell "Institution" [ref=e2502]:
+                      - generic [ref=e2503]: Institution
+                    - cell "27" [ref=e2504]
+                    - cell [ref=e2505]:
+                      - img [ref=e2506]
+                    - cell "-" [ref=e2509]
+                  - row "Bella Electronics Organization 27 -" [ref=e2510] [cursor=pointer]:
+                    - cell "Bella Electronics" [ref=e2511]:
+                      - generic [ref=e2512]:
+                        - img [ref=e2513]
+                        - text: Bella Electronics
+                    - cell "Organization" [ref=e2517]:
+                      - generic [ref=e2518]: Organization
+                    - cell "27" [ref=e2519]
+                    - cell [ref=e2520]:
+                      - img [ref=e2521]
+                    - cell "-" [ref=e2524]
+                  - row "Investor Education and Protection Fund Authority Institution 26 -" [ref=e2525] [cursor=pointer]:
+                    - cell "Investor Education and Protection Fund Authority" [ref=e2526]:
+                      - generic [ref=e2527]:
+                        - img [ref=e2528]
+                        - text: Investor Education and Protection Fund Authority
+                    - cell "Institution" [ref=e2530]:
+                      - generic [ref=e2531]: Institution
+                    - cell "26" [ref=e2532]
+                    - cell [ref=e2533]:
+                      - img [ref=e2534]
+                    - cell "-" [ref=e2537]
+                  - row "Mehtas Organization 25 -" [ref=e2538] [cursor=pointer]:
+                    - cell "Mehtas" [ref=e2539]:
+                      - generic [ref=e2540]:
+                        - img [ref=e2541]
+                        - text: Mehtas
+                    - cell "Organization" [ref=e2545]:
+                      - generic [ref=e2546]: Organization
+                    - cell "25" [ref=e2547]
+                    - cell [ref=e2548]:
+                      - img [ref=e2549]
+                    - cell "-" [ref=e2552]
+                  - row "Pratima Mehta Person 24 -" [ref=e2553] [cursor=pointer]:
+                    - cell "Pratima Mehta" [ref=e2554]:
+                      - generic [ref=e2555]:
+                        - img [ref=e2556]
+                        - text: Pratima Mehta
+                    - cell "Person" [ref=e2559]:
+                      - generic [ref=e2560]: Person
+                    - cell "24" [ref=e2561]
+                    - cell [ref=e2562]:
+                      - img [ref=e2563]
+                    - cell "-" [ref=e2566]
+                  - row "HSM Organization 23 -" [ref=e2567] [cursor=pointer]:
+                    - cell "HSM" [ref=e2568]:
+                      - generic [ref=e2569]:
+                        - img [ref=e2570]
+                        - text: HSM
+                    - cell "Organization" [ref=e2574]:
+                      - generic [ref=e2575]: Organization
+                    - cell "23" [ref=e2576]
+                    - cell [ref=e2577]:
+                      - img [ref=e2578]
+                    - cell "-" [ref=e2581]
+                  - row "MA 8 of 2016 Asset 22 -" [ref=e2582] [cursor=pointer]:
+                    - cell "MA 8 of 2016" [ref=e2583]:
+                      - generic [ref=e2584]:
+                        - img [ref=e2585]
+                        - text: MA 8 of 2016
+                    - cell "Asset" [ref=e2589]:
+                      - generic [ref=e2590]: Asset
+                    - cell "22" [ref=e2591]
+                    - cell [ref=e2592]:
+                      - img [ref=e2593]
+                    - cell "-" [ref=e2596]
+                  - row "FFSL Organization 22 -" [ref=e2597] [cursor=pointer]:
+                    - cell "FFSL" [ref=e2598]:
+                      - generic [ref=e2599]:
+                        - img [ref=e2600]
+                        - text: FFSL
+                    - cell "Organization" [ref=e2604]:
+                      - generic [ref=e2605]: Organization
+                    - cell "22" [ref=e2606]
+                    - cell [ref=e2607]:
+                      - img [ref=e2608]
+                    - cell "-" [ref=e2611]
+                  - row "Hero Honda Organization 22 -" [ref=e2612] [cursor=pointer]:
+                    - cell "Hero Honda" [ref=e2613]:
+                      - generic [ref=e2614]:
+                        - img [ref=e2615]
+                        - text: Hero Honda
+                    - cell "Organization" [ref=e2619]:
+                      - generic [ref=e2620]: Organization
+                    - cell "22" [ref=e2621]
+                    - cell [ref=e2622]:
+                      - img [ref=e2623]
+                    - cell "-" [ref=e2626]
+                  - row "Income Tax Institution 21 -" [ref=e2627] [cursor=pointer]:
+                    - cell "Income Tax" [ref=e2628]:
+                      - generic [ref=e2629]:
+                        - img [ref=e2630]
+                        - text: Income Tax
+                    - cell "Institution" [ref=e2632]:
+                      - generic [ref=e2633]: Institution
+                    - cell "21" [ref=e2634]
+                    - cell [ref=e2635]:
+                      - img [ref=e2636]
+                    - cell "-" [ref=e2639]
+                  - row "Jehangir Khajotia Person 21 advocate" [ref=e2640] [cursor=pointer]:
+                    - cell "Jehangir Khajotia" [ref=e2641]:
+                      - generic [ref=e2642]:
+                        - img [ref=e2643]
+                        - text: Jehangir Khajotia
+                    - cell "Person" [ref=e2646]:
+                      - generic [ref=e2647]: Person
+                    - cell "21" [ref=e2648]
+                    - cell [ref=e2649]:
+                      - img [ref=e2650]
+                    - cell "advocate" [ref=e2653]:
+                      - generic [ref=e2655]: advocate
+                  - row "Shilpa Bhate & Associates Organization 21 advocate" [ref=e2656] [cursor=pointer]:
+                    - cell "Shilpa Bhate & Associates" [ref=e2657]:
+                      - generic [ref=e2658]:
+                        - img [ref=e2659]
+                        - text: Shilpa Bhate & Associates
+                    - cell "Organization" [ref=e2663]:
+                      - generic [ref=e2664]: Organization
+                    - cell "21" [ref=e2665]
+                    - cell [ref=e2666]:
+                      - img [ref=e2667]
+                    - cell "advocate" [ref=e2670]:
+                      - generic [ref=e2672]: advocate
+                  - row "Central Bureau of Investigation Institution 20 -" [ref=e2673] [cursor=pointer]:
+                    - cell "Central Bureau of Investigation" [ref=e2674]:
+                      - generic [ref=e2675]:
+                        - img [ref=e2676]
+                        - text: Central Bureau of Investigation
+                    - cell "Institution" [ref=e2678]:
+                      - generic [ref=e2679]: Institution
+                    - cell "20" [ref=e2680]
+                    - cell [ref=e2681]:
+                      - img [ref=e2682]
+                    - cell "-" [ref=e2685]
+                  - row "Harshad Mehta Group Organization 20 -" [ref=e2686] [cursor=pointer]:
+                    - cell "Harshad Mehta Group" [ref=e2687]:
+                      - generic [ref=e2688]:
+                        - img [ref=e2689]
+                        - text: Harshad Mehta Group
+                    - cell "Organization" [ref=e2693]:
+                      - generic [ref=e2694]: Organization
+                    - cell "20" [ref=e2695]
+                    - cell [ref=e2696]:
+                      - img [ref=e2697]
+                    - cell "-" [ref=e2700]
+                  - row "Respondent No. 5 Person 19 respondent" [ref=e2701] [cursor=pointer]:
+                    - cell "Respondent No. 5" [ref=e2702]:
+                      - generic [ref=e2703]:
+                        - img [ref=e2704]
+                        - text: Respondent No. 5
+                    - cell "Person" [ref=e2707]:
+                      - generic [ref=e2708]: Person
+                    - cell "19" [ref=e2709]
+                    - cell [ref=e2710]:
+                      - img [ref=e2711]
+                    - cell "respondent" [ref=e2714]:
+                      - generic [ref=e2716]: respondent
+                  - row "Bombay High Court Institution 19 -" [ref=e2717] [cursor=pointer]:
+                    - cell "Bombay High Court" [ref=e2718]:
+                      - generic [ref=e2719]:
+                        - img [ref=e2720]
+                        - text: Bombay High Court
+                    - cell "Institution" [ref=e2722]:
+                      - generic [ref=e2723]: Institution
+                    - cell "19" [ref=e2724]
+                    - cell [ref=e2725]:
+                      - img [ref=e2726]
+                    - cell "-" [ref=e2729]
+                  - row "Daruwalla Person 19 -" [ref=e2730] [cursor=pointer]:
+                    - cell "Daruwalla" [ref=e2731]:
+                      - generic [ref=e2732]:
+                        - img [ref=e2733]
+                        - text: Daruwalla
+                    - cell "Person" [ref=e2736]:
+                      - generic [ref=e2737]: Person
+                    - cell "19" [ref=e2738]
+                    - cell [ref=e2739]:
+                      - img [ref=e2740]
+                    - cell "-" [ref=e2743]
+                  - row "Wadala Asset 18 -" [ref=e2744] [cursor=pointer]:
+                    - cell "Wadala" [ref=e2745]:
+                      - generic [ref=e2746]:
+                        - img [ref=e2747]
+                        - text: Wadala
+                    - cell "Asset" [ref=e2751]:
+                      - generic [ref=e2752]: Asset
+                    - cell "18" [ref=e2753]
+                    - cell [ref=e2754]:
+                      - img [ref=e2755]
+                    - cell "-" [ref=e2758]
+                  - row "Office of the Custodian Institution 18 -" [ref=e2759] [cursor=pointer]:
+                    - cell "Office of the Custodian" [ref=e2760]:
+                      - generic [ref=e2761]:
+                        - img [ref=e2762]
+                        - text: Office of the Custodian
+                    - cell "Institution" [ref=e2764]:
+                      - generic [ref=e2765]: Institution
+                    - cell "18" [ref=e2766]
+                    - cell [ref=e2767]:
+                      - img [ref=e2768]
+                    - cell "-" [ref=e2771]
+                  - row "Shilpa Bhate Person 18 -" [ref=e2772] [cursor=pointer]:
+                    - cell "Shilpa Bhate" [ref=e2773]:
+                      - generic [ref=e2774]:
+                        - img [ref=e2775]
+                        - text: Shilpa Bhate
+                    - cell "Person" [ref=e2778]:
+                      - generic [ref=e2779]: Person
+                    - cell "18" [ref=e2780]
+                    - cell [ref=e2781]:
+                      - img [ref=e2782]
+                    - cell "-" [ref=e2785]
+                  - row "Jobalia family Person 17 -" [ref=e2786] [cursor=pointer]:
+                    - cell "Jobalia family" [ref=e2787]:
+                      - generic [ref=e2788]:
+                        - img [ref=e2789]
+                        - text: Jobalia family
+                    - cell "Person" [ref=e2792]:
+                      - generic [ref=e2793]: Person
+                    - cell "17" [ref=e2794]
+                    - cell [ref=e2795]:
+                      - img [ref=e2796]
+                    - cell "-" [ref=e2799]
+                  - row "Ashwin S. Mehta Person 17 advocate" [ref=e2800] [cursor=pointer]:
+                    - cell "Ashwin S. Mehta" [ref=e2801]:
+                      - generic [ref=e2802]:
+                        - img [ref=e2803]
+                        - text: Ashwin S. Mehta
+                    - cell "Person" [ref=e2806]:
+                      - generic [ref=e2807]: Person
+                    - cell "17" [ref=e2808]
+                    - cell [ref=e2809]:
+                      - img [ref=e2810]
+                    - cell "advocate" [ref=e2813]:
+                      - generic [ref=e2815]: advocate
+                  - row "Respondent No. 2 Organization 16 -" [ref=e2816] [cursor=pointer]:
+                    - cell "Respondent No. 2" [ref=e2817]:
+                      - generic [ref=e2818]:
+                        - img [ref=e2819]
+                        - text: Respondent No. 2
+                    - cell "Organization" [ref=e2823]:
+                      - generic [ref=e2824]: Organization
+                    - cell "16" [ref=e2825]
+                    - cell [ref=e2826]:
+                      - img [ref=e2827]
+                    - cell "-" [ref=e2830]
+                  - row "Kiran Bala Nayak Person 16 -" [ref=e2831] [cursor=pointer]:
+                    - cell "Kiran Bala Nayak" [ref=e2832]:
+                      - generic [ref=e2833]:
+                        - img [ref=e2834]
+                        - text: Kiran Bala Nayak
+                    - cell "Person" [ref=e2837]:
+                      - generic [ref=e2838]: Person
+                    - cell "16" [ref=e2839]
+                    - cell [ref=e2840]:
+                      - img [ref=e2841]
+                    - cell "-" [ref=e2844]
+                  - row "Rina Mehta Person 16 -" [ref=e2845] [cursor=pointer]:
+                    - cell "Rina Mehta" [ref=e2846]:
+                      - generic [ref=e2847]:
+                        - img [ref=e2848]
+                        - text: Rina Mehta
+                    - cell "Person" [ref=e2851]:
+                      - generic [ref=e2852]: Person
+                    - cell "16" [ref=e2853]
+                    - cell [ref=e2854]:
+                      - img [ref=e2855]
+                    - cell "-" [ref=e2858]
+                  - row "Mumbai Organization 15 -" [ref=e2859] [cursor=pointer]:
+                    - cell "Mumbai" [ref=e2860]:
+                      - generic [ref=e2861]:
+                        - img [ref=e2862]
+                        - text: Mumbai
+                    - cell "Organization" [ref=e2866]:
+                      - generic [ref=e2867]: Organization
+                    - cell "15" [ref=e2868]
+                    - cell [ref=e2869]:
+                      - img [ref=e2870]
+                    - cell "-" [ref=e2873]
+                  - row "Deshmukh Person 15 -" [ref=e2874] [cursor=pointer]:
+                    - cell "Deshmukh" [ref=e2875]:
+                      - generic [ref=e2876]:
+                        - img [ref=e2877]
+                        - text: Deshmukh
+                    - cell "Person" [ref=e2880]:
+                      - generic [ref=e2881]: Person
+                    - cell "15" [ref=e2882]
+                    - cell [ref=e2883]:
+                      - img [ref=e2884]
+                    - cell "-" [ref=e2887]
+                  - row "Advocate Person 15 -" [ref=e2888] [cursor=pointer]:
+                    - cell "Advocate" [ref=e2889]:
+                      - generic [ref=e2890]:
+                        - img [ref=e2891]
+                        - text: Advocate
+                    - cell "Person" [ref=e2894]:
+                      - generic [ref=e2895]: Person
+                    - cell "15" [ref=e2896]
+                    - cell [ref=e2897]:
+                      - img [ref=e2898]
+                    - cell "-" [ref=e2901]
+                  - row "L.S. Synthetics Organization 15 -" [ref=e2902] [cursor=pointer]:
+                    - cell "L.S. Synthetics" [ref=e2903]:
+                      - generic [ref=e2904]:
+                        - img [ref=e2905]
+                        - text: L.S. Synthetics
+                    - cell "Organization" [ref=e2909]:
+                      - generic [ref=e2910]: Organization
+                    - cell "15" [ref=e2911]
+                    - cell [ref=e2912]:
+                      - img [ref=e2913]
+                    - cell "-" [ref=e2916]
+                  - row "Leena Adhvaryu & Associates Organization 15 -" [ref=e2917] [cursor=pointer]:
+                    - cell "Leena Adhvaryu & Associates" [ref=e2918]:
+                      - generic [ref=e2919]:
+                        - img [ref=e2920]
+                        - text: Leena Adhvaryu & Associates
+                    - cell "Organization" [ref=e2924]:
+                      - generic [ref=e2925]: Organization
+                    - cell "15" [ref=e2926]
+                    - cell [ref=e2927]:
+                      - img [ref=e2928]
+                    - cell "-" [ref=e2931]
+                  - row "Ketan Mathuradas Chatwani Person 14 -" [ref=e2932] [cursor=pointer]:
+                    - cell "Ketan Mathuradas Chatwani" [ref=e2933]:
+                      - generic [ref=e2934]:
+                        - img [ref=e2935]
+                        - text: Ketan Mathuradas Chatwani
+                    - cell "Person" [ref=e2938]:
+                      - generic [ref=e2939]: Person
+                    - cell "14" [ref=e2940]
+                    - cell [ref=e2941]:
+                      - img [ref=e2942]
+                    - cell "-" [ref=e2945]
+                  - row "Maharashtra Asset 14 -" [ref=e2946] [cursor=pointer]:
+                    - cell "Maharashtra" [ref=e2947]:
+                      - generic [ref=e2948]:
+                        - img [ref=e2949]
+                        - text: Maharashtra
+                    - cell "Asset" [ref=e2953]:
+                      - generic [ref=e2954]: Asset
+                    - cell "14" [ref=e2955]
+                    - cell [ref=e2956]:
+                      - img [ref=e2957]
+                    - cell "-" [ref=e2960]
+                  - row "Harshad S. Mehta Person 14 respondent" [ref=e2961] [cursor=pointer]:
+                    - cell "Harshad S. Mehta" [ref=e2962]:
+                      - generic [ref=e2963]:
+                        - img [ref=e2964]
+                        - text: Harshad S. Mehta
+                    - cell "Person" [ref=e2967]:
+                      - generic [ref=e2968]: Person
+                    - cell "14" [ref=e2969]
+                    - cell [ref=e2970]:
+                      - img [ref=e2971]
+                    - cell "respondent" [ref=e2974]:
+                      - generic [ref=e2976]: respondent
+                  - row "Investor Education and Protection Fund Authority, New Delhi Institution 14 respondent" [ref=e2977] [cursor=pointer]:
+                    - cell "Investor Education and Protection Fund Authority, New Delhi" [ref=e2978]:
+                      - generic [ref=e2979]:
+                        - img [ref=e2980]
+                        - text: Investor Education and Protection Fund Authority, New Delhi
+                    - cell "Institution" [ref=e2982]:
+                      - generic [ref=e2983]: Institution
+                    - cell "14" [ref=e2984]
+                    - cell [ref=e2985]:
+                      - img [ref=e2986]
+                    - cell "respondent" [ref=e2989]:
+                      - generic [ref=e2991]: respondent
+                  - row "Respondent No.3 Organization 13 respondent" [ref=e2992] [cursor=pointer]:
+                    - cell "Respondent No.3" [ref=e2993]:
+                      - generic [ref=e2994]:
+                        - img [ref=e2995]
+                        - text: Respondent No.3
+                    - cell "Organization" [ref=e2999]:
+                      - generic [ref=e3000]: Organization
+                    - cell "13" [ref=e3001]
+                    - cell [ref=e3002]:
+                      - img [ref=e3003]
+                    - cell "respondent" [ref=e3006]:
+                      - generic [ref=e3008]: respondent
+                  - row "A. K. Menon Person 13 -" [ref=e3009] [cursor=pointer]:
+                    - cell "A. K. Menon" [ref=e3010]:
+                      - generic [ref=e3011]:
+                        - img [ref=e3012]
+                        - text: A. K. Menon
+                    - cell "Person" [ref=e3015]:
+                      - generic [ref=e3016]: Person
+                    - cell "13" [ref=e3017]
+                    - cell [ref=e3018]:
+                      - img [ref=e3019]
+                    - cell "-" [ref=e3022]
+                  - row "Torts Act Organization 12 -" [ref=e3023] [cursor=pointer]:
+                    - cell "Torts Act" [ref=e3024]:
+                      - generic [ref=e3025]:
+                        - img [ref=e3026]
+                        - text: Torts Act
+                    - cell "Organization" [ref=e3030]:
+                      - generic [ref=e3031]: Organization
+                    - cell "12" [ref=e3032]
+                    - cell [ref=e3033]:
+                      - img [ref=e3034]
+                    - cell "-" [ref=e3037]
+                  - row "Hindustan Lever Ltd. Organization 12 -" [ref=e3038] [cursor=pointer]:
+                    - cell "Hindustan Lever Ltd." [ref=e3039]:
+                      - generic [ref=e3040]:
+                        - img [ref=e3041]
+                        - text: Hindustan Lever Ltd.
+                    - cell "Organization" [ref=e3045]:
+                      - generic [ref=e3046]: Organization
+                    - cell "12" [ref=e3047]
+                    - cell [ref=e3048]:
+                      - img [ref=e3049]
+                    - cell "-" [ref=e3052]
+                  - row "Constitution of India Institution 12 -" [ref=e3053] [cursor=pointer]:
+                    - cell "Constitution of India" [ref=e3054]:
+                      - generic [ref=e3055]:
+                        - img [ref=e3056]
+                        - text: Constitution of India
+                    - cell "Institution" [ref=e3058]:
+                      - generic [ref=e3059]: Institution
+                    - cell "12" [ref=e3060]
+                    - cell [ref=e3061]:
+                      - img [ref=e3062]
+                    - cell "-" [ref=e3065]
+                  - row "ACC Ltd. Organization 12 -" [ref=e3066] [cursor=pointer]:
+                    - cell "ACC Ltd." [ref=e3067]:
+                      - generic [ref=e3068]:
+                        - img [ref=e3069]
+                        - text: ACC Ltd.
+                    - cell "Organization" [ref=e3073]:
+                      - generic [ref=e3074]: Organization
+                    - cell "12" [ref=e3075]
+                    - cell [ref=e3076]:
+                      - img [ref=e3077]
+                    - cell "-" [ref=e3080]
+                  - row "SBI Capital Markets Ltd. Organization 12 -" [ref=e3081] [cursor=pointer]:
+                    - cell "SBI Capital Markets Ltd." [ref=e3082]:
+                      - generic [ref=e3083]:
+                        - img [ref=e3084]
+                        - text: SBI Capital Markets Ltd.
+                    - cell "Organization" [ref=e3088]:
+                      - generic [ref=e3089]: Organization
+                    - cell "12" [ref=e3090]
+                    - cell [ref=e3091]:
+                      - img [ref=e3092]
+                    - cell "-" [ref=e3095]
+                  - row "The Custodian Person 12 respondent" [ref=e3096] [cursor=pointer]:
+                    - cell "The Custodian" [ref=e3097]:
+                      - generic [ref=e3098]:
+                        - img [ref=e3099]
+                        - text: The Custodian
+                    - cell "Person" [ref=e3102]:
+                      - generic [ref=e3103]: Person
+                    - cell "12" [ref=e3104]
+                    - cell [ref=e3105]:
+                      - img [ref=e3106]
+                    - cell "respondent" [ref=e3109]:
+                      - generic [ref=e3111]: respondent
+                  - row "High Court Institution 12 -" [ref=e3112] [cursor=pointer]:
+                    - cell "High Court" [ref=e3113]:
+                      - generic [ref=e3114]:
+                        - img [ref=e3115]
+                        - text: High Court
+                    - cell "Institution" [ref=e3117]:
+                      - generic [ref=e3118]: Institution
+                    - cell "12" [ref=e3119]
+                    - cell [ref=e3120]:
+                      - img [ref=e3121]
+                    - cell "-" [ref=e3124]
+                  - row "Sanjay Naukudkar Person 12 -" [ref=e3125] [cursor=pointer]:
+                    - cell "Sanjay Naukudkar" [ref=e3126]:
+                      - generic [ref=e3127]:
+                        - img [ref=e3128]
+                        - text: Sanjay Naukudkar
+                    - cell "Person" [ref=e3131]:
+                      - generic [ref=e3132]: Person
+                    - cell "12" [ref=e3133]
+                    - cell [ref=e3134]:
+                      - img [ref=e3135]
+                    - cell "-" [ref=e3138]
+                  - row "MP 99 of 1998 Asset 11 -" [ref=e3139] [cursor=pointer]:
+                    - cell "MP 99 of 1998" [ref=e3140]:
+                      - generic [ref=e3141]:
+                        - img [ref=e3142]
+                        - text: MP 99 of 1998
+                    - cell "Asset" [ref=e3146]:
+                      - generic [ref=e3147]: Asset
+                    - cell "11" [ref=e3148]
+                    - cell [ref=e3149]:
+                      - img [ref=e3150]
+                    - cell "-" [ref=e3153]
+                  - row "Ashwin Person 11 -" [ref=e3154] [cursor=pointer]:
+                    - cell "Ashwin" [ref=e3155]:
+                      - generic [ref=e3156]:
+                        - img [ref=e3157]
+                        - text: Ashwin
+                    - cell "Person" [ref=e3160]:
+                      - generic [ref=e3161]: Person
+                    - cell "11" [ref=e3162]
+                    - cell [ref=e3163]:
+                      - img [ref=e3164]
+                    - cell "-" [ref=e3167]
+                  - row "Jobalia family Organization 11 -" [ref=e3168] [cursor=pointer]:
+                    - cell "Jobalia family" [ref=e3169]:
+                      - generic [ref=e3170]:
+                        - img [ref=e3171]
+                        - text: Jobalia family
+                    - cell "Organization" [ref=e3175]:
+                      - generic [ref=e3176]: Organization
+                    - cell "11" [ref=e3177]
+                    - cell [ref=e3178]:
+                      - img [ref=e3179]
+                    - cell "-" [ref=e3182]
+                  - row "Hero MotoCorp Limited Organization 11 respondent" [ref=e3183] [cursor=pointer]:
+                    - cell "Hero MotoCorp Limited" [ref=e3184]:
+                      - generic [ref=e3185]:
+                        - img [ref=e3186]
+                        - text: Hero MotoCorp Limited
+                    - cell "Organization" [ref=e3190]:
+                      - generic [ref=e3191]: Organization
+                    - cell "11" [ref=e3192]
+                    - cell [ref=e3193]:
+                      - img [ref=e3194]
+                    - cell "respondent" [ref=e3197]:
+                      - generic [ref=e3199]: respondent
+                  - row "Respondent Person 11 respondent" [ref=e3200] [cursor=pointer]:
+                    - cell "Respondent" [ref=e3201]:
+                      - generic [ref=e3202]:
+                        - img [ref=e3203]
+                        - text: Respondent
+                    - cell "Person" [ref=e3206]:
+                      - generic [ref=e3207]: Person
+                    - cell "11" [ref=e3208]
+                    - cell [ref=e3209]:
+                      - img [ref=e3210]
+                    - cell "respondent" [ref=e3213]:
+                      - generic [ref=e3215]: respondent
+                  - row "Mumbai Asset 11 -" [ref=e3216] [cursor=pointer]:
+                    - cell "Mumbai" [ref=e3217]:
+                      - generic [ref=e3218]:
+                        - img [ref=e3219]
+                        - text: Mumbai
+                    - cell "Asset" [ref=e3223]:
+                      - generic [ref=e3224]: Asset
+                    - cell "11" [ref=e3225]
+                    - cell [ref=e3226]:
+                      - img [ref=e3227]
+                    - cell "-" [ref=e3230]
+                  - row "Investor Education & Protection Fund Organization 11 -" [ref=e3231] [cursor=pointer]:
+                    - cell "Investor Education & Protection Fund" [ref=e3232]:
+                      - generic [ref=e3233]:
+                        - img [ref=e3234]
+                        - text: Investor Education & Protection Fund
+                    - cell "Organization" [ref=e3238]:
+                      - generic [ref=e3239]: Organization
+                    - cell "11" [ref=e3240]
+                    - cell [ref=e3241]:
+                      - img [ref=e3242]
+                    - cell "-" [ref=e3245]
+                  - row "Shilpa Bhate Associates Organization 11 advocate respondent" [ref=e3246] [cursor=pointer]:
+                    - cell "Shilpa Bhate Associates" [ref=e3247]:
+                      - generic [ref=e3248]:
+                        - img [ref=e3249]
+                        - text: Shilpa Bhate Associates
+                    - cell "Organization" [ref=e3253]:
+                      - generic [ref=e3254]: Organization
+                    - cell "11" [ref=e3255]
+                    - cell [ref=e3256]:
+                      - img [ref=e3257]
+                    - cell "advocate respondent" [ref=e3260]:
+                      - generic [ref=e3261]:
+                        - generic [ref=e3262]: advocate
+                        - generic [ref=e3263]: respondent
+                  - row "अश्विन एस. मेहता Person 10 -" [ref=e3264] [cursor=pointer]:
+                    - cell "अश्विन एस. मेहता" [ref=e3265]:
+                      - generic [ref=e3266]:
+                        - img [ref=e3267]
+                        - text: अश्विन एस. मेहता
+                    - cell "Person" [ref=e3270]:
+                      - generic [ref=e3271]: Person
+                    - cell "10" [ref=e3272]
+                    - cell [ref=e3273]:
+                      - img [ref=e3274]
+                    - cell "-" [ref=e3277]
+                  - row "KFin Technologies Pvt. Ltd Organization 10 -" [ref=e3278] [cursor=pointer]:
+                    - cell "KFin Technologies Pvt. Ltd" [ref=e3279]:
+                      - generic [ref=e3280]:
+                        - img [ref=e3281]
+                        - text: KFin Technologies Pvt. Ltd
+                    - cell "Organization" [ref=e3285]:
+                      - generic [ref=e3286]: Organization
+                    - cell "10" [ref=e3287]
+                    - cell [ref=e3288]:
+                      - img [ref=e3289]
+                    - cell "-" [ref=e3292]
+                  - row "Abha Tomar Person 10 advocate" [ref=e3293] [cursor=pointer]:
+                    - cell "Abha Tomar" [ref=e3294]:
+                      - generic [ref=e3295]:
+                        - img [ref=e3296]
+                        - text: Abha Tomar
+                    - cell "Person" [ref=e3299]:
+                      - generic [ref=e3300]: Person
+                    - cell "10" [ref=e3301]
+                    - cell [ref=e3302]:
+                      - img [ref=e3303]
+                    - cell "advocate" [ref=e3306]:
+                      - generic [ref=e3308]: advocate
+              - complementary "Entity details" [ref=e3311]:
+                - generic [ref=e3312]:
+                  - generic [ref=e3313]:
+                    - img [ref=e3315]
+                    - generic [ref=e3318]:
+                      - generic [ref=e3319]: Custodian
+                      - generic [ref=e3320]:
+                        - generic [ref=e3321]: Person
+                        - generic [ref=e3322]: Respondent
+                  - button "Close panel" [ref=e3323]:
+                    - img
+                - generic [ref=e3327]:
+                  - generic [ref=e3329]:
+                    - img
+                    - text: Pending
+                  - generic [ref=e3330]:
+                    - generic [ref=e3331]:
+                      - heading "Aliases" [level=4] [ref=e3332]
+                      - button "Add alias" [ref=e3333]:
+                        - img
+                        - text: Add
+                    - paragraph [ref=e3334]: No aliases
+                  - generic [ref=e3335]:
+                    - heading "Relationships (0)" [level=4] [ref=e3336]:
+                      - img [ref=e3337]
+                      - text: Relationships (0)
+                    - paragraph [ref=e3340]: No relationships found
+                  - generic [ref=e3341]:
+                    - heading "Mentions (1264)" [level=4] [ref=e3343]:
+                      - img [ref=e3344]
+                      - text: Mentions (1264)
+                    - generic [ref=e3347]:
+                      - generic [ref=e3348]:
+                        - paragraph [ref=e3349]: Custodian
+                        - paragraph [ref=e3351]: Unknown document • Page 94
+                      - generic [ref=e3352]:
+                        - paragraph [ref=e3353]: Custodian
+                        - paragraph [ref=e3355]: Unknown document • Page 94
+                      - generic [ref=e3356]:
+                        - paragraph [ref=e3357]: Custodian
+                        - paragraph [ref=e3359]: Unknown document • Page 94
+                      - generic [ref=e3360]:
+                        - paragraph [ref=e3361]: Custodian
+                        - paragraph [ref=e3363]: Unknown document • Page 94
+                      - generic [ref=e3364]:
+                        - paragraph [ref=e3365]: Custodian
+                        - paragraph [ref=e3367]: Unknown document • Page 94
+                      - button "View all 1264 mentions" [ref=e3368]:
+                        - img
+                        - text: View all 1264 mentions
+                  - button "Focus in Graph" [ref=e3370]:
+                    - img
+                    - text: Focus in Graph
+        - separator "Resize Q&A panel" [ref=e191]:
+          - img [ref=e193]
+        - generic [ref=e201]:
+          - generic [ref=e202]:
+            - generic [ref=e203]:
+              - img "jaanch.ai" [ref=e204]
+              - heading "Ask jaanch" [level=2] [ref=e205]
+            - generic [ref=e206]:
+              - button "Minimize panel" [ref=e207]:
+                - img
+              - button "Panel settings" [ref=e208]:
+                - img
+          - generic [ref=e209]:
+            - generic [ref=e335]:
+              - article "Your message" [ref=e336]:
+                - img [ref=e338]
+                - generic [ref=e341]:
+                  - paragraph [ref=e343]: who is the custodian
+                  - generic [ref=e345]: about 22 hours ago
+              - article "LDIP assistant message" [ref=e346]:
+                - img [ref=e348]
+                - generic [ref=e351]:
+                  - generic [ref=e352]:
+                    - generic [ref=e353]:
+                      - heading "Key Entities" [level=2] [ref=e354]
+                      - paragraph [ref=e355]: Custodian (Person)
+                      - paragraph [ref=e356]: "Based on the provided document excerpts, here's what is stated about the Custodian :"
+                      - paragraph [ref=e357]: The Custodian is an individual who plays a role in managing properties of notified persons involved in offenses related to transactions in securities during April 1, 1991 , to June 6, 1992 (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94). The documents also refer to A. K. Menon as Custodian (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 351).
+                      - paragraph [ref=e358]: "Key Details:"
+                      - list [ref=e359]:
+                        - listitem [ref=e360]: "Role:"
+                        - listitem [ref=e361]: The Custodian has the authority to notify a person involved in any offense relating to transactions in securities between April 1, 1991 and June 6, 1992 (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e362]: The Custodian has the power to cancel contracts or agreements entered into fraudulently (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e363]: The Custodian manages the properties of notified persons as directed by the Special Court (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e364]: The Custodian's position is not like that of a Receiver under the Civil Procedure Code or an Official Receiver under the Provincial Insolvency Act or Official Assignee under the Presidency Insolvency Act (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e365]: "Key Actions:"
+                        - listitem [ref=e366]: Opposing applications seeking compliance with court orders and recovery of attached assets (11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf, p. 24).
+                        - listitem [ref=e367]: Addressed a letter to Hero MotoCorp Ltd. on May 19, 2021 , after a grievance was made on May 11, 2021 (11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf, p. 24).
+                        - listitem [ref=e368]: "Relationships:"
+                        - listitem [ref=e369]: Accusations of collusion with Hero MotoCorp Ltd. (11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINA...
+                      - heading "Summary" [level=2] [ref=e370]
+                      - paragraph [ref=e371]: The documents identify a "Custodian" and describe their roles and responsibilities (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94). A. K. Menon is identified as Custodian (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 351).
+                      - paragraph [ref=e372]: "Key Details:"
+                      - list [ref=e373]:
+                        - listitem [ref=e374]: The Custodian has the authority to notify a person under Section 3(2) who has been involved in any offense relating to transactions in securities during the period 1.4.1991 to 6.6.1992 (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e375]: The Custodian has the authority under Section 4 to cancel contracts or agreements relating to the properties of the notified persons which, in his opinion, have been entered into fraudulently or to defeat the provisions of the Act (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e376]: The Custodian is required to deal with properties in the manner as directed by the Special Court (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                        - listitem [ref=e377]: The Custodian assists in the attachment of the notified person's property and manages the same thereafter (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 94).
+                    - generic [ref=e378]:
+                      - button "11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 48)" [ref=e379]:
+                        - img
+                        - generic [ref=e380]: 11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 48)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 94)" [ref=e381]:
+                        - img
+                        - generic [ref=e382]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 94)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 351)" [ref=e383]:
+                        - img
+                        - generic [ref=e384]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 351)
+                      - button "11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 50)" [ref=e385]:
+                        - img
+                        - generic [ref=e386]: 11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 50)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 94)" [ref=e387]:
+                        - img
+                        - generic [ref=e388]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 94)
+                  - generic [ref=e390]: about 22 hours ago
+              - article "Your message" [ref=e391]:
+                - img [ref=e393]
+                - generic [ref=e396]:
+                  - paragraph [ref=e398]: what is the gazette notification about
+                  - generic [ref=e400]: about 22 hours ago
+              - article "LDIP assistant message" [ref=e401]:
+                - img [ref=e403]
+                - generic [ref=e406]:
+                  - generic [ref=e407]:
+                    - generic [ref=e408]:
+                      - paragraph [ref=e409]: The gazette notification concerns individuals involved in offenses related to transactions in securities after April 1, 1991, and before the promulgation of the Special Court Ordinance of 1992 (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 88). Their names are to be officially notified in the gazette (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 88).
+                      - paragraph [ref=e410]: "Key Details:"
+                      - list [ref=e411]:
+                        - listitem [ref=e412]: The notification was issued on June 8, 1992 (2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf, p. 13).
+                        - listitem [ref=e413]: A.K. Menon was appointed Custodian under Section 3(1) of the Special Court Ordinance of 1992 (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 88).
+                        - listitem [ref=e414]: One of the names to be notified is M/s. Harshad S. Mehta, Proprietary concern (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 88).
+                      - paragraph [ref=e415]: "Not covered in available excerpts: A comprehensive list of all individuals and entities named in the notification."
+                    - generic [ref=e416]:
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 88)" [ref=e417]:
+                        - img
+                        - generic [ref=e418]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 88)
+                      - button "2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf (p. 13)" [ref=e419]:
+                        - img
+                        - generic [ref=e420]: 2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf (p. 13)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 41)" [ref=e421]:
+                        - img
+                        - generic [ref=e422]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 41)
+                      - button "7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 28)" [ref=e423]:
+                        - img
+                        - generic [ref=e424]: 7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 28)
+                      - button "7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 9)" [ref=e425]:
+                        - img
+                        - generic [ref=e426]: 7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 9)
+                  - generic [ref=e428]: about 22 hours ago
+              - article "Your message" [ref=e429]:
+                - img [ref=e431]
+                - generic [ref=e434]:
+                  - paragraph [ref=e436]: What is this case about?
+                  - generic [ref=e438]: about 4 hours ago
+              - article "LDIP assistant message" [ref=e439]:
+                - img [ref=e441]
+                - generic [ref=e444]:
+                  - generic [ref=e445]:
+                    - generic [ref=e446]:
+                      - paragraph [ref=e447]: "\"\"\"Based on the provided document excerpts, the case appears to concern transactions in securities and recovery of attached property."
+                      - paragraph [ref=e448]: "Key Details:"
+                      - list [ref=e449]:
+                        - listitem [ref=e450]: One case is identified as Miscellaneous Application No. 24 of 2016, in Miscellaneous Application No. 244 of 2003, before the Special Court (Trial of Offences Relating to Transactions in Securities) Act, 1992 at Bombay (2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf, p. 21).
+                        - listitem [ref=e451]: The applicant is listed as The Custodian, versus The Chairman of the Committee, Investor Education & Protection Fund Department of Company Affairs & Ors (2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf, p. 21).
+                        - listitem [ref=e452]: Another application involves the applicant calling upon Shri Nirav Jobalia to return and handover shares and dividends, which Shri Nirav Jobalia initially agreed to do but later backed out of (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 29).
+                        - listitem [ref=e453]: The applicant states it may be necessary to proceed against Respondent Nos. 4 to 8 on an urgent basis so that the recovery of attached property does not get jeopardized by passage of time (1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf, p. 29).
+                      - paragraph [ref=e454]: "Not covered in available excerpts: The specific nature of the transactions in securities, details of the attached property, and the specific roles and allegations against Respondent Nos. 4 to 8.\"\"\""
+                    - generic [ref=e455]:
+                      - button "2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf (p. 21)" [ref=e456]:
+                        - img
+                        - generic [ref=e457]: 2. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - ll.pdf (p. 21)
+                      - button "Companies Act, 2013.pdf (p. 106)" [ref=e458]:
+                        - img
+                        - generic [ref=e459]: Companies Act, 2013.pdf (p. 106)
+                      - button "Companies Act, 2013.pdf (p. 182)" [ref=e460]:
+                        - img
+                        - generic [ref=e461]: Companies Act, 2013.pdf (p. 182)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 29)" [ref=e462]:
+                        - img
+                        - generic [ref=e463]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 29)
+                      - button "Companies Act, 2013.pdf (p. 255)" [ref=e464]:
+                        - img
+                        - generic [ref=e465]: Companies Act, 2013.pdf (p. 255)
+                  - generic [ref=e467]: about 4 hours ago
+              - article "Your message" [ref=e468]:
+                - img [ref=e470]
+                - generic [ref=e473]:
+                  - paragraph [ref=e475]: What is this case about?
+                  - generic [ref=e477]: about 1 hour ago
+              - article "Your message" [ref=e478]:
+                - img [ref=e480]
+                - generic [ref=e483]:
+                  - paragraph [ref=e485]: Who is Nirav Jobalia?
+                  - generic [ref=e487]: about 1 hour ago
+              - article "LDIP assistant message" [ref=e488]:
+                - img [ref=e490]
+                - generic [ref=e493]:
+                  - generic [ref=e494]:
+                    - generic [ref=e495]:
+                      - heading "Key Entities" [level=2] [ref=e496]
+                      - paragraph [ref=e497]:
+                        - text: Nirav Jobalia (Person)
+                        - emphasis [ref=e498]: "Also known as: Nilesh Jobalia, Nirav Jobalja, Nirav Jomalia"
+                      - paragraph [ref=e499]: Nirav D. Jobalia is identified as Respondent No. 5 and represents Respondent No. 8 and 9 as the sole legal heir in Misc. Application No. 10 of 2023 (Affidavit in Reply, p. 1; Application in MA NO 10, p. 17).
+                      - paragraph [ref=e500]: "Key Details:"
+                      - list [ref=e501]:
+                        - listitem [ref=e502]: "Age: 44 years old (Affidavit in Sur Rejoinder, p. 4)"
+                        - listitem [ref=e503]: "Address: D-404, Annapurna Complex, Kasak, Bharuch 392 001 (Affidavit in Sur Rejoinder, p. 4)"
+                        - listitem [ref=e504]: "Addresses as Legal Heir: Flat No.B-801, Arihant Avenue -C, Jamnagar Road, Ghanteshwar, Rajkot, Gujrat 360006 (Affidavit in Sur Rejoinder, p. 4; Application in MA NO 10, p. 17)"
+                        - listitem [ref=e505]: "Representation: Represents Late Dalichand Jhoothalal Jobalia (Respondent no. 8) and Late Smitaben Dalichand Jobalia (Respondent no. 9) as sole legal heir (Affidavit in Sur Rejoinder, p. 4; Application in MA NO 10, p. 17)."
+                        - listitem [ref=e506]: "Shares: Hero MotoCorp Ltd. admitted to the transfer and release of shares from IEPF to Nirav D Jobalia in its letter dated June 23, 2021 (Rejoinder of JHM, p. 39)."
+                        - listitem [ref=e507]: "Allegations: Accused of concocting a false story and attributing acts to his deceased father (Rejoinder of JHM, p. 39)."
+                        - listitem [ref=e508]: "Shares and IEPF: There are concerns that Nirav D Jobalia and other benami holders have secured the release of shares from IEPF several years ago (Rejoinder of JHM, p. 39)."
+                        - listitem [ref=e509]: "Allegations of Perjury: Allegedly filed false and misleading affidavits on oath and committed perjury, failing to disclose the present location of shares released to him by IEPF (Rejoinder of JHM, p. 39)."
+                        - listitem [ref=e510]: "Ashwin Mehta: Mr. Ashwin Mehta , the Advocate of the Applicant, showed the draft application of the case against Nirav to Ishan and stated he is filing the case because Nirav is not agreeing to hand over the proceeds of his shares (Affidavit in Reply, p. 17)."
+                      - paragraph [ref=e511]: "Not covered in available excerpts: The documents do not provide details about specific actions Nirav Jobalia took, beyond those mentioned, or his relationships with other parties outside of the ..."
+                      - heading "Summary" [level=2] [ref=e512]
+                      - paragraph [ref=e513]: Nirav D. Jobalia is identified as Respondent No. 5 in Misc. Application No. 10 of 2023 (Affidavit in Sur Rejoinder, p. 4).
+                      - paragraph [ref=e514]: "Key Details:"
+                      - list [ref=e515]:
+                        - listitem [ref=e516]: "Age: 44 years old (Affidavit in Sur Rejoinder, p. 4, 24)"
+                        - listitem [ref=e517]: "Address: D-404, Annapurna Complex, Kasak, Bharuch 392 001 (Affidavit in Sur Rejoinder, p. 4, 24)"
+                        - listitem [ref=e518]: "Legal Heir: Sole legal heir representing Respondent No. 8 (Late Dalichand Jhoothalal Jobalia ) and Respondent No. 9 (Late Smitaben Dalichand Jobalia ) (Affidavit in Sur Rejoinder, p. 4; Application in MA No 10 of 2023, p. 17)"
+                        - listitem [ref=e519]: "Address as Legal Heir: Flat No. B-801, Arihant Avenue-C, Jamnagar Road, Ghanteshwar, Rajkot, Gujarat 360006 (Affidavit in Sur Rejoinder, p. 4; Application in MA No 10 of 2023, p. 17)"
+                        - listitem [ref=e520]: "Shares from IEPF: Hero MotoCorp Ltd. admitted to the transfer and release of shares from IEPF to Nirav D Jobalia in its letter dated 23.06.2021 (Rejoinder of JHM, p. 40)."
+                      - paragraph [ref=e521]: "Not covered in available excerpts: More specific details about Nirav D. Jobalia's alleged actions or involvement in the case, beyond being a respondent and legal heir."
+                    - generic [ref=e522]:
+                      - button "11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 40)" [ref=e523]:
+                        - img
+                        - generic [ref=e524]: 11. Rejoinder of JHM to the Affidavit in Rply of Custodian on MA NO 10 OF 2023 DT 03 06 2024 FINAL.pdf (p. 40)
+                      - button "8. Affidavit in Sur Rejoinder on Behalf of Respo no 5 Nirav Jbalia in MA NO 10 OF 2023 DT 18 01 2024.pdf (p. 4)" [ref=e525]:
+                        - img
+                        - generic [ref=e526]: 8. Affidavit in Sur Rejoinder on Behalf of Respo no 5 Nirav Jbalia in MA NO 10 OF 2023 DT 18 01 2024.pdf (p. 4)
+                      - button "8. Affidavit in Sur Rejoinder on Behalf of Respo no 5 Nirav Jbalia in MA NO 10 OF 2023 DT 18 01 2024.pdf (p. 24)" [ref=e527]:
+                        - img
+                        - generic [ref=e528]: 8. Affidavit in Sur Rejoinder on Behalf of Respo no 5 Nirav Jbalia in MA NO 10 OF 2023 DT 18 01 2024.pdf (p. 24)
+                      - button "7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 11)" [ref=e529]:
+                        - img
+                        - generic [ref=e530]: 7. Addl Affidavit of JHM IN MA NO 10 OF 2023 DT 29 12 2023.pdf (p. 11)
+                      - button "1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 17)" [ref=e531]:
+                        - img
+                        - generic [ref=e532]: 1. APPLICATION IN MA NO 10 OF 2023 DT 27 02 2023 VOL - l.pdf (p. 17)
+                  - generic [ref=e534]: about 1 hour ago
+            - generic [ref=e213]:
+              - textbox "Message input" [ref=e215]:
+                - /placeholder: Ask jaanch a question...
+              - button "Send message" [disabled]:
+                - img
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e216] [cursor=pointer]:
+    - img [ref=e217]
+  - alert [ref=e19]

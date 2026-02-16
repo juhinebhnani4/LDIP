@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Shield } from 'lucide-react';
+import { BarChart3, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LLMQuotaWidget } from '@/components/features/admin/LLMQuotaWidget';
 import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
 import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
@@ -61,6 +63,24 @@ export default async function AdminPage() {
             </p>
           </div>
         </div>
+
+        {/* Usage Dashboard Link */}
+        <Link href="/admin/usage" className="block">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Usage Dashboard</CardTitle>
+              </div>
+              <CardDescription>
+                Full cost tracking across all LLM providers — daily spend, provider &amp; operation breakdown, budget utilization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-sm text-primary font-medium">View dashboard &rarr;</span>
+            </CardContent>
+          </Card>
+        </Link>
 
         {/* Admin widgets grid */}
         <div className="grid gap-6 md:grid-cols-2">

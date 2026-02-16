@@ -2,22 +2,23 @@
 
 Story: RAG Production Gaps - Feature 2: Evaluation Framework
 Runs batch evaluation of golden dataset items using RAGAS metrics.
+
+Fix B1/B2/B3 (2026-02-16): Fixed column mismatches, replaced non-existent
+get_chat_service with RAGPipelineService, removed latency_ms references,
+added metric_scores JSONB + pipeline_config JSONB for extensibility.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import structlog
 
-from app.core.celery_app import celery_app
+from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.supabase.client import get_supabase_client as get_supabase
 from app.workers.utils import run_async
-
-if TYPE_CHECKING:
-    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -29,6 +30,65 @@ class EvaluationTaskError(Exception):
         self.message = message
         self.code = code
         super().__init__(message)
+
+
+def _build_evaluation_row(
+    *,
+    matter_id: str,
+    question: str,
+    answer: str,
+    contexts: list[str],
+    eval_result: Any,
+    triggered_by: str,
+    pipeline_config: dict[str, Any] | None = None,
+    golden_item_id: str | None = None,
+    expected_answer: str | None = None,
+    job_id: str | None = None,
+    chat_message_id: str | None = None,
+) -> dict[str, Any]:
+    """Build a row dict matching the evaluation_results schema exactly.
+
+    Single source of truth for column names. If the schema changes,
+    update this function only.
+
+    Schema columns (20260122000002 + 20260216000001):
+        id (auto), matter_id, golden_item_id, question, answer, contexts,
+        context_recall, faithfulness, answer_relevancy, overall_score,
+        evaluated_at, triggered_by, expected_answer, job_id,
+        chat_message_id, metric_scores, pipeline_config
+    """
+    scores = eval_result.scores
+
+    row: dict[str, Any] = {
+        "matter_id": matter_id,
+        "question": question,
+        "answer": answer,
+        "contexts": contexts,
+        # Individual float columns (queryable, constrained 0-1)
+        "context_recall": scores.context_recall,
+        "faithfulness": scores.faithfulness,
+        "answer_relevancy": scores.answer_relevancy,
+        "overall_score": eval_result.overall_score,
+        # JSONB: all metrics (extensible — future metrics go here without migrations)
+        "metric_scores": scores.model_dump(exclude_none=True),
+        # Pipeline config snapshot (what RAG setup produced this answer)
+        "pipeline_config": pipeline_config or {},
+        # Traceability
+        "triggered_by": triggered_by,
+        "evaluated_at": datetime.now(UTC).isoformat(),
+    }
+
+    # Optional fields — only include if present (avoid inserting NULLs needlessly)
+    if golden_item_id is not None:
+        row["golden_item_id"] = golden_item_id
+    if expected_answer is not None:
+        row["expected_answer"] = expected_answer
+    if job_id is not None:
+        row["job_id"] = job_id
+    if chat_message_id is not None:
+        row["chat_message_id"] = chat_message_id
+
+    return row
 
 
 @celery_app.task(
@@ -50,8 +110,10 @@ def run_batch_evaluation(
 ) -> dict[str, Any]:
     """Run batch evaluation of golden dataset items.
 
-    Evaluates all golden dataset items (optionally filtered by tags) using
-    the RAG pipeline and RAGAS metrics.
+    For each golden item:
+    1. Run the question through the RAG pipeline (same pipeline as chat)
+    2. Compare RAG answer against expected answer using RAGAS metrics
+    3. Store result in evaluation_results table
 
     Args:
         matter_id: Matter UUID to evaluate.
@@ -73,11 +135,10 @@ def run_batch_evaluation(
     )
 
     try:
-        # Run async evaluation in sync context
         async def _evaluate_async() -> dict[str, Any]:
             from app.services.evaluation import get_ragas_evaluator
             from app.services.evaluation.golden_dataset import GoldenDatasetService
-            from app.services.rag.chat_service import get_chat_service
+            from app.services.rag.pipeline_service import get_rag_pipeline_service
 
             # Get golden dataset items
             golden_service = GoldenDatasetService()
@@ -95,7 +156,7 @@ def run_batch_evaluation(
                 }
 
             evaluator = get_ragas_evaluator()
-            chat_service = get_chat_service()
+            pipeline = get_rag_pipeline_service()
             supabase = get_supabase()
 
             results = []
@@ -104,24 +165,21 @@ def run_batch_evaluation(
 
             for item in items:
                 try:
-                    # Get RAG response for the question
-                    rag_response = await chat_service.get_rag_response(
+                    # Step 1: Run question through RAG pipeline
+                    rag_result = await pipeline.query(
                         matter_id=matter_id,
                         question=item.question,
                         user_id=user_id,
+                        skip_cache=True,
                     )
 
-                    # Extract answer and contexts
-                    answer = rag_response.get("answer", "")
-                    contexts = [
-                        chunk.get("content", "")
-                        for chunk in rag_response.get("chunks", [])
-                    ]
+                    answer = rag_result.answer
+                    contexts = rag_result.contexts
 
                     if not contexts:
                         contexts = ["No context retrieved"]
 
-                    # Evaluate using RAGAS
+                    # Step 2: Evaluate using RAGAS
                     eval_result = await evaluator.evaluate_single(
                         question=item.question,
                         answer=answer,
@@ -129,22 +187,20 @@ def run_batch_evaluation(
                         ground_truth=item.expected_answer,
                     )
 
-                    # Store result in database
-                    result_data = {
-                        "matter_id": matter_id,
-                        "golden_item_id": item.id,
-                        "question": item.question,
-                        "generated_answer": answer,
-                        "expected_answer": item.expected_answer,
-                        "contexts": contexts,
-                        "scores": eval_result.scores.model_dump(),
-                        "overall_score": eval_result.overall_score,
-                        "latency_ms": eval_result.latency_ms,
-                        "evaluated_at": datetime.now(UTC).isoformat(),
-                        "job_id": job_id,
-                    }
-
-                    supabase.table("evaluation_results").insert(result_data).execute()
+                    # Step 3: Store result in database
+                    row = _build_evaluation_row(
+                        matter_id=matter_id,
+                        question=item.question,
+                        answer=answer,
+                        contexts=contexts,
+                        eval_result=eval_result,
+                        triggered_by="batch",
+                        pipeline_config=rag_result.pipeline_config,
+                        golden_item_id=item.id,
+                        expected_answer=item.expected_answer,
+                        job_id=job_id,
+                    )
+                    supabase.table("evaluation_results").insert(row).execute()
 
                     results.append({
                         "golden_item_id": item.id,
@@ -188,7 +244,7 @@ def run_batch_evaluation(
                 "errors": errors[:5],  # First 5 errors
             }
 
-        result = run_async(_evaluate_async())
+        result = run_async(_evaluate_async(), timeout=1200)
 
         logger.info(
             "batch_evaluation_completed",
@@ -273,6 +329,7 @@ def evaluate_chat_response(
     try:
         async def _evaluate_async() -> dict[str, Any]:
             from app.services.evaluation import get_ragas_evaluator
+            from app.services.rag.pipeline_service import get_rag_pipeline_service
 
             evaluator = get_ragas_evaluator()
 
@@ -283,20 +340,23 @@ def evaluate_chat_response(
                 ground_truth=None,  # No ground truth for auto-eval
             )
 
+            # Get pipeline config for traceability
+            pipeline = get_rag_pipeline_service()
+            pipeline_config = pipeline._get_pipeline_config()
+
             # Store result
             supabase = get_supabase()
-            supabase.table("evaluation_results").insert({
-                "matter_id": matter_id,
-                "question": question,
-                "generated_answer": answer,
-                "contexts": contexts,
-                "scores": result.scores.model_dump(),
-                "overall_score": result.overall_score,
-                "latency_ms": result.latency_ms,
-                "evaluated_at": datetime.now(UTC).isoformat(),
-                "chat_message_id": chat_message_id,
-                "is_auto_evaluation": True,
-            }).execute()
+            row = _build_evaluation_row(
+                matter_id=matter_id,
+                question=question,
+                answer=answer,
+                contexts=contexts,
+                eval_result=result,
+                triggered_by="auto",
+                pipeline_config=pipeline_config,
+                chat_message_id=chat_message_id,
+            )
+            supabase.table("evaluation_results").insert(row).execute()
 
             return {
                 "status": "completed",

@@ -10,6 +10,7 @@
  */
 
 import { type FC, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Panel,
   PanelGroup,
@@ -18,8 +19,13 @@ import {
 import { FileText, Book, GripVertical, Loader2 } from 'lucide-react';
 import { SplitViewHeader } from './SplitViewHeader';
 import { MismatchExplanation } from './MismatchExplanation';
-import { PdfViewerPanel, PdfErrorBoundary } from '../pdf';
+import { PdfErrorBoundary } from '../pdf/PdfErrorBoundary';
 import { useSplitViewStore } from '@/stores/splitViewStore';
+
+const PdfViewerPanel = dynamic(
+  () => import('../pdf/PdfViewerPanel').then((m) => ({ default: m.PdfViewerPanel })),
+  { ssr: false },
+);
 import type { SplitViewData } from '@/types/citation';
 
 export interface SplitViewCitationPanelProps {

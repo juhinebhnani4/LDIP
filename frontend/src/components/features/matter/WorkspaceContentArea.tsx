@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import {
   ResizablePanelGroup,
@@ -13,9 +14,13 @@ import { useUser, useBoundingBoxes } from '@/hooks';
 import { QAPanel } from '@/components/features/chat/QAPanel';
 import { FloatingQAPanel } from '@/components/features/chat/FloatingQAPanel';
 import { QAPanelExpandButton } from '@/components/features/chat/QAPanelExpandButton';
-import { PDFSplitView } from '@/components/features/pdf/PDFSplitView';
 import { fetchDocument } from '@/lib/api/documents';
 import type { SourceReference } from '@/types/chat';
+
+const PDFSplitView = dynamic(
+  () => import('@/components/features/pdf/PDFSplitView').then((m) => ({ default: m.PDFSplitView })),
+  { ssr: false },
+);
 
 /**
  * Workspace Content Area

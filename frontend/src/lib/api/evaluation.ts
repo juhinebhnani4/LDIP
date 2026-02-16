@@ -8,6 +8,15 @@
  * - Evaluating QA pairs using RAGAS metrics
  * - Managing golden dataset items
  * - Retrieving historical evaluation results
+ *
+ * NOTE (2026-02-16): This file is currently NOT imported anywhere in the frontend.
+ * It was pre-built to match backend evaluation routes but no UI consumes it yet.
+ * KEEP — golden dataset CRUD and types will be reused when building:
+ *   - F2: Lawyer Verification UI
+ *   - F3: Evaluation Dashboard
+ * Will need refactoring at that point (remove redundant snake/camel handling,
+ * add verification-specific endpoints).
+ * See: _bmad-output/implementation-artifacts/fix-plan-rag-pipeline-and-evaluation.md
  */
 
 import { api } from './client';

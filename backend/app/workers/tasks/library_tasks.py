@@ -108,9 +108,25 @@ def chunk_library_document(
                 "note": "Chunks already exist (idempotent skip)",
             }
 
+        # Fetch document title for chunk context enrichment
+        try:
+            lib_doc = lib_service.get_document(library_document_id)
+            doc_context = lib_doc.title or lib_doc.filename
+        except Exception as e:
+            logger.warning(
+                "chunk_library_document_context_lookup_failed",
+                library_document_id=library_document_id,
+                error=str(e),
+                action="chunking_without_context_header",
+            )
+            doc_context = None
+
         # Create chunker and process
         chunker = ParentChildChunker()
-        result = chunker.chunk_document(library_document_id, extracted_text)
+        result = chunker.chunk_document(
+            library_document_id, extracted_text,
+            document_context=doc_context,
+        )
 
         # Prepare chunks for insertion
         chunk_records = []

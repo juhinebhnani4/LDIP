@@ -24,6 +24,7 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
 from app.services.memory.redis_keys import EMBEDDING_CACHE_TTL, embedding_cache_key
 
 logger = structlog.get_logger(__name__)
@@ -243,11 +244,18 @@ class EmbeddingService:
         Returns:
             Embedding vector.
         """
+        tracker = CostTracker(
+            provider=LLMProvider.OPENAI_EMBEDDING_SMALL,
+            operation="embedding_single",
+        )
         response = await self.client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=text,
             dimensions=EMBEDDING_DIMENSIONS,
         )
+        tracker.add_tokens(input_tokens=response.usage.total_tokens)
+        tracker.log_cost()
+        await persist_cost(tracker)
         return response.data[0].embedding
 
     async def embed_batch(
@@ -363,11 +371,18 @@ class EmbeddingService:
         Returns:
             List of embedding vectors.
         """
+        tracker = CostTracker(
+            provider=LLMProvider.OPENAI_EMBEDDING_SMALL,
+            operation="embedding_batch",
+        )
         response = await self.client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=texts,
             dimensions=EMBEDDING_DIMENSIONS,
         )
+        tracker.add_tokens(input_tokens=response.usage.total_tokens)
+        tracker.log_cost()
+        await persist_cost(tracker)
         return [data.embedding for data in response.data]
 
 

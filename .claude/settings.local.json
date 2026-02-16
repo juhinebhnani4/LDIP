@@ -85,7 +85,19 @@
       "Bash(npx tsc --noEmit --skipLibCheck)",
       "WebFetch(domain:www.youtube.com)",
       "Bash(supabase migration:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(RAILWAY_TOKEN=cc2b9c31-5d95-4e0c-8a45-dcbec0b9bdb0 npx @railway/cli logs:*)",
+      "Bash(railway logs:*)",
+      "mcp__playwright__browser_fill_form",
+      "Bash(grep:*)",
+      "WebFetch(domain:www.mcolegals.in)",
+      "WebFetch(domain:landing.ai)",
+      "WebFetch(domain:www.lawnext.com)",
+      "WebFetch(domain:docs.cloud.google.com)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright"
+  ]
 }

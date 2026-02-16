@@ -26,6 +26,7 @@ from app.core.cost_tracking import (
     LLMProvider,
     estimate_tokens,
     persist_cost,
+    persist_cost_sync,
 )
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import (
@@ -827,7 +828,7 @@ class CitationExtractor:
                 output_tokens = estimate_tokens(response.text) if response.text else 0
                 cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
                 cost_tracker.log_cost()
-                # Note: persist_cost not called here - sync context, costs logged only
+                persist_cost_sync(cost_tracker)
 
                 return self._parse_gemini_response(response.text)
 

@@ -20,6 +20,8 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost
+from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.citation.act_indexer import (
@@ -641,6 +643,17 @@ class CitationVerifier:
                             system_instruction=VERIFICATION_SYSTEM_PROMPT,
                         ),
                     )
+                # Track cost
+                tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="citation_verification",
+                )
+                tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                tracker.log_cost()
+                await persist_cost(tracker)
                 return response.text
 
             except VerificationConfigurationError:

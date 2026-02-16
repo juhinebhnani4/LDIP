@@ -1,0 +1,44 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - paragraph [ref=e6]: Your session has expired. Please sign in again to continue.
+    - generic [ref=e7]:
+      - generic [ref=e9]:
+        - img [ref=e10]
+        - img "jaanch.ai" [ref=e11]
+      - generic [ref=e12]:
+        - heading "Welcome Back" [level=1] [ref=e13]
+        - paragraph [ref=e14]: Sign in to access your account
+    - generic [ref=e15]:
+      - generic [ref=e17]: Sign In
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - tablist [ref=e20]:
+            - tab "Password" [selected] [ref=e21]
+            - tab "Magic Link" [ref=e22]
+          - tabpanel "Password" [ref=e23]:
+            - generic [ref=e24]:
+              - generic [ref=e25]:
+                - text: Email
+                - textbox "Email" [ref=e26]:
+                  - /placeholder: you@example.com
+              - generic [ref=e27]:
+                - generic [ref=e28]:
+                  - text: Password
+                  - link "Forgot password?" [ref=e29] [cursor=pointer]:
+                    - /url: /forgot-password
+                - textbox "Password" [ref=e30]:
+                  - /placeholder: Your password
+              - button "Sign In" [ref=e31]
+        - generic [ref=e33]: Or continue with
+        - button "Sign in with Google" [ref=e34]:
+          - img [ref=e35]
+          - text: Sign in with Google
+      - paragraph [ref=e41]:
+        - text: Don't have an account?
+        - link "Sign up" [ref=e42] [cursor=pointer]:
+          - /url: /signup
+  - region "Notifications alt+T"
+```

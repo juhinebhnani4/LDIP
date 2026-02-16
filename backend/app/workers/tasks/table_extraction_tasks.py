@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from app.core.celery_app import celery_app
+from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.document_service import DocumentService, get_document_service
 from app.services.storage_service import StorageService, get_storage_service

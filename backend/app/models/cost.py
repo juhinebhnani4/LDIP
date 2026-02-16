@@ -241,3 +241,74 @@ class MonthlyCostReportResponse(BaseModel):
     model_config = {
         "populate_by_name": True,
     }
+
+
+# =============================================================================
+# Usage Dashboard Models (Full Cost Tracking)
+# =============================================================================
+
+
+class DailyUsage(BaseModel):
+    """Daily spend entry for time-series chart."""
+
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    spend_usd: float = Field(..., alias="spendUsd", description="Spend in USD")
+    spend_inr: float = Field(..., alias="spendInr", description="Spend in INR")
+    requests: int = Field(default=0, description="Number of API requests")
+    tokens: int = Field(default=0, description="Total tokens used")
+
+    model_config = {"populate_by_name": True}
+
+
+class ProviderUsage(BaseModel):
+    """Usage breakdown by provider."""
+
+    provider: str = Field(..., description="Provider model name")
+    spend_usd: float = Field(..., alias="spendUsd")
+    spend_inr: float = Field(..., alias="spendInr")
+    requests: int = Field(default=0)
+    input_tokens: int = Field(default=0, alias="inputTokens")
+    output_tokens: int = Field(default=0, alias="outputTokens")
+
+    model_config = {"populate_by_name": True}
+
+
+class OperationUsage(BaseModel):
+    """Usage breakdown by operation type."""
+
+    operation: str = Field(..., description="Operation name")
+    spend_usd: float = Field(..., alias="spendUsd")
+    spend_inr: float = Field(..., alias="spendInr")
+    requests: int = Field(default=0)
+    input_tokens: int = Field(default=0, alias="inputTokens")
+    output_tokens: int = Field(default=0, alias="outputTokens")
+
+    model_config = {"populate_by_name": True}
+
+
+class MatterUsage(BaseModel):
+    """Usage breakdown by matter."""
+
+    matter_id: str = Field(..., alias="matterId")
+    spend_usd: float = Field(..., alias="spendUsd")
+    spend_inr: float = Field(..., alias="spendInr")
+    requests: int = Field(default=0)
+
+    model_config = {"populate_by_name": True}
+
+
+class UsageDashboardResponse(BaseModel):
+    """Full usage dashboard response (OpenAI-style)."""
+
+    month: str = Field(..., description="Month in YYYY-MM format")
+    total_spend_usd: float = Field(..., alias="totalSpendUsd")
+    total_spend_inr: float = Field(..., alias="totalSpendInr")
+    budget_usd: float = Field(..., alias="budgetUsd")
+    total_tokens: int = Field(default=0, alias="totalTokens")
+    total_requests: int = Field(default=0, alias="totalRequests")
+    daily_spend: list[DailyUsage] = Field(default_factory=list, alias="dailySpend")
+    by_provider: list[ProviderUsage] = Field(default_factory=list, alias="byProvider")
+    by_operation: list[OperationUsage] = Field(default_factory=list, alias="byOperation")
+    by_matter: list[MatterUsage] = Field(default_factory=list, alias="byMatter")
+
+    model_config = {"populate_by_name": True}

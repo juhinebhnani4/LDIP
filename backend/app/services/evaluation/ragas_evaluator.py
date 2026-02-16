@@ -13,6 +13,7 @@ Evaluation is a high-stakes task requiring accurate assessment.
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime
 from functools import lru_cache
@@ -160,17 +161,39 @@ class RAGASEvaluator:
                 else [faithfulness, answer_relevancy]
             )
 
-            # Run evaluation
+            # Run evaluation — pass explicit LLM and embeddings.
+            # Without explicit LLM, RAGAS defaults to gpt-4o-mini with low
+            # max_tokens, causing truncated outputs ("output incomplete due to
+            # max_tokens") which make faithfulness score None/0.0 on long answers.
+            from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
             result = evaluate(
                 dataset,
                 metrics=metrics,
+                llm=ChatOpenAI(model=self._llm_model, max_tokens=4096),
+                embeddings=OpenAIEmbeddings(model="text-embedding-3-small"),
             )
 
-            # Extract scores
+            # Extract scores — RAGAS v0.4+ returns an EvaluationResult object.
+            # result.scores is List[Dict[str, Any]] — one dict per sample.
+            # For single-sample eval, grab the first dict.
+            # NaN values come from metrics that failed internally (e.g.
+            # answer_relevancy when embeddings are broken) — treat as None.
+            sample_scores = result.scores[0]
+
+            def _safe_score(val):  # noqa: ANN001, ANN202
+                if val is None:
+                    return None
+                try:
+                    f = float(val)
+                    return None if math.isnan(f) else f
+                except (TypeError, ValueError):
+                    return None
+
             scores = MetricScores(
-                context_recall=result.get("context_recall"),
-                faithfulness=result.get("faithfulness"),
-                answer_relevancy=result.get("answer_relevancy"),
+                context_recall=_safe_score(sample_scores.get("context_recall")),
+                faithfulness=_safe_score(sample_scores.get("faithfulness")),
+                answer_relevancy=_safe_score(sample_scores.get("answer_relevancy")),
             )
 
             processing_time = int((time.time() - start_time) * 1000)

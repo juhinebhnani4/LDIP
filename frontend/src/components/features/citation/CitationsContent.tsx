@@ -30,7 +30,7 @@ import { CitationsByDocumentView } from './CitationsByDocumentView';
 import { MissingActsCard } from './MissingActsCard';
 import { SplitViewCitationPanel } from './SplitViewCitationPanel';
 import { SplitViewModal } from './SplitViewModal';
-import { PdfErrorBoundary } from '../pdf';
+import { PdfErrorBoundary } from '../pdf/PdfErrorBoundary';
 import {
   useCitationsList,
   useCitationStats,

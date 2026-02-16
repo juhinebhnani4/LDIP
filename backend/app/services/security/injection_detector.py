@@ -20,6 +20,7 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
 from app.core.gemini_client import get_gemini_client
 from app.core.prompt_boundaries import detect_injection_patterns, has_injection_patterns
 
@@ -296,6 +297,18 @@ class InjectionDetector:
                     system_instruction=INJECTION_DETECTION_SYSTEM_PROMPT,
                 ),
             )
+
+            # Track cost
+            tracker = CostTracker(
+                provider=LLMProvider.GEMINI_FLASH,
+                operation="security_injection_scan",
+            )
+            tracker.add_tokens(
+                input_tokens=estimate_tokens(prompt),
+                output_tokens=estimate_tokens(response.text or ""),
+            )
+            tracker.log_cost()
+            await persist_cost(tracker)
 
             response_text = response.text.strip()
 

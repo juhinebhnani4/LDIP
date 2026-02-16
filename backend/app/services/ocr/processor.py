@@ -28,6 +28,7 @@ from app.core.circuit_breaker import (
     CircuitService,
     with_sync_circuit_breaker,
 )
+from app.core.cost_tracking import CostTracker, LLMProvider as CostProvider, persist_cost_sync
 from app.core.config import get_settings
 from app.models.ocr import OCRPage, OCRResult
 from app.services.ocr.bbox_extractor import extract_bounding_boxes
@@ -375,6 +376,16 @@ class OCRProcessor:
                 processing_time_ms=processing_time_ms,
                 page_count=len(pages),
             )
+
+            # Track Document AI cost (per-page pricing)
+            ocr_tracker = CostTracker(
+                provider=CostProvider.GOOGLE_DOCUMENT_AI,
+                operation="ocr_document_ai",
+                document_id=document_id,
+            )
+            ocr_tracker.add_units(len(pages))
+            ocr_tracker.log_cost()
+            persist_cost_sync(ocr_tracker)
 
             logger.info(
                 "ocr_processing_completed",

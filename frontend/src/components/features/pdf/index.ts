@@ -1,5 +1,7 @@
 // PDF viewer components
-export { PdfViewerPanel } from './PdfViewerPanel';
+// NOTE: PdfViewerPanel is NOT exported from this barrel to avoid pdfjs-dist
+// being pulled into SSR bundles. Import it via next/dynamic with ssr: false:
+//   const PdfViewerPanel = dynamic(() => import('./PdfViewerPanel').then(m => ({ default: m.PdfViewerPanel })), { ssr: false });
 export { PdfErrorBoundary } from './PdfErrorBoundary';
 export { PDFSplitView } from './PDFSplitView';
 export { PDFSplitViewHeader } from './PDFSplitViewHeader';

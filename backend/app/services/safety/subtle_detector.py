@@ -21,6 +21,7 @@ import time
 import structlog
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
 from app.models.safety import SubtleViolationCheck
 from app.services.safety.prompts import (
     SUBTLE_DETECTION_SYSTEM_PROMPT,
@@ -333,6 +334,15 @@ class SubtleViolationDetector:
                 # Parse response
                 response_text = response.choices[0].message.content
                 parsed = self._parse_llm_response(response_text)
+
+                # Persist cost
+                tracker = CostTracker(
+                    provider=LLMProvider.OPENAI_GPT4O_MINI,
+                    operation="safety_subtle_detection",
+                )
+                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                tracker.log_cost()
+                await persist_cost(tracker)
 
                 logger.debug(
                     "llm_call_success",

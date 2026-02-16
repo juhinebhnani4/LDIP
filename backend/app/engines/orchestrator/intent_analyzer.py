@@ -29,6 +29,7 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
 from app.engines.orchestrator.models import (
     HIGH_CONFIDENCE_THRESHOLD,
     INCLUSION_THRESHOLD,
@@ -484,6 +485,10 @@ class IntentAnalyzer:
         Returns:
             Tuple of (response_text, input_tokens, output_tokens).
         """
+        tracker = CostTracker(
+            provider=LLMProvider.OPENAI_GPT35_TURBO,
+            operation="intent_classification",
+        )
         response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -497,6 +502,10 @@ class IntentAnalyzer:
         response_text = response.choices[0].message.content or ""
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
+
+        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+        tracker.log_cost()
+        await persist_cost(tracker)
 
         return response_text, input_tokens, output_tokens
 
@@ -991,6 +1000,10 @@ class MultiIntentAnalyzer:
                 initial_signals=signals_str,
             )
 
+            tracker = CostTracker(
+                provider=LLMProvider.OPENAI_GPT35_TURBO,
+                operation="multi_intent_refine",
+            )
             response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -999,6 +1012,14 @@ class MultiIntentAnalyzer:
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
+
+            if response.usage:
+                tracker.add_tokens(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                )
+            tracker.log_cost()
+            await persist_cost(tracker)
 
             response_text = response.choices[0].message.content or ""
             return self._parse_llm_response(response_text, initial_signals)

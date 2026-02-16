@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { X } from 'lucide-react';
 import {
   Dialog,
@@ -18,8 +19,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { PdfViewerPanel } from './PdfViewerPanel';
 import { PdfErrorBoundary } from './PdfErrorBoundary';
+
+const PdfViewerPanel = dynamic(
+  () => import('./PdfViewerPanel').then((m) => ({ default: m.PdfViewerPanel })),
+  { ssr: false },
+);
 import {
   usePdfSplitViewStore,
   selectIsFullScreenOpen,

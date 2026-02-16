@@ -18,6 +18,8 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost, persist_cost_sync
+from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.engines.timeline.classification_prompts import (
     EVENT_CLASSIFICATION_BATCH_PROMPT,
@@ -185,6 +187,18 @@ class EventClassifier:
                     event_id=event_id,
                 )
 
+                # Track cost
+                ec_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="event_classification",
+                )
+                ec_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                ec_tracker.log_cost()
+                await persist_cost(ec_tracker)
+
                 processing_time = int((time.time() - start_time) * 1000)
                 logger.debug(
                     "event_classification_complete",
@@ -322,6 +336,18 @@ class EventClassifier:
                 # Parse response
                 results = self._parse_batch_response(response.text, events)
 
+                # Track cost
+                ec_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="event_classification",
+                )
+                ec_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                ec_tracker.log_cost()
+                await persist_cost(ec_tracker)
+
                 processing_time = int((time.time() - start_time) * 1000)
                 logger.info(
                     "event_classification_batch_complete",
@@ -423,6 +449,17 @@ class EventClassifier:
                         system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
                     ),
                 )
+                # Track cost (sync)
+                ec_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="event_classification",
+                )
+                ec_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                ec_tracker.log_cost()
+                persist_cost_sync(ec_tracker)
                 return self._parse_single_response(response.text, event_id)
 
             except ClassifierConfigurationError:
@@ -520,6 +557,17 @@ class EventClassifier:
                         system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
                     ),
                 )
+                # Track cost (sync)
+                ec_tracker = CostTracker(
+                    provider=CostLLMProvider.GEMINI_FLASH,
+                    operation="event_classification",
+                )
+                ec_tracker.add_tokens(
+                    input_tokens=estimate_tokens(prompt),
+                    output_tokens=estimate_tokens(response.text or ""),
+                )
+                ec_tracker.log_cost()
+                persist_cost_sync(ec_tracker)
                 return self._parse_batch_response(response.text, events)
 
             except ClassifierConfigurationError:

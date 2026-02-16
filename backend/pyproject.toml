@@ -45,6 +45,9 @@ dependencies = [
     "pandas>=2.0.0",
     # Email Notifications (Gap #19)
     "resend>=2.0.0",
+    # Evaluation Framework (Feature 2) - RAGAS metrics
+    "ragas>=0.2.0",
+    "datasets>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -53,9 +56,6 @@ ml = [
     # Table Extraction (Feature 1) - pulls in PyTorch
     "docling>=2.0.0",
     "docling-core>=2.0.0",
-    # Evaluation Framework (Feature 2) - pulls in transformers
-    "ragas>=0.2.0",
-    "datasets>=3.0.0",
 ]
 
 [dependency-groups]

@@ -6,7 +6,7 @@ All endpoints enforce matter isolation.
 """
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.api.deps import get_matter_service
 from app.core.security import get_current_user
@@ -130,6 +130,9 @@ async def evaluate_qa_pair(
 
         # Optionally store result in database
         if body.save_result:
+            from app.services.rag.pipeline_service import get_rag_pipeline_service
+
+            pipeline = get_rag_pipeline_service()
             supabase = get_supabase()
             supabase.table("evaluation_results").insert({
                 "matter_id": matter_id,
@@ -140,6 +143,8 @@ async def evaluate_qa_pair(
                 "faithfulness": result.scores.faithfulness,
                 "answer_relevancy": result.scores.answer_relevancy,
                 "overall_score": result.overall_score,
+                "metric_scores": result.scores.model_dump(exclude_none=True),
+                "pipeline_config": pipeline._get_pipeline_config(),
                 "triggered_by": "manual",
             }).execute()
 
@@ -167,7 +172,6 @@ async def evaluate_qa_pair(
 async def evaluate_batch(
     matter_id: str = Path(..., description="Matter UUID"),
     body: BatchEvaluateRequest = ...,
-    background_tasks: BackgroundTasks = ...,
     current_user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> dict:
@@ -178,7 +182,6 @@ async def evaluate_batch(
     Args:
         matter_id: Matter UUID.
         body: Batch evaluation request with optional tag filters.
-        background_tasks: FastAPI background tasks.
         current_user: Authenticated user.
         matter_service: Matter service instance.
 

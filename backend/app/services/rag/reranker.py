@@ -30,6 +30,8 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, persist_cost
+from app.core.cost_tracking import LLMProvider as CostLLMProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -266,6 +268,15 @@ class CohereRerankService:
                 )
                 for r in response.results
             ]
+
+            # Track cost (per-search pricing)
+            tracker = CostTracker(
+                provider=CostLLMProvider.COHERE_RERANK,
+                operation="search_rerank",
+            )
+            tracker.add_units(1)
+            tracker.log_cost()
+            await persist_cost(tracker)
 
             logger.info(
                 "cohere_rerank_complete",

@@ -173,6 +173,7 @@ class StreamingOrchestrator:
                         or engine_result.data.get("events", [])
                         or engine_result.data.get("contradictions", [])
                         or engine_result.data.get("chunks", [])
+                        or engine_result.data.get("results", [])
                     )
 
                 trace = EngineTraceEvent(
@@ -434,7 +435,7 @@ class StreamingOrchestrator:
             contexts: list[str] = []
             for engine_result in result.engine_results:
                 if engine_result.data:
-                    chunks = engine_result.data.get("chunks", [])
+                    chunks = engine_result.data.get("chunks", []) or engine_result.data.get("results", [])
                     for chunk in chunks:
                         if isinstance(chunk, dict) and "content" in chunk:
                             contexts.append(chunk["content"])

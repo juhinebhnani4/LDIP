@@ -1,0 +1,7 @@
+# Auth Storage Directory
+
+This directory stores authentication state for Playwright tests.
+Files here are generated automatically by the auth.setup.ts script.
+
+The user.json file contains the saved session state that allows
+tests to run without logging in each time.

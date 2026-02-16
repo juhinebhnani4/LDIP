@@ -19,6 +19,7 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
 from app.engines.contradiction.prompts import (
     CLASSIFICATION_ENHANCEMENT_SYSTEM_PROMPT,
     format_classification_prompt,
@@ -600,6 +601,18 @@ class ContradictionClassifier:
                 # Track tokens
                 cost_tracker.input_tokens = response.usage.prompt_tokens if response.usage else 0
                 cost_tracker.output_tokens = response.usage.completion_tokens if response.usage else 0
+
+                # Persist cost to DB
+                tracker = CostTracker(
+                    provider=LLMProvider.OPENAI_GPT4_TURBO,
+                    operation="contradiction_classification",
+                )
+                tracker.add_tokens(
+                    input_tokens=cost_tracker.input_tokens,
+                    output_tokens=cost_tracker.output_tokens,
+                )
+                tracker.log_cost()
+                await persist_cost(tracker)
 
                 # Parse response
                 response_text = response.choices[0].message.content

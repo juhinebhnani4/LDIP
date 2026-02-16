@@ -77,7 +77,7 @@ def _ensure_nest_asyncio() -> bool:
         return False
 
 
-def run_async(coro: Coroutine[Any, Any, T]) -> T:
+def run_async(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
     """Run async coroutine in sync context for Celery tasks.
 
     This function safely executes async code from synchronous Celery tasks.
@@ -94,6 +94,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
 
     Args:
         coro: An awaitable coroutine to execute.
+        timeout: Max seconds to wait for completion (default 300).
 
     Returns:
         The result of the coroutine execution.
@@ -105,7 +106,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
     # This creates a completely isolated event loop per call, avoiding all
     # the asyncio/gevent conflicts that cause "attached to a different loop" errors
     if _is_gevent_worker():
-        return _run_in_thread(coro)
+        return _run_in_thread(coro, timeout=timeout)
 
     # For non-gevent contexts, try nest_asyncio approach
     _ensure_nest_asyncio()
@@ -175,7 +176,7 @@ def _get_or_create_shared_loop() -> asyncio.AbstractEventLoop:
         return loop
 
 
-def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
+def _run_in_thread(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
     """Run coroutine in a thread-safe manner.
 
     In gevent: dispatches to a shared persistent event loop via
@@ -187,7 +188,7 @@ def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
     if _is_gevent_worker():
         loop = _get_or_create_shared_loop()
         future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=300)
+        return future.result(timeout=timeout)
 
     # Non-gevent fallback: existing threading.Thread approach (unchanged)
     import threading as _threading
@@ -208,10 +209,10 @@ def _run_in_thread(coro: Coroutine[Any, Any, T]) -> T:
 
     thread = _threading.Thread(target=_thread_target, daemon=True)
     thread.start()
-    thread.join(timeout=300)
+    thread.join(timeout=timeout)
 
     if thread.is_alive():
-        raise TimeoutError("Async operation timed out after 300 seconds")
+        raise TimeoutError(f"Async operation timed out after {timeout} seconds")
 
     if "error" in exception_container:
         raise exception_container["error"]

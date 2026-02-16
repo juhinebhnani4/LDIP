@@ -1,0 +1,26 @@
+Found 2 chunks containing 205(C)
+
+Chunk: 42995fd2-6c9a-4b9d-84f9-b9b66e026081
+Page: 7
+Context: ... of the Companies Act,
+further transferred the unpaid/unclaimed divided and
+shares to IEPF, i.e. the fund established under sub-
+Section 1 of Section 205(C) of the Companies Act on
+12.12.2017. In the event, the unpaid/unclaimed divided
+and shares would not have been transferred by
+Respondent to IEPF...
+
+---
+
+Chunk: a1e06d09-e8c7-4b36-9ed0-0a2b2f69c119
+Page: 8
+Context: ... of the Companies Act,
+further transferred the unpaid/unclaimed divided and
+shares to IEPF, i.e. the fund established under sub-
+Section 1 of Section 205(C) of the Companies Act on
+12.12.2017. In the event, the unpaid/unclaimed divided
+and shares would not have been transferred by
+Respondent to IEPF...
+
+---
+

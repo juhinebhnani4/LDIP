@@ -843,7 +843,7 @@ class RAGEngineAdapter(EngineAdapter):
                         "chunk_id": item.id,
                         "document_id": item.document_id,
                         "document_name": get_doc_name(item),
-                        "content": item.content[:500],  # Preview for UI
+                        "content": item.content,
                         "page_number": item.page_number,
                         "relevance_score": item.rrf_score,
                         "is_library": item.is_library,

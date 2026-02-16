@@ -130,6 +130,7 @@ class ParentChildChunker:
         document_id: str,
         text: str,
         layout: DocumentLayout | None = None,
+        document_context: str | None = None,
     ) -> ChunkingResult:
         """Chunk a document into parent-child hierarchy.
 
@@ -141,6 +142,8 @@ class ParentChildChunker:
             document_id: UUID of the source document.
             text: Extracted text from OCR to chunk.
             layout: Optional DocumentLayout from Docling for structure-aware chunking.
+            document_context: Optional filename/title to prepend as a source header
+                to parent chunks, making document metadata searchable via BM25/embeddings.
 
         Returns:
             ChunkingResult with parent and child chunks.
@@ -156,7 +159,9 @@ class ParentChildChunker:
         # Use layout-aware chunking if layout is available and has blocks
         # Layout blocks may have their own text_content, so empty text is OK
         if layout and layout.has_blocks and layout.success:
-            return self._chunk_with_layout(document_id, text, layout)
+            result = self._chunk_with_layout(document_id, text, layout)
+            self._apply_document_context(result, document_context)
+            return result
 
         # For text-based chunking, we need actual text
         if not text or not text.strip():
@@ -172,7 +177,39 @@ class ParentChildChunker:
             )
 
         # Fall back to text-based chunking
-        return self._chunk_text_based(document_id, text)
+        result = self._chunk_text_based(document_id, text)
+        self._apply_document_context(result, document_context)
+        return result
+
+    def _apply_document_context(
+        self,
+        result: ChunkingResult,
+        document_context: str | None,
+    ) -> None:
+        """Prepend a source header to parent chunk content.
+
+        This makes document metadata (filename, case number) searchable via
+        both BM25 tsvector and semantic embeddings without schema changes.
+
+        Only applied to parent chunks — children are smaller sub-chunks used
+        for retrieval precision; parents are what get sent to the LLM.
+
+        Args:
+            result: Chunking result whose parent chunks will be enriched
+                and whose total_tokens will be recalculated.
+            document_context: Filename or title to prepend. No-op if None.
+        """
+        if not document_context or not result.parent_chunks:
+            return
+
+        for chunk in result.parent_chunks:
+            chunk.content = f"[Source: {document_context}]\n\n{chunk.content}"
+            chunk.token_count = count_tokens(chunk.content)
+
+        # Recalculate total_tokens to reflect the added header tokens
+        parent_tokens = sum(c.token_count for c in result.parent_chunks)
+        child_tokens = sum(c.token_count for c in result.child_chunks)
+        result.total_tokens = parent_tokens + child_tokens
 
     def _chunk_text_based(self, document_id: str, text: str) -> ChunkingResult:
         """Original text-based chunking without layout awareness.

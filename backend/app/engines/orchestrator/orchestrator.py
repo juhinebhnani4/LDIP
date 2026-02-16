@@ -152,6 +152,7 @@ class QueryOrchestrator:
         query: str,
         user_id: str,
         context: dict[str, Any] | None = None,
+        skip_cache: bool = False,
     ) -> OrchestratorResult:
         """Process user query through full orchestration pipeline.
 
@@ -259,7 +260,7 @@ class QueryOrchestrator:
                 )
 
         # Step 0.5: Check response cache (Cost Optimization)
-        if self._use_response_cache:
+        if self._use_response_cache and not skip_cache:
             try:
                 cached = await self._cache_service.check_cache(matter_id, query)
                 if cached and cached.response_data:

@@ -30,6 +30,8 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, persist_cost
+from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import get_gemini_client
 from app.core.llm_rate_limiter import LLMProvider, get_rate_limiter
 from app.engines.contradiction.prompts import (
@@ -656,6 +658,15 @@ class StatementComparator:
             input_tokens = len(full_prompt) // 4  # Rough estimate
             output_tokens = len(response_text) // 4
 
+            # Persist Gemini screening cost
+            screening_tracker = CostTracker(
+                provider=CostLLMProvider.GEMINI_FLASH,
+                operation="contradiction_screening",
+            )
+            screening_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            screening_tracker.log_cost()
+            await persist_cost(screening_tracker)
+
             return result, confidence, quick_reason, input_tokens, output_tokens
 
         except Exception as e:
@@ -700,6 +711,15 @@ class StatementComparator:
         response_text = response.choices[0].message.content or ""
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
+
+        # Persist cost to DB
+        tracker = CostTracker(
+            provider=CostLLMProvider.OPENAI_GPT4_TURBO,
+            operation="contradiction_comparison",
+        )
+        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+        tracker.log_cost()
+        await persist_cost(tracker)
 
         return response_text, input_tokens, output_tokens
 

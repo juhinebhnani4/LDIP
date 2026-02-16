@@ -2884,7 +2884,10 @@ def chunk_document(
 
         # Create chunker and process document
         chunker = ParentChildChunker()
-        result = chunker.chunk_document(doc_id, doc.extracted_text, layout=layout)
+        result = chunker.chunk_document(
+            doc_id, doc.extracted_text, layout=layout,
+            document_context=doc.filename,
+        )
 
         # Prepare all chunks for saving
         all_chunks = result.parent_chunks + result.child_chunks

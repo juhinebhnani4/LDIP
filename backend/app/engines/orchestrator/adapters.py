@@ -544,16 +544,20 @@ class ContradictionEngineAdapter(EngineAdapter):
                     for entity in response.data[:5]:  # Limit to 5 entities
                         entity_name = entity.entity_name
                         answer_parts.append(f"\n**{entity_name}:**")
-                        for c in entity.contradictions[:2]:  # 2 per entity
-                            severity = c.severity.value.upper()
-                            # Clean OCR artifacts from excerpts before display
-                            stmt1_raw = c.statement_a.excerpt[:100] if c.statement_a else ""
-                            stmt2_raw = c.statement_b.excerpt[:100] if c.statement_b else ""
-                            stmt1 = clean_for_display(stmt1_raw)
-                            stmt2 = clean_for_display(stmt2_raw)
-                            answer_parts.append(
-                                f"- [{severity}] \"{stmt1}...\" vs \"{stmt2}...\""
-                            )
+                        for c in entity.contradictions[:3]:  # 3 per entity
+                            severity_labels = {"high": "Critical", "medium": "Noteworthy", "low": "Minor"}
+                            severity = severity_labels.get(c.severity.value, c.severity.value.title())
+                            answer_parts.append(f"\n- **{severity}**: {c.explanation}")
+
+                            # Add document references for both statements
+                            if c.statement_a:
+                                doc_a = c.statement_a.document_name or "Unknown"
+                                page_a = f", p. {c.statement_a.page}" if c.statement_a.page else ""
+                                answer_parts.append(f"  - *Statement A* ({doc_a}{page_a})")
+                            if c.statement_b:
+                                doc_b = c.statement_b.document_name or "Unknown"
+                                page_b = f", p. {c.statement_b.page}" if c.statement_b.page else ""
+                                answer_parts.append(f"  - *Statement B* ({doc_b}{page_b})")
 
                     contradiction_data = {
                         "analysis_ready": True,

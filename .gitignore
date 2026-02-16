@@ -58,8 +58,13 @@ coverage/
 *.key
 credentials.json
 
-# Sample files (large PDFs)
+# Sample files (large PDFs/zips)
 docs/sample_files/
+docs/sample_files.zip
+
+# Internal reference docs (not for repo)
+docs/COST_TRACKING.md
+docs/COST_TRACKING.html
 
 # Claude Code temporary directories
 tmpclaude-*/

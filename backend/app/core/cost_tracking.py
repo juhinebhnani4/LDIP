@@ -41,8 +41,9 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # USD to INR exchange rate (update periodically)
-# As of Jan 2025: ~83-84 INR per USD
-USD_TO_INR_RATE = 83.50
+# As of Feb 2026: ~90-91 INR per USD
+# TODO: Move to dynamic FX rate from DB/API in future (see docs/COST_TRACKING.md §2)
+USD_TO_INR_RATE = 90.50
 
 
 def usd_to_inr(usd_amount: float) -> float:
@@ -70,8 +71,9 @@ def inr_to_usd(inr_amount: float) -> float:
 
 
 # =============================================================================
-# LLM Provider Definitions with Pricing (as of Jan 2025)
+# LLM Provider Definitions with Pricing (updated Feb 2026)
 # Prices are stored in USD but converted to INR for display
+# TODO: Move pricing to Supabase table for dynamic updates (see docs/COST_TRACKING.md §2)
 # =============================================================================
 
 
@@ -106,56 +108,61 @@ class ProviderPricing:
     unit: str = "tokens"  # "tokens", "pages", "searches"
 
 
-# Pricing constants (updated Jan 2025)
+# Pricing constants (updated Feb 2026)
+# Sources: openai.com/api/pricing, ai.google.dev/gemini-api/docs/pricing,
+#          cohere.com/pricing, cloud.google.com/document-ai/pricing
+# Note: Each llm_costs row snapshots the rate at insert time, so updating
+# these constants only affects NEW cost records, not historical data.
 PROVIDER_PRICING: dict[LLMProvider, ProviderPricing] = {
-    # OpenAI GPT-4 Turbo
+    # OpenAI GPT-4 Turbo — $10/$30 per 1M tokens
     LLMProvider.OPENAI_GPT4_TURBO: ProviderPricing(
         input_cost_per_1k=0.01,
         output_cost_per_1k=0.03,
     ),
-    # OpenAI GPT-4o
+    # OpenAI GPT-4o — $2.50/$10 per 1M tokens (was $5/$15, halved Oct 2024)
     LLMProvider.OPENAI_GPT4O: ProviderPricing(
-        input_cost_per_1k=0.005,
-        output_cost_per_1k=0.015,
+        input_cost_per_1k=0.0025,
+        output_cost_per_1k=0.01,
     ),
-    # OpenAI GPT-4o-mini (200x cheaper than GPT-4)
+    # OpenAI GPT-4o-mini — $0.15/$0.60 per 1M tokens
     LLMProvider.OPENAI_GPT4O_MINI: ProviderPricing(
         input_cost_per_1k=0.00015,
         output_cost_per_1k=0.0006,
     ),
-    # OpenAI GPT-3.5 Turbo
+    # OpenAI GPT-3.5 Turbo — $0.50/$1.50 per 1M tokens
     LLMProvider.OPENAI_GPT35_TURBO: ProviderPricing(
         input_cost_per_1k=0.0005,
         output_cost_per_1k=0.0015,
     ),
-    # OpenAI Embeddings
+    # OpenAI Embeddings (Small) — $0.02 per 1M tokens
     LLMProvider.OPENAI_EMBEDDING_SMALL: ProviderPricing(
         input_cost_per_1k=0.00002,
         output_cost_per_1k=0.0,  # Embeddings have no output tokens
     ),
+    # OpenAI Embeddings (Large) — $0.13 per 1M tokens
     LLMProvider.OPENAI_EMBEDDING_LARGE: ProviderPricing(
         input_cost_per_1k=0.00013,
         output_cost_per_1k=0.0,
     ),
-    # Gemini Flash (very cost-effective)
+    # Gemini 2.5 Flash — $0.30/$2.50 per 1M tokens (NOT 1.5 Flash rates)
     LLMProvider.GEMINI_FLASH: ProviderPricing(
-        input_cost_per_1k=0.000075,  # $0.075 per 1M input tokens
-        output_cost_per_1k=0.0003,  # $0.30 per 1M output tokens
+        input_cost_per_1k=0.0003,   # $0.30 per 1M input tokens
+        output_cost_per_1k=0.0025,  # $2.50 per 1M output tokens
     ),
-    # Gemini Pro
+    # Gemini 1.5 Pro — $1.25/$5.00 per 1M tokens (≤128K context)
     LLMProvider.GEMINI_PRO: ProviderPricing(
         input_cost_per_1k=0.00125,
         output_cost_per_1k=0.005,
     ),
-    # Cohere Rerank (per search, not tokens)
+    # Cohere Rerank — $2 per 1K searches (per-search, not per-token)
     LLMProvider.COHERE_RERANK: ProviderPricing(
         input_cost_per_1k=0.002,  # $2 per 1K searches
         output_cost_per_1k=0.0,
         unit="searches",
     ),
-    # Google Document AI (per page)
+    # Google Document AI — ~$0.06/page for OCR processor
     LLMProvider.GOOGLE_DOCUMENT_AI: ProviderPricing(
-        input_cost_per_1k=1.50,  # $1.50 per 1K pages
+        input_cost_per_1k=60.0,  # $60 per 1K pages ($0.06/page)
         output_cost_per_1k=0.0,
         unit="pages",
     ),

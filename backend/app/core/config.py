@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     # Language Policing Configuration (Story 8-3: Output Sanitization)
     language_policing_enabled: bool = True  # Master switch for language policing
     policing_llm_enabled: bool = True  # Feature flag to enable/disable LLM polish
-    policing_llm_timeout: float = 10.0  # Hard timeout for policing LLM calls (seconds)
+    policing_llm_timeout: float = 20.0  # Hard timeout for policing LLM calls (seconds)
 
     # GPT-4o-mini Cost Tracking (M2 fix: configurable pricing for Stories 8-2, 8-3)
     safety_llm_input_cost_per_1k: float = 0.00015  # $0.00015 per 1K input tokens

@@ -355,7 +355,7 @@ export default function UsageDashboardPage() {
                             />
                             <div className="flex gap-3 text-xs text-muted-foreground">
                               <span>{p.requests} reqs</span>
-                              <span>{formatTokens(p.inputTokens + p.outputTokens)} tokens</span>
+                              <span>{formatTokens(p.inputTokens + p.outputTokens)} {p.provider === 'rerank-v3.5' ? 'units' : 'tokens'}</span>
                             </div>
                           </div>
                         );

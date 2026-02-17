@@ -286,12 +286,17 @@ PIPELINE_STAGES = [
 STAGE_INDEX = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES)}
 
 
-def _run_async(coro):
+def _run_async(coro, timeout=300):
     """Run async coroutine in sync context for Celery tasks.
 
     Delegates to shared gevent-compatible run_async utility.
+
+    Args:
+        coro: Async coroutine to run.
+        timeout: Timeout in seconds (default 300). Pass higher values
+            for long-running tasks like alias resolution.
     """
-    return run_async(coro)
+    return run_async(coro, timeout=timeout)
 
 
 def _get_or_create_job(
@@ -468,14 +473,26 @@ def _update_job_stage_complete(
         # Calculate progress (stage 100% complete)
         progress_pct = estimator.estimate_stage_progress(stage_name, 1.0)
 
-        # Update completed stages count
+        # Update completed stages count (use MAX to prevent regression from parallel tasks)
         stage_idx = STAGE_INDEX.get(stage_name, -1)
-        completed_stages = stage_idx + 1 if stage_idx >= 0 else None
+        new_completed_stages = stage_idx + 1 if stage_idx >= 0 else None
 
         # Get current job to update
         job = _run_async(tracker.get_job(job_id))
         if job:
             from app.models.job import ProcessingJobUpdate
+
+            # Use MAX to prevent regression from parallel stage completion
+            # e.g., citation_extraction (idx 7) completing before alias_resolution (idx 6)
+            current_stages = getattr(job, 'completed_stages', 0) or 0
+            if new_completed_stages is not None:
+                completed_stages = max(current_stages, new_completed_stages)
+            else:
+                completed_stages = current_stages
+
+            # Also prevent progress_pct regression (stages not in time_estimator return 0)
+            current_pct = getattr(job, 'progress_pct', 0) or 0
+            progress_pct = max(current_pct, progress_pct)
 
             update = ProcessingJobUpdate(
                 progress_pct=progress_pct,
@@ -1685,6 +1702,7 @@ def process_document(
         ocr_result = ocr.process_document(
             pdf_content=pdf_content,
             document_id=document_id,
+            matter_id=matter_id,
         )
 
         # Save bounding boxes
@@ -2165,7 +2183,7 @@ def validate_ocr(
         gemini_results = []
         if remaining_for_gemini:
             try:
-                gemini_results = gemini.validate_batch_sync(remaining_for_gemini)
+                gemini_results = gemini.validate_batch_sync(remaining_for_gemini, document_id=doc_id, matter_id=matter_id)
             except GeminiValidatorError as e:
                 logger.warning(
                     "validate_ocr_gemini_failed",
@@ -3428,7 +3446,7 @@ def embed_chunks(
 
                 try:
                     # Generate embeddings for batch
-                    embeddings = await embedder.embed_batch(batch_texts, skip_empty=True)
+                    embeddings = await embedder.embed_batch(batch_texts, skip_empty=True, matter_id=matter_id)
 
                     # Update chunks with embeddings
                     for _j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings, strict=False)):
@@ -3544,7 +3562,7 @@ def embed_chunks(
 
         # Dispatch act-specific tasks after embedding
         # - Act documents: index sections for split-view navigation
-        # - Citations are dispatched later from resolve_aliases -> _dispatch_downstream_tasks()
+        # - Citations are dispatched later from extract_entities -> _dispatch_post_entity_tasks()
         try:
             from app.workers.celery import celery_app
 
@@ -3986,6 +4004,8 @@ def extract_entities(
             )
             # Update job stage to mark entity_extraction complete
             _update_job_stage_complete(job_id, "entity_extraction", matter_id)
+            # Dispatch downstream tasks (citations, dates, aliases) — they have their own idempotency
+            _dispatch_post_entity_tasks(doc_id, matter_id, job_id)
             return {
                 "status": "entities_extracted",
                 "document_id": doc_id,
@@ -4421,6 +4441,9 @@ def extract_entities(
         if total_entities > 0 and not use_raw_text_fallback:
             chunks_synced = _sync_entity_ids_to_chunks(doc_id)
 
+        # Fan out: dispatch citations, dates, and aliases in parallel
+        _dispatch_post_entity_tasks(doc_id, matter_id, job_id)
+
         return {
             "status": "entities_extracted",
             "document_id": doc_id,
@@ -4511,15 +4534,19 @@ def extract_entities(
 # =============================================================================
 
 
-def _dispatch_downstream_tasks(
+def _dispatch_post_entity_tasks(
     document_id: str,
     matter_id: str,
     job_id: str | None = None,
 ) -> dict[str, list[str]]:
-    """Dispatch downstream tasks after alias resolution completes.
+    """Dispatch downstream tasks after entity extraction completes.
 
-    Triggers citation extraction and date extraction in parallel.
-    These tasks can run independently on the document text.
+    Fan-out: triggers citation extraction, date extraction, and alias resolution
+    in parallel. Citations and dates don't need aliases, so we decouple them
+    from the alias resolution gate.
+
+    The job completion chain (extract_citations -> detect_contradictions ->
+    _mark_job_completed) continues independently of alias resolution.
 
     Args:
         document_id: Document UUID.
@@ -4535,10 +4562,10 @@ def _dispatch_downstream_tasks(
     triggered_tasks: list[str] = []
     failed_tasks: list[str] = []
 
-    # Build prev_result for task chain simulation
+    # Build prev_result for citation extraction
     prev_result = {
         "document_id": document_id,
-        "status": "aliases_resolved",
+        "status": "entities_extracted",
         "job_id": job_id,
     }
 
@@ -4550,7 +4577,7 @@ def _dispatch_downstream_tasks(
                 "prev_result": prev_result,
                 "document_id": document_id,
             },
-            queue="default",  # Explicit queue routing - workers listen on default, not celery
+            queue="default",
         )
         triggered_tasks.append("extract_citations")
         logger.debug("extract_citations_dispatched", document_id=document_id)
@@ -4568,9 +4595,9 @@ def _dispatch_downstream_tasks(
             kwargs={
                 "document_id": document_id,
                 "matter_id": matter_id,
-                "auto_classify": True,  # Enable automatic event classification
+                "auto_classify": True,
             },
-            queue="default",  # Explicit queue routing - workers listen on default, not celery
+            queue="default",
         )
         triggered_tasks.append("extract_dates_from_document")
         logger.debug("extract_dates_dispatched", document_id=document_id)
@@ -4582,9 +4609,30 @@ def _dispatch_downstream_tasks(
             error=str(e),
         )
 
+    # Task 3: Alias resolution (runs independently, no longer gates downstream)
+    try:
+        celery_app.send_task(
+            "app.workers.tasks.document_tasks.resolve_aliases",
+            kwargs={
+                "document_id": document_id,
+            },
+            queue="default",
+        )
+        triggered_tasks.append("resolve_aliases")
+        logger.debug("resolve_aliases_dispatched", document_id=document_id)
+    except Exception as e:
+        failed_tasks.append("resolve_aliases")
+        logger.warning(
+            "resolve_aliases_dispatch_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+
     logger.info(
-        "downstream_tasks_dispatched",
+        "post_entity_tasks_dispatched",
         document_id=document_id,
+        matter_id=matter_id,
+        job_id=job_id,
         triggered=triggered_tasks,
         failed=failed_tasks,
     )
@@ -4608,6 +4656,8 @@ def _dispatch_downstream_tasks(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
+    soft_time_limit=600,  # 10 minutes - large matters with many entities
+    time_limit=660,  # 11 minutes - hard kill
 )  # type: ignore[misc]
 def resolve_aliases(
     self,  # type: ignore[no-untyped-def]
@@ -4617,7 +4667,6 @@ def resolve_aliases(
     entity_resolver: EntityResolver | None = None,
     mig_graph_service: MIGGraphService | None = None,
     job_tracker: JobTrackingService | None = None,
-    skip_downstream_dispatch: bool = False,  # For unified pipeline - prevents duplicate dispatch
 ) -> dict[str, str | int | float | None]:
     """Resolve entity aliases after extraction.
 
@@ -4724,29 +4773,51 @@ def resolve_aliases(
             if not entities:
                 return None, 0  # No entities to resolve
 
+            # Incremental: get entity IDs mentioned in this document only
+            doc_entity_ids: set[str] | None = None
+            if doc_id:
+                doc_mentions_resp = client.table("entity_mentions").select(
+                    "entity_id"
+                ).eq("document_id", doc_id).execute()
+
+                if doc_mentions_resp.data:
+                    doc_entity_ids = {m["entity_id"] for m in doc_mentions_resp.data}
+
+                logger.info(
+                    "resolve_aliases_incremental",
+                    document_id=doc_id,
+                    document_entities=len(doc_entity_ids) if doc_entity_ids else 0,
+                    total_matter_entities=len(entities),
+                )
+
             # Build entity contexts from mentions for Gemini analysis
+            # Filter to matter entities only (not entire table)
             entity_contexts: dict[str, str] = {}
+            matter_entity_ids = [e.id for e in entities]
 
-            # Query entity_mentions for context
-            mentions_response = client.table("entity_mentions").select(
-                "entity_id, context"
-            ).execute()
+            # Query in batches of 100 to avoid overly large IN clauses
+            for batch_start in range(0, len(matter_entity_ids), 100):
+                batch_ids = matter_entity_ids[batch_start:batch_start + 100]
+                mentions_response = client.table("entity_mentions").select(
+                    "entity_id, context"
+                ).in_("entity_id", batch_ids).execute()
 
-            if mentions_response.data:
-                for mention in mentions_response.data:
-                    entity_id = mention["entity_id"]
-                    context = mention.get("context", "")
-                    if entity_id not in entity_contexts:
-                        entity_contexts[entity_id] = context
-                    else:
-                        # Append additional context
-                        entity_contexts[entity_id] += f" | {context}"
+                if mentions_response.data:
+                    for mention in mentions_response.data:
+                        entity_id = mention["entity_id"]
+                        context = mention.get("context") or ""
+                        if entity_id not in entity_contexts:
+                            entity_contexts[entity_id] = context
+                        else:
+                            # Append additional context
+                            entity_contexts[entity_id] += f" | {context}"
 
-            # Run alias resolution
+            # Run alias resolution (incremental if doc_entity_ids available)
             resolution_result, edges_to_create = await resolver.resolve_aliases(
                 matter_id=matter_id,
                 entities=entities,
                 entity_contexts=entity_contexts,
+                document_entity_ids=doc_entity_ids,
             )
 
             # Create alias edges in the database
@@ -4788,7 +4859,7 @@ def resolve_aliases(
 
             return resolution_result, aliases_created
 
-        result = _run_async(_resolve_aliases_async())
+        result = _run_async(_resolve_aliases_async(), timeout=540)  # Below soft_time_limit=600
 
         if result[0] is None:
             # No entities to resolve - mark stage complete but NOT job complete.
@@ -4844,24 +4915,6 @@ def resolve_aliases(
             skipped=resolution_result.skipped_low_confidence,
         )
 
-        # Dispatch downstream tasks in parallel (citations and dates)
-        # These tasks can run independently after alias resolution
-        # Skip if called from unified pipeline (large doc path already dispatches these)
-        if skip_downstream_dispatch:
-            logger.info(
-                "resolve_aliases_skip_downstream",
-                document_id=doc_id,
-                matter_id=matter_id,
-                reason="skip_downstream_dispatch=True (unified chain handles dispatch)",
-            )
-            downstream_triggered = {"skipped": True, "reason": "unified_chain"}
-        else:
-            downstream_triggered = _dispatch_downstream_tasks(
-                document_id=doc_id,
-                matter_id=matter_id,
-                job_id=job_id,
-            )
-
         return {
             "status": "aliases_resolved",
             "document_id": doc_id,
@@ -4872,7 +4925,6 @@ def resolve_aliases(
             "medium_confidence_links": resolution_result.medium_confidence_links,
             "skipped_low_confidence": resolution_result.skipped_low_confidence,
             "job_id": job_id,
-            "downstream_tasks": downstream_triggered,
         }
 
     except AliasResolutionError as e:
@@ -4895,8 +4947,7 @@ def resolve_aliases(
                 document_id=doc_id,
                 error=str(e),
             )
-            # Mark job as failed
-            _mark_job_failed(job_id, e.message, e.code, matter_id)
+            # Aliases are decoupled — stage failure, not job failure
             return {
                 "status": "alias_resolution_failed",
                 "document_id": doc_id,
@@ -4907,13 +4958,32 @@ def resolve_aliases(
 
         raise
 
+    except SoftTimeLimitExceeded:
+        # Alias resolution timed out — log but do NOT fail the job.
+        # Aliases are decoupled from the job completion chain (citations → contradictions).
+        logger.warning(
+            "resolve_aliases_task_timeout",
+            document_id=doc_id,
+            matter_id=matter_id,
+            timeout_seconds=600,
+        )
+        _update_job_stage_failure(job_id, "alias_resolution", "Soft time limit exceeded", "TIMEOUT", matter_id)
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "error_message": "Alias resolution exceeded soft time limit",
+            "job_id": job_id,
+        }
+
     except DocumentServiceError as e:
         logger.error(
             "resolve_aliases_document_error",
             document_id=doc_id,
             error=str(e),
         )
-        _mark_job_failed(job_id, e.message, e.code, matter_id)
+        # Aliases are decoupled — stage failure, not job failure
+        _update_job_stage_failure(job_id, "alias_resolution", e.message, e.code, matter_id)
         return {
             "status": "alias_resolution_failed",
             "document_id": doc_id,
@@ -4929,7 +4999,8 @@ def resolve_aliases(
             error=str(e),
             error_type=type(e).__name__,
         )
-        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
+        # Aliases are decoupled — stage failure, not job failure
+        _update_job_stage_failure(job_id, "alias_resolution", str(e), "UNEXPECTED_ERROR", matter_id)
         return {
             "status": "alias_resolution_failed",
             "document_id": doc_id,
@@ -4968,10 +5039,10 @@ def extract_citations(
 ) -> dict[str, str | int | float | None]:
     """Extract Act citations from document chunks using Gemini.
 
-    This task runs after alias resolution to identify Act references.
-    Dispatched from resolve_aliases -> _dispatch_downstream_tasks().
+    This task runs after entity extraction to identify Act references.
+    Dispatched from extract_entities -> _dispatch_post_entity_tasks().
 
-    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> Entities -> Aliases -> **Extract Citations**
+    Pipeline: OCR -> Validate -> Confidence -> Chunk -> Embed -> Entities -> **Extract Citations**
 
     Args:
         prev_result: Result from previous task in chain (contains document_id).
@@ -5022,6 +5093,85 @@ def extract_citations(
                 "document_id": doc_id,
                 "reason": f"Previous task status: {prev_status}",
             }
+
+    # IDEMPOTENCY CHECK: Skip if citations already exist for this document
+    client = get_service_client()
+    citation_check = None
+    if client:
+        citation_check = client.table("citations").select("id", count="exact").eq(
+            "source_document_id", doc_id
+        ).execute()
+    if citation_check and citation_check.count and citation_check.count > 0:
+        logger.info(
+            "extract_citations_idempotency_skip",
+            document_id=doc_id,
+            existing_count=citation_check.count,
+        )
+        # Get job_id for downstream dispatch
+        job_id: str | None = None
+        if prev_result:
+            job_id = prev_result.get("job_id")  # type: ignore[assignment]
+        if job_id is None:
+            job_id = _lookup_job_id_for_document(doc_id)
+
+        # Still dispatch contradiction detection (it may not have run yet)
+        citation_result = {
+            "status": "citations_extracted",
+            "document_id": doc_id,
+            "citations_extracted": citation_check.count,
+            "job_id": job_id,
+        }
+        try:
+            # Get matter_id for analysis_mode check
+            doc_service_tmp = document_service or get_document_service()
+            _, matter_id_tmp = doc_service_tmp.get_document_for_processing(doc_id)
+
+            analysis_mode = "deep_analysis"
+            try:
+                matter_result = (
+                    client.table("matters")
+                    .select("analysis_mode")
+                    .eq("id", matter_id_tmp)
+                    .single()
+                    .execute()
+                )
+                if matter_result.data:
+                    analysis_mode = matter_result.data.get("analysis_mode", "deep_analysis")
+            except Exception:
+                pass
+
+            if analysis_mode != "quick_scan":
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.detect_contradictions",
+                    kwargs={
+                        "prev_result": citation_result,
+                        "document_id": doc_id,
+                    },
+                    queue="default",
+                )
+                logger.debug("detect_contradictions_dispatched_from_idempotency", document_id=doc_id)
+            else:
+                # Mark contradiction stage as skipped
+                _update_job_stage_complete(
+                    job_id,
+                    "contradiction_detection",
+                    matter_id_tmp,
+                    metadata={"skipped": True, "reason": "quick_scan mode"},
+                )
+        except Exception as dispatch_err:
+            logger.warning(
+                "detect_contradictions_dispatch_failed_idempotency",
+                document_id=doc_id,
+                error=str(dispatch_err),
+            )
+
+        return {
+            "status": "citations_extracted",
+            "document_id": doc_id,
+            "citations_extracted": citation_check.count,
+            "reason": "Idempotency check: citations already exist",
+            "job_id": job_id,
+        }
 
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
@@ -6017,10 +6167,34 @@ def detect_contradictions(
             error=str(e),
             error_type=type(e).__name__,
         )
-        # Still complete the pipeline — contradiction detection is the final stage
+        # Mark document completed so entity/citation/timeline results stay visible,
+        # but mark the processing_job as FAILED for honest tracking.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
-            _mark_job_completed(job_id, matter_id, document_id=doc_id)
+            # Update document status to completed (other stages finished successfully)
+            try:
+                doc_service = get_document_service()
+                doc_service.update_ocr_status(
+                    document_id=doc_id,
+                    status=DocumentStatus.COMPLETED,
+                )
+            except Exception as doc_err:
+                logger.warning("contradiction_fail_doc_status_update_error", error=str(doc_err))
+            # Mark job FAILED with error context (not COMPLETED)
+            if job_id:
+                try:
+                    tracker = get_job_tracking_service()
+                    _run_async(
+                        tracker.update_job_status(
+                            job_id=job_id,
+                            status=JobStatus.FAILED,
+                            stage="contradiction_detection",
+                            error_message=f"Contradiction detection failed: {type(e).__name__}: {str(e)[:200]}",
+                            error_code="CONTRADICTION_FAILED",
+                        )
+                    )
+                except Exception as job_err:
+                    logger.warning("contradiction_fail_job_update_error", error=str(job_err))
         return {
             "status": "contradiction_detection_failed",
             "document_id": doc_id,

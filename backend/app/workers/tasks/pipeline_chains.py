@@ -18,19 +18,19 @@ def create_post_ocr_chain(
     document_id: str,
     matter_id: str,
     job_id: str,
-    skip_downstream_dispatch: bool = False,
 ):
     """Create unified post-OCR processing chain.
 
     This chain runs after OCR completes (for both small and large documents).
     Docling layout extraction happens synchronously in chunk_document task.
 
+    After extract_entities completes, it fans out citations, dates, and
+    alias resolution in parallel via _dispatch_post_entity_tasks().
+
     Args:
         document_id: Document UUID
         matter_id: Matter UUID
         job_id: Processing job UUID
-        skip_downstream_dispatch: If True, resolve_aliases won't dispatch
-            extract_citations/extract_dates (use when caller handles dispatch)
 
     Returns:
         Celery chain ready for apply_async()
@@ -47,7 +47,6 @@ def create_post_ocr_chain(
         chunk_document,
         embed_chunks,
         extract_entities,
-        resolve_aliases,
     )
 
     logger.info(
@@ -55,16 +54,15 @@ def create_post_ocr_chain(
         document_id=document_id,
         matter_id=matter_id,
         job_id=job_id,
-        skip_downstream_dispatch=skip_downstream_dispatch,
     )
 
     # NOTE: validate_ocr only accepts document_id, not matter_id/job_id
     # The document_id is passed and flows through the chain via prev_result
+    # extract_entities dispatches citations, dates, and aliases via _dispatch_post_entity_tasks()
     return celery_chain(
         validate_ocr.s(document_id=document_id),
         calculate_confidence.s(),
         chunk_document.s(skip_bbox_linking=False),  # Docling runs here (2-4 sec)
         embed_chunks.s(),
         extract_entities.s(),
-        resolve_aliases.s(skip_downstream_dispatch=skip_downstream_dispatch),
     )

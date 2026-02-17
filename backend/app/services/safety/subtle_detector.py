@@ -264,7 +264,7 @@ class SubtleViolationDetector:
         except Exception as e:
             logger.debug("safety_cache_set_failed", error=str(e))
 
-    async def detect_violation(self, query: str) -> SubtleViolationCheck:
+    async def detect_violation(self, query: str, matter_id: str | None = None) -> SubtleViolationCheck:
         """Detect subtle legal conclusion requests using GPT-4o-mini.
 
         Story 8-2: AC #1-2 - LLM-based detection.
@@ -295,7 +295,7 @@ class SubtleViolationDetector:
 
         try:
             # Call GPT-4o-mini with retry (using sanitized query)
-            result, input_tokens, output_tokens = await self._call_llm_with_retry(sanitized_query)
+            result, input_tokens, output_tokens = await self._call_llm_with_retry(sanitized_query, matter_id=matter_id)
 
             check_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -362,7 +362,7 @@ class SubtleViolationDetector:
             ) from e
 
     async def _call_llm_with_retry(
-        self, query: str
+        self, query: str, matter_id: str | None = None,
     ) -> tuple[dict, int, int]:
         """Call GPT-4o-mini with retry logic.
 
@@ -411,6 +411,7 @@ class SubtleViolationDetector:
                 tracker = CostTracker(
                     provider=LLMProvider.OPENAI_GPT4O_MINI,
                     operation="safety_subtle_detection",
+                    matter_id=matter_id,
                 )
                 tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
                 tracker.log_cost()

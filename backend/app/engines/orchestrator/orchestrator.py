@@ -185,7 +185,7 @@ class QueryOrchestrator:
         # Instead of blocking, rewrite the query and continue processing
         original_query = query
         query_was_rewritten = False
-        safety_result = await self._safety_guard.check_query(query)
+        safety_result = await self._safety_guard.check_query(query, matter_id=matter_id)
 
         if not safety_result.is_safe:
             # If we have a suggested rewrite that's actually different, use it

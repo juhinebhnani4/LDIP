@@ -33,6 +33,8 @@ from typing import Any
 
 import structlog
 
+from app.core.correlation import get_correlation_id
+
 logger = structlog.get_logger(__name__)
 
 
@@ -681,6 +683,8 @@ class CostPersistenceService:
                     **({"cached_input_tokens": tracker.cached_input_tokens,
                         "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
                        if tracker.cached_input_tokens > 0 else {}),
+                    **({"correlation_id": cid}
+                       if (cid := get_correlation_id()) else {}),
                 },
             }
 

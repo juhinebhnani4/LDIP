@@ -709,19 +709,28 @@ async def get_usage_dashboard(
         else:
             month_end = datetime(q_year, q_month + 1, 1, tzinfo=timezone.utc)
 
-        # Fetch all cost records for the month
-        result = (
-            supabase.table("llm_costs")
-            .select(
-                "provider, operation, matter_id, input_tokens, output_tokens, "
-                "total_cost_usd, total_cost_inr, created_at"
+        # Fetch all cost records for the month (paginate past Supabase 1000-row default)
+        rows: list[dict] = []
+        page_size = 1000
+        offset = 0
+        while True:
+            result = (
+                supabase.table("llm_costs")
+                .select(
+                    "provider, operation, matter_id, input_tokens, output_tokens, "
+                    "total_cost_usd, total_cost_inr, created_at"
+                )
+                .gte("created_at", month_start.isoformat())
+                .lt("created_at", month_end.isoformat())
+                .order("created_at")
+                .range(offset, offset + page_size - 1)
+                .execute()
             )
-            .gte("created_at", month_start.isoformat())
-            .lt("created_at", month_end.isoformat())
-            .execute()
-        )
-
-        rows = result.data or []
+            page = result.data or []
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
 
         # Aggregate totals
         total_usd = 0.0

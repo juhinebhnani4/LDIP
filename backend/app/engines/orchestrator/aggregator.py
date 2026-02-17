@@ -767,7 +767,7 @@ class ResultAggregator:
 
             # Step 3: Apply language policing to unified response
             policing_result = await self._language_police.police_output(
-                result.unified_response
+                result.unified_response, matter_id=result.matter_id,
             )
 
             # Update result with sanitized text and metadata

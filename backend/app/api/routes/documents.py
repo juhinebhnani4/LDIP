@@ -91,7 +91,6 @@ from app.workers.tasks.document_tasks import (
     embed_chunks,
     extract_entities,
     process_document,
-    resolve_aliases,
     validate_ocr,
 )
 from celery import chain
@@ -678,10 +677,10 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
     queue_name = "high" if is_small_document else "default"
 
     # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding ->
-    # Entity Extraction -> Alias Resolution
+    # Entity Extraction -> (fan-out: citations, dates, aliases)
     # Each task receives the result from the previous task as first argument.
-    # After resolve_aliases completes, it dispatches extract_citations and
-    # extract_dates_from_document in parallel (see resolve_aliases task).
+    # After extract_entities completes, it dispatches extract_citations,
+    # extract_dates_from_document, and resolve_aliases in parallel.
     # Full pipeline makes documents searchable via hybrid search (BM25 + semantic),
     # populates the Matter Identity Graph (MIG) with extracted entities,
     # extracts Act citations, and builds the timeline with extracted dates.
@@ -692,7 +691,6 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
         chunk_document.s(),
         embed_chunks.s(),
         extract_entities.s(),
-        resolve_aliases.s(),
     )
 
     # Apply the chain to the appropriate queue
@@ -703,7 +701,7 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,
-        stages="ocr->validation->confidence->chunking->embedding->entity_extraction->alias_resolution->citations+dates",
+        stages="ocr->validation->confidence->chunking->embedding->entity_extraction->(citations+dates+aliases)",
     )
 
 
@@ -1876,7 +1874,48 @@ async def retry_document_processing(
             else:
                 actual_retry_type = "full"
 
+        # Reset or create processing_job so _mark_job_completed can fire
+        from app.services.supabase.client import get_service_client as get_supa_client
+        job_id: str | None = None
+        try:
+            supa = get_supa_client()
+            if supa:
+                # Try to reset existing FAILED job
+                existing = (
+                    supa.table("processing_jobs")
+                    .select("id")
+                    .eq("document_id", document_id)
+                    .in_("status", ["FAILED", "CANCELLED"])
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if existing.data:
+                    job_id = existing.data[0]["id"]
+                    supa.table("processing_jobs").update({
+                        "status": "PROCESSING",
+                        "current_stage": "retry_started",
+                        "error_message": None,
+                    }).eq("id", job_id).execute()
+                    logger.info("retry_reset_processing_job", job_id=job_id, document_id=document_id)
+                else:
+                    # Create new processing_job
+                    new_job = supa.table("processing_jobs").insert({
+                        "matter_id": matter_id,
+                        "document_id": document_id,
+                        "job_type": "DOCUMENT_PROCESSING",
+                        "status": "PROCESSING",
+                        "current_stage": "retry_started",
+                    }).execute()
+                    if new_job.data:
+                        job_id = new_job.data[0]["id"]
+                        logger.info("retry_created_processing_job", job_id=job_id, document_id=document_id)
+        except Exception as job_err:
+            logger.warning("retry_job_tracking_setup_failed", error=str(job_err), document_id=document_id)
+
         # Build and dispatch task chain
+        from app.workers.tasks.pipeline_chains import create_post_ocr_chain
+
         if actual_retry_type == "full":
             # Full OCR pipeline
             task_chain = chain(
@@ -1886,18 +1925,16 @@ async def retry_document_processing(
                 chunk_document.s(),
                 embed_chunks.s(),
                 extract_entities.s(),
-                resolve_aliases.s(),
             )
-            message = "Full OCR and RAG pipeline queued"
+            message = "Full OCR + RAG pipeline queued (entities fan out to citations, dates, aliases)"
         else:
-            # RAG only pipeline - need to pass document context
-            task_chain = chain(
-                chunk_document.s({"document_id": document_id}),
-                embed_chunks.s(),
-                extract_entities.s(),
-                resolve_aliases.s(),
+            # RAG only — use unified chain (single source of truth)
+            task_chain = create_post_ocr_chain(
+                document_id=document_id,
+                matter_id=matter_id,
+                job_id=job_id,
             )
-            message = "RAG pipeline (chunking, embedding, entities) queued"
+            message = "RAG pipeline queued (validate → chunk → embed → entities → citations+dates+aliases)"
 
         # Apply the chain
         result = task_chain.apply_async()
@@ -2019,12 +2056,11 @@ async def retry_all_stuck_documents(
                 continue
 
             try:
-                # Queue RAG pipeline
+                # Queue RAG pipeline (extract_entities fans out to citations+dates+aliases)
                 task_chain = chain(
                     chunk_document.s({"document_id": doc_id}),
                     embed_chunks.s(),
                     extract_entities.s(),
-                    resolve_aliases.s(),
                 )
                 task_chain.apply_async()
                 results["retried"] += 1

@@ -201,6 +201,20 @@ def _link_act_from_library(
                 library_document_id=library_doc_id,
                 title=display_name,
             )
+            # Check if this library doc actually has chunks (it may need processing)
+            chunk_check = client.table("library_chunks").select("id", count="exact").eq(
+                "library_document_id", library_doc_id
+            ).execute()
+            if not chunk_check.count:
+                # Library doc exists but was never processed — trigger OCR + processing
+                storage_path_existing = library_doc.get("storage_path")
+                if storage_path_existing:
+                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    ocr_and_process_library_document.apply_async(
+                        kwargs={"library_document_id": library_doc_id, "storage_path": storage_path_existing},
+                        queue="default",
+                    )
+                    logger.info("act_ocr_processing_triggered_existing", library_document_id=library_doc_id)
         else:
             # 2. Create new library document
             library_doc_id = str(uuid4())
@@ -216,7 +230,7 @@ def _link_act_from_library(
                 "jurisdiction": "central",
                 "source": "india_code",
                 "source_url": india_code_url,
-                "status": "completed",
+                "status": "pending",
                 "added_by": None,  # System-added
             }).execute()
 
@@ -232,6 +246,14 @@ def _link_act_from_library(
                 library_document_id=library_doc_id,
                 title=display_name,
             )
+
+            # Trigger OCR + processing for the new library document
+            from app.workers.tasks.library_tasks import ocr_and_process_library_document
+            ocr_and_process_library_document.apply_async(
+                kwargs={"library_document_id": library_doc_id, "storage_path": storage_path},
+                queue="default",
+            )
+            logger.info("act_ocr_processing_triggered", library_document_id=library_doc_id)
 
         # 3. Check if already linked to this matter
         existing_link = client.table("matter_library_links").select("id").eq(

@@ -103,7 +103,7 @@ Complete reference for all environment variables used in LDIP.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GEMINI_MODEL` | Gemini model for extraction | `gemini-3-flash` |
-| `OPENAI_COMPARISON_MODEL` | GPT model for reasoning | `gpt-4-turbo-preview` |
+| `OPENAI_COMPARISON_MODEL` | GPT model for reasoning | `gpt-4o` |
 | `OPENAI_INTENT_MODEL` | Model for query classification | `gpt-3.5-turbo` |
 | `OPENAI_SAFETY_MODEL` | Model for safety checks | `gpt-4o-mini` |
 

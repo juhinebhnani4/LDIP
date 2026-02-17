@@ -169,8 +169,11 @@ MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1.0
 MAX_RETRY_DELAY = 30.0
 
-# Batch size for context analysis
-CONTEXT_ANALYSIS_BATCH_SIZE = 5
+# Batch size for context analysis (pairs per Gemini call)
+CONTEXT_ANALYSIS_BATCH_SIZE = 10
+
+# Max concurrent Gemini calls for alias resolution
+ALIAS_CONCURRENT_LIMIT = 3
 
 
 # =============================================================================
@@ -522,6 +525,7 @@ class EntityResolver:
         context1: str,
         name2: str,
         context2: str,
+        matter_id: str | None = None,
     ) -> float:
         """Use Gemini to analyze context for alias determination.
 
@@ -568,6 +572,7 @@ class EntityResolver:
                 tracker = CostTracker(
                     provider=LLMProvider.GEMINI_FLASH,
                     operation="entity_alias_resolution",
+                    matter_id=matter_id,
                 )
                 if usage:
                     input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
@@ -621,6 +626,7 @@ class EntityResolver:
     async def analyze_batch_context(
         self,
         pairs: list[dict],
+        matter_id: str | None = None,
     ) -> dict[str, float]:
         """Analyze multiple name pairs in a single Gemini call.
 
@@ -659,6 +665,7 @@ class EntityResolver:
                 tracker = CostTracker(
                     provider=LLMProvider.GEMINI_FLASH,
                     operation="entity_alias_resolution_batch",
+                    matter_id=matter_id,
                 )
                 if usage:
                     input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
@@ -710,6 +717,7 @@ class EntityResolver:
         matter_id: str,
         entities: list[EntityNode],
         entity_contexts: dict[str, str] | None = None,
+        document_entity_ids: set[str] | None = None,
     ) -> tuple[AliasResolutionResult, list[EntityEdgeCreate]]:
         """Resolve aliases among a set of entities.
 
@@ -722,6 +730,10 @@ class EntityResolver:
             matter_id: Matter UUID for isolation.
             entities: List of entities to analyze.
             entity_contexts: Optional dict mapping entity_id to context text.
+            document_entity_ids: Optional set of entity IDs from the current document.
+                When provided, only these entities are compared against all others
+                (incremental resolution, O(k*N)). When None, all-vs-all comparison
+                is used (full resolution, O(n²)).
 
         Returns:
             Tuple of (AliasResolutionResult, list of EntityEdgeCreate to create).
@@ -752,7 +764,14 @@ class EntityResolver:
             high_confidence_pairs: list[AliasCandidate] = []
             medium_confidence_pairs: list[AliasCandidate] = []
 
-            for entity in type_entities:
+            # Incremental: only iterate over document entities as source
+            # They are compared against ALL type_entities as candidates
+            if document_entity_ids:
+                source_entities = [e for e in type_entities if e.id in document_entity_ids]
+            else:
+                source_entities = type_entities  # Full resolution (backward compat / admin trigger)
+
+            for entity in source_entities:
                 candidates = self.find_potential_aliases(entity, type_entities)
 
                 for candidate in candidates:
@@ -801,38 +820,68 @@ class EntityResolver:
                         "context2": entity_contexts.get(candidate.candidate_entity_id, ""),
                     })
 
-                # Process in batches
-                for batch_start in range(0, len(batch_pairs), CONTEXT_ANALYSIS_BATCH_SIZE):
-                    batch = batch_pairs[batch_start:batch_start + CONTEXT_ANALYSIS_BATCH_SIZE]
-                    confidence_map = await self.analyze_batch_context(batch)
+                # Process batches concurrently with semaphore
+                semaphore = asyncio.Semaphore(ALIAS_CONCURRENT_LIMIT)
+                batches = [
+                    batch_pairs[i:i + CONTEXT_ANALYSIS_BATCH_SIZE]
+                    for i in range(0, len(batch_pairs), CONTEXT_ANALYSIS_BATCH_SIZE)
+                ]
 
-                    for j, pair_data in enumerate(batch):
-                        pair_id = pair_data["pair_id"]
-                        candidate_idx = batch_start + j
-                        candidate = medium_confidence_pairs[candidate_idx]
+                logger.info(
+                    "alias_context_analysis_start",
+                    total_pairs=len(batch_pairs),
+                    batch_count=len(batches),
+                    batch_size=CONTEXT_ANALYSIS_BATCH_SIZE,
+                    concurrent_limit=ALIAS_CONCURRENT_LIMIT,
+                )
 
-                        context_confidence = confidence_map.get(pair_id, 0.5)
-                        candidate.context_confidence = context_confidence
+                async def _process_batch(batch: list[dict]) -> dict[str, float]:
+                    async with semaphore:
+                        return await self.analyze_batch_context(batch, matter_id=matter_id)
 
-                        # Link if combined score is high enough
-                        if candidate.final_score >= CONTEXT_CONFIDENCE_THRESHOLD:
-                            edge = EntityEdgeCreate(
-                                source_entity_id=candidate.entity_id,
-                                target_entity_id=candidate.candidate_entity_id,
-                                relationship_type=RelationshipType.ALIAS_OF,
-                                matter_id=matter_id,
-                                confidence=candidate.final_score,
-                                metadata={
-                                    "auto_linked": False,
-                                    "context_analyzed": True,
-                                    "name_similarity": candidate.name_similarity,
-                                    "context_confidence": context_confidence,
-                                },
-                            )
-                            edges_to_create.append(edge)
-                            result.medium_confidence_links += 1
-                        else:
-                            result.skipped_low_confidence += 1
+                batch_results = await asyncio.gather(
+                    *[_process_batch(b) for b in batches],
+                    return_exceptions=True,
+                )
+
+                # Merge all confidence maps and apply results
+                all_confidences: dict[str, float] = {}
+                for i, batch_result in enumerate(batch_results):
+                    if isinstance(batch_result, Exception):
+                        logger.warning(
+                            "alias_batch_failed",
+                            batch_index=i,
+                            error=str(batch_result),
+                        )
+                        # Default to 0.5 for failed batches
+                        for pair_data in batches[i]:
+                            all_confidences[pair_data["pair_id"]] = 0.5
+                    else:
+                        all_confidences.update(batch_result)
+
+                for i, candidate in enumerate(medium_confidence_pairs):
+                    pair_id = f"pair_{i}"
+                    context_confidence = all_confidences.get(pair_id, 0.5)
+                    candidate.context_confidence = context_confidence
+
+                    if candidate.final_score >= CONTEXT_CONFIDENCE_THRESHOLD:
+                        edge = EntityEdgeCreate(
+                            source_entity_id=candidate.entity_id,
+                            target_entity_id=candidate.candidate_entity_id,
+                            relationship_type=RelationshipType.ALIAS_OF,
+                            matter_id=matter_id,
+                            confidence=candidate.final_score,
+                            metadata={
+                                "auto_linked": False,
+                                "context_analyzed": True,
+                                "name_similarity": candidate.name_similarity,
+                                "context_confidence": context_confidence,
+                            },
+                        )
+                        edges_to_create.append(edge)
+                        result.medium_confidence_links += 1
+                    else:
+                        result.skipped_low_confidence += 1
 
         # Apply transitive closure: if A=B and B=C, then A=C
         edges_to_create = self._apply_transitive_closure(edges_to_create, matter_id)

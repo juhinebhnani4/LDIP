@@ -538,6 +538,69 @@ class ChunkService:
                 code="GET_CONTEXT_FAILED",
             ) from e
 
+    def get_library_chunks_for_document(
+        self,
+        library_document_id: str,
+        chunk_type: ChunkType | None = None,
+    ) -> tuple[list[ChunkWithContent], int, int]:
+        """Get all chunks for a library document from library_chunks table.
+
+        Same interface as get_chunks_for_document but reads from library_chunks.
+
+        Args:
+            library_document_id: Library document UUID.
+            chunk_type: Optional filter by chunk type.
+
+        Returns:
+            Tuple of (chunks list, parent count, child count).
+        """
+        if self.client is None:
+            raise ChunkServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+            )
+
+        try:
+            query = (
+                self.client.table("library_chunks")
+                .select("*")
+                .eq("library_document_id", library_document_id)
+                .order("chunk_type", desc=True)
+                .order("chunk_index", desc=False)
+            )
+            if chunk_type:
+                query = query.eq("chunk_type", chunk_type.value)
+
+            result = query.execute()
+            chunks = [self._parse_library_chunk(row) for row in (result.data or [])]
+            parent_count = sum(1 for c in chunks if c.chunk_type == ChunkType.PARENT)
+            child_count = sum(1 for c in chunks if c.chunk_type == ChunkType.CHILD)
+            return chunks, parent_count, child_count
+
+        except Exception as e:
+            logger.error(
+                "library_chunks_get_failed",
+                library_document_id=library_document_id,
+                error=str(e),
+            )
+            raise ChunkServiceError(
+                message=f"Failed to get library chunks: {e!s}",
+                code="GET_LIBRARY_CHUNKS_FAILED",
+            ) from e
+
+    def _parse_library_chunk(self, row: dict[str, Any]) -> ChunkWithContent:
+        """Parse a library_chunks row into ChunkWithContent."""
+        return ChunkWithContent(
+            id=row["id"],
+            document_id=row["library_document_id"],
+            content=row["content"],
+            chunk_index=row["chunk_index"],
+            chunk_type=ChunkType(row["chunk_type"]),
+            page_number=row.get("page_number"),
+            token_count=row.get("token_count", 0),
+            parent_chunk_id=row.get("parent_chunk_id"),
+        )
+
     def _parse_chunk(self, row: dict[str, Any]) -> Chunk:
         """Parse a database row into a Chunk model.
 

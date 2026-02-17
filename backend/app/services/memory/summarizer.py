@@ -109,13 +109,13 @@ class ConversationSummarizer:
             return cached
 
         # Generate new summary
-        summary = await self._summarize(messages)
+        summary = await self._summarize(messages, matter_id=matter_id)
         if summary:
             await self._cache_summary(matter_id, user_id, msg_count, summary)
 
         return summary
 
-    async def _summarize(self, messages: list[SessionMessage]) -> str | None:
+    async def _summarize(self, messages: list[SessionMessage], matter_id: str | None = None) -> str | None:
         """Generate summary from messages using Gemini Flash."""
         # Take most recent messages
         recent = messages[-MAX_MESSAGES_TO_SUMMARIZE:]
@@ -145,6 +145,7 @@ class ConversationSummarizer:
             cost_tracker = CostTracker(
                 provider=LLMProvider.GEMINI_FLASH,
                 operation="conversation_summarization",
+                matter_id=matter_id,
             )
             usage = getattr(response, 'usage_metadata', None)
             if usage:

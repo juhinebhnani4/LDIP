@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
-    openai_comparison_model: str = "gpt-4-turbo-preview"  # or gpt-4o
+    openai_comparison_model: str = "gpt-4o"  # Was gpt-4-turbo-preview; gpt-4o is 75% cheaper
 
     # Model Routing for Contradiction Detection (Cost Optimization)
     # Two-tier approach: Gemini Flash screens first, GPT-4 only for uncertain/contradictions
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     # Language Policing Configuration (Story 8-3: Output Sanitization)
     language_policing_enabled: bool = True  # Master switch for language policing
     policing_llm_enabled: bool = True  # Feature flag to enable/disable LLM polish
-    policing_llm_timeout: float = 20.0  # Hard timeout for policing LLM calls (seconds)
+    policing_llm_timeout: float = 15.0  # Hard timeout for policing LLM calls (seconds)
 
     # GPT-4o-mini Cost Tracking (M2 fix: configurable pricing for Stories 8-2, 8-3)
     safety_llm_input_cost_per_1k: float = 0.00015  # $0.00015 per 1K input tokens

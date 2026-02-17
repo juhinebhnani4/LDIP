@@ -496,8 +496,8 @@ async def compare_entity_statements(
     - includeAliases: If true (default), include statements from entity aliases
 
     **Cost Control:**
-    - Each GPT-4 comparison costs ~$0.03-0.05
-    - maxPairs=50 limits cost to ~$2.50 per entity
+    - Each GPT-4o comparison costs ~$0.008-0.013
+    - maxPairs=50 limits cost to ~$0.65 per entity
     - Use GET /statements first to check statement count
 
     **Async Processing:**

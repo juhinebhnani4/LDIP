@@ -297,7 +297,7 @@ class CitationExtractor:
             all_regex_citations.extend(regex_citations)
 
             # Step 2: Extract with Gemini (comprehensive)
-            gemini_citations = await self._extract_with_gemini(chunk_text, document_id)
+            gemini_citations = await self._extract_with_gemini(chunk_text, document_id, matter_id=matter_id)
             all_gemini_citations.extend(gemini_citations)
 
             if total_chunks > 1:
@@ -458,6 +458,7 @@ class CitationExtractor:
             provider=LLMProvider.GEMINI_FLASH,
             operation="citation_extraction_batch",
             document_id=document_id,
+            matter_id=matter_id,
         )
 
         distributed_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
@@ -696,6 +697,7 @@ class CitationExtractor:
         self,
         text: str,
         document_id: str,
+        matter_id: str | None = None,
     ) -> list[ExtractedCitation]:
         """Extract citations using Gemini.
 
@@ -713,6 +715,7 @@ class CitationExtractor:
             provider=LLMProvider.GEMINI_FLASH,
             operation="citation_extraction",
             document_id=document_id,
+            matter_id=matter_id,
         )
 
         last_error: Exception | None = None
@@ -783,6 +786,7 @@ class CitationExtractor:
         self,
         text: str,
         document_id: str,
+        matter_id: str | None = None,
     ) -> list[ExtractedCitation]:
         """Synchronous Gemini extraction.
 
@@ -800,6 +804,7 @@ class CitationExtractor:
             provider=LLMProvider.GEMINI_FLASH,
             operation="citation_extraction_sync",
             document_id=document_id,
+            matter_id=matter_id,
         )
 
         last_error: Exception | None = None

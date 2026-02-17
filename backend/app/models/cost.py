@@ -135,7 +135,7 @@ class MatterCostSummary(BaseModel):
                 ],
                 "byProvider": [
                     {
-                        "provider": "gpt-4-turbo-preview",
+                        "provider": "gpt-4o",
                         "costInr": 800.00,
                         "costUsd": 9.58,
                         "inputTokens": 50000,

@@ -296,7 +296,7 @@ class IntentAnalyzer:
             )
 
         # Step 2: Use LLM classification
-        classification, cost = await self._llm_classification(query)
+        classification, cost = await self._llm_classification(query, matter_id=matter_id)
 
         # Step 3: Apply confidence-based multi-engine fallback
         classification = self._apply_multi_engine_fallback(classification)
@@ -398,7 +398,7 @@ class IntentAnalyzer:
         return None
 
     async def _llm_classification(
-        self, query: str
+        self, query: str, matter_id: str | None = None,
     ) -> tuple[IntentClassification, IntentAnalysisCost]:
         """Classify query intent using GPT-3.5 with circuit breaker.
 
@@ -420,7 +420,7 @@ class IntentAnalyzer:
         try:
             # Call OpenAI with circuit breaker protection
             response_text, input_tokens, output_tokens = await self._call_openai_chat(
-                user_prompt
+                user_prompt, matter_id=matter_id,
             )
 
             # Track cost
@@ -476,7 +476,7 @@ class IntentAnalyzer:
 
     @with_circuit_breaker(CircuitService.OPENAI_CHAT)
     async def _call_openai_chat(
-        self, user_prompt: str
+        self, user_prompt: str, matter_id: str | None = None,
     ) -> tuple[str, int, int]:
         """Call OpenAI Chat API with circuit breaker protection.
 
@@ -489,6 +489,7 @@ class IntentAnalyzer:
         tracker = CostTracker(
             provider=LLMProvider.OPENAI_GPT35_TURBO,
             operation="intent_classification",
+            matter_id=matter_id,
         )
         response = await self.client.chat.completions.create(
             model=self.model_name,
@@ -851,7 +852,7 @@ class MultiIntentAnalyzer:
         except Exception as e:
             logger.debug("intent_cache_set_failed", error=str(e))
 
-    async def classify(self, query: str) -> MultiIntentClassification:
+    async def classify(self, query: str, matter_id: str | None = None) -> MultiIntentClassification:
         """Main entry point for query classification.
 
         Flow:
@@ -898,7 +899,7 @@ class MultiIntentAnalyzer:
             if cached is not None:
                 return cached
 
-            signals = await self._llm_refine_signals(query, signals)
+            signals = await self._llm_refine_signals(query, signals, matter_id=matter_id)
 
         # Stage 3: Detect compound intents
         compound = self._detect_compound_intent(signals)
@@ -1036,7 +1037,7 @@ class MultiIntentAnalyzer:
         return high_confidence_count > 1 or high_confidence_count == 0
 
     async def _llm_refine_signals(
-        self, query: str, initial_signals: list[IntentSignal]
+        self, query: str, initial_signals: list[IntentSignal], matter_id: str | None = None,
     ) -> list[IntentSignal]:
         """Use LLM to refine/validate intent signals.
 
@@ -1070,6 +1071,7 @@ class MultiIntentAnalyzer:
             tracker = CostTracker(
                 provider=LLMProvider.OPENAI_GPT35_TURBO,
                 operation="multi_intent_refine",
+                matter_id=matter_id,
             )
             response = await self.client.chat.completions.create(
                 model=self.model_name,

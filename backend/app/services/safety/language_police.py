@@ -43,7 +43,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Retry configuration (same as Story 8-2)
-MAX_RETRIES = 3
+MAX_RETRIES = 1
 INITIAL_RETRY_DELAY = 0.5
 MAX_RETRY_DELAY = 10.0
 
@@ -180,7 +180,7 @@ class LanguagePolice:
 
         return self._client
 
-    async def police_output(self, text: str) -> LanguagePolicingResult:
+    async def police_output(self, text: str, matter_id: str | None = None) -> LanguagePolicingResult:
         """Apply full language policing pipeline.
 
         Story 8-3: AC #1-6, Task 6.3 - Complete sanitization.
@@ -226,7 +226,7 @@ class LanguagePolice:
 
         # Phase 2: LLM polish for subtle conclusions
         try:
-            llm_result = await self._apply_llm_polish(regex_result.sanitized_text)
+            llm_result = await self._apply_llm_polish(regex_result.sanitized_text, matter_id=matter_id)
 
             total_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -298,7 +298,7 @@ class LanguagePolice:
                 sanitization_time_ms=total_time_ms,
             )
 
-    async def _apply_llm_polish(self, text: str) -> dict:
+    async def _apply_llm_polish(self, text: str, matter_id: str | None = None) -> dict:
         """Apply GPT-4o-mini polishing to text.
 
         Story 8-3: Task 5.3-5.5 - LLM polishing.
@@ -306,6 +306,7 @@ class LanguagePolice:
 
         Args:
             text: Text after regex sanitization.
+            matter_id: Optional matter UUID for cost tracking.
 
         Returns:
             Dict with sanitized_text, changes_made, confidence, cost_usd, text_truncated.
@@ -315,7 +316,7 @@ class LanguagePolice:
 
         # Call LLM with retry
         result, input_tokens, output_tokens = await self._call_llm_with_retry(
-            sanitized_input
+            sanitized_input, matter_id=matter_id,
         )
 
         # Calculate cost
@@ -358,7 +359,7 @@ class LanguagePolice:
         return sanitized, was_truncated
 
     async def _call_llm_with_retry(
-        self, text: str
+        self, text: str, matter_id: str | None = None,
     ) -> tuple[dict, int, int]:
         """Call GPT-4o-mini with retry logic.
 
@@ -407,6 +408,7 @@ class LanguagePolice:
                 tracker = CostTracker(
                     provider=LLMProvider.OPENAI_GPT4O_MINI,
                     operation="safety_language_policing",
+                    matter_id=matter_id,
                 )
                 tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
                 tracker.log_cost()

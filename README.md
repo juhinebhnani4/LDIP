@@ -69,7 +69,7 @@ celery -A app.workers.celery_app beat --loglevel=info
 | **⏱️ Timeline** | Extracts dates, builds chronology, detects temporal gaps and impossibilities, validates legal sequence ordering |
 | **👥 Entities** | Maps people, companies, relationships — resolves aliases (Jaro-Winkler similarity), generates relationship graphs, supports entity merging with correction learning |
 | **📜 Citations** | Finds every Act reference via regex + LLM dual extraction, mega-batches (3 chunks/call), parses India Code format (§123(4)), validates against statute database, discovers missing acts |
-| **⚔️ Contradictions** | Two-tier detection: Gemini screens all pairs → GPT-4 escalates uncertain results. 100% rule-based scoring ($0 cost). Classifies conflict types, ranks by severity |
+| **⚔️ Contradictions** | Two-tier detection: Gemini screens all pairs → GPT-4o escalates uncertain results. 100% rule-based scoring ($0 cost). Classifies conflict types, ranks by severity |
 | **🔀 Orchestrator** | Intent analysis (regex fast-path + GPT-3.5), parallel engine execution with 30s timeout, result aggregation (4 strategies), language policing integration |
 
 Each engine runs independently on every document and cross-references results via the **cross-engine correlation service**.
@@ -154,7 +154,7 @@ Each engine runs independently on every document and cross-references results vi
 - **Timeline engine**: Gemini Flash date extraction → event classification (7 legal event types) → entity linking → anomaly detection → legal sequence validation.
 - **Entity engine**: Gemini-powered named entity extraction → relationship extraction → alias generation (Jaro-Winkler similarity) → entity consolidation → relationship graph building → correction learning from manual fixes.
 - **Citation engine**: regex + LLM dual extraction → mega-batching (3 chunks per Gemini call) → India Code format parsing → act index lookup → abbreviation resolution → act validation → cross-reference verification → missing act discovery.
-- **Contradiction engine**: two-tier detection (Gemini Flash screens all pairs → GPT-4 Turbo escalates only uncertain results) → 100% rule-based scoring ($0 cost) → conflict classification (4+ types) → evidence confidence scoring → severity ranking.
+- **Contradiction engine**: two-tier detection (Gemini Flash screens all pairs → GPT-4o escalates only uncertain results) → 100% rule-based scoring ($0 cost) → conflict classification (4+ types) → evidence confidence scoring → severity ranking.
 - **Orchestrator engine**: intent analysis (regex fast-path + GPT-3.5 Turbo fallback) → parallel engine execution (30s timeout) → result aggregation (4 strategies: single, merge, ranked, comprehensive) → language policing integration.
 - **Cross-engine correlation**: links entities to timeline events, verifies citation consistency, checks for contradictions in cited material, detects multi-engine consistency issues.
 - **Summary generation**: Gemini Flash powered executive summaries with subject matter, key issues, current status, parties information, and content safety policing. Cached with 1-hour TTL, supports user edits (preserved separately), and regeneration on demand.
@@ -185,7 +185,7 @@ Each engine runs independently on every document and cross-references results vi
 ### AI/ML integrations
 
 - **Gemini 2.5 Flash**: primary model — RAG generation, chat, date extraction, citation extraction, entity extraction, OCR validation, contradiction screening, summary generation. Supports prefix caching for cost optimization.
-- **GPT-4 Turbo**: contradiction escalation for uncertain Gemini results.
+- **GPT-4o**: contradiction escalation for uncertain Gemini results, matter summaries.
 - **GPT-4o-mini**: safety guardrails, content moderation.
 - **GPT-3.5 Turbo**: intent classification in orchestrator (regex fast-path skips LLM when possible).
 - **OpenAI Embeddings**: text-embedding-3-small for vector search.

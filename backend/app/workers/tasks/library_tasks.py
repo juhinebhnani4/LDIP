@@ -417,6 +417,127 @@ def embed_library_chunks(
 
 
 # =============================================================================
+# Library Document OCR + Processing (for auto-fetched acts)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.library_tasks.ocr_and_process_library_document",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=120,
+)  # type: ignore[misc]
+def ocr_and_process_library_document(
+    self,  # type: ignore[no-untyped-def]
+    library_document_id: str,
+    storage_path: str,
+) -> dict[str, str | int | None]:
+    """Download a library document PDF, run OCR, then process (chunk + embed).
+
+    Used for auto-fetched Act PDFs that are stored in Supabase but never OCR'd.
+
+    Args:
+        library_document_id: Library document UUID.
+        storage_path: Supabase storage path to the PDF.
+
+    Returns:
+        Task result with OCR + processing summary.
+    """
+    logger.info(
+        "ocr_library_document_started",
+        library_document_id=library_document_id,
+        storage_path=storage_path,
+        retry_count=self.request.retries,
+    )
+
+    lib_service = get_library_service()
+    client = get_service_client()
+
+    if client is None:
+        return {
+            "status": "failed",
+            "library_document_id": library_document_id,
+            "reason": "database_not_configured",
+        }
+
+    try:
+        # 1. Update status to processing
+        lib_service.update_status(library_document_id, LibraryDocumentStatus.PROCESSING)
+
+        # 2. Download PDF from Supabase storage
+        pdf_bytes = client.storage.from_("documents").download(storage_path)
+
+        # 3. Run OCR to extract text
+        from app.services.ocr.processor import OCRProcessor
+        processor = OCRProcessor()
+        ocr_result = processor.process_document(pdf_bytes, document_id=library_document_id)
+        extracted_text = ocr_result.full_text
+
+        if not extracted_text or len(extracted_text.strip()) < 50:
+            lib_service.update_status(
+                library_document_id,
+                LibraryDocumentStatus.FAILED,
+                quality_flags=["ocr_empty_text"],
+            )
+            return {"status": "failed", "library_document_id": library_document_id, "reason": "empty_text"}
+
+        # 4. Update page_count on the library document
+        client.table("library_documents").update({
+            "page_count": ocr_result.page_count,
+        }).eq("id", library_document_id).execute()
+
+        # 5. Chain into existing processing pipeline (chunk → embed)
+        from celery import chain
+        pipeline = chain(
+            chunk_library_document.s(library_document_id, extracted_text),
+            embed_library_chunks.s(),
+        )
+        pipeline.apply_async(queue="default")
+
+        logger.info(
+            "ocr_library_document_complete",
+            library_document_id=library_document_id,
+            text_length=len(extracted_text),
+            page_count=ocr_result.page_count,
+        )
+
+        return {
+            "status": "ocr_complete",
+            "library_document_id": library_document_id,
+            "text_length": len(extracted_text),
+            "page_count": ocr_result.page_count,
+        }
+
+    except Exception as e:
+        logger.error(
+            "ocr_library_document_failed",
+            library_document_id=library_document_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            retry_count=self.request.retries,
+            max_retries=self.max_retries,
+        )
+
+        # Retry on transient errors before marking as failed
+        try:
+            raise self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            try:
+                lib_service.update_status(
+                    library_document_id,
+                    LibraryDocumentStatus.FAILED,
+                    quality_flags=["ocr_failed"],
+                )
+            except Exception:
+                pass
+            return {
+                "status": "failed",
+                "library_document_id": library_document_id,
+                "reason": str(e),
+            }
+
+
+# =============================================================================
 # Library Document Processing Pipeline
 # =============================================================================
 

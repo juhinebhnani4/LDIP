@@ -264,6 +264,7 @@ class OCRProcessor:
         pdf_content: bytes,
         document_id: str | None = None,
         enable_image_quality_scores: bool = True,
+        matter_id: str | None = None,
     ) -> OCRResult:
         """Process a PDF document and extract text with bounding boxes.
 
@@ -314,9 +315,10 @@ class OCRProcessor:
                     )
                     # Recursive call for each chunk
                     results.append(self.process_document(
-                        chunk, 
-                        document_id, 
-                        enable_image_quality_scores
+                        chunk,
+                        document_id,
+                        enable_image_quality_scores,
+                        matter_id=matter_id,
                     ))
                 
                 return self._merge_ocr_results(results)
@@ -382,6 +384,7 @@ class OCRProcessor:
                 provider=CostProvider.GOOGLE_DOCUMENT_AI,
                 operation="ocr_document_ai",
                 document_id=document_id,
+                matter_id=matter_id,
             )
             ocr_tracker.add_units(len(pages))
             ocr_tracker.log_cost()

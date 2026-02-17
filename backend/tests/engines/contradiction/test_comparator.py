@@ -48,20 +48,20 @@ class TestLLMCostTracker:
     def test_cost_calculation_input_only(self) -> None:
         """Should calculate cost for input tokens."""
         tracker = LLMCostTracker(input_tokens=1000, output_tokens=0)
-        # $0.01 per 1K input tokens
-        assert tracker.cost_usd == 0.01
+        # $0.0025 per 1K input tokens (GPT-4o)
+        assert tracker.cost_usd == 0.0025
 
     def test_cost_calculation_output_only(self) -> None:
         """Should calculate cost for output tokens."""
         tracker = LLMCostTracker(input_tokens=0, output_tokens=1000)
-        # $0.03 per 1K output tokens
-        assert tracker.cost_usd == 0.03
+        # $0.01 per 1K output tokens (GPT-4o)
+        assert tracker.cost_usd == 0.01
 
     def test_cost_calculation_combined(self) -> None:
         """Should calculate combined input + output cost."""
         tracker = LLMCostTracker(input_tokens=2000, output_tokens=500)
-        # 2K input = $0.02, 0.5K output = $0.015
-        expected = 0.02 + 0.015
+        # 2K input = $0.005, 0.5K output = $0.005 (GPT-4o)
+        expected = 0.005 + 0.005
         assert abs(tracker.cost_usd - expected) < 0.001
 
     def test_zero_tokens_zero_cost(self) -> None:
@@ -669,7 +669,7 @@ class TestRetryLogic:
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
 
             comparator = StatementComparator()
@@ -718,7 +718,7 @@ class TestRetryLogic:
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
 
             comparator = StatementComparator()
@@ -765,7 +765,7 @@ class TestRetryLogic:
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
 
             comparator = StatementComparator()

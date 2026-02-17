@@ -80,13 +80,14 @@ class SafetyGuard:
             llm_enabled=self._llm_enabled,
         )
 
-    async def check_query(self, query: str) -> SafetyCheckResult:
+    async def check_query(self, query: str, matter_id: str | None = None) -> SafetyCheckResult:
         """Check query against both regex and LLM guardrails.
 
         Story 8-1 + 8-2: Combined safety pipeline.
 
         Args:
             query: User query to check.
+            matter_id: Optional matter UUID for cost tracking.
 
         Returns:
             SafetyCheckResult with combined results.
@@ -124,7 +125,7 @@ class SafetyGuard:
             )
 
         try:
-            llm_check = await self._subtle_detector.detect_violation(query)
+            llm_check = await self._subtle_detector.detect_violation(query, matter_id=matter_id)
 
             if not llm_check.is_safe:
                 logger.info(

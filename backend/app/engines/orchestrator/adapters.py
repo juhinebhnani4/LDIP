@@ -782,11 +782,11 @@ class RAGEngineAdapter(EngineAdapter):
             # Use QueryProfile parameters if available, otherwise settings defaults
             search_limit = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
 
-            results = await search.search_with_library(
+            results = await search.search_with_rerank_and_library(
                 query=query,
                 matter_id=matter_id,
-                limit=search_limit,
-                library_limit=10,  # Library results before merge
+                rerank_top_n=search_limit,
+                library_limit=10,
             )
 
             # Step 2: Get document names for matter documents
@@ -811,7 +811,7 @@ class RAGEngineAdapter(EngineAdapter):
                     "document_name": get_doc_name(item),
                     "content": item.content,
                     "page_number": item.page_number,
-                    "relevance_score": item.rrf_score,  # RRF score as relevance
+                    "relevance_score": item.relevance_score or item.rrf_score,
                     "is_library": item.is_library,
                     "filed_by": _infer_party_from_document_name(get_doc_name(item)),
                     "bbox_ids": item.bbox_ids,
@@ -835,7 +835,7 @@ class RAGEngineAdapter(EngineAdapter):
             rag_data = {
                 "answer": answer_result.answer,
                 "total_candidates": results.total_candidates,
-                "rerank_used": False,  # RRF fusion, not Cohere rerank
+                "rerank_used": results.rerank_used,
                 "generation_time_ms": answer_result.generation_time_ms,
                 "model_used": answer_result.model_used,
                 # Search mode info for frontend UX (rate limit fallback indicator)

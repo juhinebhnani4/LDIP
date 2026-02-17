@@ -498,6 +498,8 @@ class LLMValidationResult:
 async def validate_act_name_with_llm(
     act_name: str,
     context: str | None = None,
+    document_id: str | None = None,
+    matter_id: str | None = None,
 ) -> LLMValidationResult:
     """Validate an act name using LLM for semantic understanding.
 
@@ -570,6 +572,8 @@ JSON response:'''
         tracker = CostTracker(
             provider=LLMProvider.GEMINI_FLASH,
             operation="citation_act_validation",
+            document_id=document_id,
+            matter_id=matter_id,
         )
         if usage:
             input_tokens = getattr(usage, 'prompt_token_count', 0) or 0

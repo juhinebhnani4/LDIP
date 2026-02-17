@@ -200,6 +200,7 @@ class CohereRerankService:
         query: str,
         documents: Sequence[str],
         top_n: int = DEFAULT_TOP_N,
+        matter_id: str | None = None,
     ) -> RerankResult:
         """Rerank documents by relevance to query with circuit breaker.
 
@@ -257,7 +258,7 @@ class CohereRerankService:
         try:
             # Call Cohere with circuit breaker protection
             response = await self._call_cohere_rerank(
-                query, list(documents), effective_top_n
+                query, list(documents), effective_top_n, matter_id=matter_id,
             )
 
             # Map response to our dataclass
@@ -273,6 +274,7 @@ class CohereRerankService:
             tracker = CostTracker(
                 provider=CostLLMProvider.COHERE_RERANK,
                 operation="search_rerank",
+                matter_id=matter_id,
             )
             tracker.add_units(1)
             tracker.log_cost()
@@ -338,6 +340,7 @@ class CohereRerankService:
         query: str,
         documents: list[str],
         top_n: int,
+        matter_id: str | None = None,
     ) -> cohere.RerankResponse:
         """Call Cohere API with circuit breaker protection.
 

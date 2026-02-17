@@ -141,7 +141,7 @@ class SummaryService:
         self._supabase_client = None
         settings = get_settings()
         self.api_key = settings.openai_api_key
-        self.model_name = settings.openai_comparison_model  # GPT-4 for summaries
+        self.model_name = settings.openai_comparison_model  # GPT-4o for summaries
 
     @property
     def openai_client(self):
@@ -894,7 +894,7 @@ class SummaryService:
 
             # Cost tracking for GPT-4 usage
             cost_tracker = CostTracker(
-                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                provider=LLMProvider.OPENAI_GPT4O,
                 operation="summary_subject_matter",
                 matter_id=matter_id,
             )
@@ -955,6 +955,22 @@ class SummaryService:
                     response_format={"type": "json_object"},
                     temperature=0.5,
                 )
+                # Track cost for retry call
+                retry_tracker = CostTracker(
+                    provider=LLMProvider.OPENAI_GPT4O,
+                    operation="summary_subject_matter_retry",
+                    matter_id=matter_id,
+                )
+                if retry_response.usage:
+                    retry_tracker.add_tokens(
+                        input_tokens=retry_response.usage.prompt_tokens or 0,
+                        output_tokens=retry_response.usage.completion_tokens or 0,
+                        cached_input_tokens=getattr(retry_response.usage, 'prompt_tokens_details', None)
+                        and getattr(retry_response.usage.prompt_tokens_details, 'cached_tokens', 0) or 0,
+                    )
+                retry_tracker.log_cost()
+                await persist_cost(retry_tracker)
+
                 retry_text = retry_response.choices[0].message.content
                 parsed = json.loads(retry_text)
                 raw_description = parsed.get("description", "")
@@ -1037,7 +1053,7 @@ class SummaryService:
 
             # Cost tracking for GPT-4 usage
             cost_tracker = CostTracker(
-                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                provider=LLMProvider.OPENAI_GPT4O,
                 operation="summary_key_issues",
                 matter_id=matter_id,
             )
@@ -1142,7 +1158,7 @@ class SummaryService:
 
             # Cost tracking for GPT-4 usage
             cost_tracker = CostTracker(
-                provider=LLMProvider.OPENAI_GPT4_TURBO,
+                provider=LLMProvider.OPENAI_GPT4O,
                 operation="summary_current_status",
                 matter_id=matter_id,
             )

@@ -764,7 +764,9 @@ def classify_events_for_document(
 
         # Run batch classification
         classification_results = event_classifier.classify_events_batch_sync(
-            events=events_for_classification
+            events=events_for_classification,
+            document_id=document_id,
+            matter_id=matter_id,
         )
 
         if job_id:
@@ -986,7 +988,8 @@ def classify_events_for_matter(
 
             # Classify batch
             classification_results = event_classifier.classify_events_batch_sync(
-                events=batch
+                events=batch,
+                matter_id=matter_id,
             )
 
             # Update events

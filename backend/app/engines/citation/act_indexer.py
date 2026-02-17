@@ -201,6 +201,21 @@ class ActIndexer:
                 )
 
             if not chunks:
+                # Fall back to library_chunks (for acts stored as library documents)
+                chunks, parent_count, _ = await asyncio.to_thread(
+                    self.chunk_service.get_library_chunks_for_document,
+                    document_id,
+                    ChunkType.PARENT,
+                )
+                if not chunks:
+                    chunks, _, _ = await asyncio.to_thread(
+                        self.chunk_service.get_library_chunks_for_document,
+                        document_id,
+                    )
+                if chunks:
+                    logger.info("act_index_using_library_chunks", document_id=document_id, chunk_count=len(chunks))
+
+            if not chunks:
                 raise ActIndexerError(
                     f"No chunks found for document {document_id}",
                     code="NO_CHUNKS_FOUND",

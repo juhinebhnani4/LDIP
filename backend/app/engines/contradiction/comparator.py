@@ -58,9 +58,9 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-# GPT-4 Turbo pricing (as of Jan 2025)
-GPT4_INPUT_COST_PER_1K = 0.01  # $0.01 per 1K input tokens
-GPT4_OUTPUT_COST_PER_1K = 0.03  # $0.03 per 1K output tokens
+# GPT-4o pricing (as of Oct 2024) — 75% cheaper than GPT-4 Turbo
+GPT4_INPUT_COST_PER_1K = 0.0025  # $2.50 per 1M input tokens
+GPT4_OUTPUT_COST_PER_1K = 0.01  # $10 per 1M output tokens
 
 # Gemini Flash pricing (as of Jan 2025) - much cheaper for screening
 GEMINI_INPUT_COST_PER_1K = 0.000075  # $0.075 per 1M input tokens
@@ -152,7 +152,7 @@ class LLMCostTracker:
     Supports both GPT-4 (full analysis) and Gemini (screening) costs.
     """
 
-    model: str = "gpt-4-turbo-preview"
+    model: str = "gpt-4o"
     input_tokens: int = 0
     output_tokens: int = 0
     # Two-tier routing tracking
@@ -402,6 +402,7 @@ class StatementComparator:
         entity_name: str,
         doc_a_name: str | None = None,
         doc_b_name: str | None = None,
+        matter_id: str | None = None,
     ) -> tuple[StatementPairComparison, LLMCostTracker]:
         """Compare a single pair of statements using two-tier model routing.
 
@@ -433,6 +434,8 @@ class StatementComparator:
                     entity_name=entity_name,
                     content_a=statement_a.content,
                     content_b=statement_b.content,
+                    document_id=statement_a.document_id,
+                    matter_id=matter_id,
                 )
 
                 if screening_result:
@@ -535,7 +538,7 @@ class StatementComparator:
             )
 
             response_text, input_tokens, output_tokens = await self._call_gpt4_comparison(
-                user_prompt
+                user_prompt, document_id=statement_a.document_id, matter_id=matter_id,
             )
 
             # Track GPT-4 tokens
@@ -602,6 +605,8 @@ class StatementComparator:
         entity_name: str,
         content_a: str,
         content_b: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> tuple[str, float, str, int, int] | None:
         """Call Gemini for fast screening with rate limiting.
 
@@ -660,6 +665,8 @@ class StatementComparator:
             screening_tracker = CostTracker(
                 provider=CostLLMProvider.GEMINI_FLASH,
                 operation="contradiction_screening",
+                document_id=document_id,
+                matter_id=matter_id,
             )
             screening_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
             screening_tracker.log_cost()
@@ -677,7 +684,7 @@ class StatementComparator:
 
     @with_circuit_breaker(CircuitService.OPENAI_CHAT)
     async def _call_gpt4_comparison(
-        self, user_prompt: str
+        self, user_prompt: str, document_id: str | None = None, matter_id: str | None = None,
     ) -> tuple[str, int, int]:
         """Call GPT-4 API with circuit breaker protection.
 
@@ -715,8 +722,10 @@ class StatementComparator:
 
         # Persist cost to DB
         tracker = CostTracker(
-            provider=CostLLMProvider.OPENAI_GPT4_TURBO,
+            provider=CostLLMProvider.OPENAI_GPT4O,
             operation="contradiction_comparison",
+            document_id=document_id,
+            matter_id=matter_id,
         )
         tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
         tracker.log_cost()
@@ -730,6 +739,7 @@ class StatementComparator:
         max_pairs: int = 50,
         batch_size: int = DEFAULT_BATCH_SIZE,
         cross_document_only: bool = False,
+        matter_id: str | None = None,
     ) -> ComparisonBatchResult:
         """Compare all statement pairs for an entity.
 
@@ -786,6 +796,7 @@ class StatementComparator:
                     entity_name=pair.entity_name,
                     doc_a_name=pair.doc_a_name,
                     doc_b_name=pair.doc_b_name,
+                    matter_id=matter_id,
                 )
                 for pair in batch
             ]

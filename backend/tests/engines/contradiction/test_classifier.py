@@ -63,8 +63,8 @@ class TestClassificationCostTracker:
             output_tokens=500,
             used_llm=True,
         )
-        # 1K input = $0.01, 0.5K output = $0.015
-        expected = 0.01 + 0.015
+        # 1K input = $0.0025, 0.5K output = $0.005 (GPT-4o)
+        expected = 0.0025 + 0.005
         assert abs(tracker.cost_usd - expected) < 0.001
 
     def test_default_values(self) -> None:
@@ -297,7 +297,7 @@ class TestContradictionClassifierRuleBased:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
             return ContradictionClassifier()
 
@@ -504,7 +504,7 @@ class TestContradictionClassifierLLMFallback:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
             return ContradictionClassifier()
 
@@ -596,7 +596,7 @@ class TestBatchClassification:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
             return ContradictionClassifier()
 
@@ -684,7 +684,7 @@ class TestMatterIsolation:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
 
             classifier = ContradictionClassifier()
@@ -734,7 +734,7 @@ class TestClassifierFactory:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
 
             classifier1 = get_contradiction_classifier()
@@ -759,7 +759,7 @@ class TestEdgeCases:
         with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
-                openai_comparison_model="gpt-4-turbo-preview",
+                openai_comparison_model="gpt-4o",
             )
             return ContradictionClassifier()
 

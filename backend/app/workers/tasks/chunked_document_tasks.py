@@ -638,9 +638,11 @@ def process_single_chunk(
             _run_async(chunks_svc.update_heartbeat(chunk_id))
 
             # Process through Document AI (with circuit breaker - Story 17.2)
+            # Use original document_id (valid UUID) for cost tracking persistence
             ocr_result = ocr.process_document(
                 pdf_content=chunk_bytes,
-                document_id=f"{document_id}_chunk_{chunk_index}",
+                document_id=document_id,
+                matter_id=matter_id,
             )
 
             # Story 19.1: Update heartbeat after OCR completes
@@ -1057,13 +1059,11 @@ def _trigger_parallel_processing(
         from app.workers.tasks.pipeline_chains import create_post_ocr_chain
 
         # Create unified chain - same as small docs
-        # skip_downstream_dispatch=False means resolve_aliases will dispatch
-        # extract_citations + extract_dates when it completes
+        # extract_entities dispatches citations, dates, and aliases in parallel
         unified_chain = create_post_ocr_chain(
             document_id=document_id,
             matter_id=matter_id,
             job_id=job_id,
-            skip_downstream_dispatch=False,  # Let resolve_aliases dispatch downstream
         )
 
         # Explicit queue routing - task_routes don't apply to chains dispatched from workers
@@ -1075,17 +1075,17 @@ def _trigger_parallel_processing(
             "chunk_document",
             "embed_chunks",
             "extract_entities",
-            "resolve_aliases",
-            # These are dispatched by resolve_aliases:
+            # These are dispatched by extract_entities:
             "extract_citations",
             "extract_dates_from_document",
+            "resolve_aliases",
             "detect_contradictions",
         ])
 
         logger.info(
             "unified_chain_dispatched",
             document_id=document_id,
-            chain="validate_ocr → calculate_confidence → chunk_document → embed_chunks → extract_entities → resolve_aliases → (citations + dates)",
+            chain="validate_ocr → calculate_confidence → chunk_document → embed_chunks → extract_entities → (citations + dates + aliases)",
         )
 
     except Exception as e:
@@ -1342,6 +1342,17 @@ def finalize_chunked_document(
         chunk_count = chunk_count_response.count or 0
 
         if chunk_count == 0:
+            # Can't recover if there's no extracted text to process
+            if not document.extracted_text:
+                logger.info(
+                    "finalize_skipping_no_text",
+                    document_id=document_id,
+                    status=document.status.value,
+                    document_type=getattr(document.document_type, 'value', None),
+                    reason="No extracted_text — cannot chunk or embed",
+                )
+                return {"status": "skipped", "document_id": document_id, "reason": "no_extracted_text"}
+
             # Document is OCR_COMPLETE but has 0 chunks - trigger downstream recovery
             logger.warning(
                 "finalize_triggering_downstream_recovery",

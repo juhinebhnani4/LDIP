@@ -222,7 +222,7 @@ class InjectionDetector:
         # Phase 2: LLM-enhanced detection for ambiguous cases
         if use_llm and len(scan_text) >= MIN_LLM_SCAN_LENGTH and self.client:
             try:
-                llm_result = await self._llm_scan(scan_text)
+                llm_result = await self._llm_scan(scan_text, document_id=document_id)
 
                 if llm_result:
                     # Combine regex and LLM findings
@@ -275,7 +275,7 @@ class InjectionDetector:
             scan_method="regex_only",
         )
 
-    async def _llm_scan(self, text: str) -> dict[str, Any] | None:
+    async def _llm_scan(self, text: str, document_id: str | None = None) -> dict[str, Any] | None:
         """Run LLM-based injection detection.
 
         Args:
@@ -302,6 +302,7 @@ class InjectionDetector:
             tracker = CostTracker(
                 provider=LLMProvider.GEMINI_FLASH,
                 operation="security_injection_scan",
+                document_id=document_id,
             )
             tracker.add_tokens(
                 input_tokens=estimate_tokens(prompt),

@@ -875,6 +875,7 @@ class MIGEntityExtractor:
                 provider=CostLLMProvider.GEMINI_FLASH,
                 operation="entity_extraction_batch",
                 matter_id=matter_id,
+                document_id=document_id,
             )
             if usage:
                 input_tokens = getattr(usage, 'prompt_token_count', 0) or 0

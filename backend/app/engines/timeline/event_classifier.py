@@ -130,6 +130,8 @@ class EventClassifier:
         event_id: str,
         context_text: str,
         date_text: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> EventClassificationResult:
         """Classify a single event into an event type.
 
@@ -191,6 +193,8 @@ class EventClassifier:
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="event_classification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 ec_tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),
@@ -259,6 +263,8 @@ class EventClassifier:
     async def classify_events_batch(
         self,
         events: list[dict],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> list[EventClassificationResult]:
         """Classify multiple events in a single LLM call.
 
@@ -285,15 +291,17 @@ class EventClassifier:
             results = []
             for i in range(0, len(events), MAX_BATCH_SIZE):
                 batch = events[i : i + MAX_BATCH_SIZE]
-                batch_results = await self._classify_batch(batch)
+                batch_results = await self._classify_batch(batch, document_id=document_id, matter_id=matter_id)
                 results.extend(batch_results)
             return results
 
-        return await self._classify_batch(events)
+        return await self._classify_batch(events, document_id=document_id, matter_id=matter_id)
 
     async def _classify_batch(
         self,
         events: list[dict],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> list[EventClassificationResult]:
         """Classify a batch of events (max MAX_BATCH_SIZE).
 
@@ -340,6 +348,8 @@ class EventClassifier:
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="event_classification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 ec_tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),
@@ -408,6 +418,8 @@ class EventClassifier:
         event_id: str,
         context_text: str,
         date_text: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> EventClassificationResult:
         """Synchronous wrapper for event classification.
 
@@ -453,6 +465,8 @@ class EventClassifier:
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="event_classification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 ec_tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),
@@ -505,6 +519,8 @@ class EventClassifier:
     def classify_events_batch_sync(
         self,
         events: list[dict],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> list[EventClassificationResult]:
         """Synchronous batch classification for Celery tasks.
 
@@ -522,15 +538,17 @@ class EventClassifier:
             results = []
             for i in range(0, len(events), MAX_BATCH_SIZE):
                 batch = events[i : i + MAX_BATCH_SIZE]
-                batch_results = self._classify_batch_sync(batch)
+                batch_results = self._classify_batch_sync(batch, document_id=document_id, matter_id=matter_id)
                 results.extend(batch_results)
             return results
 
-        return self._classify_batch_sync(events)
+        return self._classify_batch_sync(events, document_id=document_id, matter_id=matter_id)
 
     def _classify_batch_sync(
         self,
         events: list[dict],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> list[EventClassificationResult]:
         """Synchronous batch classification."""
         events_for_prompt = [
@@ -561,6 +579,8 @@ class EventClassifier:
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="event_classification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 ec_tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),

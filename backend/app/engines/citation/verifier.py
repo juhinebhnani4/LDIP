@@ -215,6 +215,8 @@ class CitationVerifier:
                 act_name=act_name,
                 section=citation.section_number,
                 act_document_id=act_document_id,
+                document_id=citation.document_id,
+                matter_id=citation.matter_id,
             )
 
             if section_match is None:
@@ -226,6 +228,8 @@ class CitationVerifier:
                     act_name=act_name,
                     section=citation.section_number,
                     available_sections=available_sections[:10],  # First 10 for context
+                    document_id=citation.document_id,
+                    matter_id=citation.matter_id,
                 )
 
                 logger.info(
@@ -259,6 +263,8 @@ class CitationVerifier:
                 comparison = await self.compare_quoted_text(
                     citation_quote=citation.quoted_text,
                     act_text=section_match.section_text,
+                    document_id=citation.document_id,
+                    matter_id=citation.matter_id,
                 )
 
                 similarity_score = comparison.similarity_score
@@ -349,6 +355,8 @@ class CitationVerifier:
         act_name: str,
         section: str,
         act_document_id: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> SectionMatch | None:
         """Find a section in the Act document.
 
@@ -438,7 +446,9 @@ class CitationVerifier:
         )
 
         try:
-            response = await self._call_gemini_with_retry(prompt)
+            response = await self._call_gemini_with_retry(
+                prompt, document_id=document_id, matter_id=matter_id,
+            )
             result = self._parse_json_response(response)
 
             if result and result.get("found"):
@@ -472,6 +482,8 @@ class CitationVerifier:
         self,
         citation_quote: str,
         act_text: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> QuoteComparison:
         """Compare quoted text from citation against Act text.
 
@@ -502,7 +514,9 @@ class CitationVerifier:
         )
 
         try:
-            response = await self._call_gemini_with_retry(prompt)
+            response = await self._call_gemini_with_retry(
+                prompt, document_id=document_id, matter_id=matter_id,
+            )
             result = self._parse_json_response(response)
 
             if result:
@@ -568,7 +582,9 @@ class CitationVerifier:
         )
 
         try:
-            response = await self._call_gemini_with_retry(prompt)
+            response = await self._call_gemini_with_retry(
+                prompt, document_id=document_id, matter_id=matter_id,
+            )
             result = self._parse_json_response(response)
 
             if result and result.get("explanation"):
@@ -593,6 +609,8 @@ class CitationVerifier:
         act_name: str,
         section: str,
         available_sections: list[str],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> str:
         """Generate explanation for section not found.
 
@@ -611,7 +629,9 @@ class CitationVerifier:
             "The citation may contain a typographical error or reference a non-existent section."
         )
 
-    async def _call_gemini_with_retry(self, prompt: str) -> str:
+    async def _call_gemini_with_retry(
+        self, prompt: str, document_id: str | None = None, matter_id: str | None = None,
+    ) -> str:
         """Call Gemini API with retry logic and rate limiting.
 
         Uses centralized rate limiter to prevent 429 errors across all
@@ -647,6 +667,8 @@ class CitationVerifier:
                 tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="citation_verification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),

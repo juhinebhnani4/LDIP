@@ -62,7 +62,7 @@ class TestMatterCostService:
                 "created_at": "2026-01-27T10:00:00Z",
             },
             {
-                "provider": "gpt-4-turbo-preview",
+                "provider": "gpt-4o",
                 "operation": "qa_generation",
                 "input_tokens": 500,
                 "output_tokens": 150,

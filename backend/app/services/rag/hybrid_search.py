@@ -383,7 +383,7 @@ class HybridSearchService:
         try:
             # Generate query embedding for semantic search (skip if pre-computed)
             if query_embedding is None:
-                query_embedding = await self.embedder.embed_text(query)
+                query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
 
             # Handle embedding service failure (returns None when circuit is open or API fails)
             if query_embedding is None:
@@ -674,7 +674,7 @@ class HybridSearchService:
 
         try:
             # Generate query embedding
-            query_embedding = await self.embedder.embed_text(query)
+            query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
 
             # Handle embedding service failure
             if query_embedding is None:
@@ -750,6 +750,7 @@ class HybridSearchService:
         hybrid_limit: int = DEFAULT_HYBRID_LIMIT,
         rerank_top_n: int = DEFAULT_RERANK_TOP_N,
         weights: SearchWeights | None = None,
+        query_embedding: list[float] | None = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking.
 
@@ -795,6 +796,7 @@ class HybridSearchService:
             matter_id=matter_id,
             limit=hybrid_limit,
             weights=weights,
+            query_embedding=query_embedding,
         )
 
         weights = weights or SearchWeights()
@@ -828,6 +830,7 @@ class HybridSearchService:
                 query=query,
                 documents=documents,
                 top_n=rerank_top_n,
+                matter_id=matter_id,
             )
 
             # Step 4: Map reranked indices back to original results
@@ -918,6 +921,68 @@ class HybridSearchService:
             )
 
 
+    async def _search_library_chunks(
+        self,
+        query_embedding: list[float],
+        matter_id: str,
+        library_limit: int = 10,
+    ) -> list[SearchResult]:
+        """Search linked library chunks for a matter via Supabase RPC.
+
+        Returns library SearchResult items with is_library=True.
+        Silently returns empty list on failure (library search is best-effort).
+        """
+        library_results: list[SearchResult] = []
+        supabase = get_supabase_client()
+        if supabase is None:
+            return library_results
+
+        try:
+            response = supabase.rpc(
+                "match_library_chunks_for_matter",
+                {
+                    "query_embedding": query_embedding,
+                    "filter_matter_id": matter_id,
+                    "match_count": library_limit,
+                    "similarity_threshold": 0.5,
+                }
+            ).execute()
+
+            if response.data:
+                for idx, r in enumerate(response.data):
+                    library_results.append(
+                        SearchResult(
+                            id=str(r["id"]),
+                            matter_id=matter_id,
+                            document_id=str(r["library_document_id"]),
+                            content=r["content"],
+                            page_number=r.get("page_number"),
+                            bbox_ids=None,
+                            chunk_type=r["chunk_type"],
+                            token_count=0,
+                            bm25_rank=None,
+                            semantic_rank=idx + 1,
+                            rrf_score=r["similarity"],
+                            is_library=True,
+                            library_document_title=r.get("document_title"),
+                        )
+                    )
+
+                logger.info(
+                    "library_search_results",
+                    matter_id=matter_id,
+                    count=len(library_results),
+                )
+
+        except Exception as e:
+            logger.warning(
+                "library_search_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+
+        return library_results
+
     async def search_with_library(
         self,
         query: str,
@@ -973,7 +1038,7 @@ class HybridSearchService:
 
         try:
             # Step 1: Generate query embedding ONCE for both matter and library search (C4 fix)
-            query_embedding = await self.embedder.embed_text(query)
+            query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
 
             # C4: If embedding fails, fall back to matter-only BM25 search
             # instead of passing None to search() which would try embedding again
@@ -1004,54 +1069,12 @@ class HybridSearchService:
 
             # Step 3: Search linked library chunks (semantic only for now)
             library_results: list[SearchResult] = []
-
             if query_embedding is not None:
-                supabase = get_supabase_client()
-                if supabase is not None:
-                    try:
-                        response = supabase.rpc(
-                            "match_library_chunks_for_matter",
-                            {
-                                "query_embedding": query_embedding,
-                                "filter_matter_id": matter_id,
-                                "match_count": library_limit,
-                                "similarity_threshold": 0.5,
-                            }
-                        ).execute()
-
-                        if response.data:
-                            for idx, r in enumerate(response.data):
-                                library_results.append(
-                                    SearchResult(
-                                        id=str(r["id"]),
-                                        matter_id=matter_id,  # Context matter
-                                        document_id=str(r["library_document_id"]),
-                                        content=r["content"],
-                                        page_number=r.get("page_number"),
-                                        bbox_ids=None,  # Library chunks don't have bbox
-                                        chunk_type=r["chunk_type"],
-                                        token_count=0,  # Not tracked for library
-                                        bm25_rank=None,
-                                        semantic_rank=idx + 1,
-                                        rrf_score=r["similarity"],
-                                        is_library=True,
-                                        library_document_title=r.get("document_title"),
-                                    )
-                                )
-
-                            logger.info(
-                                "library_search_results",
-                                matter_id=matter_id,
-                                count=len(library_results),
-                            )
-
-                    except Exception as e:
-                        # Don't fail the whole search if library search fails
-                        logger.warning(
-                            "library_search_failed",
-                            matter_id=matter_id,
-                            error=str(e),
-                        )
+                library_results = await self._search_library_chunks(
+                    query_embedding=query_embedding,
+                    matter_id=matter_id,
+                    library_limit=library_limit,
+                )
 
             # Step 4: Merge results using RRF
             all_results = list(matter_result.results)
@@ -1100,6 +1123,84 @@ class HybridSearchService:
                 code="SEARCH_WITH_LIBRARY_FAILED",
                 is_retryable=True,
             ) from e
+
+    async def search_with_rerank_and_library(
+        self,
+        query: str,
+        matter_id: str,
+        hybrid_limit: int = DEFAULT_HYBRID_LIMIT,
+        rerank_top_n: int = DEFAULT_RERANK_TOP_N,
+        library_limit: int = 10,
+        weights: SearchWeights | None = None,
+    ) -> RerankedSearchResult:
+        """Execute hybrid search with Cohere reranking AND library results.
+
+        Pipeline: embed -> hybrid_search -> cohere_rerank -> library_search -> merge
+
+        Pre-computes embedding once and shares it between matter search and
+        library search to avoid 2x embedding API cost.
+        """
+        try:
+            validate_namespace(matter_id)
+        except ValueError as e:
+            raise HybridSearchServiceError(
+                message=str(e),
+                code="INVALID_PARAMETER",
+                is_retryable=False,
+            ) from e
+
+        # Step 1: Pre-compute embedding (shared by matter search + library search)
+        query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
+
+        # Step 2: Reranked matter results (passes embedding to avoid 2x cost)
+        rerank_result = await self.search_with_rerank(
+            query=query,
+            matter_id=matter_id,
+            hybrid_limit=hybrid_limit,
+            rerank_top_n=rerank_top_n,
+            weights=weights,
+            query_embedding=query_embedding,
+        )
+
+        # Step 3: Library results (best-effort, uses same embedding)
+        if query_embedding is not None:
+            library_results = await self._search_library_chunks(
+                query_embedding=query_embedding,
+                matter_id=matter_id,
+                library_limit=library_limit,
+            )
+
+            if library_results:
+                # Convert library SearchResults to RerankedSearchResultItems
+                for lib in library_results:
+                    rerank_result.results.append(
+                        RerankedSearchResultItem(
+                            id=lib.id,
+                            matter_id=lib.matter_id,
+                            document_id=lib.document_id,
+                            content=lib.content,
+                            page_number=lib.page_number,
+                            bbox_ids=lib.bbox_ids,
+                            chunk_type=lib.chunk_type,
+                            token_count=lib.token_count,
+                            bm25_rank=lib.bm25_rank,
+                            semantic_rank=lib.semantic_rank,
+                            rrf_score=lib.rrf_score,
+                            relevance_score=lib.rrf_score,  # Use similarity as relevance
+                            is_library=True,
+                            library_document_title=lib.library_document_title,
+                        )
+                    )
+                rerank_result.total_candidates += len(library_results)
+
+                logger.info(
+                    "search_with_rerank_and_library_complete",
+                    matter_id=matter_id,
+                    reranked_count=len(rerank_result.results) - len(library_results),
+                    library_count=len(library_results),
+                )
+
+        return rerank_result
 
 
 @lru_cache(maxsize=1)

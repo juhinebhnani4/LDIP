@@ -51,12 +51,9 @@ CLASSIFICATION_MAP: dict[EvidenceType, ContradictionType] = {
     EvidenceType.SEMANTIC_CONFLICT: ContradictionType.SEMANTIC_CONTRADICTION,
 }
 
-# GPT-4 Turbo pricing (same as comparator)
-# NOTE: These are approximate costs for GPT-4 Turbo (gpt-4-turbo-preview).
-# Actual costs may vary based on openai_comparison_model setting in config.
-# Update these constants if using a different model (e.g., GPT-4o, GPT-4-mini).
-GPT4_INPUT_COST_PER_1K = 0.01
-GPT4_OUTPUT_COST_PER_1K = 0.03
+# GPT-4o pricing (same as comparator) — 75% cheaper than GPT-4 Turbo
+GPT4_INPUT_COST_PER_1K = 0.0025  # $2.50 per 1M input tokens
+GPT4_OUTPUT_COST_PER_1K = 0.01  # $10 per 1M output tokens
 
 # Retry settings
 MAX_RETRIES = 3
@@ -338,7 +335,7 @@ class ContradictionClassifier:
     Classification Strategy:
     - PREFER rule-based classification from EvidenceType (80%+ of cases)
     - Only use GPT-4 fallback for ambiguous cases (EvidenceType.NONE)
-    - Cost: Rule-based = $0, LLM fallback ~$0.03 per call
+    - Cost: Rule-based = $0, LLM fallback ~$0.008 per call (GPT-4o)
 
     Example:
         >>> classifier = ContradictionClassifier()
@@ -393,6 +390,8 @@ class ContradictionClassifier:
     async def classify_contradiction(
         self,
         comparison: StatementPairComparison,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> ClassificationResult:
         """Classify a single contradiction by type.
 
@@ -445,7 +444,9 @@ class ContradictionClassifier:
             reason="evidence_type_none_or_ambiguous",
         )
 
-        classification_result, cost_tracker = await self._classify_with_llm(comparison)
+        classification_result, cost_tracker = await self._classify_with_llm(
+            comparison, document_id=document_id, matter_id=matter_id,
+        )
         processing_time = int((time.time() - start_time) * 1000)
 
         logger.info(
@@ -563,6 +564,8 @@ class ContradictionClassifier:
     async def _classify_with_llm(
         self,
         comparison: StatementPairComparison,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> tuple[ClassifiedContradiction, ClassificationCostTracker]:
         """Classify contradiction using GPT-4 fallback.
 
@@ -607,8 +610,10 @@ class ContradictionClassifier:
 
                 # Persist cost to DB
                 tracker = CostTracker(
-                    provider=LLMProvider.OPENAI_GPT4_TURBO,
+                    provider=LLMProvider.OPENAI_GPT4O,
                     operation="contradiction_classification",
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 tracker.add_tokens(
                     input_tokens=cost_tracker.input_tokens,
@@ -705,6 +710,8 @@ class ContradictionClassifier:
     async def classify_all(
         self,
         comparisons: list[StatementPairComparison],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> list[ClassificationResult]:
         """Classify all contradictions in a batch.
 
@@ -727,7 +734,9 @@ class ContradictionClassifier:
         results: list[ClassificationResult] = []
         for comparison in contradictions:
             try:
-                result = await self.classify_contradiction(comparison)
+                result = await self.classify_contradiction(
+                    comparison, document_id=document_id, matter_id=matter_id,
+                )
                 results.append(result)
             except ClassifierError as e:
                 logger.warning(

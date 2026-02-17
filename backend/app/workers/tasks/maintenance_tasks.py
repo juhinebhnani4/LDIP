@@ -1016,8 +1016,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
 
         stuck_docs = (
             client.table("documents")
-            .select("id, matter_id, filename, status, updated_at")
+            .select("id, matter_id, filename, status, updated_at, extracted_text")
             .eq("status", "ocr_complete")
+            .not_.is_("extracted_text", "null")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
         )
@@ -1113,6 +1114,31 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
                 )
                 results["errors"].append({"document_id": doc_id, "error": str(e)})
 
+        # Also recover stuck library documents (pending/processing for too long)
+        try:
+            stuck_lib_docs = (
+                client.table("library_documents")
+                .select("id, storage_path, status")
+                .in_("status", ["pending", "processing"])
+                .lt("updated_at", cutoff_time.isoformat())
+                .execute()
+            )
+            for lib_doc in (stuck_lib_docs.data or []):
+                if lib_doc.get("storage_path"):
+                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    ocr_and_process_library_document.apply_async(
+                        kwargs={"library_document_id": lib_doc["id"], "storage_path": lib_doc["storage_path"]},
+                        queue="default",
+                    )
+                    results["resumed"] += 1
+                    logger.info(
+                        "resume_stuck_library_document",
+                        library_document_id=lib_doc["id"],
+                        status=lib_doc["status"],
+                    )
+        except Exception as e:
+            logger.warning("resume_stuck_library_documents_failed", error=str(e))
+
         logger.info(
             "resume_stuck_pipelines_completed",
             checked=results["checked"],
@@ -1142,7 +1168,6 @@ def _dispatch_from_chunking(document_id: str, matter_id: str) -> None:
         document_id=document_id,
         matter_id=matter_id,
         job_id=None,  # No job tracking for recovery
-        skip_downstream_dispatch=False,
     )
     chain.apply_async(queue="default")
 
@@ -1155,13 +1180,15 @@ def _dispatch_from_chunking(document_id: str, matter_id: str) -> None:
 
 
 def _dispatch_from_embedding(document_id: str, matter_id: str) -> None:
-    """Dispatch pipeline from embedding stage onwards."""
+    """Dispatch pipeline from embedding stage onwards.
+
+    extract_entities fans out to citations, dates, and aliases on completion.
+    """
     from celery import chain as celery_chain
 
     from app.workers.tasks.document_tasks import (
         embed_chunks,
         extract_entities,
-        resolve_aliases,
     )
 
     # Pass prev_result dict with document_id for chain tasks
@@ -1170,7 +1197,6 @@ def _dispatch_from_embedding(document_id: str, matter_id: str) -> None:
     task_chain = celery_chain(
         embed_chunks.s(prev_result),
         extract_entities.s(),
-        resolve_aliases.s(skip_downstream_dispatch=False),
     )
     task_chain.apply_async(queue="default")
 
@@ -1183,22 +1209,19 @@ def _dispatch_from_embedding(document_id: str, matter_id: str) -> None:
 
 
 def _dispatch_from_entities(document_id: str, matter_id: str) -> None:
-    """Dispatch pipeline from entity extraction stage onwards."""
-    from celery import chain as celery_chain
+    """Dispatch pipeline from entity extraction stage onwards.
 
-    from app.workers.tasks.document_tasks import (
-        extract_entities,
-        resolve_aliases,
-    )
+    extract_entities fans out to citations, dates, and aliases on completion.
+    """
+    from app.workers.tasks.document_tasks import extract_entities
 
     # Pass prev_result dict with document_id for chain tasks
     prev_result = {"document_id": document_id, "status": "embedded"}
 
-    task_chain = celery_chain(
-        extract_entities.s(prev_result),
-        resolve_aliases.s(skip_downstream_dispatch=False),
+    extract_entities.apply_async(
+        args=[prev_result],
+        queue="default",
     )
-    task_chain.apply_async(queue="default")
 
     logger.info(
         "recovery_pipeline_dispatched",

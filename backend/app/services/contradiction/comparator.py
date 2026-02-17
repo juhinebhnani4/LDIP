@@ -243,6 +243,7 @@ class StatementComparisonService:
             batch_result = await self.comparator.compare_all_entity_statements(
                 entity_statements=entity_statements,
                 max_pairs=max_pairs,
+                matter_id=matter_id,
             )
 
             # Filter by confidence threshold
@@ -502,6 +503,7 @@ class StatementComparisonService:
         batch_result = await self.comparator.compare_all_entity_statements(
             entity_statements=entity_statements,
             max_pairs=max_pairs,
+            matter_id=matter_id,
         )
 
         # Filter by confidence threshold

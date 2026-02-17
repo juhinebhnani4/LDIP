@@ -266,7 +266,7 @@ class EventEntityLinker:
 
         # Optionally use Gemini for additional extraction
         if use_gemini and self.client:
-            gemini_mentions = await self._extract_mentions_with_gemini(description)
+            gemini_mentions = await self._extract_mentions_with_gemini(description, matter_id=matter_id)
             # Merge mentions, avoiding duplicates
             existing_texts = {m.text.lower() for m in mentions}
             for gm in gemini_mentions:
@@ -355,7 +355,7 @@ class EventEntityLinker:
 
             if use_gemini and self.client:
                 gemini_mentions = await self._extract_mentions_with_gemini(
-                    event.description
+                    event.description, matter_id=matter_id,
                 )
                 existing_texts = {m.text.lower() for m in mentions}
                 for gm in gemini_mentions:
@@ -706,7 +706,7 @@ class EventEntityLinker:
         return text in common_phrases
 
     async def _extract_mentions_with_gemini(
-        self, description: str
+        self, description: str, matter_id: str | None = None,
     ) -> list[EntityMention]:
         """Use Gemini to extract entity mentions for complex cases.
 
@@ -735,6 +735,7 @@ class EventEntityLinker:
                 tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
                     operation="timeline_entity_linking",
+                    matter_id=matter_id,
                 )
                 tracker.add_tokens(
                     input_tokens=estimate_tokens(prompt),

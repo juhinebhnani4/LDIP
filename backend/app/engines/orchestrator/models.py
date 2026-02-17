@@ -204,3 +204,60 @@ class MultiIntentClassification:
     def has_engine(self, engine: EngineType) -> bool:
         """Check if engine is in required engines."""
         return engine in self.required_engines
+
+    def to_cache(self) -> dict:
+        """Serialize to a JSON-safe dict for Redis caching."""
+        return {
+            "signals": [
+                {
+                    "engine": s.engine.value,
+                    "confidence": s.confidence,
+                    "source": s.source.value,
+                    "pattern_matched": s.pattern_matched,
+                }
+                for s in self.signals
+            ],
+            "compound_intent": {
+                "name": self.compound_intent.name,
+                "primary_engine": self.compound_intent.primary_engine.value,
+                "supporting_engines": [e.value for e in self.compound_intent.supporting_engines],
+                "aggregation_strategy": self.compound_intent.aggregation_strategy,
+            } if self.compound_intent else None,
+            "reasoning": self.reasoning,
+            "llm_was_used": self.llm_was_used,
+        }
+
+    @classmethod
+    def from_cache(cls, data: dict) -> MultiIntentClassification:
+        """Deserialize from a cached dict."""
+        signals = [
+            IntentSignal(
+                engine=EngineType(s["engine"]),
+                confidence=s["confidence"],
+                source=IntentSource(s["source"]),
+                pattern_matched=s.get("pattern_matched"),
+            )
+            for s in data.get("signals", [])
+        ]
+        compound_data = data.get("compound_intent")
+        compound = None
+        if compound_data:
+            compound = CompoundIntent(
+                name=compound_data["name"],
+                primary_engine=EngineType(compound_data["primary_engine"]),
+                supporting_engines=[EngineType(e) for e in compound_data["supporting_engines"]],
+                aggregation_strategy=compound_data["aggregation_strategy"],
+            )
+
+        # Rebuild QueryProfile from signals + query (not cached to avoid staleness)
+        from app.engines.rag.query_profile import QueryProfile
+
+        result = cls(
+            signals=signals,
+            compound_intent=compound,
+            reasoning=data.get("reasoning", ""),
+            llm_was_used=data.get("llm_was_used", False),
+        )
+        # Derive profile from the deserialized signals
+        result.query_profile = QueryProfile.from_intent_signals(signals, "")
+        return result

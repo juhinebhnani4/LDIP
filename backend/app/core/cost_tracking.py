@@ -208,6 +208,7 @@ class CostTracker:
     entity_id: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_input_tokens: int = 0
     start_time: float = field(default_factory=time.time)
     _logged: bool = field(default=False, repr=False)
 
@@ -250,6 +251,13 @@ class CostTracker:
         return usd_to_inr(self.total_cost_usd)
 
     @property
+    def cache_hit_rate(self) -> float:
+        """Calculate cache hit rate (cached / input tokens)."""
+        if self.input_tokens <= 0:
+            return 0.0
+        return self.cached_input_tokens / self.input_tokens
+
+    @property
     def duration_ms(self) -> int:
         """Calculate operation duration in milliseconds."""
         return int((time.time() - self.start_time) * 1000)
@@ -258,15 +266,18 @@ class CostTracker:
         self,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        cached_input_tokens: int = 0,
     ) -> None:
         """Add tokens to the tracker.
 
         Args:
             input_tokens: Number of input tokens to add.
             output_tokens: Number of output tokens to add.
+            cached_input_tokens: Number of cached input tokens (subset of input_tokens).
         """
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
+        self.cached_input_tokens += cached_input_tokens
 
     def add_units(self, units: int) -> None:
         """Add units (pages, searches) for non-token-based pricing.
@@ -299,6 +310,10 @@ class CostTracker:
             "duration_ms": self.duration_ms,
         }
 
+        if self.cached_input_tokens > 0:
+            log_data["cached_input_tokens"] = self.cached_input_tokens
+            log_data["cache_hit_rate"] = round(self.cache_hit_rate, 3)
+
         if self.matter_id:
             log_data["matter_id"] = self.matter_id
         if self.document_id:
@@ -318,7 +333,7 @@ class CostTracker:
         Returns:
             Dictionary with all cost tracking data.
         """
-        return {
+        result = {
             "provider": self.provider.value,
             "operation": self.operation,
             "matter_id": self.matter_id,
@@ -336,6 +351,10 @@ class CostTracker:
             "total_cost_usd": self.total_cost_usd,
             "duration_ms": self.duration_ms,
         }
+        if self.cached_input_tokens > 0:
+            result["cached_input_tokens"] = self.cached_input_tokens
+            result["cache_hit_rate"] = round(self.cache_hit_rate, 3)
+        return result
 
 
 # =============================================================================
@@ -657,7 +676,12 @@ class CostPersistenceService:
                 # Exchange rate at time of tracking
                 "usd_to_inr_rate": USD_TO_INR_RATE,
                 "duration_ms": tracker.duration_ms,
-                "metadata": metadata or {},
+                "metadata": {
+                    **(metadata or {}),
+                    **({"cached_input_tokens": tracker.cached_input_tokens,
+                        "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
+                       if tracker.cached_input_tokens > 0 else {}),
+                },
             }
 
             result = self.supabase.table("llm_costs").insert(record).execute()
@@ -916,7 +940,11 @@ def persist_cost_sync(tracker: CostTracker) -> str | None:
             "total_cost_usd": tracker.total_cost_usd,
             "usd_to_inr_rate": USD_TO_INR_RATE,
             "duration_ms": tracker.duration_ms,
-            "metadata": {},
+            "metadata": {
+                **({"cached_input_tokens": tracker.cached_input_tokens,
+                    "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
+                   if tracker.cached_input_tokens > 0 else {}),
+            },
         }
         result = service.supabase.table("llm_costs").insert(record).execute()
         return result.data[0].get("id") if result.data else None

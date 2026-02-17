@@ -563,6 +563,24 @@ JSON response:'''
                 max_output_tokens=200,
             ),
         )
+
+        # Track cost
+        from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
+        usage = getattr(response, 'usage_metadata', None)
+        tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="citation_act_validation",
+        )
+        if usage:
+            input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
+            output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+        else:
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(response.text) if response.text else 0
+        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+        tracker.log_cost()
+        await persist_cost(tracker)
+
         response_text = response.text.strip()
 
         # Parse JSON response

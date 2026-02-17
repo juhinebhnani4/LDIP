@@ -16,6 +16,7 @@ DO NOT use GPT-4 - it's 30x more expensive for a simple task.
 Fallback: When circuit is open, defaults to RAG engine with warning.
 """
 
+import hashlib
 import json
 import re
 import time
@@ -502,8 +503,11 @@ class IntentAnalyzer:
         response_text = response.choices[0].message.content or ""
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
+        cached_tokens = 0
+        if response.usage and response.usage.prompt_tokens_details:
+            cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
-        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
         tracker.log_cost()
         await persist_cost(tracker)
 
@@ -768,6 +772,9 @@ class MultiIntentAnalyzer:
         4
     """
 
+    # Cache TTL for intent classification results (5 minutes)
+    INTENT_CACHE_TTL = 300
+
     def __init__(self, llm_client=None) -> None:
         """Initialize multi-intent analyzer.
 
@@ -777,6 +784,7 @@ class MultiIntentAnalyzer:
         """
         self._llm = llm_client
         self._client = None
+        self._redis = None
         settings = get_settings()
         self.api_key = settings.openai_api_key
         self.model_name = settings.openai_intent_model
@@ -796,6 +804,52 @@ class MultiIntentAnalyzer:
                 logger.warning("multi_intent_llm_init_failed", error=str(e))
                 return None
         return self._client
+
+    async def _ensure_redis(self):
+        """Lazily initialize Redis client for caching."""
+        if self._redis is None:
+            try:
+                from app.services.memory.redis_client import get_redis_client
+                self._redis = await get_redis_client()
+            except Exception as e:
+                logger.debug("intent_cache_redis_init_failed", error=str(e))
+        return self._redis
+
+    @staticmethod
+    def _cache_key(query: str) -> str:
+        """Generate cache key from normalized query text."""
+        normalized = query.lower().strip()
+        query_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        return f"intent_cache:{query_hash}"
+
+    async def _get_cached_classification(self, query: str) -> MultiIntentClassification | None:
+        """Check Redis for a cached classification result."""
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return None
+            data = await redis.get(self._cache_key(query))
+            if data is None:
+                return None
+            payload = json.loads(data if isinstance(data, str) else data.decode("utf-8"))
+            result = MultiIntentClassification.from_cache(payload)
+            logger.info("intent_cache_hit", query_length=len(query))
+            return result
+        except Exception as e:
+            logger.debug("intent_cache_get_failed", error=str(e))
+            return None
+
+    async def _set_cached_classification(self, query: str, result: MultiIntentClassification) -> None:
+        """Store classification result in Redis with short TTL."""
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return
+            payload = result.to_cache()
+            await redis.set(self._cache_key(query), json.dumps(payload), ex=self.INTENT_CACHE_TTL)
+            logger.debug("intent_cache_set", query_length=len(query))
+        except Exception as e:
+            logger.debug("intent_cache_set_failed", error=str(e))
 
     async def classify(self, query: str) -> MultiIntentClassification:
         """Main entry point for query classification.
@@ -839,6 +893,11 @@ class MultiIntentAnalyzer:
         needs_llm = self._needs_llm_refinement(signals)
 
         if needs_llm and self.client:
+            # Check cache before calling LLM
+            cached = await self._get_cached_classification(query)
+            if cached is not None:
+                return cached
+
             signals = await self._llm_refine_signals(query, signals)
 
         # Stage 3: Detect compound intents
@@ -869,6 +928,10 @@ class MultiIntentAnalyzer:
             aggregation_strategy=result.aggregation_strategy,
             processing_time_ms=processing_time,
         )
+
+        # Cache the result if LLM was used (pattern-only results are fast, no need to cache)
+        if needs_llm and self.client is not None:
+            await self._set_cached_classification(query, result)
 
         return result
 
@@ -1018,9 +1081,13 @@ class MultiIntentAnalyzer:
             )
 
             if response.usage:
+                cached_tokens = 0
+                if response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
                 tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
+                    cached_input_tokens=cached_tokens,
                 )
             tracker.log_cost()
             await persist_cost(tracker)

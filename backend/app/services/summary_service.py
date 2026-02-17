@@ -911,9 +911,13 @@ class SummaryService:
 
             # Track tokens from response
             if response.usage:
+                cached_tokens = 0
+                if response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
+                    cached_input_tokens=cached_tokens,
                 )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)
@@ -1050,9 +1054,13 @@ class SummaryService:
 
             # Track tokens from response
             if response.usage:
+                cached_tokens = 0
+                if response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
+                    cached_input_tokens=cached_tokens,
                 )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)
@@ -1151,9 +1159,13 @@ class SummaryService:
 
             # Track tokens from response
             if response.usage:
+                cached_tokens = 0
+                if response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
+                    cached_input_tokens=cached_tokens,
                 )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)

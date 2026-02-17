@@ -20,6 +20,12 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+    persist_cost,
+)
 from app.core.gemini_client import get_gemini_client
 from app.models.memory import SessionMessage
 from app.services.memory.redis_client import get_redis_client
@@ -134,6 +140,24 @@ class ConversationSummarizer:
             )
 
             summary = response.text.strip() if response.text else None
+
+            # Track cost (Gemini returns actual token counts in usage_metadata)
+            cost_tracker = CostTracker(
+                provider=LLMProvider.GEMINI_FLASH,
+                operation="conversation_summarization",
+            )
+            usage = getattr(response, 'usage_metadata', None)
+            if usage:
+                input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
+                output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                cached_tokens = getattr(usage, 'cached_content_token_count', 0) or 0
+            else:
+                input_tokens = estimate_tokens(prompt)
+                output_tokens = estimate_tokens(summary) if summary else 0
+                cached_tokens = 0
+            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+            cost_tracker.log_cost()
+            await persist_cost(cost_tracker)
 
             if summary:
                 logger.debug(

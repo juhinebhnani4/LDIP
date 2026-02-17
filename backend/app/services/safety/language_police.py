@@ -395,6 +395,9 @@ class LanguagePolice:
                 # Extract token counts
                 input_tokens = response.usage.prompt_tokens if response.usage else 0
                 output_tokens = response.usage.completion_tokens if response.usage else 0
+                cached_tokens = 0
+                if response.usage and response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
                 # Parse response
                 response_text = response.choices[0].message.content
@@ -405,7 +408,7 @@ class LanguagePolice:
                     provider=LLMProvider.OPENAI_GPT4O_MINI,
                     operation="safety_language_policing",
                 )
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
                 tracker.log_cost()
                 await persist_cost(tracker)
 

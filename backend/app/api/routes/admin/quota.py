@@ -46,6 +46,7 @@ from app.services.queue_metrics_service import (
     DEFAULT_ALERT_THRESHOLD,
     get_queue_metrics_service,
 )
+from app.services.matter_cost_service import normalize_operation
 from app.services.supabase.client import get_service_client
 
 router = APIRouter(prefix="/admin", tags=["admin-quota"])
@@ -768,8 +769,8 @@ async def get_usage_dashboard(
             provider_map[provider]["inp"] += inp
             provider_map[provider]["out"] += out
 
-            # Operation
-            operation = row.get("operation", "unknown")
+            # Operation (normalize to grouped categories)
+            operation = normalize_operation(row.get("operation", "unknown"))
             if operation not in operation_map:
                 operation_map[operation] = {"usd": 0.0, "inr": 0.0, "requests": 0, "inp": 0, "out": 0}
             operation_map[operation]["usd"] += cost_usd

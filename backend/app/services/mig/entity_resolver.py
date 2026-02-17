@@ -24,6 +24,7 @@ from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
 from app.core.gemini_client import get_gemini_client
 from app.models.entity import EntityEdgeCreate, EntityNode, EntityType, RelationshipType
 from app.services.mig.alias_prompts import (
@@ -561,6 +562,23 @@ class EntityResolver:
                         system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
                     ),
                 )
+
+                # Track cost
+                usage = getattr(response, 'usage_metadata', None)
+                tracker = CostTracker(
+                    provider=LLMProvider.GEMINI_FLASH,
+                    operation="entity_alias_resolution",
+                )
+                if usage:
+                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
+                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                else:
+                    input_tokens = estimate_tokens(prompt)
+                    output_tokens = estimate_tokens(response.text) if response.text else 0
+                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                tracker.log_cost()
+                await persist_cost(tracker)
+
                 result = self._parse_context_response(response.text)
 
                 logger.debug(
@@ -635,6 +653,23 @@ class EntityResolver:
                         system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
                     ),
                 )
+
+                # Track cost
+                usage = getattr(response, 'usage_metadata', None)
+                tracker = CostTracker(
+                    provider=LLMProvider.GEMINI_FLASH,
+                    operation="entity_alias_resolution_batch",
+                )
+                if usage:
+                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
+                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                else:
+                    input_tokens = estimate_tokens(prompt)
+                    output_tokens = estimate_tokens(response.text) if response.text else 0
+                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                tracker.log_cost()
+                await persist_cost(tracker)
+
                 results = self._parse_batch_response(response.text)
 
                 # Map results by pair_id

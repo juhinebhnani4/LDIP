@@ -258,10 +258,17 @@ class RAGAnswerGenerator:
                         answer_length=len(answer_text),
                     )
 
-                # Track costs (Gemini doesn't expose token counts, so estimate)
-                input_tokens = estimate_tokens(user_prompt)
-                output_tokens = estimate_tokens(answer_text)
-                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                # Track costs (use actual Gemini token counts with fallback)
+                usage = getattr(response, 'usage_metadata', None)
+                if usage:
+                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
+                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                    cached_tokens = getattr(usage, 'cached_content_token_count', 0) or 0
+                else:
+                    input_tokens = estimate_tokens(user_prompt)
+                    output_tokens = estimate_tokens(answer_text)
+                    cached_tokens = 0
+                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
                 cost_tracker.log_cost()
                 await persist_cost(cost_tracker)
 

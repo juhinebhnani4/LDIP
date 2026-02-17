@@ -14,6 +14,7 @@ CRITICAL: Uses GPT-4o-mini (NOT GPT-4) - 200x cheaper for input tokens.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import threading
 import time
@@ -124,6 +125,9 @@ class SubtleViolationDetector:
         'implicit_conclusion_request'
     """
 
+    # Cache TTL for safety detection results (2 minutes — shorter for security)
+    SAFETY_CACHE_TTL = 120
+
     def __init__(self) -> None:
         """Initialize subtle violation detector.
 
@@ -134,6 +138,7 @@ class SubtleViolationDetector:
         self.model_name = settings.openai_safety_model
         self.timeout = settings.safety_llm_timeout
         self._client = None
+        self._redis = None
 
         logger.info(
             "subtle_violation_detector_configured",
@@ -204,6 +209,61 @@ class SubtleViolationDetector:
 
         return sanitized
 
+    async def _ensure_redis(self):
+        """Lazily initialize Redis client for caching."""
+        if self._redis is None:
+            try:
+                from app.services.memory.redis_client import get_redis_client
+                self._redis = await get_redis_client()
+            except Exception as e:
+                logger.debug("safety_cache_redis_init_failed", error=str(e))
+        return self._redis
+
+    @staticmethod
+    def _cache_key(query: str) -> str:
+        """Generate cache key from normalized query text."""
+        normalized = query.lower().strip()
+        query_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        return f"safety_cache:{query_hash}"
+
+    async def _get_cached_result(self, query: str) -> SubtleViolationCheck | None:
+        """Check Redis for a cached safety check result."""
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return None
+            data = await redis.get(self._cache_key(query))
+            if data is None:
+                return None
+            payload = json.loads(data if isinstance(data, str) else data.decode("utf-8"))
+            result = SubtleViolationCheck(**payload)
+            logger.info("safety_cache_hit", query_length=len(query))
+            return result
+        except Exception as e:
+            logger.debug("safety_cache_get_failed", error=str(e))
+            return None
+
+    async def _set_cached_result(self, query: str, result: SubtleViolationCheck) -> None:
+        """Store safety check result in Redis with short TTL."""
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return
+            payload = {
+                "is_safe": result.is_safe,
+                "violation_detected": result.violation_detected,
+                "violation_type": result.violation_type,
+                "explanation": result.explanation,
+                "suggested_rewrite": result.suggested_rewrite,
+                "confidence": result.confidence,
+                "llm_cost_usd": result.llm_cost_usd,
+                "check_time_ms": result.check_time_ms,
+            }
+            await redis.set(self._cache_key(query), json.dumps(payload), ex=self.SAFETY_CACHE_TTL)
+            logger.debug("safety_cache_set", query_length=len(query))
+        except Exception as e:
+            logger.debug("safety_cache_set_failed", error=str(e))
+
     async def detect_violation(self, query: str) -> SubtleViolationCheck:
         """Detect subtle legal conclusion requests using GPT-4o-mini.
 
@@ -219,6 +279,11 @@ class SubtleViolationDetector:
             SubtleViolationCheck with detection result.
         """
         start_time = time.perf_counter()
+
+        # Check cache before LLM call
+        cached = await self._get_cached_result(query)
+        if cached is not None:
+            return cached
 
         # H2 Fix: Sanitize query before sending to LLM
         sanitized_query = self._sanitize_query(query)
@@ -244,7 +309,7 @@ class SubtleViolationDetector:
                     check_time_ms=round(check_time_ms, 2),
                     cost_usd=round(cost_usd, 6),
                 )
-                return SubtleViolationCheck(
+                check = SubtleViolationCheck(
                     is_safe=True,
                     violation_detected=False,
                     explanation=result.get("explanation", "Query is safe"),
@@ -252,6 +317,8 @@ class SubtleViolationDetector:
                     llm_cost_usd=cost_usd,
                     check_time_ms=check_time_ms,
                 )
+                await self._set_cached_result(query, check)
+                return check
 
             # Handle blocked queries
             violation_type = result.get("violation_type")
@@ -263,7 +330,7 @@ class SubtleViolationDetector:
                 check_time_ms=round(check_time_ms, 2),
             )
 
-            return SubtleViolationCheck(
+            check = SubtleViolationCheck(
                 is_safe=False,
                 violation_detected=True,
                 violation_type=violation_type,
@@ -273,6 +340,8 @@ class SubtleViolationDetector:
                 llm_cost_usd=cost_usd,
                 check_time_ms=check_time_ms,
             )
+            await self._set_cached_result(query, check)
+            return check
 
         except OpenAIConfigurationError:
             # Re-raise configuration errors (non-retryable)
@@ -330,6 +399,9 @@ class SubtleViolationDetector:
                 # Extract token counts
                 input_tokens = response.usage.prompt_tokens if response.usage else 0
                 output_tokens = response.usage.completion_tokens if response.usage else 0
+                cached_tokens = 0
+                if response.usage and response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
                 # Parse response
                 response_text = response.choices[0].message.content
@@ -340,7 +412,7 @@ class SubtleViolationDetector:
                     provider=LLMProvider.OPENAI_GPT4O_MINI,
                     operation="safety_subtle_detection",
                 )
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
                 tracker.log_cost()
                 await persist_cost(tracker)
 

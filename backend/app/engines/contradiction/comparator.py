@@ -621,16 +621,14 @@ class StatementComparator:
                 content_b=content_b,
             )
 
-            # Combine system + user prompt for Gemini
-            full_prompt = f"{GEMINI_SCREENING_SYSTEM_PROMPT}\n\n{screening_prompt}"
-
             # Apply rate limiting to prevent 429 errors
             gemini_limiter = get_rate_limiter(LLMProvider.GEMINI)
             async with gemini_limiter:
                 response = await self.gemini_client.aio.models.generate_content(
                     model=self.screening_model,
-                    contents=full_prompt,
+                    contents=screening_prompt,
                     config=types.GenerateContentConfig(
+                        system_instruction=GEMINI_SCREENING_SYSTEM_PROMPT,
                         response_mime_type="application/json",
                         temperature=0.1,
                     ),
@@ -655,7 +653,7 @@ class StatementComparator:
             quick_reason = parsed.get("quick_reason", "")
 
             # Estimate tokens (Gemini doesn't always provide exact counts)
-            input_tokens = len(full_prompt) // 4  # Rough estimate
+            input_tokens = len(screening_prompt) // 4  # Rough estimate
             output_tokens = len(response_text) // 4
 
             # Persist Gemini screening cost
@@ -711,13 +709,16 @@ class StatementComparator:
         response_text = response.choices[0].message.content or ""
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
+        cached_tokens = 0
+        if response.usage and response.usage.prompt_tokens_details:
+            cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
         # Persist cost to DB
         tracker = CostTracker(
             provider=CostLLMProvider.OPENAI_GPT4_TURBO,
             operation="contradiction_comparison",
         )
-        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
         tracker.log_cost()
         await persist_cost(tracker)
 

@@ -601,6 +601,9 @@ class ContradictionClassifier:
                 # Track tokens
                 cost_tracker.input_tokens = response.usage.prompt_tokens if response.usage else 0
                 cost_tracker.output_tokens = response.usage.completion_tokens if response.usage else 0
+                cached_tokens = 0
+                if response.usage and response.usage.prompt_tokens_details:
+                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
                 # Persist cost to DB
                 tracker = CostTracker(
@@ -610,6 +613,7 @@ class ContradictionClassifier:
                 tracker.add_tokens(
                     input_tokens=cost_tracker.input_tokens,
                     output_tokens=cost_tracker.output_tokens,
+                    cached_input_tokens=cached_tokens,
                 )
                 tracker.log_cost()
                 await persist_cost(tracker)

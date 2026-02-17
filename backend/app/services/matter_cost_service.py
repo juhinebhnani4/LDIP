@@ -22,6 +22,69 @@ from app.services.supabase.client import get_service_client
 logger = structlog.get_logger(__name__)
 
 
+def normalize_operation(operation: str) -> str:
+    """Normalize operation names for display.
+
+    Groups similar operations into user-friendly categories.
+    Used by both per-matter cost widget and admin usage dashboard.
+
+    Args:
+        operation: Raw operation name from database.
+
+    Returns:
+        Normalized operation name.
+    """
+    op_lower = operation.lower()
+
+    # Embedding operations
+    if "embed" in op_lower:
+        return "Embedding"
+
+    # Safety & security operations (safety_subtle_detection, safety_language_policing, security_injection_scan)
+    if any(x in op_lower for x in ["safety", "security", "injection"]):
+        return "Safety"
+
+    # Intent classification (intent_classification, multi_intent_refine)
+    if "intent" in op_lower:
+        return "Intent"
+
+    # Q&A and chat operations (rag_generation, query_rewrite)
+    if any(x in op_lower for x in ["qa", "chat", "rag", "query"]):
+        return "Q&A"
+
+    # Search operations (search_rerank)
+    if "rerank" in op_lower or "search" in op_lower:
+        return "Search"
+
+    # Citation extraction (citation_extraction, citation_verification, citation_act_validation)
+    if "citation" in op_lower:
+        return "Citations"
+
+    # Contradiction detection
+    if "contradiction" in op_lower:
+        return "Contradictions"
+
+    # Timeline extraction (date_extraction, event_classification, timeline_entity_linking)
+    # Must be checked before "entity" to catch timeline_entity_linking
+    if any(x in op_lower for x in ["timeline", "event", "date_extraction"]):
+        return "Timeline"
+
+    # Entity extraction (entity_extraction, entity_alias_resolution)
+    if "entity" in op_lower or "ner" in op_lower or "alias" in op_lower:
+        return "Entities"
+
+    # Summary generation (summary_subject_matter, summary_key_issues, conversation_summarization)
+    if "summar" in op_lower:
+        return "Summary"
+
+    # OCR and document processing
+    if any(x in op_lower for x in ["ocr", "document_ai"]):
+        return "OCR"
+
+    # Default: capitalize first letter
+    return operation.replace("_", " ").title()
+
+
 class MatterCostService:
     """Service for retrieving and aggregating matter-level costs.
 
@@ -232,52 +295,8 @@ class MatterCostService:
         )
 
     def _normalize_operation(self, operation: str) -> str:
-        """Normalize operation names for display.
-
-        Groups similar operations into user-friendly categories.
-
-        Args:
-            operation: Raw operation name from database.
-
-        Returns:
-            Normalized operation name.
-        """
-        op_lower = operation.lower()
-
-        # Embedding operations
-        if "embed" in op_lower:
-            return "Embedding"
-
-        # Q&A and chat operations
-        if any(x in op_lower for x in ["qa", "chat", "rag", "query"]):
-            return "Q&A"
-
-        # Citation extraction
-        if "citation" in op_lower:
-            return "Citations"
-
-        # Entity extraction
-        if "entity" in op_lower or "ner" in op_lower:
-            return "Entities"
-
-        # Contradiction detection
-        if "contradiction" in op_lower:
-            return "Contradictions"
-
-        # Timeline extraction
-        if "timeline" in op_lower or "event" in op_lower:
-            return "Timeline"
-
-        # Summary generation
-        if "summar" in op_lower:
-            return "Summary"
-
-        # OCR and document processing
-        if any(x in op_lower for x in ["ocr", "document_ai"]):
-            return "OCR"
-
-        # Default: capitalize first letter
-        return operation.replace("_", " ").title()
+        """Normalize operation names for display. Delegates to module-level function."""
+        return normalize_operation(operation)
 
 
 # =============================================================================

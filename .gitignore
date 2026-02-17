@@ -70,5 +70,8 @@ docs/COST_TRACKING.html
 tmpclaude-*/
 **/tmpclaude-*/
 
+# Playwright MCP screenshots/snapshots
+.playwright-mcp/
+
 .vercel
 .env*.local

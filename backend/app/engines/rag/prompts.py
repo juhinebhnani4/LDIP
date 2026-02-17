@@ -142,7 +142,7 @@ SYSTEM_PROMPTS: dict[str, str] = {
 
 RAG_ANSWER_USER_PROMPT = """Based on these document excerpts, answer the following question:
 
-<user_query>{query}</user_query>
+{wrapped_query}
 
 DOCUMENT EXCERPTS:
 {context}
@@ -177,7 +177,13 @@ def format_rag_answer_prompt(
         max_chunks=max_chunks,
         max_chunk_content=max_chunk_content,
     )
-    return RAG_ANSWER_USER_PROMPT.format(query=query, context=context)
+    # SECURITY: Escape XML tags in user query to prevent prompt injection (C1)
+    safe_query = wrap_user_query(query)
+
+    return RAG_ANSWER_USER_PROMPT.format(
+        wrapped_query=safe_query,
+        context=context,
+    )
 
 
 def _format_context(

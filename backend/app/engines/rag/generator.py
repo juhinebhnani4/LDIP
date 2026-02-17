@@ -167,6 +167,7 @@ class RAGAnswerGenerator:
             query: User's question.
             chunks: Retrieved document chunks with content and metadata.
             matter_id: Optional matter ID for cost tracking.
+            query_profile: Optional query profile for adaptive parameters.
 
         Returns:
             RAGAnswerResult with generated answer and metadata.
@@ -365,5 +366,8 @@ async def generate_rag_answer(
     """
     generator = get_rag_generator()
     return await generator.generate_answer(
-        query, chunks, matter_id=matter_id, query_profile=query_profile
+        query,
+        chunks,
+        matter_id=matter_id,
+        query_profile=query_profile,
     )

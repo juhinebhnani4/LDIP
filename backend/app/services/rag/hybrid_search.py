@@ -328,6 +328,7 @@ class HybridSearchService:
         limit: int = 20,
         weights: SearchWeights | None = None,
         rrf_k: int = 60,
+        query_embedding: list[float] | None = None,
     ) -> HybridSearchResult:
         """Execute hybrid search with RRF fusion.
 
@@ -341,6 +342,7 @@ class HybridSearchService:
             limit: Max results to return (default 20 for reranking).
             weights: Optional custom weights for BM25/semantic.
             rrf_k: RRF smoothing constant (default 60, industry standard).
+            query_embedding: Optional pre-computed embedding to avoid duplicate API calls (C4).
 
         Returns:
             HybridSearchResult with ranked results.
@@ -379,8 +381,9 @@ class HybridSearchService:
         )
 
         try:
-            # Generate query embedding for semantic search
-            query_embedding = await self.embedder.embed_text(query)
+            # Generate query embedding for semantic search (skip if pre-computed)
+            if query_embedding is None:
+                query_embedding = await self.embedder.embed_text(query)
 
             # Handle embedding service failure (returns None when circuit is open or API fails)
             if query_embedding is None:
@@ -969,16 +972,34 @@ class HybridSearchService:
         )
 
         try:
-            # Step 1: Generate query embedding for semantic search
+            # Step 1: Generate query embedding ONCE for both matter and library search (C4 fix)
             query_embedding = await self.embedder.embed_text(query)
 
-            # Step 2: Execute matter hybrid search
+            # C4: If embedding fails, fall back to matter-only BM25 search
+            # instead of passing None to search() which would try embedding again
+            if query_embedding is None:
+                logger.warning(
+                    "search_with_library_embedding_failed_bm25_fallback",
+                    matter_id=matter_id,
+                    query_len=len(query),
+                )
+                return await self.search(
+                    query=query,
+                    matter_id=matter_id,
+                    limit=limit,
+                    weights=weights,
+                    rrf_k=rrf_k,
+                    query_embedding=query_embedding,
+                )
+
+            # Step 2: Execute matter hybrid search (pass pre-computed embedding to avoid 2x API cost)
             matter_result = await self.search(
                 query=query,
                 matter_id=matter_id,
                 limit=limit,
                 weights=weights,
                 rrf_k=rrf_k,
+                query_embedding=query_embedding,
             )
 
             # Step 3: Search linked library chunks (semantic only for now)

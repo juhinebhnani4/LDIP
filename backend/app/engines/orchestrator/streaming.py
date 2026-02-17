@@ -35,6 +35,8 @@ from app.models.chat import (
 )
 from app.models.orchestrator import OrchestratorResult
 from app.services.memory.session import SessionMemoryService, get_session_memory_service
+from app.services.memory.summarizer import get_conversation_summarizer
+from app.services.rag.query_rewriter import MIN_MESSAGES_FOR_REWRITE, rewrite_query
 
 logger = structlog.get_logger(__name__)
 
@@ -135,17 +137,20 @@ class StreamingOrchestrator:
                 data={"status": "processing", "message": "LDIP is thinking..."},
             )
 
-            # Task 4.1-4.3: Load session context and save user message
-            session_context = await self._prepare_session(
+            # Task 4.1-4.3: Load session context, rewrite query, save user message
+            session_context, rewritten_query = await self._prepare_session(
                 matter_id=matter_id,
                 user_id=user_id,
                 query=query,
             )
 
-            # Process through orchestrator
+            # Use rewritten query for retrieval (original query kept for display)
+            search_query = rewritten_query or query
+
+            # Process through orchestrator with rewritten query
             result = await self.orchestrator.process_query(
                 matter_id=matter_id,
-                query=query,
+                query=search_query,
                 user_id=user_id,
                 context=session_context,
             )
@@ -301,10 +306,12 @@ class StreamingOrchestrator:
         matter_id: str,
         user_id: str,
         query: str,
-    ) -> dict[str, Any] | None:
-        """Prepare session context for query processing.
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Prepare session context and rewrite query for retrieval.
 
         Story 11.3: Task 4.1-4.3 - Session integration.
+        G1: Generate conversation summary.
+        G2 (revised): Use summary to REWRITE query (not inject into prompt).
 
         Args:
             matter_id: Matter UUID.
@@ -312,7 +319,7 @@ class StreamingOrchestrator:
             query: User's query to save.
 
         Returns:
-            Session context dict or None if session unavailable.
+            Tuple of (session context dict or None, rewritten query or None).
         """
         try:
             # Task 4.1: Load session context
@@ -323,6 +330,7 @@ class StreamingOrchestrator:
             )
 
             # Task 4.3: Save user message to session
+            # NOTE: Save AFTER loading so the summary doesn't include the current query
             await self.session_service.add_message(
                 matter_id=matter_id,
                 user_id=user_id,
@@ -332,14 +340,54 @@ class StreamingOrchestrator:
 
             # Task 4.2: Return context for pronoun resolution
             if session:
-                return {
+                entities = list(session.entities_mentioned.keys())
+
+                # G1: Generate conversation summary
+                conversation_summary = None
+                try:
+                    summarizer = get_conversation_summarizer()
+                    conversation_summary = await summarizer.get_summary(
+                        matter_id=matter_id,
+                        user_id=user_id,
+                        messages=session.messages,
+                    )
+                except Exception as e:
+                    logger.debug(
+                        "conversation_summary_failed",
+                        matter_id=matter_id,
+                        error=str(e),
+                    )
+
+                # G2 (revised): Rewrite query using summary for better retrieval
+                rewritten_query = None
+                if conversation_summary:
+                    try:
+                        rewritten_query = await rewrite_query(
+                            query=query,
+                            conversation_summary=conversation_summary,
+                            entities=entities,
+                            matter_id=matter_id,
+                        )
+                        # If rewriter returned the same query, treat as no rewrite
+                        if rewritten_query == query:
+                            rewritten_query = None
+                    except Exception as e:
+                        logger.debug(
+                            "query_rewrite_failed",
+                            matter_id=matter_id,
+                            error=str(e),
+                        )
+
+                context = {
                     "session_id": session.session_id,
                     "messages": [
                         {"role": m.role, "content": m.content}
                         for m in session.messages[-5:]  # Last 5 for context
                     ],
-                    "entities": list(session.entities_mentioned.keys()),
+                    "entities": entities,
                 }
+
+                return context, rewritten_query
 
         except Exception as e:
             logger.warning(
@@ -348,7 +396,7 @@ class StreamingOrchestrator:
                 error=str(e),
             )
 
-        return None
+        return None, None
 
     async def _save_assistant_response(
         self,

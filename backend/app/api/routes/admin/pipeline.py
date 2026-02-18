@@ -621,3 +621,87 @@ async def reprocess_stuck_documents(
         stuck_documents=stuck_infos,
         errors=errors,
     )
+
+
+# =============================================================================
+# Voyage Embedding Migration
+# =============================================================================
+
+
+class VoyageMigrationRequest(BaseModel):
+    """Request body for Voyage embedding backfill."""
+
+    matter_id: str | None = Field(
+        default=None,
+        description="Optional matter ID to limit scope. If omitted, processes all chunks.",
+    )
+    batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Chunks per batch (default 50)",
+    )
+
+
+class VoyageMigrationResponse(BaseModel):
+    """Response for Voyage migration trigger."""
+
+    success: bool
+    message: str
+    celery_task_id: str | None = None
+
+
+@router.post(
+    "/embeddings/migrate-voyage",
+    response_model=VoyageMigrationResponse,
+    summary="Trigger Voyage embedding backfill",
+    description="Backfill Voyage law-2 embeddings for existing chunks. Admin only.",
+)
+async def trigger_voyage_migration(
+    request: VoyageMigrationRequest | None = None,
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> VoyageMigrationResponse:
+    """Trigger batch Voyage embedding generation for chunks missing them."""
+    from app.workers.celery import celery_app
+
+    matter_id = request.matter_id if request else None
+    batch_size = request.batch_size if request else 50
+
+    logger.info(
+        "admin_voyage_migration_triggered",
+        admin_id=admin.id,
+        admin_email=admin.email,
+        matter_id=matter_id,
+        batch_size=batch_size,
+    )
+
+    try:
+        task = celery_app.send_task(
+            "app.workers.tasks.voyage_embedding_tasks.batch_embed_voyage",
+            kwargs={
+                "matter_id": matter_id,
+                "batch_size": batch_size,
+            },
+        )
+
+        return VoyageMigrationResponse(
+            success=True,
+            message=f"Voyage embedding migration triggered{f' for matter {matter_id}' if matter_id else ' for all chunks'}",
+            celery_task_id=task.id,
+        )
+
+    except Exception as e:
+        logger.error(
+            "admin_voyage_migration_failed",
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "VOYAGE_MIGRATION_FAILED",
+                    "message": f"Failed to trigger Voyage migration: {e!s}",
+                    "details": {},
+                }
+            },
+        ) from e

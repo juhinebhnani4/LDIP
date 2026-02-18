@@ -41,10 +41,14 @@ import { costsApi } from '@/lib/api/costs';
 // =============================================================================
 
 function formatUsd(val: number): string {
+  if (val > 0 && val < 0.001) return `$${val.toFixed(6)}`;
+  if (val > 0 && val < 0.01) return `$${val.toFixed(4)}`;
   return `$${val.toFixed(2)}`;
 }
 
 function formatInr(val: number): string {
+  if (val > 0 && val < 0.001) return `₹${val.toFixed(6)}`;
+  if (val > 0 && val < 0.01) return `₹${val.toFixed(4)}`;
   return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
@@ -72,6 +76,8 @@ function formatProviderName(provider: string): string {
     'gemini-1.5-pro': 'Gemini 1.5 Pro',
     'rerank-v3.5': 'Cohere Rerank',
     'document-ai': 'Document AI (OCR)',
+    'voyage-law-2': 'Voyage Law-2',
+    'voyage-rerank-2.5': 'Voyage Rerank 2.5',
   };
   return map[provider] || provider;
 }
@@ -88,6 +94,8 @@ const PROVIDER_COLORS: Record<string, string> = {
   'gemini-1.5-pro': '#ec4899',
   'rerank-v3.5': '#14b8a6',
   'document-ai': '#6366f1',
+  'voyage-law-2': '#7c3aed',
+  'voyage-rerank-2.5': '#a855f7',
 };
 
 function getProviderColor(provider: string): string {

@@ -21,8 +21,10 @@ logger = structlog.get_logger(__name__)
 
 MIN_BATCH_SIZE = 1
 MAX_BATCH_SIZE = 200
-DEFAULT_BATCH_SIZE = 50
-RATE_LIMIT_DELAY = 0.5  # seconds between batches
+DEFAULT_BATCH_SIZE = 5  # Small default to respect free-tier rate limits (3 RPM, 10K TPM)
+RATE_LIMIT_DELAY = 25  # 25 seconds between batches (free tier = 3 RPM)
+RATE_LIMIT_RETRY_DELAY = 60  # Wait 60s on rate limit error before retrying
+MAX_RATE_LIMIT_RETRIES = 3  # Max retries per batch on rate limit
 
 
 # =============================================================================
@@ -46,12 +48,12 @@ def batch_embed_voyage(
     """Batch-generate Voyage embeddings for chunks missing them.
 
     Fetches chunks with `embedding IS NOT NULL` but `embedding_voyage IS NULL`,
-    calls VoyageEmbeddingService.embed_batch() with input_type="document",
+    calls Voyage API directly with rate-limit retry logic,
     and updates the `embedding_voyage` column.
 
     Args:
         matter_id: Optional matter ID to limit scope.
-        batch_size: Chunks per batch (default 50).
+        batch_size: Chunks per batch (default 5 for free-tier safety).
         resume_from_chunk_id: Resume from this chunk ID.
 
     Returns:
@@ -84,15 +86,22 @@ async def _run_migration(
     batch_size: int,
     resume_from_chunk_id: str | None,
 ) -> dict:
-    """Async migration logic."""
-    from app.core.supabase import get_service_client
-    from app.services.rag.voyage_embedder import get_voyage_embedding_service
+    """Async migration logic with rate-limit retry."""
+    from app.services.supabase.client import get_service_client
 
     supabase = get_service_client()
     if supabase is None:
         return {"status": "failed", "error": "Service client not available"}
 
-    embedder = get_voyage_embedding_service()
+    # Import voyageai directly to bypass circuit breaker for batch migration
+    import voyageai
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    if not settings.voyage_api_key:
+        return {"status": "failed", "error": "VOYAGE_API_KEY not configured"}
+
+    client = voyageai.Client(api_key=settings.voyage_api_key)
 
     processed = 0
     failed = 0
@@ -119,17 +128,46 @@ async def _run_migration(
         chunks = response.data
         texts = [c["content"] for c in chunks]
 
-        # Generate Voyage embeddings
-        embeddings = await embedder.embed_batch(
-            texts, skip_empty=True, input_type="document",
-        )
+        # Call Voyage API with rate-limit retry
+        embeddings = None
+        for retry in range(MAX_RATE_LIMIT_RETRIES + 1):
+            try:
+                result = client.embed(
+                    texts=texts,
+                    model="voyage-law-2",
+                    input_type="document",
+                )
+                embeddings = result.embeddings
+                break
+            except Exception as e:
+                error_str = str(e)
+                if "rate" in error_str.lower() or "RateLimitError" in type(e).__name__:
+                    logger.warning(
+                        "voyage_batch_rate_limited",
+                        retry=retry + 1,
+                        max_retries=MAX_RATE_LIMIT_RETRIES,
+                        delay=RATE_LIMIT_RETRY_DELAY,
+                    )
+                    if retry < MAX_RATE_LIMIT_RETRIES:
+                        await asyncio.sleep(RATE_LIMIT_RETRY_DELAY)
+                        continue
+                logger.error(
+                    "voyage_batch_embed_api_error",
+                    error=error_str,
+                    error_type=type(e).__name__,
+                    batch_size=len(texts),
+                )
+                break
+
+        if embeddings is None:
+            # All retries failed, mark all chunks as failed
+            failed += len(chunks)
+            last_chunk_id = chunks[-1]["id"]
+            await asyncio.sleep(RATE_LIMIT_RETRY_DELAY)
+            continue
 
         # Update each chunk with its Voyage embedding
         for chunk, embedding in zip(chunks, embeddings):
-            if embedding is None:
-                failed += 1
-                continue
-
             try:
                 supabase.table("chunks").update(
                     {"embedding_voyage": embedding}
@@ -144,8 +182,14 @@ async def _run_migration(
                 failed += 1
 
         last_chunk_id = chunks[-1]["id"]
+        logger.info(
+            "voyage_batch_progress",
+            processed=processed,
+            failed=failed,
+            last_chunk_id=last_chunk_id,
+        )
 
-        # Rate limit between batches
+        # Rate limit between batches (respect free tier 3 RPM)
         await asyncio.sleep(RATE_LIMIT_DELAY)
 
     elapsed = time.time() - start_time

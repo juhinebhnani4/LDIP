@@ -778,10 +778,15 @@ class RAGEngineAdapter(EngineAdapter):
             rerank_provider = context.get("rerank_provider") if context else None
             embedding_provider = context.get("embedding_provider") if context else None
 
+            # Kill switch: force default providers when A/B testing is disabled
+            settings = get_settings()
+            if not settings.voyage_ab_testing_enabled:
+                rerank_provider = None
+                embedding_provider = None
+
             # Step 1: Hybrid search with library integration
             # Searches both matter documents AND linked library documents
             search = self._get_search()
-            settings = get_settings()
 
             # Use QueryProfile parameters if available, otherwise settings defaults
             search_limit = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n

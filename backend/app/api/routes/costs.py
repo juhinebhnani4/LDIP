@@ -86,7 +86,7 @@ EMBEDDING_PROVIDERS = {
 }
 
 RERANKING_PROVIDERS = {
-    "cohere": ["cohere-rerank-v3.5", "rerank-english-v3.0"],
+    "cohere": ["rerank-v3.5", "cohere-rerank-v3.5", "rerank-english-v3.0"],
     "voyage": ["voyage-rerank-2.5"],
 }
 

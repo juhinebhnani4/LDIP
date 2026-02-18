@@ -7,6 +7,7 @@ import { LLMQuotaWidget } from '@/components/features/admin/LLMQuotaWidget';
 import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
 import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
 import { CleanupWidget } from '@/components/features/admin/CleanupWidget';
+import { CostComparisonDashboard } from '@/components/features/costs/CostComparisonDashboard';
 
 /**
  * Admin Dashboard Page
@@ -81,6 +82,9 @@ export default async function AdminPage() {
             </CardContent>
           </Card>
         </Link>
+
+        {/* A/B Testing: Provider Cost Comparison */}
+        <CostComparisonDashboard />
 
         {/* Admin widgets grid */}
         <div className="grid gap-6 md:grid-cols-2">

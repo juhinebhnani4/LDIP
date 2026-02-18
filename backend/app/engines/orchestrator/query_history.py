@@ -238,18 +238,37 @@ def get_query_history_store(db_client: Any = None) -> QueryHistoryStore:
     """Get or create QueryHistoryStore instance (thread-safe).
 
     Args:
-        db_client: Optional Supabase client.
+        db_client: Optional Supabase client. If not provided,
+            auto-detects from get_supabase_client().
 
     Returns:
         QueryHistoryStore instance.
     """
     global _query_history_store
 
-    # Fast path - no lock needed if already initialized
+    # Fast path - no lock needed if already initialized with DB
     if _query_history_store is not None and (
         db_client is None or _query_history_store._db is not None
     ):
+        # If store exists but has no DB, try auto-detect
+        if _query_history_store._db is None:
+            try:
+                from app.services.supabase.client import get_supabase_client
+                auto_client = get_supabase_client()
+                if auto_client:
+                    _query_history_store._db = auto_client
+                    logger.info("query_history_store_db_auto_detected")
+            except Exception:
+                pass
         return _query_history_store
+
+    # Auto-detect client if not provided
+    if db_client is None:
+        try:
+            from app.services.supabase.client import get_supabase_client
+            db_client = get_supabase_client()
+        except Exception:
+            pass
 
     # Slow path - need lock for initialization
     with _query_history_store_lock:

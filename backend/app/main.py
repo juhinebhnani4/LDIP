@@ -23,6 +23,7 @@ from app.api.routes import (
     chunks,
     citations,
     contradiction,
+    costs,
     cross_engine,
     dashboard,
     documents,
@@ -44,6 +45,7 @@ from app.api.routes import (
     summary,
     tables,
     timeline,
+    usage,
     users,
     verifications,
     ws,
@@ -137,6 +139,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize DB-backed pricing (P3)
         from app.core.pricing_loader import initialize_pricing
         initialize_pricing(supabase)
+
+        # Initialize query history store with DB client for audit persistence
+        from app.engines.orchestrator.query_history import get_query_history_store
+        get_query_history_store(supabase)
+        logger.info("query_history_store_initialized")
     except Exception as e:
         # Log but don't fail startup - cost tracking is non-critical
         logger.warning(
@@ -359,6 +366,8 @@ def create_app() -> FastAPI:
     app.include_router(summary.router, prefix="/api")
     app.include_router(activity.router, prefix="/api")
     app.include_router(dashboard.router, prefix="/api")
+    app.include_router(usage.router, prefix="/api")
+    app.include_router(costs.router, prefix="/api")
     app.include_router(notifications.router, prefix="/api")
     app.include_router(global_search.router, prefix="/api")
     app.include_router(tables.router, prefix="/api")

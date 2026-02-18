@@ -80,6 +80,8 @@ class CircuitService(str, Enum):
     OPENAI_CHAT = "openai_chat"
     GEMINI_FLASH = "gemini_flash"
     COHERE_RERANK = "cohere_rerank"
+    VOYAGE_EMBEDDINGS = "voyage_embeddings"
+    VOYAGE_RERANK = "voyage_rerank"
     DOCUMENTAI_OCR = "documentai_ocr"
 
 
@@ -220,6 +222,18 @@ SERVICE_CONFIGS: dict[CircuitService, CircuitConfig] = {
         max_retries=3,
     ),
     CircuitService.COHERE_RERANK: CircuitConfig(
+        failure_threshold=5,
+        recovery_timeout=60,
+        timeout_seconds=10,  # Shorter timeout for rerank
+        max_retries=3,
+    ),
+    CircuitService.VOYAGE_EMBEDDINGS: CircuitConfig(
+        failure_threshold=5,
+        recovery_timeout=60,
+        timeout_seconds=30,
+        max_retries=3,
+    ),
+    CircuitService.VOYAGE_RERANK: CircuitConfig(
         failure_threshold=5,
         recovery_timeout=60,
         timeout_seconds=10,  # Shorter timeout for rerank

@@ -136,6 +136,10 @@ export interface ChatMessage {
   queryWasRewritten?: boolean;
   /** Original query before safety rewrite (if rewritten) */
   originalQuery?: string;
+  /** A/B testing: embedding provider used for this response */
+  embeddingProvider?: 'openai' | 'voyage';
+  /** A/B testing: reranker provider used for this response */
+  rerankProvider?: 'cohere' | 'voyage';
 }
 
 /**

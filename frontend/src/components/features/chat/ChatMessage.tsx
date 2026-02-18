@@ -211,6 +211,19 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
             <span>Response was truncated due to length.</span>
           </div>
         )}
+
+        {/* A/B testing: Provider badges (assistant only) */}
+        {!isUser && (message.embeddingProvider || message.rerankProvider) && (
+          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="rounded bg-muted px-1.5 py-0.5">
+              {message.embeddingProvider === 'voyage' ? 'Voyage' : 'OpenAI'}
+            </span>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="rounded bg-muted px-1.5 py-0.5">
+              {message.rerankProvider === 'voyage' ? 'Voyage' : 'Cohere'}
+            </span>
+          </div>
+        )}
       </div>
     </article>
   );

@@ -165,6 +165,15 @@ class StreamCompleteEvent(BaseModel):
         default=None,
         description="Original query before safety rewrite (if rewritten)"
     )
+    # A/B testing: provider metadata
+    embedding_provider: str | None = Field(
+        default=None,
+        description="Embedding provider used: 'openai' or 'voyage'"
+    )
+    rerank_provider: str | None = Field(
+        default=None,
+        description="Reranker provider used: 'cohere' or 'voyage'"
+    )
 
 
 class ChatStreamRequest(BaseModel):
@@ -179,6 +188,8 @@ class ChatStreamRequest(BaseModel):
 
     query: str = Field(min_length=1, max_length=4000, description="User's question")
     session_id: str | None = Field(default=None, description="Session ID for context")
+    embedding_provider: str | None = Field(default=None, description="'openai' or 'voyage'")
+    rerank_provider: str | None = Field(default=None, description="'cohere' or 'voyage'")
 
 
 # =============================================================================

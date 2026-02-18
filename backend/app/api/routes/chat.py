@@ -161,6 +161,10 @@ async def stream_chat(
                 user_id=current_user.id,
                 query=body.query,
                 session_id=body.session_id,
+                provider_context={
+                    "embedding_provider": body.embedding_provider,
+                    "rerank_provider": body.rerank_provider,
+                },
             ):
                 # DEBUG: Log complete event sources to trace document_name
                 if event.type.value == "complete":
@@ -258,6 +262,10 @@ async def send_message(
             user_id=current_user.id,
             query=body.query,
             session_id=body.session_id,
+            provider_context={
+                "embedding_provider": body.embedding_provider,
+                "rerank_provider": body.rerank_provider,
+            },
         ):
             if event.type == StreamEventType.COMPLETE:
                 response_data = event.data

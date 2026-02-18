@@ -9,8 +9,10 @@ import { QAPanelPlaceholder } from './QAPanelPlaceholder';
 import { ChatInput } from './ChatInput';
 import { StreamingMessage } from './StreamingMessage';
 import { SuggestedQuestions } from './SuggestedQuestions';
+import { ModelSelector } from './ModelSelector';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
+import { useModelStore } from '@/stores/modelStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData, type SSEParseErrorContext } from '@/hooks/useSSE';
 import { useUser } from '@/hooks/useAuth';
 import { canRetryError } from '@/lib/api/client';
@@ -133,7 +135,9 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
       data.searchMode,
       data.embeddingCompletionPct,
       data.queryWasRewritten,
-      data.originalQuery
+      data.originalQuery,
+      data.embeddingProvider,
+      data.rerankProvider,
     );
     // Story 13.4: Clear error state on success
     setStreamError(null);
@@ -226,8 +230,13 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
     const assistantMessageId = crypto.randomUUID();
     startStreaming(assistantMessageId);
 
-    // Start SSE stream
-    await startStream(`/api/chat/${matterId}/stream`, { query });
+    // Start SSE stream with model selection from store
+    const { embeddingProvider, rerankProvider } = useModelStore.getState();
+    await startStream(`/api/chat/${matterId}/stream`, {
+      query,
+      embedding_provider: embeddingProvider,
+      rerank_provider: rerankProvider,
+    });
   }, [matterId, userId, addMessage, startStreaming, startStream]);
 
   // Story 13.4: Handle retry for failed queries
@@ -328,6 +337,7 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
       <QAPanelHeader matterId={matterId} />
+      <ModelSelector />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {renderContent()}

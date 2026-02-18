@@ -774,6 +774,10 @@ class RAGEngineAdapter(EngineAdapter):
             # Extract QueryProfile from context (set by orchestrator)
             query_profile = context.get("query_profile") if context else None
 
+            # Extract A/B testing provider selections from context
+            rerank_provider = context.get("rerank_provider") if context else None
+            embedding_provider = context.get("embedding_provider") if context else None
+
             # Step 1: Hybrid search with library integration
             # Searches both matter documents AND linked library documents
             search = self._get_search()
@@ -787,6 +791,8 @@ class RAGEngineAdapter(EngineAdapter):
                 matter_id=matter_id,
                 rerank_top_n=search_limit,
                 library_limit=10,
+                rerank_provider=rerank_provider,
+                embedding_provider=embedding_provider,
             )
 
             # Step 2: Get document names for matter documents

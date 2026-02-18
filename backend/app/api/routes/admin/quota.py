@@ -11,6 +11,7 @@ Provides admin-only endpoints for:
 All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import structlog
@@ -887,3 +888,125 @@ async def get_usage_dashboard(
                 }
             },
         ) from e
+
+
+# =============================================================================
+# P6: Contradiction Savings Report
+# =============================================================================
+
+
+@router.get(
+    "/contradiction-savings",
+    summary="Get Contradiction Savings Report",
+    description="""
+    Get contradiction two-tier routing savings data from materialized view.
+
+    Shows how much money the Gemini screening tier saves compared to
+    sending everything through GPT-4o.
+
+    **Requires admin access.**
+    """,
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_contradiction_savings(
+    request: Request,
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> dict:
+    """Get contradiction savings report from materialized view."""
+    try:
+        supabase = get_service_client()
+
+        result = await asyncio.to_thread(
+            lambda: supabase.table("contradiction_savings_report")
+            .select("*")
+            .order("month", desc=True)
+            .limit(12)
+            .execute()
+        )
+
+        rows = result.data or []
+
+        # Aggregate across all matters for summary
+        total_actual = 0.0
+        total_hypothetical = 0.0
+        total_screening_calls = 0
+        total_escalated_calls = 0
+        total_calls = 0
+
+        monthly_data = []
+        # Group by month
+        month_agg: dict[str, dict] = {}
+        for row in rows:
+            month = row.get("month", "unknown")
+            if month not in month_agg:
+                month_agg[month] = {
+                    "actual": 0.0, "hypothetical": 0.0,
+                    "screening": 0, "escalated": 0, "total": 0,
+                }
+            month_agg[month]["actual"] += float(row.get("actual_total_cost_usd") or 0)
+            month_agg[month]["hypothetical"] += float(row.get("hypothetical_screening_as_gpt4o_usd") or 0) + float(row.get("escalated_cost_usd") or 0)
+            month_agg[month]["screening"] += int(row.get("screening_calls") or 0)
+            month_agg[month]["escalated"] += int(row.get("escalated_calls") or 0)
+            month_agg[month]["total"] += int(row.get("total_calls") or 0)
+
+        for month, agg in sorted(month_agg.items(), reverse=True):
+            savings = agg["hypothetical"] - agg["actual"]
+            savings_pct = (savings / agg["hypothetical"] * 100) if agg["hypothetical"] > 0 else 0
+            escalation_rate = (agg["escalated"] / agg["screening"]) if agg["screening"] > 0 else 0
+
+            total_actual += agg["actual"]
+            total_hypothetical += agg["hypothetical"]
+            total_screening_calls += agg["screening"]
+            total_escalated_calls += agg["escalated"]
+            total_calls += agg["total"]
+
+            monthly_data.append({
+                "month": month,
+                "actualCostUsd": round(agg["actual"], 6),
+                "hypotheticalCostUsd": round(agg["hypothetical"], 6),
+                "savingsUsd": round(savings, 6),
+                "savingsPct": round(savings_pct, 1),
+                "screeningCalls": agg["screening"],
+                "escalatedCalls": agg["escalated"],
+                "escalationRate": round(escalation_rate, 4),
+                "totalCalls": agg["total"],
+            })
+
+        total_savings = total_hypothetical - total_actual
+        total_savings_pct = (total_savings / total_hypothetical * 100) if total_hypothetical > 0 else 0
+        overall_escalation_rate = (total_escalated_calls / total_screening_calls) if total_screening_calls > 0 else 0
+
+        return {
+            "summary": {
+                "totalActualCostUsd": round(total_actual, 6),
+                "totalHypotheticalCostUsd": round(total_hypothetical, 6),
+                "totalSavingsUsd": round(total_savings, 6),
+                "totalSavingsPct": round(total_savings_pct, 1),
+                "totalScreeningCalls": total_screening_calls,
+                "totalEscalatedCalls": total_escalated_calls,
+                "overallEscalationRate": round(overall_escalation_rate, 4),
+                "totalCalls": total_calls,
+            },
+            "monthly": monthly_data,
+        }
+
+    except Exception as e:
+        logger.error(
+            "contradiction_savings_failed",
+            admin_id=admin.id,
+            error=str(e),
+        )
+        # Return empty data on error (view might not exist yet)
+        return {
+            "summary": {
+                "totalActualCostUsd": 0,
+                "totalHypotheticalCostUsd": 0,
+                "totalSavingsUsd": 0,
+                "totalSavingsPct": 0,
+                "totalScreeningCalls": 0,
+                "totalEscalatedCalls": 0,
+                "overallEscalationRate": 0,
+                "totalCalls": 0,
+            },
+            "monthly": [],
+        }

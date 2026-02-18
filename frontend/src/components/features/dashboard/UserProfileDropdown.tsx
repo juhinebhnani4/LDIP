@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, HelpCircle, LogOut, ChevronDown, Shield } from 'lucide-react';
+import { Settings, HelpCircle, LogOut, ChevronDown, Shield, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -98,6 +98,10 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
     router.push('/settings');
   };
 
+  const handleUsage = () => {
+    router.push('/usage');
+  };
+
   const handleAdmin = () => {
     router.push('/admin');
   };
@@ -144,6 +148,10 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
           <DropdownMenuItem onClick={handleSettings}>
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleUsage}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            <span>Usage</span>
           </DropdownMenuItem>
           {/* F2 fix: Only show Admin link to actual admins */}
           {isAdmin && (

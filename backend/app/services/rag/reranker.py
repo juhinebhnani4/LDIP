@@ -117,6 +117,8 @@ class CohereRerankService:
     CRITICAL: Implements graceful fallback - if Cohere API fails,
     returns original RRF-ranked results with warning logged.
 
+    Implements BaseRerankService interface for use with reranker_factory.
+
     Example:
         >>> service = CohereRerankService()
         >>> result = await service.rerank(
@@ -134,6 +136,11 @@ class CohereRerankService:
         model optimized for document relevance scoring. Much cheaper
         than LLM calls (~$0.002 per 1,000 documents).
     """
+
+    @property
+    def provider_name(self) -> str:
+        """Return the provider identifier."""
+        return "cohere"
 
     def __init__(self):
         """Initialize Cohere rerank service.

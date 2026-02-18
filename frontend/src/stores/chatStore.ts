@@ -209,7 +209,9 @@ interface ChatActions {
     searchMode?: 'hybrid' | 'bm25_only' | 'bm25_fallback',
     embeddingCompletionPct?: number,
     queryWasRewritten?: boolean,
-    originalQuery?: string
+    originalQuery?: string,
+    embeddingProvider?: 'openai' | 'voyage',
+    rerankProvider?: 'cohere' | 'voyage'
   ) => void;
   /**
    * Story 2.3: Abort streaming and save incomplete message.
@@ -387,7 +389,7 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
 
-      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct, queryWasRewritten, originalQuery) => {
+      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct, queryWasRewritten, originalQuery, embeddingProvider, rerankProvider) => {
         const { streamingMessageId, messages } = get();
         if (!streamingMessageId) return;
 
@@ -409,6 +411,9 @@ export const useChatStore = create<ChatStore>()(
           // Query safety rewrite metadata
           queryWasRewritten,
           originalQuery,
+          // A/B testing provider metadata
+          embeddingProvider,
+          rerankProvider,
         };
 
         set({

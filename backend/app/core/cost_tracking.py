@@ -106,6 +106,10 @@ class LLMProvider(str, Enum):
     # Cohere Models
     COHERE_RERANK = "rerank-v3.5"
 
+    # Voyage AI Models
+    VOYAGE_EMBEDDING_LAW2 = "voyage-law-2"
+    VOYAGE_RERANK_2_5 = "voyage-rerank-2.5"
+
     # Google Document AI (per page pricing)
     GOOGLE_DOCUMENT_AI = "document-ai"
 
@@ -168,6 +172,17 @@ PROVIDER_PRICING: dict[LLMProvider, ProviderPricing] = {
     # Cohere Rerank — $2 per 1K searches (per-search, not per-token)
     LLMProvider.COHERE_RERANK: ProviderPricing(
         input_cost_per_1k=0.002,  # $2 per 1K searches
+        output_cost_per_1k=0.0,
+        unit="searches",
+    ),
+    # Voyage AI Embeddings (voyage-law-2) — $0.12 per 1M tokens
+    LLMProvider.VOYAGE_EMBEDDING_LAW2: ProviderPricing(
+        input_cost_per_1k=0.00012,
+        output_cost_per_1k=0.0,
+    ),
+    # Voyage AI Rerank (rerank-2.5) — $0.05 per 1M tokens
+    LLMProvider.VOYAGE_RERANK_2_5: ProviderPricing(
+        input_cost_per_1k=0.00005,
         output_cost_per_1k=0.0,
         unit="searches",
     ),

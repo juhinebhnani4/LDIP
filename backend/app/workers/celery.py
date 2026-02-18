@@ -250,6 +250,7 @@ _TASK_MODULES = [
     "app.workers.tasks.quota_monitoring_tasks",
     "app.workers.tasks.reasoning_archive_tasks",
     "app.workers.tasks.verification_tasks",
+    "app.workers.tasks.voyage_embedding_tasks",
 ]
 
 _import_errors: list[str] = []
@@ -267,6 +268,7 @@ try:
         quota_monitoring_tasks,
         reasoning_archive_tasks,
         verification_tasks,
+        voyage_embedding_tasks,
     )
     _logger.info(
         "celery_task_modules_imported",

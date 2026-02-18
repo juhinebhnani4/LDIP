@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Settings, Loader2, Scale, FileCheck, IndianRupee, TrendingUp, RefreshCw, Globe, Briefcase, Lock, Zap, SearchCheck } from 'lucide-react';
-import { useMatterCosts } from '@/hooks/useMatterCosts';
+import { Settings, Loader2, Scale, FileCheck, Globe, Briefcase, Lock, Zap, SearchCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -87,9 +86,6 @@ export function MatterSettingsDialog({
   const [isSaving, setIsSaving] = useState(false);
   const currentMatter = useMatterStore((state) => state.currentMatter);
   const updateStoreMatter = useMatterStore((state) => state.updateMatter);
-
-  // Story 7.1: Per-Matter Cost Tracking
-  const { data: costData, isLoading: costsLoading, refetch: refetchCosts } = useMatterCosts(matterId);
 
   // Local state for verification mode
   const [verificationMode, setVerificationMode] = useState<VerificationMode>(
@@ -283,85 +279,6 @@ export function MatterSettingsDialog({
                   Quick Scan is ~40% faster and ~30% cheaper but skips contradiction detection.
                 </p>
               </div>
-            )}
-          </div>
-
-          <Separator />
-
-          {/* Story 7.1: Cost Tracking Section */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IndianRupee className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-sm font-medium">Cost Tracking (30 days)</Label>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => refetchCosts()}
-                disabled={costsLoading}
-                aria-label="Refresh costs"
-              >
-                <RefreshCw className={`h-3 w-3 ${costsLoading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-
-            {costsLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : costData ? (
-              <div className="space-y-3">
-                {/* Total Cost */}
-                <div className="rounded-lg border bg-muted/50 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Total Cost</span>
-                    <span className="text-lg font-semibold">
-                      ₹{costData.totalCostInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ${costData.totalCostUsd.toFixed(2)} USD
-                  </p>
-                </div>
-
-                {/* Weekly Cost */}
-                <div className="flex items-center gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-blue-500" />
-                  <span className="text-muted-foreground">This week:</span>
-                  <span className="font-medium">
-                    ₹{costData.weeklyCostInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                {/* Cost by Operation */}
-                {costData.byOperation.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">By Operation</p>
-                    <div className="space-y-1">
-                      {costData.byOperation.slice(0, 4).map((op) => (
-                        <div
-                          key={op.operation}
-                          className="flex items-center justify-between text-xs"
-                        >
-                          <span className="text-muted-foreground">{op.operation}</span>
-                          <span>₹{op.costInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Operations Count */}
-                <p className="text-xs text-muted-foreground text-center pt-1">
-                  {costData.operationCount.toLocaleString()} LLM operations
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-4">
-                No cost data available
-              </p>
             )}
           </div>
 

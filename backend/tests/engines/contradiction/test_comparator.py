@@ -366,6 +366,7 @@ class TestStatementComparator:
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
+                openai_comparison_model="gpt-4o",
                 contradiction_model_routing_enabled=False,
             )
 
@@ -426,6 +427,7 @@ class TestStatementComparator:
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
+                openai_comparison_model="gpt-4o",
                 contradiction_model_routing_enabled=False,
             )
 
@@ -693,17 +695,18 @@ class TestRetryLogic:
 
     @pytest.mark.asyncio
     async def test_retry_on_rate_limit_error(self) -> None:
-        """Should retry on 429 rate limit errors."""
+        """Should retry on transient connection errors (circuit breaker retries)."""
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
                 contradiction_model_routing_enabled=False,
+                contradiction_cache_enabled=False,
             )
 
             comparator = StatementComparator()
 
-            # First call fails with rate limit, second succeeds
+            # First call fails with transient error, second succeeds
             mock_client = AsyncMock()
             success_response = MagicMock()
             success_response.choices = [MagicMock()]
@@ -718,9 +721,10 @@ class TestRetryLogic:
             success_response.usage.completion_tokens = 50
             success_response.usage.prompt_tokens_details = None
 
+            # ConnectionError is retried by the circuit breaker's tenacity
             mock_client.chat.completions.create = AsyncMock(
                 side_effect=[
-                    Exception("429 Rate limit exceeded"),
+                    ConnectionError("Rate limit exceeded"),
                     success_response,
                 ]
             )
@@ -732,24 +736,24 @@ class TestRetryLogic:
             )
 
             # Should succeed after retry
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                comparison, _ = await comparator.compare_statement_pair(
-                    statement_a=stmt,
-                    statement_b=stmt,
-                    entity_name="Test",
-                )
+            comparison, _ = await comparator.compare_statement_pair(
+                statement_a=stmt,
+                statement_b=stmt,
+                entity_name="Test",
+            )
 
             assert comparison.result == ComparisonResult.CONSISTENT
             assert mock_client.chat.completions.create.call_count == 2
 
     @pytest.mark.asyncio
     async def test_retry_on_transient_500_error(self) -> None:
-        """Should retry on 500 server errors."""
+        """Should retry on transient connection errors (circuit breaker retries)."""
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
                 contradiction_model_routing_enabled=False,
+                contradiction_cache_enabled=False,
             )
 
             comparator = StatementComparator()
@@ -768,9 +772,10 @@ class TestRetryLogic:
             success_response.usage.completion_tokens = 50
             success_response.usage.prompt_tokens_details = None
 
+            # ConnectionError is retried by the circuit breaker's tenacity
             mock_client.chat.completions.create = AsyncMock(
                 side_effect=[
-                    Exception("500 Internal Server Error"),
+                    ConnectionError("Server error"),
                     success_response,
                 ]
             )
@@ -781,12 +786,11 @@ class TestRetryLogic:
                 content="Test", page_number=1,
             )
 
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                comparison, _ = await comparator.compare_statement_pair(
-                    statement_a=stmt,
-                    statement_b=stmt,
-                    entity_name="Test",
-                )
+            comparison, _ = await comparator.compare_statement_pair(
+                statement_a=stmt,
+                statement_b=stmt,
+                entity_name="Test",
+            )
 
             assert comparison.result == ComparisonResult.CONSISTENT
             assert mock_client.chat.completions.create.call_count == 2

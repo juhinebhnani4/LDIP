@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
     cohere_api_key: str = ""  # For Cohere Rerank v3.5
+    voyage_api_key: str = ""  # For Voyage AI embeddings + reranking
+
+    # Voyage A/B Testing Kill Switch
+    # When False (default): hides model selector UI, ignores provider params, uses OpenAI + Cohere
+    # When True: enables model selector UI and Voyage provider options
+    voyage_ab_testing_enabled: bool = False
 
     # Google Cloud
     google_cloud_project_id: str = ""

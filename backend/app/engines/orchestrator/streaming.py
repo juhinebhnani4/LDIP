@@ -105,6 +105,7 @@ class StreamingOrchestrator:
         user_id: str,
         query: str,
         session_id: str | None = None,
+        provider_context: dict[str, str | None] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """Process query and stream events.
 
@@ -147,12 +148,17 @@ class StreamingOrchestrator:
             # Use rewritten query for retrieval (original query kept for display)
             search_query = rewritten_query or query
 
+            # Merge provider_context into session context for engine adapters
+            merged_context = session_context or {}
+            if provider_context:
+                merged_context = {**merged_context, **provider_context}
+
             # Process through orchestrator with rewritten query
             result = await self.orchestrator.process_query(
                 matter_id=matter_id,
                 query=search_query,
                 user_id=user_id,
-                context=session_context,
+                context=merged_context or None,
             )
 
             # Check if query was blocked by safety guard
@@ -233,6 +239,9 @@ class StreamingOrchestrator:
                 # Query safety rewrite metadata
                 query_was_rewritten=result.query_was_rewritten,
                 original_query=result.original_query if result.query_was_rewritten else None,
+                # A/B testing provider metadata
+                embedding_provider=(provider_context or {}).get("embedding_provider") or "openai",
+                rerank_provider=(provider_context or {}).get("rerank_provider") or "cohere",
             )
 
             yield StreamEvent(

@@ -41,7 +41,7 @@ const swrConfig = {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
       <SWRConfig value={swrConfig}>
         <TooltipProvider>
           {children}

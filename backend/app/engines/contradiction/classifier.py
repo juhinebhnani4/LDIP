@@ -51,10 +51,6 @@ CLASSIFICATION_MAP: dict[EvidenceType, ContradictionType] = {
     EvidenceType.SEMANTIC_CONFLICT: ContradictionType.SEMANTIC_CONTRADICTION,
 }
 
-# GPT-4o pricing (same as comparator) — 75% cheaper than GPT-4 Turbo
-GPT4_INPUT_COST_PER_1K = 0.0025  # $2.50 per 1M input tokens
-GPT4_OUTPUT_COST_PER_1K = 0.01  # $10 per 1M output tokens
-
 # Retry settings
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1.0
@@ -119,8 +115,11 @@ class ClassificationCostTracker:
         """Calculate total cost in USD."""
         if not self.used_llm:
             return 0.0
-        input_cost = (self.input_tokens / 1000) * GPT4_INPUT_COST_PER_1K
-        output_cost = (self.output_tokens / 1000) * GPT4_OUTPUT_COST_PER_1K
+        from app.core.pricing_loader import get_pricing
+
+        gpt4_pricing = get_pricing("gpt-4o")
+        input_cost = (self.input_tokens / 1000) * gpt4_pricing.input_cost_per_1k
+        output_cost = (self.output_tokens / 1000) * gpt4_pricing.output_cost_per_1k
         return input_cost + output_cost
 
 

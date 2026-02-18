@@ -133,6 +133,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         supabase = get_service_client()
         get_cost_service(supabase)
         logger.info("cost_persistence_service_initialized")
+
+        # Initialize DB-backed pricing (P3)
+        from app.core.pricing_loader import initialize_pricing
+        initialize_pricing(supabase)
     except Exception as e:
         # Log but don't fail startup - cost tracking is non-critical
         logger.warning(

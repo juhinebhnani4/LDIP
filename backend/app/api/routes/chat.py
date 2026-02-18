@@ -143,6 +143,9 @@ async def stream_chat(
         HTTPException: 404 if matter not found or no access.
         HTTPException: 400 if request validation fails.
     """
+    from app.core.correlation import bind_cost_user_id
+    bind_cost_user_id(current_user.id)
+
     logger.info(
         "stream_chat_request",
         matter_id=matter_id,
@@ -236,6 +239,9 @@ async def send_message(
     Raises:
         HTTPException: 500 if processing fails.
     """
+    from app.core.correlation import bind_cost_user_id
+    bind_cost_user_id(current_user.id)
+
     logger.info(
         "send_message_request",
         matter_id=matter_id,

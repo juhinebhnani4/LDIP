@@ -131,6 +131,9 @@ class Settings(BaseSettings):
     # Monthly Cost Budget (Usage Dashboard)
     monthly_cost_budget_usd: float = 120.0  # $120/month budget for LLM costs
 
+    # FX Rate (configurable via USD_TO_INR_RATE env var)
+    usd_to_inr_rate: float = 90.50  # As of Feb 2026: ~90-91 INR per USD
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 

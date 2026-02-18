@@ -325,6 +325,10 @@ def initialize_cost_service(sender=None, **kwargs):
         supabase = get_service_client()
         get_cost_service(supabase)
         _logger.info("cost_persistence_service_initialized_in_worker")
+
+        # Initialize DB-backed pricing (P3)
+        from app.core.pricing_loader import initialize_pricing
+        initialize_pricing(supabase)
     except Exception as e:
         _logger.warning(
             "cost_persistence_init_failed_in_worker",

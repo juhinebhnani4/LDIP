@@ -45,20 +45,35 @@ from app.models.contradiction import (
 class TestLLMCostTracker:
     """Tests for LLM cost calculation."""
 
-    def test_cost_calculation_input_only(self) -> None:
+    @patch("app.core.pricing_loader.get_provider_pricing")
+    def test_cost_calculation_input_only(self, mock_pricing) -> None:
         """Should calculate cost for input tokens."""
+        from app.core.cost_tracking import ProviderPricing
+        mock_pricing.return_value = {
+            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+        }
         tracker = LLMCostTracker(input_tokens=1000, output_tokens=0)
         # $0.0025 per 1K input tokens (GPT-4o)
         assert tracker.cost_usd == 0.0025
 
-    def test_cost_calculation_output_only(self) -> None:
+    @patch("app.core.pricing_loader.get_provider_pricing")
+    def test_cost_calculation_output_only(self, mock_pricing) -> None:
         """Should calculate cost for output tokens."""
+        from app.core.cost_tracking import ProviderPricing
+        mock_pricing.return_value = {
+            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+        }
         tracker = LLMCostTracker(input_tokens=0, output_tokens=1000)
         # $0.01 per 1K output tokens (GPT-4o)
         assert tracker.cost_usd == 0.01
 
-    def test_cost_calculation_combined(self) -> None:
+    @patch("app.core.pricing_loader.get_provider_pricing")
+    def test_cost_calculation_combined(self, mock_pricing) -> None:
         """Should calculate combined input + output cost."""
+        from app.core.cost_tracking import ProviderPricing
+        mock_pricing.return_value = {
+            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+        }
         tracker = LLMCostTracker(input_tokens=2000, output_tokens=500)
         # 2K input = $0.005, 0.5K output = $0.005 (GPT-4o)
         expected = 0.005 + 0.005
@@ -78,8 +93,13 @@ class TestLLMCostTracker:
 class TestComparisonBatchResult:
     """Tests for batch result aggregation."""
 
-    def test_empty_result(self) -> None:
+    @patch("app.core.pricing_loader.get_provider_pricing")
+    def test_empty_result(self, mock_pricing) -> None:
         """Should handle empty results."""
+        from app.core.cost_tracking import ProviderPricing
+        mock_pricing.return_value = {
+            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+        }
         result = ComparisonBatchResult()
         assert result.total_cost_usd == 0.0
         assert result.contradictions_found == 0
@@ -344,7 +364,10 @@ class TestStatementComparator:
     ) -> None:
         """Should detect contradiction with amount mismatch (AC #2)."""
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
-            mock_settings.return_value = MagicMock(openai_api_key="test-key")
+            mock_settings.return_value = MagicMock(
+                openai_api_key="test-key",
+                contradiction_model_routing_enabled=False,
+            )
 
             comparator = StatementComparator()
 
@@ -356,8 +379,9 @@ class TestStatementComparator:
             mock_completion.usage = MagicMock()
             mock_completion.usage.prompt_tokens = 500
             mock_completion.usage.completion_tokens = 150
+            mock_completion.usage.prompt_tokens_details = None
             mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
-            comparator._client = mock_client
+            comparator._openai_client = mock_client
 
             stmt_a = Statement(
                 entity_id="entity-123",
@@ -400,7 +424,10 @@ class TestStatementComparator:
     ) -> None:
         """Should mark consistent pairs as consistent (AC #3)."""
         with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
-            mock_settings.return_value = MagicMock(openai_api_key="test-key")
+            mock_settings.return_value = MagicMock(
+                openai_api_key="test-key",
+                contradiction_model_routing_enabled=False,
+            )
 
             comparator = StatementComparator()
 
@@ -411,8 +438,9 @@ class TestStatementComparator:
             mock_completion.usage = MagicMock()
             mock_completion.usage.prompt_tokens = 500
             mock_completion.usage.completion_tokens = 100
+            mock_completion.usage.prompt_tokens_details = None
             mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
-            comparator._client = mock_client
+            comparator._openai_client = mock_client
 
             stmt_a = Statement(
                 entity_id="entity-123",
@@ -670,6 +698,7 @@ class TestRetryLogic:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
+                contradiction_model_routing_enabled=False,
             )
 
             comparator = StatementComparator()
@@ -687,6 +716,7 @@ class TestRetryLogic:
             success_response.usage = MagicMock()
             success_response.usage.prompt_tokens = 100
             success_response.usage.completion_tokens = 50
+            success_response.usage.prompt_tokens_details = None
 
             mock_client.chat.completions.create = AsyncMock(
                 side_effect=[
@@ -694,7 +724,7 @@ class TestRetryLogic:
                     success_response,
                 ]
             )
-            comparator._client = mock_client
+            comparator._openai_client = mock_client
 
             stmt = Statement(
                 entity_id="e1", chunk_id="c1", document_id="d1",
@@ -719,6 +749,7 @@ class TestRetryLogic:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
+                contradiction_model_routing_enabled=False,
             )
 
             comparator = StatementComparator()
@@ -735,6 +766,7 @@ class TestRetryLogic:
             success_response.usage = MagicMock()
             success_response.usage.prompt_tokens = 100
             success_response.usage.completion_tokens = 50
+            success_response.usage.prompt_tokens_details = None
 
             mock_client.chat.completions.create = AsyncMock(
                 side_effect=[
@@ -742,7 +774,7 @@ class TestRetryLogic:
                     success_response,
                 ]
             )
-            comparator._client = mock_client
+            comparator._openai_client = mock_client
 
             stmt = Statement(
                 entity_id="e1", chunk_id="c1", document_id="d1",
@@ -766,6 +798,7 @@ class TestRetryLogic:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
+                contradiction_model_routing_enabled=False,
             )
 
             comparator = StatementComparator()
@@ -774,7 +807,7 @@ class TestRetryLogic:
             mock_client.chat.completions.create = AsyncMock(
                 side_effect=Exception("401 Invalid API key")
             )
-            comparator._client = mock_client
+            comparator._openai_client = mock_client
 
             stmt = Statement(
                 entity_id="e1", chunk_id="c1", document_id="d1",

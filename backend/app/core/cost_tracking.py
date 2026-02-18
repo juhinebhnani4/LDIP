@@ -48,6 +48,15 @@ logger = structlog.get_logger(__name__)
 USD_TO_INR_RATE = 90.50
 
 
+def _get_usd_to_inr_rate() -> float:
+    """Get current USD to INR rate from settings (or fallback constant)."""
+    try:
+        from app.core.config import get_settings
+        return get_settings().usd_to_inr_rate
+    except Exception:
+        return USD_TO_INR_RATE
+
+
 def usd_to_inr(usd_amount: float) -> float:
     """Convert USD to INR.
 
@@ -57,7 +66,7 @@ def usd_to_inr(usd_amount: float) -> float:
     Returns:
         Amount in INR.
     """
-    return usd_amount * USD_TO_INR_RATE
+    return usd_amount * _get_usd_to_inr_rate()
 
 
 def inr_to_usd(inr_amount: float) -> float:
@@ -69,7 +78,7 @@ def inr_to_usd(inr_amount: float) -> float:
     Returns:
         Amount in USD.
     """
-    return inr_amount / USD_TO_INR_RATE
+    return inr_amount / _get_usd_to_inr_rate()
 
 
 # =============================================================================
@@ -208,6 +217,7 @@ class CostTracker:
     matter_id: str | None = None
     document_id: str | None = None
     entity_id: str | None = None
+    user_id: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     cached_input_tokens: int = 0
@@ -217,10 +227,8 @@ class CostTracker:
     @property
     def pricing(self) -> ProviderPricing:
         """Get pricing for this provider."""
-        return PROVIDER_PRICING.get(
-            self.provider,
-            ProviderPricing(input_cost_per_1k=0.0, output_cost_per_1k=0.0),
-        )
+        from app.core.pricing_loader import get_pricing
+        return get_pricing(self.provider)
 
     @property
     def input_cost_usd(self) -> float:
@@ -555,11 +563,10 @@ def estimate_cost_inr(
     Returns:
         Estimated cost in INR.
     """
+    from app.core.pricing_loader import get_pricing
+
     input_tokens = estimate_tokens(input_text)
-    pricing = PROVIDER_PRICING.get(
-        provider,
-        ProviderPricing(input_cost_per_1k=0.0, output_cost_per_1k=0.0),
-    )
+    pricing = get_pricing(provider)
 
     input_cost_usd = (input_tokens / 1000) * pricing.input_cost_per_1k
     output_cost_usd = (estimated_output_tokens / 1000) * pricing.output_cost_per_1k
@@ -594,8 +601,11 @@ def get_model_pricing_info() -> dict[str, dict[str, Any]]:
         Dictionary of model pricing for documentation/display.
         Includes both USD and INR pricing.
     """
+    from app.core.pricing_loader import get_provider_pricing
+
+    all_pricing = get_provider_pricing()
     return {
-        provider.value: {
+        provider_key: {
             # USD pricing (base)
             "input_cost_per_1k_usd": pricing.input_cost_per_1k,
             "output_cost_per_1k_usd": pricing.output_cost_per_1k,
@@ -604,7 +614,7 @@ def get_model_pricing_info() -> dict[str, dict[str, Any]]:
             "output_cost_per_1k_inr": round(usd_to_inr(pricing.output_cost_per_1k), 4),
             "unit": pricing.unit,
         }
-        for provider, pricing in PROVIDER_PRICING.items()
+        for provider_key, pricing in all_pricing.items()
     }
 
 
@@ -614,9 +624,10 @@ def get_exchange_rate() -> dict[str, float]:
     Returns:
         Dictionary with exchange rate info.
     """
+    rate = _get_usd_to_inr_rate()
     return {
-        "usd_to_inr": USD_TO_INR_RATE,
-        "inr_to_usd": 1 / USD_TO_INR_RATE,
+        "usd_to_inr": rate,
+        "inr_to_usd": 1 / rate,
     }
 
 
@@ -659,10 +670,13 @@ class CostPersistenceService:
             The created record ID, or None if save failed.
         """
         try:
+            from app.core.correlation import get_cost_user_id
+
             record = {
                 "matter_id": tracker.matter_id,
                 "document_id": tracker.document_id,
                 "entity_id": tracker.entity_id,
+                "user_id": tracker.user_id or get_cost_user_id(),
                 "provider": tracker.provider.value,
                 "operation": tracker.operation,
                 "input_tokens": tracker.input_tokens,
@@ -676,7 +690,7 @@ class CostPersistenceService:
                 "output_cost_usd": tracker.output_cost_usd,
                 "total_cost_usd": tracker.total_cost_usd,
                 # Exchange rate at time of tracking
-                "usd_to_inr_rate": USD_TO_INR_RATE,
+                "usd_to_inr_rate": _get_usd_to_inr_rate(),
                 "duration_ms": tracker.duration_ms,
                 "metadata": {
                     **(metadata or {}),
@@ -928,10 +942,13 @@ def persist_cost_sync(tracker: CostTracker) -> str | None:
     if not service:
         return None
     try:
+        from app.core.correlation import get_cost_user_id
+
         record = {
             "matter_id": tracker.matter_id,
             "document_id": tracker.document_id,
             "entity_id": tracker.entity_id,
+            "user_id": tracker.user_id or get_cost_user_id(),
             "provider": tracker.provider.value,
             "operation": tracker.operation,
             "input_tokens": tracker.input_tokens,
@@ -942,7 +959,7 @@ def persist_cost_sync(tracker: CostTracker) -> str | None:
             "input_cost_usd": tracker.input_cost_usd,
             "output_cost_usd": tracker.output_cost_usd,
             "total_cost_usd": tracker.total_cost_usd,
-            "usd_to_inr_rate": USD_TO_INR_RATE,
+            "usd_to_inr_rate": _get_usd_to_inr_rate(),
             "duration_ms": tracker.duration_ms,
             "metadata": {
                 **({"cached_input_tokens": tracker.cached_input_tokens,

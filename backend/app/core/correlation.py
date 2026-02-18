@@ -70,7 +70,7 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             # Clear context after request to prevent leakage to other requests
-            structlog.contextvars.unbind_contextvars("correlation_id")
+            structlog.contextvars.unbind_contextvars("correlation_id", "cost_user_id")
 
 
 def get_correlation_id() -> str | None:
@@ -86,5 +86,30 @@ def get_correlation_id() -> str | None:
         # Access the current context variables
         ctx = structlog.contextvars.get_contextvars()
         return ctx.get("correlation_id")
+    except Exception:
+        return None
+
+
+def bind_cost_user_id(user_id: str) -> None:
+    """Bind user_id to structlog context for cost attribution (P5).
+
+    Called in chat endpoints so all CostTracker calls within the request
+    automatically pick up the user_id without explicit passing.
+
+    Args:
+        user_id: Authenticated user's UUID string.
+    """
+    structlog.contextvars.bind_contextvars(cost_user_id=user_id)
+
+
+def get_cost_user_id() -> str | None:
+    """Get the current cost_user_id from context.
+
+    Returns:
+        The user_id bound for cost attribution, or None if not set.
+    """
+    try:
+        ctx = structlog.contextvars.get_contextvars()
+        return ctx.get("cost_user_id")
     except Exception:
         return None

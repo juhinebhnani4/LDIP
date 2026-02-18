@@ -58,14 +58,6 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-# GPT-4o pricing (as of Oct 2024) — 75% cheaper than GPT-4 Turbo
-GPT4_INPUT_COST_PER_1K = 0.0025  # $2.50 per 1M input tokens
-GPT4_OUTPUT_COST_PER_1K = 0.01  # $10 per 1M output tokens
-
-# Gemini Flash pricing (as of Jan 2025) - much cheaper for screening
-GEMINI_INPUT_COST_PER_1K = 0.000075  # $0.075 per 1M input tokens
-GEMINI_OUTPUT_COST_PER_1K = 0.0003  # $0.30 per 1M output tokens
-
 # Rate limiting
 DEFAULT_BATCH_SIZE = 5  # Process 5 pairs in parallel (rate limit safe)
 
@@ -168,18 +160,22 @@ class LLMCostTracker:
         Returns:
             Total cost based on token counts for both tiers.
         """
+        from app.core.pricing_loader import get_pricing
+
         total_cost = 0.0
 
         # Screening tier cost (Gemini)
         if self.screening_model:
-            screening_input = (self.screening_input_tokens / 1000) * GEMINI_INPUT_COST_PER_1K
-            screening_output = (self.screening_output_tokens / 1000) * GEMINI_OUTPUT_COST_PER_1K
+            screening_pricing = get_pricing(self.screening_model)
+            screening_input = (self.screening_input_tokens / 1000) * screening_pricing.input_cost_per_1k
+            screening_output = (self.screening_output_tokens / 1000) * screening_pricing.output_cost_per_1k
             total_cost += screening_input + screening_output
 
         # Full analysis tier cost (GPT-4) - only if escalated
         if self.input_tokens > 0 or self.output_tokens > 0:
-            input_cost = (self.input_tokens / 1000) * GPT4_INPUT_COST_PER_1K
-            output_cost = (self.output_tokens / 1000) * GPT4_OUTPUT_COST_PER_1K
+            gpt4_pricing = get_pricing(self.model)
+            input_cost = (self.input_tokens / 1000) * gpt4_pricing.input_cost_per_1k
+            output_cost = (self.output_tokens / 1000) * gpt4_pricing.output_cost_per_1k
             total_cost += input_cost + output_cost
 
         return total_cost
@@ -200,8 +196,11 @@ class ComparisonBatchResult:
     @property
     def total_cost_usd(self) -> float:
         """Calculate total cost for all comparisons."""
-        input_cost = (self.total_input_tokens / 1000) * GPT4_INPUT_COST_PER_1K
-        output_cost = (self.total_output_tokens / 1000) * GPT4_OUTPUT_COST_PER_1K
+        from app.core.pricing_loader import get_pricing
+
+        gpt4_pricing = get_pricing("gpt-4o")
+        input_cost = (self.total_input_tokens / 1000) * gpt4_pricing.input_cost_per_1k
+        output_cost = (self.total_output_tokens / 1000) * gpt4_pricing.output_cost_per_1k
         return input_cost + output_cost
 
     @property

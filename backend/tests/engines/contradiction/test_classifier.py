@@ -56,8 +56,13 @@ class TestClassificationCostTracker:
         )
         assert tracker.cost_usd == 0.0
 
-    def test_cost_calculated_when_llm_used(self) -> None:
+    @patch("app.core.pricing_loader.get_provider_pricing")
+    def test_cost_calculated_when_llm_used(self, mock_pricing) -> None:
         """Should calculate cost when LLM fallback is used."""
+        from app.core.cost_tracking import ProviderPricing
+        mock_pricing.return_value = {
+            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+        }
         tracker = ClassificationCostTracker(
             input_tokens=1000,
             output_tokens=500,
@@ -547,6 +552,7 @@ class TestContradictionClassifierLLMFallback:
         mock_completion.usage = MagicMock()
         mock_completion.usage.prompt_tokens = 300
         mock_completion.usage.completion_tokens = 100
+        mock_completion.usage.prompt_tokens_details = None
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
         classifier._client = mock_client
 

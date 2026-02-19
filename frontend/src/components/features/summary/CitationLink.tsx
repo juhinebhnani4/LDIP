@@ -8,7 +8,6 @@
  * Story 10B.2: Summary Tab Verification and Edit (AC #4)
  */
 
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Tooltip,
@@ -17,6 +16,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { openDocumentByName } from '@/lib/utils/openDocument';
 
 interface CitationLinkProps {
   /** Document name */
@@ -41,21 +41,23 @@ export function CitationLink({
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
 
-  const href = `/matter/${matterId}/documents?doc=${encodeURIComponent(documentName)}&page=${pageNumber}`;
-
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link
-            href={href}
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              openDocumentByName(matterId, documentName, pageNumber);
+            }}
             className={cn(
-              'text-blue-600 hover:text-blue-800 underline underline-offset-2 inline-flex items-center gap-1',
+              'text-blue-600 hover:text-blue-800 underline underline-offset-2 inline-flex items-center gap-1 cursor-pointer',
               className
             )}
           >
             {displayText ?? `pg. ${pageNumber}`}
-          </Link>
+          </a>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs">
           <p className="font-medium">{documentName}</p>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Calendar, ExternalLink, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +12,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { SummaryNotesDialog } from './SummaryNotesDialog';
 import { EditableSection } from './EditableSection';
 import { CitationLink } from './CitationLink';
+import { openDocumentByName } from '@/lib/utils/openDocument';
 import type { CurrentStatus, SummaryVerificationDecision } from '@/types/summary';
 
 /**
@@ -147,14 +147,14 @@ export function CurrentStatusSection({
             </span>
           )}
         </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link
-            href={`/matter/${matterId}/documents?doc=${encodeURIComponent(currentStatus.sourceDocument)}${currentStatus.sourcePage ? `&page=${currentStatus.sourcePage}` : ''}`}
-            aria-label={`View full order: ${currentStatus.sourceDocument}${currentStatus.sourcePage ? `, page ${currentStatus.sourcePage}` : ''}`}
-          >
-            <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-            View Full Order
-          </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => openDocumentByName(matterId, currentStatus.sourceDocument, currentStatus.sourcePage)}
+          aria-label={`View full order: ${currentStatus.sourceDocument}${currentStatus.sourcePage ? `, page ${currentStatus.sourcePage}` : ''}`}
+        >
+          <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+          View Full Order
         </Button>
       </div>
     </>

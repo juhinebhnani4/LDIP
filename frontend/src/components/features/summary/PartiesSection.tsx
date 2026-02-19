@@ -12,6 +12,7 @@ import { InlineVerificationButtons } from './InlineVerificationButtons';
 import { VerificationBadge } from './VerificationBadge';
 import { SummaryNotesDialog } from './SummaryNotesDialog';
 import { CitationLink } from './CitationLink';
+import { openDocumentByName } from '@/lib/utils/openDocument';
 import type { PartyInfo, PartyRole, SummaryVerificationDecision } from '@/types/summary';
 
 /**
@@ -175,18 +176,14 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
               </Link>
             </Button>
             <Button
-              asChild
               variant="ghost"
               size="sm"
               className="flex-1"
+              onClick={() => openDocumentByName(matterId, party.sourceDocument, party.sourcePage)}
+              aria-label={`View source: ${party.sourceDocument}${party.sourcePage ? `, page ${party.sourcePage}` : ''}`}
             >
-              <Link
-                href={`/matter/${matterId}/documents?doc=${encodeURIComponent(party.sourceDocument)}${party.sourcePage ? `&page=${party.sourcePage}` : ''}`}
-                aria-label={`View source: ${party.sourceDocument}${party.sourcePage ? `, page ${party.sourcePage}` : ''}`}
-              >
-                <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                View Source
-              </Link>
+              <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              View Source
             </Button>
           </div>
         </CardContent>

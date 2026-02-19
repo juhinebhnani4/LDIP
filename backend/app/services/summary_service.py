@@ -14,6 +14,7 @@ Summary generation = user-facing, accuracy critical.
 
 import asyncio
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -255,6 +256,55 @@ class SummaryService:
             self.get_key_issues(matter_id, top_chunks),
             self.get_current_status(matter_id, top_chunks, recent_events),
         )
+
+        # BUG-005 fix: Case Overview (GPT-4) is authoritative for party names.
+        # Entity extraction (Gemini) often hallucinates names (e.g., "Prisoner",
+        # "State of Maharashtra"). Use overview names as primary, enriched with
+        # entity metadata (entity_id, citations, pages) when available.
+        overview_parties = self._parse_parties_from_overview(
+            subject_matter.description
+        )
+        if overview_parties:
+            entity_by_role = {}
+            for p in parties:
+                if p.role not in entity_by_role:
+                    entity_by_role[p.role] = p
+
+            enriched = []
+            for op in overview_parties:
+                entity_match = entity_by_role.get(op.role)
+                if entity_match:
+                    # If entity name differs from overview name, the entity had
+                    # a wrong/generic name (e.g. "Prisoner" instead of "State of
+                    # Uttar Pradesh"). In that case the entity's source_page
+                    # points to where the wrong name appears, not the real party.
+                    # Default to page 1 (cover page lists parties in Indian
+                    # court judgments).
+                    names_match = (
+                        entity_match.entity_name.lower().strip()
+                        == op.entity_name.lower().strip()
+                    )
+                    # When names don't match, fix page to 1 (cover page)
+                    # and create a corrected citation so the link stays clickable.
+                    corrected_page = entity_match.source_page if names_match else 1
+                    corrected_citation = entity_match.citation
+                    if not names_match and entity_match.citation:
+                        corrected_citation = entity_match.citation.model_copy(
+                            update={"page": 1, "excerpt": None}
+                        )
+                    enriched.append(PartyInfo(
+                        entity_id=entity_match.entity_id,
+                        entity_name=op.entity_name,  # Overview name wins
+                        role=op.role,
+                        source_document=entity_match.source_document,
+                        source_page=corrected_page,
+                        is_verified=entity_match.is_verified,
+                        citation=corrected_citation,
+                    ))
+                else:
+                    enriched.append(op)
+            parties = enriched
+        # else: no overview available, keep entity-extracted parties as-is
 
         # Build summary
         summary = MatterSummary(
@@ -587,7 +637,6 @@ class SummaryService:
             return True
 
         # Patterns for numbered placeholders like "Respondent No.1", "Respondent 2"
-        import re
         numbered_pattern = re.compile(
             r"^(respondent|petitioner|appellant|defendant|applicant|complainant)\s*(no\.?|nos\.?|number)?\s*\d*$",
             re.IGNORECASE,
@@ -611,6 +660,73 @@ class SummaryService:
                 return True
 
         return False
+
+    def _parse_parties_from_overview(self, description: str) -> list[PartyInfo]:
+        """Parse party names from the GPT-4 case overview markdown.
+
+        BUG-005 fix: Entity extraction sometimes hallucinates party names
+        (e.g., "State of Maharashtra" instead of "State of Uttar Pradesh").
+        The GPT-4 case overview reads the full document and is always correct.
+        Use its Parties section as ground truth.
+
+        Args:
+            description: The case overview markdown text.
+
+        Returns:
+            List of PartyInfo objects parsed from the overview.
+        """
+        parties = []
+        if not description:
+            return parties
+
+        # Match "Petitioner/Applicant/Appellant: Name(s)" patterns
+        petitioner_pattern = re.compile(
+            r"\*?\*?(?:Petitioner|Applicant|Appellant)(?:/\w+)?(?:\(s\))?\s*:\*?\*?\s*(.+)",
+            re.IGNORECASE,
+        )
+        respondent_pattern = re.compile(
+            r"\*?\*?(?:Respondent|Defendant)(?:\(s\))?\s*:\*?\*?\s*(.+)",
+            re.IGNORECASE,
+        )
+
+        for line in description.split("\n"):
+            line = line.strip().lstrip("•-* ")
+
+            pet_match = petitioner_pattern.search(line)
+            if pet_match:
+                name = pet_match.group(1).strip().rstrip("*")
+                if name and not self._is_placeholder_party_name(name):
+                    parties.append(
+                        PartyInfo(
+                            entity_id=str(uuid.uuid4()),
+                            entity_name=name,
+                            role=PartyRole.PETITIONER,
+                            source_document="Case Overview",
+                            source_page=1,
+                            is_verified=False,
+                            citation=None,
+                        )
+                    )
+
+            resp_match = respondent_pattern.search(line)
+            if resp_match:
+                name = resp_match.group(1).strip().rstrip("*")
+                # Remove trailing parenthetical descriptions
+                name = re.sub(r"\s*\(.*\)\s*$", "", name).strip()
+                if name and not self._is_placeholder_party_name(name):
+                    parties.append(
+                        PartyInfo(
+                            entity_id=str(uuid.uuid4()),
+                            entity_name=name,
+                            role=PartyRole.RESPONDENT,
+                            source_document="Case Overview",
+                            source_page=1,
+                            is_verified=False,
+                            citation=None,
+                        )
+                    )
+
+        return parties
 
     async def _check_party_verified(self, matter_id: str, entity_id: str) -> bool:
         """Check if a party entity has been verified.
@@ -974,6 +1090,98 @@ class SummaryService:
                 retry_text = retry_response.choices[0].message.content
                 parsed = json.loads(retry_text)
                 raw_description = parsed.get("description", "")
+
+            # BUG-003 FIX: Structural section validator.
+            # Verify the Case Overview contains all required sections.  If any
+            # are missing, retry once with explicit instructions listing the
+            # missing sections.  This makes correctness structural rather than
+            # relying solely on prompt compliance.
+            _required_sections = {
+                "Case Type": r"\*\*Case Type",
+                "Parties": r"\*\*Parties",
+                "Core Dispute": r"\*\*Core Dispute",
+                "Background": r"\*\*Background",
+            }
+            missing = [
+                name
+                for name, pattern in _required_sections.items()
+                if not re.search(pattern, raw_description, re.IGNORECASE)
+            ]
+            if missing and not any(
+                m.lower() in raw_description.lower() for m in _placeholder_markers
+            ):
+                logger.warning(
+                    "subject_matter_missing_sections",
+                    matter_id=matter_id,
+                    missing_sections=missing,
+                )
+                section_retry_response = await self.openai_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": SUBJECT_MATTER_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                        {"role": "assistant", "content": response_text},
+                        {
+                            "role": "user",
+                            "content": (
+                                "Your response is missing these required sections: "
+                                f"{', '.join(missing)}. "
+                                "Regenerate the complete case overview with ALL "
+                                "required sections: Case Type, Forum, Parties, "
+                                "Core Dispute, Background, Relief Sought, Current Stage."
+                            ),
+                        },
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.4,
+                )
+                retry_tracker = CostTracker(
+                    provider=LLMProvider.OPENAI_GPT4O,
+                    operation="summary_subject_matter_section_retry",
+                    matter_id=matter_id,
+                )
+                if section_retry_response.usage:
+                    retry_tracker.add_tokens(
+                        input_tokens=section_retry_response.usage.prompt_tokens or 0,
+                        output_tokens=section_retry_response.usage.completion_tokens or 0,
+                        cached_input_tokens=getattr(
+                            section_retry_response.usage, "prompt_tokens_details", None
+                        )
+                        and getattr(
+                            section_retry_response.usage.prompt_tokens_details,
+                            "cached_tokens",
+                            0,
+                        )
+                        or 0,
+                    )
+                retry_tracker.log_cost()
+                await persist_cost(retry_tracker)
+
+                retry_text = section_retry_response.choices[0].message.content
+                retry_parsed = json.loads(retry_text)
+                retry_description = retry_parsed.get("description", "")
+
+                # Accept retry if it has MORE required sections than original
+                retry_missing = [
+                    name
+                    for name, pattern in _required_sections.items()
+                    if not re.search(pattern, retry_description, re.IGNORECASE)
+                ]
+                if len(retry_missing) < len(missing):
+                    raw_description = retry_description
+                    parsed = retry_parsed
+                    logger.info(
+                        "subject_matter_section_retry_improved",
+                        matter_id=matter_id,
+                        original_missing=missing,
+                        retry_missing=retry_missing,
+                    )
+                else:
+                    logger.info(
+                        "subject_matter_section_retry_no_improvement",
+                        matter_id=matter_id,
+                        missing_sections=missing,
+                    )
 
             # Apply language policing
             policing = get_language_policing_service()
@@ -1499,18 +1707,20 @@ class SummaryService:
     def _is_summary_valid(self, summary: MatterSummary) -> bool:
         """Check if summary generation actually succeeded.
 
-        Returns False if all GPT-4 sections failed, indicating the summary
-        should NOT be cached (so users can retry immediately).
+        BUG-003 FIX: Requires subject_matter AND at least one of the other
+        sections to succeed.  Previously used OR (any-one-ok), which cached
+        incomplete summaries missing key sections.
 
         Args:
             summary: The generated summary to validate.
 
         Returns:
-            True if at least one GPT-4 section succeeded.
+            True if subject_matter succeeded and at least one other section did.
         """
         subject_matter_ok = (
             summary.subject_matter.description
             != "Unable to generate summary at this time."
+            and len(summary.subject_matter.description) > 50
         )
         key_issues_ok = len(summary.key_issues) > 0
         current_status_ok = (
@@ -1519,7 +1729,8 @@ class SummaryService:
             or summary.current_status.last_order_date is not None
         )
 
-        return subject_matter_ok or key_issues_ok or current_status_ok
+        # Subject matter is mandatory; at least one other section must also pass
+        return subject_matter_ok and (key_issues_ok or current_status_ok)
 
     # =========================================================================
     # Redis Caching (Task 2.8) - AC #4

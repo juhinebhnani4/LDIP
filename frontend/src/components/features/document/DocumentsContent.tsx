@@ -12,7 +12,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -21,7 +22,7 @@ import { DocumentsHeader } from './DocumentsHeader';
 import { AddDocumentsDialog } from './AddDocumentsDialog';
 import { LinkedLibraryPanel } from '../library/LinkedLibraryPanel';
 import { useDocuments } from '@/hooks/useDocuments';
-import { retryAllStuckDocuments } from '@/lib/api/documents';
+import { fetchDocument, retryAllStuckDocuments } from '@/lib/api/documents';
 import type { DocumentListItem } from '@/types/document';
 
 interface DocumentsContentProps {
@@ -120,6 +121,33 @@ export function DocumentsContent({
 
   // Fetch documents using hook
   const { documents, isLoading, error, refresh } = useDocuments(matterId);
+
+  // Cross-tab navigation: read ?doc=...&page=... from URL
+  const searchParams = useSearchParams();
+  const docParam = searchParams.get('doc');
+  const pageParam = searchParams.get('page') || searchParams.get('pages')?.split('-')[0];
+
+  // Find the document matching the URL param (by filename or ID)
+  const targetDoc = useMemo(() => {
+    if (!docParam || !documents.length) return null;
+    const decoded = decodeURIComponent(docParam);
+    return documents.find(
+      (d) => d.filename === docParam || d.filename === decoded || d.id === docParam
+    ) || null;
+  }, [docParam, documents]);
+
+  // Open a document in a new tab (with optional page anchor)
+  const handleOpenDocument = useCallback(async (doc: DocumentListItem, page?: string) => {
+    try {
+      const fullDoc = await fetchDocument(doc.id);
+      const url = page
+        ? `${fullDoc.storagePath}#page=${page}`
+        : fullDoc.storagePath;
+      window.open(url, '_blank');
+    } catch {
+      toast.error('Failed to open document');
+    }
+  }, []);
 
   // Calculate processing documents count
   const processingStats = useMemo(() => {
@@ -226,12 +254,28 @@ export function DocumentsContent({
           </div>
         )}
 
+        {/* Cross-tab navigation: prompt to open the targeted document */}
+        {targetDoc && (
+          <div className="flex items-center justify-between p-3 rounded-lg border bg-primary/5 border-primary/20">
+            <span className="text-sm font-medium">
+              {targetDoc.filename}{pageParam ? `, page ${pageParam}` : ''}
+            </span>
+            <button
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleOpenDocument(targetDoc, pageParam || undefined)}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open Document
+            </button>
+          </div>
+        )}
+
         {/* Document List - pass documents to avoid double fetching */}
         <DocumentList
           matterId={matterId}
           documents={documents}
           onRefresh={refresh}
-          onDocumentClick={onDocumentClick}
+          onDocumentClick={onDocumentClick || ((doc) => handleOpenDocument(doc))}
         />
 
         {/* Linked Library Panel - Phase 2: Shared Legal Library */}

@@ -5903,6 +5903,40 @@ def detect_contradictions(
             chunk_entities = chunk.get("entity_ids") or []
             entity_ids.update(chunk_entities)
 
+        # BUG-LT-H FIX: Document-level idempotency check.
+        # Check if contradictions already exist for the entities in THIS
+        # document, not the entire matter.  This ensures uploading a second
+        # document to a matter still triggers contradiction detection for its
+        # new entities.
+        if entity_ids:
+            existing_for_entities = (
+                client.table("statement_comparisons")
+                .select("entity_id")
+                .eq("matter_id", matter_id)
+                .in_("entity_id", list(entity_ids))
+                .execute()
+            )
+            already_compared = {
+                r["entity_id"] for r in (existing_for_entities.data or [])
+            }
+            if entity_ids.issubset(already_compared):
+                logger.info(
+                    "detect_contradictions_idempotency_skip",
+                    document_id=doc_id,
+                    matter_id=matter_id,
+                    entities_already_compared=len(already_compared),
+                    reason="All entities from this document already have comparisons",
+                )
+                _populate_verification_records(matter_id, doc_id)
+                _mark_job_completed(job_id, matter_id, document_id=doc_id)
+                return {
+                    "status": "contradiction_detection_complete",
+                    "document_id": doc_id,
+                    "contradictions_found": len(already_compared),
+                    "reason": "Idempotency: all document entities already compared",
+                    "job_id": job_id,
+                }
+
         if not entity_ids:
             logger.info(
                 "detect_contradictions_no_entities",
@@ -6205,11 +6239,20 @@ def detect_contradictions(
                 document_id=doc_id,
                 error=str(e),
             )
+            # BUG-001/002 fix: Complete the pipeline even on comparison failure.
+            # Contradiction detection is the final stage — earlier stages
+            # (entities, citations, timeline) already succeeded and their
+            # results should remain visible. Mark document COMPLETED so the
+            # frontend doesn't show a false "failed processing" banner.
+            if matter_id and doc_id:
+                _populate_verification_records(matter_id, doc_id)
+                _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_failed",
                 "document_id": doc_id,
                 "error_code": e.code,
                 "error_message": e.message,
+                "job_id": job_id,
             }
 
         raise
@@ -6220,11 +6263,17 @@ def detect_contradictions(
             document_id=doc_id,
             error=str(e),
         )
+        # BUG-001/002 fix: Same as above — complete the pipeline so
+        # earlier-stage results stay visible.
+        if matter_id and doc_id:
+            _populate_verification_records(matter_id, doc_id)
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": e.code,
             "error_message": e.message,
+            "job_id": job_id,
         }
 
     except Exception as e:
@@ -6234,37 +6283,17 @@ def detect_contradictions(
             error=str(e),
             error_type=type(e).__name__,
         )
-        # Mark document completed so entity/citation/timeline results stay visible,
-        # but mark the processing_job as FAILED for honest tracking.
+        # BUG-001/002 fix: Mark job COMPLETED (not FAILED) so the frontend
+        # doesn't show a false "failed processing" banner. Contradiction
+        # detection is the final stage — earlier stages (entities, citations,
+        # timeline) already succeeded and their results should stay visible.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
-            # Update document status to completed (other stages finished successfully)
-            try:
-                doc_service = get_document_service()
-                doc_service.update_ocr_status(
-                    document_id=doc_id,
-                    status=DocumentStatus.COMPLETED,
-                )
-            except Exception as doc_err:
-                logger.warning("contradiction_fail_doc_status_update_error", error=str(doc_err))
-            # Mark job FAILED with error context (not COMPLETED)
-            if job_id:
-                try:
-                    tracker = get_job_tracking_service()
-                    _run_async(
-                        tracker.update_job_status(
-                            job_id=job_id,
-                            status=JobStatus.FAILED,
-                            stage="contradiction_detection",
-                            error_message=f"Contradiction detection failed: {type(e).__name__}: {str(e)[:200]}",
-                            error_code="CONTRADICTION_FAILED",
-                        )
-                    )
-                except Exception as job_err:
-                    logger.warning("contradiction_fail_job_update_error", error=str(job_err))
+            _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "UNEXPECTED_ERROR",
             "error_message": str(e),
+            "job_id": job_id,
         }

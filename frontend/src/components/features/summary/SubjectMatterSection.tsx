@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { FileText, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +12,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { SummaryNotesDialog } from './SummaryNotesDialog';
 import { EditableSection } from './EditableSection';
 import { CitationLink } from './CitationLink';
+import { openDocumentByName } from '@/lib/utils/openDocument';
 import type { SubjectMatter, SummaryVerificationDecision } from '@/types/summary';
 
 /**
@@ -127,18 +127,14 @@ export function SubjectMatterSection({
             {subjectMatter.sources.map((source, index) => (
               <Button
                 key={`${source.documentName}-${index}`}
-                asChild
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs"
+                onClick={() => openDocumentByName(matterId, source.documentName, source.pageRange.split('-')[0])}
+                aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
               >
-                <Link
-                  href={`/matter/${matterId}/documents?doc=${encodeURIComponent(source.documentName)}&pages=${encodeURIComponent(source.pageRange)}`}
-                  aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
-                >
-                  <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
-                  {source.documentName} (pp. {source.pageRange})
-                </Link>
+                <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
+                {source.documentName} (pp. {source.pageRange})
               </Button>
             ))}
           </div>

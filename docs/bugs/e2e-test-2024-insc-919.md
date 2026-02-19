@@ -37,9 +37,9 @@
 | Category | Round 1 | Round 2 | Round 3 | Total | Fixed |
 |----------|---------|---------|---------|-------|-------|
 | CRITICAL | 5 | 3 | 2 | 10 | 0 |
-| MAJOR | 5 | 3 | 5 | 13 | 5 |
+| MAJOR | 5 | 3 | 5 | 13 | 8 |
 | MINOR | 6 | 3 | 5 | 14 | 7 |
-| **Total** | **16** | **9** | **12** | **37** | **12** |
+| **Total** | **16** | **9** | **12** | **37** | **15** |
 
 ---
 
@@ -338,28 +338,31 @@
 
 #### BUG-LT3-B: "Date mentioned: Invalid Date" on all contradictions
 - **Severity**: MAJOR
-- **Status**: [ ] Open
-- **File**: Frontend contradictions display component
+- **Status**: [x] Fixed
+- **File**: `backend/app/services/contradiction_list_service.py`, `frontend/src/components/features/contradiction/StatementSection.tsx`
 - **What happens**: Every contradiction card shows "Date mentioned: Invalid Date" instead of an actual date or no date field at all.
 - **Impact**: UI looks broken. Lawyers reading contradiction details see "Invalid Date" which reduces trust.
-- **Fix direction**: Check the date parsing in the contradictions component — likely a `new Date(null)` or `new Date(undefined)` producing "Invalid Date". Either fix the data source or hide the field when no date is available.
+- **Root cause**: Backend extracted `evidence.get("value_a")` as a date for ALL contradiction types, but `value_a`/`value_b` are generic evidence values — only meaningful as dates for `date_mismatch`/`temporal_discrepancy` types. For semantic contradictions, these contain text descriptions that `new Date()` can't parse, producing "Invalid Date" (which doesn't throw in JS).
+- **Fix**: (1) Backend: Only populate `StatementInfo.date` when evidence type is `date_mismatch` or `temporal_discrepancy`. All other contradiction types get `date=None`. (2) Frontend: Added `isNaN(date.getTime())` guard in `formatDate()` as defense-in-depth — returns null for unparseable strings instead of "Invalid Date".
 
 #### BUG-LT3-C: Timeline header says "0 events" but body shows 17 of 24
 - **Severity**: MAJOR
-- **Status**: [ ] Open
-- **File**: Frontend timeline tab header/stats component
+- **Status**: [x] Fixed
+- **File**: `frontend/src/components/features/timeline/TimelineHeader.tsx`
 - **What happens**: Timeline tab header displays "0 events" count, but the body correctly shows "Showing 17 of 24 events" with all events rendered and grouped by year.
 - **Impact**: Contradictory display. Header suggests no data while body shows rich timeline.
-- **Fix direction**: The header event count query is likely separate from the body's event list query. Check if the header uses a different API call or count method.
+- **Root cause**: Header used `stats?.totalEvents ?? totalEventsFromMeta ?? fallbackEventCount ?? 0` where `stats?.totalEvents` came from a separate `/timeline/stats` endpoint. When that endpoint returned `totalEvents: 0` (from stale cache or early-processing snapshot), the nullish coalescing (`??`) stopped at 0 since it's not null/undefined. The reliable `totalEventsFromMeta` from the actual `/timeline/full` data query was never reached.
+- **Fix**: Reordered priority to `totalEventsFromMeta ?? stats?.totalEvents ?? fallbackEventCount ?? 0`. The pagination meta from the actual events query is ground truth and always preferred when available.
 
 #### BUG-LT3-E: act_resolutions FK violation on act_document_id
 - **Severity**: MAJOR
-- **Status**: [ ] Open
-- **File**: Backend act resolution / citation verification logic
+- **Status**: [x] Fixed
+- **File**: `supabase/migrations/20260219000007_fix_act_resolutions_fk.sql`
 - **Log**: `insert or update on table "act_resolutions" violates foreign key constraint "act_resolutions_act_document_id_fkey"`
 - **What happens**: Act resolution tries to link to a library document ID, but the FK constraint references the `documents` table (matter documents) instead of `library_documents`. Library doc IDs don't exist in the `documents` table.
 - **Impact**: Act resolution results can't be stored. Citation verification can't link to act documents.
-- **Fix direction**: Check the FK constraint — `act_document_id` should reference `library_documents(id)` not `documents(id)`. Or the code should use the correct table's ID.
+- **Root cause**: The `act_resolutions` table was created (migration `20260106000007`) before the library system (migration `20260126000001`). When acts were migrated from per-matter `documents` to shared `library_documents`, the FK constraint on `act_document_id` was never updated. The backend upload flow creates `library_documents` records and passes their IDs to `act_resolutions`, but the FK still pointed to `documents(id)`.
+- **Fix**: New migration `20260219000007_fix_act_resolutions_fk.sql` drops the old FK and adds a corrected one referencing `library_documents(id)` with `ON DELETE SET NULL`.
 
 #### BUG-LT3-F: India Code HTTP error during act resolution
 - **Severity**: MAJOR

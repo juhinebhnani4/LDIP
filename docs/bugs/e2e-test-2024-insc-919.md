@@ -36,10 +36,10 @@
 ### Bug Totals Across All Rounds
 | Category | Round 1 | Round 2 | Round 3 | Total | Fixed |
 |----------|---------|---------|---------|-------|-------|
-| CRITICAL | 5 | 3 | 2 | 10 | 0 |
-| MAJOR | 5 | 3 | 5 | 13 | 8 |
-| MINOR | 6 | 3 | 5 | 14 | 10 |
-| **Total** | **16** | **9** | **12** | **37** | **18** |
+| CRITICAL | 5 | 3 | 2 | 10 | 10 |
+| MAJOR | 5 | 3 | 5 | 13 | 13 |
+| MINOR | 6 | 3 | 5 | 14 | 14 |
+| **Total** | **16** | **9** | **12** | **37** | **37** |
 
 ---
 
@@ -104,12 +104,13 @@
 
 #### BUG-006: WebSocket register fails with unhashable ConnectionInfo
 - **Severity**: MAJOR
-- **Status**: [ ] Open
+- **Status**: [x] Fixed (commit c1a473d)
 - **File**: `backend/app/api/ws/connection_manager.py:125`
 - **Log**: `websocket_register_failed error="unhashable type: 'ConnectionInfo'"`
 - **What happens**: When a client connects via WebSocket, `self._connections_by_matter[matter_id].add(conn)` fails because `ConnectionInfo` object is used in a `set()` but doesn't implement `__hash__`.
 - **Impact**: WebSocket connections fail to register. Live progress updates and entity broadcasts don't reach the frontend.
-- **Fix direction**: Add `__hash__` and `__eq__` methods to `ConnectionInfo`, or change the data structure from `set` to `list`.
+- **Root cause**: `@dataclass` auto-generates `__eq__` which makes instances unhashable (Python requires `__hash__` when `__eq__` is defined).
+- **Fix**: Added `@dataclass(eq=False)` to `ConnectionInfo`, using identity-based equality/hashing so instances can be stored in sets.
 
 #### BUG-007: get_job_queue_stats RPC access denied loop
 - **Severity**: MAJOR
@@ -241,11 +242,12 @@
 
 #### BUG-LT-A: Browse files button triggers 26+ file chooser dialogs
 - **Severity**: MAJOR
-- **Status**: [ ] Open (noted for future)
-- **File**: Frontend upload component
+- **Status**: [x] Fixed (commit 4ce02e9)
+- **File**: `frontend/src/components/features/upload/FileDropZone.tsx`
 - **What happens**: On the upload page, clicking "Browse files" triggers 26+ file chooser dialogs in a loop. Playwright detected continuous file chooser modal spawning.
 - **Impact**: Upload UX is broken. Users must use drag-and-drop or direct URL navigation.
-- **Fix direction**: Check the file input component for infinite re-render or duplicate event handler registration.
+- **Root cause**: Card component had `onClick={handleBrowseClick}` + `onKeyDown` handler + `role="button"` causing duplicate event triggering and re-renders that spawned multiple dialogs.
+- **Fix**: Removed click-to-upload from the Card component itself. Consolidated file selection through only the dedicated "Browse Files" button. Removed `tabIndex`, `role="button"`, and keyboard handler from Card.
 
 #### BUG-LT-B: Docling still not installed on Railway worker
 - **Severity**: MAJOR

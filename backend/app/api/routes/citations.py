@@ -310,7 +310,7 @@ async def get_citation_stats(
             unique_acts=discovery_stats["total_acts"],
             verified_count=verified_count,
             pending_count=pending_count,
-            missing_acts_count=discovery_stats["missing_count"],
+            missing_acts_count=discovery_stats["missing_count"] + discovery_stats.get("not_on_indiacode_count", 0),
         )
 
     except Exception as e:

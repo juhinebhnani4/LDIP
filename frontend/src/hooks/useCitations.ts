@@ -72,6 +72,7 @@ export interface UseActDiscoveryResult {
   missingCount: number;
   availableCount: number;
   skippedCount: number;
+  notOnIndiacodeCount: number;
   isLoading: boolean;
   error: Error | null;
   mutate: () => Promise<void>;
@@ -295,14 +296,16 @@ export function useActDiscoveryReport(matterId: string): UseActDiscoveryResult {
 
   const acts = data?.data ?? [];
   const missingCount = acts.filter((a) => a.resolutionStatus === 'missing').length;
-  const availableCount = acts.filter((a) => a.resolutionStatus === 'available').length;
+  const availableCount = acts.filter((a) => a.resolutionStatus === 'available' || a.resolutionStatus === 'auto_fetched').length;
   const skippedCount = acts.filter((a) => a.resolutionStatus === 'skipped').length;
+  const notOnIndiacodeCount = acts.filter((a) => a.resolutionStatus === 'not_on_indiacode').length;
 
   return {
     acts,
     missingCount,
     availableCount,
     skippedCount,
+    notOnIndiacodeCount,
     isLoading,
     error: error ?? null,
     mutate: async () => {

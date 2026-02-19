@@ -41,6 +41,7 @@ class ActResolutionStats:
     auto_fetched_count: int = 0
     auto_fetching_count: int = 0
     skipped_count: int = 0
+    not_on_indiacode_count: int = 0
     invalid_count: int = 0
     total_citations: int = 0
 
@@ -60,6 +61,7 @@ class ActResolutionStats:
             "auto_fetched_count": self.auto_fetched_count,
             "auto_fetching_count": self.auto_fetching_count,
             "skipped_count": self.skipped_count,
+            "not_on_indiacode_count": self.not_on_indiacode_count,
             "invalid_count": self.invalid_count,
             "total_citations": self.total_citations,
         }
@@ -118,6 +120,9 @@ def compute_resolution_stats(
             stats.total_acts += 1
         elif resolution.resolution_status == ActResolutionStatus.SKIPPED:
             stats.skipped_count += 1
+            stats.total_acts += 1
+        elif resolution.resolution_status == ActResolutionStatus.NOT_ON_INDIACODE:
+            stats.not_on_indiacode_count += 1
             stats.total_acts += 1
         elif resolution.resolution_status == ActResolutionStatus.INVALID:
             stats.invalid_count += 1

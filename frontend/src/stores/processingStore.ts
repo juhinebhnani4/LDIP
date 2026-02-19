@@ -235,8 +235,11 @@ export const useProcessingStore = create<ProcessingStore>()((set, get) => ({
   },
 
   getFailedJobs: () => {
-    const { jobs } = get();
-    return Array.from(jobs.values()).filter((job) => job.status === 'FAILED');
+    const { jobs, jobsByDocument } = get();
+    const latestJobIds = new Set(jobsByDocument.values());
+    return Array.from(jobs.values()).filter(
+      (job) => job.status === 'FAILED' && (!job.document_id || latestJobIds.has(job.id))
+    );
   },
 
   clear: () => {
@@ -318,12 +321,17 @@ export const selectActiveJobCount = (state: ProcessingStore) => {
   return count;
 };
 
-/** Select failed job count */
+/** Select failed job count (only counts latest job per document) */
 export const selectFailedJobCount = (state: ProcessingStore) => {
+  const latestJobIds = new Set(state.jobsByDocument.values());
   let count = 0;
   for (const job of state.jobs.values()) {
     if (job.status === 'FAILED') {
-      count++;
+      // Only count if this is the latest job for its document.
+      // Jobs without document_id (matter-level) are always counted.
+      if (!job.document_id || latestJobIds.has(job.id)) {
+        count++;
+      }
     }
   }
   return count;

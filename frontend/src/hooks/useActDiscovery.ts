@@ -57,6 +57,8 @@ export interface UseActDiscoveryReturn {
   autoFetchingCount: number;
   /** Number of skipped Acts */
   skippedCount: number;
+  /** Number of Acts not available on India Code */
+  notOnIndiacodeCount: number;
   /** Total citation count across all Acts */
   totalCitations: number;
 }
@@ -227,10 +229,11 @@ export function useActDiscovery(
   }, [matterId]);
 
   // Computed values
-  const availableCount = actReport.filter((act) => act.resolutionStatus === 'available').length;
+  const availableCount = actReport.filter((act) => act.resolutionStatus === 'available' || act.resolutionStatus === 'auto_fetched').length;
   const missingCount = actReport.filter((act) => act.resolutionStatus === 'missing').length;
   const autoFetchingCount = actReport.filter((act) => act.resolutionStatus === 'auto_fetching').length;
   const skippedCount = actReport.filter((act) => act.resolutionStatus === 'skipped').length;
+  const notOnIndiacodeCount = actReport.filter((act) => act.resolutionStatus === 'not_on_indiacode').length;
   const totalCitations = actReport.reduce((sum, act) => sum + act.citationCount, 0);
 
   // Poll when auto_fetching acts exist and hook is enabled (modal is open)
@@ -256,6 +259,7 @@ export function useActDiscovery(
     missingCount,
     autoFetchingCount,
     skippedCount,
+    notOnIndiacodeCount,
     totalCitations,
   };
 }

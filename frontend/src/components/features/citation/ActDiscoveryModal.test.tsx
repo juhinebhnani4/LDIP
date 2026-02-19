@@ -48,11 +48,29 @@ describe('ActDiscoveryModal', () => {
     actDocumentId: 'doc-123',
   };
 
+  const mockAutoFetchedAct: ActDiscoverySummary = {
+    actName: 'Indian Penal Code, 1860',
+    actNameNormalized: 'indian_penal_code_1860',
+    citationCount: 8,
+    resolutionStatus: 'auto_fetched',
+    userAction: 'pending',
+    actDocumentId: 'doc-456',
+  };
+
   const mockMissingAct: ActDiscoverySummary = {
     actName: 'Negotiable Instruments Act, 1881',
     actNameNormalized: 'negotiable_instruments_act_1881',
     citationCount: 12,
     resolutionStatus: 'missing',
+    userAction: 'pending',
+    actDocumentId: null,
+  };
+
+  const mockNotOnIndiacodeAct: ActDiscoverySummary = {
+    actName: 'Maharashtra Rent Control Act, 1999',
+    actNameNormalized: 'maharashtra_rent_control_act_1999',
+    citationCount: 4,
+    resolutionStatus: 'not_on_indiacode',
     userAction: 'pending',
     actDocumentId: null,
   };
@@ -67,7 +85,7 @@ describe('ActDiscoveryModal', () => {
   };
 
   const mockReport: ActDiscoveryResponse = {
-    data: [mockAvailableAct, mockMissingAct, mockSkippedAct],
+    data: [mockAvailableAct, mockAutoFetchedAct, mockMissingAct, mockNotOnIndiacodeAct, mockSkippedAct],
   };
 
   beforeEach(() => {
@@ -144,7 +162,9 @@ describe('ActDiscoveryModal', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Securities Act, 1992')).toBeInTheDocument();
+        expect(screen.getByText('Indian Penal Code, 1860')).toBeInTheDocument();
         expect(screen.getByText('Negotiable Instruments Act, 1881')).toBeInTheDocument();
+        expect(screen.getByText('Maharashtra Rent Control Act, 1999')).toBeInTheDocument();
         expect(screen.getByText('Companies Act, 2013')).toBeInTheDocument();
       });
     });
@@ -165,9 +185,30 @@ describe('ActDiscoveryModal', () => {
       });
 
       // Now check for section headers - the headers contain count in parens
-      expect(screen.getByText(/Detected in Your Files \(1\)/)).toBeInTheDocument();
+      // auto_fetched merges into "Detected in Your Files" (available + auto_fetched = 2)
+      expect(screen.getByText(/Detected in Your Files \(2\)/)).toBeInTheDocument();
       expect(screen.getByText(/Missing Acts \(1\)/)).toBeInTheDocument();
+      expect(screen.getByText(/Not Available on India Code \(1\)/)).toBeInTheDocument();
       expect(screen.getByText(/Skipped \(1\)/)).toBeInTheDocument();
+    });
+
+    it('shows auto_fetched acts in Detected in Your Files section', async () => {
+      render(
+        <ActDiscoveryModal
+          matterId={mockMatterId}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          onContinue={mockOnContinue}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Indian Penal Code, 1860')).toBeInTheDocument();
+      });
+
+      // The auto_fetched act should be inside the "Available Acts" list
+      const availableList = screen.getByRole('list', { name: /available acts/i });
+      expect(availableList).toContainElement(screen.getByText('Indian Penal Code, 1860'));
     });
 
     it('shows graceful degradation info when missing acts exist', async () => {
@@ -185,6 +226,30 @@ describe('ActDiscoveryModal', () => {
           screen.getByText(/Unverified - Act not provided/i)
         ).toBeInTheDocument();
       });
+    });
+
+    it('shows not_on_indiacode acts even when no other statuses exist', async () => {
+      // Scenario: modal shows only not_on_indiacode acts (the stuck-UI scenario)
+      vi.mocked(citationsApi.getActDiscoveryReport).mockResolvedValue({
+        data: [mockNotOnIndiacodeAct],
+      });
+
+      render(
+        <ActDiscoveryModal
+          matterId={mockMatterId}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          onContinue={mockOnContinue}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Maharashtra Rent Control Act, 1999')).toBeInTheDocument();
+        expect(screen.getByText(/Not Available on India Code \(1\)/)).toBeInTheDocument();
+      });
+
+      // Graceful degradation banner should show since not_on_indiacode needs attention
+      expect(screen.getByText(/Unverified - Act not provided/i)).toBeInTheDocument();
     });
   });
 
@@ -359,6 +424,7 @@ describe('ActDiscoveryModal', () => {
       await waitFor(() => {
         expect(screen.getByRole('list', { name: /available acts/i })).toBeInTheDocument();
         expect(screen.getByRole('list', { name: /missing acts/i })).toBeInTheDocument();
+        expect(screen.getByRole('list', { name: /acts not on india code/i })).toBeInTheDocument();
       });
     });
   });

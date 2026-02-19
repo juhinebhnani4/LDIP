@@ -122,6 +122,7 @@ export function CitationsContent({
   const {
     acts,
     missingCount,
+    notOnIndiacodeCount,
     isLoading: actsLoading,
     mutate: refreshActs,
   } = useActDiscoveryReport(matterId);
@@ -435,7 +436,7 @@ export function CitationsContent({
       </div>
 
       {/* Sidebar - Missing Acts Card */}
-      {(showMissingActsCard || missingCount > 0) && (
+      {(showMissingActsCard || missingCount + notOnIndiacodeCount > 0) && (
         <div className="w-80 flex-shrink-0">
           <MissingActsCard
             matterId={matterId}
@@ -468,7 +469,7 @@ export function CitationsContent({
       {/* Attention banner for issues */}
       <CitationsAttentionBanner
         issueCount={issueCount}
-        missingActsCount={missingCount}
+        missingActsCount={missingCount + notOnIndiacodeCount}
         onReviewIssues={handleReviewIssues}
         onUploadMissingActs={handleUploadMissingActs}
       />

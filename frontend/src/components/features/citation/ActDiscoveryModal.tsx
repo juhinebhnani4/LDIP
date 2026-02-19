@@ -142,12 +142,15 @@ export function ActDiscoveryModal({
     availableCount,
     missingCount,
     autoFetchingCount,
+    notOnIndiacodeCount,
   } = useActDiscovery(matterId, open);
 
   // Group Acts by status for display
   const availableActs = actReport.filter((act) => act.resolutionStatus === 'available');
+  const autoFetchedActs = actReport.filter((act) => act.resolutionStatus === 'auto_fetched');
   const autoFetchingActs = actReport.filter((act) => act.resolutionStatus === 'auto_fetching');
   const missingActs = actReport.filter((act) => act.resolutionStatus === 'missing');
+  const notOnIndiacodeActs = actReport.filter((act) => act.resolutionStatus === 'not_on_indiacode');
   const skippedActs = actReport.filter((act) => act.resolutionStatus === 'skipped');
 
   /**
@@ -219,7 +222,8 @@ export function ActDiscoveryModal({
   );
 
   const totalActs = actReport.length;
-  const hasMissingActs = missingActs.length > 0;
+  const needsAttentionCount = missingCount + notOnIndiacodeCount;
+  const hasMissingActs = missingActs.length > 0 || notOnIndiacodeActs.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -231,7 +235,7 @@ export function ActDiscoveryModal({
           <DialogDescription>
             {view === 'upload' && uploadingActName
               ? `Upload the PDF for ${uploadingActName}`
-              : `Your case files reference ${totalActs} ${totalActs === 1 ? 'Act' : 'Acts'}. ${availableCount} available${autoFetchingCount > 0 ? `, ${autoFetchingCount} being fetched` : ''}, ${missingCount} missing.`}
+              : `Your case files reference ${totalActs} ${totalActs === 1 ? 'Act' : 'Acts'}. ${availableCount} available${autoFetchingCount > 0 ? `, ${autoFetchingCount} being fetched` : ''}${needsAttentionCount > 0 ? `, ${needsAttentionCount} need attention` : ''}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,15 +263,24 @@ export function ActDiscoveryModal({
               {!isLoading && !error && actReport.length > 0 && (
                 <div className="h-[350px] overflow-y-auto pr-2 -mr-2">
                   <div className="space-y-4">
-                    {/* Available Acts Section */}
-                    {availableActs.length > 0 && (
+                    {/* Available Acts Section (includes auto_fetched) */}
+                    {(availableActs.length > 0 || autoFetchedActs.length > 0) && (
                       <div>
                         <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-2">
                           <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                          Detected in Your Files ({availableActs.length})
+                          Detected in Your Files ({availableActs.length + autoFetchedActs.length})
                         </h3>
                         <div className="space-y-2" role="list" aria-label="Available Acts">
                           {availableActs.map((act) => (
+                            <ActDiscoveryItem
+                              key={act.actNameNormalized}
+                              act={act}
+                              onUpload={handleUploadClick}
+                              onSkip={handleSkipClick}
+                              isDisabled={isMutating}
+                            />
+                          ))}
+                          {autoFetchedActs.map((act) => (
                             <ActDiscoveryItem
                               key={act.actNameNormalized}
                               act={act}
@@ -310,6 +323,27 @@ export function ActDiscoveryModal({
                         </h3>
                         <div className="space-y-2" role="list" aria-label="Missing Acts">
                           {missingActs.map((act) => (
+                            <ActDiscoveryItem
+                              key={act.actNameNormalized}
+                              act={act}
+                              onUpload={handleUploadClick}
+                              onSkip={handleSkipClick}
+                              isDisabled={isMutating}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Not Available on India Code Section */}
+                    {notOnIndiacodeActs.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-orange-600" />
+                          Not Available on India Code ({notOnIndiacodeActs.length})
+                        </h3>
+                        <div className="space-y-2" role="list" aria-label="Acts not on India Code">
+                          {notOnIndiacodeActs.map((act) => (
                             <ActDiscoveryItem
                               key={act.actNameNormalized}
                               act={act}

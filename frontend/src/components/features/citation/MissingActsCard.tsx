@@ -74,9 +74,11 @@ export function MissingActsCard({
   const [uploadingAct, setUploadingAct] = useState<string | null>(null);
   const [skippingAct, setSkippingAct] = useState<string | null>(null);
 
-  // Filter to only missing acts that need action
+  // Filter to acts that need user action (missing or not on India Code)
   const missingActs = acts.filter(
-    (act) => act.resolutionStatus === 'missing' && act.userAction === 'pending'
+    (act) =>
+      (act.resolutionStatus === 'missing' || act.resolutionStatus === 'not_on_indiacode') &&
+      act.userAction === 'pending'
   );
 
   // Handle upload completion
@@ -126,7 +128,7 @@ export function MissingActsCard({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Scale className="h-5 w-5 text-amber-600" />
-                <CardTitle className="text-base">Missing Acts</CardTitle>
+                <CardTitle className="text-base">Acts Needing Attention</CardTitle>
                 <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
                   {missingActs.length}
                 </Badge>

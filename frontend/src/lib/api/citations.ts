@@ -259,7 +259,7 @@ export async function getMissingActs(matterId: string): Promise<ActDiscoveryResp
   const report = await getActDiscoveryReport(matterId, false);
   return {
     data: report.data.filter(
-      (act) => act.resolutionStatus === 'missing' && act.userAction === 'pending'
+      (act) => (act.resolutionStatus === 'missing' || act.resolutionStatus === 'not_on_indiacode') && act.userAction === 'pending'
     ),
   };
 }

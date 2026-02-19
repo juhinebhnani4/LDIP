@@ -47,6 +47,7 @@ class ActResolutionStatus(str, Enum):
 
     AVAILABLE = "available"
     AUTO_FETCHED = "auto_fetched"
+    AUTO_FETCHING = "auto_fetching"
     MISSING = "missing"
     INVALID = "invalid"
     NOT_ON_INDIACODE = "not_on_indiacode"

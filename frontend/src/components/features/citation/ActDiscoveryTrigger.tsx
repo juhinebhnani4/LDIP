@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getMissingActs } from '@/lib/api/citations';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import { ActDiscoveryModal } from './ActDiscoveryModal';
 
 export interface ActDiscoveryTriggerProps {
@@ -58,6 +59,9 @@ export function ActDiscoveryTrigger({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const hasCheckedRef = useRef(false);
   const isMountedRef = useRef(true);
+
+  // Subscribe to WebSocket for real-time act discovery updates
+  const { subscribe } = useWebSocket(matterId);
 
   /**
    * Check for missing Acts and show modal if found
@@ -98,9 +102,10 @@ export function ActDiscoveryTrigger({
         checkForMissingActs();
       }
 
-      // When act discovery updates (e.g., user uploads an Act)
+      // When act discovery updates (e.g., auto-fetch completes)
       if (event.event === 'act_discovery_update') {
-        // Could refetch here if needed
+        hasCheckedRef.current = false;
+        checkForMissingActs();
       }
     },
     [matterId, checkForMissingActs]
@@ -135,6 +140,18 @@ export function ActDiscoveryTrigger({
       channel.unsubscribe();
     };
   }, [matterId, handleCitationEvent, checkForMissingActs]);
+
+  // Subscribe to WS citation_update messages for act_discovery_update events
+  useEffect(() => {
+    const unsubscribe = subscribe<{ event?: string }>('citation_update', (message) => {
+      const data = message?.data as { event?: string } | undefined;
+      if (data?.event === 'act_discovery_update') {
+        hasCheckedRef.current = false;
+        checkForMissingActs();
+      }
+    });
+    return unsubscribe;
+  }, [subscribe, checkForMissingActs]);
 
   // Reset check flag when matterId changes
   useEffect(() => {

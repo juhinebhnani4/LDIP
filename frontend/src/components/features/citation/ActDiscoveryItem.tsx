@@ -71,6 +71,17 @@ function getStatusBadge(status: ActDiscoverySummary['resolutionStatus'], citatio
           Auto-fetched
         </Badge>
       );
+    case 'auto_fetching':
+      return (
+        <Badge
+          variant="default"
+          className="bg-blue-500/10 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-800"
+          aria-label="Fetching Act from India Code"
+        >
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
+          Fetching...
+        </Badge>
+      );
     case 'missing':
       return (
         <Badge
@@ -144,6 +155,7 @@ export function ActDiscoveryItem({
         'flex items-center justify-between gap-4 p-3 rounded-lg border',
         act.resolutionStatus === 'available' && 'bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900',
         act.resolutionStatus === 'auto_fetched' && 'bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900',
+        act.resolutionStatus === 'auto_fetching' && 'bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900',
         act.resolutionStatus === 'missing' && 'bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900',
         act.resolutionStatus === 'not_on_indiacode' && 'bg-orange-50/50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-900',
         act.resolutionStatus === 'skipped' && 'bg-muted/50 border-muted'

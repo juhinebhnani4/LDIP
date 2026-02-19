@@ -20,6 +20,7 @@ export type VerificationStatus =
 export type ActResolutionStatus =
   | 'available'
   | 'auto_fetched'
+  | 'auto_fetching'
   | 'missing'
   | 'invalid'
   | 'not_on_indiacode'

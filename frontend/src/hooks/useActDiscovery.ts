@@ -53,6 +53,8 @@ export interface UseActDiscoveryReturn {
   availableCount: number;
   /** Number of missing Acts */
   missingCount: number;
+  /** Number of Acts being auto-fetched */
+  autoFetchingCount: number;
   /** Number of skipped Acts */
   skippedCount: number;
   /** Total citation count across all Acts */
@@ -227,8 +229,20 @@ export function useActDiscovery(
   // Computed values
   const availableCount = actReport.filter((act) => act.resolutionStatus === 'available').length;
   const missingCount = actReport.filter((act) => act.resolutionStatus === 'missing').length;
+  const autoFetchingCount = actReport.filter((act) => act.resolutionStatus === 'auto_fetching').length;
   const skippedCount = actReport.filter((act) => act.resolutionStatus === 'skipped').length;
   const totalCitations = actReport.reduce((sum, act) => sum + act.citationCount, 0);
+
+  // Poll when auto_fetching acts exist and hook is enabled (modal is open)
+  useEffect(() => {
+    if (!enabled || autoFetchingCount === 0) return;
+
+    const interval = setInterval(() => {
+      fetchReport();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [enabled, autoFetchingCount, fetchReport]);
 
   return {
     actReport,
@@ -240,6 +254,7 @@ export function useActDiscovery(
     isMutating,
     availableCount,
     missingCount,
+    autoFetchingCount,
     skippedCount,
     totalCitations,
   };

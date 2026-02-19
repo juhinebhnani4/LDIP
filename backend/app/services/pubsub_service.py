@@ -468,6 +468,7 @@ def broadcast_act_discovery_update(
     total_acts: int,
     missing_count: int,
     available_count: int,
+    auto_fetching_count: int = 0,
 ) -> None:
     """Broadcast act discovery report update.
 
@@ -479,6 +480,7 @@ def broadcast_act_discovery_update(
         total_acts: Total number of unique Acts referenced.
         missing_count: Number of Acts not yet uploaded.
         available_count: Number of Acts that are available.
+        auto_fetching_count: Number of Acts currently being fetched.
     """
     try:
         service = get_pubsub_service()
@@ -490,6 +492,7 @@ def broadcast_act_discovery_update(
             "total_acts": total_acts,
             "missing_count": missing_count,
             "available_count": available_count,
+            "auto_fetching_count": auto_fetching_count,
         }
 
         service.client.publish(channel, json.dumps(message))

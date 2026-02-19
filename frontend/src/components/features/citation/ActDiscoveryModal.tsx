@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -141,10 +141,12 @@ export function ActDiscoveryModal({
     isMutating,
     availableCount,
     missingCount,
+    autoFetchingCount,
   } = useActDiscovery(matterId, open);
 
   // Group Acts by status for display
   const availableActs = actReport.filter((act) => act.resolutionStatus === 'available');
+  const autoFetchingActs = actReport.filter((act) => act.resolutionStatus === 'auto_fetching');
   const missingActs = actReport.filter((act) => act.resolutionStatus === 'missing');
   const skippedActs = actReport.filter((act) => act.resolutionStatus === 'skipped');
 
@@ -230,7 +232,7 @@ export function ActDiscoveryModal({
           <DialogDescription id="act-discovery-description">
             {view === 'upload' && uploadingActName
               ? `Upload the PDF for ${uploadingActName}`
-              : `Your case files reference ${totalActs} ${totalActs === 1 ? 'Act' : 'Acts'}. ${availableCount} available, ${missingCount} missing.`}
+              : `Your case files reference ${totalActs} ${totalActs === 1 ? 'Act' : 'Acts'}. ${availableCount} available${autoFetchingCount > 0 ? `, ${autoFetchingCount} being fetched` : ''}, ${missingCount} missing.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -267,6 +269,27 @@ export function ActDiscoveryModal({
                         </h3>
                         <div className="space-y-2" role="list" aria-label="Available Acts">
                           {availableActs.map((act) => (
+                            <ActDiscoveryItem
+                              key={act.actNameNormalized}
+                              act={act}
+                              onUpload={handleUploadClick}
+                              onSkip={handleSkipClick}
+                              isDisabled={isMutating}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto-Fetching Acts Section */}
+                    {autoFetchingActs.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 text-blue-600 animate-spin" />
+                          Fetching from India Code ({autoFetchingActs.length})
+                        </h3>
+                        <div className="space-y-2" role="list" aria-label="Acts being fetched">
+                          {autoFetchingActs.map((act) => (
                             <ActDiscoveryItem
                               key={act.actNameNormalized}
                               act={act}

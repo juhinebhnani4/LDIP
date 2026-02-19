@@ -491,23 +491,25 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                 )
                 results["invalid"] += 1
             elif validation.validation_status == ValidationStatus.VALID:
-                # Still missing until PDF is fetched
+                # Use auto_fetching if auto-fetch is enabled, otherwise stay missing
+                status = "auto_fetching" if settings.india_code_auto_fetch_enabled else "missing"
                 _update_act_resolution(
                     client,
                     matter_id,
                     normalized,
-                    "missing",
+                    status,
                     is_valid=True,
                     validation_cache_id=cache_id,
                 )
                 results["valid"] += 1
             else:
                 # Unknown - needs India Code lookup
+                status = "auto_fetching" if settings.india_code_auto_fetch_enabled else "missing"
                 _update_act_resolution(
                     client,
                     matter_id,
                     normalized,
-                    "missing",
+                    status,
                     is_valid=True,  # Assume valid until proven otherwise
                     validation_cache_id=cache_id,
                 )
@@ -722,14 +724,19 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
     """Update act resolutions in all matters where acts are now cached.
 
     Also creates document records for auto-fetched Acts in each matter.
+    Handles failure path: marks acts as not_on_indiacode if validation says so.
+    Broadcasts updates to frontends for all affected matters.
 
     Returns dict with counts of resolutions and documents updated/created.
     """
     settings = get_settings()
     cache_service = get_act_cache_service()
 
+    # Track affected matter_ids for broadcasting
+    affected_matter_ids: set[str] = set()
+
     try:
-        # Get all cached acts with additional details
+        # === SUCCESS PATH: Update resolutions where PDFs are now cached ===
         cached_result = client.table("act_validation_cache").select(
             "id, act_name_normalized, act_name_canonical, cached_storage_path, india_code_url"
         ).not_.is_("cached_storage_path", "null").execute()
@@ -745,24 +752,23 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
             storage_path = cached.get("cached_storage_path")
             india_code_url = cached.get("india_code_url")
 
-            # Get all matching act_resolutions that are missing (not yet auto_fetched)
+            # Get all matching act_resolutions that are missing or auto_fetching
             resolutions_result = client.table("act_resolutions").select(
                 "id, matter_id"
             ).eq(
                 "act_name_normalized", normalized
-            ).eq(
-                "resolution_status", "missing"
+            ).in_(
+                "resolution_status", ["missing", "auto_fetching"]
             ).execute()
 
-            missing_resolutions = resolutions_result.data or []
+            pending_resolutions = resolutions_result.data or []
 
-            for resolution in missing_resolutions:
+            for resolution in pending_resolutions:
                 matter_id = resolution.get("matter_id")
 
                 # Get file size from storage for document record
                 file_size = 0
                 try:
-                    # Try to get size from storage metadata
                     prefix = settings.act_cache_storage_prefix
                     files = client.storage.from_("documents").list(
                         path=f"{prefix}/",
@@ -801,9 +807,9 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                     ).execute()
 
                     updated_resolutions += 1
+                    affected_matter_ids.add(matter_id)
 
-                    # Update citation statuses from act_unavailable to pending
-                    # This ensures citations can be verified now that Act is available
+                    # Trigger verification now that Act is available
                     try:
                         from app.workers.tasks.verification_tasks import (
                             trigger_verification_on_act_upload,
@@ -814,7 +820,7 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                                 "act_name": canonical or normalized,
                                 "act_document_id": doc_id,
                             },
-                            queue="default",  # Explicit queue routing - workers listen on default, not celery
+                            queue="default",
                         )
                         logger.info(
                             "verification_triggered_for_auto_fetched_act",
@@ -830,9 +836,103 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                             error=str(ve),
                         )
 
+        # === FAILURE PATH: Mark acts as not_on_indiacode if validation says so ===
+        try:
+            not_found_result = client.table("act_validation_cache").select(
+                "id, act_name_normalized"
+            ).eq(
+                "validation_status", "not_on_indiacode"
+            ).execute()
+
+            not_found_acts = not_found_result.data or []
+            failed_resolutions = 0
+
+            for nf in not_found_acts:
+                normalized = nf.get("act_name_normalized")
+                cache_id = nf.get("id")
+
+                # Find resolutions stuck in auto_fetching for this act
+                stuck_result = client.table("act_resolutions").select(
+                    "id, matter_id"
+                ).eq(
+                    "act_name_normalized", normalized
+                ).eq(
+                    "resolution_status", "auto_fetching"
+                ).execute()
+
+                stuck_resolutions = stuck_result.data or []
+
+                for resolution in stuck_resolutions:
+                    matter_id = resolution.get("matter_id")
+                    client.table("act_resolutions").update({
+                        "resolution_status": "not_on_indiacode",
+                        "validation_cache_id": cache_id,
+                        "updated_at": "now()",
+                    }).eq(
+                        "id", resolution.get("id")
+                    ).execute()
+
+                    failed_resolutions += 1
+                    affected_matter_ids.add(matter_id)
+
+            if failed_resolutions > 0:
+                logger.info(
+                    "auto_fetching_failures_resolved",
+                    failed_resolutions=failed_resolutions,
+                )
+        except Exception as fe:
+            logger.warning("failure_path_error", error=str(fe))
+
+        # === BROADCAST: Notify frontends for all affected matters ===
+        for mid in affected_matter_ids:
+            try:
+                from app.engines.citation.discovery import compute_resolution_stats
+                from app.models.citation import ActResolution
+
+                res_result = client.table("act_resolutions").select(
+                    "id, matter_id, act_name_normalized, act_name_display, "
+                    "act_document_id, resolution_status, user_action, citation_count, "
+                    "first_seen_at, created_at, updated_at"
+                ).eq("matter_id", mid).execute()
+
+                resolutions = [
+                    ActResolution(
+                        id=r["id"],
+                        matterId=r["matter_id"],
+                        actNameNormalized=r["act_name_normalized"],
+                        actNameDisplay=r.get("act_name_display"),
+                        actDocumentId=r.get("act_document_id"),
+                        resolutionStatus=r["resolution_status"],
+                        userAction=r["user_action"],
+                        citationCount=r.get("citation_count", 0),
+                        firstSeenAt=r.get("first_seen_at"),
+                        createdAt=r["created_at"],
+                        updatedAt=r["updated_at"],
+                    )
+                    for r in (res_result.data or [])
+                ]
+
+                stats = compute_resolution_stats(resolutions, include_invalid=False)
+
+                from app.services.pubsub_service import broadcast_act_discovery_update
+                broadcast_act_discovery_update(
+                    matter_id=mid,
+                    total_acts=stats.total_acts,
+                    missing_count=stats.missing_count,
+                    available_count=stats.available_count + stats.auto_fetched_count,
+                    auto_fetching_count=stats.auto_fetching_count,
+                )
+            except Exception as be:
+                logger.warning(
+                    "broadcast_after_resolution_update_failed",
+                    matter_id=mid,
+                    error=str(be),
+                )
+
         result = {
             "resolutions_updated": updated_resolutions,
             "documents_created": created_documents,
+            "matters_broadcast": len(affected_matter_ids),
         }
         logger.info("update_matter_resolutions_complete", **result)
         return result
@@ -923,6 +1023,12 @@ def process_pending_validations() -> dict:
             args=[matter_id],
             queue="low",  # Background processing, low priority
         )
+
+    # Also trigger fetch to handle any acts stuck in auto_fetching
+    # (e.g., from crashed workers or incomplete previous runs)
+    settings = get_settings()
+    if settings.india_code_auto_fetch_enabled:
+        fetch_acts_from_india_code.apply_async(queue="low")
 
     logger.info("process_pending_validations_complete", **results)
     return results

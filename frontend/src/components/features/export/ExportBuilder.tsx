@@ -269,7 +269,6 @@ export function ExportBuilder({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           className="sm:max-w-[900px] lg:max-w-[1100px] h-[80vh] flex flex-col"
-          aria-describedby="export-builder-description"
         >
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -296,7 +295,7 @@ export function ExportBuilder({
                 </TabsList>
               </Tabs>
             </div>
-            <DialogDescription id="export-builder-description">
+            <DialogDescription>
               Select and reorder sections to include in your export
               {previewMode === 'preview' && ' • Click sections to edit'}
             </DialogDescription>

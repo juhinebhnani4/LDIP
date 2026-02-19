@@ -225,11 +225,10 @@ export function ActDiscoveryModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="sm:max-w-[600px] max-h-[80vh] flex flex-col"
-        aria-describedby="act-discovery-description"
       >
         <DialogHeader>
           <DialogTitle>Act References Detected</DialogTitle>
-          <DialogDescription id="act-discovery-description">
+          <DialogDescription>
             {view === 'upload' && uploadingActName
               ? `Upload the PDF for ${uploadingActName}`
               : `Your case files reference ${totalActs} ${totalActs === 1 ? 'Act' : 'Acts'}. ${availableCount} available${autoFetchingCount > 0 ? `, ${autoFetchingCount} being fetched` : ''}, ${missingCount} missing.`}

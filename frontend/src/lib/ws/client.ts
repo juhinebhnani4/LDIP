@@ -128,12 +128,14 @@ export type WSUnsubscribe = () => void;
 // =============================================================================
 
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL ||
-  (process.env.NEXT_PUBLIC_API_URL?.replace('http', 'ws') || 'ws://localhost:8000');
+  (process.env.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
+    : 'ws://localhost:8000');
 
 /** Reconnection settings */
-const RECONNECT_MIN_DELAY = 1000; // 1 second
+const RECONNECT_MIN_DELAY = 2000; // 2 seconds
 const RECONNECT_MAX_DELAY = 30000; // 30 seconds
-const RECONNECT_MAX_ATTEMPTS = 5; // Reduced for better UX - fail faster
+const RECONNECT_MAX_ATTEMPTS = 3; // Fail fast — polling fallback is reliable
 const RECONNECT_BACKOFF_MULTIPLIER = 2; // Standard exponential: 1s → 2s → 4s → 8s → 16s
 
 /** Heartbeat settings */
@@ -282,10 +284,31 @@ class WebSocketClient {
   // Private Methods
   // ===========================================================================
 
+  /**
+   * Pre-flight health check — avoids browser WS errors when backend is unreachable.
+   */
+  private async isBackendReachable(): Promise<boolean> {
+    try {
+      const healthUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api/health';
+      const response = await fetch(healthUrl, { method: 'GET', signal: AbortSignal.timeout(5000) });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   private async establishConnection(): Promise<void> {
     if (!this.matterId) return;
 
     this.setConnectionState('connecting');
+
+    // Pre-flight: check if backend is reachable before attempting WS
+    const reachable = await this.isBackendReachable();
+    if (!reachable) {
+      if (DEBUG_WS) console.log('[WS] Backend unreachable — skipping WS, polling fallback active');
+      this.setConnectionState('disconnected');
+      return;
+    }
 
     try {
       // Get auth token from Supabase

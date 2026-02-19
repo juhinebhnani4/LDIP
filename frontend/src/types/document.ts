@@ -11,8 +11,12 @@ export type DocumentType = 'case_file' | 'act' | 'annexure' | 'other';
 /** Document source indicating how the document was added */
 export type DocumentSource = 'user_upload' | 'auto_fetched' | 'system';
 
-/** Document status from processing pipeline */
-export type DocumentStatus = 'pending' | 'processing' | 'ocr_complete' | 'completed' | 'ocr_failed' | 'failed';
+/** Document status from processing pipeline — must match all 12 backend statuses */
+export type DocumentStatus =
+  | 'pending' | 'processing' | 'ocr_complete' | 'ocr_failed'
+  | 'pending_review' | 'chunking' | 'chunking_failed'
+  | 'embedding' | 'embedding_failed'
+  | 'searchable' | 'completed' | 'failed';
 
 /** OCR quality status based on confidence thresholds */
 export type OCRQualityStatus = 'good' | 'fair' | 'poor';

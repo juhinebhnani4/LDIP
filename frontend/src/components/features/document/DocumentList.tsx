@@ -69,17 +69,27 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
 ];
 
 /**
- * User-friendly status labels per AC requirements.
- * Simplifies technical statuses to "Indexed", "Processing", or "Failed".
+ * User-friendly status labels for all 12 backend statuses.
  */
 const STATUS_LABELS: Record<DocumentStatus, string> = {
-  pending: 'Processing',
+  pending: 'Pending',
   processing: 'Processing',
-  ocr_complete: 'Indexed',
+  ocr_complete: 'OCR Done',
+  ocr_failed: 'OCR Failed',
+  pending_review: 'Needs Review',
+  chunking: 'Chunking',
+  chunking_failed: 'Chunking Failed',
+  embedding: 'Embedding',
+  embedding_failed: 'Embedding Failed',
+  searchable: 'Indexed',
   completed: 'Indexed',
-  ocr_failed: 'Failed',
   failed: 'Failed',
 };
+
+/** Status groups for badge coloring */
+const FAILED_STATUSES: DocumentStatus[] = ['failed', 'ocr_failed', 'chunking_failed', 'embedding_failed'];
+const SUCCESS_STATUSES: DocumentStatus[] = ['completed', 'searchable'];
+const REVIEW_STATUSES: DocumentStatus[] = ['pending_review'];
 
 /** Column definitions for sortable headers */
 const SORTABLE_COLUMNS: { key: DocumentSortColumn; label: string }[] = [
@@ -609,11 +619,13 @@ export function DocumentList({
                   <TableCell>
                     <span
                       className={`text-sm ${
-                        doc.status === 'failed' || doc.status === 'ocr_failed'
+                        FAILED_STATUSES.includes(doc.status)
                           ? 'text-destructive'
-                          : doc.status === 'completed' || doc.status === 'ocr_complete'
+                          : SUCCESS_STATUSES.includes(doc.status)
                             ? 'text-green-600'
-                            : 'text-muted-foreground'
+                            : REVIEW_STATUSES.includes(doc.status)
+                              ? 'text-amber-600'
+                              : 'text-muted-foreground'
                       }`}
                     >
                       {STATUS_LABELS[doc.status]}

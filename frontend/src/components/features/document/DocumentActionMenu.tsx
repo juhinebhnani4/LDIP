@@ -9,8 +9,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { DocumentListItem } from '@/types/document';
+import type { DocumentListItem, DocumentStatus } from '@/types/document';
 import type { MatterRole } from '@/types/matter';
+
+/** Statuses where retry should be available */
+const RETRYABLE_STATUSES: DocumentStatus[] = [
+  'failed', 'ocr_failed', 'chunking_failed', 'embedding_failed',  // all failure states
+  'ocr_complete',  // stuck: OCR done but RAG never started
+  'processing', 'pending',  // stuck: never progressed
+];
 
 export interface DocumentActionMenuProps {
   document: DocumentListItem;
@@ -46,14 +53,7 @@ export function DocumentActionMenu({
   const canEdit = userRole === 'owner' || userRole === 'editor';
 
   // Show retry option for failed or stuck documents
-  // Include 'pending' status for documents where processing never started
-  const canRetry =
-    onRetry &&
-    canEdit &&
-    (document.status === 'ocr_failed' ||
-      document.status === 'ocr_complete' ||
-      document.status === 'processing' ||
-      document.status === 'pending');
+  const canRetry = onRetry && canEdit && RETRYABLE_STATUSES.includes(document.status);
 
   return (
     <DropdownMenu>

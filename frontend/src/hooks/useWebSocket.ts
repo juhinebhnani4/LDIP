@@ -197,15 +197,16 @@ export function useWebSocket(
       return;
     }
 
-    // Connect to new matter - clear any previous error
+    // Connect to new matter with a short delay to let the page settle
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Clearing error before connect is intentional
     setError((prev) => (prev !== null ? null : prev));
-    void wsClient.connect(matterId);
+    const connectTimer = setTimeout(() => {
+      void wsClient.connect(matterId);
+    }, 1000);
 
     // Cleanup on unmount
     return () => {
-      // Don't disconnect on unmount if another component might be using the connection
-      // The connection will persist and be reused by other components
+      clearTimeout(connectTimer);
     };
   }, [matterId, enabled, autoConnect, wsClient]);
 

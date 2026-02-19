@@ -1868,9 +1868,12 @@ async def retry_document_processing(
         # Determine retry type
         actual_retry_type = retry_type
         if retry_type == "auto":
-            # If OCR is complete, just retry RAG
-            if doc.status.value in ["ocr_complete", "ocr_failed"]:
-                actual_retry_type = "rag" if doc.extracted_text else "full"
+            # Statuses where OCR already succeeded → RAG-only retry
+            rag_only_statuses = ["ocr_complete", "chunking_failed", "embedding_failed", "searchable"]
+            if doc.status.value in rag_only_statuses:
+                actual_retry_type = "rag"
+            elif doc.status.value in ["ocr_failed", "failed"] and doc.extracted_text:
+                actual_retry_type = "rag"
             else:
                 actual_retry_type = "full"
 
@@ -2012,14 +2015,13 @@ async def retry_all_stuck_documents(
     try:
         client = get_supabase_client()
 
-        # Find stuck documents in this matter:
-        # 1. OCR complete but have no chunks (RAG not run)
-        # 2. Processing jobs stuck in QUEUED or PROCESSING for too long
+        # Find stuck/failed documents in this matter
+        stuck_statuses = ["ocr_complete", "failed", "ocr_failed", "chunking_failed", "embedding_failed"]
         docs_response = (
             client.table("documents")
             .select("id, filename, status, extracted_text")
             .eq("matter_id", matter_id)
-            .eq("status", "ocr_complete")
+            .in_("status", stuck_statuses)
             .execute()
         )
 
@@ -2033,9 +2035,39 @@ async def retry_all_stuck_documents(
 
         for doc in documents:
             doc_id = doc["id"]
+            doc_status = doc.get("status", "")
             has_text = bool(doc.get("extracted_text"))
 
-            # Check if document has chunks
+            # Determine retry type based on status
+            # chunking_failed/embedding_failed/ocr_complete: OCR succeeded → RAG-only
+            # failed/ocr_failed WITH extracted_text: OCR succeeded → RAG-only
+            # failed/ocr_failed WITHOUT extracted_text: full OCR pipeline
+            rag_only_statuses = ["ocr_complete", "chunking_failed", "embedding_failed"]
+            needs_full_ocr = doc_status in ["failed", "ocr_failed"] and not has_text
+
+            if needs_full_ocr:
+                try:
+                    task_chain = chain(
+                        process_document.s(doc_id),
+                        validate_ocr.s(),
+                        calculate_confidence.s(),
+                        chunk_document.s(),
+                        embed_chunks.s(),
+                        extract_entities.s(),
+                    )
+                    task_chain.apply_async()
+                    results["retried"] += 1
+                    logger.info("stuck_document_full_retry_queued", document_id=doc_id, matter_id=matter_id)
+                except Exception as e:
+                    results["errors"].append({"document_id": doc_id, "error": str(e)})
+                continue
+
+            # RAG-only retry: skip if no text
+            if not has_text:
+                results["skipped"] += 1
+                continue
+
+            # Check if document already has chunks (RAG done)
             chunks_response = (
                 client.table("chunks")
                 .select("id", count="exact")
@@ -2045,18 +2077,11 @@ async def retry_all_stuck_documents(
             )
             has_chunks = (chunks_response.count or 0) > 0
 
-            # Skip if already has chunks (RAG done)
-            if has_chunks:
-                results["skipped"] += 1
-                continue
-
-            # Skip if no text to process
-            if not has_text:
+            if has_chunks and doc_status == "ocr_complete":
                 results["skipped"] += 1
                 continue
 
             try:
-                # Queue RAG pipeline (extract_entities fans out to citations+dates+aliases)
                 task_chain = chain(
                     chunk_document.s({"document_id": doc_id}),
                     embed_chunks.s(),
@@ -2064,18 +2089,9 @@ async def retry_all_stuck_documents(
                 )
                 task_chain.apply_async()
                 results["retried"] += 1
-
-                logger.info(
-                    "stuck_document_retry_queued",
-                    document_id=doc_id,
-                    matter_id=matter_id,
-                )
-
+                logger.info("stuck_document_rag_retry_queued", document_id=doc_id, matter_id=matter_id)
             except Exception as e:
-                results["errors"].append({
-                    "document_id": doc_id,
-                    "error": str(e),
-                })
+                results["errors"].append({"document_id": doc_id, "error": str(e)})
 
         logger.info(
             "retry_all_stuck_completed",

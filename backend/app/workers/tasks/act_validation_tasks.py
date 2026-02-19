@@ -354,21 +354,38 @@ def _create_document_for_auto_fetched_act(
 
 
 def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int = 50) -> list[dict]:
-    """Get acts that haven't been validated yet."""
+    """Get acts that need validation or re-evaluation.
+
+    Returns two categories:
+    1. Acts never validated (no validation_cache_id)
+    2. Acts validated but still stuck in 'missing' (need auto-fetch transition)
+    """
     try:
-        query = client.table("act_resolutions").select(
-            "id, matter_id, act_name_normalized, act_name_display, resolution_status"
-        ).is_("validation_cache_id", "null")
+        # Query 1: Acts never validated (no cache entry)
+        query1 = client.table("act_resolutions").select(
+            "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
+        ).is_("validation_cache_id", "null").eq("resolution_status", "missing")
 
         if matter_id:
-            query = query.eq("matter_id", matter_id)
+            query1 = query1.eq("matter_id", matter_id)
 
-        # Only get missing acts (not already resolved)
-        query = query.eq("resolution_status", "missing")
-        query = query.limit(limit)
+        result1 = query1.limit(limit).execute()
+        unvalidated = result1.data or []
 
-        result = query.execute()
-        return result.data or []
+        # Query 2: Acts validated but still stuck in 'missing' (need re-evaluation for auto-fetch)
+        remaining = limit - len(unvalidated)
+        if remaining > 0:
+            query2 = client.table("act_resolutions").select(
+                "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
+            ).not_.is_("validation_cache_id", "null").eq("resolution_status", "missing")
+
+            if matter_id:
+                query2 = query2.eq("matter_id", matter_id)
+
+            result2 = query2.limit(remaining).execute()
+            unvalidated.extend(result2.data or [])
+
+        return unvalidated
 
     except Exception as e:
         logger.error("get_unvalidated_acts_error", error=str(e))
@@ -455,6 +472,18 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
         normalized = act.get("act_name_normalized", "")
 
         try:
+            # If act already has a validation cache entry, skip re-validation
+            # and just transition missing → auto_fetching if auto-fetch is enabled
+            existing_cache_id = act.get("validation_cache_id")
+            if existing_cache_id:
+                if settings.india_code_auto_fetch_enabled:
+                    _update_act_resolution(
+                        client, matter_id, normalized, "auto_fetching",
+                        is_valid=True, validation_cache_id=existing_cache_id,
+                    )
+                    results["valid"] += 1
+                continue
+
             # Validate the act name
             validation = validation_service.validate(act_display)
 
@@ -851,13 +880,13 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                 normalized = nf.get("act_name_normalized")
                 cache_id = nf.get("id")
 
-                # Find resolutions stuck in auto_fetching for this act
+                # Find resolutions stuck in auto_fetching or missing for this act
                 stuck_result = client.table("act_resolutions").select(
                     "id, matter_id"
                 ).eq(
                     "act_name_normalized", normalized
-                ).eq(
-                    "resolution_status", "auto_fetching"
+                ).in_(
+                    "resolution_status", ["auto_fetching", "missing"]
                 ).execute()
 
                 stuck_resolutions = stuck_result.data or []

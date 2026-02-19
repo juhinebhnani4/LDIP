@@ -177,9 +177,10 @@ export function DocumentsContent({
       (d) => d.status === 'processing' || d.status === 'pending'
     );
 
-    // Stuck documents: failed status (we can't tell time here, so just count failed)
+    // Stuck documents: all failure statuses
     const stuckDocs = documents.filter(
-      (d) => d.status === 'failed' || d.status === 'ocr_failed'
+      (d) => d.status === 'failed' || d.status === 'ocr_failed' ||
+             d.status === 'chunking_failed' || d.status === 'embedding_failed'
     );
 
     const processingCount = processingDocs.length;

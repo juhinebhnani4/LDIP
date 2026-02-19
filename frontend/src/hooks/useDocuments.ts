@@ -118,18 +118,19 @@ export function useDocuments(
       // SWR handles polling natively - much more efficient than setInterval
       refreshInterval: (latestData) => {
         if (!enablePolling) return 0;
-        // Poll if any documents are processing
+        // Poll if any documents are in active processing stages
+        const ACTIVE_PROCESSING_STATUSES = ['processing', 'pending', 'chunking', 'embedding', 'ocr_complete'];
         const hasProcessingDocs = latestData?.data?.some(
-          (d) => d.status === 'processing' || d.status === 'pending'
+          (d) => ACTIVE_PROCESSING_STATUSES.includes(d.status)
         );
         return hasProcessingDocs ? PROCESSING_POLL_INTERVAL_MS : 0;
       },
     }
   );
 
-  // Check if any documents are processing
+  // Check if any documents are in active processing stages
   const hasProcessing = (data?.data ?? []).some(
-    (d) => d.status === 'processing' || d.status === 'pending'
+    (d) => ['processing', 'pending', 'chunking', 'embedding', 'ocr_complete'].includes(d.status)
   );
 
   return {

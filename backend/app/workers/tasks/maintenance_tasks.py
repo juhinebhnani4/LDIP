@@ -1369,6 +1369,7 @@ def sync_act_resolutions_with_documents(self) -> dict:
         "resolutions_fixed": 0,
         "missing_to_available": 0,
         "available_to_missing": 0,
+        "missing_to_auto_fetching": 0,
         "errors": [],
     }
 
@@ -1417,7 +1418,7 @@ def sync_act_resolutions_with_documents(self) -> dict:
                 # Get all resolutions for this matter
                 resolutions_response = (
                     client.table("act_resolutions")
-                    .select("id, act_name_normalized, resolution_status, act_document_id")
+                    .select("id, act_name_normalized, resolution_status, act_document_id, validation_cache_id, is_valid")
                     .eq("matter_id", matter_id)
                     .execute()
                 )
@@ -1478,6 +1479,25 @@ def sync_act_resolutions_with_documents(self) -> dict:
                                 deleted_document_id=current_doc_id,
                             )
 
+                    # Case 3: Resolution says 'missing' but is validated + auto-fetch enabled
+                    # Catches acts validated before auto-fetch was deployed, or any future state drift
+                    elif current_status == "missing" and not matching_doc:
+                        if resolution.get("validation_cache_id") and resolution.get("is_valid"):
+                            from app.core.config import get_settings
+                            settings = get_settings()
+                            if settings.india_code_auto_fetch_enabled:
+                                client.table("act_resolutions").update({
+                                    "resolution_status": "auto_fetching",
+                                }).eq("id", res_id).execute()
+
+                                results["resolutions_fixed"] += 1
+                                results["missing_to_auto_fetching"] += 1
+                                logger.info(
+                                    "act_resolution_fixed_missing_to_auto_fetching",
+                                    matter_id=matter_id,
+                                    act_name=normalized_name,
+                                )
+
             except Exception as e:
                 logger.warning(
                     "sync_act_resolutions_matter_failed",
@@ -1492,6 +1512,7 @@ def sync_act_resolutions_with_documents(self) -> dict:
             resolutions_fixed=results["resolutions_fixed"],
             missing_to_available=results["missing_to_available"],
             available_to_missing=results["available_to_missing"],
+            missing_to_auto_fetching=results["missing_to_auto_fetching"],
             errors=len(results["errors"]),
         )
 
@@ -1499,6 +1520,109 @@ def sync_act_resolutions_with_documents(self) -> dict:
 
     except Exception as e:
         logger.error("sync_act_resolutions_with_documents_failed", error=str(e))
+        return {"error": str(e)}
+
+
+# =============================================================================
+# One-Time Repair: Stuck Missing Acts
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.repair_stuck_missing_acts",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def repair_stuck_missing_acts(self) -> dict:
+    """One-time repair task for acts stuck in 'missing' that should be 'auto_fetching'.
+
+    Finds all act_resolutions where:
+    - resolution_status = 'missing'
+    - is_valid = True
+    - validation_cache_id IS NOT NULL
+
+    These are acts that were validated before auto-fetch was deployed.
+    Transitions them to 'auto_fetching' and triggers the fetch pipeline.
+
+    Idempotent — safe to re-run.
+
+    Returns:
+        Dictionary with repair results.
+    """
+    from app.core.config import get_settings
+    from app.services.supabase.client import get_service_client
+
+    logger.info("repair_stuck_missing_acts_started")
+
+    results = {
+        "found": 0,
+        "transitioned": 0,
+        "errors": [],
+    }
+
+    try:
+        settings = get_settings()
+        if not settings.india_code_auto_fetch_enabled:
+            logger.info("repair_stuck_missing_acts_skipped_auto_fetch_disabled")
+            return {"skipped": True, "reason": "auto_fetch_disabled"}
+
+        client = get_service_client()
+        if client is None:
+            return {"error": "Database client not configured"}
+
+        # Find all stuck acts: missing + validated + has cache entry
+        stuck_response = (
+            client.table("act_resolutions")
+            .select("id, matter_id, act_name_normalized, act_name_display, validation_cache_id")
+            .eq("resolution_status", "missing")
+            .eq("is_valid", True)
+            .not_.is_("validation_cache_id", "null")
+            .execute()
+        )
+
+        stuck_acts = stuck_response.data or []
+        results["found"] = len(stuck_acts)
+
+        if not stuck_acts:
+            logger.info("repair_stuck_missing_acts_none_found")
+            return results
+
+        for act in stuck_acts:
+            try:
+                client.table("act_resolutions").update({
+                    "resolution_status": "auto_fetching",
+                }).eq("id", act["id"]).execute()
+
+                results["transitioned"] += 1
+                logger.info(
+                    "repair_stuck_act_transitioned",
+                    act_name=act.get("act_name_normalized"),
+                    matter_id=act.get("matter_id"),
+                )
+            except Exception as e:
+                results["errors"].append({
+                    "act_id": act["id"],
+                    "error": str(e),
+                })
+
+        # Trigger fetch pipeline to process the newly queued acts
+        if results["transitioned"] > 0:
+            from app.workers.tasks.act_validation_tasks import fetch_acts_from_india_code
+            fetch_acts_from_india_code.apply_async(queue="low")
+            logger.info("repair_stuck_missing_acts_fetch_triggered", count=results["transitioned"])
+
+        logger.info(
+            "repair_stuck_missing_acts_completed",
+            found=results["found"],
+            transitioned=results["transitioned"],
+            errors=len(results["errors"]),
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error("repair_stuck_missing_acts_failed", error=str(e))
         return {"error": str(e)}
 
 

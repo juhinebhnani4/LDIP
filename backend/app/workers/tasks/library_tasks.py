@@ -465,7 +465,32 @@ def ocr_and_process_library_document(
         lib_service.update_status(library_document_id, LibraryDocumentStatus.PROCESSING)
 
         # 2. Download PDF from Supabase storage
-        pdf_bytes = client.storage.from_("documents").download(storage_path)
+        # BUG-016: Pre-flight check — verify file exists before download.
+        # Missing files are permanent failures (retrying won't help), so fail
+        # immediately with a clear flag instead of exhausting retries → DLQ.
+        try:
+            pdf_bytes = client.storage.from_("documents").download(storage_path)
+        except Exception as storage_err:
+            err_msg = str(storage_err).lower()
+            if "not found" in err_msg or "404" in err_msg or "object not found" in err_msg:
+                logger.error(
+                    "ocr_library_document_storage_missing",
+                    library_document_id=library_document_id,
+                    storage_path=storage_path,
+                    error=str(storage_err),
+                )
+                lib_service.update_status(
+                    library_document_id,
+                    LibraryDocumentStatus.FAILED,
+                    quality_flags=["storage_missing"],
+                )
+                return {
+                    "status": "failed",
+                    "library_document_id": library_document_id,
+                    "reason": f"storage_missing: {storage_path}",
+                }
+            # Re-raise transient errors (network, timeout) for retry
+            raise
 
         # 3. Run OCR to extract text
         from app.services.ocr.processor import OCRProcessor

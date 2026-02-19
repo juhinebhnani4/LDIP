@@ -23,10 +23,12 @@ import { VerificationGroupedView } from './VerificationGroupedView';
 import { VerificationActions } from './VerificationActions';
 import { VerificationFilters } from './VerificationFilters';
 import { VerificationNotesDialog } from './VerificationNotesDialog';
+import { FindingDetailPanel } from './FindingDetailPanel';
 import { useVerificationQueue } from '@/hooks/useVerificationQueue';
 import { useVerificationStats } from '@/hooks/useVerificationStats';
 import { useVerificationActions } from '@/hooks/useVerificationActions';
 import { useVerificationStore } from '@/stores/verificationStore';
+import type { VerificationQueueItem } from '@/types';
 
 interface VerificationContentProps {
   /** Matter ID */
@@ -120,6 +122,10 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
   const [notesAction, setNotesAction] = useState<'reject' | 'flag'>('reject');
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [isBulkAction, setIsBulkAction] = useState(false);
+
+  // Detail panel state (BUG-012)
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
+  const [selectedFinding, setSelectedFinding] = useState<VerificationQueueItem | null>(null);
 
   // Hooks for data fetching
   const {
@@ -235,6 +241,15 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
     [isBulkAction, notesAction, pendingActionId, selectedIds, bulkReject, bulkFlag, reject, flag]
   );
 
+  // Handle item click - open detail panel (BUG-012)
+  const handleItemClick = useCallback((id: string) => {
+    const item = filteredQueue.find((q) => q.id === id);
+    if (item) {
+      setSelectedFinding(item);
+      setDetailPanelOpen(true);
+    }
+  }, [filteredQueue]);
+
   // Handle tier badge click - apply confidence tier filter
   // Story 10D.2 Task 5.5: Clickable stat cards apply corresponding filter
   const handleTierClick = useCallback(
@@ -321,6 +336,7 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
           onToggleSelect={toggleSelected}
           onSelectAll={selectAll}
           processingIds={processingIds}
+          onItemClick={handleItemClick}
         />
       )}
 
@@ -332,6 +348,17 @@ export function VerificationContent({ matterId, onStartSession }: VerificationCo
         itemCount={isBulkAction ? selectedIds.length : 1}
         isLoading={isActioning}
         onSubmit={handleNotesSubmit}
+      />
+
+      {/* Finding Detail Panel (BUG-012) */}
+      <FindingDetailPanel
+        isOpen={detailPanelOpen}
+        onClose={() => setDetailPanelOpen(false)}
+        finding={selectedFinding}
+        onApprove={handleApprove}
+        onReject={handleRejectClick}
+        onFlag={handleFlagClick}
+        isLoading={isActioning}
       />
     </div>
   );

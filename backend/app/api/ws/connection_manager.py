@@ -19,9 +19,13 @@ from fastapi import WebSocket
 logger = structlog.get_logger(__name__)
 
 
-@dataclass
+@dataclass(eq=False)
 class ConnectionInfo:
-    """Metadata for an active WebSocket connection."""
+    """Metadata for an active WebSocket connection.
+
+    Uses identity-based equality/hashing (eq=False) so instances can be
+    stored in sets. Each ConnectionInfo represents a unique connection.
+    """
 
     websocket: WebSocket
     user_id: str

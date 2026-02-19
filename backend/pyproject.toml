@@ -49,12 +49,7 @@ dependencies = [
     # Evaluation Framework (Feature 2) - RAGAS metrics
     "ragas>=0.2.0",
     "datasets>=3.0.0",
-]
-
-[project.optional-dependencies]
-# Heavy ML dependencies - install separately if needed
-ml = [
-    # Table Extraction (Feature 1) - pulls in PyTorch
+    # Layout-Aware Chunking (Docling Integration)
     "docling>=2.0.0",
     "docling-core>=2.0.0",
 ]

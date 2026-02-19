@@ -215,9 +215,11 @@ class IndiaCodeClient:
         client = self._get_client()
         await self._rate_limit()
 
-        # Clean the search term
+        # Clean the search term, avoiding year duplication
+        # e.g., act_name="Code of Criminal Procedure, 1973" + year=1973
+        # should NOT become "Code of Criminal Procedure, 1973 1973"
         search_term = act_name.strip()
-        if year:
+        if year and str(year) not in search_term:
             search_term = f"{search_term} {year}"
 
         # URL encode the search term

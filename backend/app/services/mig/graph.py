@@ -771,14 +771,17 @@ class MIGGraphService:
                 def _insert_edge():
                     return (
                         self.client.table("identity_edges")
-                        .insert({
-                            "matter_id": matter_id,
-                            "source_node_id": edge.source_entity_id,
-                            "target_node_id": edge.target_entity_id,
-                            "relationship_type": edge.relationship_type.value,
-                            "confidence": edge.confidence,
-                            "metadata": edge.metadata,
-                        })
+                        .upsert(
+                            {
+                                "matter_id": matter_id,
+                                "source_node_id": edge.source_entity_id,
+                                "target_node_id": edge.target_entity_id,
+                                "relationship_type": edge.relationship_type.value,
+                                "confidence": edge.confidence,
+                                "metadata": edge.metadata,
+                            },
+                            on_conflict="matter_id,source_node_id,target_node_id,relationship_type",
+                        )
                         .execute()
                     )
 

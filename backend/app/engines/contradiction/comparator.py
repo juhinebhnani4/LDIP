@@ -445,7 +445,10 @@ class StatementComparator:
                     cost_tracker.screening_input_tokens = in_tokens
                     cost_tracker.screening_output_tokens = out_tokens
 
-                    # Check if we can skip GPT-4
+                    # Check if we can skip GPT-4.
+                    # "contradiction" from screening always escalates for GPT-4 confirmation.
+                    # "needs_review" always escalates (not in skip list).
+                    # "consistent"/"unrelated" skip only if confidence >= threshold.
                     skip_gpt4 = (
                         result in ("consistent", "unrelated")
                         and confidence >= self.confidence_threshold

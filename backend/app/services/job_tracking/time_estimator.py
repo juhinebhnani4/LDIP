@@ -421,14 +421,18 @@ class TimeEstimator:
             Overall progress percentage (0-100).
         """
         # Stage weights (approximate percentage of total time)
+        # Must match PIPELINE_STAGES in document_tasks.py (all 10 stages)
         stage_weights = {
-            "ocr": 40,  # OCR typically takes longest
-            "validation": 10,
+            "ocr": 30,                    # OCR typically takes longest
+            "validation": 5,
             "confidence": 2,
-            "chunking": 8,
-            "embedding": 15,
-            "entity_extraction": 20,
-            "alias_resolution": 5,
+            "chunking": 5,
+            "embedding": 10,
+            "entity_extraction": 15,
+            "alias_resolution": 3,
+            "citation_extraction": 10,     # Gemini API calls per chunk
+            "citation_verification": 5,    # Verification + India Code lookups
+            "contradiction_detection": 15, # GPT-4o escalation pairs
         }
 
         # Stage order
@@ -442,7 +446,8 @@ class TimeEstimator:
             current_idx = stages.index(normalized)
         except ValueError:
             logger.warning("unknown_stage_for_progress", stage=current_stage)
-            return 0
+            # Return 95% for unknown stages (likely near completion) to avoid regression
+            return 95
 
         # Sum completed stage weights
         completed_weight = sum(stage_weights[s] for s in stages[:current_idx])

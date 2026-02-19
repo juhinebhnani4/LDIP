@@ -338,6 +338,14 @@ async def _link_chunk_with_page_index(
 
     most_common_page = page_counts.most_common(1)[0][0] if page_counts else None
 
+    # BUG-014: Fallback to best candidate page when bbox matching fails
+    # The page estimation is still useful even when detailed window matching
+    # doesn't reach the threshold — better than returning None.
+    fallback_used = False
+    if most_common_page is None and candidate_pages:
+        most_common_page = candidate_pages[0]
+        fallback_used = True
+
     logger.debug(
         "chunk_bbox_linking_complete",
         document_id=document_id,
@@ -348,6 +356,7 @@ async def _link_chunk_with_page_index(
         match_score=best_match_score,
         optimized=True,
         candidate_pages=candidate_pages,
+        fallback_used=fallback_used,
     )
 
     return matched_bbox_ids, most_common_page
@@ -448,8 +457,16 @@ async def link_chunks_to_bboxes(
         if bbox_ids:
             linked_count += 1
 
+    # BUG-014: Positional interpolation for remaining page=None chunks.
+    # After bbox linking, interpolate page numbers from neighboring chunks
+    # that DO have pages, or estimate proportionally from total page count.
+    none_count_before = sum(1 for c in chunks if c.page_number is None)
+    if none_count_before > 0 and page_index and page_index.all_pages:
+        _interpolate_missing_pages(chunks, page_index.all_pages)
+
     link_time = time.time() - link_start_time
     total_time = time.time() - start_time
+    none_count_after = sum(1 for c in chunks if c.page_number is None)
 
     logger.info(
         "linking_chunks_to_bboxes_complete",
@@ -460,4 +477,61 @@ async def link_chunks_to_bboxes(
         total_time_seconds=round(total_time, 2),
         optimized=use_optimized,
         avg_per_chunk_ms=round((link_time / len(chunks)) * 1000, 1) if chunks else 0,
+        pages_interpolated=none_count_before - none_count_after,
+        pages_still_none=none_count_after,
     )
+
+
+def _interpolate_missing_pages(
+    chunks: list[ChunkData],
+    all_pages: list[int],
+) -> None:
+    """Fill in missing page numbers by interpolating from neighbors.
+
+    BUG-014: When bbox linking fails for some chunks, estimate their page
+    from surrounding chunks that do have pages. Falls back to proportional
+    estimation when no neighbors exist.
+
+    Args:
+        chunks: Chunks to fill (modified in place).
+        all_pages: Sorted list of all page numbers in the document.
+    """
+    if not chunks or not all_pages:
+        return
+
+    total_chunks = len(chunks)
+    min_page = all_pages[0]
+    max_page = all_pages[-1]
+
+    for i, chunk in enumerate(chunks):
+        if chunk.page_number is not None:
+            continue
+
+        # Look for nearest chunk before with a page
+        prev_page = None
+        for j in range(i - 1, -1, -1):
+            if chunks[j].page_number is not None:
+                prev_page = chunks[j].page_number
+                break
+
+        # Look for nearest chunk after with a page
+        next_page = None
+        for j in range(i + 1, total_chunks):
+            if chunks[j].page_number is not None:
+                next_page = chunks[j].page_number
+                break
+
+        if prev_page is not None and next_page is not None:
+            # Interpolate between neighbors
+            chunk.page_number = (prev_page + next_page) // 2
+        elif prev_page is not None:
+            # After last known page — use it
+            chunk.page_number = prev_page
+        elif next_page is not None:
+            # Before first known page — use it
+            chunk.page_number = next_page
+        else:
+            # No neighbors at all — proportional estimate
+            chunk.page_number = min_page + round(
+                (i / max(total_chunks - 1, 1)) * (max_page - min_page)
+            )

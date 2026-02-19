@@ -382,11 +382,19 @@ You do NOT need detailed analysis. Just quickly check:
 2. If yes, do they appear to conflict or agree?
 
 CLASSIFICATION (be conservative - when unsure, say "needs_review"):
-- consistent: Statements clearly agree or complement each other
+- consistent: Statements clearly agree or complement each other with NO factual tension
 - unrelated: Statements discuss completely different topics
 - needs_review: Statements MIGHT conflict OR you're not sure - requires expert review
+- contradiction: Statements clearly make incompatible factual claims
 
-IMPORTANT: It's better to flag something for review than to miss a potential contradiction.
+WATCH FOR THESE COMMON LEGAL CONTRADICTIONS:
+- Hearsay vs direct testimony: One witness says "X told me he saw Y" but X's own testimony says something different
+- Prosecution version vs witness deposition: What the prosecution claims a witness saw vs what the witness actually stated
+- Conflicting accounts of the same event by different witnesses
+- Claims about procedural compliance vs evidence of non-compliance
+- Different factual claims about dates, locations, sequence of events, or who was present
+
+IMPORTANT: It's better to flag something for review than to miss a potential contradiction. If two statements describe the same event but with ANY factual differences (even subtle ones like what someone claimed to have seen vs what they testified), classify as "needs_review".
 
 Respond ONLY with valid JSON."""
 
@@ -400,7 +408,7 @@ Quick assessment - do these statements conflict?
 
 Respond with JSON:
 {{
-  "result": "consistent|unrelated|needs_review",
+  "result": "consistent|unrelated|needs_review|contradiction",
   "confidence": 0.0-1.0,
   "quick_reason": "One sentence explanation"
 }}"""
@@ -437,7 +445,7 @@ Quick assessment - do these statements conflict?
 
 Respond with JSON:
 {{
-  "result": "consistent|unrelated|needs_review",
+  "result": "consistent|unrelated|needs_review|contradiction",
   "confidence": 0.0-1.0,
   "quick_reason": "One sentence explanation"
 }}"""
@@ -461,7 +469,7 @@ def validate_screening_response(parsed: dict) -> list[str]:
             errors.append(f"Missing required field: {field}")
 
     # Validate result enum
-    valid_results = {"consistent", "unrelated", "needs_review"}
+    valid_results = {"consistent", "unrelated", "needs_review", "contradiction"}
     result = parsed.get("result", "").lower()
     if result and result not in valid_results:
         errors.append(f"Invalid result '{result}'. Must be one of: {valid_results}")

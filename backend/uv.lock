@@ -1657,6 +1657,8 @@ dependencies = [
     { name = "circuitbreaker" },
     { name = "cohere" },
     { name = "datasets" },
+    { name = "docling" },
+    { name = "docling-core" },
     { name = "fastapi" },
     { name = "google-cloud-documentai" },
     { name = "google-genai" },
@@ -1686,12 +1688,6 @@ dependencies = [
     { name = "voyageai" },
 ]
 
-[package.optional-dependencies]
-ml = [
-    { name = "docling" },
-    { name = "docling-core" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
@@ -1711,8 +1707,8 @@ requires-dist = [
     { name = "circuitbreaker", specifier = ">=2.0.0" },
     { name = "cohere", specifier = ">=5.20.1" },
     { name = "datasets", specifier = ">=3.0.0" },
-    { name = "docling", marker = "extra == 'ml'", specifier = ">=2.0.0" },
-    { name = "docling-core", marker = "extra == 'ml'", specifier = ">=2.0.0" },
+    { name = "docling", specifier = ">=2.0.0" },
+    { name = "docling-core", specifier = ">=2.0.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "google-cloud-documentai", specifier = ">=3.7.0" },
     { name = "google-genai", specifier = ">=1.0.0" },
@@ -1741,7 +1737,6 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
 ]
-provides-extras = ["ml"]
 
 [package.metadata.requires-dev]
 dev = [

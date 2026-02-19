@@ -3,6 +3,7 @@
 > Lessons from Perplexity and Claude Code applied to legal document intelligence.
 >
 > Created: 2026-02-18
+> Updated: 2026-02-19 — Added Phase 0 (Stability) based on E2E test of 2024 INSC 919
 
 ---
 
@@ -85,6 +86,57 @@ Claude Code is a coding agent with local tool execution and an agentic loop. Key
 ---
 
 ## Roadmap
+
+### Phase 0: Stability & Core Fixes (Now – 2 weeks)
+
+> Discovered via E2E test on 2024 INSC 919 (Ashok vs State of UP). Full report: [docs/bugs/e2e-test-2024-insc-919.md](bugs/e2e-test-2024-insc-919.md)
+
+**Why this comes first**: The core engines work — Jaanch found the exact contradiction a Supreme Court judge flagged. But infrastructure bugs almost prevented it. A demo to any lawyer right now would show "1 document failed processing" on a successful analysis. Phase 0 makes the existing product reliable before adding new capabilities.
+
+#### 0.1 Contradiction Engine Reliability (CRITICAL)
+
+| Bug | Fix | Effort |
+|-----|-----|--------|
+| **Timeout kills task while async work continues** | Increase timeout from ~300s to 600s+ or restructure to per-entity timeouts with checkpointing | Medium |
+| **Gemini Flash screening too aggressive** | Tune screening prompt to be more skeptical on witness testimony; lower escalation threshold from 0.9 to 0.8 | Medium |
+| **False "failed processing" banner** | Mark task as partial_success when findings were stored despite timeout; don't surface engine failure as document failure | Low |
+
+#### 0.2 Data Accuracy (CRITICAL)
+
+| Bug | Fix | Effort |
+|-----|-----|--------|
+| **Wrong respondent (Maharashtra vs UP)** | Fix party extraction — entity hallucinated wrong state despite correct text in Case Overview | Medium |
+| **India Code year duplication** | Deduplicate year in search query ("CrPC 1973 1973" → "CrPC 1973") | Low |
+
+#### 0.3 Real-Time Pipeline (MAJOR)
+
+| Bug | Fix | Effort |
+|-----|-----|--------|
+| **WebSocket unhashable ConnectionInfo** | Add `__hash__`/`__eq__` to ConnectionInfo or switch from set to list | Low |
+| **get_job_queue_stats RPC access denied** | Fix Supabase RLS policy to allow matter owner access | Low |
+| **Live Discoveries panel empty** | Fix WebSocket registration (BUG-006), then verify frontend subscription | Low-Med |
+| **Progress bar non-linear/backwards** | Ensure monotonic stage progression; simplify to "Stage X of 5" | Medium |
+
+#### 0.4 Infrastructure (MAJOR)
+
+| Bug | Fix | Effort |
+|-----|-----|--------|
+| **Docling not installed on worker** | Add to Docker image or remove import attempt | Low |
+| **Library document storage 404s** | Add consistency check for storage objects | Low |
+
+#### 0.5 Verification UX (MINOR)
+
+| Bug | Fix | Effort |
+|-----|-----|--------|
+| **Contradiction "Source" shows N/A** | Wire chunk page references to verification table | Low |
+| **No detail expansion for contradictions** | Add expandable detail view with both statements + reasoning | Medium |
+| **Duplicate identity_edges 409s** | Use UPSERT or check-before-insert | Low |
+| **Bbox linkings with low match scores** | Improve fallback page assignment from OCR coordinates | Low |
+| **Stage 4 stuck at 100%** | Trigger stage transition on task completion/failure, not timeout | Low |
+
+**Exit criteria for Phase 0**: Re-run the same 2024 INSC 919 test case. All 3 contradictions found, no "failed" banner, correct respondent, progress bar smooth, Live Discoveries shows entities appearing.
+
+---
 
 ### Phase 1: Reasoning Layer (Now – 6 months)
 
@@ -360,7 +412,8 @@ tools = [
 
 | Phase | Timeline | Focus | Key Deliverables |
 |-------|----------|-------|-----------------|
-| **1** | Now – 6 months | Reasoning | Iterative sub-queries, smart compaction |
+| **0** | Now – 2 weeks | Stability | Fix 16 bugs from E2E test, make existing engines reliable |
+| **1** | 2 weeks – 6 months | Reasoning | Iterative sub-queries, smart compaction |
 | **2** | 6 months – 1 year | Knowledge | Pre-crawled legal index, user memory, context enrichment |
 | **3** | Year 1 – 2 | Intelligence | Dynamic tool selection, case law index |
 | **4** | Year 2 – 4 | Enterprise | On-premise deployment, collaboration, custom LLM |

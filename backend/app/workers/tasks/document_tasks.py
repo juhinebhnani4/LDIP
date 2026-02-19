@@ -673,12 +673,30 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
 
         verification_service = get_verification_service()
 
-        # 1. Fetch contradictions from statement_comparisons
+        # 1. Fetch contradictions from statement_comparisons (include chunk refs for source tracking)
         contradictions = client.table("statement_comparisons") \
-            .select("id, explanation, confidence") \
+            .select("id, explanation, confidence, statement_a_id, statement_b_id") \
             .eq("matter_id", matter_id) \
             .eq("result", "contradiction") \
             .execute()
+
+        # 1b. Resolve chunk IDs → document_id + page_number for source references
+        chunk_ids_needed: set[str] = set()
+        for row in (contradictions.data or []):
+            chunk_ids_needed.add(row["statement_a_id"])
+            chunk_ids_needed.add(row["statement_b_id"])
+
+        chunk_info: dict[str, dict] = {}  # chunk_id -> {document_id, page_number}
+        if chunk_ids_needed:
+            chunks_result = client.table("chunks") \
+                .select("chunk_id, document_id, page_number") \
+                .in_("chunk_id", list(chunk_ids_needed)) \
+                .execute()
+            for c in (chunks_result.data or []):
+                chunk_info[c["chunk_id"]] = {
+                    "document_id": c.get("document_id"),
+                    "page_number": c.get("page_number"),
+                }
 
         # 2. Fetch failed citations from citations
         failed_citations = client.table("citations") \
@@ -721,7 +739,18 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             if source_id not in existing_source_ids:
                 try:
                     confidence_raw = row.get("confidence") or 50.0
-                    finding_result = client.table("findings").insert({
+
+                    # Resolve source document IDs and pages from chunks
+                    source_doc_ids: list[str] = []
+                    source_pages: list[int] = []
+                    for chunk_id in [row.get("statement_a_id"), row.get("statement_b_id")]:
+                        info = chunk_info.get(chunk_id, {})
+                        if info.get("document_id"):
+                            source_doc_ids.append(info["document_id"])
+                        if info.get("page_number") is not None:
+                            source_pages.append(info["page_number"])
+
+                    finding_data = {
                         "matter_id": matter_id,
                         "engine_type": "contradiction",
                         "finding_type": "contradiction_detected",
@@ -731,7 +760,15 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
                         },
                         "confidence": min(confidence_raw / 100.0, 1.0),
                         "status": "pending",
-                    }).execute()
+                    }
+                    if source_doc_ids:
+                        finding_data["source_document_ids"] = source_doc_ids
+                    if source_pages:
+                        finding_data["source_pages"] = source_pages
+
+                    finding_result = client.table("findings").insert(
+                        finding_data
+                    ).execute()
                     if finding_result.data:
                         finding_id = finding_result.data[0]["id"]
                         finding_id_by_source[source_id] = finding_id
@@ -1456,6 +1493,16 @@ def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLa
     from app.services.supabase.client import get_service_client
 
     try:
+        # Check if Docling is available before attempting layout extraction
+        from app.services.table_extraction.docling_provider import get_docling_provider
+        if not get_docling_provider().is_available():
+            logger.warning(
+                "layout_extraction_docling_not_available",
+                document_id=document_id,
+                hint="Install docling with: pip install 'ldip-backend[ml]'",
+            )
+            return None
+
         # Get document info to find the storage path
         client = get_service_client()
         if client is None:
@@ -5412,6 +5459,16 @@ def extract_citations(
             },
         )
 
+        # BUG-015: Mark citation_verification as complete in the pipeline.
+        # Citation verification runs asynchronously via validate_acts_for_matter
+        # (background task on low-priority queue) and should not block progress.
+        _update_job_stage_complete(
+            job_id,
+            "citation_verification",
+            matter_id,
+            metadata={"async": True, "note": "runs in background via act validation"},
+        )
+
         # Story 7.1: Broadcast citations feature availability
         broadcast_feature_ready(
             matter_id=matter_id,
@@ -5686,7 +5743,10 @@ def _store_comparison_results(
             # Use upsert to avoid duplicates (statement_a_id + statement_b_id)
             # Note: This requires a unique constraint on (statement_a_id, statement_b_id)
             # If not available, use insert with on_conflict handling
-            result = client.table("statement_comparisons").insert(records).execute()
+            result = client.table("statement_comparisons").upsert(
+                records,
+                on_conflict="matter_id,statement_a_id,statement_b_id",
+            ).execute()
             stored = len(result.data) if result.data else 0
 
             logger.info(
@@ -6035,7 +6095,9 @@ def detect_contradictions(
                     entities_skipped += 1
 
         # Run async comparison (gevent-compatible via _run_async)
-        _run_async(_detect_contradictions_async())
+        # Pass timeout=1140 (19 min) to stay below soft_time_limit=1200 (20 min).
+        # Without this, _run_async defaults to 300s which kills the task prematurely.
+        _run_async(_detect_contradictions_async(), timeout=1140)
 
         # Broadcast contradiction detection completion
         broadcast_document_status(
@@ -6098,24 +6160,29 @@ def detect_contradictions(
             "job_id": job_id,
         }
 
-    except SoftTimeLimitExceeded:
-        # Task timeout - complete pipeline with partial results
+    except (SoftTimeLimitExceeded, TimeoutError) as timeout_exc:
+        # Task timeout - complete pipeline with partial results.
+        # Catches both Celery's SoftTimeLimitExceeded (20 min) and
+        # _run_async's TimeoutError (19 min) so both follow the graceful path.
+        timeout_type = type(timeout_exc).__name__
         logger.error(
             "detect_contradictions_task_timeout",
             document_id=doc_id,
+            timeout_type=timeout_type,
             timeout_seconds=1200,
             entities_processed=entities_processed,
             contradictions_found=total_contradictions,
         )
-        # Still complete the pipeline — contradiction detection is the final stage
+        # Still complete the pipeline — contradiction detection is the final stage.
+        # If contradictions were found before timeout, they're already stored.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
-            "status": "contradiction_detection_failed",
+            "status": "contradiction_detection_partial" if total_contradictions > 0 else "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "TIMEOUT",
-            "error_message": "Contradiction detection timeout exceeded (20 minutes)",
+            "error_message": f"Contradiction detection timeout ({timeout_type}). {entities_processed} entities processed, {total_contradictions} contradictions found before timeout.",
             "entities_processed": entities_processed,
             "contradictions_found": total_contradictions,
             "job_id": job_id,

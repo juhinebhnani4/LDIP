@@ -415,10 +415,22 @@ class JobRecoveryService:
             Dictionary with recovery statistics.
         """
         try:
-            # Count jobs by status
-            stats_response = self.supabase.rpc(
-                "get_job_queue_stats"
+            # Count jobs by status (direct query — RPC is per-matter only)
+            stats_response = self.supabase.table("processing_jobs").select(
+                "status"
             ).execute()
+
+            # Aggregate counts by status
+            from collections import Counter
+            status_counts = Counter(row["status"] for row in (stats_response.data or []))
+            queue_stats = {
+                "queued": status_counts.get("QUEUED", 0),
+                "processing": status_counts.get("PROCESSING", 0),
+                "completed": status_counts.get("COMPLETED", 0),
+                "failed": status_counts.get("FAILED", 0),
+                "cancelled": status_counts.get("CANCELLED", 0),
+                "skipped": status_counts.get("SKIPPED", 0),
+            }
 
             # Count recently recovered jobs
             one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
@@ -429,7 +441,7 @@ class JobRecoveryService:
             ).execute()
 
             return {
-                "queue_stats": stats_response.data,
+                "queue_stats": queue_stats,
                 "recovered_last_hour": recovered_response.count or 0,
                 "config": {
                     "stale_timeout_minutes": settings.job_stale_timeout_minutes,

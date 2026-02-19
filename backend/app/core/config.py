@@ -65,8 +65,8 @@ class Settings(BaseSettings):
     # Two-tier approach: Gemini Flash screens first, GPT-4 only for uncertain/contradictions
     contradiction_model_routing_enabled: bool = True  # Enable two-tier routing
     contradiction_screening_model: str = "gemini-2.5-flash"  # Fast/cheap for initial screening
-    contradiction_screening_confidence_threshold: float = 0.85  # Below this -> escalate to GPT-4
-    contradiction_escalate_results: list[str] = ["contradiction", "uncertain"]  # Results to escalate
+    contradiction_screening_confidence_threshold: float = 0.80  # Below this -> escalate to GPT-4
+    contradiction_escalate_results: list[str] = ["contradiction", "needs_review"]  # Always escalate these
 
     # GPT-3.5 Configuration (Story 6-1: Query Intent Classification)
     openai_intent_model: str = "gpt-3.5-turbo"  # Cost-sensitive classification

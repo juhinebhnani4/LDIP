@@ -79,6 +79,10 @@ RULES:
     - "Respondent No. 1 failed to appear" → extract "Respondent No. 1" with confidence 0.4
 13. NEVER extract generic terms as standalone entities:
     - "The Respondent", "The Petitioner" alone → do NOT extract
+14. CRITICAL - Party names must be EXACTLY as written in the text:
+    - NEVER substitute, infer, or correct party names (e.g., if text says "State of Uttar Pradesh", do NOT change to "State of Maharashtra" or any other state)
+    - Copy party names character-for-character from the source text
+    - If a state/government entity appears, use the EXACT state name from the text
 
 EXAMPLES:
 

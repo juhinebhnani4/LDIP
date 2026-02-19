@@ -394,48 +394,48 @@ class TestStageProgressEstimate:
 
     def test_calculates_progress_for_ocr(self, estimator: TimeEstimator) -> None:
         """Should calculate progress percentage for OCR stage."""
-        # OCR is the first stage with 40% weight
+        # OCR is the first stage with 30% weight
         result = estimator.estimate_stage_progress(
             current_stage="ocr",
             stage_progress=0.5,  # 50% through OCR
         )
 
-        # 0 completed stages + 50% of 40% = 20%
-        assert result == 20
+        # 0 completed stages + 50% of 30% = 15%
+        assert result == 15
 
     def test_calculates_progress_for_middle_stage(
         self, estimator: TimeEstimator
     ) -> None:
         """Should calculate progress for middle stage."""
-        # Chunking is after OCR (40%) + validation (10%) + confidence (2%)
+        # Chunking is after OCR (30%) + validation (5%) + confidence (2%)
         result = estimator.estimate_stage_progress(
             current_stage="chunking",
             stage_progress=0.0,  # Just started chunking
         )
 
-        # 52% completed (40 + 10 + 2)
-        assert result == 52
+        # 37% completed (30 + 5 + 2)
+        assert result == 37
 
     def test_calculates_progress_for_last_stage(
         self, estimator: TimeEstimator
     ) -> None:
         """Should calculate progress near end."""
-        # Alias resolution is last, after 95% complete
+        # Contradiction detection is last stage, after 85% complete
         result = estimator.estimate_stage_progress(
-            current_stage="alias_resolution",
-            stage_progress=0.5,  # 50% through alias
+            current_stage="contradiction_detection",
+            stage_progress=0.5,  # 50% through contradiction detection
         )
 
-        # 95% + 50% of 5% = 97.5% -> 97
-        assert result == 97
+        # 85% + 50% of 15% = 92.5% -> 92
+        assert result == 92
 
-    def test_returns_zero_for_unknown_stage(self, estimator: TimeEstimator) -> None:
-        """Should return 0 for unknown stage."""
+    def test_returns_fallback_for_unknown_stage(self, estimator: TimeEstimator) -> None:
+        """Should return 95 for unknown stage to prevent regression."""
         result = estimator.estimate_stage_progress(
             current_stage="unknown_stage",
             stage_progress=0.5,
         )
-        assert result == 0
+        assert result == 95
 
     def test_normalizes_stage_names(self, estimator: TimeEstimator) -> None:
         """Should handle different stage name formats."""

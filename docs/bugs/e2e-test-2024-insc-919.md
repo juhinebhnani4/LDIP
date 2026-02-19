@@ -38,8 +38,8 @@
 |----------|---------|---------|---------|-------|-------|
 | CRITICAL | 5 | 3 | 2 | 10 | 0 |
 | MAJOR | 5 | 3 | 5 | 13 | 8 |
-| MINOR | 6 | 3 | 5 | 14 | 7 |
-| **Total** | **16** | **9** | **12** | **37** | **15** |
+| MINOR | 6 | 3 | 5 | 14 | 10 |
+| **Total** | **16** | **9** | **12** | **37** | **18** |
 
 ---
 
@@ -269,24 +269,27 @@
 
 #### BUG-LT-D: "0 Files Received" on processing page
 - **Severity**: MINOR
-- **Status**: [ ] Open (noted for future)
-- **File**: Frontend processing page component
+- **Status**: [x] Fixed
+- **File**: `frontend/src/app/(dashboard)/upload/processing/page.tsx`, `frontend/src/components/features/upload/ProcessingScreen.tsx`
 - **What happens**: The processing page shows "0 Files Received" even though 1 file was uploaded and processing.
-- **Fix direction**: Check the file count query on the processing page.
+- **Root cause**: File count came from `uploadWizardStore.files` (local File objects). In recovery mode (page refresh) or after upload phase, the files array was empty since File objects aren't persisted.
+- **Fix**: Added `useDocuments(matterId)` hook in the processing page to fetch documents from backend. `ProcessingScreen` now uses `effectiveFileCount = files.length > 0 ? files.length : backendDocuments.length` for the file count display.
 
 #### BUG-LT-E: Matter title shows "New Matter" instead of case name
 - **Severity**: MINOR
-- **Status**: [ ] Open (noted for future)
-- **File**: Frontend matter creation / processing page
+- **Status**: [x] Fixed
+- **File**: `frontend/src/app/(dashboard)/upload/processing/page.tsx`
 - **What happens**: The matter title shows "New Matter" instead of the extracted case name from the document (e.g., "Ashok vs State of Uttar Pradesh").
-- **Fix direction**: Check if matter title is updated after document processing completes.
+- **Root cause**: `matterName` was only set from the upload wizard store (user-entered or auto-generated from filename). The backend updates the matter title after document processing extracts the case name, but the frontend never fetched the updated title.
+- **Fix**: Added `useEffect` that fetches matter details via `mattersApi.get(matterId)` when matterId is available, and updates the store's `matterName` with the backend title. Both `ProcessingScreen` and `CompletionScreen` benefit since they read from the same store.
 
 #### BUG-LT-F: DOCUMENTS section on processing page is empty
 - **Severity**: MINOR
-- **Status**: [ ] Open (noted for future)
-- **File**: Frontend processing page
+- **Status**: [x] Fixed
+- **File**: `frontend/src/app/(dashboard)/upload/processing/page.tsx`, `frontend/src/components/features/upload/ProcessingScreen.tsx`
 - **What happens**: The DOCUMENTS section on the left side of the processing page is empty, showing no uploaded documents.
-- **Fix direction**: Check the documents query on the processing page.
+- **Root cause**: The DOCUMENTS section only showed `UploadProgressView` during upload phase, then a simple text count ("{files.length} files received") after. No actual document list was rendered — no filenames, statuses, or page counts were displayed.
+- **Fix**: (1) Added `useDocuments(matterId)` in the processing page to fetch documents from backend with polling enabled. (2) Added document list UI in `ProcessingScreen` that renders each document with filename, page count, file size, and a status icon (spinner for processing, check for completed, X for failed). (3) Falls back to simple count text when backend documents haven't loaded yet.
 
 ---
 
@@ -366,20 +369,21 @@
 
 #### BUG-LT3-F: India Code HTTP error during act resolution
 - **Severity**: MAJOR
-- **Status**: [ ] Open
-- **File**: Backend India Code search / act resolution
+- **Status**: [x] Fixed
+- **File**: `backend/app/engines/citation/india_code.py`, `backend/app/workers/tasks/act_validation_tasks.py`
 - **Log**: India Code search returned HTTP error with empty error message for 4 acts
 - **What happens**: All 4 acts (CrPC, IPC, BNSS, Indian Evidence Act) failed to resolve via India Code search. The error message was empty, making debugging impossible.
 - **Impact**: No acts can be fetched from India Code, blocking automatic citation verification.
-- **Fix direction**: (1) Add proper error message logging for India Code HTTP responses. (2) May be related to BUG-004 (year duplication in search query) or India Code API availability.
+- **Root cause**: `httpx.HTTPStatusError` exceptions contain HTTP status code, URL, and response body info, but the code only caught the base `httpx.HTTPError` and called `str(e)` which can produce empty strings for certain error subclasses. Error messages were not preserved with sufficient context.
+- **Fix**: (1) Added separate `httpx.HTTPStatusError` catch blocks in `search_act()`, `get_bitstream_url()`, and `download_pdf()` that log `status_code`, `request.url`, and `response.text`. (2) All error handlers now use structured logging with `error_type` and fallback `"(no message)"` for empty exceptions. (3) Added download failure logging in `act_validation_tasks.py` fetch flow for search-based downloads.
 
 #### BUG-LT3-G: Document viewer doesn't exist — "View" opens raw PDF in new tab
 - **Severity**: MAJOR
-- **Status**: [ ] Open
-- **File**: Frontend documents tab / Actions menu
+- **Status**: [x] Fixed
+- **File**: `frontend/src/components/features/pdf/PdfViewerModal.tsx`, `frontend/src/components/features/document/DocumentList.tsx`, `frontend/src/components/features/document/DocumentsContent.tsx`
 - **What happens**: The "View" action in the Documents tab opens the raw PDF from Supabase storage in a new browser tab (browser's built-in PDF viewer). There is no in-app document viewer with page navigation, search, or annotation support.
 - **Impact**: No way to view documents within the app context. Loses all contextual features (bbox overlay, entity highlighting, citation marking). The `?doc=` and `?page=` query parameters in source links are non-functional.
-- **Fix direction**: Build an in-app document viewer component (e.g., using pdf.js which is already loaded for the citation viewer) that responds to `?doc=` query params and scrolls to `?page=` number. The citation viewer already has a working pdf.js integration that could be reused.
+- **Fix**: (1) Rewrote `PdfViewerModal` from placeholder shell to fully functional modal using `PdfViewerPanel` (pdf.js). Supports page navigation, zoom, keyboard shortcuts (arrow keys, +/-), and download. (2) Changed `DocumentList.handleViewDocument()` to open the in-app viewer instead of `window.open()`. (3) Changed `DocumentsContent.handleOpenDocument()` to use in-app viewer for cross-tab `?doc=&page=` navigation. (4) Added auto-open: when `?doc=` query param matches a document, the viewer opens automatically on mount with the specified page.
 
 ### MINOR (5 bugs)
 
@@ -393,36 +397,39 @@
 
 #### BUG-LT3-H: Source links (`?doc=&page=`) don't open document viewer
 - **Severity**: MINOR (blocked by BUG-LT3-G)
-- **Status**: [ ] Open
-- **File**: Frontend routing / documents tab
+- **Status**: [x] Fixed (by BUG-LT3-G fix)
+- **File**: `frontend/src/components/features/document/DocumentsContent.tsx`
 - **What happens**: All "View Source" and "pg. N" links from Summary, Timeline, and other tabs navigate to `/documents?doc=...&page=N` but just show the document list. No document opens, no page is scrolled to.
 - **Impact**: Source attribution links are non-functional. Users can't click through from findings to source text.
-- **Fix direction**: Depends on BUG-LT3-G (document viewer). Once a viewer exists, wire up the `?doc=` and `?page=` query params to open and navigate it.
+- **Fix**: BUG-LT3-G fix added in-app PDF viewer. `DocumentsContent` now auto-opens the viewer when `?doc=` param matches a document, navigating to the specified `?page=` number. Cross-tab source links are now functional.
 
 #### BUG-LT3-I: No bbox overlay/highlighting in any document viewing mode
 - **Severity**: MINOR (blocked by BUG-LT3-G)
-- **Status**: [ ] Open
-- **File**: Frontend document viewer (not yet built)
+- **Status**: [x] Fixed
+- **File**: `frontend/src/components/features/pdf/PdfViewerModal.tsx`, `frontend/src/components/features/document/DocumentList.tsx`, `frontend/src/components/features/document/DocumentsContent.tsx`
 - **What happens**: Even in the citation viewer (which renders the source PDF correctly with pdf.js), there is no bbox overlay highlighting the citation location on the page. The bounding box data exists in the database (98% OCR quality, 85 bounding boxes) but is never rendered.
 - **Impact**: Users can't see which text on the page corresponds to an entity, citation, or contradiction.
-- **Fix direction**: After document viewer exists, add a canvas overlay layer that draws rectangles from the `bounding_boxes` table data. The citation viewer already renders the PDF — extend it with highlight overlays.
+- **Root cause**: The rendering infrastructure was 100% complete (BboxOverlay component, useBoundingBoxes hook, PdfViewerPanel accepts bbox props), but PdfViewerModal never fetched bounding boxes — it had no `documentId` to query with.
+- **Fix**: (1) Added `documentId` prop to `PdfViewerModal`. (2) Used `useBoundingBoxes` hook to fetch bboxes via `fetchByPage(documentId, currentPage)` whenever the page changes. (3) Pass fetched `boundingBoxes` and `bboxPageNumber` down to `PdfViewerPanel` which already renders `BboxOverlay`. (4) Updated both `DocumentList` and `DocumentsContent` to pass `documentId` when opening the viewer. Uses existing two-tier cache (in-memory + localStorage) for performance.
 
 #### BUG-LT3-J: Docling version detection reports 0.0.0
 - **Severity**: MINOR (cosmetic)
-- **Status**: [ ] Open
-- **File**: Backend docling provider initialization
+- **Status**: [x] Fixed
+- **File**: `backend/app/services/table_extraction/docling_provider.py`
 - **Log**: `docling_version=0.0.0`, `docling_version_outdated installed=0.0.0 required=2.0.0`
 - **What happens**: Docling is installed and working (StandardPdfPipeline runs, OCR produces results), but version detection reports 0.0.0 and logs a warning about being outdated.
 - **Impact**: Log noise. Misleading warning about outdated version when docling is actually functional.
-- **Fix direction**: Check how version is detected — likely `importlib.metadata.version("docling")` returns 0.0.0 for the installed package. May need to check `docling-core` or the actual package name.
+- **Root cause**: `importlib.metadata.version("docling")` returns "0.0.0" for certain installation methods (editable installs, some build backends). The code only had one detection strategy and always warned on low version.
+- **Fix**: (1) Added `_detect_version()` static method with 3 fallback strategies: importlib.metadata for "docling", `docling.__version__` attribute, and docling-core version as proxy. (2) Only logs `docling_version_outdated` warning when a real version number is detected that's actually below the minimum — skips warning for "unknown" or proxy versions where docling is functional but version metadata is unavailable.
 
 #### BUG-LT3-K: Citation count mismatch — Summary says 21, Citations tab says 19
 - **Severity**: MINOR
-- **Status**: [ ] Open
-- **File**: Frontend summary stats vs citations tab query
+- **Status**: [x] Fixed
+- **File**: `backend/app/services/summary_service.py`
 - **What happens**: Summary page alert says "21 citations need verification" and stats show "21 Citations Found". But the Citations tab header shows "19 found". Two citations are missing from the tab view.
 - **Impact**: Inconsistent numbers reduce trust. Not clear which count is correct.
-- **Fix direction**: Compare the queries — Summary stats likely count all citation records while the Citations tab may deduplicate or filter some.
+- **Root cause**: Summary used a raw `COUNT(*)` on the citations table (`_get_citations_count`), while the Citations tab used `get_citation_counts_by_act()` which filters out: (1) citations from Act documents (self-referencing — citations extracted from Acts pointing back at themselves), and (2) citations with invalid/garbage act names. The 2-citation gap was from these filtered records. The Citations tab count (19) was the correct one.
+- **Fix**: (1) Replaced `_get_citations_count()` with a call to `CitationStorageService.get_citation_counts_by_act()` — same filtered query the Citations tab uses. Single source of truth. (2) Also replaced `_count_citation_issues()` (used for "N citations need verification" attention item) to use the same filtered `pending_count` from `get_citation_counts_by_act()`. Both summary stats and attention items now match the Citations tab exactly.
 
 ---
 

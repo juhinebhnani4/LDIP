@@ -3,8 +3,9 @@
 /**
  * PDF Viewer Panel Component
  *
- * Wraps PDF.js viewer for split-view context with navigation and zoom controls.
- * Only renders visible page + 1 buffer for performance per project-context.md.
+ * Continuous-scroll PDF viewer using pdf.js. Renders all pages vertically
+ * with scroll-based lazy rendering for performance.
+ * Supports zoom controls, page input (scroll-to-page), and bbox overlays.
  *
  * Story 3-4: Split-View Citation Highlighting (AC: #1, #5)
  * Story 11.6: Implement PDF Viewer Full Modal Mode (AC: #2 - Fit to Page)
@@ -18,8 +19,6 @@ import {
   type FC,
 } from 'react';
 import {
-  ChevronLeft,
-  ChevronRight,
   ZoomIn,
   ZoomOut,
   Maximize,
@@ -59,28 +58,17 @@ export interface PdfViewerPanelProps {
   boundingBoxes?: SplitViewBoundingBox[];
   /** Page number the bounding boxes belong to (for filtering) */
   bboxPageNumber?: number;
-  /**
-   * Highlight type for semantic categorization (Story 11.7).
-   * When provided, takes precedence over verificationStatus/isSource.
-   */
   highlightType?: HighlightType;
-  /** Verification status for highlight colors (legacy, used when highlightType not provided) */
   verificationStatus?: VerificationStatus;
-  /** Whether this is the source (left) panel (legacy, used when highlightType not provided) */
   isSource?: boolean;
   /** Current page (controlled) */
   currentPage?: number;
   /** Current scale (controlled) */
   scale?: number;
-  /** Callback when page changes */
   onPageChange?: (page: number) => void;
-  /** Callback when scale changes */
   onScaleChange?: (scale: number) => void;
-  /** Callback when total pages is determined (after PDF loads) */
   onTotalPagesChange?: (totalPages: number) => void;
-  /** Panel title for accessibility */
   panelTitle?: string;
-  /** Optional className */
   className?: string;
 }
 
@@ -88,9 +76,10 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
 const SCALE_STEP = 0.25;
 const DEFAULT_SCALE = 1.0;
+const PAGE_GAP = 8;
 
 /**
- * PDF viewer panel with page navigation, zoom controls, and bbox highlighting.
+ * PDF viewer panel with continuous scroll, zoom controls, and bbox highlighting.
  */
 export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
   documentUrl,
@@ -108,27 +97,92 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
   panelTitle,
   className,
 }) => {
-  // State
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [internalPage, setInternalPage] = useState(initialPage);
   const [internalScale, setInternalScale] = useState(DEFAULT_SCALE);
   const [pageInput, setPageInput] = useState(String(initialPage));
   const [isLoading, setIsLoading] = useState(true);
-  const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pageSize, setPageSize] = useState({ width: 612, height: 792 }); // Default letter size
+  const [pageSize, setPageSize] = useState({ width: 612, height: 792 });
+  // Force re-render trigger when pages finish rendering (for hiding spinners)
+  const [renderVersion, setRenderVersion] = useState(0);
 
-  // Refs
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const renderTaskRef = useRef<{ promise: Promise<void> } | null>(null);
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
+  const pageRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
+  const canvasRefsMap = useRef<Map<number, HTMLCanvasElement>>(new Map());
+  const isScrollingToPage = useRef(false);
+  const renderedPagesRef = useRef<Set<number>>(new Set());
+  const renderingPagesRef = useRef<Set<number>>(new Set());
 
-  // Use controlled values if provided, otherwise use internal state
   const page = controlledPage ?? internalPage;
   const scale = controlledScale ?? internalScale;
 
-  // Page change handler
+  // --- "Function ref" pattern: store the latest render functions in refs ---
+  // This ensures scroll handlers always call the latest version with fresh closures,
+  // avoiding the stale closure problem that plagues useCallback-based approaches.
+  const renderVisiblePagesRef = useRef<() => void>(() => {});
+
+  // renderPage: renders a single page to its canvas
+  const renderPageFn = async (pageNum: number) => {
+    if (!pdfDoc) return;
+    if (renderedPagesRef.current.has(pageNum)) return;
+    if (renderingPagesRef.current.has(pageNum)) return;
+
+    const canvas = canvasRefsMap.current.get(pageNum);
+    if (!canvas) return;
+
+    renderingPagesRef.current.add(pageNum);
+
+    try {
+      const pageObj = await pdfDoc.getPage(pageNum);
+      const viewport = pageObj.getViewport({ scale });
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = viewport.width * dpr;
+      canvas.height = viewport.height * dpr;
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+      ctx.scale(dpr, dpr);
+
+      await pageObj.render({ canvasContext: ctx, viewport }).promise;
+
+      renderedPagesRef.current.add(pageNum);
+      renderingPagesRef.current.delete(pageNum);
+      setRenderVersion((v) => v + 1);
+    } catch (err) {
+      renderingPagesRef.current.delete(pageNum);
+      if (err instanceof Error && err.message.includes('cancelled')) return;
+      console.warn(`Failed to render page ${pageNum}:`, err);
+    }
+  };
+
+  // renderVisiblePages: finds visible pages via getBoundingClientRect and renders them.
+  // Uses BCR (not offsetTop) for reliable coordinates inside CSS-transformed dialogs.
+  const renderVisiblePagesFn = () => {
+    const container = containerRef.current;
+    if (!container || !pdfDoc || numPages === 0) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const viewHeight = container.clientHeight;
+    const buffer = viewHeight; // render 1 viewport ahead/behind
+
+    pageRefsMap.current.forEach((el, pageNum) => {
+      const elRect = el.getBoundingClientRect();
+      const relativeTop = elRect.top - containerRect.top;
+
+      if (relativeTop < viewHeight + buffer && relativeTop + el.offsetHeight > -buffer) {
+        renderPageFn(pageNum);
+      }
+    });
+  };
+
+  // Update the ref on every render so scroll handler always gets latest closure
+  renderVisiblePagesRef.current = renderVisiblePagesFn;
+
   const handlePageChange = useCallback(
     (newPage: number) => {
       const clampedPage = Math.max(1, Math.min(newPage, numPages || 1));
@@ -138,11 +192,17 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
         setInternalPage(clampedPage);
       }
       setPageInput(String(clampedPage));
+
+      const pageEl = pageRefsMap.current.get(clampedPage);
+      if (pageEl) {
+        isScrollingToPage.current = true;
+        pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => { isScrollingToPage.current = false; }, 800);
+      }
     },
     [numPages, onPageChange]
   );
 
-  // Scale change handler
   const handleScaleChange = useCallback(
     (newScale: number) => {
       const clampedScale = Math.max(MIN_SCALE, Math.min(newScale, MAX_SCALE));
@@ -155,45 +215,19 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     [onScaleChange]
   );
 
-  // Fit to width handler - calculates scale to fit page width in viewport (Story 11.6)
   const handleFitToWidth = useCallback(() => {
-    if (!containerRef.current || pageSize.width === 0) {
-      return;
-    }
-
-    const container = containerRef.current;
-    // Account for padding (16px = p-4 on each side)
-    const availableWidth = container.clientWidth - 32;
-
-    // Calculate scale to fit page width
+    if (!containerRef.current || pageSize.width === 0) return;
+    const availableWidth = containerRef.current.clientWidth - 32;
     const fitScale = availableWidth / pageSize.width;
-
-    // Clamp to allowed range
-    const clampedScale = Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE));
-    handleScaleChange(clampedScale);
+    handleScaleChange(Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE)));
   }, [pageSize.width, handleScaleChange]);
 
-  // Fit to page handler - calculates scale to fit entire page in viewport (Story 11.6)
   const handleFitToPage = useCallback(() => {
-    if (!containerRef.current || pageSize.width === 0 || pageSize.height === 0) {
-      return;
-    }
-
-    const container = containerRef.current;
-    // Account for padding (16px = p-4 on each side)
-    const availableWidth = container.clientWidth - 32;
-    const availableHeight = container.clientHeight - 32;
-
-    // Calculate scale to fit page in both dimensions
-    const scaleX = availableWidth / pageSize.width;
-    const scaleY = availableHeight / pageSize.height;
-
-    // Use the smaller scale to ensure the entire page fits
-    const fitScale = Math.min(scaleX, scaleY);
-
-    // Clamp to allowed range
-    const clampedScale = Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE));
-    handleScaleChange(clampedScale);
+    if (!containerRef.current || pageSize.width === 0 || pageSize.height === 0) return;
+    const availableWidth = containerRef.current.clientWidth - 32;
+    const availableHeight = containerRef.current.clientHeight - 32;
+    const fitScale = Math.min(availableWidth / pageSize.width, availableHeight / pageSize.height);
+    handleScaleChange(Math.max(MIN_SCALE, Math.min(fitScale, MAX_SCALE)));
   }, [pageSize.width, pageSize.height, handleScaleChange]);
 
   // Load PDF document
@@ -203,14 +237,12 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     const loadPdf = async () => {
       setIsLoading(true);
       setError(null);
+      renderedPagesRef.current = new Set();
+      renderingPagesRef.current = new Set();
 
       try {
-        // Dynamic import of PDF.js
         const pdfjs = await import('pdfjs-dist');
 
-        // Configure worker - use unpkg as primary CDN with version lock for reliability
-        // PDF.js requires a web worker for performance. Using a CDN is standard practice.
-        // Alternative: copy worker to public/ and serve locally if CDN is blocked
         if (!pdfjs.GlobalWorkerOptions.workerSrc) {
           pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
         }
@@ -222,8 +254,12 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
 
         setPdfDoc(doc as unknown as PDFDocumentProxy);
         setNumPages(doc.numPages);
-        // Notify parent of total pages for header display
         onTotalPagesChange?.(doc.numPages);
+
+        const firstPage = await doc.getPage(1);
+        const vp = firstPage.getViewport({ scale: 1.0 });
+        setPageSize({ width: vp.width, height: vp.height });
+
         setIsLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -233,90 +269,96 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     };
 
     loadPdf();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [documentUrl, onTotalPagesChange]);
 
-  // Render current page
+  // Initial render: when PDF loads, render visible pages after DOM settles
   useEffect(() => {
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfDoc || numPages === 0) return;
+    const timer = setTimeout(() => renderVisiblePagesRef.current(), 150);
+    return () => clearTimeout(timer);
+  }, [pdfDoc, numPages]);
 
-    let cancelled = false;
+  // When scale changes, clear rendered state and re-render
+  useEffect(() => {
+    if (!pdfDoc || numPages === 0) return;
+    renderedPagesRef.current = new Set();
+    renderingPagesRef.current = new Set();
+    setRenderVersion((v) => v + 1);
+    const timer = setTimeout(() => renderVisiblePagesRef.current(), 150);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDoc, numPages, scale]);
 
-    const renderPage = async () => {
-      setIsRendering(true);
+  // Page tracking callback ref (avoids stale onPageChange in scroll handler)
+  const onPageChangeRef = useRef(onPageChange);
+  onPageChangeRef.current = onPageChange;
 
-      try {
-        // Cancel any ongoing render
-        if (renderTaskRef.current) {
-          await renderTaskRef.current.promise.catch(() => {});
-        }
+  // Callback ref for the scroll container. Registers the scroll handler
+  // the moment the DOM node appears, bypassing useEffect timing issues
+  // (containerRef was null in effects due to early-return loading state).
+  const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup previous handler
+    if (scrollCleanupRef.current) {
+      scrollCleanupRef.current();
+      scrollCleanupRef.current = null;
+    }
 
-        const pageObj = await pdfDoc.getPage(page);
+    containerRef.current = node;
 
-        if (cancelled) return;
+    if (node) {
+      const handleScroll = () => {
+        renderVisiblePagesRef.current();
 
-        const viewport = pageObj.getViewport({ scale });
-        const canvas = canvasRef.current;
+        if (isScrollingToPage.current) return;
 
-        if (!canvas) return;
+        const containerRect = node.getBoundingClientRect();
+        const containerTop = containerRect.top;
+        let closestPage = 1;
+        let closestDist = Infinity;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Handle high DPI displays
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = viewport.width * dpr;
-        canvas.height = viewport.height * dpr;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
-        ctx.scale(dpr, dpr);
-
-        // Store page size for bbox overlay
-        setPageSize({
-          width: viewport.width / scale,
-          height: viewport.height / scale,
-        });
-
-        // Render PDF page
-        const renderTask = pageObj.render({
-          canvasContext: ctx,
-          viewport,
-        });
-        renderTaskRef.current = renderTask;
-
-        await renderTask.promise;
-
-        if (!cancelled) {
-          setIsRendering(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          // Ignore cancelled render errors
-          if (err instanceof Error && err.message.includes('cancelled')) {
-            return;
+        pageRefsMap.current.forEach((el, pageNum) => {
+          const rect = el.getBoundingClientRect();
+          const dist = Math.abs(rect.top - containerTop);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestPage = pageNum;
           }
-          setError(err instanceof Error ? err.message : 'Failed to render page');
-          setIsRendering(false);
+        });
+
+        if (onPageChangeRef.current) {
+          onPageChangeRef.current(closestPage);
+        } else {
+          setInternalPage(closestPage);
         }
+        setPageInput(String(closestPage));
+      };
+
+      node.addEventListener('scroll', handleScroll, { passive: true });
+      scrollCleanupRef.current = () => node.removeEventListener('scroll', handleScroll);
+    }
+  }, []);
+
+  // Scroll to initial page on first load
+  useEffect(() => {
+    if (!pdfDoc || numPages === 0 || initialPage <= 1) return;
+
+    const timer = setTimeout(() => {
+      const pageEl = pageRefsMap.current.get(initialPage);
+      if (pageEl) {
+        isScrollingToPage.current = true;
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+        setTimeout(() => { isScrollingToPage.current = false; }, 300);
       }
-    };
+    }, 100);
 
-    renderPage();
+    return () => clearTimeout(timer);
+  }, [pdfDoc, numPages, initialPage]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pdfDoc, page, scale]);
-
-  // Update page input when controlled page changes
   useEffect(() => {
     setPageInput(String(page));
   }, [page]);
 
-  // Handle page input submission
   const handlePageInputSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newPage = parseInt(pageInput, 10);
@@ -327,13 +369,22 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     }
   };
 
-  // Filter bboxes for current page - only show bboxes when viewing their specific page
-  // bboxPageNumber indicates which page the bboxes belong to
-  const currentPageBboxes = bboxPageNumber !== undefined && page === bboxPageNumber
-    ? boundingBoxes
-    : [];
+  const setPageRef = useCallback((pageNum: number, el: HTMLDivElement | null) => {
+    if (el) {
+      pageRefsMap.current.set(pageNum, el);
+    } else {
+      pageRefsMap.current.delete(pageNum);
+    }
+  }, []);
 
-  // Render loading state
+  const setCanvasRef = useCallback((pageNum: number, el: HTMLCanvasElement | null) => {
+    if (el) {
+      canvasRefsMap.current.set(pageNum, el);
+    } else {
+      canvasRefsMap.current.delete(pageNum);
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <div className={`flex flex-col items-center justify-center h-full bg-muted/30 ${className ?? ''}`}>
@@ -343,116 +394,75 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     );
   }
 
-  // Render error state
   if (error) {
     return (
       <div className={`flex flex-col items-center justify-center h-full bg-muted/30 ${className ?? ''}`}>
         <AlertCircle className="h-8 w-8 text-destructive" />
         <p className="mt-2 text-sm text-destructive">{error}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => window.location.reload()}
-        >
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => window.location.reload()}>
           Retry
         </Button>
       </div>
     );
   }
 
+  const scaledWidth = pageSize.width * scale;
+  const scaledHeight = pageSize.height * scale;
+
+  // Suppress unused var warning - renderVersion is used to trigger re-renders
+  void renderVersion;
+
   return (
     <div className={`flex flex-col h-full ${className ?? ''}`}>
       {/* Controls bar */}
       <div className="flex items-center justify-between px-3 py-2 border-b bg-background">
-        {/* Page navigation */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => handlePageChange(page - 1)}
-            disabled={page <= 1}
-            title="Previous page"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
           <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1">
             <Input
               value={pageInput}
               onChange={(e) => setPageInput(e.target.value)}
               className="h-8 w-14 text-center text-sm"
               aria-label="Page number"
-              title="Enter page number and press Enter"
+              title="Enter page number and press Enter to scroll"
             />
             <span className="text-sm text-muted-foreground">/ {numPages}</span>
           </form>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => handlePageChange(page + 1)}
-            disabled={page >= numPages}
-            title="Next page"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
 
-        {/* Panel title */}
         {panelTitle && (
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground truncate max-w-[40%]">
             {panelTitle}
           </span>
         )}
 
-        {/* Zoom controls */}
         <div className="flex items-center gap-1">
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            variant="ghost" size="icon" className="h-8 w-8"
             onClick={() => handleScaleChange(scale - SCALE_STEP)}
-            disabled={scale <= MIN_SCALE}
-            title="Zoom out (-)"
+            disabled={scale <= MIN_SCALE} title="Zoom out (-)"
           >
             <ZoomOut className="h-4 w-4" />
           </Button>
-
           <span className="text-xs text-muted-foreground min-w-[50px] text-center">
             {Math.round(scale * 100)}%
           </span>
-
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            variant="ghost" size="icon" className="h-8 w-8"
             onClick={() => handleScaleChange(scale + SCALE_STEP)}
-            disabled={scale >= MAX_SCALE}
-            title="Zoom in (+)"
+            disabled={scale >= MAX_SCALE} title="Zoom in (+)"
           >
             <ZoomIn className="h-4 w-4" />
           </Button>
-
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleFitToWidth}
-            title="Fit to width"
+            variant="ghost" size="icon" className="h-8 w-8"
+            onClick={handleFitToWidth} title="Fit to width"
             aria-label="Fit page width to view"
           >
             <Maximize className="h-4 w-4" />
           </Button>
-
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleFitToPage}
-            title="Fit to page"
+            variant="ghost" size="icon" className="h-8 w-8"
+            onClick={handleFitToPage} title="Fit to page"
             aria-label="Fit entire page in view"
           >
             <Minimize2 className="h-4 w-4" />
@@ -460,38 +470,41 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
         </div>
       </div>
 
-      {/* PDF canvas container */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto bg-muted/30 p-4"
-      >
-        <div className="relative inline-block mx-auto">
-          {/* PDF page canvas */}
-          <canvas
-            ref={canvasRef}
-            className="shadow-lg"
-            aria-label={`${panelTitle ?? 'PDF'} page ${page}`}
-          />
+      {/* Continuous scroll PDF container */}
+      <div ref={containerCallbackRef} className="flex-1 overflow-auto bg-muted/30 p-4">
+        <div className="flex flex-col items-center" style={{ gap: `${PAGE_GAP}px` }}>
+          {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
+            <div
+              key={pageNum}
+              ref={(el) => setPageRef(pageNum, el)}
+              data-page={pageNum}
+              className="relative shadow-lg bg-white"
+              style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
+            >
+              <canvas
+                ref={(el) => setCanvasRef(pageNum, el)}
+                aria-label={`${panelTitle ?? 'PDF'} page ${pageNum}`}
+              />
 
-          {/* Bbox overlay */}
-          {currentPageBboxes.length > 0 && (
-            <BboxOverlay
-              boundingBoxes={currentPageBboxes}
-              pageWidth={pageSize.width}
-              pageHeight={pageSize.height}
-              scale={scale}
-              highlightType={highlightType}
-              verificationStatus={verificationStatus}
-              isSource={isSource}
-            />
-          )}
+              {bboxPageNumber === pageNum && boundingBoxes.length > 0 && (
+                <BboxOverlay
+                  boundingBoxes={boundingBoxes}
+                  pageWidth={pageSize.width}
+                  pageHeight={pageSize.height}
+                  scale={scale}
+                  highlightType={highlightType}
+                  verificationStatus={verificationStatus}
+                  isSource={isSource}
+                />
+              )}
 
-          {/* Rendering indicator */}
-          {isRendering && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              {!renderedPagesRef.current.has(pageNum) && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>

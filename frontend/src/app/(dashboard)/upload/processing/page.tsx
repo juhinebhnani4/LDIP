@@ -25,6 +25,8 @@ import { simulateUploadAndProcessing } from '@/lib/utils/mock-processing';
 import { createMatterAndUpload } from '@/lib/api/upload-orchestration';
 import { useProcessingStatus } from '@/hooks/useProcessingStatus';
 import { useLiveDiscoveries } from '@/hooks/useLiveDiscoveries';
+import { useDocuments } from '@/hooks/useDocuments';
+import { mattersApi } from '@/lib/api/matters';
 import { requestNotificationPermission } from '@/lib/utils/browser-notifications';
 import { jobsApi } from '@/lib/api/jobs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -73,6 +75,7 @@ export default function ProcessingPage() {
     (state) => state.addUploadedDocumentId
   );
   const matterName = useUploadWizardStore((state) => state.matterName);
+  const setMatterName = useUploadWizardStore((state) => state.setMatterName);
   const matterId = useUploadWizardStore((state) => state.matterId);
 
   // Background processing store
@@ -148,6 +151,25 @@ export default function ProcessingPage() {
       stopOnComplete: false, // Keep updating discoveries even after processing completes
     }
   );
+
+  // Fetch documents from backend when matterId is available (fixes BUG-LT-D, BUG-LT-F)
+  const { documents: backendDocuments } = useDocuments(
+    matterId ?? '',
+    { enablePolling: true }
+  );
+
+  // Fetch matter title from backend when matterId is available (fixes BUG-LT-E)
+  useEffect(() => {
+    if (!matterId) return;
+    let cancelled = false;
+    mattersApi.get(matterId).then((matter) => {
+      if (cancelled) return;
+      if (matter.title && matter.title !== 'New Matter') {
+        setMatterName(matter.title);
+      }
+    }).catch(() => { /* ignore - title will stay as store value */ });
+    return () => { cancelled = true; };
+  }, [matterId, setMatterName]);
 
   // Sync real API progress to store when using real APIs
   useEffect(() => {
@@ -407,7 +429,10 @@ export default function ProcessingPage() {
           </Alert>
         </div>
       )}
-      <ProcessingScreen onContinueInBackground={handleContinueInBackground} />
+      <ProcessingScreen
+        onContinueInBackground={handleContinueInBackground}
+        backendDocuments={backendDocuments}
+      />
     </>
   );
 }

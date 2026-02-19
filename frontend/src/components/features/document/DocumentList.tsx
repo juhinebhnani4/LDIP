@@ -21,6 +21,7 @@ import {
   retryDocumentProcessing,
   updateDocument,
 } from '@/lib/api/documents';
+import { PdfViewerModal } from '../pdf/PdfViewerModal';
 import { DocumentTypeBadge } from './DocumentTypeBadge';
 import { OCRQualityBadge } from './OCRQualityBadge';
 import { DocumentProcessingStatus } from './DocumentProcessingStatus';
@@ -236,6 +237,13 @@ export function DocumentList({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // In-app document viewer state (BUG-LT3-G fix)
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerDocId, setViewerDocId] = useState<string | undefined>(undefined);
+  const [viewerDocName, setViewerDocName] = useState('Document');
+  const [viewerInitialPage, setViewerInitialPage] = useState(1);
+
   // Use external documents if provided, otherwise use internal state
   const isControlled = externalDocuments !== undefined;
   const documents = isControlled ? externalDocuments : internalDocuments;
@@ -362,12 +370,14 @@ export function DocumentList({
   // Document Action Handlers (Story 10D.4)
   // ============================================================================
 
-  const handleViewDocument = async (doc: DocumentListItem) => {
+  const handleViewDocument = async (doc: DocumentListItem, page?: number) => {
     try {
       const document = await fetchDocument(doc.id);
-      // Note: fetchDocument returns a Document where storagePath contains the signed URL
-      // (the backend populates storage_path with the signed URL for viewing - see documents.py:953-977)
-      window.open(document.storagePath, '_blank');
+      setViewerUrl(document.storagePath);
+      setViewerDocId(doc.id);
+      setViewerDocName(doc.filename);
+      setViewerInitialPage(page ?? 1);
+      setViewerOpen(true);
     } catch {
       toast.error('Failed to open document');
     }
@@ -716,6 +726,16 @@ export function DocumentList({
           onDelete={handleDeleteDocument}
         />
       )}
+
+      {/* In-app PDF Viewer (BUG-LT3-G fix, BUG-LT3-I bbox overlay) */}
+      <PdfViewerModal
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        documentUrl={viewerUrl}
+        documentId={viewerDocId}
+        documentName={viewerDocName}
+        initialPage={viewerInitialPage}
+      />
     </TooltipProvider>
   );
 }

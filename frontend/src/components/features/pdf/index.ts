@@ -8,5 +8,5 @@ export { PDFSplitViewHeader } from './PDFSplitViewHeader';
 export { PDFFullScreenModal } from './PDFFullScreenModal';
 export { BboxOverlay } from './BboxOverlay';
 
-// New PDF Modal shell (Story 2.3)
-export { PdfViewerModal, PdfViewerModalSkeleton } from './PdfViewerModal';
+// PDF Modal with pdf.js viewer (Story 2.3, BUG-LT3-G)
+export { PdfViewerModal } from './PdfViewerModal';

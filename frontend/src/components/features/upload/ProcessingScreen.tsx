@@ -12,7 +12,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,17 +21,36 @@ import { UploadProgressView } from './UploadProgressView';
 import { ProcessingProgressView } from './ProcessingProgressView';
 import { LiveDiscoveriesPanel } from './LiveDiscoveriesPanel';
 import type { UploadProgress } from '@/types/upload';
+import type { DocumentListItem } from '@/types/document';
 
 interface ProcessingScreenProps {
   /** Optional className for the container */
   className?: string;
   /** Callback when user clicks "Continue in Background" */
   onContinueInBackground?: () => void;
+  /** Documents fetched from backend (for recovery mode and live updates) */
+  backendDocuments?: DocumentListItem[];
+}
+
+/** Status icon for document processing state */
+function DocumentStatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'completed':
+    case 'searchable':
+    case 'indexed':
+      return <CheckCircle2 className="size-4 text-green-600 shrink-0" />;
+    case 'failed':
+    case 'ocr_failed':
+      return <XCircle className="size-4 text-red-500 shrink-0" />;
+    default:
+      return <Loader2 className="size-4 text-primary animate-spin shrink-0" />;
+  }
 }
 
 export function ProcessingScreen({
   className,
   onContinueInBackground,
+  backendDocuments,
 }: ProcessingScreenProps) {
   const router = useRouter();
 
@@ -64,6 +83,12 @@ export function ProcessingScreen({
     }
     return true;
   }, [files, uploadProgress]);
+
+  // Use backend document count as fallback when local files are empty (recovery mode)
+  const effectiveFileCount = files.length > 0 ? files.length : (backendDocuments?.length ?? 0);
+
+  // Determine if we have backend documents to show in the DOCUMENTS section
+  const hasBackendDocuments = (backendDocuments?.length ?? 0) > 0;
 
   // Handle continue in background
   const handleContinueInBackground = useCallback(() => {
@@ -109,7 +134,7 @@ export function ProcessingScreen({
         <ProcessingProgressView
           currentStage={processingStage}
           overallProgressPct={overallProgressPct}
-          filesReceived={files.length}
+          filesReceived={effectiveFileCount}
           className="mb-6"
         />
 
@@ -131,14 +156,35 @@ export function ProcessingScreen({
               />
             )}
 
-            {/* Show processing details after upload complete */}
-            {!isUploadPhase && uploadsComplete && (
+            {/* Show document list from backend after upload phase */}
+            {!isUploadPhase && hasBackendDocuments && (
+              <div className="space-y-2">
+                {backendDocuments!.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border bg-background p-3"
+                  >
+                    <FileText className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{doc.filename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {doc.pageCount ? `${doc.pageCount} pages` : 'Processing...'}
+                        {doc.fileSize ? ` · ${(doc.fileSize / (1024 * 1024)).toFixed(1)} MB` : ''}
+                      </p>
+                    </div>
+                    <DocumentStatusIcon status={doc.status} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Fallback: show simple count when no backend docs yet */}
+            {!isUploadPhase && !hasBackendDocuments && uploadsComplete && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <span>✓</span>
-                  <span>{files.length} files received</span>
+                  <span>{effectiveFileCount} files received</span>
                 </div>
-                {/* Additional processing stats can be added here */}
               </div>
             )}
           </div>

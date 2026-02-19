@@ -11,9 +11,9 @@
  * Task 1: Create DocumentsContent container component
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ import { DocumentList } from './DocumentList';
 import { DocumentsHeader } from './DocumentsHeader';
 import { AddDocumentsDialog } from './AddDocumentsDialog';
 import { LinkedLibraryPanel } from '../library/LinkedLibraryPanel';
+import { PdfViewerModal } from '../pdf/PdfViewerModal';
 import { useDocuments } from '@/hooks/useDocuments';
 import { fetchDocument, retryAllStuckDocuments } from '@/lib/api/documents';
 import type { DocumentListItem } from '@/types/document';
@@ -119,6 +120,13 @@ export function DocumentsContent({
   // Retry all stuck state
   const [isRetryingAll, setIsRetryingAll] = useState(false);
 
+  // In-app document viewer state (BUG-LT3-G / BUG-LT3-H fix)
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerDocId, setViewerDocId] = useState<string | undefined>(undefined);
+  const [viewerDocName, setViewerDocName] = useState('Document');
+  const [viewerInitialPage, setViewerInitialPage] = useState(1);
+
   // Fetch documents using hook
   const { documents, isLoading, error, refresh } = useDocuments(matterId);
 
@@ -136,18 +144,28 @@ export function DocumentsContent({
     ) || null;
   }, [docParam, documents]);
 
-  // Open a document in a new tab (with optional page anchor)
+  // Open a document in the in-app viewer (with optional page)
   const handleOpenDocument = useCallback(async (doc: DocumentListItem, page?: string) => {
     try {
       const fullDoc = await fetchDocument(doc.id);
-      const url = page
-        ? `${fullDoc.storagePath}#page=${page}`
-        : fullDoc.storagePath;
-      window.open(url, '_blank');
+      setViewerUrl(fullDoc.storagePath);
+      setViewerDocId(doc.id);
+      setViewerDocName(doc.filename);
+      setViewerInitialPage(page ? parseInt(page, 10) || 1 : 1);
+      setViewerOpen(true);
     } catch {
       toast.error('Failed to open document');
     }
   }, []);
+
+  // Auto-open document viewer when ?doc= param matches a document (BUG-LT3-H fix)
+  const [autoOpenAttempted, setAutoOpenAttempted] = useState(false);
+  useEffect(() => {
+    if (targetDoc && !autoOpenAttempted && !viewerOpen) {
+      setAutoOpenAttempted(true);
+      handleOpenDocument(targetDoc, pageParam || undefined);
+    }
+  }, [targetDoc, autoOpenAttempted, viewerOpen, handleOpenDocument, pageParam]);
 
   // Calculate processing documents count
   const processingStats = useMemo(() => {
@@ -264,8 +282,8 @@ export function DocumentsContent({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => handleOpenDocument(targetDoc, pageParam || undefined)}
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open Document
+              <FileText className="h-3.5 w-3.5" />
+              View Document
             </button>
           </div>
         )}
@@ -287,6 +305,16 @@ export function DocumentsContent({
           onOpenChange={setAddDialogOpen}
           matterId={matterId}
           onComplete={handleUploadComplete}
+        />
+
+        {/* In-app PDF Viewer (BUG-LT3-G / BUG-LT3-H / BUG-LT3-I fix) */}
+        <PdfViewerModal
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          documentUrl={viewerUrl}
+          documentId={viewerDocId}
+          documentName={viewerDocName}
+          initialPage={viewerInitialPage}
         />
       </div>
     </div>

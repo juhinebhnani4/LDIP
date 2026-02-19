@@ -84,6 +84,46 @@ class DoclingProvider:
             self._converter = self._create_converter()
         return self._converter
 
+    @staticmethod
+    def _detect_version() -> str:
+        """Detect docling version using multiple strategies.
+
+        importlib.metadata can return "0.0.0" for some installations
+        (e.g., editable installs, certain build backends). This method
+        tries several approaches to get the real version.
+
+        Returns:
+            Detected version string, or "unknown" if all methods fail.
+        """
+        from importlib.metadata import version as pkg_version, PackageNotFoundError
+
+        # Strategy 1: importlib.metadata for "docling"
+        try:
+            v = pkg_version("docling")
+            if v and v != "0.0.0":
+                return v
+        except PackageNotFoundError:
+            pass
+
+        # Strategy 2: docling.__version__ attribute (some packages set this)
+        try:
+            import docling
+            v = getattr(docling, "__version__", None)
+            if v and v != "0.0.0":
+                return v
+        except ImportError:
+            pass
+
+        # Strategy 3: docling-core version as proxy (always installed with docling)
+        try:
+            v = pkg_version("docling-core")
+            if v and v != "0.0.0":
+                return f"core-{v}"
+        except PackageNotFoundError:
+            pass
+
+        return "unknown"
+
     def _create_converter(self) -> DocumentConverter:
         """Create and configure the Docling converter.
 
@@ -96,11 +136,18 @@ class DoclingProvider:
         try:
             # Validate Docling version
             import docling  # noqa: F401
-            from importlib.metadata import version as pkg_version
             from packaging import version
 
-            docling_version = pkg_version("docling")
-            if version.parse(docling_version) < version.parse(MIN_DOCLING_VERSION):
+            docling_version = self._detect_version()
+
+            # Only warn if we got a real version that's too old — not for
+            # detection failures ("unknown", "core-*") where docling may
+            # actually be fine.
+            if (
+                docling_version not in ("unknown",)
+                and not docling_version.startswith("core-")
+                and version.parse(docling_version) < version.parse(MIN_DOCLING_VERSION)
+            ):
                 logger.warning(
                     "docling_version_outdated",
                     installed=docling_version,

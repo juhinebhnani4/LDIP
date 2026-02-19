@@ -659,6 +659,14 @@ def fetch_acts_from_india_code(self) -> dict:
                             first_result = search_results[0]
                             download = await india_code.download_pdf(first_result.doc_id)
 
+                            if not download.success:
+                                logger.warning(
+                                    "fetch_act_download_failed_search",
+                                    normalized=normalized,
+                                    doc_id=first_result.doc_id,
+                                    error=download.error_message,
+                                )
+
                             if download.success and download.pdf_bytes:
                                 storage_path = cache_service.cache_act(
                                     normalized, download.pdf_bytes
@@ -695,7 +703,8 @@ def fetch_acts_from_india_code(self) -> dict:
                     logger.error(
                         "fetch_act_error",
                         normalized=normalized,
-                        error=str(e),
+                        error_type=type(e).__name__,
+                        error=str(e) or "(no message)",
                     )
                     results["errors"] += 1
 

@@ -293,11 +293,30 @@ class IndiaCodeClient:
             logger.info(f"Found {len(results)} results for: {search_term}")
             return results
 
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "india_code_search_http_error",
+                search_term=search_term,
+                status_code=e.response.status_code,
+                url=str(e.request.url),
+                response_text=e.response.text[:500] if e.response.text else "(empty)",
+            )
+            return []
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error searching India Code: {e}")
+            logger.error(
+                "india_code_search_error",
+                search_term=search_term,
+                error_type=type(e).__name__,
+                error=str(e) or "(no message)",
+            )
             return []
         except Exception as e:
-            logger.error(f"Error searching India Code: {e}")
+            logger.error(
+                "india_code_search_unexpected_error",
+                search_term=search_term,
+                error_type=type(e).__name__,
+                error=str(e) or "(no message)",
+            )
             return []
 
     async def get_bitstream_url(self, doc_id: str) -> str | None:
@@ -358,11 +377,25 @@ class IndiaCodeClient:
                     # For now, return the base pattern
                     # The actual filename would need to be discovered
 
-            logger.warning(f"Could not find PDF URL for doc_id: {doc_id}")
+            logger.warning("india_code_bitstream_not_found", doc_id=doc_id, url=handle_url)
             return None
 
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "india_code_bitstream_http_error",
+                doc_id=doc_id,
+                status_code=e.response.status_code,
+                url=str(e.request.url),
+                response_text=e.response.text[:500] if e.response.text else "(empty)",
+            )
+            return None
         except Exception as e:
-            logger.error(f"Error getting bitstream URL for {doc_id}: {e}")
+            logger.error(
+                "india_code_bitstream_error",
+                doc_id=doc_id,
+                error_type=type(e).__name__,
+                error=str(e) or "(no message)",
+            )
             return None
 
     async def download_pdf(
@@ -434,24 +467,60 @@ class IndiaCodeClient:
                 file_size=len(pdf_bytes),
             )
 
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error downloading PDF: {e}")
+        except httpx.HTTPStatusError as e:
+            error_msg = (
+                f"HTTP {e.response.status_code} from {e.request.url}"
+                f" — {e.response.text[:200]}" if e.response.text else
+                f"HTTP {e.response.status_code} from {e.request.url} (empty response body)"
+            )
+            logger.error(
+                "india_code_download_http_error",
+                doc_id=doc_id,
+                status_code=e.response.status_code,
+                url=str(e.request.url),
+                bitstream_url=bitstream_url,
+                response_text=e.response.text[:500] if e.response.text else "(empty)",
+            )
             return IndiaCodeDownloadResult(
                 success=False,
                 doc_id=doc_id,
                 pdf_bytes=None,
                 pdf_url=bitstream_url,
-                error_message=f"HTTP error: {str(e)}",
+                error_message=error_msg,
+                file_size=0,
+            )
+        except httpx.HTTPError as e:
+            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            logger.error(
+                "india_code_download_error",
+                doc_id=doc_id,
+                bitstream_url=bitstream_url,
+                error_type=type(e).__name__,
+                error=str(e) or "(no message)",
+            )
+            return IndiaCodeDownloadResult(
+                success=False,
+                doc_id=doc_id,
+                pdf_bytes=None,
+                pdf_url=bitstream_url,
+                error_message=error_msg,
                 file_size=0,
             )
         except Exception as e:
-            logger.error(f"Error downloading PDF: {e}")
+            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            logger.error(
+                "india_code_download_unexpected_error",
+                doc_id=doc_id,
+                bitstream_url=bitstream_url,
+                error_type=type(e).__name__,
+                error=str(e) or "(no message)",
+            )
             return IndiaCodeDownloadResult(
                 success=False,
                 doc_id=doc_id,
                 pdf_bytes=None,
                 pdf_url=bitstream_url,
-                error_message=f"Error: {str(e)}",
+                error_message=error_msg,
                 file_size=0,
             )
 

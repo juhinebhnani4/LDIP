@@ -410,30 +410,19 @@ class SummaryService:
             return 0
 
     async def _count_citation_issues(self, matter_id: str) -> int:
-        """Count unverified citations from citations table (excluding soft-deleted docs)."""
+        """Count unverified citations using the same filtered logic as the Citations tab.
+
+        BUG-LT3-K fix: Previously this was a raw count that included citations from
+        Act documents and invalid act names. Now uses get_citation_counts_by_act which
+        filters those out, keeping the attention item count consistent with what the
+        Citations tab actually shows.
+        """
         try:
-            # Get active document IDs first
-            docs_result = await asyncio.to_thread(
-                lambda: self.supabase.table("documents")
-                .select("id")
-                .eq("matter_id", matter_id)
-                .is_("deleted_at", "null")
-                .execute()
-            )
-            active_doc_ids = [d["id"] for d in docs_result.data or []]
+            from app.engines.citation.storage import get_citation_storage_service
 
-            if not active_doc_ids:
-                return 0
-
-            result = await asyncio.to_thread(
-                lambda: self.supabase.table("citations")
-                .select("id", count="exact")
-                .eq("matter_id", matter_id)
-                .in_("source_document_id", active_doc_ids)
-                .neq("verification_status", "verified")
-                .execute()
-            )
-            return result.count or 0
+            storage = get_citation_storage_service()
+            counts = await storage.get_citation_counts_by_act(matter_id)
+            return sum(c.get("pending_count", 0) for c in counts)
         except Exception as e:
             logger.warning("count_citation_issues_failed", error=str(e))
             return 0
@@ -933,15 +922,19 @@ class SummaryService:
             return 0
 
     async def _get_citations_count(self, matter_id: str) -> int:
-        """Count citations from citations table."""
+        """Count citations using the same filtered logic as the Citations tab.
+
+        BUG-LT3-K fix: Previously this was a raw COUNT(*) on the citations table,
+        which included citations from Act documents (self-referencing) and invalid
+        act names. The Citations tab filtered these out via get_citation_counts_by_act,
+        causing a mismatch (e.g., 21 vs 19). Now both use the same source of truth.
+        """
         try:
-            result = await asyncio.to_thread(
-                lambda: self.supabase.table("citations")
-                .select("id", count="exact")
-                .eq("matter_id", matter_id)
-                .execute()
-            )
-            return result.count or 0
+            from app.engines.citation.storage import get_citation_storage_service
+
+            storage = get_citation_storage_service()
+            counts = await storage.get_citation_counts_by_act(matter_id)
+            return sum(c["citation_count"] for c in counts)
         except Exception as e:
             logger.warning("get_citations_count_failed", error=str(e))
             return 0

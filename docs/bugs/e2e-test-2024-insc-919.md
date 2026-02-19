@@ -180,6 +180,93 @@
 
 ---
 
+## Live Test Round 2 Bugs (9 additional)
+
+> Test Date: 2026-02-19 (post-deploy live test)
+> Matter ID: `eb648d52-1e05-4e57-8f4c-8d2fa6316a64`
+> Document ID: `0906a6fb-b41d-40b4-9899-e1fd3655d2bf`
+> Job ID: `951724cd-efcd-4408-ad06-2b8b1aaa5ddd`
+
+### CRITICAL (3 bugs)
+
+#### BUG-LT-C: documents_status_check constraint blocks "searchable" status
+- **Severity**: CRITICAL
+- **Status**: [ ] Open
+- **File**: `supabase/migrations/20260107000002_add_ocr_columns_to_documents.sql`
+- **Log**: `new row for relation "documents" violates check constraint "documents_status_check"` (HTTP 400)
+- **What happens**: After embedding completes, the code tries to update document status to "searchable". The DB constraint only allows: `pending, processing, ocr_complete, ocr_failed, completed, failed`. The enum defines 12 values but the DB only allows 6.
+- **Impact**: Document status never updates to "searchable", breaking downstream status checks.
+- **Fix direction**: New migration to expand the check constraint to include all DocumentStatus enum values.
+
+#### BUG-LT-G: Pipeline stuck after worker restart, no recovery
+- **Severity**: CRITICAL
+- **Status**: [ ] Open (noted for future)
+- **File**: `backend/app/workers/celery.py`, `backend/app/workers/tasks/maintenance_tasks.py`
+- **What happens**: When the Railway worker restarts (e.g., from deployment), in-flight Celery tasks are lost. The pipeline stops mid-stage. `recover_stale_jobs` finds 0 because the job was recently updated. `resume_stuck_pipelines` only checks `status="ocr_complete"` (not intermediate stages) and runs every 30 min with 1-hour staleness threshold.
+- **Impact**: Documents are permanently stuck at intermediate stages after deployments or crashes. No automated recovery exists for stages beyond ocr_complete.
+- **Fix direction**: (1) Expand `resume_stuck_pipelines` to check all intermediate statuses. (2) Add `acks_late=True` to critical Celery tasks. (3) Reduce staleness threshold after deployment.
+
+#### BUG-LT-H: Duplicate pipeline execution (all stages run 2x)
+- **Severity**: CRITICAL (cost)
+- **Status**: [ ] Open (noted for future)
+- **File**: `backend/app/workers/tasks/document_tasks.py`
+- **What happens**: Every pipeline stage from `validate_ocr` through `extract_entities` ran TWICE. Double LLM costs: embedding ran 2x ($0.038 INR instead of $0.019), entity extraction ran 2x ($4.57 INR instead of $2.29).
+- **Impact**: 2x cost for every document processed. With Gemini 2.5 Flash for entity extraction, this doubles the per-document cost.
+- **Fix direction**: Investigate why two task chains are dispatched. Likely a duplicate `process_document` dispatch or the OCR merge step triggering twice.
+
+### MAJOR (3 bugs)
+
+#### BUG-LT-A: Browse files button triggers 26+ file chooser dialogs
+- **Severity**: MAJOR
+- **Status**: [ ] Open (noted for future)
+- **File**: Frontend upload component
+- **What happens**: On the upload page, clicking "Browse files" triggers 26+ file chooser dialogs in a loop. Playwright detected continuous file chooser modal spawning.
+- **Impact**: Upload UX is broken. Users must use drag-and-drop or direct URL navigation.
+- **Fix direction**: Check the file input component for infinite re-render or duplicate event handler registration.
+
+#### BUG-LT-B: Docling still not installed on Railway worker
+- **Severity**: MAJOR
+- **Status**: [ ] Open
+- **File**: `backend/Dockerfile`, `backend/pyproject.toml`
+- **Log**: `docling_import_failed error="No module named 'docling'"`
+- **What happens**: Despite docling being in `pyproject.toml` main dependencies and in `uv.lock`, it fails to install on Railway. Docling depends on PyTorch (~2GB), which requires system libraries (`libgl1`, `libglib2.0`) not present in `python:3.12-slim`.
+- **Impact**: Layout-aware chunking is disabled. Falls back to text-based chunking with inferior bbox matching.
+- **Fix direction**: Add system dependencies to Dockerfile builder and runtime stages.
+
+#### BUG-LT-I: identity_nodes batch insert 409 conflict
+- **Severity**: MAJOR
+- **Status**: [ ] Open (noted for future)
+- **File**: `backend/app/services/mig/graph.py`
+- **Log**: `duplicate key value violates unique constraint "identity_nodes_matter_id_entity_type_canonical_name_key"` (409 Conflict)
+- **What happens**: Batch insert of 12 identity nodes fails because `(ASSET, Indian Penal Code)` already exists. Same pattern as BUG-013 but for `identity_nodes` table.
+- **Impact**: Entity nodes may be lost when batch insert fails. Falls back to individual inserts but some may still fail.
+- **Fix direction**: Change `identity_nodes` batch `.insert()` to `.upsert()` with `on_conflict="matter_id,entity_type,canonical_name"`.
+
+### MINOR (3 bugs)
+
+#### BUG-LT-D: "0 Files Received" on processing page
+- **Severity**: MINOR
+- **Status**: [ ] Open (noted for future)
+- **File**: Frontend processing page component
+- **What happens**: The processing page shows "0 Files Received" even though 1 file was uploaded and processing.
+- **Fix direction**: Check the file count query on the processing page.
+
+#### BUG-LT-E: Matter title shows "New Matter" instead of case name
+- **Severity**: MINOR
+- **Status**: [ ] Open (noted for future)
+- **File**: Frontend matter creation / processing page
+- **What happens**: The matter title shows "New Matter" instead of the extracted case name from the document (e.g., "Ashok vs State of Uttar Pradesh").
+- **Fix direction**: Check if matter title is updated after document processing completes.
+
+#### BUG-LT-F: DOCUMENTS section on processing page is empty
+- **Severity**: MINOR
+- **Status**: [ ] Open (noted for future)
+- **File**: Frontend processing page
+- **What happens**: The DOCUMENTS section on the left side of the processing page is empty, showing no uploaded documents.
+- **Fix direction**: Check the documents query on the processing page.
+
+---
+
 ## Recommended Fix Order
 
 | Priority | Bug | Effort | Impact |

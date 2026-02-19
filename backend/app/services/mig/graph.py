@@ -467,7 +467,7 @@ class MIGGraphService:
         def _insert():
             return (
                 self.client.table("identity_nodes")
-                .insert(rows_to_insert)
+                .upsert(rows_to_insert, on_conflict="matter_id,entity_type,canonical_name")
                 .execute()
             )
 

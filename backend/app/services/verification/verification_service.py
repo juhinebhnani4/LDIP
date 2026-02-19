@@ -492,6 +492,69 @@ class VerificationService:
                 is_retryable=True,
             ) from e
 
+    async def get_all_verifications_queue(
+        self,
+        matter_id: str,
+        supabase: Client,
+        limit: int = 100,
+    ) -> list[VerificationQueueItem]:
+        """Get ALL verifications for queue UI (not just pending).
+
+        BUG-LT3-A fix: The verification center was showing 0 items because
+        it only queried PENDING verifications. This method returns all items
+        regardless of decision status, so the "All" view is populated.
+
+        Args:
+            matter_id: Matter UUID.
+            supabase: Supabase client.
+            limit: Max items to return.
+
+        Returns:
+            List of VerificationQueueItem for UI display.
+        """
+        start_time = time.perf_counter()
+
+        try:
+            result = supabase.table("finding_verifications").select(
+                "*"
+            ).eq("matter_id", matter_id).order(
+                "confidence_before", desc=False  # Low confidence first
+            ).order(
+                "created_at", desc=False  # Oldest first
+            ).limit(limit).execute()
+
+            # Batch-fetch source document names via findings → documents
+            doc_name_map = self._batch_fetch_document_names(
+                result.data, supabase
+            )
+
+            items = [
+                self._to_queue_item(r, doc_name_map.get(r.get("finding_id")))
+                for r in result.data
+            ]
+
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+            logger.debug(
+                "all_verifications_queue_retrieved",
+                matter_id=matter_id,
+                count=len(items),
+                elapsed_ms=round(elapsed_ms, 2),
+            )
+
+            return items
+
+        except Exception as e:
+            logger.error(
+                "get_all_verifications_queue_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise VerificationServiceError(
+                f"Failed to get all verifications queue: {e}",
+                is_retryable=True,
+            ) from e
+
     async def get_verification_stats(
         self,
         matter_id: str,

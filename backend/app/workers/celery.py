@@ -167,12 +167,12 @@ celery_app.conf.update(
             "schedule": 1800,  # Every 30 minutes (was 10min — not time-sensitive)
             "options": {"queue": "low"},
         },
-        # Resume stuck pipelines - runs every 30 minutes
-        # Recovers documents stuck at ocr_complete or other intermediate states
+        # Resume stuck pipelines - runs every 15 minutes (BUG-LT-G: faster recovery)
+        # Recovers documents stuck at ocr_complete or processing jobs at any stage
         "resume-stuck-pipelines": {
             "task": "app.workers.tasks.maintenance_tasks.resume_stuck_pipelines",
-            "schedule": 1800,  # Every 30 minutes
-            "args": [1],  # Documents stuck for more than 1 hour
+            "schedule": 900,  # Every 15 minutes (was 30 min — faster recovery after deploys)
+            "kwargs": {"stale_minutes": 30},  # Jobs/docs stuck for >30 minutes (was 1 hour)
             "options": {"queue": "low"},
         },
         # Sync act_resolutions with documents - runs every 15 minutes

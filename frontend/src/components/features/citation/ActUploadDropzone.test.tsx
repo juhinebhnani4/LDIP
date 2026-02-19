@@ -121,7 +121,7 @@ describe('ActUploadDropzone', () => {
         />
       );
 
-      const dropzone = screen.getByRole('button', { name: /drop pdf file here/i });
+      const dropzone = screen.getByTestId('act-upload-dropzone');
       const file = createMockFile('test.txt', 1024, 'text/plain');
 
       // Use drag-drop to bypass input accept attribute filtering
@@ -284,7 +284,7 @@ describe('ActUploadDropzone', () => {
         />
       );
 
-      const dropzone = screen.getByRole('button', { name: /drop pdf file here/i });
+      const dropzone = screen.getByTestId('act-upload-dropzone');
 
       fireEvent.dragEnter(dropzone, {
         dataTransfer: { files: [] },
@@ -303,7 +303,7 @@ describe('ActUploadDropzone', () => {
         />
       );
 
-      const dropzone = screen.getByRole('button', { name: /drop pdf file here/i });
+      const dropzone = screen.getByTestId('act-upload-dropzone');
       const file = createMockFile('act.pdf', 1024);
 
       const dataTransfer = {
@@ -349,8 +349,11 @@ describe('ActUploadDropzone', () => {
         />
       );
 
-      const dropzone = screen.getByRole('button', { name: /drop pdf file here/i });
-      expect(dropzone).toBeInTheDocument();
+      const dropzone = screen.getByTestId('act-upload-dropzone');
+      expect(dropzone).toHaveAttribute(
+        'aria-label',
+        `Drop PDF file here or use Browse Files button for ${mockActName}`
+      );
     });
 
     it('has hidden file input', () => {

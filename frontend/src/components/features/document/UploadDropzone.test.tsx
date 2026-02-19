@@ -70,14 +70,12 @@ describe('UploadDropzone', () => {
       ).toBeInTheDocument();
     });
 
-    it('has accessible role and label', async () => {
+    it('has accessible label on dropzone', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
       expect(dropzone).toBeInTheDocument();
-      expect(dropzone).toHaveAttribute('tabindex', '0');
+      expect(dropzone).toHaveAttribute('aria-label', 'Drop files here or use Browse Files button');
     });
   });
 
@@ -85,9 +83,7 @@ describe('UploadDropzone', () => {
     it('shows drag active state when dragging files over', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       await act(async () => {
         fireEvent.dragEnter(dropzone, {
@@ -102,9 +98,7 @@ describe('UploadDropzone', () => {
     it('returns to default state on drag leave', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       await act(async () => {
         fireEvent.dragEnter(dropzone, {
@@ -126,9 +120,7 @@ describe('UploadDropzone', () => {
     it('accepts PDF files', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const pdfFile = createMockFile('document.pdf', 1024, 'application/pdf');
 
@@ -146,9 +138,7 @@ describe('UploadDropzone', () => {
     it('accepts ZIP files', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const zipFile = createMockFile('archive.zip', 1024, 'application/zip');
 
@@ -166,9 +156,7 @@ describe('UploadDropzone', () => {
     it('rejects non-PDF/ZIP files with error message', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const docFile = createMockFile('document.doc', 1024, 'application/msword');
 
@@ -191,9 +179,7 @@ describe('UploadDropzone', () => {
     it('shows invalid state briefly for rejected files', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const invalidFile = createMockFile('image.png', 1024, 'image/png');
 
@@ -209,17 +195,15 @@ describe('UploadDropzone', () => {
   });
 
   describe('File Size Validation (AC: #3)', () => {
-    it('rejects files larger than 500MB', async () => {
+    it('rejects files larger than 200MB', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
-      // 501 MB file (size is mocked, not actual content)
+      // 201 MB file (size is mocked, not actual content)
       const largeFile = createMockFile(
         'large.pdf',
-        501 * 1024 * 1024,
+        201 * 1024 * 1024,
         'application/pdf'
       );
 
@@ -231,22 +215,20 @@ describe('UploadDropzone', () => {
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith(
-          expect.stringContaining('File exceeds 500MB limit')
+          expect.stringContaining('exceeds the 200MB upload limit')
         );
       });
     });
 
-    it('accepts files exactly at 500MB limit', async () => {
+    it('accepts files exactly at 200MB limit', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
-      // Exactly 500 MB file (size is mocked)
+      // Exactly 200 MB file (size is mocked)
       const maxSizeFile = createMockFile(
         'max.pdf',
-        500 * 1024 * 1024,
+        200 * 1024 * 1024,
         'application/pdf'
       );
 
@@ -266,9 +248,7 @@ describe('UploadDropzone', () => {
     it('shows warning when more than 100 files are uploaded', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       // Create 105 valid files
       const files = Array.from({ length: 105 }, (_, i) =>
@@ -291,9 +271,7 @@ describe('UploadDropzone', () => {
     it('accepts only first 100 files when limit exceeded', async () => {
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       // Create 105 valid files
       const files = Array.from({ length: 105 }, (_, i) =>
@@ -343,40 +321,6 @@ describe('UploadDropzone', () => {
     });
   });
 
-  describe('Keyboard Accessibility', () => {
-    it('can be activated with Enter key', async () => {
-      const user = userEvent.setup();
-      render(<UploadDropzone matterId={matterId} />);
-
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
-
-      // Focus and press Enter
-      dropzone.focus();
-      await user.keyboard('{Enter}');
-
-      // Should not throw error
-      expect(dropzone).toHaveFocus();
-    });
-
-    it('can be activated with Space key', async () => {
-      const user = userEvent.setup();
-      render(<UploadDropzone matterId={matterId} />);
-
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
-
-      // Focus and press Space
-      dropzone.focus();
-      await user.keyboard(' ');
-
-      // Should not throw error
-      expect(dropzone).toHaveFocus();
-    });
-  });
-
   describe('Progress UI Integration', () => {
     it('shows progress list when files are added', async () => {
       // Pre-populate the store - wrapped in act
@@ -419,9 +363,7 @@ describe('UploadDropzone', () => {
 
       render(<UploadDropzone matterId={matterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const validFile = createMockFile('doc.pdf', 1024, 'application/pdf');
 
@@ -447,9 +389,7 @@ describe('UploadDropzone', () => {
 
       render(<UploadDropzone matterId={specificMatterId} />);
 
-      const dropzone = screen.getByRole('button', {
-        name: /drop files here or click to browse/i,
-      });
+      const dropzone = screen.getByTestId('upload-dropzone');
 
       const validFile = createMockFile('test.pdf', 1024, 'application/pdf');
 

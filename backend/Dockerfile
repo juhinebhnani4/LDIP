@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     cmake \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,10 +36,14 @@ RUN uv sync --frozen --no-install-project --no-dev
 # ==============================================================================
 FROM python:3.12-slim AS runtime
 
-# Install runtime system libraries needed by docling, opencv, etc.
+# Install runtime system libraries needed by docling, opencv, torch, etc.
+# - libgl1, libsm6, libxext6, libxrender1: OpenCV runtime
+# - libglib2.0-0: GLib runtime (docling-parse)
+# - libgomp1: OpenMP runtime (required by torch/numpy for parallelism)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     libsm6 \
     libxext6 \
     libxrender1 \

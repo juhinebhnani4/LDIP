@@ -239,8 +239,8 @@ export function ActUploadDropzone({
       <Card
         className={cn(
           'relative transition-colors',
-          dropzoneState === 'default' && 'border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 cursor-pointer',
-          dropzoneState === 'drag-over' && 'border-dashed border-primary bg-primary/5 cursor-pointer',
+          dropzoneState === 'default' && 'border-dashed border-muted-foreground/25 hover:border-muted-foreground/50',
+          dropzoneState === 'drag-over' && 'border-dashed border-primary bg-primary/5',
           dropzoneState === 'uploading' && 'border-solid border-primary',
           dropzoneState === 'success' && 'border-solid border-green-500 bg-green-50/50 dark:bg-green-950/20',
           dropzoneState === 'error' && 'border-dashed border-destructive bg-destructive/5'
@@ -249,10 +249,8 @@ export function ActUploadDropzone({
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={isInteractive ? handleBrowseClick : undefined}
-        tabIndex={isInteractive ? 0 : -1}
-        role={isInteractive ? 'button' : undefined}
-        aria-label={isInteractive ? `Drop PDF file here or click to browse for ${actName}` : undefined}
+        aria-label={`Drop PDF file here or use Browse Files button for ${actName}`}
+        data-testid="act-upload-dropzone"
       >
         <CardContent className="flex flex-col items-center justify-center py-8">
           {/* Icon */}
@@ -307,10 +305,7 @@ export function ActUploadDropzone({
               type="button"
               variant="outline"
               size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleBrowseClick();
-              }}
+              onClick={handleBrowseClick}
             >
               <Upload className="mr-2 size-4" aria-hidden="true" />
               Browse Files

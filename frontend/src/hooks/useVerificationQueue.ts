@@ -151,10 +151,13 @@ export function useVerificationQueue(
   }, []);
 
   // Fetch queue from API
+  // BUG-LT3-A fix: Use getAllQueue instead of getPendingQueue so the "All" view
+  // shows all verification items, not just pending ones. The user can still filter
+  // by status using the filter controls.
   const fetchQueue = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await verificationsApi.getPendingQueue(matterId, limit);
+      const data = await verificationsApi.getAllQueue(matterId, limit);
       // Only update state if component is still mounted
       if (isMountedRef.current) {
         setQueue(data);

@@ -776,13 +776,19 @@ class ContradictionListService:
         statement_b: dict[str, Any] = data.get("statement_b") or {}
         evidence: dict[str, Any] = data.get("evidence") or {}
 
+        # Only populate date for temporal contradictions where evidence values are actual dates
+        evidence_type = evidence.get("type", "")
+        is_temporal = evidence_type in ("date_mismatch", "temporal_discrepancy")
+        date_a = evidence.get("value_a") if is_temporal else None
+        date_b = evidence.get("value_b") if is_temporal else None
+
         # Build statement info
         stmt_a_info = StatementInfo(
             document_id=statement_a.get("document_id", ""),
             document_name=statement_a.get("document_name", "Unknown"),
             page=statement_a.get("page_number"),
             excerpt=self._truncate_excerpt(statement_a.get("content", "")),
-            date=evidence.get("value_a"),  # Extract date if available
+            date=date_a,
         )
 
         stmt_b_info = StatementInfo(
@@ -790,7 +796,7 @@ class ContradictionListService:
             document_name=statement_b.get("document_name", "Unknown"),
             page=statement_b.get("page_number"),
             excerpt=self._truncate_excerpt(statement_b.get("content", "")),
-            date=evidence.get("value_b"),  # Extract date if available
+            date=date_b,
         )
 
         # Build evidence links (bbox_ids populated when bbox data is available)

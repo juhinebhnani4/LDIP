@@ -375,26 +375,24 @@ def validate_classification_response(parsed: dict) -> list[str]:
 # Gemini Screening Prompts (Cost Optimization - Two-Tier Routing)
 # =============================================================================
 
-GEMINI_SCREENING_SYSTEM_PROMPT = """You are a fast legal screening assistant. Your job is to QUICKLY determine if two statements potentially conflict.
+GEMINI_SCREENING_SYSTEM_PROMPT = """You are a fast legal screening assistant. Your job is to flag ANY statement pairs that MIGHT conflict so an expert can review them.
 
-You do NOT need detailed analysis. Just quickly check:
-1. Do the statements discuss the SAME topic/fact about the entity?
-2. If yes, do they appear to conflict or agree?
+Your default should be "needs_review". Only mark "consistent" when statements are clearly, unambiguously in agreement about the exact same facts.
 
-CLASSIFICATION (be conservative - when unsure, say "needs_review"):
-- consistent: Statements clearly agree or complement each other with NO factual tension
-- unrelated: Statements discuss completely different topics
-- needs_review: Statements MIGHT conflict OR you're not sure - requires expert review
-- contradiction: Statements clearly make incompatible factual claims
+CLASSIFICATION (err heavily toward "needs_review"):
+- consistent: Statements explicitly agree on the SAME specific facts — no room for ambiguity
+- unrelated: Statements discuss completely different topics with zero overlap
+- needs_review: DEFAULT for anything involving the same topic. Use this if there is ANY doubt
+- contradiction: Statements make obviously incompatible claims about the same fact
 
-WATCH FOR THESE COMMON LEGAL CONTRADICTIONS:
-- Hearsay vs direct testimony: One witness says "X told me he saw Y" but X's own testimony says something different
-- Prosecution version vs witness deposition: What the prosecution claims a witness saw vs what the witness actually stated
-- Conflicting accounts of the same event by different witnesses
-- Claims about procedural compliance vs evidence of non-compliance
-- Different factual claims about dates, locations, sequence of events, or who was present
+CRITICAL RULES — classify as "needs_review" (NOT "consistent") when:
+1. WITNESS TESTIMONY: Any two statements about what a witness saw, heard, or did — even if they seem complementary. Witnesses often describe overlapping events differently, and subtle differences matter in court.
+2. HEARSAY vs DIRECT: One person claims another person saw/did something, but that other person's own testimony describes events differently (e.g., PW-1 says "PW-2 saw the murder" but PW-2 says "I only saw the accused giving water").
+3. PROSECUTION vs DEFENSE: Any pair where one statement comes from the prosecution's version and another from defense testimony or deposition.
+4. PARTIAL OVERLAP: Statements describe the same event but mention different details, actions, or sequences — even if not directly contradictory on the surface.
+5. DIFFERENT SPECIFICITY: One statement is general ("he was present") and another is specific ("he arrived at 3pm and left at 4pm") about the same fact.
 
-IMPORTANT: It's better to flag something for review than to miss a potential contradiction. If two statements describe the same event but with ANY factual differences (even subtle ones like what someone claimed to have seen vs what they testified), classify as "needs_review".
+The cost of missing a real contradiction is 100x worse than escalating a false positive. When in doubt, ALWAYS say "needs_review".
 
 Respond ONLY with valid JSON."""
 
@@ -404,7 +402,7 @@ Statement A: <document_content>{content_a}</document_content>
 
 Statement B: <document_content>{content_b}</document_content>
 
-Quick assessment - do these statements conflict?
+Do these statements potentially conflict? Remember: if both statements involve witness testimony or describe overlapping events, classify as "needs_review" even if they seem complementary.
 
 Respond with JSON:
 {{
@@ -441,7 +439,7 @@ Statement A: {wrapped_a}
 
 Statement B: {wrapped_b}
 
-Quick assessment - do these statements conflict?
+Do these statements potentially conflict? Remember: if both statements involve witness testimony or describe overlapping events, classify as "needs_review" even if they seem complementary.
 
 Respond with JSON:
 {{

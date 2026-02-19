@@ -3,7 +3,7 @@
  *
  * Validates files before upload with:
  * - File type validation (PDF, ZIP only)
- * - File size validation (50MB hard limit for Supabase free tier)
+ * - File size validation (200MB browser limit; 50MB Supabase limit handled by compression)
  * - File size warnings (40MB+ triggers compression)
  * - File count validation (100 files max per upload)
  */
@@ -16,13 +16,15 @@ import type {
 import {
   COMPRESSION_THRESHOLD_BYTES,
   SUPABASE_FILE_LIMIT_BYTES,
+  MAX_BROWSER_FILE_SIZE_BYTES,
 } from '@/lib/utils/pdf-compression';
 
 /**
- * Maximum file size in bytes (50MB) - Supabase free tier limit
- * Files larger than this cannot be uploaded even after compression attempts.
+ * Maximum file size in bytes (200MB) - browser-side limit.
+ * Files between 50-200MB will be lossy-compressed before upload.
+ * Files over 200MB are rejected outright.
  */
-export const MAX_FILE_SIZE = SUPABASE_FILE_LIMIT_BYTES;
+export const MAX_FILE_SIZE = MAX_BROWSER_FILE_SIZE_BYTES;
 
 /** Maximum file size in bytes for Act uploads (100MB) - Acts are typically smaller */
 export const MAX_ACT_FILE_SIZE = 100 * 1024 * 1024;
@@ -97,14 +99,14 @@ function validateSingleFile(file: File): ValidationError | null {
     };
   }
 
-  // Check file size against Supabase limit (50MB)
-  // Note: Files between 40-50MB will attempt compression during upload
+  // Check file size against browser-side limit (200MB)
+  // Files 50-200MB will be lossy-compressed during upload
   if (file.size > MAX_FILE_SIZE) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
     return {
       file,
       code: 'FILE_TOO_LARGE',
-      message: `File "${file.name}" is ${sizeMB}MB which exceeds the 50MB upload limit. Please split this document into smaller parts.`,
+      message: `File "${file.name}" is ${sizeMB}MB which exceeds the 200MB upload limit. Please split this document into smaller parts.`,
     };
   }
 

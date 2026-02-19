@@ -83,6 +83,27 @@ export async function getPendingQueue(
   return response.data;
 }
 
+/**
+ * Get ALL verification queue items (all statuses, not just pending).
+ *
+ * BUG-LT3-A fix: The Verification Center "All" view was showing 0 items
+ * because it only fetched PENDING verifications. This endpoint returns
+ * all items regardless of decision status.
+ *
+ * @param matterId - Matter UUID.
+ * @param limit - Max items to return (default 100, max 200).
+ * @returns All verification queue items.
+ */
+export async function getAllQueue(
+  matterId: string,
+  limit: number = 100
+): Promise<VerificationQueueItem[]> {
+  const response = await api.get<VerificationQueueResponse>(
+    `/api/matters/${matterId}/verifications/queue?limit=${limit}`
+  );
+  return response.data;
+}
+
 // =============================================================================
 // Story 8-5: List Verifications (Task 6.2)
 // =============================================================================
@@ -360,6 +381,7 @@ export async function checkExportEligibility(matterId: string): Promise<ExportEl
 export const verificationsApi = {
   getStats: getVerificationStats,
   getPendingQueue,
+  getAllQueue,
   getVerifications,
   approve: approveVerification,
   reject: rejectVerification,

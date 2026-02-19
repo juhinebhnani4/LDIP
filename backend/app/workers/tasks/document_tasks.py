@@ -1499,7 +1499,7 @@ def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLa
             logger.warning(
                 "layout_extraction_docling_not_available",
                 document_id=document_id,
-                hint="Install docling with: pip install 'ldip-backend[ml]'",
+                hint="Docling import failed. Check runtime has libgomp1 and all shared libs.",
             )
             return None
 

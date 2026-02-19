@@ -163,18 +163,11 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleBrowseClick();
-    }
-  };
-
   return (
     <div className={className}>
       <Card
         className={cn(
-          'border-2 border-dashed transition-all duration-200 cursor-pointer',
+          'border-2 border-dashed transition-all duration-200',
           isDragOver
             ? 'border-primary bg-primary/5 scale-[1.02]'
             : 'border-muted-foreground/25 hover:border-muted-foreground/50'
@@ -182,11 +175,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={handleBrowseClick}
-        onKeyDown={handleKeyDown}
-        tabIndex={0}
-        role="button"
-        aria-label="Drop files here or click to browse"
+        aria-label="Drop files here or use Browse Files button"
         data-testid="file-drop-zone"
       >
         <CardContent className="flex flex-col items-center justify-center py-16 px-8 text-center">
@@ -216,10 +205,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
           <Button
             type="button"
             variant="outline"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleBrowseClick();
-            }}
+            onClick={handleBrowseClick}
             className="mb-6"
             data-testid="file-browse-button"
           >
@@ -229,7 +215,7 @@ export function FileDropZone({ onFilesSelected, className }: FileDropZoneProps) 
           {/* File format info */}
           <div className="space-y-1 text-sm text-muted-foreground">
             <p>Supported: PDF, ZIP (containing PDFs)*</p>
-            <p>Maximum: 500MB per file &bull; 100 files per matter</p>
+            <p>Maximum: 200MB per file &bull; 100 files per matter</p>
             <p className="text-xs mt-2">*ZIP contents validated during processing</p>
           </div>
         </CardContent>

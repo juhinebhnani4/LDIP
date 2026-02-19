@@ -24,6 +24,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useUploadStore } from '@/stores/uploadStore';
 import {
   compressPdfIfNeeded,
+  compressPdfLossy,
   needsCompression,
   getCompressionStats,
   compressionExceedsLimit,
@@ -184,19 +185,20 @@ export class FileTooLargeError extends Error {
 /**
  * Compress a file if it exceeds the size threshold.
  * Updates the upload store with compression status.
- * Throws FileTooLargeError if file still exceeds limit after compression.
+ *
+ * Pipeline:
+ * - <40MB: no compression
+ * - 40-50MB: lossless only (metadata removal + object streams)
+ * - 50-200MB: lossless first → if still >50MB → lossy (JPEG re-encoding)
+ * - >200MB: rejected at validation layer
  *
  * @param fileId - ID in upload store
  * @param file - File to potentially compress
  * @returns The file (compressed or original)
- * @throws FileTooLargeError if file exceeds 50MB limit after compression
+ * @throws FileTooLargeError if file exceeds 50MB limit after all compression
  */
 async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
   if (!needsCompression(file)) {
-    // Even files under compression threshold need to be checked against Supabase limit
-    if (file.size > SUPABASE_FILE_LIMIT_BYTES) {
-      throw new FileTooLargeError(file.name, file.size);
-    }
     return file;
   }
 
@@ -206,36 +208,73 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
   store.updateStatus(fileId, 'compressing');
 
   try {
-    const result = await compressPdfIfNeeded(file, (progress) => {
-      // Could add more granular progress here if needed
-      console.log(`[Compression] ${file.name}: ${progress.message}`);
+    // Step 1: Lossless compression (metadata removal + object streams)
+    const losslessResult = await compressPdfIfNeeded(file, (progress) => {
+      console.log(`[Compression:lossless] ${file.name}: ${progress.message}`);
     });
 
-    if (result.wasCompressed) {
-      const compressionInfo = getCompressionStats(result);
+    let currentFile = losslessResult.file;
+    let currentSize = losslessResult.finalSize;
+
+    if (losslessResult.wasCompressed) {
+      const compressionInfo = getCompressionStats(losslessResult);
       store.updateFileAfterCompression(
         fileId,
-        result.file,
-        result.originalSize,
+        losslessResult.file,
+        losslessResult.originalSize,
         compressionInfo
       );
-      console.log(`[Compression] ${file.name}: ${compressionInfo}`);
-    } else if (result.warning) {
-      // File couldn't be compressed or is still too large
-      console.warn(`[Compression] ${file.name}: ${result.warning}`);
+      console.log(`[Compression:lossless] ${file.name}: ${compressionInfo}`);
     }
 
-    // Check if file still exceeds Supabase limit after compression
-    if (compressionExceedsLimit(result)) {
+    // Step 2: If still over Supabase limit, apply lossy compression
+    if (currentSize > SUPABASE_FILE_LIMIT_BYTES) {
+      console.log(`[Compression:lossy] ${file.name}: ${(currentSize / (1024 * 1024)).toFixed(1)}MB still exceeds 50MB, starting lossy compression...`);
+
+      const lossyResult = await compressPdfLossy(currentFile, (progress) => {
+        // Update store with page-level progress for UI display
+        if (progress.currentPage && progress.totalPages) {
+          store.updateStatus(
+            fileId,
+            'compressing',
+            `Compressing page ${progress.currentPage} of ${progress.totalPages}...`
+          );
+        }
+        console.log(`[Compression:lossy] ${file.name}: ${progress.message}`);
+      });
+
+      if (lossyResult.wasCompressed) {
+        const compressionInfo = getCompressionStats({
+          ...lossyResult,
+          originalSize: file.size, // Show reduction from original, not from lossless
+        });
+        store.updateFileAfterCompression(
+          fileId,
+          lossyResult.file,
+          file.size,
+          compressionInfo
+        );
+        console.log(`[Compression:lossy] ${file.name}: ${compressionInfo}`);
+      }
+
+      currentFile = lossyResult.file;
+      currentSize = lossyResult.finalSize;
+    }
+
+    // Final check: still over Supabase limit?
+    if (currentSize > SUPABASE_FILE_LIMIT_BYTES) {
       store.updateStatus(
         fileId,
         'error',
-        `File exceeds 50MB limit after compression (${(result.finalSize / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
+        `File exceeds 50MB limit after compression (${(currentSize / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
       );
-      throw new FileTooLargeError(file.name, result.finalSize);
+      throw new FileTooLargeError(file.name, currentSize);
     }
 
-    return result.file;
+    // Reset status from compressing to pending (ready for upload)
+    store.updateStatus(fileId, 'pending');
+
+    return currentFile;
   } catch (error) {
     // Re-throw FileTooLargeError
     if (error instanceof FileTooLargeError) {
@@ -246,12 +285,12 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
     // Continue with original file if compression fails
     store.updateStatus(fileId, 'pending');
 
-    // But still check if original file exceeds limit
+    // But still check if original file exceeds Supabase limit
     if (file.size > SUPABASE_FILE_LIMIT_BYTES) {
       store.updateStatus(
         fileId,
         'error',
-        `File exceeds 50MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
+        `File exceeds 50MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Compression failed — please split this document.`
       );
       throw new FileTooLargeError(file.name, file.size);
     }

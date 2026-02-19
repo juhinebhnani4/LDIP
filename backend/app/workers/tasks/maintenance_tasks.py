@@ -973,21 +973,23 @@ def sync_missing_entity_ids(self) -> dict:
     max_retries=1,
     default_retry_delay=60,
 )
-def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
+def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None = None) -> dict:
     """Resume document processing pipelines that got stuck at intermediate stages.
 
     Finds documents that are stuck at ocr_complete (or other intermediate states)
-    for longer than stale_hours and re-triggers the remaining pipeline stages.
+    AND processing_jobs stuck in PROCESSING state (BUG-LT-G fix).
 
     This handles:
     - Documents where Celery task chain broke
     - Documents where worker crashed mid-pipeline
     - Documents uploaded before a bug fix
+    - Processing jobs stuck at any intermediate stage after worker restart
 
-    Runs every 30 minutes to recover stuck documents.
+    Runs every 15 minutes to recover stuck documents.
 
     Args:
-        stale_hours: Hours after which a document is considered stuck.
+        stale_hours: Hours after which a document is considered stuck (legacy).
+        stale_minutes: Minutes after which a job is considered stuck (preferred).
 
     Returns:
         Dictionary with recovery results.
@@ -996,7 +998,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
 
     from app.services.supabase.client import get_service_client
 
-    logger.info("resume_stuck_pipelines_started", stale_hours=stale_hours)
+    # Use stale_minutes if provided, otherwise fall back to stale_hours
+    effective_minutes = stale_minutes if stale_minutes is not None else stale_hours * 60
+    logger.info("resume_stuck_pipelines_started", stale_minutes=effective_minutes)
 
     results = {
         "checked": 0,
@@ -1010,9 +1014,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
         if client is None:
             return {"error": "Database client not configured"}
 
-        # Find documents stuck at ocr_complete for more than stale_hours
+        # Find documents stuck at ocr_complete for longer than the threshold
         # These should have progressed to 'completed' but didn't
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=stale_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=effective_minutes)
 
         stuck_docs = (
             client.table("documents")
@@ -1113,6 +1117,106 @@ def resume_stuck_pipelines(self, stale_hours: int = 1) -> dict:
                     error=str(e),
                 )
                 results["errors"].append({"document_id": doc_id, "error": str(e)})
+
+        # =================================================================
+        # BUG-LT-G FIX: Also recover stuck PROCESSING jobs at any stage
+        # The original code only checked documents with status="ocr_complete".
+        # When a worker restarts, in-flight tasks are lost but the processing_job
+        # remains in PROCESSING state. This section catches those stuck jobs.
+        # =================================================================
+        try:
+            stuck_jobs = (
+                client.table("processing_jobs")
+                .select("id, document_id, matter_id, current_stage, updated_at, metadata, status")
+                .eq("status", "PROCESSING")
+                .lt("updated_at", cutoff_time.isoformat())
+                .execute()
+            )
+
+            for job in (stuck_jobs.data or []):
+                job_doc_id = job.get("document_id")
+                job_matter_id = job.get("matter_id")
+                stage = job.get("current_stage", "")
+
+                if not job_doc_id:
+                    continue
+
+                try:
+                    # Determine which stage to resume from based on current_stage
+                    if stage in ("contradiction_detection",):
+                        # Last stage — just mark completed if contradictions exist
+                        contradictions = (
+                            client.table("statement_comparisons")
+                            .select("id", count="exact")
+                            .eq("matter_id", job_matter_id)
+                            .execute()
+                        )
+                        if contradictions.count and contradictions.count > 0:
+                            client.table("processing_jobs").update(
+                                {"status": "COMPLETED"}
+                            ).eq("id", job["id"]).execute()
+                            results["resumed"] += 1
+                            logger.info(
+                                "resume_stuck_job_completed",
+                                job_id=job["id"],
+                                document_id=job_doc_id,
+                                stage=stage,
+                            )
+                        else:
+                            # Re-dispatch contradiction detection
+                            from app.workers.tasks.document_tasks import detect_contradictions
+                            detect_contradictions.apply_async(
+                                kwargs={"document_id": job_doc_id},
+                                queue="default",
+                                countdown=5,
+                            )
+                            results["resumed"] += 1
+                    elif stage in ("citation_extraction", "citation_verification"):
+                        from app.workers.tasks.document_tasks import extract_citations
+                        extract_citations.apply_async(
+                            kwargs={"document_id": job_doc_id},
+                            queue="default",
+                            countdown=5,
+                        )
+                        results["resumed"] += 1
+                    elif stage == "entity_extraction":
+                        _dispatch_from_entities(job_doc_id, job_matter_id)
+                        results["resumed"] += 1
+                    elif stage == "embedding":
+                        _dispatch_from_embedding(job_doc_id, job_matter_id)
+                        results["resumed"] += 1
+                    elif stage in ("chunking", "validation", "confidence", "ocr"):
+                        _dispatch_from_chunking(job_doc_id, job_matter_id)
+                        results["resumed"] += 1
+                    else:
+                        # Unknown stage — restart from chunking as safe default
+                        _dispatch_from_chunking(job_doc_id, job_matter_id)
+                        results["resumed"] += 1
+
+                    # Update job timestamp to prevent immediate re-dispatch
+                    from datetime import datetime as dt_cls, timezone as tz_cls
+                    client.table("processing_jobs").update(
+                        {"updated_at": dt_cls.now(tz_cls.utc).isoformat()}
+                    ).eq("id", job["id"]).execute()
+
+                    logger.info(
+                        "resume_stuck_processing_job",
+                        job_id=job["id"],
+                        document_id=job_doc_id,
+                        stage=stage,
+                    )
+
+                except Exception as e:
+                    logger.warning(
+                        "resume_stuck_processing_job_failed",
+                        job_id=job["id"],
+                        document_id=job_doc_id,
+                        error=str(e),
+                    )
+                    results["errors"].append({"job_id": job["id"], "error": str(e)})
+
+        except Exception as e:
+            logger.warning("resume_stuck_processing_jobs_scan_failed", error=str(e))
 
         # Also recover stuck library documents (pending/processing for too long)
         try:

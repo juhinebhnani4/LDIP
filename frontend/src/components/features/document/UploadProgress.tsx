@@ -27,7 +27,7 @@ function UploadProgressItem({ file, onCancel }: UploadProgressItemProps) {
           <CheckCircle2 className="size-5 text-green-500" aria-hidden="true" />
         ) : status === 'error' ? (
           <AlertCircle className="size-5 text-destructive" aria-hidden="true" />
-        ) : status === 'uploading' ? (
+        ) : status === 'uploading' || status === 'compressing' ? (
           <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" />
         ) : (
           <FileIcon className="size-5 text-muted-foreground" aria-hidden="true" />
@@ -45,6 +45,10 @@ function UploadProgressItem({ file, onCancel }: UploadProgressItemProps) {
 
         {status === 'error' ? (
           <p className="mt-1 text-xs text-destructive">{error}</p>
+        ) : status === 'compressing' ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {error || 'Compressing...'}
+          </p>
         ) : status === 'uploading' ? (
           <div className="mt-2">
             {/* Radix Progress component handles aria-valuenow/min/max internally */}
@@ -62,7 +66,7 @@ function UploadProgressItem({ file, onCancel }: UploadProgressItemProps) {
         )}
       </div>
 
-      {/* Cancel button (only show for pending/uploading) */}
+      {/* Cancel button (only show for pending/uploading, not during compression) */}
       {(status === 'pending' || status === 'uploading') && (
         <Button
           variant="ghost"

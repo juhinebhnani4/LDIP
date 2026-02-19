@@ -95,10 +95,11 @@ class DoclingProvider:
         """
         try:
             # Validate Docling version
-            import docling
+            import docling  # noqa: F401
+            from importlib.metadata import version as pkg_version
             from packaging import version
 
-            docling_version = getattr(docling, "__version__", "0.0.0")
+            docling_version = pkg_version("docling")
             if version.parse(docling_version) < version.parse(MIN_DOCLING_VERSION):
                 logger.warning(
                     "docling_version_outdated",

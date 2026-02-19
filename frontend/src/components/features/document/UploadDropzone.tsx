@@ -48,7 +48,7 @@ type DropzoneState = 'default' | 'drag-over' | 'invalid' | 'uploading';
  * - Drag-and-drop with visual feedback
  * - Browse Files button for file picker
  * - File type validation (PDF, ZIP only)
- * - File size limit (500MB per file)
+ * - File size limit (200MB per file, auto-compressed to fit 50MB Supabase limit)
  * - File count limit (100 files per upload)
  * - Progress tracking via Zustand store
  * - Accessibility support (keyboard, screen readers)
@@ -237,19 +237,6 @@ export function UploadDropzone({
     fileInputRef.current?.click();
   }, []);
 
-  /**
-   * Handle keyboard activation
-   */
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleBrowseClick();
-      }
-    },
-    [handleBrowseClick]
-  );
-
   // Determine visual state classes
   const stateClasses = {
     default: 'border-dashed border-muted-foreground/25 hover:border-muted-foreground/50',
@@ -265,19 +252,16 @@ export function UploadDropzone({
       {/* Dropzone */}
       <Card
         className={cn(
-          'relative cursor-pointer transition-colors',
+          'relative transition-colors',
           stateClasses[dropzoneState]
         )}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={handleBrowseClick}
-        onKeyDown={handleKeyDown}
-        tabIndex={0}
-        role="button"
-        aria-label="Drop files here or click to browse"
+        aria-label="Drop files here or use Browse Files button"
         aria-describedby="dropzone-description"
+        data-testid="upload-dropzone"
       >
         <CardContent className="flex flex-col items-center justify-center py-12">
           {/* Icon */}
@@ -330,10 +314,7 @@ export function UploadDropzone({
             type="button"
             variant="outline"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleBrowseClick();
-            }}
+            onClick={handleBrowseClick}
             disabled={isUploading}
           >
             <FileIcon className="mr-2 size-4" aria-hidden="true" />

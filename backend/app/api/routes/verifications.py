@@ -133,6 +133,63 @@ async def get_verification_stats(
 
 
 @router.get(
+    "/queue",
+    response_model=VerificationQueueResponse,
+    response_model_by_alias=True,
+    responses={
+        200: {"description": "All verification queue items"},
+        404: {"description": "Matter not found"},
+    },
+)
+async def get_all_verifications_queue(
+    matter_id: str = Path(..., description="Matter UUID"),
+    limit: int = Query(100, ge=1, le=200, description="Max items to return"),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    db=Depends(get_db),
+    service: VerificationService = Depends(_get_verification_service),
+) -> VerificationQueueResponse:
+    """Get all verification queue items (all statuses).
+
+    BUG-LT3-A fix: Returns ALL verifications regardless of decision status,
+    so the "All" view in the Verification Center is populated.
+
+    Args:
+        matter_id: Matter UUID.
+        limit: Max items to return (default 100, max 200).
+        membership: Validated matter membership.
+        db: Supabase client.
+        service: Verification service.
+
+    Returns:
+        VerificationQueueResponse with all items.
+    """
+    try:
+        items = await service.get_all_verifications_queue(matter_id, db, limit)
+        return VerificationQueueResponse(
+            data=items,
+            meta={"limit": limit, "count": len(items)},
+        )
+    except VerificationServiceError as e:
+        logger.error(
+            "get_all_verifications_queue_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.get(
     "/pending",
     response_model=VerificationQueueResponse,
     response_model_by_alias=True,

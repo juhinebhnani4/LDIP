@@ -44,13 +44,15 @@ function formatDate(dateString: string | null): string | null {
   if (!dateString) return null;
   try {
     const date = new Date(dateString);
+    // Guard against Invalid Date (new Date with unparseable strings doesn't throw)
+    if (isNaN(date.getTime())) return null;
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
   } catch {
-    return dateString;
+    return null;
   }
 }
 

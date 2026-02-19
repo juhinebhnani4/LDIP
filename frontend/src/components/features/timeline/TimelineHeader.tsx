@@ -79,8 +79,9 @@ export function TimelineHeader({
     return <TimelineHeaderSkeleton className={className} />;
   }
 
-  // Use stats if available, otherwise use totalEventsFromMeta, then fallbackEventCount
-  const eventCount = stats?.totalEvents ?? totalEventsFromMeta ?? fallbackEventCount ?? 0;
+  // Prefer totalEventsFromMeta (from actual data query) over stats endpoint when available,
+  // since the stats endpoint may return stale cached values (e.g., 0 from initial load)
+  const eventCount = totalEventsFromMeta ?? stats?.totalEvents ?? fallbackEventCount ?? 0;
   const dateRange = formatDateRange(
     stats?.dateRangeStart ?? null,
     stats?.dateRangeEnd ?? null

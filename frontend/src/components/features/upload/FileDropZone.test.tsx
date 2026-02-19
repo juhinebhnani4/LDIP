@@ -58,7 +58,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      expect(screen.getByText(/maximum: 500mb per file/i)).toBeInTheDocument();
+      expect(screen.getByText(/maximum: 200mb per file/i)).toBeInTheDocument();
     });
 
     it('renders with custom className', () => {
@@ -76,7 +76,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
 
       fireEvent.dragOver(dropZone);
 
@@ -87,7 +87,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
 
       fireEvent.dragOver(dropZone);
       expect(screen.getByText(/drop to upload/i)).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
       const file = createMockFile('test.pdf');
       const dataTransfer = createMockDataTransfer([file]);
 
@@ -115,7 +115,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
       const file = createMockFile('test.xlsx', 1024, 'application/vnd.ms-excel');
       const dataTransfer = createMockDataTransfer([file]);
 
@@ -159,7 +159,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
       const file = createMockFile('test.xlsx', 1024, 'application/vnd.ms-excel');
       const dataTransfer = createMockDataTransfer([file]);
 
@@ -174,9 +174,9 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
-      // Create file larger than 500MB
-      const largeFile = createMockFile('large.pdf', 600 * 1024 * 1024);
+      const dropZone = screen.getByTestId('file-drop-zone');
+      // Create file larger than 200MB
+      const largeFile = createMockFile('large.pdf', 250 * 1024 * 1024);
       const dataTransfer = createMockDataTransfer([largeFile]);
 
       fireEvent.drop(dropZone, { dataTransfer });
@@ -190,7 +190,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
       // Create 101 files
       const files = Array.from({ length: 101 }, (_, i) =>
         createMockFile(`test${i}.pdf`)
@@ -208,7 +208,7 @@ describe('FileDropZone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
+      const dropZone = screen.getByTestId('file-drop-zone');
       const file = createMockFile('test.xlsx', 1024, 'application/vnd.ms-excel');
       const dataTransfer = createMockDataTransfer([file]);
 
@@ -221,21 +221,12 @@ describe('FileDropZone', () => {
   });
 
   describe('accessibility', () => {
-    it('is keyboard accessible via tab', () => {
+    it('has accessible label for drop zone', () => {
       const onFilesSelected = vi.fn();
       render(<FileDropZone onFilesSelected={onFilesSelected} />);
 
-      const dropZone = screen.getByRole('button', { name: /drop files here or click to browse/i });
-      expect(dropZone).toHaveAttribute('tabIndex', '0');
-    });
-
-    it('has accessible name for drop zone', () => {
-      const onFilesSelected = vi.fn();
-      render(<FileDropZone onFilesSelected={onFilesSelected} />);
-
-      expect(
-        screen.getByRole('button', { name: /drop files here or click to browse/i })
-      ).toBeInTheDocument();
+      const dropZone = screen.getByTestId('file-drop-zone');
+      expect(dropZone).toHaveAttribute('aria-label', 'Drop files here or use Browse Files button');
     });
 
     it('hides file input from accessibility tree', () => {

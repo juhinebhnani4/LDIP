@@ -11,4 +11,4 @@
 ### Vercel (Frontend)
 - **Project**: ldip
 - **Deploy command**: `cd frontend && vercel --prod`
-- **Production URL**: https://jaanch-ai.vercel.app
+- **Production URL**: https://www.jaanch-ai.in

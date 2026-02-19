@@ -215,11 +215,14 @@ class IndiaCodeClient:
         client = self._get_client()
         await self._rate_limit()
 
-        # Clean the search term, avoiding year duplication
-        # e.g., act_name="Code of Criminal Procedure, 1973" + year=1973
-        # should NOT become "Code of Criminal Procedure, 1973 1973"
+        # BUG-004 fix: Strip trailing year from act name before appending,
+        # preventing duplication like "Code of Criminal Procedure, 1973 1973".
+        # The canonical name from validation often includes the year (e.g.,
+        # "Code of Criminal Procedure, 1973") AND year is passed separately.
         search_term = act_name.strip()
-        if year and str(year) not in search_term:
+        # Strip trailing ",? YYYY" pattern from act name
+        search_term = re.sub(r",?\s*\d{4}\s*$", "", search_term).strip()
+        if year:
             search_term = f"{search_term} {year}"
 
         # URL encode the search term

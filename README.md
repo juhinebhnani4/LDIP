@@ -19,7 +19,7 @@ The name "jaanch" (जाँच) is Hindi for *investigation* or *examination*. 
 
 If you want a legal document analysis tool that verifies instead of summarizes, cites instead of guesses, and says "I don't know" instead of making things up — this is it.
 
-[Website](https://jaanch-ai.vercel.app/) · [Backend Docs](./backend/README.md)
+[Website](https://www.jaanch-ai.in/) · [Backend Docs](./backend/README.md)
 
 ## Quick start
 
@@ -269,4 +269,4 @@ Jaanch was built by **Juhi Nebhnani** and **Siddhi Maheshwari**.
 
 Part of the [100xEngineers](https://100xengineers.com) program.
 
-- [jaanch.ai](https://jaanch-ai.vercel.app/)
+- [jaanch.ai](https://www.jaanch-ai.in/)

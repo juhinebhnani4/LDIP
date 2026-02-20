@@ -211,8 +211,14 @@ def _format_context(
     effective_max_chunks = max_chunks or MAX_CONTEXT_CHUNKS
     effective_max_content = max_chunk_content or MAX_CHUNK_CONTENT
 
+    # Gap 6: Deduplicate overlapping text at parent chunk boundaries.
+    # Adjacent parent chunks share ~100-token overlaps from chunking.
+    # Trim duplicate prefixes before formatting to avoid wasting tokens
+    # and prevent LLM over-weighting of repeated passages.
+    selected_chunks = _deduplicate_chunk_boundaries(chunks[:effective_max_chunks])
+
     formatted = []
-    for i, chunk in enumerate(chunks[:effective_max_chunks], 1):
+    for i, chunk in enumerate(selected_chunks, 1):
         # Support both snake_case (from DB) and camelCase (from API)
         doc_name = chunk.get("document_name") or chunk.get("documentName") or "Unknown Document"
         page = chunk.get("page_number") or chunk.get("pageNumber") or "?"
@@ -233,3 +239,117 @@ def _format_context(
         )
 
     return "\n\n".join(formatted)
+
+
+# =============================================================================
+# Chunk Boundary Deduplication (Gap 6)
+# =============================================================================
+
+
+def _deduplicate_chunk_boundaries(
+    chunks: list[dict],
+    min_overlap: int = 50,
+) -> list[dict]:
+    """Remove overlapping text at boundaries between chunks from the same document.
+
+    Gap 6: Parent chunks have ~100-token overlaps at boundaries (configured as
+    chunk_parent_overlap=100 tokens in config.py). When multiple parent chunks
+    from the same document are sent to the LLM, the overlapping boundary text
+    wastes ~8-15% of tokens and can cause the LLM to over-weight repeated
+    information.
+
+    For each chunk, checks if its content prefix duplicates any previous
+    chunk's suffix (same document only). If found, trims the duplicate prefix
+    from the later chunk. Metadata (page_number, bbox_ids, etc.) is preserved.
+
+    Args:
+        chunks: List of chunk dicts with 'content' and 'document_id' keys.
+        min_overlap: Minimum characters for an overlap to be considered
+            meaningful (avoids trimming coincidental short matches).
+
+    Returns:
+        Chunks with boundary overlaps trimmed.
+    """
+    if len(chunks) <= 1:
+        return chunks
+
+    # Work on shallow copies so we don't mutate the caller's dicts
+    result = [dict(c) for c in chunks]
+
+    for i in range(1, len(result)):
+        current_content = result[i].get("content", "")
+        current_doc = result[i].get("document_id") or result[i].get("documentId")
+
+        if not current_content or not current_doc:
+            continue
+
+        # Find the LARGEST overlap across all previous same-document chunks.
+        # This prevents a coincidental short match from a non-adjacent chunk
+        # from superseding a real boundary overlap from the adjacent chunk.
+        best_overlap = 0
+        for j in range(i):
+            prev_content = result[j].get("content", "")
+            prev_doc = result[j].get("document_id") or result[j].get("documentId")
+
+            if not prev_content or prev_doc != current_doc:
+                continue
+
+            overlap = _find_boundary_overlap(
+                prev_content, current_content, min_overlap=min_overlap,
+            )
+            if overlap > best_overlap:
+                best_overlap = overlap
+
+        # Trim the duplicate prefix, but never produce an empty chunk
+        if best_overlap > 0 and best_overlap < len(current_content):
+            result[i]["content"] = current_content[best_overlap:]
+
+    return result
+
+
+def _find_boundary_overlap(
+    text_a: str,
+    text_b: str,
+    max_check: int = 800,
+    min_overlap: int = 50,
+) -> int:
+    """Find the longest suffix of text_a that equals a prefix of text_b.
+
+    Uses seed-based search for efficiency: locates candidate positions
+    using a short prefix of text_b via str.find(), then verifies the
+    full overlap at each candidate.
+
+    Args:
+        text_a: Text whose suffix to check.
+        text_b: Text whose prefix to check.
+        max_check: Maximum characters to examine from end of text_a.
+        min_overlap: Minimum overlap length to report.
+
+    Returns:
+        Length of the overlapping region in characters, or 0 if below
+        min_overlap.
+    """
+    if not text_a or not text_b:
+        return 0
+
+    suffix = text_a[-max_check:] if len(text_a) > max_check else text_a
+    seed_len = min(40, len(text_b))
+    seed = text_b[:seed_len]
+
+    # Search for seed in suffix — earliest match gives longest overlap
+    pos = 0
+    while True:
+        idx = suffix.find(seed, pos)
+        if idx == -1:
+            break
+
+        # Verify full match from this position to end of suffix
+        remaining = suffix[idx:]
+        match_len = min(len(remaining), len(text_b))
+        if remaining[:match_len] == text_b[:match_len]:
+            overlap = len(suffix) - idx
+            return overlap if overlap >= min_overlap else 0
+
+        pos = idx + 1
+
+    return 0

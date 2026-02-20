@@ -10,6 +10,7 @@ import { ChatInput } from './ChatInput';
 import { StreamingMessage } from './StreamingMessage';
 import { SuggestedQuestions } from './SuggestedQuestions';
 import { ModelSelector } from './ModelSelector';
+import { SearchFilterPanel } from './SearchFilterPanel';
 import { ErrorAlert } from '@/components/ui/error-alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -17,6 +18,7 @@ import { useSSE, type CompleteData, type EngineTraceData, type TokenData, type S
 import { useUser } from '@/hooks/useAuth';
 import { canRetryError } from '@/lib/api/client';
 import type { SourceReference, ChatMessage, EngineTrace } from '@/types/chat';
+import type { SearchFilters } from '@/types/search';
 
 interface QAPanelProps {
   /** Matter ID for loading conversation history */
@@ -75,6 +77,9 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<Error | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // Gap 4: Search filter state
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
 
   // F5: Track last parse error toast time to debounce multiple errors
   const lastParseErrorToastRef = useRef<number>(0);
@@ -230,14 +235,29 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
     const assistantMessageId = crypto.randomUUID();
     startStreaming(assistantMessageId);
 
-    // Start SSE stream with model selection from store
+    // Start SSE stream with model selection from store + search filters
     const { embeddingProvider, rerankProvider } = useModelStore.getState();
+
+    // Gap 4: Build search_filters object for API (only if filters are active)
+    const hasActiveFilters = searchFilters.documentIds?.length ||
+      searchFilters.documentTypes?.length ||
+      searchFilters.pageMin != null ||
+      searchFilters.pageMax != null;
+
+    const apiFilters = hasActiveFilters ? {
+      ...(searchFilters.documentIds?.length && { document_ids: searchFilters.documentIds }),
+      ...(searchFilters.documentTypes?.length && { document_types: searchFilters.documentTypes }),
+      ...(searchFilters.pageMin != null && { page_min: searchFilters.pageMin }),
+      ...(searchFilters.pageMax != null && { page_max: searchFilters.pageMax }),
+    } : undefined;
+
     await startStream(`/api/chat/${matterId}/stream`, {
       query,
       embedding_provider: embeddingProvider,
       rerank_provider: rerankProvider,
+      search_filters: apiFilters,
     });
-  }, [matterId, userId, addMessage, startStreaming, startStream]);
+  }, [matterId, userId, addMessage, startStreaming, startStream, searchFilters]);
 
   // Story 13.4: Handle retry for failed queries
   const handleRetry = useCallback(async () => {
@@ -321,6 +341,15 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
               isRetrying={isRetrying}
             />
           </div>
+        )}
+
+        {/* Gap 4: Search filter panel (above chat input) */}
+        {matterId && (
+          <SearchFilterPanel
+            matterId={matterId}
+            filters={searchFilters}
+            onChange={setSearchFilters}
+          />
         )}
 
         {/* Chat input (always visible at bottom) */}

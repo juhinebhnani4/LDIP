@@ -137,6 +137,17 @@ function transformSingleModeResponse(data: {
  * })
  * ```
  */
+/** Convert SearchFilters to snake_case for API */
+function transformFiltersToApi(filters?: import('@/types/search').SearchFilters): Record<string, unknown> | undefined {
+  if (!filters) return undefined
+  const result: Record<string, unknown> = {}
+  if (filters.documentIds?.length) result.document_ids = filters.documentIds
+  if (filters.documentTypes?.length) result.document_types = filters.documentTypes
+  if (filters.pageMin != null) result.page_min = filters.pageMin
+  if (filters.pageMax != null) result.page_max = filters.pageMax
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
 export async function hybridSearch(
   matterId: string,
   request: SearchRequest
@@ -152,6 +163,12 @@ export async function hybridSearch(
   if (request.rerank) {
     body.rerank = true
     body.rerank_top_n = request.rerankTopN ?? RERANK_DEFAULTS.topN
+  }
+
+  // Gap 4: Add metadata filters if provided
+  const apiFilters = transformFiltersToApi(request.filters)
+  if (apiFilters) {
+    body.filters = apiFilters
   }
 
   const response = await api.post<{

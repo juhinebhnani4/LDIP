@@ -35,6 +35,7 @@ from app.models.search import (
     AliasExpandedSearchResponse,
     BM25SearchRequest,
     FuzzyMatchInfo,
+    SearchFilters,
     SearchMeta,
     SearchRequest,
     SearchResponse,
@@ -189,6 +190,9 @@ async def hybrid_search(
     # Story 8-1/8-2 Code Review Fix: Check query safety before search
     await _check_query_safety(body.query, safety_guard, membership.matter_id)
 
+    # Gap 4: Extract filters (None if not provided or empty)
+    search_filters = body.filters if body.filters and not body.filters.is_empty else None
+
     logger.info(
         "hybrid_search_request",
         matter_id=membership.matter_id,
@@ -199,6 +203,7 @@ async def hybrid_search(
         semantic_weight=body.semantic_weight,
         rerank=body.rerank,
         rerank_top_n=body.rerank_top_n if body.rerank else None,
+        has_filters=search_filters is not None,
     )
 
     try:
@@ -217,6 +222,7 @@ async def hybrid_search(
                 hybrid_limit=body.limit,
                 rerank_top_n=body.rerank_top_n,
                 weights=weights,
+                filters=search_filters,
             )
 
             items = [
@@ -243,6 +249,7 @@ async def hybrid_search(
             matter_id=membership.matter_id,
             limit=body.limit,
             weights=weights,
+            filters=search_filters,
         )
 
         items = [_result_to_item(r) for r in result.results]

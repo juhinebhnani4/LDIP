@@ -3337,6 +3337,10 @@ def embed_chunks(
             "chunking_complete",
             "searchable",
             "ocr_complete",  # Allow if chunks exist
+            "table_extraction_complete",  # Gap 5: extract_tables runs before embed_chunks
+            "table_extraction_partial",
+            "table_extraction_skipped",
+            "table_extraction_failed",  # Non-critical — still embed text chunks
         )
         # Only skip on explicit failure statuses
         failed_statuses = (

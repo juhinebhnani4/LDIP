@@ -48,6 +48,7 @@ def create_post_ocr_chain(
         embed_chunks,
         extract_entities,
     )
+    from app.workers.tasks.table_extraction_tasks import extract_tables
 
     logger.info(
         "creating_post_ocr_chain",
@@ -58,11 +59,14 @@ def create_post_ocr_chain(
 
     # NOTE: validate_ocr only accepts document_id, not matter_id/job_id
     # The document_id is passed and flows through the chain via prev_result
+    # extract_tables runs after chunking to create table chunks (Gap 5)
+    # embed_chunks embeds ALL chunks (text + table) — queries by embedding IS NULL
     # extract_entities dispatches citations, dates, and aliases via _dispatch_post_entity_tasks()
     return celery_chain(
         validate_ocr.s(document_id=document_id),
         calculate_confidence.s(),
-        chunk_document.s(skip_bbox_linking=False),  # Docling runs here (2-4 sec)
+        chunk_document.s(skip_bbox_linking=False),  # Docling layout runs here (2-4 sec)
+        extract_tables.s(),  # Gap 5: extract tables + create table chunks
         embed_chunks.s(),
         extract_entities.s(),
     )

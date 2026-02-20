@@ -10,10 +10,16 @@ CRITICAL: All search operations enforce 4-layer matter isolation.
 The matter_id parameter is MANDATORY for every search query.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import structlog
+
+if TYPE_CHECKING:
+    from app.models.search import SearchFilters
 
 from app.services.rag.embedder import (
     EmbeddingService,
@@ -74,7 +80,7 @@ class SearchResult:
         content: Chunk text content.
         page_number: Source page number (for highlighting).
         bbox_ids: Bounding box UUIDs for precise source highlighting.
-        chunk_type: 'parent' or 'child'.
+        chunk_type: 'parent', 'child', or 'table' (Gap 5: table-aware embedding).
         token_count: Number of tokens in chunk.
         bm25_rank: Rank from BM25 search (None if not in BM25 results).
         semantic_rank: Rank from semantic search (None if not in semantic results).
@@ -135,7 +141,7 @@ class RerankedSearchResultItem:
         content: Chunk text content.
         page_number: Source page number (for highlighting).
         bbox_ids: Bounding box UUIDs for precise source highlighting.
-        chunk_type: 'parent' or 'child'.
+        chunk_type: 'parent', 'child', or 'table' (Gap 5: table-aware embedding).
         token_count: Number of tokens in chunk.
         bm25_rank: Rank from BM25 search (None if not in BM25 results).
         semantic_rank: Rank from semantic search (None if not in semantic results).
@@ -334,6 +340,7 @@ class HybridSearchService:
         rrf_k: int = 60,
         query_embedding: list[float] | None = None,
         embedding_provider: str | None = None,
+        filters: "SearchFilters | None" = None,
     ) -> HybridSearchResult:
         """Execute hybrid search with RRF fusion.
 
@@ -383,6 +390,7 @@ class HybridSearchService:
             bm25_weight=weights.bm25,
             semantic_weight=weights.semantic,
             rrf_k=rrf_k,
+            has_filters=filters is not None and not filters.is_empty if filters else False,
         )
 
         # Resolve embedding provider
@@ -406,7 +414,7 @@ class HybridSearchService:
                     embedding_provider=embedding_provider or "openai",
                 )
                 # Fall back to BM25-only search when embeddings unavailable
-                bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit)
+                bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit, filters=filters)
                 return HybridSearchResult(
                     results=bm25_results,
                     query=query,
@@ -427,6 +435,9 @@ class HybridSearchService:
                     is_retryable=False,
                 )
 
+            # Gap 4: Convert filters to RPC params (empty dict if no filters)
+            filter_params = filters.to_rpc_params() if filters and not filters.is_empty else {}
+
             # Use Voyage-specific RPC when Voyage embeddings are selected
             if use_voyage:
                 rpc_name = "hybrid_search_chunks_voyage"
@@ -438,6 +449,7 @@ class HybridSearchService:
                     "full_text_weight": weights.bm25,
                     "semantic_weight": weights.semantic,
                     "rrf_k": rrf_k,
+                    **filter_params,
                 }
             else:
                 rpc_name = "hybrid_search_chunks"
@@ -450,6 +462,7 @@ class HybridSearchService:
                     "semantic_weight": weights.semantic,
                     "rrf_k": rrf_k,
                     "filter_model_version": get_current_embedding_model_version(),
+                    **filter_params,
                 }
 
             response = supabase.rpc(rpc_name, rpc_params).execute()
@@ -468,7 +481,7 @@ class HybridSearchService:
                         embedded_chunks=embedded_chunks,
                         completion_pct=round(completion_pct, 1),
                     )
-                    bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit)
+                    bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit, filters=filters)
                     return HybridSearchResult(
                         results=bm25_results,
                         query=query,
@@ -558,6 +571,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
+        filters: "SearchFilters | None" = None,
     ) -> list[SearchResult]:
         """Internal BM25 search returning raw results.
 
@@ -567,6 +581,7 @@ class HybridSearchService:
             query: Search query text.
             matter_id: matter UUID for isolation.
             limit: Max results to return.
+            filters: Optional metadata filters (Gap 4).
 
         Returns:
             List of search results ranked by BM25 score.
@@ -580,12 +595,16 @@ class HybridSearchService:
                     is_retryable=False,
                 )
 
+            # Gap 4: Merge filter params into RPC call
+            filter_params = filters.to_rpc_params() if filters and not filters.is_empty else {}
+
             response = supabase.rpc(
                 "bm25_search_chunks",
                 {
                     "query_text": query,
                     "filter_matter_id": matter_id,
                     "match_count": limit,
+                    **filter_params,
                 }
             ).execute()
 
@@ -632,6 +651,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
+        filters: "SearchFilters | None" = None,
     ) -> HybridSearchResult:
         """Execute BM25-only keyword search.
 
@@ -641,6 +661,7 @@ class HybridSearchService:
             query: Search query text.
             matter_id: REQUIRED - matter UUID for isolation.
             limit: Max results to return.
+            filters: Optional metadata filters (Gap 4).
 
         Returns:
             HybridSearchResult with BM25-only results.
@@ -657,7 +678,7 @@ class HybridSearchService:
             limit=limit,
         )
 
-        results = await self._bm25_search_internal(query, matter_id, limit)
+        results = await self._bm25_search_internal(query, matter_id, limit, filters=filters)
 
         return HybridSearchResult(
             results=results,
@@ -782,6 +803,7 @@ class HybridSearchService:
         query_embedding: list[float] | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
+        filters: "SearchFilters | None" = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking.
 
@@ -829,6 +851,7 @@ class HybridSearchService:
             weights=weights,
             query_embedding=query_embedding,
             embedding_provider=embedding_provider,
+            filters=filters,
         )
 
         weights = weights or SearchWeights()
@@ -1030,6 +1053,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rrf_k: int = 60,
         embedding_provider: str | None = None,
+        filters: "SearchFilters | None" = None,
     ) -> HybridSearchResult:
         """Execute hybrid search on both matter chunks and linked library chunks.
 
@@ -1102,6 +1126,7 @@ class HybridSearchService:
                     rrf_k=rrf_k,
                     query_embedding=query_embedding,
                     embedding_provider=embedding_provider,
+                    filters=filters,
                 )
 
             # Step 2: Execute matter hybrid search (pass pre-computed embedding to avoid 2x API cost)
@@ -1113,6 +1138,7 @@ class HybridSearchService:
                 rrf_k=rrf_k,
                 query_embedding=query_embedding,
                 embedding_provider=embedding_provider,
+                filters=filters,
             )
 
             # Step 3: Search linked library chunks (semantic only for now)
@@ -1184,6 +1210,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
+        filters: "SearchFilters | None" = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking AND library results.
 
@@ -1219,6 +1246,7 @@ class HybridSearchService:
             query_embedding=query_embedding,
             rerank_provider=rerank_provider,
             embedding_provider=embedding_provider,
+            filters=filters,
         )
 
         # Step 3: Library results (best-effort, uses same embedding)

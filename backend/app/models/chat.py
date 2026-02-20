@@ -190,6 +190,10 @@ class ChatStreamRequest(BaseModel):
     session_id: str | None = Field(default=None, description="Session ID for context")
     embedding_provider: str | None = Field(default=None, description="'openai' or 'voyage'")
     rerank_provider: str | None = Field(default=None, description="'cohere' or 'voyage'")
+    search_filters: dict | None = Field(
+        default=None,
+        description="Gap 4: Optional metadata filters {document_ids, document_types, page_min, page_max}",
+    )
 
 
 # =============================================================================

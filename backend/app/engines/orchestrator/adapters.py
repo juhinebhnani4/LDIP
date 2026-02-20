@@ -868,6 +868,23 @@ class RAGEngineAdapter(EngineAdapter):
             rerank_provider = context.get("rerank_provider") if context else None
             embedding_provider = context.get("embedding_provider") if context else None
 
+            # Gap 4: Extract search filters from context (set by chat route)
+            search_filters = None
+            raw_filters = context.get("search_filters") if context else None
+            if raw_filters and isinstance(raw_filters, dict):
+                from app.models.search import SearchFilters
+                try:
+                    search_filters = SearchFilters(**raw_filters)
+                    if search_filters.is_empty:
+                        search_filters = None
+                except Exception as e:
+                    logger.warning(
+                        "rag_adapter_invalid_search_filters",
+                        error=str(e),
+                        raw_filters=raw_filters,
+                    )
+                    search_filters = None
+
             # Kill switch: force default providers when A/B testing is disabled
             settings = get_settings()
             if not settings.voyage_ab_testing_enabled:
@@ -897,6 +914,7 @@ class RAGEngineAdapter(EngineAdapter):
                 weights=query_profile.search_weights if query_profile else None,
                 rerank_provider=rerank_provider,
                 embedding_provider=embedding_provider,
+                filters=search_filters,
             )
 
             # Step 1b: Parent context expansion — replace child content with

@@ -16,17 +16,19 @@ class ChunkType(str, Enum):
     Types:
     - parent: Larger chunks (1500-2000 tokens) for context
     - child: Smaller chunks (400-700 tokens) for retrieval
+    - table: Extracted table content (self-contained, no parent expansion)
     """
 
     PARENT = "parent"
     CHILD = "child"
+    TABLE = "table"
 
 
 class ChunkBase(BaseModel):
     """Base chunk properties."""
 
     content: str = Field(..., description="Text content of the chunk")
-    chunk_type: ChunkType = Field(..., description="Type: parent or child")
+    chunk_type: ChunkType = Field(..., description="Type: parent, child, or table")
     chunk_index: int = Field(..., ge=0, description="Order within document")
     token_count: int = Field(..., ge=0, description="Number of tokens")
 

@@ -4,7 +4,87 @@ Defines request/response models for the search endpoints.
 All search operations are matter-isolated via the API layer.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+# Valid document types matching the documents table CHECK constraint
+VALID_DOCUMENT_TYPES = frozenset({"case_file", "act", "annexure", "other"})
+
+
+class SearchFilters(BaseModel):
+    """Metadata filters for scoping search results.
+
+    Gap 4: All fields are optional — None means "no filter".
+    Filters are applied at the SQL level in all 3 search RPC functions.
+
+    Examples:
+        Search only affidavits: filters={"document_types": ["case_file"]}
+        Search pages 10-30: filters={"page_min": 10, "page_max": 30}
+        Search specific docs: filters={"document_ids": ["uuid1", "uuid2"]}
+    """
+
+    document_ids: list[str] | None = Field(
+        None,
+        description="Filter to specific document UUIDs",
+    )
+    document_types: list[str] | None = Field(
+        None,
+        description="Filter by document type: 'case_file', 'act', 'annexure', 'other'",
+    )
+    page_min: int | None = Field(
+        None,
+        ge=1,
+        description="Minimum page number (inclusive)",
+    )
+    page_max: int | None = Field(
+        None,
+        ge=1,
+        description="Maximum page number (inclusive)",
+    )
+
+    @model_validator(mode="after")
+    def validate_filters(self) -> "SearchFilters":
+        """Validate filter consistency."""
+        # Validate document_types are from allowed set
+        if self.document_types:
+            invalid = set(self.document_types) - VALID_DOCUMENT_TYPES
+            if invalid:
+                raise ValueError(
+                    f"Invalid document_types: {invalid}. "
+                    f"Must be one of: {sorted(VALID_DOCUMENT_TYPES)}"
+                )
+
+        # Validate page range consistency
+        if self.page_min is not None and self.page_max is not None:
+            if self.page_min > self.page_max:
+                raise ValueError(
+                    f"page_min ({self.page_min}) must be <= page_max ({self.page_max})"
+                )
+
+        return self
+
+    @property
+    def is_empty(self) -> bool:
+        """True if no filters are set (all None)."""
+        return (
+            self.document_ids is None
+            and self.document_types is None
+            and self.page_min is None
+            and self.page_max is None
+        )
+
+    def to_rpc_params(self) -> dict:
+        """Convert to SQL RPC parameter dict. Only includes non-None values."""
+        params: dict = {}
+        if self.document_ids is not None:
+            params["filter_document_ids"] = self.document_ids
+        if self.document_types is not None:
+            params["filter_document_types"] = self.document_types
+        if self.page_min is not None:
+            params["filter_page_min"] = self.page_min
+        if self.page_max is not None:
+            params["filter_page_max"] = self.page_max
+        return params
 
 
 class SearchRequest(BaseModel):
@@ -44,6 +124,10 @@ class SearchRequest(BaseModel):
         ge=1,
         le=20,
         description="Number of top results after reranking (only used when rerank=true)",
+    )
+    filters: SearchFilters | None = Field(
+        None,
+        description="Optional metadata filters to scope search results",
     )
 
 

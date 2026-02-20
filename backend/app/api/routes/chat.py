@@ -164,6 +164,7 @@ async def stream_chat(
                 provider_context={
                     "embedding_provider": body.embedding_provider,
                     "rerank_provider": body.rerank_provider,
+                    "search_filters": body.search_filters,
                 },
             ):
                 # DEBUG: Log complete event sources to trace document_name
@@ -265,6 +266,7 @@ async def send_message(
             provider_context={
                 "embedding_provider": body.embedding_provider,
                 "rerank_provider": body.rerank_provider,
+                "search_filters": body.search_filters,
             },
         ):
             if event.type == StreamEventType.COMPLETE:

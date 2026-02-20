@@ -5,6 +5,29 @@
  * Matches backend Pydantic models in app/models/search.py
  */
 
+/**
+ * Gap 4: Metadata filters for scoping search results.
+ * All fields optional — omit or set null for "no filter".
+ */
+export interface SearchFilters {
+  /** Filter to specific document UUIDs */
+  documentIds?: string[]
+  /** Filter by document type: 'case_file', 'act', 'annexure', 'other' */
+  documentTypes?: Array<'case_file' | 'act' | 'annexure' | 'other'>
+  /** Minimum page number (inclusive, 1-based) */
+  pageMin?: number
+  /** Maximum page number (inclusive) */
+  pageMax?: number
+}
+
+/** Valid document types for filtering */
+export const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'case_file', label: 'Case File' },
+  { value: 'act', label: 'Act' },
+  { value: 'annexure', label: 'Annexure' },
+  { value: 'other', label: 'Other' },
+] as const
+
 /** Request model for hybrid search */
 export interface SearchRequest {
   /** Search query text (1-1000 chars) */
@@ -19,6 +42,8 @@ export interface SearchRequest {
   rerank?: boolean
   /** Number of top results after reranking (1-20, default 3, only used when rerank=true) */
   rerankTopN?: number
+  /** Gap 4: Optional metadata filters */
+  filters?: SearchFilters
 }
 
 /** Request model for BM25-only keyword search */

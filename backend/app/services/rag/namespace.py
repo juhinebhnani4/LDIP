@@ -84,8 +84,8 @@ class MatterNamespaceFilter:
             for entity_id in self.entity_ids:
                 _validate_uuid(entity_id, "entity_id")
 
-        if self.chunk_type and self.chunk_type not in ("parent", "child"):
-            raise ValueError("chunk_type must be 'parent' or 'child'")
+        if self.chunk_type and self.chunk_type not in ("parent", "child", "table"):
+            raise ValueError("chunk_type must be 'parent', 'child', or 'table'")
 
 
 # =============================================================================

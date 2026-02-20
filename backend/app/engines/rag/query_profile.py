@@ -82,7 +82,7 @@ class QueryProfile:
     def default(cls) -> "QueryProfile":
         """Current behavior — backward compatible.
 
-        Matches existing constants: MAX_CONTEXT_CHUNKS=5, MAX_CHUNK_CONTENT=1500,
+        Matches existing constants: MAX_CONTEXT_CHUNKS=5, MAX_CHUNK_CONTENT=2000,
         MAX_ANSWER_LENGTH=2000, DEFAULT_RERANK_TOP_N=3.
         """
         return cls(
@@ -90,7 +90,7 @@ class QueryProfile:
             hybrid_limit=50,
             rerank_top_n=3,
             max_context_chunks=5,
-            max_chunk_content=1500,
+            max_chunk_content=2000,
             max_answer_length=2000,
             system_prompt_key="default",
         )
@@ -129,7 +129,7 @@ class QueryProfile:
             hybrid_limit=50,
             rerank_top_n=5,
             max_context_chunks=5,
-            max_chunk_content=1500,
+            max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
         )
@@ -142,7 +142,7 @@ class QueryProfile:
             hybrid_limit=50,
             rerank_top_n=5,
             max_context_chunks=5,
-            max_chunk_content=1500,
+            max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
         )

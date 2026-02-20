@@ -95,6 +95,7 @@ class SearchResult:
     rrf_score: float
     is_library: bool = False
     library_document_title: str | None = None
+    parent_chunk_id: str | None = None
 
 
 @dataclass
@@ -157,6 +158,7 @@ class RerankedSearchResultItem:
     relevance_score: float | None
     is_library: bool = False
     library_document_title: str | None = None
+    parent_chunk_id: str | None = None
 
 
 @dataclass
@@ -509,6 +511,7 @@ class HybridSearchService:
                     bm25_rank=r.get("bm25_rank"),
                     semantic_rank=r.get("semantic_rank"),
                     rrf_score=r["rrf_score"],
+                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
                 )
                 for r in validated
             ]
@@ -605,6 +608,7 @@ class HybridSearchService:
                     bm25_rank=r.get("row_num"),
                     semantic_rank=None,
                     rrf_score=r.get("rank") or 0,
+                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
                 )
                 for r in validated
             ]
@@ -749,6 +753,7 @@ class HybridSearchService:
                     bm25_rank=None,
                     semantic_rank=r.get("row_num"),
                     rrf_score=r.get("similarity") or 0,
+                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
                 )
                 for r in validated
             ]
@@ -881,6 +886,7 @@ class HybridSearchService:
                         relevance_score=item.relevance_score,
                         is_library=original.is_library,
                         library_document_title=original.library_document_title,
+                        parent_chunk_id=original.parent_chunk_id,
                     )
                 )
 
@@ -933,6 +939,7 @@ class HybridSearchService:
                     relevance_score=None,  # No Cohere score
                     is_library=r.is_library,
                     library_document_title=r.library_document_title,
+                    parent_chunk_id=r.parent_chunk_id,
                 )
                 for r in hybrid_result.results[:rerank_top_n]
             ]
@@ -1243,6 +1250,7 @@ class HybridSearchService:
                             relevance_score=lib.rrf_score,  # Use similarity as relevance
                             is_library=True,
                             library_document_title=lib.library_document_title,
+                            parent_chunk_id=None,  # Library chunks don't use parent expansion
                         )
                     )
                 rerank_result.total_candidates += len(library_results)

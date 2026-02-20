@@ -747,6 +747,95 @@ class RAGEngineAdapter(EngineAdapter):
             )
             return {}
 
+    async def _expand_parent_context(
+        self,
+        results: "RerankedSearchResult",
+    ) -> "RerankedSearchResult":
+        """Replace child chunk content with parent chunk content for richer LLM context.
+
+        Gap 1: Parent-Child Context Expansion.
+        Strategy: "Retrieve child, generate from parent"
+
+        Child chunks (400-700 tokens) are retrieval-optimized — they match
+        narrowly in BM25/semantic search. Parent chunks (1500-2000 tokens)
+        are generation-optimized — they give the LLM surrounding context.
+
+        This method:
+        1. Collects unique parent_chunk_ids from child results
+        2. Batch-fetches parent content in a single DB call
+        3. Deduplicates: if multiple children share the same parent,
+           keeps only the highest-ranked child (preserving its page/bbox for citations)
+        4. Replaces child content with parent content
+
+        Preserves child's page_number and bbox_ids for precise citation highlighting.
+        Falls back gracefully to original child content on any failure.
+        """
+        if not results.results:
+            return results
+
+        # Collect unique parent_chunk_ids from child results
+        parent_ids: set[str] = set()
+        for item in results.results:
+            if item.parent_chunk_id and item.chunk_type == "child":
+                parent_ids.add(item.parent_chunk_id)
+
+        if not parent_ids:
+            return results  # All results are already parent chunks or have no parent
+
+        # Batch-fetch parent chunk content in a single DB call
+        parent_content_map: dict[str, str] = {}
+        try:
+            supabase = self._get_supabase()
+            parent_result = (
+                supabase.table("chunks")
+                .select("id, content")
+                .in_("id", list(parent_ids))
+                .execute()
+            )
+            parent_content_map = {
+                str(row["id"]): row["content"]
+                for row in (parent_result.data or [])
+            }
+        except Exception as e:
+            logger.warning(
+                "parent_context_expansion_db_failed",
+                error=str(e),
+                parent_count=len(parent_ids),
+            )
+            return results  # Graceful fallback — use original child content
+
+        # Deduplicate by parent_chunk_id and expand content.
+        # Results are already ranked (reranked or RRF-ordered), so the first
+        # child we encounter for a given parent is the highest-ranked one.
+        seen_parents: set[str] = set()
+        expanded_results = []
+
+        for item in results.results:
+            if item.chunk_type == "child" and item.parent_chunk_id:
+                if item.parent_chunk_id in seen_parents:
+                    continue  # Skip — another child from this parent already included
+                seen_parents.add(item.parent_chunk_id)
+
+                # Replace content with parent's broader context
+                parent_content = parent_content_map.get(item.parent_chunk_id)
+                if parent_content:
+                    # Mutate content to parent's, keep child's page/bbox for citations
+                    item.content = parent_content
+            expanded_results.append(item)
+
+        deduped_count = len(results.results) - len(expanded_results)
+        if deduped_count > 0 or parent_content_map:
+            logger.info(
+                "parent_context_expanded",
+                original_count=len(results.results),
+                expanded_count=len(expanded_results),
+                parents_fetched=len(parent_content_map),
+                deduped=deduped_count,
+            )
+
+        results.results = expanded_results
+        return results
+
     async def execute(
         self,
         matter_id: str,
@@ -757,6 +846,7 @@ class RAGEngineAdapter(EngineAdapter):
 
         Pipeline:
         1. Hybrid search with library integration (searches matter + linked library docs)
+        1b. Parent context expansion (replace child content with parent for richer context)
         2. Fetch document names for citations
         3. Generate grounded answer with Gemini
 
@@ -799,6 +889,10 @@ class RAGEngineAdapter(EngineAdapter):
                 rerank_provider=rerank_provider,
                 embedding_provider=embedding_provider,
             )
+
+            # Step 1b: Parent context expansion — replace child content with
+            # parent's broader context for richer LLM generation
+            results = await self._expand_parent_context(results)
 
             # Step 2: Get document names for matter documents
             # Library documents already have titles in the result

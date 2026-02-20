@@ -335,13 +335,13 @@ async def bm25_search(
     try:
         search_service = get_hybrid_search_service()
 
-        results = await search_service.bm25_search(
+        result = await search_service.bm25_search(
             query=body.query,
             matter_id=membership.matter_id,
             limit=body.limit,
         )
 
-        items = [_result_to_item(r) for r in results]
+        items = [_result_to_item(r) for r in result.results]
 
         return SingleModeSearchResponse(
             data=items,

@@ -156,13 +156,43 @@ class StreamingOrchestrator:
             # for deterministic hash-based A/B traffic routing
             merged_context["user_id"] = user_id
 
-            # Process through orchestrator with rewritten query
-            result = await self.orchestrator.process_query(
-                matter_id=matter_id,
-                query=search_query,
-                user_id=user_id,
-                context=merged_context or None,
+            # Process through orchestrator with rewritten query.
+            # Run in background task with keepalive pings to prevent
+            # Railway's HTTP/2 proxy from killing idle SSE connections (~12s timeout).
+            KEEPALIVE_INTERVAL_S = 5
+            processing_messages = [
+                "Analyzing documents...",
+                "Searching for relevant passages...",
+                "Cross-referencing sources...",
+                "Synthesizing findings...",
+                "Preparing response...",
+            ]
+            task = asyncio.create_task(
+                self.orchestrator.process_query(
+                    matter_id=matter_id,
+                    query=search_query,
+                    user_id=user_id,
+                    context=merged_context or None,
+                )
             )
+            ping_count = 0
+            while not task.done():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(task), timeout=KEEPALIVE_INTERVAL_S
+                    )
+                except asyncio.TimeoutError:
+                    # Task still running — send keepalive ping
+                    msg = processing_messages[
+                        min(ping_count, len(processing_messages) - 1)
+                    ]
+                    yield StreamEvent(
+                        type=StreamEventType.TYPING,
+                        data={"status": "processing", "message": msg},
+                    )
+                    ping_count += 1
+
+            result: OrchestratorResult = task.result()
 
             # Check if query was blocked by safety guard
             if result.blocked:

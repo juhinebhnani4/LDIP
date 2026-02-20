@@ -878,14 +878,23 @@ class RAGEngineAdapter(EngineAdapter):
             # Searches both matter documents AND linked library documents
             search = self._get_search()
 
-            # Use QueryProfile parameters if available, otherwise settings defaults
-            search_limit = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
+            # Use QueryProfile parameters if available, otherwise defaults.
+            # hybrid_limit controls the candidate pool size (e.g., 100 for summary).
+            # rerank_top_n controls how many survive reranking (e.g., 12 for summary).
+            # Both must be passed — otherwise summary queries get 50 candidates
+            # instead of 100, starving the reranker of relevant results.
+            from app.services.rag.hybrid_search import DEFAULT_HYBRID_LIMIT
+
+            rerank_top_n = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
+            hybrid_limit = query_profile.hybrid_limit if query_profile else DEFAULT_HYBRID_LIMIT
 
             results = await search.search_with_rerank_and_library(
                 query=query,
                 matter_id=matter_id,
-                rerank_top_n=search_limit,
+                hybrid_limit=hybrid_limit,
+                rerank_top_n=rerank_top_n,
                 library_limit=10,
+                weights=query_profile.search_weights if query_profile else None,
                 rerank_provider=rerank_provider,
                 embedding_provider=embedding_provider,
             )

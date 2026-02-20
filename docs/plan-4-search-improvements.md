@@ -1,7 +1,7 @@
 # Plan: 4 Search/Retrieval Improvements
 
 **Date**: 2026-02-20
-**Status**: Gap 1 implemented — Gaps 2-4 pending
+**Status**: Gaps 1-3 implemented — Gap 4 pending
 
 ---
 
@@ -74,7 +74,9 @@ Parents are ~1500-2000 tokens vs children at 400-700. With `max_context_chunks=5
 
 ---
 
-## Gap 2: Dynamic RRF Weights
+## Gap 2: Dynamic RRF Weights — DONE
+
+> **Implemented**: 2026-02-20 | **Status**: Deployed to codebase
 
 ### Problem
 
@@ -124,55 +126,48 @@ That's it. Two files, ~20 lines of code. The entire pipeline from QueryProfile �
 
 ---
 
-## Gap 3: Hindi/Gujarati BM25 Fix
+## Gap 3: Hindi/Gujarati BM25 Fix — DONE
+
+> **Implemented**: 2026-02-20 | **Status**: Deployed to codebase, pending migration apply
 
 ### Problem
 
 `to_tsvector('english', ...)` doesn't tokenize Devanagari (Hindi/Gujarati) correctly. Migration 20260115 fixed this by switching to `'simple'` tokenizer, but later migrations regressed.
 
-### Current State (Updated from re-verification)
+### Root Cause (Deep Analysis)
 
-**Migration ordering matters — last CREATE OR REPLACE wins.**
+The `chunks.fts` stored column uses `to_tsvector('simple', content)` but the hybrid search functions query with `websearch_to_tsquery('english', query_text)`. This **config mismatch** means English stemming produces different lexemes than `'simple'` tokenization — e.g., `websearch_to_tsquery('english', 'running')` produces `'run'` but the stored tsvector has `'running'`, causing **silent BM25 recall loss** beyond just Hindi/Gujarati.
 
-| Function | Last Defined By | Current Config | Status |
+### Complete Audit (7 items fixed)
+
+| # | Location | Bug | Fix |
 |---|---|---|---|
-| `bm25_search_chunks` | 20260220000002 (Gap 1) | `'simple'` | OK |
-| `hybrid_search_chunks` | 20260220000002 (Gap 1) | **`'english'`** | **BROKEN** (carried over from 20260127) |
-| `hybrid_search_chunks_voyage` | 20260220000002 (Gap 1) | **`'english'`** | **BROKEN** (carried over from 20260219) |
-| `chunks.fts` generated column | 20260115 (security_fixes) | `'simple'` | OK |
-| `idx_events_description` index | 20260106 (create_events) | **`'english'`** | **BROKEN** |
-| `idx_mig_canonical_name` index | 20260106 (create_mig) | **`'english'`** | **BROKEN** |
+| 1 | `hybrid_search_chunks()` BM25 CTE | `websearch_to_tsquery('english', ...)` mismatches `chunks.fts` simple config | → `plainto_tsquery('simple', ...)` |
+| 2 | `hybrid_search_chunks_voyage()` BM25 CTE | Same config mismatch | → `plainto_tsquery('simple', ...)` |
+| 3 | `idx_events_description` index | `to_tsvector('english', description)` | Recreated with `'simple'` |
+| 4 | `idx_identity_nodes_name_search` index | `to_tsvector('english', canonical_name)` | Recreated with `'simple'` |
+| 5 | `idx_documents_extracted_text` index | `to_tsvector('english', COALESCE(extracted_text, ''))` (**missed by original plan**) | Recreated with `'simple'` |
+| 6 | `cross_engine_service.py:250` | `config: "english"` | → `config: "simple"` |
+| 7 | Regression prevention | No comments warning about config consistency | Added `-- IMPORTANT` comments in migration + Python |
 
-| Python File | Line | Current Config | Status |
-|---|---|---|---|
-| `cross_engine_service.py` | 250 | **`'english'`** | **BROKEN** |
+### Implementation
 
-### Fix
+**Files changed**:
 
-**Files to change**:
-
-1. **`supabase/migrations/` — new migration `2026XXXX_fix_voyage_and_indexes_multilingual.sql`**
-
-   a. Recreate `hybrid_search_chunks_voyage()` — change `websearch_to_tsquery('english', ...)` to `plainto_tsquery('simple', ...)` on lines 135 and 139
-
-   b. Drop and recreate `idx_events_description`:
-   ```sql
-   DROP INDEX IF EXISTS idx_events_description;
-   CREATE INDEX idx_events_description ON public.events
-     USING GIN (to_tsvector('simple', description));
-   ```
-
-   c. Drop and recreate `idx_mig_canonical_name`:
-   ```sql
-   DROP INDEX IF EXISTS idx_mig_canonical_name;
-   CREATE INDEX idx_mig_canonical_name ON public.matter_investigation_guides
-     USING GIN (to_tsvector('simple', canonical_name));
-   ```
+1. **`supabase/migrations/20260220100001_fix_multilingual_text_search.sql`** (new)
+   - Drops and recreates `hybrid_search_chunks` and `hybrid_search_chunks_voyage` with `plainto_tsquery('simple', ...)` in BM25 CTEs
+   - Drops and recreates 3 GIN indexes: `idx_events_description`, `idx_identity_nodes_name_search`, `idx_documents_extracted_text`
+   - Re-grants permissions for `authenticated` and `service_role`
+   - Extensive header comment explaining WHY `'simple'` is used and listing all locations that must stay in sync
 
 2. **`backend/app/services/cross_engine_service.py`** (line 250)
-   - Change `options={"config": "english"}` to `options={"config": "simple"}`
+   - Changed `options={"config": "english"}` to `options={"config": "simple"}`
+   - Added inline comment explaining the index dependency
 
-**Effort**: ~15 minutes
+### Deploy steps
+
+1. Apply migration: `supabase db push`
+2. Deploy backend (no config changes needed)
 
 ---
 
@@ -289,8 +284,8 @@ class SearchRequest(BaseModel):
 | Order | Gap | Effort | Status |
 |---|---|---|---|
 | ~~1~~ | ~~**Gap 1**: Parent context expansion~~ | ~~2 hrs~~ | **DONE** (2026-02-20) |
-| 2 | **Gap 3**: Hindi/Gujarati fix | 15 min | Pending — note: Gap 1 migration recreated `hybrid_search_chunks` and `hybrid_search_chunks_voyage` with `'english'` tokenizer (carried over from previous definitions). Gap 3 migration must run AFTER Gap 1 to fix this. |
-| 3 | **Gap 2**: Dynamic RRF weights | 30 min | Pending |
+| ~~2~~ | ~~**Gap 3**: Hindi/Gujarati fix~~ | ~~15 min~~ | **DONE** (2026-02-20) — Fixed 7 items (2 functions, 3 indexes, 1 Python file, + regression comments). Found and fixed `idx_documents_extracted_text` which original plan missed. |
+| ~~3~~ | ~~**Gap 2**: Dynamic RRF weights~~ | ~~30 min~~ | **DONE** (2026-02-20) |
 | 4 | **Gap 4**: Metadata filtering | 1-2 days | Pending — largest scope, needs frontend work |
 
 Gaps 2-3 can ship in one PR. Gap 4 is a separate feature PR.

@@ -18,6 +18,8 @@ from enum import Enum
 
 import structlog
 
+from app.services.rag.hybrid_search import SearchWeights
+
 logger = structlog.get_logger(__name__)
 
 
@@ -77,6 +79,7 @@ class QueryProfile:
     max_chunk_content: int
     max_answer_length: int
     system_prompt_key: str
+    search_weights: SearchWeights = SearchWeights()
 
     @classmethod
     def default(cls) -> "QueryProfile":
@@ -93,6 +96,7 @@ class QueryProfile:
             max_chunk_content=2000,
             max_answer_length=2000,
             system_prompt_key="default",
+            search_weights=SearchWeights(bm25=1.0, semantic=1.0),
         )
 
     @classmethod
@@ -106,6 +110,7 @@ class QueryProfile:
             max_chunk_content=2000,
             max_answer_length=5000,
             system_prompt_key="summary",
+            search_weights=SearchWeights(bm25=0.7, semantic=1.3),
         )
 
     @classmethod
@@ -119,6 +124,7 @@ class QueryProfile:
             max_chunk_content=2000,
             max_answer_length=4000,
             system_prompt_key="default",
+            search_weights=SearchWeights(bm25=0.8, semantic=1.2),
         )
 
     @classmethod
@@ -132,11 +138,12 @@ class QueryProfile:
             max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
+            search_weights=SearchWeights(bm25=1.0, semantic=1.0),
         )
 
     @classmethod
     def for_citation(cls) -> "QueryProfile":
-        """Citation queries — moderate retrieval."""
+        """Citation queries — higher BM25 for exact legal references."""
         return cls(
             query_type=QueryType.CITATION,
             hybrid_limit=50,
@@ -145,6 +152,7 @@ class QueryProfile:
             max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
+            search_weights=SearchWeights(bm25=1.5, semantic=0.7),
         )
 
     @classmethod
@@ -194,6 +202,8 @@ class QueryProfile:
             max_context_chunks=profile.max_context_chunks,
             max_answer_length=profile.max_answer_length,
             system_prompt_key=profile.system_prompt_key,
+            bm25_weight=profile.search_weights.bm25,
+            semantic_weight=profile.search_weights.semantic,
             is_summary=is_summary,
             is_comparison=is_comparison,
         )

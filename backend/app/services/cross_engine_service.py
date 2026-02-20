@@ -247,7 +247,10 @@ class CrossEngineService:
                     .eq("matter_id", matter_id)
                     .order("event_date", desc=False)
                     .range(offset, offset + per_page - 1)
-                    .text_search("description", search_query, options={"config": "english"})
+                    # IMPORTANT: Must use 'simple' config to match the idx_events_description
+                    # GIN index (to_tsvector('simple', description)). Using 'english' would cause
+                    # index misses and fail on Hindi/Gujarati text.
+                    .text_search("description", search_query, options={"config": "simple"})
                     .execute()
                 )
                 total_events = events_result.count if events_result.count else 0

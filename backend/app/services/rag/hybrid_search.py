@@ -39,7 +39,7 @@ DEFAULT_RERANK_TOP_N = 3
 # Data Classes
 # =============================================================================
 
-@dataclass
+@dataclass(frozen=True)
 class SearchWeights:
     """Weights for hybrid search components.
 

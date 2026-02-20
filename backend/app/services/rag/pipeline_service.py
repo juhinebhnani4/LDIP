@@ -215,16 +215,38 @@ class RAGPipelineService:
                     contexts.append(chunk)
         return contexts
 
-    def _get_pipeline_config(self) -> dict[str, Any]:
+    def _get_pipeline_config(
+        self,
+        embedding_provider: str | None = None,
+        rerank_provider: str | None = None,
+    ) -> dict[str, Any]:
         """Snapshot current pipeline configuration for traceability.
 
         Stored with each evaluation result so you can compare
         'how did the same question perform under different configs?'
+
+        Args:
+            embedding_provider: Override embedding provider name for A/B testing.
+            rerank_provider: Override reranker provider name for A/B testing.
         """
+        embed_provider = embedding_provider or "openai"
+        rerank = rerank_provider or "cohere"
+
+        embed_model_map = {
+            "openai": EMBEDDING_MODEL,
+            "voyage": "voyage-law-2",
+        }
+        rerank_model_map = {
+            "cohere": "cohere-rerank-v3.5",
+            "voyage": "voyage-rerank-2.5",
+        }
+
         return {
             "generator_model": self._settings.gemini_model,
-            "embedding_model": EMBEDDING_MODEL,
-            "reranker": "cohere-rerank-v3.5",
+            "embedding_model": embed_model_map.get(embed_provider, EMBEDDING_MODEL),
+            "embedding_provider": embed_provider,
+            "reranker": rerank_model_map.get(rerank, "cohere-rerank-v3.5"),
+            "rerank_provider": rerank,
             "rag_search_limit": self._settings.rag_search_limit,
             "rag_rerank_top_n": self._settings.rag_rerank_top_n,
         }

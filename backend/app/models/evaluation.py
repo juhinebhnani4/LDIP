@@ -115,3 +115,14 @@ class GoldenItemResponse(BaseModel):
     """Response for single golden dataset item."""
 
     data: dict[str, Any] = Field(..., description="Golden item data")
+
+
+# =============================================================================
+# Gap 9: Baseline & Regression Models
+# =============================================================================
+
+
+class PromoteBaselineRequest(BaseModel):
+    """Request to promote a batch evaluation run to active baseline."""
+
+    job_id: str = Field(..., min_length=1, description="Celery task ID of the batch run to promote")

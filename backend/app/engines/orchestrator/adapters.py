@@ -886,10 +886,24 @@ class RAGEngineAdapter(EngineAdapter):
                     search_filters = None
 
             # Kill switch: force default providers when A/B testing is disabled
+            # ab_test_override bypasses the kill switch for explicit A/B comparison
+            # experiments (the kill switch controls live traffic, not experiments)
             settings = get_settings()
-            if not settings.voyage_ab_testing_enabled:
+            ab_test_override = context.get("ab_test_override", False) if context else False
+            if not settings.voyage_ab_testing_enabled and not ab_test_override:
                 rerank_provider = None
                 embedding_provider = None
+            elif not embedding_provider and not rerank_provider:
+                # Gap 10: Percentage-based routing when no explicit provider selected
+                # Uses deterministic hash of user_id+matter_id for sticky cohorts
+                if settings.voyage_traffic_percentage > 0:
+                    from app.services.evaluation.ab_testing import ABTestRouter
+                    user_id = context.get("user_id") if context else None
+                    embedding_provider, rerank_provider = ABTestRouter.determine_provider(
+                        user_id=user_id,
+                        matter_id=matter_id,
+                        percentage=settings.voyage_traffic_percentage,
+                    )
 
             # Step 1: Hybrid search with library integration
             # Searches both matter documents AND linked library documents
@@ -905,6 +919,8 @@ class RAGEngineAdapter(EngineAdapter):
             rerank_top_n = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
             hybrid_limit = query_profile.hybrid_limit if query_profile else DEFAULT_HYBRID_LIMIT
 
+            # Gap 10: Track search latency separately for A/B comparison
+            search_start = time.time()
             results = await search.search_with_rerank_and_library(
                 query=query,
                 matter_id=matter_id,
@@ -916,6 +932,7 @@ class RAGEngineAdapter(EngineAdapter):
                 embedding_provider=embedding_provider,
                 filters=search_filters,
             )
+            search_latency_ms = int((time.time() - search_start) * 1000)
 
             # Step 1b: Parent context expansion — replace child content with
             # parent's broader context for richer LLM generation
@@ -974,6 +991,10 @@ class RAGEngineAdapter(EngineAdapter):
                 "search_mode": results.search_mode,
                 "fallback_reason": results.fallback_reason,
                 "library_results_count": library_count,
+                # Gap 10: Provider and latency metadata for A/B testing
+                "embedding_provider": embedding_provider or "openai",
+                "rerank_provider": rerank_provider or "cohere",
+                "search_latency_ms": search_latency_ms,
                 "results": [
                     {
                         "chunk_id": item.id,

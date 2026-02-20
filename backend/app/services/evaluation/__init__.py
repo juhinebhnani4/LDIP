@@ -18,6 +18,8 @@ from app.services.evaluation.models import (
     GoldenDatasetItem,
 )
 from app.services.evaluation.golden_dataset import GoldenDatasetService
+from app.services.evaluation.baseline_service import BaselineService
+from app.services.evaluation.regression_detector import detect_regression, RegressionReport
 
 __all__ = [
     "RAGASEvaluator",
@@ -27,4 +29,7 @@ __all__ = [
     "MetricScores",
     "GoldenDatasetItem",
     "GoldenDatasetService",
+    "BaselineService",
+    "detect_regression",
+    "RegressionReport",
 ]

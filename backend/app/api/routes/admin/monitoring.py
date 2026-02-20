@@ -1,11 +1,12 @@
-"""Admin Vector & Chunk Monitoring API routes.
+"""Admin Monitoring API routes.
 
 Gap 7: Vector Quantization — Chunk Count Monitoring Dashboard
 Gap 8: HNSW Index Tuning — Index Configuration Visibility
+Gap 9: Automated RAGAS Regression — Quality Monitoring Dashboard
 
 Provides admin-only endpoints for:
 - GET /api/admin/chunk-metrics - Per-matter and global chunk count metrics
-  with alert thresholds for vector quantization planning
+- GET /api/admin/quality-metrics - RAG quality monitoring with regression alerts
 
 All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
@@ -273,3 +274,139 @@ def _get_quantization_recommendation(
             "No action needed yet."
         )
     return "No action needed at current scale. float32 is optimal for legal precision."
+
+
+# =============================================================================
+# Gap 9: Quality Metrics Monitoring
+# =============================================================================
+
+
+@router.get(
+    "/quality-metrics",
+    summary="Get RAG Quality Metrics",
+    description="""
+    Get RAG quality metrics for evaluation monitoring.
+
+    Returns:
+    - Per-matter quality scores (latest batch vs active baseline)
+    - Regression alerts (matters where quality dropped > 10%)
+    - Evaluation schedule status
+    - Monthly evaluation cost estimate
+    - Golden dataset coverage
+
+    **Requires admin access.**
+    """,
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_quality_metrics(
+    request: Request,
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> dict:
+    """Get RAG quality metrics for admin monitoring dashboard.
+
+    Gap 9: Automated RAGAS Regression — Quality Monitoring Dashboard
+
+    Calls the get_evaluation_quality_summary() RPC function which aggregates:
+    - Latest batch scores per matter
+    - Active baseline comparison
+    - Regression flags
+    - Evaluation frequency
+    """
+    try:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+
+        logger.info(
+            "admin_quality_metrics_request",
+            admin_id=admin.id,
+            admin_email=admin.email,
+        )
+
+        supabase = get_service_client()
+
+        # Fetch quality summary (one RPC call — all aggregation in SQL)
+        summary_result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_evaluation_quality_summary").execute()
+        )
+
+        # Parse per-matter metrics
+        matters = []
+        regression_count = 0
+        total_golden_items = 0
+
+        for row in summary_result.data or []:
+            has_regression = bool(row.get("has_regression", False))
+            if has_regression:
+                regression_count += 1
+
+            golden_count = int(row.get("golden_item_count") or 0)
+            total_golden_items += golden_count
+
+            matters.append({
+                "matterId": row.get("matter_id"),
+                "matterTitle": row.get("matter_title", "Untitled"),
+                # Latest batch scores
+                "latestOverall": row.get("latest_overall"),
+                "latestFaithfulness": row.get("latest_faithfulness"),
+                "latestRelevancy": row.get("latest_relevancy"),
+                "latestRecall": row.get("latest_recall"),
+                "latestEvalDate": row.get("latest_eval_date"),
+                "latestJobId": row.get("latest_job_id"),
+                "latestEvalCount": int(row.get("latest_eval_count") or 0),
+                # Baseline comparison
+                "baselineOverall": row.get("baseline_overall"),
+                "baselineDate": row.get("baseline_date"),
+                "baselineItemCount": int(row.get("baseline_item_count") or 0),
+                # Delta and regression
+                "overallDelta": row.get("overall_delta"),
+                "hasRegression": has_regression,
+                # Coverage
+                "goldenItemCount": golden_count,
+                # Frequency
+                "totalEvals30d": int(row.get("total_evals_30d") or 0),
+                "lastEvalAgeHours": row.get("last_eval_age_hours"),
+            })
+
+        return {
+            "matters": matters,
+            "summary": {
+                "totalMatters": len(matters),
+                "mattersWithRegression": regression_count,
+                "totalGoldenItems": total_golden_items,
+                "mattersWithBaseline": sum(
+                    1 for m in matters if m["baselineOverall"] is not None
+                ),
+                "mattersEvaluatedRecently": sum(
+                    1 for m in matters
+                    if m.get("lastEvalAgeHours") is not None
+                    and m["lastEvalAgeHours"] < 48
+                ),
+            },
+            "schedule": {
+                "enabled": settings.evaluation_schedule_enabled,
+                "regressionThreshold": settings.evaluation_regression_threshold,
+                "criticalThreshold": settings.evaluation_critical_threshold,
+                "monthlyBudgetUsd": settings.evaluation_monthly_budget_usd,
+                "autoBaseline": settings.evaluation_auto_baseline,
+            },
+            "hasRegressions": regression_count > 0,
+            "lastUpdated": datetime.now(timezone.utc).isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(
+            "admin_quality_metrics_failed",
+            admin_id=admin.id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "QUALITY_METRICS_FAILED",
+                    "message": "Failed to retrieve quality metrics",
+                    "details": {},
+                }
+            },
+        ) from e

@@ -221,6 +221,15 @@ celery_app.conf.update(
             "args": [30],  # 30-day retention period
             "options": {"queue": "low"},
         },
+        # Gap 9: Nightly RAGAS evaluation — batch-evaluates all matters with golden datasets
+        # Gated by EVALUATION_SCHEDULE_ENABLED (default: false). When enabled, runs nightly.
+        # Includes regression detection against active baselines and cost budgeting.
+        # Cost: ~$0.15-0.30 per matter per run (GPT-4 for RAGAS metrics).
+        "scheduled-ragas-evaluation": {
+            "task": "app.workers.tasks.evaluation_tasks.run_scheduled_evaluation",
+            "schedule": crontab(hour=1, minute=0),  # Daily at 1 AM UTC
+            "options": {"queue": "low"},
+        },
     },
 )
 

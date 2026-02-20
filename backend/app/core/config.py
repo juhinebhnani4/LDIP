@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     # When True: enables model selector UI and Voyage provider options
     voyage_ab_testing_enabled: bool = False
 
+    # Voyage A/B Testing: Percentage-Based Traffic Routing (Gap 10)
+    # When voyage_ab_testing_enabled=True and user hasn't explicitly selected a provider,
+    # this percentage of queries get routed to Voyage (0=all OpenAI, 100=all Voyage).
+    # Routing is deterministic per user+matter (hash-based) for sticky cohorts.
+    voyage_traffic_percentage: int = 0  # 0-100, percentage routed to Voyage
+
+    # Minimum evaluation samples per arm before auto-decision is considered
+    voyage_ab_min_samples: int = 20
+
+    # Auto-promote: if Voyage quality >= OpenAI AND cost < OpenAI after min_samples,
+    # automatically set voyage_traffic_percentage to 100
+    voyage_ab_auto_promote_enabled: bool = False
+
     # Google Cloud
     google_cloud_project_id: str = ""
     google_cloud_location: str = "us"
@@ -220,6 +233,13 @@ class Settings(BaseSettings):
     auto_evaluation_enabled: bool = False  # Auto-evaluate after ingestion (cost warning)
     openai_evaluation_model: str = "gpt-4"  # Model for RAGAS evaluation
     evaluation_batch_size: int = 10  # Golden dataset items per batch
+
+    # Gap 9: Automated RAGAS Regression — Scheduled evaluation + regression detection
+    evaluation_schedule_enabled: bool = False  # Nightly batch evaluation (cost warning: ~$0.15-0.30/matter/run)
+    evaluation_regression_threshold: float = 0.10  # 10% relative drop = WARNING
+    evaluation_critical_threshold: float = 0.60  # Absolute score below this = CRITICAL
+    evaluation_monthly_budget_usd: float = 10.0  # Max monthly spend on eval runs ($)
+    evaluation_auto_baseline: bool = True  # Auto-promote first batch run to baseline
 
     # Inspector Mode Configuration (RAG Production Gaps - Feature 3)
     inspector_enabled: bool = True  # Enable search inspector endpoints

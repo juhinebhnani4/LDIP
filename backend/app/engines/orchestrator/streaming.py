@@ -152,6 +152,9 @@ class StreamingOrchestrator:
             merged_context = session_context or {}
             if provider_context:
                 merged_context = {**merged_context, **provider_context}
+            # Gap 10: Inject user_id into context so RAG adapter can use it
+            # for deterministic hash-based A/B traffic routing
+            merged_context["user_id"] = user_id
 
             # Process through orchestrator with rewritten query
             result = await self.orchestrator.process_query(
@@ -240,8 +243,14 @@ class StreamingOrchestrator:
                 query_was_rewritten=result.query_was_rewritten,
                 original_query=result.original_query if result.query_was_rewritten else None,
                 # A/B testing provider metadata
-                embedding_provider=(provider_context or {}).get("embedding_provider") or "openai",
-                rerank_provider=(provider_context or {}).get("rerank_provider") or "cohere",
+                # Read actual provider from RAG engine result (adapter may have overridden
+                # via percentage-based routing), falling back to request-level context
+                embedding_provider=self._extract_actual_provider(result, "embedding_provider")
+                    or (provider_context or {}).get("embedding_provider")
+                    or "openai",
+                rerank_provider=self._extract_actual_provider(result, "rerank_provider")
+                    or (provider_context or {}).get("rerank_provider")
+                    or "cohere",
             )
 
             yield StreamEvent(
@@ -640,6 +649,21 @@ class StreamingOrchestrator:
             truncated = True
 
         return truncated, more_available, total_results_hint
+
+    @staticmethod
+    def _extract_actual_provider(
+        result: OrchestratorResult,
+        key: str,
+    ) -> str | None:
+        """Extract actual provider used from RAG engine result data.
+
+        The RAG adapter stores the provider it actually used (which may differ
+        from the request-level provider due to A/B routing) in rag_data.
+        """
+        for er in result.engine_results:
+            if er.data and key in er.data:
+                return er.data[key]
+        return None
 
     def _extract_search_mode(
         self,

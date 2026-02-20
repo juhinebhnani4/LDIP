@@ -8,7 +8,9 @@ import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
 import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
 import { CleanupWidget } from '@/components/features/admin/CleanupWidget';
 import { ChunkMetricsWidget } from '@/components/features/admin/ChunkMetricsWidget';
+import { QualityMetricsWidget } from '@/components/features/admin/QualityMetricsWidget';
 import { CostComparisonDashboard } from '@/components/features/costs/CostComparisonDashboard';
+import { ABTestingWidget } from '@/components/features/admin/ABTestingWidget';
 
 /**
  * Admin Dashboard Page
@@ -103,6 +105,12 @@ export default async function AdminPage() {
 
           {/* Vector Index Health Widget (Gap 7 & 8) */}
           <ChunkMetricsWidget />
+
+          {/* RAG Quality Monitor Widget (Gap 9) */}
+          <QualityMetricsWidget />
+
+          {/* A/B Testing Widget (Gap 10) */}
+          <ABTestingWidget />
         </div>
 
         {/* Admin info footer */}

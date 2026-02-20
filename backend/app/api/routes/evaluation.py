@@ -19,6 +19,7 @@ from app.models.evaluation import (
     EvaluationResultsResponse,
     GoldenDatasetResponse,
     GoldenItemResponse,
+    PromoteBaselineRequest,
     UpdateGoldenItemRequest,
 )
 from app.services.evaluation.golden_dataset import GoldenDatasetService
@@ -495,3 +496,152 @@ async def delete_golden_item(
     )
 
     return {"data": {"deleted": True, "id": item_id}}
+
+
+# =============================================================================
+# Gap 9: Baseline & Regression Endpoints
+# =============================================================================
+
+
+@router.post("/baselines")
+async def promote_baseline(
+    matter_id: str = Path(..., description="Matter UUID"),
+    body: PromoteBaselineRequest = ...,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> dict:
+    """Promote a batch evaluation run to active baseline.
+
+    The active baseline is used as the reference point for regression detection.
+    Creating a new baseline deactivates the previous one (kept for history).
+
+    Args:
+        matter_id: Matter UUID.
+        body: Contains job_id of the batch run to promote.
+        current_user: Authenticated user.
+        matter_service: Matter service instance.
+
+    Returns:
+        Created baseline record.
+    """
+    _verify_matter_access(matter_id, current_user.id, matter_service, require_edit=True)
+
+    from app.services.evaluation.baseline_service import BaselineService
+
+    service = BaselineService()
+    baseline = await service.create_baseline_from_job(
+        matter_id=matter_id,
+        job_id=body.job_id,
+        created_by=current_user.id,
+    )
+
+    if not baseline:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": {
+                    "code": "BASELINE_CREATION_FAILED",
+                    "message": "No successful evaluation results found for this job_id",
+                    "details": {},
+                }
+            },
+        )
+
+    logger.info(
+        "baseline_promoted",
+        matter_id=matter_id,
+        job_id=body.job_id,
+        baseline_id=baseline.get("id"),
+        user_id=current_user.id,
+    )
+
+    return {"data": baseline}
+
+
+@router.get("/baselines/active")
+async def get_active_baseline(
+    matter_id: str = Path(..., description="Matter UUID"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> dict:
+    """Get the active baseline for a matter.
+
+    Returns null data if no baseline exists (matter has never been baselined).
+
+    Args:
+        matter_id: Matter UUID.
+        current_user: Authenticated user.
+        matter_service: Matter service instance.
+
+    Returns:
+        Active baseline record or null.
+    """
+    _verify_matter_access(matter_id, current_user.id, matter_service)
+
+    from app.services.evaluation.baseline_service import BaselineService
+
+    service = BaselineService()
+    baseline = await service.get_active_baseline(matter_id)
+
+    return {"data": baseline}
+
+
+@router.get("/baselines/history")
+async def get_baseline_history(
+    matter_id: str = Path(..., description="Matter UUID"),
+    limit: int = Query(10, ge=1, le=50, description="Max baselines to return"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> dict:
+    """Get baseline history for a matter (most recent first).
+
+    Args:
+        matter_id: Matter UUID.
+        limit: Max records to return.
+        current_user: Authenticated user.
+        matter_service: Matter service instance.
+
+    Returns:
+        List of baseline records (newest first).
+    """
+    _verify_matter_access(matter_id, current_user.id, matter_service)
+
+    from app.services.evaluation.baseline_service import BaselineService
+
+    service = BaselineService()
+    history = await service.get_baseline_history(matter_id, limit=limit)
+
+    return {"data": history}
+
+
+@router.get("/trends")
+async def get_evaluation_trends(
+    matter_id: str = Path(..., description="Matter UUID"),
+    days: int = Query(30, ge=1, le=365, description="Number of days of history"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> dict:
+    """Get daily evaluation score trends for a matter.
+
+    Returns one data point per day with averaged scores across all
+    evaluations that day. Used for rendering trend charts.
+
+    Args:
+        matter_id: Matter UUID.
+        days: Number of days of history to return.
+        current_user: Authenticated user.
+        matter_service: Matter service instance.
+
+    Returns:
+        Daily aggregated scores.
+    """
+    _verify_matter_access(matter_id, current_user.id, matter_service)
+
+    supabase = get_supabase()
+
+    result = supabase.rpc(
+        "get_evaluation_trends",
+        {"p_matter_id": matter_id, "p_days": days},
+    ).execute()
+
+    return {"data": result.data or []}

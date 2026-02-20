@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
+    ab_testing,
     activity,
     anomalies,
     bounding_boxes,
@@ -374,6 +375,7 @@ def create_app() -> FastAPI:
     app.include_router(tables.router, prefix="/api")
     app.include_router(tables.document_tables_router, prefix="/api")
     app.include_router(evaluation.router, prefix="/api")
+    app.include_router(ab_testing.router, prefix="/api")
     app.include_router(inspector.router, prefix="/api")
     app.include_router(users.router)
 

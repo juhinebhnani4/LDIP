@@ -168,9 +168,127 @@ export async function getChunkMetrics(): Promise<ChunkMetricsData> {
 }
 
 // =============================================================================
+// Gap 9: Quality Metrics Types + API
+// =============================================================================
+
+export interface MatterQualityMetrics {
+  matterId: string;
+  matterTitle: string;
+  // Latest batch scores
+  latestOverall: number | null;
+  latestFaithfulness: number | null;
+  latestRelevancy: number | null;
+  latestRecall: number | null;
+  latestEvalDate: string | null;
+  latestJobId: string | null;
+  latestEvalCount: number;
+  // Baseline comparison
+  baselineOverall: number | null;
+  baselineDate: string | null;
+  baselineItemCount: number;
+  // Delta and regression
+  overallDelta: number | null;
+  hasRegression: boolean;
+  // Coverage
+  goldenItemCount: number;
+  // Frequency
+  totalEvals30d: number;
+  lastEvalAgeHours: number | null;
+}
+
+export interface QualityMetricsSummary {
+  totalMatters: number;
+  mattersWithRegression: number;
+  totalGoldenItems: number;
+  mattersWithBaseline: number;
+  mattersEvaluatedRecently: number;
+}
+
+export interface QualityScheduleConfig {
+  enabled: boolean;
+  regressionThreshold: number;
+  criticalThreshold: number;
+  monthlyBudgetUsd: number;
+  autoBaseline: boolean;
+}
+
+export interface QualityMetricsData {
+  matters: MatterQualityMetrics[];
+  summary: QualityMetricsSummary;
+  schedule: QualityScheduleConfig;
+  hasRegressions: boolean;
+  lastUpdated: string;
+}
+
+// Quality metrics response transformers
+function transformMatterQuality(data: Record<string, unknown>): MatterQualityMetrics {
+  return {
+    matterId: toString(data.matterId ?? data.matter_id),
+    matterTitle: toString(data.matterTitle ?? data.matter_title, 'Untitled'),
+    latestOverall: data.latestOverall != null ? toNumber(data.latestOverall) : null,
+    latestFaithfulness: data.latestFaithfulness != null ? toNumber(data.latestFaithfulness) : null,
+    latestRelevancy: data.latestRelevancy != null ? toNumber(data.latestRelevancy) : null,
+    latestRecall: data.latestRecall != null ? toNumber(data.latestRecall) : null,
+    latestEvalDate: data.latestEvalDate != null ? toString(data.latestEvalDate) : null,
+    latestJobId: data.latestJobId != null ? toString(data.latestJobId) : null,
+    latestEvalCount: toNumber(data.latestEvalCount ?? data.latest_eval_count),
+    baselineOverall: data.baselineOverall != null ? toNumber(data.baselineOverall) : null,
+    baselineDate: data.baselineDate != null ? toString(data.baselineDate) : null,
+    baselineItemCount: toNumber(data.baselineItemCount ?? data.baseline_item_count),
+    overallDelta: data.overallDelta != null ? toNumber(data.overallDelta) : null,
+    hasRegression: toBoolean(data.hasRegression ?? data.has_regression),
+    goldenItemCount: toNumber(data.goldenItemCount ?? data.golden_item_count),
+    totalEvals30d: toNumber(data.totalEvals30d ?? data.total_evals_30d),
+    lastEvalAgeHours: data.lastEvalAgeHours != null ? toNumber(data.lastEvalAgeHours) : null,
+  };
+}
+
+function transformQualityMetricsData(data: Record<string, unknown>): QualityMetricsData {
+  const mattersData = (data.matters ?? []) as Array<Record<string, unknown>>;
+  const summaryData = (data.summary ?? {}) as Record<string, unknown>;
+  const scheduleData = (data.schedule ?? {}) as Record<string, unknown>;
+
+  return {
+    matters: mattersData.map(transformMatterQuality),
+    summary: {
+      totalMatters: toNumber(summaryData.totalMatters ?? summaryData.total_matters),
+      mattersWithRegression: toNumber(summaryData.mattersWithRegression ?? summaryData.matters_with_regression),
+      totalGoldenItems: toNumber(summaryData.totalGoldenItems ?? summaryData.total_golden_items),
+      mattersWithBaseline: toNumber(summaryData.mattersWithBaseline ?? summaryData.matters_with_baseline),
+      mattersEvaluatedRecently: toNumber(summaryData.mattersEvaluatedRecently ?? summaryData.matters_evaluated_recently),
+    },
+    schedule: {
+      enabled: toBoolean(scheduleData.enabled),
+      regressionThreshold: toNumber(scheduleData.regressionThreshold ?? scheduleData.regression_threshold, 0.10),
+      criticalThreshold: toNumber(scheduleData.criticalThreshold ?? scheduleData.critical_threshold, 0.60),
+      monthlyBudgetUsd: toNumber(scheduleData.monthlyBudgetUsd ?? scheduleData.monthly_budget_usd, 10),
+      autoBaseline: toBoolean(scheduleData.autoBaseline ?? scheduleData.auto_baseline, true),
+    },
+    hasRegressions: toBoolean(data.hasRegressions ?? data.has_regressions),
+    lastUpdated: toString(data.lastUpdated ?? data.last_updated, new Date().toISOString()),
+  };
+}
+
+/**
+ * Get RAG quality metrics for admin monitoring.
+ *
+ * Gap 9: Automated RAGAS Regression — Quality Monitoring Dashboard
+ *
+ * @returns Quality metrics with per-matter scores, regression alerts, schedule info
+ */
+export async function getQualityMetrics(): Promise<QualityMetricsData> {
+  const response = await api.get<Record<string, unknown>>(
+    '/api/admin/quality-metrics'
+  );
+
+  return transformQualityMetricsData(response);
+}
+
+// =============================================================================
 // Exported API Object
 // =============================================================================
 
 export const adminMonitoringApi = {
   getChunkMetrics,
+  getQualityMetrics,
 };

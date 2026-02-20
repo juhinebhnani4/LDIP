@@ -3,6 +3,9 @@
 Story: RAG Production Gaps - Feature 2: Evaluation Framework
 Runs batch evaluation of golden dataset items using RAGAS metrics.
 
+Gap 9: Automated RAGAS Regression — Scheduled evaluation, baseline tracking,
+regression detection, cost budgeting.
+
 Fix B1/B2/B3 (2026-02-16): Fixed column mismatches, replaced non-existent
 get_chat_service with RAGPipelineService, removed latency_ms references,
 added metric_scores JSONB + pipeline_config JSONB for extensibility.
@@ -17,7 +20,10 @@ import structlog
 
 from app.workers.celery import celery_app
 from app.core.config import get_settings
-from app.services.supabase.client import get_supabase_client as get_supabase
+from app.services.supabase.client import (
+    get_supabase_client as get_supabase,
+    get_service_client,
+)
 from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
@@ -91,6 +97,97 @@ def _build_evaluation_row(
     return row
 
 
+# =============================================================================
+# Gap 9: Post-batch regression check + baseline management
+# =============================================================================
+
+
+def _run_post_batch_checks(
+    matter_id: str,
+    job_id: str,
+    successful_count: int,
+) -> dict[str, Any]:
+    """Run regression detection and baseline management after a batch evaluation.
+
+    Called at the end of run_batch_evaluation. Steps:
+    1. Auto-create baseline if none exists (first run scenario)
+    2. If baseline exists, fetch batch results and run regression detection
+    3. Return regression report (or skip info)
+
+    Returns dict with regression info for inclusion in task result.
+    """
+    settings = get_settings()
+
+    if successful_count == 0:
+        return {"regression_check": "skipped", "reason": "no_successful_results"}
+
+    try:
+        async def _check_async() -> dict[str, Any]:
+            from app.services.evaluation.baseline_service import BaselineService
+            from app.services.evaluation.regression_detector import detect_regression
+
+            baseline_svc = BaselineService()
+
+            # Step 1: Auto-create baseline if missing and feature enabled
+            if settings.evaluation_auto_baseline:
+                new_baseline = await baseline_svc.auto_create_if_missing(
+                    matter_id=matter_id,
+                    job_id=job_id,
+                )
+                if new_baseline:
+                    return {
+                        "regression_check": "baseline_created",
+                        "baseline_id": new_baseline.get("id"),
+                        "baseline_avg": new_baseline.get("avg_overall"),
+                        "reason": "first_batch_run",
+                    }
+
+            # Step 2: Get active baseline for comparison
+            baseline = await baseline_svc.get_active_baseline(matter_id)
+            if not baseline:
+                return {"regression_check": "skipped", "reason": "no_baseline"}
+
+            # Step 3: Fetch current batch results
+            supabase = get_service_client()
+            result = (
+                supabase.table("evaluation_results")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("job_id", job_id)
+                .execute()
+            )
+
+            if not result.data:
+                return {"regression_check": "skipped", "reason": "no_results_found"}
+
+            # Step 4: Run regression detection
+            report = detect_regression(
+                matter_id=matter_id,
+                current_results=result.data,
+                baseline=baseline,
+            )
+
+            return {
+                "regression_check": "completed",
+                "has_regression": report.has_regression,
+                "regression_report": report.to_dict(),
+            }
+
+        return run_async(_check_async(), timeout=60)
+
+    except Exception as e:
+        logger.warning(
+            "post_batch_regression_check_failed",
+            matter_id=matter_id,
+            job_id=job_id,
+            error=str(e),
+        )
+        return {
+            "regression_check": "error",
+            "error": str(e),
+        }
+
+
 @celery_app.task(
     name="app.workers.tasks.evaluation_tasks.run_batch_evaluation",
     bind=True,
@@ -107,6 +204,8 @@ def run_batch_evaluation(
     matter_id: str,
     tags: list[str] | None = None,
     user_id: str | None = None,
+    embedding_provider: str | None = None,
+    rerank_provider: str | None = None,
 ) -> dict[str, Any]:
     """Run batch evaluation of golden dataset items.
 
@@ -114,14 +213,17 @@ def run_batch_evaluation(
     1. Run the question through the RAG pipeline (same pipeline as chat)
     2. Compare RAG answer against expected answer using RAGAS metrics
     3. Store result in evaluation_results table
+    4. (Gap 9) Run regression detection against active baseline
 
     Args:
         matter_id: Matter UUID to evaluate.
         tags: Optional tags to filter golden items.
         user_id: Optional user ID for tracking.
+        embedding_provider: Override provider for A/B testing ('openai'|'voyage').
+        rerank_provider: Override provider for A/B testing ('cohere'|'voyage').
 
     Returns:
-        Task result with evaluation summary.
+        Task result with evaluation summary + regression report.
     """
     settings = get_settings()
     job_id = self.request.id
@@ -132,10 +234,14 @@ def run_batch_evaluation(
         matter_id=matter_id,
         tags=tags,
         user_id=user_id,
+        embedding_provider=embedding_provider,
+        rerank_provider=rerank_provider,
     )
 
     try:
         async def _evaluate_async() -> dict[str, Any]:
+            import time as _time
+
             from app.services.evaluation import get_ragas_evaluator
             from app.services.evaluation.golden_dataset import GoldenDatasetService
             from app.services.rag.pipeline_service import get_rag_pipeline_service
@@ -159,6 +265,18 @@ def run_batch_evaluation(
             pipeline = get_rag_pipeline_service()
             supabase = get_supabase()
 
+            # Gap 10: Build provider context for A/B testing
+            # This gets passed through to the orchestrator → adapter → search
+            # ab_test_override=True bypasses the kill switch — the kill switch
+            # controls live traffic routing, not explicit comparison experiments
+            provider_context = None
+            if embedding_provider or rerank_provider:
+                provider_context = {
+                    "embedding_provider": embedding_provider,
+                    "rerank_provider": rerank_provider,
+                    "ab_test_override": True,
+                }
+
             results = []
             errors = []
             total_score = 0.0
@@ -166,12 +284,16 @@ def run_batch_evaluation(
             for item in items:
                 try:
                     # Step 1: Run question through RAG pipeline
+                    # Gap 10: Pass provider context for A/B testing
+                    query_start = _time.time()
                     rag_result = await pipeline.query(
                         matter_id=matter_id,
                         question=item.question,
                         user_id=user_id,
+                        context=provider_context,
                         skip_cache=True,
                     )
+                    search_latency_ms = int((_time.time() - query_start) * 1000)
 
                     answer = rag_result.answer
                     contexts = rag_result.contexts
@@ -188,6 +310,13 @@ def run_batch_evaluation(
                     )
 
                     # Step 3: Store result in database
+                    # Gap 10: Include provider info in pipeline_config
+                    enriched_config = {
+                        **(rag_result.pipeline_config or {}),
+                        "embedding_provider": embedding_provider or "openai",
+                        "rerank_provider": rerank_provider or "cohere",
+                    }
+
                     row = _build_evaluation_row(
                         matter_id=matter_id,
                         question=item.question,
@@ -195,11 +324,16 @@ def run_batch_evaluation(
                         contexts=contexts,
                         eval_result=eval_result,
                         triggered_by="batch",
-                        pipeline_config=rag_result.pipeline_config,
+                        pipeline_config=enriched_config,
                         golden_item_id=item.id,
                         expected_answer=item.expected_answer,
                         job_id=job_id,
                     )
+                    # Gap 10: Add provider columns + latency
+                    row["embedding_provider"] = embedding_provider or "openai"
+                    row["rerank_provider"] = rerank_provider or "cohere"
+                    row["search_latency_ms"] = search_latency_ms
+
                     supabase.table("evaluation_results").insert(row).execute()
 
                     results.append({
@@ -256,11 +390,19 @@ def run_batch_evaluation(
             average_score=result.get("average_score"),
         )
 
+        # Gap 9: Run post-batch regression check (non-blocking — failures don't fail the task)
+        regression_info = _run_post_batch_checks(
+            matter_id=matter_id,
+            job_id=job_id,
+            successful_count=result.get("successful", 0),
+        )
+
         return {
             **result,
             "job_id": job_id,
             "matter_id": matter_id,
             "tags": tags,
+            **regression_info,
         }
 
     except Exception as e:
@@ -384,4 +526,424 @@ def evaluate_chat_response(
         return {
             "status": "failed",
             "error": str(e),
+        }
+
+
+# =============================================================================
+# Gap 9: Scheduled Nightly Evaluation
+# =============================================================================
+
+
+def _estimate_eval_cost(item_count: int) -> float:
+    """Estimate evaluation cost in USD.
+
+    RAGAS uses GPT-4 for each (question, answer, contexts) tuple with 3 metrics.
+    Approximate: ~2000 tokens input + ~500 tokens output per item × 3 metrics.
+    GPT-4 pricing: $0.03/1K input, $0.06/1K output.
+
+    Per item: (2 * 0.03 + 0.5 * 0.06) * 3 = ~$0.27 per item
+    Conservative estimate: ~$0.015 per item (RAGAS is batched internally)
+    """
+    return item_count * 0.015
+
+
+@celery_app.task(
+    name="app.workers.tasks.evaluation_tasks.run_scheduled_evaluation",
+    bind=True,
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=1,
+    time_limit=3600,  # 1 hour max (evaluates all matters sequentially)
+    soft_time_limit=3300,
+)  # type: ignore[misc]
+def run_scheduled_evaluation(
+    self,  # type: ignore[no-untyped-def]
+) -> dict[str, Any]:
+    """Nightly scheduled evaluation of all matters with golden datasets.
+
+    Gap 9: Automated RAGAS Regression
+
+    Steps:
+    1. Find all matters with golden dataset items (> 0 items)
+    2. Check monthly cost budget (skip if exceeded)
+    3. For each matter: trigger batch evaluation
+    4. Each batch eval handles regression detection via _run_post_batch_checks()
+
+    Cost control:
+    - Estimates cost before each matter and skips if budget exceeded
+    - Logs cumulative cost for monitoring
+    - Budget configurable via EVALUATION_MONTHLY_BUDGET_USD
+
+    This task is triggered by Celery Beat (nightly at 1 AM UTC).
+    Gated by EVALUATION_SCHEDULE_ENABLED setting.
+    """
+    settings = get_settings()
+
+    if not settings.evaluation_schedule_enabled:
+        return {
+            "status": "skipped",
+            "reason": "Scheduled evaluation disabled (EVALUATION_SCHEDULE_ENABLED=false)",
+        }
+
+    logger.info("scheduled_evaluation_started")
+
+    try:
+        # Find matters with golden datasets
+        supabase = get_service_client()
+        golden_counts_result = supabase.rpc(
+            "get_evaluation_quality_summary"
+        ).execute()
+
+        if not golden_counts_result.data:
+            return {
+                "status": "no_matters",
+                "message": "No matters with golden datasets found",
+            }
+
+        matters = golden_counts_result.data
+
+        # Check monthly cost budget
+        month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        cost_result = (
+            supabase.table("evaluation_results")
+            .select("id", count="exact")
+            .gte("evaluated_at", month_start.isoformat())
+            .eq("triggered_by", "batch")
+            .execute()
+        )
+        monthly_eval_count = cost_result.count or 0
+        estimated_monthly_cost = _estimate_eval_cost(monthly_eval_count)
+
+        logger.info(
+            "scheduled_evaluation_budget_check",
+            monthly_eval_count=monthly_eval_count,
+            estimated_monthly_cost_usd=round(estimated_monthly_cost, 2),
+            budget_usd=settings.evaluation_monthly_budget_usd,
+        )
+
+        results: list[dict[str, Any]] = []
+        total_evaluated = 0
+        total_skipped = 0
+        cumulative_cost = estimated_monthly_cost
+
+        # Per-matter timeout: .apply() runs inline so inner task's time_limit is
+        # not enforced by Celery. We use signal.alarm (Unix) as a guard.
+        import signal
+        import platform
+        _is_unix = platform.system() != "Windows"
+        PER_MATTER_TIMEOUT = 35 * 60  # 35 minutes (inner task has 30 min hard limit)
+
+        for matter_row in matters:
+            m_id = matter_row.get("matter_id")
+            m_title = matter_row.get("matter_title", "Unknown")
+            golden_count = int(matter_row.get("golden_item_count", 0))
+
+            if golden_count == 0:
+                continue
+
+            # Cost check before each matter
+            estimated_cost = _estimate_eval_cost(golden_count)
+            if cumulative_cost + estimated_cost > settings.evaluation_monthly_budget_usd:
+                logger.warning(
+                    "scheduled_evaluation_budget_exceeded",
+                    matter_id=m_id,
+                    matter_title=m_title,
+                    cumulative_cost=round(cumulative_cost, 2),
+                    estimated_cost=round(estimated_cost, 2),
+                    budget=settings.evaluation_monthly_budget_usd,
+                )
+                total_skipped += 1
+                results.append({
+                    "matter_id": m_id,
+                    "matter_title": m_title,
+                    "status": "skipped_budget",
+                })
+                continue
+
+            # Trigger batch evaluation (synchronous within this task — sequential per matter)
+            logger.info(
+                "scheduled_evaluation_matter_start",
+                matter_id=m_id,
+                matter_title=m_title,
+                golden_count=golden_count,
+            )
+
+            try:
+                # Call run_batch_evaluation directly (not .delay) — we want sequential execution
+                # within this scheduled task to control cost and avoid overwhelming the system.
+                #
+                # IMPORTANT: .apply() runs the task inline in this process — the inner task's
+                # time_limit/soft_time_limit decorators are NOT enforced. We use signal.alarm
+                # (Unix) as a per-matter timeout guard so one hanging matter can't eat the full
+                # 1-hour outer limit and starve other matters.
+
+                # signal.alarm is Unix-only; on Windows we rely on the outer task time_limit
+                if _is_unix:
+                    _prev_handler = signal.getsignal(signal.SIGALRM)
+
+                    def _timeout_handler(signum, frame):  # type: ignore[no-untyped-def]
+                        raise TimeoutError(f"Per-matter evaluation timed out after {PER_MATTER_TIMEOUT}s")
+
+                    signal.signal(signal.SIGALRM, _timeout_handler)
+                    signal.alarm(PER_MATTER_TIMEOUT)
+
+                try:
+                    batch_result = run_batch_evaluation.apply(
+                        args=[],
+                        kwargs={
+                            "matter_id": m_id,
+                            "tags": None,
+                            "user_id": None,
+                        },
+                    ).result
+                finally:
+                    if _is_unix:
+                        signal.alarm(0)  # Cancel alarm
+                        signal.signal(signal.SIGALRM, _prev_handler)  # Restore handler
+
+                cumulative_cost += estimated_cost
+                total_evaluated += 1
+
+                results.append({
+                    "matter_id": m_id,
+                    "matter_title": m_title,
+                    "status": batch_result.get("status", "unknown"),
+                    "average_score": batch_result.get("average_score"),
+                    "has_regression": batch_result.get("has_regression", False),
+                    "successful": batch_result.get("successful", 0),
+                })
+
+            except Exception as e:
+                logger.error(
+                    "scheduled_evaluation_matter_failed",
+                    matter_id=m_id,
+                    error=str(e),
+                )
+                results.append({
+                    "matter_id": m_id,
+                    "matter_title": m_title,
+                    "status": "failed",
+                    "error": str(e)[:200],
+                })
+
+        logger.info(
+            "scheduled_evaluation_completed",
+            total_matters=len(matters),
+            total_evaluated=total_evaluated,
+            total_skipped=total_skipped,
+            cumulative_cost_usd=round(cumulative_cost, 2),
+        )
+
+        return {
+            "status": "completed",
+            "total_matters": len(matters),
+            "evaluated": total_evaluated,
+            "skipped": total_skipped,
+            "cumulative_cost_usd": round(cumulative_cost, 2),
+            "budget_usd": settings.evaluation_monthly_budget_usd,
+            "results": results,
+        }
+
+    except Exception as e:
+        logger.error(
+            "scheduled_evaluation_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return {
+            "status": "failed",
+            "error_code": "SCHEDULED_EVALUATION_FAILED",
+            "error_message": str(e),
+        }
+
+
+# =============================================================================
+# Gap 10: A/B Comparison Task
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.evaluation_tasks.run_ab_comparison",
+    bind=True,
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=1,
+    time_limit=3600,  # 1 hour (runs 2 batch evaluations sequentially)
+    soft_time_limit=3300,
+)  # type: ignore[misc]
+def run_ab_comparison(
+    self,  # type: ignore[no-untyped-def]
+    run_id: str,
+    matter_id: str,
+    tags: list[str] | None = None,
+    user_id: str | None = None,
+    control_embedding: str = "openai",
+    control_reranker: str = "cohere",
+    treatment_embedding: str = "voyage",
+    treatment_reranker: str = "voyage",
+) -> dict[str, Any]:
+    """Run A/B comparison: same golden dataset, two provider configurations.
+
+    Gap 10: Automated Voyage A/B Testing
+
+    Steps:
+    1. Run batch evaluation with control providers (OpenAI + Cohere)
+    2. Run batch evaluation with treatment providers (Voyage + Voyage)
+    3. Aggregate scores, run Welch's t-test, make decision
+    4. Update ab_test_runs record with results
+
+    Both arms use the same golden dataset questions in the same order,
+    eliminating question-level variance from the comparison.
+
+    Args:
+        run_id: A/B test run UUID (from ab_test_runs table).
+        matter_id: Matter UUID to evaluate.
+        tags: Optional golden dataset tag filters.
+        user_id: User ID for tracking.
+        control_embedding: Control arm embedding provider.
+        control_reranker: Control arm reranker.
+        treatment_embedding: Treatment arm embedding provider.
+        treatment_reranker: Treatment arm reranker.
+
+    Returns:
+        Comparison result with decision.
+    """
+    logger.info(
+        "ab_comparison_started",
+        run_id=run_id,
+        matter_id=matter_id,
+        control=f"{control_embedding}+{control_reranker}",
+        treatment=f"{treatment_embedding}+{treatment_reranker}",
+    )
+
+    try:
+        async def _run_comparison_async() -> dict[str, Any]:
+            from app.services.evaluation.ab_testing import ABTestRunner
+
+            runner = ABTestRunner()
+
+            # Step 1: Run control arm
+            await runner.update_run(run_id, {"status": "running_control"})
+
+            control_result = run_batch_evaluation.apply(
+                args=[],
+                kwargs={
+                    "matter_id": matter_id,
+                    "tags": tags,
+                    "user_id": user_id,
+                    "embedding_provider": control_embedding,
+                    "rerank_provider": control_reranker,
+                },
+            ).result
+
+            control_job_id = control_result.get("job_id")
+            if not control_job_id or control_result.get("status") == "failed":
+                await runner.update_run(run_id, {
+                    "status": "failed",
+                    "error_message": f"Control arm failed: {control_result.get('error_message', 'unknown')}",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                })
+                return {"status": "failed", "phase": "control", **control_result}
+
+            await runner.update_run(run_id, {
+                "control_job_id": control_job_id,
+            })
+
+            logger.info(
+                "ab_comparison_control_done",
+                run_id=run_id,
+                control_job_id=control_job_id,
+                avg_score=control_result.get("average_score"),
+            )
+
+            # Step 2: Run treatment arm
+            await runner.update_run(run_id, {"status": "running_treatment"})
+
+            treatment_result = run_batch_evaluation.apply(
+                args=[],
+                kwargs={
+                    "matter_id": matter_id,
+                    "tags": tags,
+                    "user_id": user_id,
+                    "embedding_provider": treatment_embedding,
+                    "rerank_provider": treatment_reranker,
+                },
+            ).result
+
+            treatment_job_id = treatment_result.get("job_id")
+            if not treatment_job_id or treatment_result.get("status") == "failed":
+                await runner.update_run(run_id, {
+                    "status": "failed",
+                    "treatment_job_id": treatment_job_id,
+                    "error_message": f"Treatment arm failed: {treatment_result.get('error_message', 'unknown')}",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                })
+                return {"status": "failed", "phase": "treatment", **treatment_result}
+
+            await runner.update_run(run_id, {
+                "treatment_job_id": treatment_job_id,
+            })
+
+            logger.info(
+                "ab_comparison_treatment_done",
+                run_id=run_id,
+                treatment_job_id=treatment_job_id,
+                avg_score=treatment_result.get("average_score"),
+            )
+
+            # Step 3: Compare results
+            comparison = await runner.complete_comparison(
+                run_id=run_id,
+                control_job_id=control_job_id,
+                treatment_job_id=treatment_job_id,
+            )
+
+            return {
+                "status": "completed",
+                "run_id": run_id,
+                "decision": comparison.get("decision"),
+                "decision_confidence": comparison.get("decision_confidence"),
+                "decision_reasoning": comparison.get("decision_reasoning"),
+                "control_overall": comparison.get("control_scores", {}).get("overall"),
+                "treatment_overall": comparison.get("treatment_scores", {}).get("overall"),
+            }
+
+        result = run_async(_run_comparison_async(), timeout=3000)
+
+        logger.info(
+            "ab_comparison_completed",
+            run_id=run_id,
+            decision=result.get("decision"),
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(
+            "ab_comparison_failed",
+            run_id=run_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+
+        # Update run status
+        try:
+            async def _mark_failed() -> None:
+                from app.services.evaluation.ab_testing import ABTestRunner
+                await ABTestRunner.update_run(run_id, {
+                    "status": "failed",
+                    "error_message": str(e),
+                    "completed_at": datetime.now(UTC).isoformat(),
+                })
+            run_async(_mark_failed(), timeout=10)
+        except Exception:
+            pass
+
+        return {
+            "status": "failed",
+            "run_id": run_id,
+            "error_code": "AB_COMPARISON_FAILED",
+            "error_message": str(e),
         }

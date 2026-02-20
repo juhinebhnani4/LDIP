@@ -165,7 +165,14 @@ def detect_regression(
     current_scores: list[float] = []
 
     for r in current_results:
-        score = float(r.get("overall_score", 0))
+        score = float(r.get("overall_score") or 0)
+        # Match baseline_service.py behavior: exclude items with overall_score <= 0.
+        # Baseline creation filters `overall_score > 0`, so we must do the same here
+        # to avoid asymmetric comparison (baseline has no zero-score items but
+        # regression detection would include them, causing systematic false positives).
+        if score <= 0:
+            continue
+
         current_scores.append(score)
 
         gid = r.get("golden_item_id")

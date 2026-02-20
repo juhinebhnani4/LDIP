@@ -13,6 +13,8 @@ Story 8-1/8-2 Code Review Fix: SafetyGuard integration added to all search
 endpoints to prevent bypassing guardrails via search queries.
 """
 
+import re
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -679,8 +681,7 @@ async def alias_expanded_search(
                             aliases_found.extend(other_variants)
 
                             # Build OR query: replace matched name with (name OR alias1 OR alias2)
-                            # Use case-insensitive replacement
-                            import re
+                            # Use case-insensitive replacement (re imported at module level)
                             or_clause = f'({matched_name} OR {" OR ".join(other_variants)})'
                             expanded_query = re.sub(
                                 re.escape(matched_name),

@@ -179,12 +179,28 @@ class RAGPipelineService:
                 execution_time_ms=execution_time_ms,
             )
 
-            # Gap 10: Extract search latency from RAG engine result data
+            # Gap 10: Extract search latency and actual provider from RAG engine result data
             search_latency_ms = None
+            actual_embedding_provider = None
+            actual_rerank_provider = None
             for er in result.engine_results:
-                if er.data and "search_latency_ms" in er.data:
-                    search_latency_ms = er.data["search_latency_ms"]
-                    break
+                if er.data:
+                    if "search_latency_ms" in er.data:
+                        search_latency_ms = er.data["search_latency_ms"]
+                    if "embedding_provider" in er.data:
+                        actual_embedding_provider = er.data["embedding_provider"]
+                    if "rerank_provider" in er.data:
+                        actual_rerank_provider = er.data["rerank_provider"]
+
+            # Use actual providers from engine results, then context, then defaults
+            embed_prov = (
+                actual_embedding_provider
+                or (context or {}).get("embedding_provider")
+            )
+            rerank_prov = (
+                actual_rerank_provider
+                or (context or {}).get("rerank_provider")
+            )
 
             return RAGPipelineResult(
                 answer=result.unified_response,
@@ -194,7 +210,10 @@ class RAGPipelineService:
                 engines_used=[e.value for e in result.successful_engines],
                 execution_time_ms=execution_time_ms,
                 search_latency_ms=search_latency_ms,
-                pipeline_config=self._get_pipeline_config(),
+                pipeline_config=self._get_pipeline_config(
+                    embedding_provider=embed_prov,
+                    rerank_provider=rerank_prov,
+                ),
             )
 
         except Exception as e:

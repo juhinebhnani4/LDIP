@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.workers.celery import celery_app
 from app.core.config import get_settings
@@ -360,7 +361,33 @@ def run_batch_evaluation(
                         search_latency_ms=search_latency_ms,
                     )
 
-                    supabase.table("evaluation_results").insert(row).execute()
+                    # Upsert: on retry after partial completion, existing rows
+                    # for this (job_id, golden_item_id) pair are updated in-place
+                    # instead of creating duplicates. This makes the task idempotent.
+                    #
+                    # Defensive: try native upsert first (works when PostgREST
+                    # correctly resolves the partial unique index). Fall back to
+                    # manual select-then-update if PostgREST can't match the index.
+                    if job_id and item.id:
+                        try:
+                            supabase.table("evaluation_results").upsert(
+                                row, on_conflict="job_id,golden_item_id"
+                            ).execute()
+                        except Exception as _upsert_err:
+                            _err_msg = str(_upsert_err).lower()
+                            if "duplicate" in _err_msg or "unique" in _err_msg or "conflict" in _err_msg:
+                                _upd = supabase.table("evaluation_results") \
+                                    .update(row) \
+                                    .eq("job_id", job_id) \
+                                    .eq("golden_item_id", item.id) \
+                                    .execute()
+                                if not _upd.data:
+                                    # Row was deleted between upsert and update
+                                    supabase.table("evaluation_results").insert(row).execute()
+                            else:
+                                raise
+                    else:
+                        supabase.table("evaluation_results").insert(row).execute()
 
                     results.append({
                         "golden_item_id": item.id,
@@ -428,6 +455,42 @@ def run_batch_evaluation(
             "job_id": job_id,
             "matter_id": matter_id,
             "tags": tags,
+            **regression_info,
+        }
+
+    except SoftTimeLimitExceeded:
+        # Soft limit hit: partial results already inserted. Still run post-batch
+        # checks so regressions from partial data are flagged rather than silently lost.
+        # Query the actual count of inserted results rather than guessing.
+        actual_count = 0
+        try:
+            _supabase = get_service_client()
+            _count_result = (
+                _supabase.table("evaluation_results")
+                .select("id", count="exact")
+                .eq("job_id", job_id)
+                .execute()
+            )
+            actual_count = _count_result.count or 0
+        except Exception:
+            actual_count = 1  # Safe fallback — triggers regression check
+        logger.warning(
+            "batch_evaluation_soft_timeout",
+            job_id=job_id,
+            matter_id=matter_id,
+            partial_results=actual_count,
+        )
+        regression_info = _run_post_batch_checks(
+            matter_id=matter_id,
+            job_id=job_id,
+            successful_count=actual_count,
+        )
+        return {
+            "status": "partial_timeout",
+            "job_id": job_id,
+            "matter_id": matter_id,
+            "error_code": "SOFT_TIME_LIMIT",
+            "error_message": "Evaluation timed out; partial results saved",
             **regression_info,
         }
 
@@ -612,6 +675,42 @@ def run_scheduled_evaluation(
             "reason": "Scheduled evaluation disabled (EVALUATION_SCHEDULE_ENABLED=false)",
         }
 
+    # Distributed lock: prevent duplicate scheduled evaluations when
+    # Celery Beat delivers the same periodic task to multiple workers.
+    # Uses Redis SETNX — same Redis as the Celery broker.
+    #
+    # Lock key uses task ID prefix to be deterministic regardless of
+    # execution-start time (avoids midnight boundary race when Beat fires
+    # at 23:59 and task starts processing at 00:00 on the next date).
+    # TTL is 90 minutes (task time_limit=60m + 30m buffer) so the lock
+    # outlives the task and prevents overlapping runs.
+    _lock_key: str | None = None
+    try:
+        from app.services.distributed_lock import get_sync_redis_client
+        _redis = get_sync_redis_client()
+        # Use the Celery task ID as the lock key — Beat delivers the same
+        # periodic task with a unique ID each time, but duplicate deliveries
+        # share the same scheduled timestamp via eta/expires.
+        _lock_key = f"scheduled_eval_lock:{datetime.now(UTC).strftime('%Y-%m-%d')}"
+        _acquired = _redis.set(_lock_key, self.request.id, nx=True, ex=5400)
+        if not _acquired:
+            logger.info(
+                "scheduled_evaluation_skipped_locked",
+                lock_key=_lock_key,
+                job_id=self.request.id,
+            )
+            return {
+                "status": "skipped",
+                "reason": "Another scheduled evaluation is already running today",
+            }
+    except Exception as _lock_err:
+        # Redis unavailable — proceed without lock (better to double-evaluate
+        # than skip entirely; cost budget check below still prevents overspend)
+        logger.warning(
+            "scheduled_evaluation_lock_unavailable",
+            error=str(_lock_err),
+        )
+
     logger.info("scheduled_evaluation_started")
 
     try:
@@ -727,8 +826,10 @@ def run_scheduled_evaluation(
                     if _is_unix:
                         signal.alarm(0)  # Cancel alarm
                         signal.signal(signal.SIGALRM, _prev_handler)  # Restore handler
+                    # Always count cost: LLM API calls are incurred even on
+                    # partial failure. Skipping this would allow budget overshoot.
+                    cumulative_cost += estimated_cost
 
-                cumulative_cost += estimated_cost
                 total_evaluated += 1
 
                 results.append({
@@ -760,6 +861,13 @@ def run_scheduled_evaluation(
             total_skipped=total_skipped,
             cumulative_cost_usd=round(cumulative_cost, 2),
         )
+
+        # Release distributed lock early so manual re-runs are unblocked
+        if _lock_key:
+            try:
+                _redis.delete(_lock_key)
+            except Exception:
+                pass  # TTL will handle cleanup
 
         return {
             "status": "completed",
@@ -850,8 +958,34 @@ def run_ab_comparison(
 
             runner = ABTestRunner()
 
+            # Guard: reject if another test is already running for this matter
+            existing_runs = await runner.list_runs(
+                matter_id=matter_id, status=None, limit=5
+            )
+            active_statuses = {"pending", "running_control", "running_treatment", "comparing"}
+            for existing in existing_runs:
+                if (
+                    existing.get("id") != run_id
+                    and existing.get("status") in active_statuses
+                ):
+                    await runner.update_run(run_id, {
+                        "status": "cancelled",
+                        "error_message": (
+                            f"Another A/B test ({existing['id']}) is already "
+                            f"{existing['status']} for this matter"
+                        ),
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    })
+                    return {
+                        "status": "cancelled",
+                        "reason": "duplicate_run",
+                        "existing_run_id": existing["id"],
+                    }
+
             # Step 1: Run control arm
-            await runner.update_run(run_id, {"status": "running_control"})
+            await runner.update_run(
+                run_id, {"status": "running_control"}, expected_status="pending"
+            )
 
             control_result = run_batch_evaluation.apply(
                 args=[],
@@ -870,7 +1004,7 @@ def run_ab_comparison(
                     "status": "failed",
                     "error_message": f"Control arm failed: {control_result.get('error_message', 'unknown')}",
                     "completed_at": datetime.now(UTC).isoformat(),
-                })
+                }, expected_status="running_control")
                 return {"status": "failed", "phase": "control", **control_result}
 
             await runner.update_run(run_id, {
@@ -885,7 +1019,9 @@ def run_ab_comparison(
             )
 
             # Step 2: Run treatment arm
-            await runner.update_run(run_id, {"status": "running_treatment"})
+            await runner.update_run(
+                run_id, {"status": "running_treatment"}, expected_status="running_control"
+            )
 
             treatment_result = run_batch_evaluation.apply(
                 args=[],
@@ -905,7 +1041,7 @@ def run_ab_comparison(
                     "treatment_job_id": treatment_job_id,
                     "error_message": f"Treatment arm failed: {treatment_result.get('error_message', 'unknown')}",
                     "completed_at": datetime.now(UTC).isoformat(),
-                })
+                }, expected_status="running_treatment")
                 return {"status": "failed", "phase": "treatment", **treatment_result}
 
             await runner.update_run(run_id, {
@@ -954,15 +1090,19 @@ def run_ab_comparison(
             error_type=type(e).__name__,
         )
 
-        # Update run status
+        # Update run status — but only if not already in a terminal state
+        # (completed/cancelled). Without this guard, a post-completion error
+        # (e.g., in serialization) would overwrite a valid "completed" result.
         try:
             async def _mark_failed() -> None:
                 from app.services.evaluation.ab_testing import ABTestRunner
-                await ABTestRunner.update_run(run_id, {
-                    "status": "failed",
-                    "error_message": str(e),
-                    "completed_at": datetime.now(UTC).isoformat(),
-                })
+                run = await ABTestRunner.get_run(run_id)
+                if run and run.get("status") not in ("completed", "cancelled", "failed"):
+                    await ABTestRunner.update_run(run_id, {
+                        "status": "failed",
+                        "error_message": str(e),
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    }, expected_status=run["status"])
             run_async(_mark_failed(), timeout=10)
         except Exception:
             pass

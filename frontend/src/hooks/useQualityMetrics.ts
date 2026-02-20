@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { QualityMetricsData, MatterQualityMetrics } from '@/lib/api/admin-monitoring';
 import { adminMonitoringApi } from '@/lib/api/admin-monitoring';
@@ -128,9 +128,9 @@ export function useQualityMetrics(pollIntervalMs: number = DEFAULT_POLL_INTERVAL
     };
   }, [fetchMetrics, pollIntervalMs]);
 
-  // Calculate derived state
-  const matters = metricsData?.matters ?? [];
-  const regressionMatters = matters.filter((m) => m.hasRegression);
+  // Derived state — memoized to avoid creating new array references on every render
+  const matters = useMemo(() => metricsData?.matters ?? [], [metricsData]);
+  const regressionMatters = useMemo(() => matters.filter((m) => m.hasRegression), [matters]);
   const hasRegressions = metricsData?.hasRegressions ?? false;
   const lastUpdated = metricsData?.lastUpdated ?? null;
 

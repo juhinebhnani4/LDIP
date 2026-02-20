@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChunkMetricsData, MatterChunkMetrics } from '@/lib/api/admin-monitoring';
 import { adminMonitoringApi } from '@/lib/api/admin-monitoring';
@@ -130,10 +130,10 @@ export function useChunkMetrics(pollIntervalMs: number = DEFAULT_POLL_INTERVAL):
     };
   }, [fetchMetrics, pollIntervalMs]);
 
-  // Calculate derived state
-  const matters = metricsData?.matters ?? [];
+  // Derived state — memoized to avoid creating new array references on every render
+  const matters = useMemo(() => metricsData?.matters ?? [], [metricsData]);
   const globalTotal = metricsData?.global.totalChunks ?? 0;
-  const alertMatters = matters.filter((m) => m.exceedsThreshold);
+  const alertMatters = useMemo(() => matters.filter((m) => m.exceedsThreshold), [matters]);
   const hasAlerts = metricsData?.alertsTriggered ?? false;
   const lastUpdated = metricsData?.lastUpdated ?? null;
 

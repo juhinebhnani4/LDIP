@@ -58,13 +58,23 @@ export function SearchFilterPanel({ matterId, filters, onChange }: SearchFilterP
   }, [filters, onChange]);
 
   const handlePageMin = useCallback((value: string) => {
-    const num = value ? parseInt(value, 10) : undefined;
-    onChange({ ...filters, pageMin: num && num > 0 ? num : undefined });
+    const parsed = value ? parseInt(value, 10) : NaN;
+    const num = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    // Cross-validate: if pageMin > pageMax, clamp to pageMax
+    const clamped = num !== undefined && filters.pageMax !== undefined && num > filters.pageMax
+      ? filters.pageMax
+      : num;
+    onChange({ ...filters, pageMin: clamped });
   }, [filters, onChange]);
 
   const handlePageMax = useCallback((value: string) => {
-    const num = value ? parseInt(value, 10) : undefined;
-    onChange({ ...filters, pageMax: num && num > 0 ? num : undefined });
+    const parsed = value ? parseInt(value, 10) : NaN;
+    const num = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    // Cross-validate: if pageMax < pageMin, clamp to pageMin
+    const clamped = num !== undefined && filters.pageMin !== undefined && num < filters.pageMin
+      ? filters.pageMin
+      : num;
+    onChange({ ...filters, pageMax: clamped });
   }, [filters, onChange]);
 
   // Group completed documents by type for display

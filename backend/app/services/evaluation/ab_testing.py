@@ -16,24 +16,40 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import math
 from datetime import UTC, datetime
 from typing import Any
 
+from scipy import stats as scipy_stats
+
 import structlog
 
 from app.core.config import get_settings
+from app.services.supabase.client import get_service_client as _get_service_raw
 from app.services.supabase.client import get_supabase_client as _get_supabase_raw
 
 logger = structlog.get_logger(__name__)
 
 
 def get_supabase():
-    """Get Supabase client with null guard."""
+    """Get Supabase client with null guard (for reads — respects RLS)."""
     client = _get_supabase_raw()
     if client is None:
         raise RuntimeError("Supabase client not configured — A/B testing requires database access")
+    return client
+
+
+def _get_service_supabase():
+    """Get service-role Supabase client for write operations that bypass RLS.
+
+    Required because ab_test_runs UPDATE is restricted to service_role only
+    (authenticated users only have SELECT+INSERT via RLS policies).
+    """
+    client = _get_service_raw()
+    if client is None:
+        raise RuntimeError("Supabase service client not configured — A/B testing requires service-role access")
     return client
 
 
@@ -147,7 +163,9 @@ class ABTestAnalyzer:
     ) -> dict[str, float]:
         """Perform Welch's t-test for independent samples with unequal variance.
 
-        Pure Python implementation (no scipy dependency needed).
+        Uses scipy.stats for accurate p-values at all sample sizes. Effect size
+        uses Glass's delta (control arm SD as denominator) which is appropriate
+        when variances are unequal — consistent with using Welch's t-test.
 
         Args:
             scores_a: Control arm scores.
@@ -186,7 +204,6 @@ class ABTestAnalyzer:
         # Welch's t-statistic
         se = math.sqrt(var_a / n_a + var_b / n_b)
         if se < 1e-10:
-            # Identical scores — no difference
             return {
                 "t_statistic": 0.0,
                 "p_value_approx": 1.0,
@@ -205,55 +222,39 @@ class ABTestAnalyzer:
         denom = (var_a / n_a) ** 2 / (n_a - 1) + (var_b / n_b) ** 2 / (n_b - 1)
         df = num / denom if denom > 0 else n_a + n_b - 2
 
-        # Approximate p-value using Student's t CDF (good enough for our purposes)
-        # Uses the regularized incomplete beta function approximation
-        p_value = ABTestAnalyzer._approx_t_p_value(abs(t_stat), df)
+        # Exact two-tailed p-value via scipy (accurate for all df, including df < 5)
+        p_value = float(scipy_stats.t.sf(abs(t_stat), df) * 2)
 
-        # Cohen's d effect size (pooled standard deviation)
-        pooled_std = math.sqrt(
-            ((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2)
-        )
-        cohens_d = abs(mean_a - mean_b) / pooled_std if pooled_std > 0 else 0.0
+        # Glass's delta: use control arm (scores_a) SD as denominator.
+        # Appropriate for Welch's context where variances are unequal — we measure
+        # the effect relative to the established baseline (control), not a pooled
+        # estimate that conflates both arms' variance.
+        # Glass's delta edge case: when control SD is 0, all control scores
+        # are identical. If means differ, the effect is effectively infinite
+        # relative to a zero-variance baseline. We use 999.0 as a sentinel
+        # (not float('inf')) because JSON serialization of inf is undefined
+        # and would crash the DB write in complete_comparison().
+        if std_a > 0:
+            glass_delta = abs(mean_a - mean_b) / std_a
+        elif abs(mean_a - mean_b) > 1e-10:
+            glass_delta = 999.0
+        else:
+            glass_delta = 0.0
 
         return {
             "t_statistic": round(t_stat, 4),
             "p_value_approx": round(p_value, 6),
             "degrees_of_freedom": round(df, 2),
-            "effect_size_cohens_d": round(cohens_d, 4),
+            "effect_size_cohens_d": round(glass_delta, 4),
             "mean_a": round(mean_a, 4),
             "mean_b": round(mean_b, 4),
             "std_a": round(std_a, 4),
             "std_b": round(std_b, 4),
         }
 
-    @staticmethod
-    def _approx_t_p_value(t: float, df: float) -> float:
-        """Approximate two-tailed p-value for Student's t-distribution.
-
-        Uses the normal approximation for large df and a conservative
-        approximation for small df. Accurate to ~0.01 for df > 5.
-        """
-        if df <= 0:
-            return 1.0
-        if t <= 0:
-            return 1.0
-
-        # For large df, t approaches normal
-        if df > 100:
-            # Normal approximation using error function
-            z = t
-            p = math.erfc(z / math.sqrt(2))
-            return min(p, 1.0)
-
-        # For moderate df, use approximation: p ≈ 2 * (1 - Φ(t * sqrt(df/(df-2))))
-        # where Φ is the standard normal CDF
-        if df > 2:
-            z_approx = t * math.sqrt(df / (df - 2 + t * t / df))
-            p = math.erfc(z_approx / math.sqrt(2))
-            return min(p, 1.0)
-
-        # Very small df — conservative (high p-value = harder to reject null)
-        return min(2.0 / (1 + t * t), 1.0)
+    # Minimum acceptable faithfulness score for a legal tool.
+    # Below this threshold, treatment is rejected regardless of overall score.
+    MIN_FAITHFULNESS = 0.70
 
     @staticmethod
     def make_decision(
@@ -262,16 +263,19 @@ class ABTestAnalyzer:
         control_cost_usd: float,
         treatment_cost_usd: float,
         min_samples: int | None = None,
+        control_faithfulness: list[float] | None = None,
+        treatment_faithfulness: list[float] | None = None,
     ) -> dict[str, Any]:
         """Make automated decision about which provider to use.
 
         Decision matrix:
         1. Insufficient data → 'insufficient_data'
-        2. Treatment significantly better → 'treatment_wins'
-        3. No significant difference AND treatment cheaper → 'treatment_wins'
-        4. Control significantly better → 'control_wins'
-        5. No significant difference AND control cheaper → 'control_wins'
-        6. No significant difference AND similar cost → 'no_significant_difference'
+        2. Treatment faithfulness below safety threshold → 'control_wins'
+        3. Treatment significantly better → 'treatment_wins'
+        4. No significant difference AND treatment cheaper → 'treatment_wins'
+        5. Control significantly better → 'control_wins'
+        6. No significant difference AND control cheaper → 'control_wins'
+        7. No significant difference AND similar cost → 'no_significant_difference'
 
         Args:
             control_scores: Overall RAGAS scores for control (OpenAI+Cohere).
@@ -279,6 +283,8 @@ class ABTestAnalyzer:
             control_cost_usd: Total cost in USD for control arm.
             treatment_cost_usd: Total cost in USD for treatment arm.
             min_samples: Minimum samples per arm (default from config).
+            control_faithfulness: Per-item faithfulness scores for control arm.
+            treatment_faithfulness: Per-item faithfulness scores for treatment arm.
 
         Returns:
             Dict with decision, confidence, reasoning, and statistical_test data.
@@ -321,6 +327,72 @@ class ABTestAnalyzer:
         effect_size = test["effect_size_cohens_d"]
         mean_control = test["mean_a"]
         mean_treatment = test["mean_b"]
+
+        # Gate 2: Faithfulness safety check (critical for legal tools)
+        # If treatment arm has significantly lower faithfulness, reject it
+        # regardless of overall score — unfaithful answers are dangerous.
+        #
+        # If faithfulness data is unavailable (empty or None), we log a warning
+        # but do NOT skip the gate — we proceed to the quality comparison without
+        # the faithfulness check. This is a known limitation when evaluation
+        # results lack faithfulness scores.
+        has_faithfulness_data = (
+            treatment_faithfulness
+            and control_faithfulness
+            and len(treatment_faithfulness) >= 2
+            and len(control_faithfulness) >= 2
+        )
+        if not has_faithfulness_data:
+            logger.warning(
+                "ab_test_faithfulness_gate_skipped",
+                reason="insufficient_faithfulness_data",
+                control_count=len(control_faithfulness) if control_faithfulness else 0,
+                treatment_count=len(treatment_faithfulness) if treatment_faithfulness else 0,
+            )
+        if has_faithfulness_data:
+            avg_t_faith = sum(treatment_faithfulness) / len(treatment_faithfulness)
+            avg_c_faith = sum(control_faithfulness) / len(control_faithfulness)
+            if avg_t_faith < ABTestAnalyzer.MIN_FAITHFULNESS:
+                return {
+                    "decision": "control_wins",
+                    "confidence": 0.9,
+                    "reasoning": (
+                        f"Treatment faithfulness ({avg_t_faith:.3f}) is below "
+                        f"safety threshold ({ABTestAnalyzer.MIN_FAITHFULNESS}). "
+                        f"In a legal tool, unfaithful answers are unacceptable. "
+                        f"Control faithfulness: {avg_c_faith:.3f}."
+                    ),
+                    "statistical_test": test,
+                    "faithfulness_gate": True,
+                }
+            # Also flag if treatment faithfulness is significantly worse than control.
+            # 5% relative drop threshold — stricter than overall quality (10%) because
+            # faithfulness regressions in a legal tool are more dangerous than relevancy drops.
+            if (
+                avg_c_faith > 0
+                and (avg_c_faith - avg_t_faith) / avg_c_faith > 0.05
+                and len(treatment_faithfulness) >= 5
+            ):
+                faith_test = ABTestAnalyzer.welch_t_test(
+                    control_faithfulness, treatment_faithfulness
+                )
+                if faith_test["p_value_approx"] < ABTestAnalyzer.ALPHA:
+                    return {
+                        "decision": "control_wins",
+                        "confidence": round(
+                            max(0.0, min(1.0 - faith_test["p_value_approx"], 1.0)),
+                            3,
+                        ),
+                        "reasoning": (
+                            f"Treatment faithfulness ({avg_t_faith:.3f}) is "
+                            f"significantly worse than control ({avg_c_faith:.3f}) "
+                            f"(p={faith_test['p_value_approx']:.4f}). "
+                            f"Faithfulness regressions are independently gated "
+                            f"for legal safety."
+                        ),
+                        "statistical_test": test,
+                        "faithfulness_gate": True,
+                    }
 
         is_significant = p_value < ABTestAnalyzer.ALPHA
         is_meaningful = effect_size >= ABTestAnalyzer.MIN_EFFECT_SIZE
@@ -393,12 +465,17 @@ class ABTestAnalyzer:
                 reasoning += "Run more samples or check per-query-type breakdown."
                 confidence = 0.3
 
-        return {
+        result = {
             "decision": decision,
             "confidence": round(confidence, 3),
             "reasoning": reasoning,
             "statistical_test": test,
         }
+        # Flag when faithfulness safety gate was skipped (insufficient data).
+        # Auto-promotion logic should refuse to promote when this flag is set.
+        if not has_faithfulness_data:
+            result["faithfulness_gate_skipped"] = True
+        return result
 
 
 # =============================================================================
@@ -444,7 +521,7 @@ class ABTestRunner:
         Returns:
             Created ab_test_runs record.
         """
-        supabase = get_supabase()
+        supabase = _get_service_supabase()
 
         row = {
             "matter_id": matter_id,
@@ -458,23 +535,79 @@ class ABTestRunner:
         if created_by:
             row["created_by"] = created_by
 
-        result = supabase.table("ab_test_runs").insert(row).execute()
+        result = await asyncio.to_thread(
+            lambda: supabase.table("ab_test_runs").insert(row).execute()
+        )
         if not result.data:
             raise RuntimeError("Failed to create A/B test run — insert returned no data")
         return result.data[0]
 
+    # Valid status transitions for optimistic locking
+    _STATUS_TRANSITIONS: dict[str, set[str]] = {
+        "pending": {"running_control", "failed", "cancelled"},
+        "running_control": {"running_treatment", "failed", "cancelled"},
+        "running_treatment": {"comparing", "failed", "cancelled"},
+        "comparing": {"completed", "failed", "cancelled"},
+    }
+
     @staticmethod
-    async def update_run(run_id: str, updates: dict[str, Any]) -> None:
-        """Update an A/B test run record."""
-        supabase = get_supabase()
-        supabase.table("ab_test_runs").update(updates).eq("id", run_id).execute()
+    async def update_run(
+        run_id: str,
+        updates: dict[str, Any],
+        expected_status: str | None = None,
+    ) -> None:
+        """Update an A/B test run record with optimistic locking.
+
+        Uses service-role client because UPDATE on ab_test_runs is restricted
+        to service_role only (authenticated users have SELECT+INSERT only).
+
+        When `expected_status` is provided, the update includes a WHERE clause
+        on the current status, preventing stale writes (e.g., overwriting a
+        cancellation). If the status doesn't match, the update silently affects
+        0 rows — this is safe because concurrent transitions are rare and the
+        final state is always consistent.
+
+        If `expected_status` is None, the update is unconditional (used for
+        metadata-only updates like setting job_id or final completion data).
+        """
+        # Validate state machine transition if both old and new status are known
+        new_status = updates.get("status")
+        if expected_status and new_status:
+            allowed = ABTestRunner._STATUS_TRANSITIONS.get(expected_status, set())
+            if allowed and new_status not in allowed:
+                raise ValueError(
+                    f"Invalid status transition: {expected_status} -> {new_status}. "
+                    f"Allowed: {sorted(allowed)}"
+                )
+
+        supabase = _get_service_supabase()
+
+        def _do_update():
+            query = supabase.table("ab_test_runs").update(updates).eq("id", run_id)
+            if expected_status is not None:
+                return query.eq("status", expected_status).execute()
+            return query.execute()
+
+        result = await asyncio.to_thread(_do_update)
+        if expected_status is not None and not result.data:
+            logger.warning(
+                "ab_test_status_transition_failed",
+                run_id=run_id,
+                expected_status=expected_status,
+                attempted_update=updates.get("status"),
+            )
+            raise RuntimeError(
+                f"Status transition failed for run {run_id}: "
+                f"expected status '{expected_status}' but row was not updated "
+                f"(likely already transitioned or cancelled)"
+            )
 
     @staticmethod
     async def get_run(run_id: str) -> dict[str, Any] | None:
         """Get an A/B test run by ID."""
         supabase = get_supabase()
-        result = (
-            supabase.table("ab_test_runs")
+        result = await asyncio.to_thread(
+            lambda: supabase.table("ab_test_runs")
             .select("*")
             .eq("id", run_id)
             .execute()
@@ -489,12 +622,16 @@ class ABTestRunner:
     ) -> list[dict[str, Any]]:
         """List A/B test runs with optional filters."""
         supabase = get_supabase()
-        query = supabase.table("ab_test_runs").select("*")
-        if matter_id:
-            query = query.eq("matter_id", matter_id)
-        if status:
-            query = query.eq("status", status)
-        result = query.order("created_at", desc=True).limit(limit).execute()
+
+        def _query():
+            q = supabase.table("ab_test_runs").select("*")
+            if matter_id:
+                q = q.eq("matter_id", matter_id)
+            if status:
+                q = q.eq("status", status)
+            return q.order("created_at", desc=True).limit(limit).execute()
+
+        result = await asyncio.to_thread(_query)
         return result.data or []
 
     @staticmethod
@@ -507,15 +644,22 @@ class ABTestRunner:
         supabase = get_supabase()
 
         try:
-            result = supabase.rpc("get_ab_test_scores", {"p_job_id": job_id}).execute()
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("get_ab_test_scores", {"p_job_id": job_id}).execute()
+            )
             if result.data:
                 return result.data
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "ab_test_rpc_fallback",
+                job_id=job_id,
+                error=str(e),
+                msg="get_ab_test_scores RPC failed, falling back to client-side aggregation",
+            )
 
         # Fallback: client-side aggregation
-        result = (
-            supabase.table("evaluation_results")
+        result = await asyncio.to_thread(
+            lambda: supabase.table("evaluation_results")
             .select(
                 "golden_item_id, overall_score, context_recall, "
                 "faithfulness, answer_relevancy, search_latency_ms"
@@ -568,7 +712,9 @@ class ABTestRunner:
         """
         runner = ABTestRunner()
 
-        await runner.update_run(run_id, {"status": "comparing"})
+        await runner.update_run(
+            run_id, {"status": "comparing"}, expected_status="running_treatment"
+        )
 
         try:
             # Aggregate scores for each arm
@@ -580,7 +726,7 @@ class ABTestRunner:
                     "status": "failed",
                     "error_message": "Failed to aggregate scores for one or both arms",
                     "completed_at": datetime.now(UTC).isoformat(),
-                })
+                }, expected_status="comparing")
                 return {"status": "failed"}
 
             # Extract individual overall scores for statistical test
@@ -613,6 +759,18 @@ class ABTestRunner:
                 k = int(len(arr) * p / 100)
                 return arr[min(k, len(arr) - 1)]
 
+            # Extract per-item faithfulness for safety gate
+            control_faithfulness = [
+                s["faithfulness"]
+                for s in (control_agg.get("scores") or [])
+                if s.get("faithfulness") is not None
+            ]
+            treatment_faithfulness = [
+                s["faithfulness"]
+                for s in (treatment_agg.get("scores") or [])
+                if s.get("faithfulness") is not None
+            ]
+
             # Get cost data from llm_costs table
             control_cost = await _get_job_cost(control_job_id)
             treatment_cost = await _get_job_cost(treatment_job_id)
@@ -623,6 +781,8 @@ class ABTestRunner:
                 treatment_scores=treatment_scores,
                 control_cost_usd=control_cost,
                 treatment_cost_usd=treatment_cost,
+                control_faithfulness=control_faithfulness,
+                treatment_faithfulness=treatment_faithfulness,
             )
 
             # Update run with all results
@@ -678,11 +838,16 @@ class ABTestRunner:
                 run_id=run_id,
                 error=str(e),
             )
-            await runner.update_run(run_id, {
-                "status": "failed",
-                "error_message": str(e),
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+            # Guard: only overwrite to "failed" if still in "comparing" state.
+            # If already cancelled or completed, don't clobber.
+            try:
+                await runner.update_run(run_id, {
+                    "status": "failed",
+                    "error_message": str(e),
+                    "completed_at": datetime.now(UTC).isoformat(),
+                }, expected_status="comparing")
+            except (RuntimeError, ValueError):
+                pass  # Already transitioned — safe to ignore
             raise
 
     @staticmethod
@@ -695,34 +860,38 @@ class ABTestRunner:
         settings = get_settings()
         supabase = get_supabase()
 
-        # Get latest completed run
-        latest_result = (
-            supabase.table("ab_test_runs")
-            .select("*")
-            .eq("status", "completed")
-            .order("completed_at", desc=True)
-            .limit(1)
-            .execute()
+        def _fetch_status():
+            """Run all three DB queries in a single thread to avoid blocking
+            the FastAPI event loop (sync Supabase client)."""
+            latest_result = (
+                supabase.table("ab_test_runs")
+                .select("*")
+                .eq("status", "completed")
+                .order("completed_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            running_result = (
+                supabase.table("ab_test_runs")
+                .select("id, status, created_at, matter_id")
+                .in_("status", ["pending", "running_control", "running_treatment", "comparing"])
+                .limit(1)
+                .execute()
+            )
+            count_result = (
+                supabase.table("ab_test_runs")
+                .select("id", count="exact")
+                .eq("status", "completed")
+                .execute()
+            )
+            return latest_result, running_result, count_result
+
+        latest_result, running_result, count_result = await asyncio.to_thread(
+            _fetch_status
         )
+
         latest_run = latest_result.data[0] if latest_result.data else None
-
-        # Get any currently running test
-        running_result = (
-            supabase.table("ab_test_runs")
-            .select("id, status, created_at, matter_id")
-            .in_("status", ["pending", "running_control", "running_treatment", "comparing"])
-            .limit(1)
-            .execute()
-        )
         running_run = running_result.data[0] if running_result.data else None
-
-        # Count total completed runs
-        count_result = (
-            supabase.table("ab_test_runs")
-            .select("id", count="exact")
-            .eq("status", "completed")
-            .execute()
-        )
         total_completed = count_result.count or 0
 
         return {
@@ -744,33 +913,17 @@ class ABTestRunner:
 async def _get_job_cost(job_id: str) -> float:
     """Get total cost in USD for evaluation results linked to a job.
 
-    Since batch evaluation runs RAG queries, costs are tracked in llm_costs
-    table. We estimate based on the evaluation results' contexts.
-    For now, return 0 until we link job_id to cost tracking.
-    """
-    # Future: link batch evaluation Celery task ID to cost tracking entries
-    # via correlation ID or explicit job_id tagging.
-    # For now, use the evaluation_results count as a proxy
-    # (each question = 1 RAG query = ~1 embed + 1 rerank + 1 LLM call)
-    supabase = get_supabase()
-    try:
-        result = (
-            supabase.table("evaluation_results")
-            .select("pipeline_config", count="exact")
-            .eq("job_id", job_id)
-            .execute()
-        )
-        count = result.count or 0
+    Returns 0.0 to signal "no real cost data available" until we implement
+    actual cost tracking by linking job_id to llm_costs entries. The decision
+    engine correctly handles this: when both costs are 0, has_real_costs=False
+    and cost is not used as a tiebreaker.
 
-        # Rough cost estimates per query:
-        # OpenAI embed: ~$0.00002 + Cohere rerank: ~$0.002 + Gemini gen: ~$0.001
-        # Voyage embed: ~$0.00012 + Voyage rerank: ~$0.00005 + Gemini gen: ~$0.001
-        # These are rough but good enough for comparison
-        if result.data and result.data[0].get("pipeline_config"):
-            config = result.data[0]["pipeline_config"]
-            if config.get("embedding_provider") == "voyage":
-                return count * 0.00127  # Voyage embed + rerank + Gemini
-            return count * 0.00302  # OpenAI embed + Cohere rerank + Gemini
-        return count * 0.003
-    except Exception:
-        return 0.0
+    Previously this returned hardcoded estimates that systematically favored
+    Voyage (0.00127/query vs OpenAI's 0.00302/query), causing the decision
+    engine to always pick Voyage as a cost tiebreaker. This was misleading
+    because the estimates were fabricated, not measured.
+
+    TODO: Link batch evaluation Celery task ID to llm_costs entries via
+    correlation ID or explicit job_id tagging.
+    """
+    return 0.0

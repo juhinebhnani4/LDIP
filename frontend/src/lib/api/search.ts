@@ -41,11 +41,12 @@ function transformSearchResult(data: Record<string, unknown>): SearchResult {
   }
 }
 
-/** Convert snake_case API response to camelCase for reranked results */
+/** Convert snake_case API response to camelCase for reranked results.
+ * relevanceScore is already handled by transformSearchResult (both snake_case
+ * and camelCase), so no override needed here. */
 function transformRerankedResult(data: Record<string, unknown>): RerankedSearchResult {
   return {
     ...transformSearchResult(data),
-    relevanceScore: (data.relevance_score as number | null) ?? null,
   }
 }
 

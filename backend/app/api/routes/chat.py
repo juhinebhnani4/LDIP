@@ -61,12 +61,12 @@ class SSEErrorReportRequest(BaseModel):
     Story 6.2: SSE error reporting from frontend.
     """
 
-    session_id: str = Field(..., description="SSE session ID")
-    matter_id: str | None = Field(None, description="Matter ID from stream URL")
-    error_type: str = Field(..., description="Type of error (sse_json_parse_failed, etc.)")
-    error_message: str = Field(..., description="Error message")
-    raw_chunk: str | None = Field(None, description="Raw chunk content (truncated)")
-    timestamp: str = Field(..., description="ISO timestamp of error")
+    session_id: str = Field(..., max_length=100, description="SSE session ID")
+    matter_id: str | None = Field(None, max_length=100, description="Matter ID from stream URL")
+    error_type: str = Field(..., max_length=100, description="Type of error (sse_json_parse_failed, etc.)")
+    error_message: str = Field(..., max_length=2000, description="Error message")
+    raw_chunk: str | None = Field(None, max_length=2000, description="Raw chunk content (truncated)")
+    timestamp: str = Field(..., max_length=50, description="ISO timestamp of error")
 
 
 class SSEStreamStatusRequest(BaseModel):

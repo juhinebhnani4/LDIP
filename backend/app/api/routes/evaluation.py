@@ -6,7 +6,9 @@ All endpoints enforce matter isolation.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+
+from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 
 from app.api.deps import get_matter_service
 from app.core.security import get_current_user
@@ -86,7 +88,9 @@ def _verify_matter_access(
 
 
 @router.post("/evaluate", response_model=EvaluateResponse)
+@limiter.limit(CRITICAL_RATE_LIMIT)
 async def evaluate_qa_pair(
+    request: Request,
     matter_id: str = Path(..., description="Matter UUID"),
     body: EvaluateRequest = ...,
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -170,7 +174,9 @@ async def evaluate_qa_pair(
 
 
 @router.post("/evaluate/batch")
+@limiter.limit(CRITICAL_RATE_LIMIT)
 async def evaluate_batch(
+    request: Request,
     matter_id: str = Path(..., description="Matter UUID"),
     body: BatchEvaluateRequest = ...,
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -217,7 +223,9 @@ async def evaluate_batch(
 
 
 @router.get("/results", response_model=EvaluationResultsResponse)
+@limiter.limit(READONLY_RATE_LIMIT)
 async def get_evaluation_results(
+    request: Request,
     matter_id: str = Path(..., description="Matter UUID"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),

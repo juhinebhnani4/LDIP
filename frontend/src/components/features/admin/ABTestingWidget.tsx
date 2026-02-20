@@ -148,13 +148,13 @@ function LatestRunDetail({ run }: { run: ABTestRun }) {
         </div>
       )}
 
-      {/* Statistical test */}
+      {/* Statistical test — guard against NaN/null from API */}
       {run.statisticalTest && (
         <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1 font-mono">
-          p={run.statisticalTest.p_value_approx.toFixed(4)}{' '}
-          d={run.statisticalTest.effect_size_cohens_d.toFixed(3)}{' '}
-          t={run.statisticalTest.t_statistic.toFixed(2)}{' '}
-          df={run.statisticalTest.degrees_of_freedom.toFixed(0)}
+          p={Number.isFinite(run.statisticalTest.p_value_approx) ? run.statisticalTest.p_value_approx.toFixed(4) : '—'}{' '}
+          d={Number.isFinite(run.statisticalTest.effect_size_cohens_d) ? run.statisticalTest.effect_size_cohens_d.toFixed(3) : '—'}{' '}
+          t={Number.isFinite(run.statisticalTest.t_statistic) ? run.statisticalTest.t_statistic.toFixed(2) : '—'}{' '}
+          df={Number.isFinite(run.statisticalTest.degrees_of_freedom) ? run.statisticalTest.degrees_of_freedom.toFixed(0) : '—'}
         </div>
       )}
 

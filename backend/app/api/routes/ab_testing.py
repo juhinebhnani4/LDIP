@@ -11,13 +11,36 @@ Provides endpoints for:
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
+from typing import Literal
 
+from app.api.deps import get_matter_service
 from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
+from app.services.matter_service import MatterService
 
 router = APIRouter(prefix="/ab-testing", tags=["ab-testing"])
 logger = structlog.get_logger(__name__)
+
+
+def _verify_matter_access(
+    matter_id: str,
+    user_id: str,
+    matter_service: MatterService,
+    require_edit: bool = False,
+) -> None:
+    """Verify user has access to matter. Raises HTTPException if not."""
+    role = matter_service.get_user_role(matter_id, user_id)
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "MATTER_NOT_FOUND", "message": "Matter not found or you don't have access"}},
+        )
+    if require_edit and role not in ("owner", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "INSUFFICIENT_PERMISSIONS", "message": "Owner or Editor role required"}},
+        )
 
 
 # =============================================================================
@@ -30,10 +53,10 @@ class ABCompareRequest(BaseModel):
 
     matter_id: str = Field(..., description="Matter UUID to evaluate")
     tags: list[str] | None = Field(None, description="Golden dataset tag filters")
-    control_embedding: str = Field("openai", description="Control embedding provider")
-    control_reranker: str = Field("cohere", description="Control reranker provider")
-    treatment_embedding: str = Field("voyage", description="Treatment embedding provider")
-    treatment_reranker: str = Field("voyage", description="Treatment reranker provider")
+    control_embedding: Literal["openai", "voyage"] = Field("openai", description="Control embedding provider")
+    control_reranker: Literal["cohere", "voyage"] = Field("cohere", description="Control reranker provider")
+    treatment_embedding: Literal["openai", "voyage"] = Field("voyage", description="Treatment embedding provider")
+    treatment_reranker: Literal["cohere", "voyage"] = Field("voyage", description="Treatment reranker provider")
 
 
 # =============================================================================
@@ -47,6 +70,7 @@ async def trigger_comparison(
     request: Request,
     body: ABCompareRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
 ) -> dict:
     """Trigger an A/B comparison experiment.
 
@@ -59,6 +83,8 @@ async def trigger_comparison(
 
     Cost: ~$0.30-0.60 per comparison (2x batch evaluation).
     """
+    _verify_matter_access(body.matter_id, current_user.id, matter_service, require_edit=True)
+
     logger.info(
         "ab_comparison_requested",
         user_id=current_user.id,
@@ -114,7 +140,7 @@ async def trigger_comparison(
         logger.error("ab_comparison_trigger_failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": {"code": "AB_COMPARE_FAILED", "message": str(e)}},
+            detail={"error": {"code": "AB_COMPARE_FAILED", "message": "Failed to trigger A/B comparison"}},
         ) from e
 
 
@@ -122,12 +148,15 @@ async def trigger_comparison(
 @limiter.limit(READONLY_RATE_LIMIT)
 async def list_runs(
     request: Request,
-    matter_id: str | None = Query(None, description="Filter by matter ID"),
+    matter_id: str = Query(..., description="Matter ID (required)"),
     run_status: str | None = Query(None, alias="status", description="Filter by status"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
 ) -> dict:
-    """List A/B test runs with optional filters."""
+    """List A/B test runs for a matter."""
+    _verify_matter_access(matter_id, current_user.id, matter_service)
+
     try:
         from app.services.evaluation.ab_testing import ABTestRunner
 
@@ -150,6 +179,7 @@ async def get_run(
     request: Request,
     run_id: str = Path(..., description="A/B test run UUID"),
     current_user: AuthenticatedUser = Depends(get_current_user),
+    matter_service: MatterService = Depends(get_matter_service),
 ) -> dict:
     """Get a specific A/B test run with full results."""
     try:
@@ -162,6 +192,15 @@ async def get_run(
                 detail={"error": {"code": "RUN_NOT_FOUND", "message": "A/B test run not found"}},
             )
 
+        # Verify the user has access to the matter this run belongs to
+        run_matter_id = run.get("matter_id")
+        if not run_matter_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": {"code": "INVALID_RUN", "message": "Run has no associated matter"}},
+            )
+        _verify_matter_access(run_matter_id, current_user.id, matter_service)
+
         return {"data": run}
 
     except HTTPException:
@@ -170,7 +209,7 @@ async def get_run(
         logger.error("ab_get_run_failed", run_id=run_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": {"code": "AB_GET_RUN_FAILED", "message": str(e)}},
+            detail={"error": {"code": "AB_GET_RUN_FAILED", "message": "Failed to retrieve A/B test run"}},
         ) from e
 
 

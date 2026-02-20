@@ -30,6 +30,11 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+# Valid embedding dimensions for supported providers:
+# - OpenAI text-embedding-3-small: 1536
+# - Voyage voyage-law-2: 1024
+VALID_EMBEDDING_DIMENSIONS = frozenset({1536, 1024})
+
 
 def _validate_uuid(value: str, name: str) -> None:
     """Validate that a value is a valid UUID.
@@ -220,7 +225,7 @@ def build_semantic_search_query(
 
     Args:
         namespace_filter: The validated namespace filter.
-        query_embedding: The query embedding vector (1536 dimensions).
+        query_embedding: The query embedding vector (1536 or 1024 dimensions).
         limit: Maximum number of results to return.
         similarity_threshold: Minimum similarity score (0-1).
 
@@ -232,14 +237,18 @@ def build_semantic_search_query(
 
     Example:
         >>> filter = get_namespace_filter("abc-123")
-        >>> embedding = [0.1] * 1536  # Example embedding
+        >>> embedding = [0.1] * 1536  # OpenAI example (or 1024 for Voyage)
         >>> params = build_semantic_search_query(filter, embedding, limit=5)
         >>> params["filter_matter_id"]
         'abc-123'
     """
-    # Validate embedding dimensions
-    if not query_embedding or len(query_embedding) != 1536:
-        raise ValueError(f"query_embedding must have 1536 dimensions, got {len(query_embedding) if query_embedding else 0}")
+    # Validate embedding dimensions (supports multiple providers)
+    dim = len(query_embedding) if query_embedding else 0
+    if dim not in VALID_EMBEDDING_DIMENSIONS:
+        raise ValueError(
+            f"query_embedding has {dim} dimensions, "
+            f"expected one of {sorted(VALID_EMBEDDING_DIMENSIONS)}"
+        )
 
     if not 0 <= similarity_threshold <= 1:
         raise ValueError("similarity_threshold must be between 0 and 1")

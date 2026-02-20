@@ -49,11 +49,9 @@ class TableExtractionTaskError(Exception):
 @celery_app.task(
     name="app.workers.tasks.table_extraction_tasks.extract_tables",
     bind=True,
-    autoretry_for=(ConnectionError,),
-    retry_backoff=True,
-    retry_backoff_max=60,
     max_retries=2,
-    retry_jitter=True,
+    soft_time_limit=600,  # 10 minutes soft limit for Docling ML extraction
+    time_limit=660,  # 11 minutes hard limit
 )  # type: ignore[misc]
 def extract_tables(
     self,  # type: ignore[no-untyped-def]
@@ -114,7 +112,7 @@ def extract_tables(
     # Skip if previous task failed
     if prev_result:
         prev_status = prev_result.get("status")
-        failed_statuses = ("failed", "error", "ocr_failed", "chunking_failed")
+        failed_statuses = ("failed", "error", "ocr_failed", "chunking_failed", "chunking_skipped")
         if prev_status in failed_statuses:
             logger.info(
                 "extract_tables_skipped",
@@ -151,15 +149,17 @@ def extract_tables(
         )
         pdf_content = store_service.download_file(storage_path)
 
-        # Save to temp file for Docling (it requires file path)
+        # Save to temp file for Docling (it requires file path).
+        # Track tmp_path at outer scope so cleanup runs even if write() throws.
         import tempfile
         from pathlib import Path
 
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-            tmp_file.write(pdf_content)
-            tmp_path = Path(tmp_file.name)
-
+        tmp_path: Path | None = None
         try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                tmp_file.write(pdf_content)
+
             # Import here to avoid loading Docling at startup
             from app.services.table_extraction import get_table_extractor
 
@@ -203,13 +203,51 @@ def extract_tables(
                 "processing_time_ms": result.processing_time_ms,
                 "error": result.error,
             }
-
         finally:
-            # Clean up temp file
-            try:
-                tmp_path.unlink()
-            except Exception:
-                pass
+            # Clean up temp file — runs regardless of where the exception occurred
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
+
+    except ConnectionError as e:
+        # Manual retry for transient network errors. We handle this inside
+        # the except block (not via autoretry_for) to preserve the "never raises"
+        # contract. autoretry_for intercepts exceptions BEFORE this handler,
+        # and when retries exhaust, MaxRetriesExceededError breaks the Celery chain.
+        #
+        # With manual retry: if retries remain, self.retry() raises Retry (Celery
+        # re-queues the task). If retries are exhausted, we return gracefully
+        # so the chain continues to embed_chunks.
+        retry_count = self.request.retries
+        if retry_count < self.max_retries:
+            logger.warning(
+                "extract_tables_connection_error_retrying",
+                document_id=doc_id,
+                job_id=job_id,
+                retry=retry_count + 1,
+                max_retries=self.max_retries,
+                error=str(e),
+            )
+            # self.retry() raises Retry exception — Celery re-queues the task
+            raise self.retry(exc=e, countdown=min(30 * (2 ** retry_count), 60))
+
+        # Retries exhausted — return gracefully so the chain continues
+        logger.error(
+            "extract_tables_connection_error_exhausted",
+            document_id=doc_id,
+            job_id=job_id,
+            retries_attempted=retry_count,
+            error=str(e),
+        )
+        return {
+            "status": "table_extraction_failed",
+            "document_id": doc_id,
+            "job_id": job_id,
+            "error_code": "CONNECTION_ERROR",
+            "error_message": f"Network error after {retry_count} retries: {e}",
+        }
 
     except Exception as e:
         logger.error(
@@ -245,7 +283,12 @@ def _store_tables(
         matter_id: Matter UUID for isolation.
         document_id: Document UUID for linkage.
     """
-    supabase = get_supabase()
+    # Use service client (not anon client) for write operations in background tasks.
+    # Background workers have no user context, so RLS with anon client may silently fail.
+    supabase = get_service_client()
+    if supabase is None:
+        logger.warning("table_store_skipped_no_client", document_id=document_id)
+        return
 
     # Idempotency: delete existing tables for this document before re-inserting
     try:
@@ -338,7 +381,10 @@ def _create_table_chunks(
             error=str(e),
         )
 
-    # Get the next chunk_index to avoid collisions with text chunks
+    # Get the next chunk_index to avoid collisions with text chunks.
+    # Query max chunk_index among non-table chunks (parent+child) since we just
+    # deleted table chunks above. If the query fails, we cannot safely determine
+    # the next index — skip table chunk creation rather than risk collisions.
     try:
         max_index_resp = (
             client.table("chunks")
@@ -349,8 +395,13 @@ def _create_table_chunks(
             .execute()
         )
         next_index = (max_index_resp.data[0]["chunk_index"] + 1) if max_index_resp.data else 0
-    except Exception:
-        next_index = 10000  # Safe offset if query fails
+    except Exception as e:
+        logger.error(
+            "table_chunks_max_index_query_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return 0  # Skip table chunks rather than risk index collisions
 
     chunk_records: list[dict] = []
 
@@ -491,8 +542,9 @@ def _split_table_by_rows(
     header_block = f"{header_line}\n{separator_line}"
     header_tokens = count_tokens(header_block)
 
-    # Budget for data rows per chunk
-    row_budget = TABLE_CHUNK_MAX_TOKENS - header_tokens - 30  # 30 tokens for prefix
+    # Budget for data rows per chunk. If the header is extremely wide (many columns),
+    # ensure a minimum budget of 200 tokens per chunk to avoid 1-row-per-chunk explosion.
+    row_budget = max(TABLE_CHUNK_MAX_TOKENS - header_tokens - 30, 200)  # 30 tokens for prefix
 
     chunks: list[dict] = []
     current_rows: list[str] = []
@@ -501,6 +553,24 @@ def _split_table_by_rows(
 
     for row in data_rows:
         row_tokens = count_tokens(row)
+
+        # Guard: if a single row exceeds the budget, truncate it to avoid
+        # creating an oversized chunk. Legal tables with many columns can
+        # easily have rows exceeding 2000 tokens.
+        # Truncation preserves markdown table structure by cutting at cell
+        # boundaries (| delimiters) and appending a closing pipe.
+        if row_tokens > row_budget:
+            cells = row.split("|")
+            truncated: list[str] = []
+            accumulated = 0
+            for cell in cells:
+                cell_tokens = count_tokens(cell)
+                if accumulated + cell_tokens > row_budget and truncated:
+                    break
+                truncated.append(cell)
+                accumulated += cell_tokens
+            row = "|".join(truncated) + "| ..."
+            row_tokens = count_tokens(row)
 
         if current_tokens + row_tokens > row_budget and current_rows:
             # Flush current chunk

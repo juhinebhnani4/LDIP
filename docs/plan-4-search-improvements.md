@@ -938,3 +938,118 @@ Voyage embedding model integration is production-ready with a boolean kill switc
 4. Deploy frontend: `cd frontend && vercel --prod`
 5. To enable A/B routing: set `VOYAGE_TRAFFIC_PERCENTAGE=10` in Railway (start with 10% canary)
 6. To trigger manual comparison: `POST /api/ab-testing/compare` with matter_id
+
+---
+
+## Code Review: Deep Analysis & Fixes (2026-02-20)
+
+> **Status**: Complete — 3 rounds of adversarial code review across all 10 gaps
+
+### Review Process
+
+Three rounds of deep adversarial review covering ~50 files across the full search improvements implementation:
+
+| Round | Scope | Issues Found | Issues Fixed |
+|-------|-------|-------------|-------------|
+| Round 1 | Initial review across 5 parallel agents (SQL, core services, evaluation, API+frontend, pipeline+tasks) | 5 CRITICAL, 12 HIGH, 15+ MODERATE | All CRITICAL + HIGH fixed |
+| Round 2 | Re-review of Round 1 fixes (statistical engine, eval tasks) | 4 HIGH, 3 MODERATE | All fixed |
+| Round 3 | Final deep review of remaining 5 architectural issues + re-review | 2 HIGH, 1 CRITICAL (theoretical), 6 MODERATE | All fixed |
+
+### Fixes Applied
+
+#### Statistical Engine (`ab_testing.py`)
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| C1 | CRITICAL | Replace hand-rolled p-value with scipy | `_approx_t_p_value()` used normal approximation, inaccurate for df < 30. Replaced with `scipy.stats.t.sf(abs(t_stat), df) * 2` — exact for all sample sizes. |
+| C2 | CRITICAL | Add faithfulness safety gate | Treatment arms with low faithfulness (<0.70) are now rejected regardless of overall score. Critical for a legal tool where unfaithful answers are dangerous. |
+| H1 | HIGH | Glass's delta instead of Cohen's d | Pooled SD Cohen's d conflates both arms' variance. Glass's delta uses control arm SD as denominator — appropriate for Welch's context. |
+| H2 | HIGH | Glass's delta zero-variance edge case | When `std_a == 0`, returns `999.0` sentinel (not `float('inf')` which crashes JSON serialization). |
+| H3 | HIGH | Optimistic locking with validation | `update_run()` now verifies affected rows and raises `RuntimeError` on stale writes. |
+| H4 | HIGH | Enforce `_STATUS_TRANSITIONS` | `update_run()` validates new status against allowed transitions before writing. |
+| H5 | HIGH | Guard failure updates | `complete_comparison()` failure paths now pass `expected_status="comparing"` to prevent overwriting cancellations. |
+| M1 | MODERATE | Faithfulness gate data validation | Requires minimum 2 samples per arm. Logs warning when gate is skipped. |
+| M2 | MODERATE | Faithfulness gate bypass flag | Decision result includes `faithfulness_gate_skipped: True` when safety gate was bypassed. Auto-promotion should refuse when set. |
+| M3 | MODERATE | Secondary faithfulness threshold | Lowered from 10% to 5% relative drop — stricter because faithfulness regressions in legal tools are more dangerous than relevancy drops. |
+| M4 | MODERATE | Wrap sync Supabase in `asyncio.to_thread` | All ABTestRunner async methods now offload sync HTTP calls to thread pool, unblocking the FastAPI event loop. |
+| L1 | LOW | Log RPC fallback errors | `aggregate_scores()` RPC fallback now logs warning instead of silently swallowing. |
+
+#### Evaluation Tasks (`evaluation_tasks.py`)
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| C3 | CRITICAL | Upsert idempotency | Changed `insert()` to `upsert(on_conflict="job_id,golden_item_id")` with defensive fallback for PostgREST compatibility. Fallback verifies UPDATE affected rows. |
+| C4 | CRITICAL | Duplicate A/B run prevention | Checks for active runs before starting, cancels duplicates. |
+| H6 | HIGH | Expected status on all transitions | All status transitions use `expected_status` parameter, preventing stale writes from overwriting cancellations. |
+| H7 | HIGH | SoftTimeLimitExceeded handler | Queries actual inserted count from DB (via service client, not RLS client) instead of hardcoding. |
+| H8 | HIGH | Distributed lock for scheduled eval | Redis SETNX with 90-min TTL prevents duplicate nightly evaluations. Lock released on completion. Graceful fallback if Redis unavailable. |
+| H9 | HIGH | Error handler status guard | `run_ab_comparison` error handler now checks current status before marking failed, preventing overwrite of completed/cancelled results. |
+| M5 | MODERATE | Cost tracking in `finally` | `cumulative_cost += estimated_cost` moved to `finally` block — counts cost even on partial failure. |
+| L2 | LOW | Count query client | SoftTimeLimitExceeded count query changed from `get_supabase()` (RLS) to `get_service_client()` (service role). |
+
+#### Namespace & Dimensions (`namespace.py`)
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| H10 | HIGH | Dynamic dimension validation | Replaced hardcoded `!= 1536` with `VALID_EMBEDDING_DIMENSIONS = frozenset({1536, 1024})`. Voyage's 1024-dim vectors now pass validation. |
+
+#### API Security
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| H11 | HIGH | Authorization bypass fix | AB testing route now rejects runs with NULL `matter_id` instead of skipping access check. |
+| M6 | MODERATE | Rate limiting on evaluation endpoints | Added `@limiter.limit()` to `evaluate_qa_pair`, `evaluate_batch`, `get_evaluation_results`. |
+| M7 | MODERATE | SSE error field limits | Added `max_length` validation to `session_id`, `error_type`, `error_message`, `raw_chunk` in chat error reports. |
+| L3 | LOW | Module-level import | Moved `import re` from function body to module level in `search.py`. |
+
+#### Table Extraction (`table_extraction_tasks.py`)
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| M8 | MODERATE | Cell-boundary-aware row truncation | Changed from simple string slice to cell-boundary-aware truncation preserving markdown pipe delimiters. |
+| M9 | MODERATE | Temp file leak fix | Moved temp file cleanup to outer `finally` scope so cleanup happens on all exit paths. |
+
+#### Regression Detector (`regression_detector.py`)
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| M10 | MODERATE | Zero-score filter | Added `score <= 0` filter to match baseline creation behavior, preventing zero-score items from skewing regression detection. |
+
+#### Frontend
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| M11 | MODERATE | `Number.isFinite()` guards | Added guards on `.toFixed()` calls in ABTestingWidget statistical display. |
+| M12 | MODERATE | `useMemo` for derived state | Wrapped derived arrays in `useChunkMetrics` and `useQualityMetrics` hooks to prevent unnecessary re-renders. |
+| M13 | MODERATE | Cross-field validation | SearchFilterPanel now clamps pageMin/pageMax against each other. |
+| L4 | LOW | Remove redundant override | Removed redundant `relevanceScore` override in `transformRerankedResult`. |
+
+#### Migration
+
+| # | Severity | Fix | Description |
+|---|----------|-----|-------------|
+| M14 | MODERATE | Upsert constraint | New migration `20260220700001_add_eval_results_upsert_constraint.sql` — partial unique index on `(job_id, golden_item_id)` for idempotent batch evaluation. |
+
+### Files Modified (17 files + 1 new migration)
+
+**Backend (12 files)**:
+- `backend/app/services/evaluation/ab_testing.py` — Statistical engine, asyncio.to_thread, Glass's delta, faithfulness gate, optimistic locking
+- `backend/app/workers/tasks/evaluation_tasks.py` — Upsert, distributed lock, SoftTimeLimitExceeded, status guards
+- `backend/app/services/rag/namespace.py` — Dynamic dimension validation
+- `backend/app/api/routes/ab_testing.py` — Authorization bypass fix
+- `backend/app/api/routes/evaluation.py` — Rate limiting
+- `backend/app/api/routes/search.py` — Module-level import
+- `backend/app/api/routes/chat.py` — SSE field limits
+- `backend/app/services/evaluation/regression_detector.py` — Zero-score filter
+- `backend/app/services/rag/pipeline_service.py` — Provider config
+- `backend/app/workers/tasks/table_extraction_tasks.py` — Row truncation, temp file fix
+
+**Frontend (5 files)**:
+- `frontend/src/components/features/admin/ABTestingWidget.tsx` — Number.isFinite guards
+- `frontend/src/components/features/chat/SearchFilterPanel.tsx` — Cross-field validation
+- `frontend/src/hooks/useChunkMetrics.ts` — useMemo
+- `frontend/src/hooks/useQualityMetrics.ts` — useMemo
+- `frontend/src/lib/api/search.ts` — Remove redundant override
+
+**Migration (1 file)**:
+- `supabase/migrations/20260220700001_add_eval_results_upsert_constraint.sql` — Upsert constraint

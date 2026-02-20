@@ -63,6 +63,9 @@ class RAGPipelineResult(BaseModel):
         default_factory=dict,
         description="Snapshot of pipeline configuration for traceability",
     )
+    search_latency_ms: int | None = Field(
+        default=None, description="Search+rerank latency in ms (from RAG adapter)",
+    )
     blocked: bool = Field(
         default=False, description="True if query was blocked by safety checks"
     )
@@ -176,6 +179,13 @@ class RAGPipelineService:
                 execution_time_ms=execution_time_ms,
             )
 
+            # Gap 10: Extract search latency from RAG engine result data
+            search_latency_ms = None
+            for er in result.engine_results:
+                if er.data and "search_latency_ms" in er.data:
+                    search_latency_ms = er.data["search_latency_ms"]
+                    break
+
             return RAGPipelineResult(
                 answer=result.unified_response,
                 contexts=contexts,
@@ -183,6 +193,7 @@ class RAGPipelineService:
                 confidence=result.confidence,
                 engines_used=[e.value for e in result.successful_engines],
                 execution_time_ms=execution_time_ms,
+                search_latency_ms=search_latency_ms,
                 pipeline_config=self._get_pipeline_config(),
             )
 

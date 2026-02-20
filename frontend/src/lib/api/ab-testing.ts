@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * A/B Testing API Client
  *
@@ -91,6 +89,10 @@ function toBool(v: unknown, fallback = false): boolean {
   return typeof v === 'boolean' ? v : fallback;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
 function transformScores(data: Record<string, unknown> | null): ABTestScores | null {
   if (!data) return null;
   return {
@@ -127,8 +129,8 @@ function transformRun(data: Record<string, unknown>): ABTestRun {
     treatmentReranker: toStr(data.treatment_reranker, 'voyage'),
     controlJobId: data.control_job_id ? toStr(data.control_job_id) : null,
     treatmentJobId: data.treatment_job_id ? toStr(data.treatment_job_id) : null,
-    controlScores: transformScores(data.control_scores as Record<string, unknown> | null),
-    treatmentScores: transformScores(data.treatment_scores as Record<string, unknown> | null),
+    controlScores: transformScores(isRecord(data.control_scores) ? data.control_scores : null),
+    treatmentScores: transformScores(isRecord(data.treatment_scores) ? data.treatment_scores : null),
     controlLatencyP50: data.control_latency_p50_ms != null ? toNum(data.control_latency_p50_ms) : null,
     controlLatencyP95: data.control_latency_p95_ms != null ? toNum(data.control_latency_p95_ms) : null,
     treatmentLatencyP50: data.treatment_latency_p50_ms != null ? toNum(data.treatment_latency_p50_ms) : null,
@@ -138,7 +140,7 @@ function transformRun(data: Record<string, unknown>): ABTestRun {
     decision: data.decision ? toStr(data.decision) : null,
     decisionConfidence: data.decision_confidence != null ? toNum(data.decision_confidence) : null,
     decisionReasoning: data.decision_reasoning ? toStr(data.decision_reasoning) : null,
-    statisticalTest: transformStatisticalTest(data.statistical_test as Record<string, unknown> | null),
+    statisticalTest: transformStatisticalTest(isRecord(data.statistical_test) ? data.statistical_test : null),
     goldenItemCount: data.golden_item_count != null ? toNum(data.golden_item_count) : null,
     createdAt: toStr(data.created_at),
     completedAt: data.completed_at ? toStr(data.completed_at) : null,
@@ -146,8 +148,8 @@ function transformRun(data: Record<string, unknown>): ABTestRun {
 }
 
 function transformStatus(data: Record<string, unknown>): ABTestStatus {
-  const latestRaw = data.latest_run as Record<string, unknown> | null;
-  const runningRaw = data.running as Record<string, unknown> | null;
+  const latestRaw = isRecord(data.latest_run) ? data.latest_run : null;
+  const runningRaw = isRecord(data.running) ? data.running : null;
 
   return {
     enabled: toBool(data.enabled),
@@ -171,17 +173,19 @@ function transformStatus(data: Record<string, unknown>): ABTestStatus {
 
 export async function getABTestStatus(): Promise<ABTestStatus> {
   const response = await api.get<{ data: Record<string, unknown> }>('/api/ab-testing/status');
+  if (!response.data) throw new Error('No data in A/B test status response');
   return transformStatus(response.data);
 }
 
 export async function getABTestRuns(matterId?: string): Promise<ABTestRun[]> {
-  const params = matterId ? `?matter_id=${matterId}` : '';
+  const params = matterId ? `?${new URLSearchParams({ matter_id: matterId })}` : '';
   const response = await api.get<{ data: Array<Record<string, unknown>> }>(`/api/ab-testing/runs${params}`);
   return (response.data || []).map(transformRun);
 }
 
 export async function getABTestRun(runId: string): Promise<ABTestRun> {
   const response = await api.get<{ data: Record<string, unknown> }>(`/api/ab-testing/runs/${runId}`);
+  if (!response.data) throw new Error('No data in A/B test run response');
   return transformRun(response.data);
 }
 

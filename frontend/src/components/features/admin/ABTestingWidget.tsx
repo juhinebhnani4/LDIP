@@ -33,9 +33,8 @@ function ScoreBar({
 }) {
   const cv = controlValue ?? 0;
   const tv = treatmentValue ?? 0;
-  const maxVal = Math.max(cv, tv, 0.01);
-  const controlPct = (cv / 1) * 100; // Scores are 0-1
-  const treatmentPct = (tv / 1) * 100;
+  const controlPct = cv * 100; // Scores are 0-1
+  const treatmentPct = tv * 100;
 
   return (
     <div className="space-y-1">
@@ -79,13 +78,13 @@ function DecisionBadge({ decision, confidence }: { decision: string | null; conf
     insufficient_data: { icon: AlertTriangle, color: 'text-orange-500', label: 'Need More Data' },
   };
 
-  const c = config[decision] || config.insufficient_data;
+  const c = config[decision] || { icon: AlertTriangle, color: 'text-gray-500', label: decision };
   const Icon = c.icon;
   const confPct = confidence ? `${(confidence * 100).toFixed(0)}%` : '';
 
   return (
     <div className={`flex items-center gap-1.5 ${c.color}`}>
-      <Icon className="size-4" />
+      <Icon className="size-4" aria-hidden="true" />
       <span className="text-sm font-medium">{c.label}</span>
       {confPct && <span className="text-xs text-muted-foreground">({confPct} conf.)</span>}
     </div>
@@ -105,7 +104,7 @@ function LatestRunDetail({ run }: { run: ABTestRun }) {
       {/* Decision */}
       <div className="flex items-center justify-between">
         <DecisionBadge decision={run.decision} confidence={run.decisionConfidence} />
-        {run.goldenItemCount && (
+        {run.goldenItemCount != null && run.goldenItemCount > 0 && (
           <span className="text-xs text-muted-foreground">{run.goldenItemCount} items</span>
         )}
       </div>
@@ -134,13 +133,13 @@ function LatestRunDetail({ run }: { run: ABTestRun }) {
       )}
 
       {/* Latency comparison */}
-      {(run.controlLatencyP50 || run.treatmentLatencyP50) && (
+      {(run.controlLatencyP50 != null || run.treatmentLatencyP50 != null) && (
         <div className="flex gap-4 pt-1 text-xs text-muted-foreground">
           <div>
             <span className="font-medium">Latency P50:</span>{' '}
             {run.controlLatencyP50 ?? '–'}ms vs {run.treatmentLatencyP50 ?? '–'}ms
           </div>
-          {(run.controlLatencyP95 || run.treatmentLatencyP95) && (
+          {(run.controlLatencyP95 != null || run.treatmentLatencyP95 != null) && (
             <div>
               <span className="font-medium">P95:</span>{' '}
               {run.controlLatencyP95 ?? '–'}ms vs {run.treatmentLatencyP95 ?? '–'}ms
@@ -160,7 +159,7 @@ function LatestRunDetail({ run }: { run: ABTestRun }) {
       )}
 
       {/* Timestamp */}
-      {run.completedAt && (
+      {run.completedAt && run.completedAt.length > 0 && (
         <div className="text-[10px] text-muted-foreground">
           Completed {new Date(run.completedAt).toLocaleString()}
         </div>
@@ -192,8 +191,8 @@ function StatusIndicator({ status }: { status: string }) {
   };
 
   return (
-    <div className="flex items-center gap-1.5 text-xs">
-      <span className={`size-2 rounded-full ${colors[status] || 'bg-gray-400'}`} />
+    <div className="flex items-center gap-1.5 text-xs" role="status">
+      <span className={`size-2 rounded-full ${colors[status] || 'bg-gray-400'}`} aria-hidden="true" />
       <span className="text-muted-foreground">{labels[status] || status}</span>
     </div>
   );
@@ -241,6 +240,7 @@ export function ABTestingWidget() {
             onClick={refresh}
             className="p-1 rounded hover:bg-muted transition-colors"
             title="Refresh"
+            aria-label="Refresh A/B testing status"
           >
             <RefreshCw className="size-3.5 text-muted-foreground" />
           </button>
@@ -281,7 +281,9 @@ export function ABTestingWidget() {
               <div className="border rounded-md px-3 py-2 space-y-1">
                 <StatusIndicator status={status.running.status} />
                 <div className="text-[10px] text-muted-foreground">
-                  Started {new Date(status.running.createdAt).toLocaleString()}
+                  {status.running.createdAt && status.running.createdAt.length > 0 &&
+                    `Started ${new Date(status.running.createdAt).toLocaleString()}`
+                  }
                 </div>
               </div>
             )}

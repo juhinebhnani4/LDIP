@@ -29,6 +29,21 @@ from app.workers.utils import run_async
 logger = structlog.get_logger(__name__)
 
 
+def _extract_search_latency(rag_result) -> int | None:  # noqa: ANN001
+    """Extract actual search latency from RAG pipeline result.
+
+    The RAG adapter tracks search+rerank time separately from full pipeline
+    time. This extracts that value for accurate A/B latency comparison.
+    Falls back to full pipeline execution_time_ms if search_latency not available.
+    """
+    if hasattr(rag_result, "search_latency_ms") and rag_result.search_latency_ms is not None:
+        return rag_result.search_latency_ms
+    # Fallback: use full pipeline time (less accurate but better than nothing)
+    if hasattr(rag_result, "execution_time_ms"):
+        return rag_result.execution_time_ms
+    return None
+
+
 class EvaluationTaskError(Exception):
     """Error in evaluation task."""
 
@@ -51,17 +66,21 @@ def _build_evaluation_row(
     expected_answer: str | None = None,
     job_id: str | None = None,
     chat_message_id: str | None = None,
+    embedding_provider: str | None = None,
+    rerank_provider: str | None = None,
+    search_latency_ms: int | None = None,
 ) -> dict[str, Any]:
     """Build a row dict matching the evaluation_results schema exactly.
 
     Single source of truth for column names. If the schema changes,
     update this function only.
 
-    Schema columns (20260122000002 + 20260216000001):
+    Schema columns (20260122000002 + 20260216000001 + 20260220600001):
         id (auto), matter_id, golden_item_id, question, answer, contexts,
         context_recall, faithfulness, answer_relevancy, overall_score,
         evaluated_at, triggered_by, expected_answer, job_id,
-        chat_message_id, metric_scores, pipeline_config
+        chat_message_id, metric_scores, pipeline_config,
+        embedding_provider, rerank_provider, search_latency_ms
     """
     scores = eval_result.scores
 
@@ -93,6 +112,13 @@ def _build_evaluation_row(
         row["job_id"] = job_id
     if chat_message_id is not None:
         row["chat_message_id"] = chat_message_id
+    # Gap 10: Provider attribution and search latency
+    if embedding_provider is not None:
+        row["embedding_provider"] = embedding_provider
+    if rerank_provider is not None:
+        row["rerank_provider"] = rerank_provider
+    if search_latency_ms is not None:
+        row["search_latency_ms"] = search_latency_ms
 
     return row
 
@@ -285,7 +311,6 @@ def run_batch_evaluation(
                 try:
                     # Step 1: Run question through RAG pipeline
                     # Gap 10: Pass provider context for A/B testing
-                    query_start = _time.time()
                     rag_result = await pipeline.query(
                         matter_id=matter_id,
                         question=item.question,
@@ -293,7 +318,9 @@ def run_batch_evaluation(
                         context=provider_context,
                         skip_cache=True,
                     )
-                    search_latency_ms = int((_time.time() - query_start) * 1000)
+                    # Gap 10: Extract actual search latency from engine result
+                    # (tracked inside the RAG adapter, not full pipeline time)
+                    search_latency_ms = _extract_search_latency(rag_result)
 
                     answer = rag_result.answer
                     contexts = rag_result.contexts
@@ -328,11 +355,10 @@ def run_batch_evaluation(
                         golden_item_id=item.id,
                         expected_answer=item.expected_answer,
                         job_id=job_id,
+                        embedding_provider=embedding_provider or "openai",
+                        rerank_provider=rerank_provider or "cohere",
+                        search_latency_ms=search_latency_ms,
                     )
-                    # Gap 10: Add provider columns + latency
-                    row["embedding_provider"] = embedding_provider or "openai"
-                    row["rerank_provider"] = rerank_provider or "cohere"
-                    row["search_latency_ms"] = search_latency_ms
 
                     supabase.table("evaluation_results").insert(row).execute()
 

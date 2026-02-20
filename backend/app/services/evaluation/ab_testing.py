@@ -79,6 +79,9 @@ class ABTestRouter:
         if percentage is None:
             percentage = settings.voyage_traffic_percentage
 
+        # Clamp to valid range
+        percentage = max(0, min(100, percentage))
+
         if percentage <= 0:
             return None, None
         if percentage >= 100:
@@ -91,7 +94,7 @@ class ABTestRouter:
         # Deterministic hash → stable bucket assignment
         # MD5 is fine here (not security, just distribution)
         hash_input = f"{user_id}:{matter_id}".encode()
-        hash_value = int(hashlib.md5(hash_input).hexdigest(), 16)
+        hash_value = int(hashlib.md5(hash_input, usedforsecurity=False).hexdigest(), 16)
         bucket = hash_value % 100  # 0-99
 
         if bucket < percentage:
@@ -456,7 +459,9 @@ class ABTestRunner:
             row["created_by"] = created_by
 
         result = supabase.table("ab_test_runs").insert(row).execute()
-        return result.data[0] if result.data else row
+        if not result.data:
+            raise RuntimeError("Failed to create A/B test run — insert returned no data")
+        return result.data[0]
 
     @staticmethod
     async def update_run(run_id: str, updates: dict[str, Any]) -> None:

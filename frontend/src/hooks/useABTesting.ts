@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ABTestStatus } from '@/lib/api/ab-testing';
+import { getABTestStatus } from '@/lib/api/ab-testing';
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
@@ -26,7 +27,6 @@ export function useABTesting() {
     fetchingRef.current = true;
 
     try {
-      const { getABTestStatus } = await import('@/lib/api/ab-testing');
       const data = await getABTestStatus();
       if (mountedRef.current) {
         setStatus(data);

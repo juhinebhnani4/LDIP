@@ -7,6 +7,7 @@ import { LLMQuotaWidget } from '@/components/features/admin/LLMQuotaWidget';
 import { QueueDepthWidget } from '@/components/features/admin/QueueDepthWidget';
 import { CostReportWidget } from '@/components/features/admin/CostReportWidget';
 import { CleanupWidget } from '@/components/features/admin/CleanupWidget';
+import { ChunkMetricsWidget } from '@/components/features/admin/ChunkMetricsWidget';
 import { CostComparisonDashboard } from '@/components/features/costs/CostComparisonDashboard';
 
 /**
@@ -99,6 +100,9 @@ export default async function AdminPage() {
 
           {/* Data Cleanup Widget */}
           <CleanupWidget />
+
+          {/* Vector Index Health Widget (Gap 7 & 8) */}
+          <ChunkMetricsWidget />
         </div>
 
         {/* Admin info footer */}

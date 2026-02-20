@@ -51,6 +51,7 @@ from app.api.routes import (
     ws,
 )
 from app.api.routes.admin import maintenance as admin_maintenance
+from app.api.routes.admin import monitoring as admin_monitoring
 from app.api.routes.admin import pipeline as admin_pipeline
 from app.api.routes.admin import quota as admin_quota
 from app.core.config import get_settings
@@ -381,6 +382,7 @@ def create_app() -> FastAPI:
 
     # Admin routes (require admin access)
     app.include_router(admin_maintenance.router, prefix="/api")
+    app.include_router(admin_monitoring.router, prefix="/api")
     app.include_router(admin_pipeline.router, prefix="/api")
     app.include_router(admin_quota.router, prefix="/api")
 

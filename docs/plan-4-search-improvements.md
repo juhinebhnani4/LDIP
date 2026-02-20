@@ -1,7 +1,7 @@
 # Plan: 4 Search/Retrieval Improvements
 
 **Date**: 2026-02-20
-**Status**: 6 of 8 gaps implemented (Gaps 1-6 done)
+**Status**: 8 of 10 gaps implemented — Gaps 9 & 10 analyzed, not started
 
 ---
 
@@ -273,7 +273,13 @@ Extracts `search_filters` from `body.filters` and passes to search service calls
 | ~~5~~ | ~~**Gap 5**: Table-aware embedding~~ | ~~1-2 days~~ | **DONE** (2026-02-20) — Pipeline integration + table chunking. 7 files changed: 1 migration (CHECK constraint), model enum, namespace validation, pipeline chain, table extraction task (chunk creation + large table splitting), embed_chunks status handling, search docstrings. |
 | ~~6~~ | ~~**Gap 6**: Chunk boundary dedup~~ | ~~2-4 hrs~~ | **DONE** (2026-02-20) — Seed-based suffix-prefix matching in `_format_context()`. 1 file changed: `prompts.py` (2 new functions + integration in `_format_context`). Saves ~8-15% tokens per query with 3+ same-doc parents. |
 
-6 of 8 gaps complete (Gaps 1-6). Gaps 7-8 are lower priority (low/none).
+| ~~7~~ | ~~**Gap 7**: Vector quantization monitoring~~ | ~~2-3 hrs~~ | **DONE** (2026-02-20) — Full-stack monitoring: 2 SQL RPC functions, admin endpoint (parallel fetch + progressive recommendations), frontend widget (global progress, HNSW config, per-matter breakdown, alerts). 8 files changed. |
+| ~~8~~ | ~~**Gap 8**: HNSW index tuning~~ | ~~1 hr~~ | **DONE** (2026-02-20) — Rebuilt all 4 HNSW indexes with ef_construction=128, added SET LOCAL ef_search=80 to both hybrid search functions. 1 migration, 2 functions recreated. |
+
+Gaps 1-8 complete. Gaps 9-10 analyzed — ready for implementation.
+
+| 7 | **Gap 9**: Automated RAGAS regression | 2-3 days | **Analyzed** — Framework exists, needs CI/CD wiring, thresholds, scheduling |
+| 8 | **Gap 10**: Automated Voyage A/B testing | 2-3 days | **Analyzed** — Manual kill switch exists, needs % routing, RAGAS comparison, auto-decision. Synergistic with Gap 9. |
 
 ---
 
@@ -429,13 +435,13 @@ Parent context expansion (Gap 1) deduplicates at the parent level — if multipl
 
 ---
 
-### Gap 7: Vector Quantization — NOT AN ISSUE (Monitor Only)
+### Gap 7: Vector Quantization Monitoring — DONE
 
-> **Status**: No action needed | **Priority**: LOW | **Effort**: N/A (monitoring only)
+> **Implemented**: 2026-02-20 | **Status**: Deployed to codebase, pending migration apply
 
 #### Problem Statement
 
-With 1536-dim OpenAI + 1024-dim Voyage vectors stored as full float32, storage and memory could become concerns at scale. Int8 or scalar quantization could halve memory and speed search.
+With 1536-dim OpenAI + 1024-dim Voyage vectors stored as full float32, storage and memory could become concerns at scale. Need proactive monitoring to know when to consider quantization (halfvec, int8, dimension reduction, or separate vector DB).
 
 #### Analysis
 
@@ -454,53 +460,147 @@ With 1536-dim OpenAI + 1024-dim Voyage vectors stored as full float32, storage a
 - Storage costs are negligible at current scale (<$1/month)
 - pgvector float32 is the safest, most tested path
 
-**When to revisit:**
-- Chunk count exceeds 500K (add monitoring metric)
-- Query latency exceeds 500ms consistently
-- Storage costs become meaningful (>$50/month for vectors)
+#### Implementation
 
-#### Long-term Options (if needed)
+**Strategy**: Full-stack monitoring dashboard — SQL RPC functions for metrics, backend admin endpoint, frontend widget with alerts and HNSW config visibility.
+
+**Files changed**:
+
+1. **`supabase/migrations/20260220400001_add_chunk_metrics_function.sql`** (new)
+   - `get_chunk_metrics()` — per-matter chunk counts with type breakdown (parent, child, table), Voyage embedding coverage, and 50K threshold alert flag
+   - `get_global_chunk_count()` — global totals (total chunks, embedding coverage, matter count), 500K threshold alert flag
+   - Both functions are `SECURITY DEFINER`, `STABLE`, granted only to `service_role` (admin access enforced at API layer)
+
+2. **`backend/app/api/routes/admin/monitoring.py`** (new)
+   - `GET /api/admin/chunk-metrics` — admin-only endpoint
+   - Calls both RPC functions in parallel via `asyncio.gather()`
+   - Returns per-matter breakdown, global totals, HNSW index config, alert flags, and progressive quantization recommendations
+   - `_get_quantization_recommendation()` — generates human-readable advice based on scale:
+     - <100K: "No action needed"
+     - 100K-500K: "Monitor closely"
+     - >500K or matter >50K: "Consider halfvec(float16)"
+     - >1M: "URGENT: halfvec or separate vector DB"
+
+3. **`backend/app/api/routes/admin/__init__.py`** — added `monitoring_router`
+
+4. **`backend/app/main.py`** — registered `admin_monitoring.router`
+
+5. **`frontend/src/lib/api/admin-monitoring.ts`** (new)
+   - Full TypeScript types for chunk metrics response
+   - Runtime type validation transformers (handles snake_case/camelCase, null safety)
+   - `getChunkMetrics()` API function
+
+6. **`frontend/src/hooks/useChunkMetrics.ts`** (new)
+   - 2-minute polling (chunk counts change slowly)
+   - Visibility-based polling (stops when tab hidden)
+   - Fetch deduplication, mounted-state safety
+   - Derived state: `hasAlerts`, `alertMatters`, `globalTotal`
+
+7. **`frontend/src/components/features/admin/ChunkMetricsWidget.tsx`** (new)
+   - "Vector Index Health" card with:
+     - Global chunk count progress bar (color-coded by threshold proximity)
+     - HNSW config display (m, ef_construction, ef_search values)
+     - Per-matter chunk breakdown (top 5, with parent/child/table split)
+     - Quantization recommendation banner
+     - Alert threshold badges
+   - Loading skeleton, error handling, manual refresh
+
+8. **`frontend/src/app/(dashboard)/admin/page.tsx`** — added `<ChunkMetricsWidget />`
+
+#### Alert Thresholds
+
+| Level | Threshold | Action |
+|---|---|---|
+| Per-matter | 50K chunks | Monitor HNSW recall quality for that matter |
+| Global | 500K chunks | Consider halfvec(float16) — 2x compression, ~2-3% accuracy loss |
+| Global | 1M chunks | URGENT: halfvec or separate vector DB (Pinecone/Weaviate) |
+
+#### Long-term Quantization Options (when thresholds are hit)
 
 1. **halfvec (float16)** — pgvector 0.7+ supports `halfvec(1536)`, 2x compression, ~2-3% accuracy loss. Best first step.
 2. **Dimension reduction** — Switch to `text-embedding-3-large` with PCA to 768 dims. Better quality at fewer dims.
 3. **Scalar quantization** — int8 via application-layer quantization. 4x compression, ~5-10% accuracy loss.
 4. **Separate vector DB** — If RLS overhead becomes significant at millions of vectors, consider Pinecone/Weaviate.
 
-#### Action Item
+#### Deploy steps
 
-Add a chunk count metric to monitoring dashboard. Alert when any single matter exceeds 50K chunks or global count exceeds 500K.
+1. Apply migration: `supabase db push`
+2. Deploy backend
+3. Deploy frontend
 
 ---
 
-### Gap 8: HNSW Index Tuning — NOT AN ISSUE
+### Gap 8: HNSW Index Tuning — DONE
 
-> **Status**: No action needed | **Priority**: NONE | **Effort**: N/A
+> **Implemented**: 2026-02-20 | **Status**: Deployed to codebase, pending migration apply
 
 #### Problem Statement
 
-`ef_construction=64` was suggested as too conservative for legal precision. Bumping to `ef_construction=128` and `ef_search=128` at query time would improve recall.
+`ef_construction=64` was conservative for legal precision. While the architecture compensates via hybrid search + reranking, improving base HNSW quality provides a stronger foundation — better ANN candidates → better reranking input → better final results.
 
 #### Analysis
 
-**ef_construction=64 is well-suited for this architecture.** The system compensates through multiple layers:
+**Why tune now despite architecture compensating:**
 
-1. **Matter isolation** — every query filters by `matter_id`, so effective HNSW search space is 100-10K vectors (not millions). At this scale, ef_construction=64 provides near-perfect recall.
+1. **Defense in depth** — Hybrid search + reranking compensate for HNSW misses, but why rely on compensation when the base layer can be improved at minimal cost?
+2. **Legal precision demands** — In legal document analysis, every missed relevant chunk can mean a missed citation or incorrect contradiction assessment. The ~2-5% isolated recall improvement may surface that one critical chunk the reranker wouldn't see otherwise.
+3. **Future-proofing** — As matters grow and the system scales, having better HNSW quality reduces dependence on the BM25 fallback and reranking safety net.
+4. **Acceptable cost** — Index build time ~2x slower (acceptable for legal doc volumes, not real-time), query latency ~5-10ms added (within budget).
 
-2. **Hybrid search redundancy** — BM25 catches exact keyword matches that HNSW might miss. RRF fusion ensures both contribute. If HNSW misses a result, BM25 likely catches it.
+#### Implementation
 
-3. **Reranking safety net** — 50 candidates fed to Cohere Rerank v3.5. Even if HNSW ranks a relevant result at position 25-30, reranker surfaces it to top-3.
+**Strategy**: Two-part tuning — better index quality via `ef_construction=128`, and better query recall via `SET LOCAL hnsw.ef_search = 80`.
 
-4. **Dynamic weights** — CITATION queries boost BM25 (1.5x) for exact legal references. SUMMARY queries boost semantic (1.3x). Application-level tuning > index-level tuning.
+**Files changed**:
 
-5. **No ef_search override needed** — pgvector default (~40) is sufficient given the small per-matter index size. Setting `ef_search=128` would add latency with negligible recall improvement.
+1. **`supabase/migrations/20260220400002_tune_hnsw_indexes.sql`** (new)
 
-**Benchmark**: Increasing ef_construction from 64→128 would yield ~2-5% better HNSW recall in isolation, but after hybrid fusion + reranking, the end-to-end improvement would be <1%. Not worth the 2x slower index build time.
+   **Part A: Index recreation (all 4 HNSW indexes)**:
+   - `idx_chunks_embedding` — chunks.embedding (OpenAI 1536-dim): `ef_construction` 64→128
+   - `idx_library_chunks_embedding` — library_chunks.embedding (OpenAI 1536-dim): `ef_construction` 64→128
+   - `idx_chunks_embedding_voyage` — chunks.embedding_voyage (Voyage 1024-dim): `ef_construction` 64→128
+   - `idx_library_chunks_embedding_voyage` — library_chunks.embedding_voyage (Voyage 1024-dim): `ef_construction` 64→128
+   - All indexes: `m=16` retained (good balance of memory and connectivity)
 
-#### When to Revisit
+   **Part B: Query-time ef_search tuning (2 hybrid functions)**:
+   - `hybrid_search_chunks` — added `SET LOCAL hnsw.ef_search = 80` at start of function body
+   - `hybrid_search_chunks_voyage` — added `SET LOCAL hnsw.ef_search = 80` at start of function body
+   - `SET LOCAL` is transaction-scoped — no session bleed to other queries
+   - `bm25_search_chunks` — NOT modified (no vector search involved)
+   - All function signatures unchanged — full backward compatibility
+   - All previous features preserved: parent_chunk_id, metadata filters, 'simple' config
 
-- If a single matter exceeds 100K chunks (unlikely for legal case files)
-- If reranking is removed from the pipeline (recall would depend more heavily on HNSW alone)
-- If switching from hybrid to semantic-only search
+   **Grants**: Re-granted `EXECUTE` on both hybrid functions to `authenticated` and `service_role`
+
+#### Parameter Rationale
+
+| Parameter | Before | After | Rationale |
+|---|---|---|---|
+| `ef_construction` | 64 | 128 | 2x better graph quality during build. ~2-5% isolated recall improvement. Sweet spot for legal precision at <100K vectors. |
+| `ef_search` | ~40 (default) | 80 | 2x more candidates explored per query. Closes gap between ANN and exact search. ~5-10ms latency added. |
+| `m` | 16 | 16 (unchanged) | Already optimal. Higher m adds memory without proportional recall gain at this scale. |
+
+#### Architecture Layers (unchanged but strengthened)
+
+| Layer | Role | Gap 8 Impact |
+|---|---|---|
+| HNSW index | ANN candidate generation | **Improved** — better graph quality + deeper search |
+| BM25 | Exact keyword fallback | Unchanged — catches what HNSW misses |
+| RRF fusion | Hybrid score combination | Unchanged — fuses improved HNSW with BM25 |
+| Cohere Rerank | Precision reranking | Improved input — better ANN candidates = better reranking |
+| Dynamic weights | Query-type adaptation | Unchanged — CITATION/SUMMARY/etc. profiles |
+
+#### When to Revisit Further
+
+- If a single matter exceeds 100K chunks — consider `m=24` or `ef_construction=256`
+- If query latency exceeds 200ms — consider reducing `ef_search` back to 40
+- If reranking is removed — `ef_search=120` to compensate
+- If switching from hybrid to semantic-only — `ef_search=160` for high-recall
+
+#### Deploy steps
+
+1. Apply migration: `supabase db push` (indexes will be rebuilt — may take a few minutes for large tables)
+2. Deploy backend (no code changes needed beyond the migration)
 
 ---
 
@@ -510,5 +610,184 @@ Add a chunk count metric to monitoring dashboard. Alert when any single matter e
 |---|---|---|---|---|---|---|
 | 5 | Table-aware embedding | **YES — FIXED (Gap 5)** | **High** — now searchable | N/A — resolved | **DONE** | Deployed to codebase |
 | 6 | Chunk boundary dedup | **YES — FIXED (Gap 6)** | **Medium** — no more over-weighting | ~8-15% tokens saved | **DONE** | Deployed to codebase |
-| 7 | Vector quantization | No (at current scale) | None | None now | LOW | Monitor |
-| 8 | HNSW tuning | No — architecture compensates | None | None | NONE | No action |
+| 7 | Vector quantization | **YES — FIXED (Gap 7)** | None (monitoring) | Proactive alerting | **DONE** | Full-stack monitoring dashboard |
+| 8 | HNSW tuning | **YES — FIXED (Gap 8)** | **+2-5% HNSW recall** | ~5-10ms latency | **DONE** | ef_construction=128, ef_search=80 |
+| 9 | Automated RAGAS regression | **YES — framework exists, automation missing** | **High** — silent quality regressions | No CI/CD cost yet | **P1** | Wire into CI/CD, add thresholds + alerting |
+| 10 | Automated Voyage A/B testing | **YES — manual kill switch only** | **High** — no quality comparison | Cost tracking exists, no quality tracking | **P1** | Add % routing, RAGAS per-provider eval, auto-decision |
+
+---
+
+### Gap 9: Automated RAGAS Regression — NOT STARTED
+
+> **Analyzed**: 2026-02-20 | **Status**: Framework complete, automation missing
+
+#### Problem
+
+The RAGAS evaluation framework is fully implemented (evaluator service, golden dataset CRUD, batch evaluation, auto-evaluation, REST API, database schema) but requires **manual triggering** via API endpoint. There is no CI/CD integration, no threshold-based alerting, no baseline tracking, and no scheduled evaluation. Quality regressions in the RAG pipeline can ship to production undetected.
+
+#### What Exists (Complete Foundation)
+
+| Component | File | Status |
+|-----------|------|--------|
+| RAGAS library (`>=0.2.0`) | `backend/pyproject.toml` | Installed |
+| `RAGASEvaluator` (faithfulness, context_recall, answer_relevancy) | `backend/app/services/evaluation/ragas_evaluator.py` | Complete |
+| `GoldenDatasetService` (CRUD with tag filtering, matter isolation) | `backend/app/services/evaluation/golden_dataset.py` | Complete |
+| `EvaluationResult`, `MetricScores`, `BatchEvaluationResult` models | `backend/app/services/evaluation/models.py` | Complete |
+| `run_batch_evaluation` Celery task (30-min timeout) | `backend/app/workers/tasks/evaluation_tasks.py` | Complete |
+| `evaluate_chat_response` Celery task (auto-eval after chat) | `backend/app/workers/tasks/evaluation_tasks.py` | Complete |
+| Auto-eval integration in chat orchestrator | `backend/app/engines/orchestrator/streaming.py` | Complete |
+| REST API (8 endpoints: evaluate single/batch, golden CRUD, results history) | `backend/app/api/routes/evaluation.py` | Complete |
+| DB tables (`golden_dataset`, `evaluation_results` with RLS) | `supabase/migrations/20260122000002_*`, `20260216000001_*` | Complete |
+| Extended schema (job_id, chat_message_id, metric_scores JSONB, pipeline_config JSONB) | `supabase/migrations/20260216000001_extend_evaluation_results.sql` | Complete |
+| Config: `auto_evaluation_enabled`, `openai_evaluation_model`, `evaluation_batch_size` | `backend/app/core/config.py` | Complete (auto_eval defaults OFF) |
+| Partial index on `overall_score < 0.7` | `evaluation_results` table | Exists but unread |
+| Test scripts | `backend/test_batch_eval.py`, `backend/update_golden.py` | Manual only |
+
+#### Key Implementation Details
+
+**RAGASEvaluator** uses GPT-4 as evaluation LLM (configurable via `openai_evaluation_model`), OpenAI `text-embedding-3-small` for evaluation embeddings, and measures 3 metrics:
+- `context_recall` — how much relevant context was retrieved
+- `faithfulness` — how grounded the answer is in the retrieved context
+- `answer_relevancy` — how relevant the answer is to the question
+
+**Auto-evaluation** is integrated in `streaming.py` — when `auto_evaluation_enabled=True`, every chat response is non-blockingly evaluated via Celery task `evaluate_chat_response`. Results stored with `triggered_by='auto'` and linked to the specific `chat_message_id`.
+
+**Batch evaluation** runs all golden dataset items for a matter through the full RAG pipeline, evaluates each answer with RAGAS, and stores results grouped by `job_id` (Celery task ID).
+
+**Pipeline config snapshot** — `evaluation_results.pipeline_config` (JSONB) captures the RAG configuration that produced the answer, enabling correlation of score changes with pipeline changes.
+
+#### What's Missing (The Actual Gaps)
+
+| Gap | Description | Impact |
+|-----|-------------|--------|
+| **No CI/CD integration** | `.github/workflows/ci-backend.yml` runs unit tests only; no RAGAS step | Quality regressions ship undetected |
+| **No threshold-based alerting** | Partial index on `overall_score < 0.7` exists but nothing reads it | No one knows when quality drops |
+| **No baseline tracking** | No mechanism to compare current scores against a known-good baseline | Can't detect "score dropped 10%" |
+| **No scheduled evaluation** | Batch eval is API-triggered only (manual) | Days/weeks without evaluation |
+| **No regression detection logic** | No diff between current and previous batch runs | No automated "quality regressed" signal |
+| **No metrics dashboard** | Raw results in DB, no aggregated trends/visualizations | Manual SQL querying required |
+| **No unit tests** for evaluation services | `backend/tests/` has no evaluation tests | Evaluation code itself could break silently |
+| **No cost tracking** for evaluation runs | GPT-4 at $0.03/$0.06 per 1K tokens, no budget enforcement | Uncontrolled evaluation costs |
+
+#### Recommended Implementation
+
+**Phase 1 — CI/CD Gate (highest value)**:
+1. GitHub Actions workflow: on PR to main, trigger batch evaluation against a seed golden dataset
+2. Compare scores against stored baseline; fail PR if any metric drops >10%
+3. Store baseline scores as JSON artifact in repo or DB
+
+**Phase 2 — Scheduled Monitoring**:
+1. Celery Beat scheduled task: nightly batch evaluation of all matters with golden datasets
+2. Aggregation SQL views: avg/min/max scores per golden item, per tag, per date
+3. Slack/email alert when `overall_score < 0.7` for any run
+
+**Phase 3 — Dashboard & Analysis**:
+1. Admin dashboard widget: score trends over time, per-matter breakdown
+2. Failure pattern detection: which golden items fail most often, which chunks cause low recall
+3. Cost tracking per evaluation run
+
+#### Cost Estimate
+
+RAGAS evaluation uses GPT-4 for each (question, answer, contexts) tuple. With 20 golden dataset items:
+- ~2000 tokens input + ~500 tokens output per item × 3 metrics
+- ~$0.15-0.30 per batch run
+- Nightly runs: ~$5-10/month
+
+---
+
+### Gap 10: Automated Voyage A/B Testing — NOT STARTED
+
+> **Analyzed**: 2026-02-20 | **Status**: Manual infrastructure complete, experimentation framework missing
+
+#### Problem
+
+Voyage embedding model integration is production-ready with a boolean kill switch (`voyage_ab_testing_enabled`), user-facing model selector, per-query provider routing, circuit breaker protection, and cost comparison dashboard. However, the "A/B testing" is just **manual provider switching** — there is no percentage-based routing, no quality comparison via RAGAS, no latency tracking, no statistical significance testing, and no automated decision logic to data-drive the embedding model choice.
+
+#### What Exists (Complete Manual Infrastructure)
+
+| Component | File | Status |
+|-----------|------|--------|
+| `VoyageEmbeddingService` (voyage-law-2, 1024 dims, Redis cache, circuit breaker) | `backend/app/services/rag/voyage_embedder.py` | Complete |
+| Voyage reranker (`voyage-rerank-2`) | `backend/app/services/rag/voyage_reranker.py` | Complete |
+| Kill switch: `voyage_ab_testing_enabled: bool = False` | `backend/app/core/config.py:44-47` | Complete (defaults OFF) |
+| Kill switch enforced in embedding factory (forces OpenAI when OFF) | `backend/app/services/rag/embedder_factory.py:45-49` | Complete |
+| Kill switch enforced in reranker factory (forces Cohere when OFF) | `backend/app/services/rag/reranker_factory.py:37-41` | Complete |
+| Frontend `ModelSelector.tsx` (hidden when kill switch OFF) | `frontend/src/components/features/chat/ModelSelector.tsx` | Complete |
+| Zustand model store (persisted to localStorage) | `frontend/src/stores/modelStore.ts` | Complete |
+| Per-query provider routing via `ChatStreamRequest` | `backend/app/api/routes/chat.py:164-168` | Complete |
+| Circuit breaker (5 failures → open, 60s recovery) | `backend/app/core/circuit_breaker.py` (VOYAGE_EMBEDDINGS, VOYAGE_RERANK) | Complete |
+| Fallback: Voyage embed fail → BM25-only; Voyage rerank fail → RRF-only | `voyage_embedder.py`, `voyage_reranker.py` | Complete |
+| Cost comparison dashboard (OpenAI vs Voyage) | `backend/app/api/routes/costs.py` + `CostComparisonDashboard.tsx` | Complete |
+| Cost tracking (USD/INR, per-user, per-matter, per-provider) | `backend/app/core/cost_tracking.py` | Complete |
+| Dual embedding columns (`embedding` 1536d + `embedding_voyage` 1024d) | `supabase/migrations/20260219000003_*` | Complete |
+| Batch migration Celery task (rate-limited, progress tracked) | `backend/app/workers/tasks/voyage_embedding_tasks.py` | Complete |
+| Admin chunk metrics (shows `totalWithVoyage` coverage) | `backend/app/api/routes/admin/monitoring.py` | Complete |
+
+#### Kill Switch Mechanics
+
+```
+VOYAGE_AB_TESTING_ENABLED=false (default)
+├── embedder_factory.py → forces EmbeddingProvider.OPENAI regardless of request
+├── reranker_factory.py → forces RerankProvider.COHERE regardless of request
+└── ModelSelector.tsx → returns null (hidden from UI)
+
+VOYAGE_AB_TESTING_ENABLED=true
+├── embedder_factory.py → respects request's embedding_provider param
+├── reranker_factory.py → respects request's rerank_provider param
+└── ModelSelector.tsx → renders two dropdowns (embedding + reranker)
+```
+
+#### Provider Selection Flow
+
+1. User picks provider in `ModelSelector.tsx` → stored in Zustand/localStorage
+2. Frontend sends `embedding_provider` + `rerank_provider` in `ChatStreamRequest`
+3. `chat.py` passes as `provider_context` dict to streaming orchestrator
+4. `adapters.py` extracts and passes to `hybrid_search.search_with_rerank_and_library()`
+5. `embedder_factory.py` / `reranker_factory.py` resolve to concrete service (with kill switch override)
+
+#### What's Missing (The Actual Gaps)
+
+| Gap | Description | Impact |
+|-----|-------------|--------|
+| **No percentage-based routing** | All-or-nothing per user toggle; no canary/gradual rollout | Can't safely test on subset of traffic |
+| **No RAGAS quality comparison** | RAGAS evaluator exists but not integrated with provider selection | No quality data to drive the decision |
+| **No latency tracking per provider** | Cost tracked, response time not recorded | Can't compare speed |
+| **No statistical significance testing** | Raw cost numbers only, no hypothesis testing | Can't confidently declare a winner |
+| **No sticky user cohorts** | Users toggle freely, no controlled experiment design | Confounded results |
+| **No side-by-side execution** | Can't run same query against both providers simultaneously | No direct quality comparison |
+| **No automated rollout decision** | No logic to auto-promote Voyage based on metrics | Remains manual forever |
+| **No relevance scoring per provider** | Only cost compared, not result quality | Cost-optimal ≠ quality-optimal |
+
+#### Recommended Implementation
+
+**Phase 1 — RAGAS Per-Provider Comparison (highest value, synergistic with Gap 9)**:
+1. Extend `run_batch_evaluation` to accept `embedding_provider` parameter
+2. Run same golden dataset against OpenAI and Voyage pipelines
+3. Store results with `pipeline_config` capturing which provider was used
+4. Add comparison endpoint: `GET /api/evaluation/provider-comparison?matter_id=X`
+
+**Phase 2 — Percentage-Based Routing**:
+1. Add `voyage_traffic_percentage: int = 0` config (0-100)
+2. In `embedder_factory.py`: hash `(user_id + matter_id)` to deterministically route percentage of queries to Voyage
+3. Sticky per-user: same user always gets same provider (prevents within-user variance)
+4. Record `provider_used` in chat message metadata for analysis
+
+**Phase 3 — Automated Decision**:
+1. After N queries per provider (statistical power), run RAGAS comparison
+2. If Voyage quality >= OpenAI quality AND Voyage cost < OpenAI cost → auto-set `voyage_traffic_percentage=100`
+3. Alert admin with comparison report before auto-promoting
+4. Rollback trigger: if circuit breaker opens 3x in 24h → auto-reduce to 0%
+
+#### Synergy with Gap 9
+
+These two gaps share the same core need: **automated RAGAS evaluation with comparison**. Implementing Gap 9 (CI/CD regression testing) first provides:
+- Batch evaluation scheduling
+- Baseline tracking
+- Threshold alerting
+
+Gap 10 then extends that with:
+- Per-provider evaluation runs
+- Comparative analysis
+- Traffic routing decisions
+
+The two should be implemented together for maximum leverage.

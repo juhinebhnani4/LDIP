@@ -1,0 +1,33 @@
+-- Add SUMMARY_GENERATION job type to processing_jobs constraint
+-- Enables background summary generation via Celery worker queue
+
+-- Drop the old constraint
+ALTER TABLE public.processing_jobs
+DROP CONSTRAINT IF EXISTS processing_jobs_job_type_check;
+
+-- Add updated constraint with SUMMARY_GENERATION
+ALTER TABLE public.processing_jobs
+ADD CONSTRAINT processing_jobs_job_type_check
+CHECK (job_type IN (
+  -- Original types
+  'DOCUMENT_PROCESSING',
+  'OCR',
+  'VALIDATION',
+  'CHUNKING',
+  'EMBEDDING',
+  'ENTITY_EXTRACTION',
+  'ALIAS_RESOLUTION',
+  -- Engine types
+  'CITATION_EXTRACTION',
+  'CITATION_VERIFICATION',
+  'CONTRADICTION_DETECTION',
+  'DATE_EXTRACTION',
+  'EVENT_CLASSIFICATION',
+  'ENTITY_LINKING',
+  'ANOMALY_DETECTION',
+  -- Summary generation
+  'SUMMARY_GENERATION'
+));
+
+-- Update comment to reflect all types
+COMMENT ON COLUMN public.processing_jobs.job_type IS 'Type: DOCUMENT_PROCESSING, OCR, VALIDATION, CHUNKING, EMBEDDING, ENTITY_EXTRACTION, ALIAS_RESOLUTION, CITATION_EXTRACTION, CITATION_VERIFICATION, CONTRADICTION_DETECTION, DATE_EXTRACTION, EVENT_CLASSIFICATION, ENTITY_LINKING, ANOMALY_DETECTION, SUMMARY_GENERATION';

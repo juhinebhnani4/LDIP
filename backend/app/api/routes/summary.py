@@ -15,6 +15,8 @@ Provides endpoints for:
 CRITICAL: Uses matter access validation for Layer 4 security.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
@@ -24,10 +26,12 @@ from app.api.deps import (
     validate_matter_access,
 )
 from app.core.rate_limit import READONLY_RATE_LIMIT, STANDARD_RATE_LIMIT, limiter
+from app.models.job import JobStatus, JobType
 from app.models.summary import (
     MatterSummaryResponse,
     SummaryEditCreate,
     SummaryEditResponse,
+    SummaryGenerationStatus,
     SummaryNoteCreate,
     SummaryNoteResponse,
     SummaryRegenerateRequest,
@@ -36,6 +40,7 @@ from app.models.summary import (
     SummaryVerificationResponse,
     SummaryVerificationsListResponse,
 )
+from app.services.job_tracking import get_job_tracking_service
 from app.services.summary_edit_service import (
     SummaryEditService,
     SummaryEditServiceError,
@@ -213,36 +218,150 @@ async def get_matter_summary(
 
     Story 14.1: AC #1 - GET /api/matters/{matter_id}/summary endpoint.
 
+    Uses a check-cache → dispatch-job → return-status pattern so that
+    heavy GPT-4 calls run in the Celery worker queue, not in the HTTP
+    request. The frontend polls until status becomes "ready" or "failed".
+
     Args:
         access: Validated matter access context (enforces Layer 4 security).
         force_refresh: If True, bypass cache and regenerate.
         summary_service: Summary service instance.
 
     Returns:
-        MatterSummaryResponse with summary data.
+        MatterSummaryResponse with summary data or generation status.
 
     Raises:
         HTTPException: On authentication, authorization, or generation errors.
     """
+    from app.workers.tasks.summary_tasks import generate_summary
+
+    matter_id = access.matter_id
+    tracker = get_job_tracking_service()
+
     try:
         logger.info(
             "summary_request",
-            matter_id=access.matter_id,
+            matter_id=matter_id,
             user_id=access.user_id,
             force_refresh=force_refresh,
         )
 
-        summary = await summary_service.get_summary(
-            matter_id=access.matter_id,
-            force_refresh=force_refresh,
+        # 1. Check cache (skip if force refresh)
+        if not force_refresh:
+            cached = await summary_service.get_cached_summary(matter_id)
+            if cached is not None:
+                return MatterSummaryResponse(
+                    data=cached,
+                    status=SummaryGenerationStatus.READY,
+                )
+
+        # 2. Check for an active SUMMARY_GENERATION job
+        jobs = await tracker.list_jobs_for_matter(
+            matter_id=matter_id,
+            job_type_filter=JobType.SUMMARY_GENERATION,
         )
 
-        return MatterSummaryResponse(data=summary)
+        active_job = next(
+            (j for j in jobs if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)),
+            None,
+        )
+        if active_job is not None:
+            return MatterSummaryResponse(
+                status=SummaryGenerationStatus.GENERATING,
+                job_id=active_job.id,
+                progress=active_job.progress_pct,
+                stage=active_job.current_stage,
+            )
+
+        # 3. Check for recent FAILED job (within last 5 minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+        recent_failed = next(
+            (
+                j
+                for j in jobs
+                if j.status == JobStatus.FAILED
+                and (j.completed_at or j.updated_at) > cutoff
+            ),
+            None,
+        )
+        if recent_failed is not None and not force_refresh:
+            return MatterSummaryResponse(
+                status=SummaryGenerationStatus.FAILED,
+                job_id=recent_failed.id,
+                error=recent_failed.error_message or "Summary generation failed",
+            )
+
+        # 4. No cache, no active job → dispatch new background job
+        #    Use Redis SETNX to prevent duplicate job creation under concurrent requests
+        from app.services.memory.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+        lock_key = f"summary_gen_lock:{matter_id}"
+        lock_acquired = await redis.set(lock_key, "1", nx=True, ex=600)
+
+        if not lock_acquired:
+            # Another request is creating the job — re-check for the active job
+            jobs = await tracker.list_jobs_for_matter(
+                matter_id=matter_id,
+                job_type_filter=JobType.SUMMARY_GENERATION,
+            )
+            active_job = next(
+                (j for j in jobs if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)),
+                None,
+            )
+            if active_job is not None:
+                return MatterSummaryResponse(
+                    status=SummaryGenerationStatus.GENERATING,
+                    job_id=active_job.id,
+                    progress=active_job.progress_pct,
+                    stage=active_job.current_stage,
+                )
+            # Lock exists but no active job (edge case) — fall through to create
+
+        if force_refresh:
+            await summary_service.invalidate_cache(matter_id)
+
+        job = await tracker.create_job(
+            matter_id=matter_id,
+            job_type=JobType.SUMMARY_GENERATION,
+            max_retries=2,
+        )
+
+        result = generate_summary.delay(matter_id, job.id)
+
+        # Store Celery task ID on the job record for debugging correlation
+        await tracker.update_job_status(
+            job_id=job.id,
+            status=JobStatus.QUEUED,
+            matter_id=matter_id,
+        )
+        # update_job_status doesn't accept celery_task_id, so patch it directly
+        try:
+            from app.services.supabase.client import get_supabase_client
+            get_supabase_client().table("processing_jobs").update(
+                {"celery_task_id": result.id}
+            ).eq("id", job.id).execute()
+        except Exception:
+            pass  # Non-critical — ID is also in logs
+
+        logger.info(
+            "summary_generation_dispatched",
+            matter_id=matter_id,
+            job_id=job.id,
+            celery_task_id=result.id,
+        )
+
+        return MatterSummaryResponse(
+            status=SummaryGenerationStatus.GENERATING,
+            job_id=job.id,
+            progress=0,
+            stage="queued",
+        )
 
     except SummaryServiceError as e:
         logger.error(
             "summary_request_failed",
-            matter_id=access.matter_id,
+            matter_id=matter_id,
             error=e.message,
             code=e.code,
         )
@@ -250,7 +369,7 @@ async def get_matter_summary(
     except Exception as e:
         logger.error(
             "summary_request_unexpected_error",
-            matter_id=access.matter_id,
+            matter_id=matter_id,
             error=str(e),
         )
         raise HTTPException(

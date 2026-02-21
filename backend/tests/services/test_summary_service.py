@@ -224,7 +224,7 @@ class TestSummaryCache:
             "app.services.summary_service.get_redis_client",
             side_effect=mock_get_redis,
         ):
-            result = await service._get_cached_summary(matter_id)
+            result = await service.get_cached_summary(matter_id)
 
         assert result is not None
         assert result.matter_id == matter_id
@@ -243,7 +243,7 @@ class TestSummaryCache:
             "app.services.summary_service.get_redis_client",
             side_effect=mock_get_redis,
         ):
-            result = await service._get_cached_summary(matter_id)
+            result = await service.get_cached_summary(matter_id)
 
         assert result is None
 
@@ -261,7 +261,7 @@ class TestSummaryCache:
             "app.services.summary_service.get_redis_client",
             side_effect=mock_get_redis,
         ):
-            result = await service._get_cached_summary(matter_id)
+            result = await service.get_cached_summary(matter_id)
 
         assert result is None
 

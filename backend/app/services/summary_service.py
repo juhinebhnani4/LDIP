@@ -161,9 +161,13 @@ class SummaryService:
                 )
 
             try:
+                import httpx
                 from openai import AsyncOpenAI
 
-                self._openai_client = AsyncOpenAI(api_key=self.api_key)
+                self._openai_client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    timeout=httpx.Timeout(120.0, connect=10.0),
+                )
                 logger.info(
                     "summary_service_openai_initialized",
                     model=self.model_name,
@@ -221,7 +225,7 @@ class SummaryService:
         """
         # Check cache first (unless force_refresh)
         if not force_refresh:
-            cached = await self._get_cached_summary(matter_id)
+            cached = await self.get_cached_summary(matter_id)
             if cached:
                 logger.info(
                     "summary_cache_hit",
@@ -319,7 +323,7 @@ class SummaryService:
         )
 
         # Only cache if summary generation actually succeeded
-        if self._is_summary_valid(summary):
+        if self.is_summary_valid(summary):
             await self._cache_summary(matter_id, summary)
         else:
             logger.warning(
@@ -1697,7 +1701,7 @@ class SummaryService:
     # Summary Validation
     # =========================================================================
 
-    def _is_summary_valid(self, summary: MatterSummary) -> bool:
+    def is_summary_valid(self, summary: MatterSummary) -> bool:
         """Check if summary generation actually succeeded.
 
         BUG-003 FIX: Requires subject_matter AND at least one of the other
@@ -1729,7 +1733,7 @@ class SummaryService:
     # Redis Caching (Task 2.8) - AC #4
     # =========================================================================
 
-    async def _get_cached_summary(self, matter_id: str) -> MatterSummary | None:
+    async def get_cached_summary(self, matter_id: str) -> MatterSummary | None:
         """Get summary from Redis cache.
 
         Story 14.1: AC #4 - Summary cached with 1-hour TTL.

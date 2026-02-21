@@ -78,6 +78,7 @@ celery_app.conf.update(
         "app.workers.tasks.chunked_document_tasks.*": {"queue": "default"},
         "app.workers.tasks.engine_tasks.*": {"queue": "default"},
         "app.workers.tasks.library_tasks.*": {"queue": "default"},
+        "app.workers.tasks.summary_tasks.*": {"queue": "default"},
     },
     # === BROKER TRANSPORT OPTIONS ===
     # CRITICAL: visibility_timeout must exceed task_time_limit to prevent duplicate execution
@@ -258,6 +259,7 @@ _TASK_MODULES = [
     "app.workers.tasks.maintenance_tasks",
     "app.workers.tasks.quota_monitoring_tasks",
     "app.workers.tasks.reasoning_archive_tasks",
+    "app.workers.tasks.summary_tasks",
     "app.workers.tasks.verification_tasks",
     "app.workers.tasks.voyage_embedding_tasks",
 ]
@@ -276,6 +278,7 @@ try:
         maintenance_tasks,
         quota_monitoring_tasks,
         reasoning_archive_tasks,
+        summary_tasks,
         verification_tasks,
         voyage_embedding_tasks,
     )
@@ -302,6 +305,7 @@ _CRITICAL_TASKS = [
     "app.workers.tasks.document_tasks.resolve_aliases",
     "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
     "app.workers.tasks.maintenance_tasks.dispatch_stuck_queued_jobs",
+    "app.workers.tasks.summary_tasks.generate_summary",
 ]
 
 _missing_tasks = [t for t in _CRITICAL_TASKS if t not in celery_app.tasks]

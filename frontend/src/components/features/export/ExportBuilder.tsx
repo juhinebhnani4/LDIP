@@ -125,7 +125,7 @@ export function ExportBuilder({
   const [, setPendingClose] = useState(false);
 
   // Fetch content counts from existing hooks
-  const { summary, isLoading: summaryLoading, isError: summaryError } = useMatterSummary(matterId);
+  const { summary, isLoading: summaryLoading, isError: summaryError, isGenerating: summaryGenerating } = useMatterSummary(matterId);
   const { events, isLoading: timelineLoading, isError: timelineError } = useTimeline(matterId);
   const { entities, total: entitiesTotal, isLoading: entitiesLoading, error: entitiesError } = useEntities(matterId);
   const { stats: citationStats, isLoading: citationsLoading, error: citationsError } = useCitationStats(matterId);
@@ -136,7 +136,7 @@ export function ExportBuilder({
   // updateSectionCount and setSectionLoading are stable (useCallback with [] deps)
   useEffect(() => {
     // Executive Summary - count key sections based on MatterSummary type
-    if (summaryLoading) {
+    if (summaryLoading || summaryGenerating) {
       setSectionLoading('executive-summary', true);
       setSectionLoading('key-findings', true);
     } else if (summaryError) {
@@ -157,7 +157,7 @@ export function ExportBuilder({
       const findingsCount = summary.keyIssues?.length ?? 0;
       updateSectionCount('key-findings', findingsCount);
     }
-  }, [summary, summaryLoading, summaryError, updateSectionCount, setSectionLoading]);
+  }, [summary, summaryLoading, summaryGenerating, summaryError, updateSectionCount, setSectionLoading]);
 
   // Memoize event count to prevent infinite loops from unstable array references
   const eventsCount = events?.length ?? 0;

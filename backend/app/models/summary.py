@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # =============================================================================
 # Story 14.1: Enums (Task 1.2)
@@ -359,16 +359,56 @@ class MatterSummary(BaseModel):
 # =============================================================================
 
 
+class SummaryGenerationStatus(str, Enum):
+    """Status of background summary generation."""
+
+    READY = "ready"
+    GENERATING = "generating"
+    FAILED = "failed"
+
+
 class MatterSummaryResponse(BaseModel):
     """API response wrapper for matter summary.
 
     Story 14.1: AC #1 - Follows project API response pattern with data wrapper.
+
+    When status="ready", data is always non-null. Existing callers that only
+    check response.data continue to work unchanged.
     """
 
-    data: MatterSummary = Field(
-        ...,
-        description="Summary data",
+    data: MatterSummary | None = Field(
+        None,
+        description="Summary data (present when status is 'ready')",
     )
+    status: SummaryGenerationStatus = Field(
+        default=SummaryGenerationStatus.READY,
+        description="Generation status: ready, generating, or failed",
+    )
+    job_id: str | None = Field(
+        None,
+        alias="jobId",
+        description="Background job ID when generating",
+    )
+    progress: int | None = Field(
+        None,
+        description="Generation progress percentage (0-100)",
+    )
+    stage: str | None = Field(
+        None,
+        description="Current generation stage",
+    )
+    error: str | None = Field(
+        None,
+        description="Error message if generation failed",
+    )
+
+    model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _check_data_present_when_ready(self) -> MatterSummaryResponse:
+        if self.status == SummaryGenerationStatus.READY and self.data is None:
+            raise ValueError("data must be non-null when status is 'ready'")
+        return self
 
 
 # =============================================================================

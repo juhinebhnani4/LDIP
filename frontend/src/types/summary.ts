@@ -242,9 +242,24 @@ export interface MatterSummary {
 }
 
 /**
+ * Status of background summary generation
+ */
+export type SummaryGenerationStatus = 'ready' | 'generating' | 'failed';
+
+/**
  * API response wrapper for matter summary
  */
 export interface MatterSummaryResponse {
-  /** Summary data */
-  data: MatterSummary;
+  /** Summary data (present when status is 'ready') */
+  data: MatterSummary | null;
+  /** Generation status */
+  status: SummaryGenerationStatus;
+  /** Background job ID when generating */
+  jobId?: string;
+  /** Generation progress percentage (0-100) */
+  progress?: number;
+  /** Current generation stage */
+  stage?: string;
+  /** Error message if generation failed */
+  error?: string;
 }

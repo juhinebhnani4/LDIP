@@ -24,6 +24,7 @@ class JobType(str, Enum):
     - EVENT_CLASSIFICATION: Timeline event classification stage (Story 4-2)
     - ENTITY_LINKING: Timeline event to MIG entity linking stage (Story 4-3)
     - ANOMALY_DETECTION: Timeline anomaly detection stage (Story 4-4)
+    - SUMMARY_GENERATION: Background summary generation
     """
 
     DOCUMENT_PROCESSING = "DOCUMENT_PROCESSING"
@@ -40,6 +41,7 @@ class JobType(str, Enum):
     EVENT_CLASSIFICATION = "EVENT_CLASSIFICATION"
     ENTITY_LINKING = "ENTITY_LINKING"
     ANOMALY_DETECTION = "ANOMALY_DETECTION"
+    SUMMARY_GENERATION = "SUMMARY_GENERATION"
 
 
 class JobStatus(str, Enum):

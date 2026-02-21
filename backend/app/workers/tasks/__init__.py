@@ -5,12 +5,13 @@ split by domain (`document_tasks`, `engine_tasks`) so that routing works.
 """
 
 __all__ = [
+    "act_validation_tasks",
     "document_tasks",
     "engine_tasks",
-    "library_tasks",
-    "verification_tasks",
-    "maintenance_tasks",
-    "table_extraction_tasks",
     "evaluation_tasks",
-    "act_validation_tasks",
+    "library_tasks",
+    "maintenance_tasks",
+    "summary_tasks",
+    "table_extraction_tasks",
+    "verification_tasks",
 ]

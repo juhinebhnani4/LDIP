@@ -852,7 +852,7 @@ class MultiIntentAnalyzer:
         except Exception as e:
             logger.debug("intent_cache_set_failed", error=str(e))
 
-    async def classify(self, query: str, matter_id: str | None = None) -> MultiIntentClassification:
+    async def classify(self, query: str, matter_id: str | None = None, document_count: int | None = None) -> MultiIntentClassification:
         """Main entry point for query classification.
 
         Flow:
@@ -910,7 +910,7 @@ class MultiIntentAnalyzer:
         # Stage 5: Derive QueryProfile from signals + query text
         from app.engines.rag.query_profile import QueryProfile
 
-        profile = QueryProfile.from_intent_signals(signals, query)
+        profile = QueryProfile.from_intent_signals(signals, query, document_count=document_count)
 
         result = MultiIntentClassification(
             signals=signals,

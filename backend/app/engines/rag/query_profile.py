@@ -13,6 +13,7 @@ then passed through the pipeline to control:
 - System prompt selection
 """
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -43,10 +44,12 @@ class QueryType(str, Enum):
     GENERAL = "general"
 
 
-# Keywords used to detect summary sub-intent from query text
+# Keywords used to detect summary sub-intent from query text.
+# "brief" is excluded — too common in legal contexts ("amicus brief", "reply brief")
+# and causes false positives that trigger summary retrieval for specific queries.
 _SUMMARY_KEYWORDS = frozenset([
     "summarize", "summary", "key findings", "overview", "gist",
-    "main points", "highlights", "brief", "recap", "outline",
+    "main points", "highlights", "recap", "outline",
 ])
 
 # Keywords used to detect comparison sub-intent from query text
@@ -54,6 +57,12 @@ _COMPARISON_KEYWORDS = frozenset([
     "compare", "comparison", "contrast", "versus", "vs",
     "differ", "difference", "differences",
 ])
+
+# Compiled word-boundary patterns for keyword matching.
+# Using word boundaries (\b) prevents substring false positives like
+# "outlined" matching "outline" or "different" matching "differ".
+_SUMMARY_PATTERNS = [re.compile(rf"\b{re.escape(kw)}\b") for kw in _SUMMARY_KEYWORDS]
+_COMPARISON_PATTERNS = [re.compile(rf"\b{re.escape(kw)}\b") for kw in _COMPARISON_KEYWORDS]
 
 
 @dataclass(frozen=True)
@@ -156,19 +165,71 @@ class QueryProfile:
         )
 
     @classmethod
+    def _scale_for_matter_size(cls, profile: "QueryProfile", document_count: int) -> "QueryProfile":
+        """Scale retrieval parameters based on matter size.
+
+        Small matters don't need massive candidate pools — pulling 100
+        candidates from a corpus of 200 chunks is wasteful. This scales
+        parameters proportionally so small matters are fast while large
+        matters still get thorough retrieval.
+
+        Args:
+            profile: Base profile from query type classification.
+            document_count: Number of documents in the matter.
+
+        Returns:
+            New QueryProfile with scaled parameters (frozen dataclass).
+        """
+        if document_count <= 10:
+            scale = 0.5
+            tier = "small"
+        elif document_count <= 30:
+            scale = 0.7
+            tier = "medium"
+        else:
+            # Large matters keep original parameters
+            return profile
+
+        scaled = cls(
+            query_type=profile.query_type,
+            hybrid_limit=max(20, int(profile.hybrid_limit * scale)),
+            rerank_top_n=max(3, int(profile.rerank_top_n * scale)),
+            max_context_chunks=max(3, int(profile.max_context_chunks * scale)),
+            max_chunk_content=profile.max_chunk_content,
+            max_answer_length=max(1500, int(profile.max_answer_length * scale)),
+            system_prompt_key=profile.system_prompt_key,
+            search_weights=profile.search_weights,
+        )
+
+        logger.info(
+            "query_profile_scaled_for_matter_size",
+            tier=tier,
+            document_count=document_count,
+            original_hybrid_limit=profile.hybrid_limit,
+            scaled_hybrid_limit=scaled.hybrid_limit,
+            original_rerank_top_n=profile.rerank_top_n,
+            scaled_rerank_top_n=scaled.rerank_top_n,
+        )
+
+        return scaled
+
+    @classmethod
     def from_intent_signals(
         cls,
         signals: list,
         query: str,
+        document_count: int | None = None,
     ) -> "QueryProfile":
         """Derive QueryProfile from intent classification + query text.
 
         Uses a combination of engine types from intent signals and keyword
         detection in the query text to select the appropriate profile.
+        If document_count is provided, scales parameters based on matter size.
 
         Args:
             signals: List of IntentSignal from MultiIntentAnalyzer.
             query: Original user query text.
+            document_count: Number of documents in the matter (optional).
 
         Returns:
             QueryProfile with appropriate parameters for this query type.
@@ -178,11 +239,13 @@ class QueryProfile:
         engine_types = {s.engine for s in signals}
         query_lower = query.lower()
 
-        # Check for summary sub-intent via keywords
-        is_summary = any(kw in query_lower for kw in _SUMMARY_KEYWORDS)
+        # Check for summary sub-intent via word-boundary keyword matching.
+        # Word boundaries prevent false positives from legal terms like
+        # "amicus brief", "outlined", or substring matches.
+        is_summary = any(p.search(query_lower) for p in _SUMMARY_PATTERNS)
 
-        # Check for comparison sub-intent via keywords
-        is_comparison = any(kw in query_lower for kw in _COMPARISON_KEYWORDS)
+        # Check for comparison sub-intent via word-boundary keyword matching
+        is_comparison = any(p.search(query_lower) for p in _COMPARISON_PATTERNS)
 
         if is_summary:
             profile = cls.for_summary()
@@ -195,6 +258,10 @@ class QueryProfile:
         else:
             profile = cls.default()
 
+        # Scale parameters based on matter size if document count is known
+        if document_count is not None:
+            profile = cls._scale_for_matter_size(profile, document_count)
+
         logger.info(
             "query_profile_selected",
             query_type=profile.query_type.value,
@@ -206,6 +273,7 @@ class QueryProfile:
             semantic_weight=profile.search_weights.semantic,
             is_summary=is_summary,
             is_comparison=is_comparison,
+            document_count=document_count,
         )
 
         return profile

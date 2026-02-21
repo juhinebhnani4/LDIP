@@ -58,6 +58,7 @@ from app.models.orchestrator import (
 )
 from app.models.safety import SafetyCheckResult
 from app.services.safety import SafetyGuard, get_safety_guard
+from app.services.supabase.client import get_supabase_client
 
 logger = structlog.get_logger(__name__)
 
@@ -305,10 +306,30 @@ class QueryOrchestrator:
         # Story 6-1 Enhancement: Support multi-intent classification
         multi_classification: MultiIntentClassification | None = None
         intent_result: IntentAnalysisResult | None = None
+        document_count: int | None = None
 
         if self._use_multi_intent:
+            # Step 0.5: Get matter document count for adaptive query profiling.
+            # A single cheap COUNT query lets the pipeline scale retrieval
+            # parameters to match matter size (small/medium/large).
+            # Only needed for the multi-intent path (legacy path doesn't use it).
+            try:
+                sb = get_supabase_client()
+                if sb:
+                    count_resp = await asyncio.to_thread(
+                        lambda: sb.table("documents")
+                        .select("id", count="exact")
+                        .eq("matter_id", matter_id)
+                        .in_("status", ["searchable", "completed"])
+                        .execute()
+                    )
+                    document_count = count_resp.count
+                    logger.info("matter_document_count", matter_id=matter_id, document_count=document_count)
+            except Exception as e:
+                logger.warning("matter_document_count_failed", matter_id=matter_id, error=str(e))
+
             # New multi-intent classification path
-            multi_classification = await self._multi_intent_analyzer.classify(query)
+            multi_classification = await self._multi_intent_analyzer.classify(query, document_count=document_count)
             engines = list(multi_classification.required_engines)
 
             # Create legacy IntentAnalysisResult for backward compatibility (audit logging)
@@ -344,10 +365,22 @@ class QueryOrchestrator:
                 fast_path_used=intent_result.fast_path_used,
             )
 
-        # Step 1.5: Pass QueryProfile through context for RAG engine
-        if multi_classification and multi_classification.query_profile:
+        # Step 1.5: Ensure QueryProfile with matter-size scaling for RAG engine.
+        # Always re-derive here to handle three cases:
+        #   1. Fresh classification — profile already scaled, re-derive is idempotent
+        #   2. Cached classification — profile was built without document_count
+        #   3. Comprehensive request — profile was None (early return skipped Stage 5)
+        if multi_classification:
+            from app.engines.rag.query_profile import QueryProfile
+
+            profile = QueryProfile.from_intent_signals(
+                multi_classification.signals, query, document_count=document_count
+            )
+            multi_classification.query_profile = profile
             context = dict(context) if context else {}
-            context["query_profile"] = multi_classification.query_profile
+            context["query_profile"] = profile
+            if document_count is not None:
+                context["document_count"] = document_count
 
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(

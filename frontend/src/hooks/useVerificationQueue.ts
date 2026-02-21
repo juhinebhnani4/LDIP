@@ -154,9 +154,12 @@ export function useVerificationQueue(
   // BUG-LT3-A fix: Use getAllQueue instead of getPendingQueue so the "All" view
   // shows all verification items, not just pending ones. The user can still filter
   // by status using the filter controls.
-  const fetchQueue = useCallback(async () => {
+  const fetchQueue = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial fetch, not background polls
+      if (showLoading) {
+        setLoading(true);
+      }
       const data = await verificationsApi.getAllQueue(matterId, limit);
       // Only update state if component is still mounted
       if (isMountedRef.current) {
@@ -170,7 +173,7 @@ export function useVerificationQueue(
         setError(message);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && showLoading) {
         setLoading(false);
       }
     }
@@ -179,19 +182,26 @@ export function useVerificationQueue(
   // Initialize matter ID and fetch queue
   useEffect(() => {
     setMatterId(matterId);
-    fetchQueue();
+    fetchQueue(true);
   }, [matterId, setMatterId, fetchQueue]);
 
-  // Set up polling
+  // Track whether a background poll is in flight to avoid overlapping requests
+  const isPollingRef = useRef(false);
+
+  // Set up polling — silent background refresh without loading flicker
   useEffect(() => {
     if (!enablePolling) {
       return;
     }
 
-    const intervalId = setInterval(() => {
-      // Don't poll if currently loading
-      if (!isLoading) {
-        fetchQueue();
+    const intervalId = setInterval(async () => {
+      // Don't poll if currently loading or another poll is in flight
+      if (isLoading || isPollingRef.current) return;
+      isPollingRef.current = true;
+      try {
+        await fetchQueue(false); // silent — no loading spinner
+      } finally {
+        isPollingRef.current = false;
       }
     }, pollInterval);
 

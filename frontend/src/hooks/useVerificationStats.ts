@@ -8,7 +8,7 @@
  * Story 8-5: Implement Verification Queue UI (Task 9.2)
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { verificationsApi } from '@/lib/api/verifications';
 import type { VerificationStats } from '@/types';
@@ -86,9 +86,12 @@ export function useVerificationStats(
   const blockingCount = stats?.blockingCount ?? 0;
 
   // Fetch stats from API
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (showLoading = true) => {
     try {
-      setLoadingStats(true);
+      // Only show loading spinner on initial fetch, not background polls
+      if (showLoading) {
+        setLoadingStats(true);
+      }
       const data = await verificationsApi.getStats(matterId);
       setStats(data);
       setError(null);
@@ -97,25 +100,33 @@ export function useVerificationStats(
         err instanceof Error ? err.message : 'Failed to load verification stats';
       setError(message);
     } finally {
-      setLoadingStats(false);
+      if (showLoading) {
+        setLoadingStats(false);
+      }
     }
   }, [matterId, setLoadingStats, setStats, setError]);
 
   // Initial fetch
   useEffect(() => {
-    fetchStats();
+    fetchStats(true);
   }, [fetchStats]);
 
-  // Set up polling
+  // Track whether a background poll is in flight
+  const isPollingRef = useRef(false);
+
+  // Set up polling — silent background refresh without loading flicker
   useEffect(() => {
     if (!enablePolling) {
       return;
     }
 
-    const intervalId = setInterval(() => {
-      // Don't poll if currently loading
-      if (!isLoading) {
-        fetchStats();
+    const intervalId = setInterval(async () => {
+      if (isLoading || isPollingRef.current) return;
+      isPollingRef.current = true;
+      try {
+        await fetchStats(false); // silent — no loading spinner
+      } finally {
+        isPollingRef.current = false;
       }
     }, pollInterval);
 

@@ -82,8 +82,8 @@ export interface Citation {
   documentId: string;
   /** Display name of document */
   documentName: string;
-  /** Page number */
-  page: number;
+  /** Page number (null when page is unknown) */
+  page: number | null;
   /** Optional text excerpt */
   excerpt?: string;
 }

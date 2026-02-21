@@ -14,10 +14,16 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ matterId: 'test-matter-123' }),
 }));
 
+// Mock openDocumentByName to verify navigation calls
+const mockOpenDocumentByName = vi.fn();
+vi.mock('@/lib/utils/openDocument', () => ({
+  openDocumentByName: (...args: unknown[]) => mockOpenDocumentByName(...args),
+}));
+
 describe('CitationLink', () => {
   const defaultProps = {
     documentName: 'petition.pdf',
-    pageNumber: 5,
+    pageNumber: 5 as number | null,
   };
 
   beforeEach(() => {
@@ -74,29 +80,66 @@ describe('CitationLink', () => {
     expect(excerptElements.length).toBeGreaterThan(0);
   });
 
-  it('navigates to documents tab with correct params', () => {
+  it('calls openDocumentByName with page number on click', async () => {
+    const user = userEvent.setup();
     render(<CitationLink {...defaultProps} />);
 
     const link = screen.getByRole('link');
-    expect(link).toHaveAttribute(
-      'href',
-      '/matters/test-matter-123/documents?doc=petition.pdf&page=5'
+    await user.click(link);
+
+    expect(mockOpenDocumentByName).toHaveBeenCalledWith(
+      'test-matter-123',
+      'petition.pdf',
+      5
     );
   });
 
-  it('encodes document name in URL', () => {
+  it('calls openDocumentByName without page when page is null', async () => {
+    const user = userEvent.setup();
+    render(<CitationLink {...defaultProps} pageNumber={null} />);
+
+    const link = screen.getByRole('link');
+    await user.click(link);
+
+    expect(mockOpenDocumentByName).toHaveBeenCalledWith(
+      'test-matter-123',
+      'petition.pdf',
+      undefined
+    );
+  });
+
+  it('renders document name when page is null and no displayText', () => {
+    render(<CitationLink {...defaultProps} pageNumber={null} />);
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent('petition.pdf');
+    expect(link).not.toHaveTextContent('pg.');
+  });
+
+  it('truncates long document names when used as fallback', () => {
     render(
       <CitationLink
-        documentName="some document with spaces.pdf"
-        pageNumber={10}
+        documentName="Writ_Petition_Civil_No_12345_of_2024_filed_by_Petitioner.pdf"
+        pageNumber={null}
       />
     );
 
     const link = screen.getByRole('link');
-    expect(link).toHaveAttribute(
-      'href',
-      '/matters/test-matter-123/documents?doc=some%20document%20with%20spaces.pdf&page=10'
+    // Should be truncated, not show the full 60-char filename
+    expect(link.textContent!.length).toBeLessThanOrEqual(33);
+  });
+
+  it('renders displayText even when page is null', () => {
+    render(
+      <CitationLink
+        {...defaultProps}
+        pageNumber={null}
+        displayText="Order, p. 3"
+      />
     );
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent('Order, p. 3');
   });
 
   it('applies citation link styling', () => {

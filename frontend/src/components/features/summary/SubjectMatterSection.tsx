@@ -107,15 +107,25 @@ export function SubjectMatterSection({
       {/* Story 14.6: Citation links for factual claims */}
       {subjectMatter.citations && subjectMatter.citations.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {subjectMatter.citations.map((citation, index) => (
-            <CitationLink
-              key={`citation-${index}`}
-              documentName={citation.documentName}
-              pageNumber={citation.page}
-              excerpt={citation.excerpt}
-              className="text-xs"
-            />
-          ))}
+          {subjectMatter.citations.map((citation, index) => {
+            // When page is null, use a short excerpt snippet as display text
+            // so multiple citations from the same document are distinguishable
+            const fallbackText =
+              citation.page == null && citation.excerpt
+                ? citation.excerpt.slice(0, 40) + (citation.excerpt.length > 40 ? '\u2026' : '')
+                : undefined;
+
+            return (
+              <CitationLink
+                key={`citation-${index}`}
+                documentName={citation.documentName}
+                pageNumber={citation.page}
+                excerpt={citation.excerpt}
+                displayText={fallbackText}
+                className="text-xs"
+              />
+            );
+          })}
         </div>
       )}
 

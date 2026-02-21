@@ -36,7 +36,8 @@ from app.engines.orchestrator.audit_logger import (
     get_query_audit_logger,
 )
 from app.engines.orchestrator.executor import (
-    ENGINE_TIMEOUT_SECONDS,
+    ENGINE_TIMEOUT_DEFAULT,
+    ENGINE_TIMEOUTS,
     EngineExecutor,
     get_engine_executor,
 )
@@ -89,7 +90,8 @@ __all__ = [
     "ExecutionPlanner",
     "get_execution_planner",
     # Story 6-2: Engine Executor
-    "ENGINE_TIMEOUT_SECONDS",
+    "ENGINE_TIMEOUT_DEFAULT",
+    "ENGINE_TIMEOUTS",
     "EngineExecutor",
     "get_engine_executor",
     # Story 6-2: Result Aggregator

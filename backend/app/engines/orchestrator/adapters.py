@@ -641,6 +641,21 @@ def _infer_party_from_document_name(doc_name: str) -> str | None:
     return None
 
 
+class _DegradedGenerationResult:
+    """Lightweight stand-in for RAGAnswerResult when Gemini generation fails.
+
+    Used for graceful degradation — returns retrieved chunks to the user
+    instead of failing the entire RAG engine.
+    """
+
+    def __init__(self, answer: str, chunks_used: int, generation_time_ms: int = 0):
+        self.answer = answer
+        self.generation_time_ms = generation_time_ms
+        self.model_used = "none (degraded)"
+        self.chunks_used = chunks_used
+        self.sources = []
+
+
 class RAGEngineAdapter(EngineAdapter):
     """Adapter for RAG Hybrid Search + Answer Generation (Epic 2B, Story 6-2).
 
@@ -816,11 +831,13 @@ class RAGEngineAdapter(EngineAdapter):
                     continue  # Skip — another child from this parent already included
                 seen_parents.add(item.parent_chunk_id)
 
-                # Replace content with parent's broader context
+                # Replace content with parent's broader context for LLM generation,
+                # but preserve original child content for the API response so users
+                # see the actual matched chunk in the source list.
                 parent_content = parent_content_map.get(item.parent_chunk_id)
                 if parent_content:
-                    # Mutate content to parent's, keep child's page/bbox for citations
-                    item.content = parent_content
+                    item.original_content = item.content  # Preserve for API response
+                    item.content = parent_content  # LLM sees parent context
             expanded_results.append(item)
 
         deduped_count = len(results.results) - len(expanded_results)
@@ -968,14 +985,51 @@ class RAGEngineAdapter(EngineAdapter):
                 for item in results.results
             ]
 
-            # Step 4: Generate answer with Gemini
+            # Step 4: Generate answer with Gemini (with graceful degradation)
             generator = self._get_generator()
-            answer_result = await generator.generate_answer(
-                query=query,
-                chunks=chunks_for_generation,
-                matter_id=matter_id,
-                query_profile=query_profile,
-            )
+            generation_degraded = False
+            gen_start = time.time()
+            try:
+                answer_result = await generator.generate_answer(
+                    query=query,
+                    chunks=chunks_for_generation,
+                    matter_id=matter_id,
+                    query_profile=query_profile,
+                )
+            except Exception as gen_error:
+                # Graceful degradation: return retrieved chunks without LLM answer
+                # This is better than failing the entire RAG engine
+                from app.engines.rag.generator import RAGGenerationTimeoutError
+
+                generation_degraded = True
+                if isinstance(gen_error, RAGGenerationTimeoutError):
+                    degraded_answer = (
+                        "The answer is taking longer than expected to generate. "
+                        "Here are the most relevant document excerpts found:"
+                    )
+                    logger.warning(
+                        "rag_generation_timeout_degraded",
+                        matter_id=matter_id,
+                        timeout_seconds=gen_error.timeout_seconds,
+                        chunks_available=len(chunks_for_generation),
+                    )
+                else:
+                    degraded_answer = (
+                        "Answer generation encountered an error. "
+                        "Here are the most relevant document excerpts found:"
+                    )
+                    logger.warning(
+                        "rag_generation_error_degraded",
+                        matter_id=matter_id,
+                        error=str(gen_error),
+                        chunks_available=len(chunks_for_generation),
+                    )
+
+                answer_result = _DegradedGenerationResult(
+                    answer=degraded_answer,
+                    chunks_used=len(chunks_for_generation),
+                    generation_time_ms=int((time.time() - gen_start) * 1000),
+                )
 
             # Count library results for logging
             library_count = sum(1 for item in results.results if item.is_library)
@@ -995,12 +1049,15 @@ class RAGEngineAdapter(EngineAdapter):
                 "embedding_provider": embedding_provider or "openai",
                 "rerank_provider": rerank_provider or "cohere",
                 "search_latency_ms": search_latency_ms,
+                "generation_degraded": generation_degraded,
                 "results": [
                     {
                         "chunk_id": item.id,
                         "document_id": item.document_id,
                         "document_name": get_doc_name(item),
-                        "content": item.content,
+                        # Show original child content in API response (what user matched on),
+                        # not parent content (which is used only for LLM generation).
+                        "content": item.original_content or item.content,
                         "page_number": item.page_number,
                         "relevance_score": item.rrf_score,
                         "is_library": item.is_library,

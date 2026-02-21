@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     # Gemini Configuration
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
+    gemini_generation_timeout: float = 20.0  # Hard timeout for Gemini generation calls (seconds)
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4o"  # Was gpt-4-turbo-preview; gpt-4o is 75% cheaper

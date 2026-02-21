@@ -43,6 +43,7 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES = 2
 INITIAL_RETRY_DELAY = 0.5
 MAX_ANSWER_LENGTH = 2000  # Max characters in generated answer
+GEMINI_GENERATION_TIMEOUT_SECONDS = 20.0  # Hard timeout per Gemini call (overridden by config)
 
 
 # =============================================================================
@@ -70,6 +71,18 @@ class RAGConfigurationError(RAGGeneratorError):
 
     def __init__(self, message: str):
         super().__init__(message, code="RAG_NOT_CONFIGURED", is_retryable=False)
+
+
+class RAGGenerationTimeoutError(RAGGeneratorError):
+    """Raised when Gemini generation exceeds the timeout."""
+
+    def __init__(self, timeout_seconds: float):
+        super().__init__(
+            f"Gemini generation timed out after {timeout_seconds:.0f}s",
+            code="RAG_GENERATION_TIMEOUT",
+            is_retryable=False,
+        )
+        self.timeout_seconds = timeout_seconds
 
 
 # =============================================================================
@@ -209,6 +222,10 @@ class RAGAnswerGenerator:
             matter_id=matter_id,
         )
 
+        # Get configurable timeout from settings (GEMINI_GENERATION_TIMEOUT env var)
+        settings = get_settings()
+        generation_timeout = settings.gemini_generation_timeout
+
         # Generate answer with retries
         last_error = None
         retry_delay = INITIAL_RETRY_DELAY
@@ -220,12 +237,15 @@ class RAGAnswerGenerator:
                     profile.system_prompt_key, RAG_ANSWER_SYSTEM_PROMPT
                 )
 
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
+                response = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                        ),
                     ),
+                    timeout=generation_timeout,
                 )
 
                 # Extract answer text
@@ -306,6 +326,17 @@ class RAGAnswerGenerator:
                     model_used=self.model_name,
                     chunks_used=len(chunks_to_use),
                 )
+
+            except TimeoutError:
+                # Gemini call exceeded timeout — don't retry, surface immediately
+                generation_time_ms = int((time.time() - start_time) * 1000)
+                logger.warning(
+                    "rag_generation_timeout",
+                    attempt=attempt + 1,
+                    timeout_seconds=generation_timeout,
+                    generation_time_ms=generation_time_ms,
+                )
+                raise RAGGenerationTimeoutError(generation_timeout)
 
             except Exception as e:
                 last_error = e

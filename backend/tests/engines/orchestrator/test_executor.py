@@ -16,7 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.engines.orchestrator.executor import (
-    ENGINE_TIMEOUT_SECONDS,
+    ENGINE_TIMEOUT_DEFAULT,
+    ENGINE_TIMEOUTS,
     EngineExecutor,
     get_engine_executor,
 )
@@ -74,7 +75,7 @@ def mock_slow_adapter():
     adapter.engine_type = EngineType.RAG
 
     async def mock_execute(matter_id, query, context=None):
-        await asyncio.sleep(ENGINE_TIMEOUT_SECONDS + 1)
+        await asyncio.sleep(ENGINE_TIMEOUTS.get("rag", ENGINE_TIMEOUT_DEFAULT) + 1)
         return EngineExecutionResult(
             engine=EngineType.RAG,
             success=True,
@@ -274,8 +275,11 @@ class TestTimeoutHandling:
         with patch("app.engines.orchestrator.executor.get_cached_adapter") as mock:
             mock.return_value = mock_slow_adapter
 
-            # Use a shorter timeout for test
-            with patch("app.engines.orchestrator.executor.ENGINE_TIMEOUT_SECONDS", 0.1):
+            # Use a shorter timeout for test — patch per-engine dict
+            with patch.dict(
+                "app.engines.orchestrator.executor.ENGINE_TIMEOUTS",
+                {"rag": 0.1},
+            ):
                 result = await executor._execute_single_engine(
                     matter_id="matter-123",
                     query="Query",
@@ -327,6 +331,49 @@ class TestTimeoutHandling:
         assert len(results) == 2
         # Both should complete
         assert all(r.success for r in results)
+
+    @pytest.mark.asyncio
+    async def test_per_engine_timeout_values(self, executor):
+        """RAG engine should get longer timeout than Timeline."""
+        rag_timeout = ENGINE_TIMEOUTS.get("rag", ENGINE_TIMEOUT_DEFAULT)
+        timeline_timeout = ENGINE_TIMEOUTS.get("timeline", ENGINE_TIMEOUT_DEFAULT)
+
+        assert rag_timeout > timeline_timeout, (
+            f"RAG timeout ({rag_timeout}s) should be > Timeline timeout ({timeline_timeout}s)"
+        )
+        assert rag_timeout == 45.0
+        assert timeline_timeout == 10.0
+
+    @pytest.mark.asyncio
+    async def test_unknown_engine_gets_default_timeout(self):
+        """Engines not in ENGINE_TIMEOUTS dict should use the default."""
+        timeout = ENGINE_TIMEOUTS.get("nonexistent_engine", ENGINE_TIMEOUT_DEFAULT)
+        assert timeout == ENGINE_TIMEOUT_DEFAULT
+
+    @pytest.mark.asyncio
+    async def test_timeout_error_includes_engine_specific_timeout(self, executor):
+        """Timeout error message should reference the per-engine timeout, not a generic one."""
+        async def slow_execute(matter_id, query, context=None):
+            await asyncio.sleep(100)  # Will be killed by timeout
+
+        slow_adapter = MagicMock()
+        slow_adapter.execute = AsyncMock(side_effect=slow_execute)
+
+        with patch("app.engines.orchestrator.executor.get_cached_adapter") as mock:
+            mock.return_value = slow_adapter
+
+            with patch.dict(
+                "app.engines.orchestrator.executor.ENGINE_TIMEOUTS",
+                {"timeline": 0.05},
+            ):
+                result = await executor._execute_single_engine(
+                    matter_id="matter-123",
+                    query="Query",
+                    engine=EngineType.TIMELINE,
+                )
+
+        assert not result.success
+        assert "0.05" in result.error  # Should reference the per-engine timeout
 
 
 # =============================================================================

@@ -31,8 +31,17 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-# Timeout per engine in seconds
-ENGINE_TIMEOUT_SECONDS = 30.0
+# Per-engine timeouts in seconds
+# Timeline/Citation are DB-heavy, RAG includes embedding + rerank + LLM generation
+ENGINE_TIMEOUT_DEFAULT = 30.0
+ENGINE_TIMEOUTS: dict[str, float] = {
+    "timeline": 10.0,        # Pure DB queries, ~600ms typical
+    "citation": 30.0,        # DB + some LLM verification
+    "contradiction": 30.0,   # LLM comparison calls
+    "rag": 45.0,             # Embedding + search + rerank + Gemini generation
+    "document_discovery": 10.0,  # Pure DB metadata queries
+    "entity_lookup": 15.0,   # DB lookups with some aggregation
+}
 
 
 # =============================================================================
@@ -222,18 +231,20 @@ class EngineExecutor:
             EngineExecutionResult from the engine.
         """
         start_time = time.time()
+        # Compute timeout once, accessible in try/except blocks
+        timeout = ENGINE_TIMEOUTS.get(engine.value, ENGINE_TIMEOUT_DEFAULT)
 
         try:
             adapter = get_cached_adapter(engine)
 
-            # Execute with timeout
+            # Execute with per-engine timeout (RAG gets more time for LLM generation)
             result = await asyncio.wait_for(
                 adapter.execute(
                     matter_id=matter_id,
                     query=query,
                     context=context,
                 ),
-                timeout=ENGINE_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
 
             logger.debug(
@@ -253,13 +264,13 @@ class EngineExecutor:
                 "engine_timeout",
                 engine=engine.value,
                 matter_id=matter_id,
-                timeout_seconds=ENGINE_TIMEOUT_SECONDS,
+                timeout_seconds=timeout,
             )
 
             return EngineExecutionResult(
                 engine=engine,
                 success=False,
-                error=f"Engine timed out after {ENGINE_TIMEOUT_SECONDS} seconds",
+                error=f"Engine timed out after {timeout} seconds",
                 execution_time_ms=execution_time_ms,
             )
 

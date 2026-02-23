@@ -278,7 +278,7 @@ class QueryOrchestrator:
                     cached_sources = [
                         SourceReference(**s) for s in cached.response_data.get("sources", [])
                     ]
-                    return OrchestratorResult(
+                    cached_result = OrchestratorResult(
                         matter_id=matter_id,
                         query=query,
                         success=cached.response_data.get("success", True),
@@ -294,6 +294,12 @@ class QueryOrchestrator:
                         wall_clock_time_ms=wall_clock_time_ms,
                         from_cache=True,
                     )
+                    # Preserve safety rewrite metadata on cached results
+                    if query_was_rewritten:
+                        cached_result.query_was_rewritten = True
+                        cached_result.original_query = original_query
+                        cached_result.rewritten_query = query
+                    return cached_result
             except Exception as e:
                 # Cache errors should not fail the query
                 logger.warning(

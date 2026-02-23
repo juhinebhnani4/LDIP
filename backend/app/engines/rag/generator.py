@@ -173,6 +173,7 @@ class RAGAnswerGenerator:
         chunks: list[dict[str, Any]],
         matter_id: str | None = None,
         query_profile: QueryProfile | None = None,
+        cause_title: str | None = None,
     ) -> RAGAnswerResult:
         """Generate a grounded answer from retrieved chunks.
 
@@ -181,6 +182,7 @@ class RAGAnswerGenerator:
             chunks: Retrieved document chunks with content and metadata.
             matter_id: Optional matter ID for cost tracking.
             query_profile: Optional query profile for adaptive parameters.
+            cause_title: Optional cause title (party listing) for context grounding.
 
         Returns:
             RAGAnswerResult with generated answer and metadata.
@@ -213,6 +215,7 @@ class RAGAnswerGenerator:
             chunks_to_use,
             max_chunks=profile.max_context_chunks,
             max_chunk_content=profile.max_chunk_content,
+            cause_title=cause_title,
         )
 
         # Initialize cost tracker for Gemini Flash
@@ -390,6 +393,7 @@ async def generate_rag_answer(
     chunks: list[dict[str, Any]],
     matter_id: str | None = None,
     query_profile: QueryProfile | None = None,
+    cause_title: str | None = None,
 ) -> RAGAnswerResult:
     """Convenience function to generate RAG answer.
 
@@ -398,6 +402,7 @@ async def generate_rag_answer(
         chunks: Retrieved document chunks.
         matter_id: Optional matter ID for cost tracking.
         query_profile: Optional QueryProfile for adaptive parameters.
+        cause_title: Optional cause title (party listing) for context grounding.
 
     Returns:
         RAGAnswerResult with generated answer.
@@ -408,4 +413,5 @@ async def generate_rag_answer(
         chunks,
         matter_id=matter_id,
         query_profile=query_profile,
+        cause_title=cause_title,
     )

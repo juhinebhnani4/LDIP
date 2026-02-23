@@ -965,6 +965,9 @@ class RAGEngineAdapter(EngineAdapter):
             # Extract QueryProfile from context (set by orchestrator)
             query_profile = context.get("query_profile") if context else None
 
+            # Extract cause_title for RAG context grounding
+            cause_title = context.get("cause_title") if context else None
+
             # Extract A/B testing provider selections from context
             rerank_provider = context.get("rerank_provider") if context else None
             embedding_provider = context.get("embedding_provider") if context else None
@@ -1139,6 +1142,7 @@ class RAGEngineAdapter(EngineAdapter):
                     chunks=chunks_for_generation,
                     matter_id=matter_id,
                     query_profile=query_profile,
+                    cause_title=cause_title,
                 )
             except Exception as gen_error:
                 from app.engines.rag.generator import RAGGenerationTimeoutError
@@ -1165,6 +1169,7 @@ class RAGEngineAdapter(EngineAdapter):
                             chunks=reduced_chunks,
                             matter_id=matter_id,
                             query_profile=query_profile,
+                            cause_title=cause_title,
                         )
                         # Retry succeeded — continue normally
                     except Exception:

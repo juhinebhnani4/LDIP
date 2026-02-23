@@ -179,6 +179,11 @@ class Matter(MatterBase):
         alias="dataResidency",
         description="Data residency region for API routing (Story 7.3)",
     )
+    cause_title: str | None = Field(
+        None,
+        alias="causeTitle",
+        description="Extracted party listing (cause title) from the application document",
+    )
     created_at: datetime = Field(..., alias="createdAt", description="When the matter was created")
     updated_at: datetime = Field(..., alias="updatedAt", description="When the matter was last updated")
     deleted_at: datetime | None = Field(None, alias="deletedAt", description="Soft delete timestamp (NULL = not deleted)")

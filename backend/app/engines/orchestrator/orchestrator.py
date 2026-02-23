@@ -410,6 +410,33 @@ class QueryOrchestrator:
             except Exception as e:
                 logger.warning("orchestrator_entity_detection_failed", error=str(e))
 
+        # Step 1.8: Load cause title for RAG context grounding.
+        # The cause title (party listing) is foundational reference for any
+        # legal case — always prepend it so the LLM can resolve respondent
+        # numbers and party roles without relying on chunk retrieval.
+        if EngineType.RAG in engines or EngineType.ENTITY_LOOKUP in engines:
+            try:
+                sb = get_supabase_client()
+                if sb:
+                    ct_resp = await asyncio.to_thread(
+                        lambda: sb.table("matters")
+                        .select("cause_title")
+                        .eq("id", matter_id)
+                        .single()
+                        .execute()
+                    )
+                    cause_title = ct_resp.data.get("cause_title") if ct_resp.data else None
+                    if cause_title:
+                        context = dict(context) if context else {}
+                        context["cause_title"] = cause_title
+                        logger.info(
+                            "cause_title_loaded",
+                            matter_id=matter_id,
+                            cause_title_length=len(cause_title),
+                        )
+            except Exception as e:
+                logger.warning("cause_title_load_failed", matter_id=matter_id, error=str(e))
+
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(
             matter_id=matter_id,

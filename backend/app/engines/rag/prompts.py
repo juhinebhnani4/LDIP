@@ -60,6 +60,12 @@ LEGAL NEUTRALITY (MANDATORY):
 - Replace "proves" → "indicates", "shows" → "states"
 - Present facts objectively without interpreting legal significance
 
+RECONCILIATION RULES:
+- If the same person appears under multiple designations (e.g., different respondent numbers), EXPLAIN why — they may hold multiple legal capacities (e.g., in their own right AND as legal heir of a deceased party)
+- If CASE PARTIES context is provided, use it to resolve respondent number references
+- When citing a respondent number, include the person's name: "Respondent No. 5 (Nirav D. Jobalia)" not just "Respondent No. 5"
+- If different documents use different numbers for the same person, note this explicitly
+
 RESPONSE STRUCTURE:
 ```
 [Direct answer paragraph with key facts bolded and cited]
@@ -126,6 +132,12 @@ RULES:
 - Do NOT make legal conclusions or predictions
 - Use neutral verbs: "states", "indicates", "describes", "mentions"
 - NEVER use: "clearly", "obviously", "proves", "establishes", "guilty", "liable"
+
+RECONCILIATION RULES:
+- If the same person appears under multiple designations (e.g., different respondent numbers), EXPLAIN why — they may hold multiple legal capacities (e.g., in their own right AND as legal heir of a deceased party)
+- If CASE PARTIES context is provided, use it to resolve respondent number references and party roles
+- When citing a respondent number, include the person's name for clarity
+- If different documents use different numbers for the same person, note this explicitly
 """
 
 # =============================================================================
@@ -145,7 +157,7 @@ RAG_ANSWER_USER_PROMPT = """Based on these document excerpts, answer the followi
 
 {wrapped_query}
 
-DOCUMENT EXCERPTS:
+{case_context}DOCUMENT EXCERPTS:
 {context}
 
 Provide a concise, grounded answer with inline citations. If the excerpts don't contain sufficient information to answer, indicate that clearly."""
@@ -161,6 +173,7 @@ def format_rag_answer_prompt(
     chunks: list[dict],
     max_chunks: int | None = None,
     max_chunk_content: int | None = None,
+    cause_title: str | None = None,
 ) -> str:
     """Format the user prompt for RAG answer generation.
 
@@ -169,6 +182,7 @@ def format_rag_answer_prompt(
         chunks: List of retrieved chunks with content and metadata.
         max_chunks: Override for MAX_CONTEXT_CHUNKS (from QueryProfile).
         max_chunk_content: Override for MAX_CHUNK_CONTENT (from QueryProfile).
+        cause_title: Optional cause title (party listing) for context grounding.
 
     Returns:
         Formatted prompt string.
@@ -181,9 +195,18 @@ def format_rag_answer_prompt(
     # SECURITY: Escape XML tags in user query to prevent prompt injection (C1)
     safe_query = wrap_user_query(query)
 
+    case_context = ""
+    if cause_title:
+        case_context = (
+            "CASE PARTIES (from the application filing — use as reference for "
+            "respondent numbers and party roles):\n"
+            f"{cause_title}\n\n"
+        )
+
     return RAG_ANSWER_USER_PROMPT.format(
         wrapped_query=safe_query,
         context=context,
+        case_context=case_context,
     )
 
 
@@ -343,11 +366,13 @@ def _find_boundary_overlap(
         if idx == -1:
             break
 
-        # Verify full match from this position to end of suffix
+        # Verify full match from this position to end of suffix.
+        # The actual overlap is the shorter of: remaining suffix length vs text_b length.
+        # We must NOT report more overlap than was actually verified.
         remaining = suffix[idx:]
         match_len = min(len(remaining), len(text_b))
         if remaining[:match_len] == text_b[:match_len]:
-            overlap = len(suffix) - idx
+            overlap = match_len  # Report only the verified overlap length
             return overlap if overlap >= min_overlap else 0
 
         pos = idx + 1

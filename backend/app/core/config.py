@@ -155,7 +155,14 @@ class Settings(BaseSettings):
     usd_to_inr_rate: float = 90.50  # As of Feb 2026: ~90-91 INR per USD
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    cors_origins: list[str] = [
+        "http://localhost:3000", 
+        "http://localhost:3001",
+        "https://jaanch.ai",
+        "https://www.jaanch.ai",
+        "https://jaanch-ai.in",
+        "https://www.jaanch-ai.in"
+    ]
 
     @field_validator("cors_origins", mode="before")
     @classmethod

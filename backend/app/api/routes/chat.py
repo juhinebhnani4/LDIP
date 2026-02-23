@@ -208,7 +208,15 @@ async def stream_chat(
                 }),
             }
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "Cache-Control": "no-cache, no-store, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+        ping=15,
+    )
 
 
 @router.post("/{matter_id}/message")

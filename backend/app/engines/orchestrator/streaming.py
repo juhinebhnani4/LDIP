@@ -194,6 +194,13 @@ class StreamingOrchestrator:
 
             result: OrchestratorResult = task.result()
 
+            # Send a keepalive ping AFTER process_query completes to re-prime
+            # Railway's proxy buffer before the burst of ENGINE_COMPLETE/TOKEN events.
+            yield StreamEvent(
+                type=StreamEventType.TYPING,
+                data={"status": "processing", "message": "Formatting response..."},
+            )
+
             # Check if query was blocked by safety guard
             if result.blocked:
                 yield StreamEvent(

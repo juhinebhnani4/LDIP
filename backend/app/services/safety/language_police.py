@@ -43,7 +43,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Retry configuration (same as Story 8-2)
-MAX_RETRIES = 1
+MAX_RETRIES = 2
 INITIAL_RETRY_DELAY = 0.5
 MAX_RETRY_DELAY = 10.0
 

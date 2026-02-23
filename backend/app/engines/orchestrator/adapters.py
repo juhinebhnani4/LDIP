@@ -359,9 +359,23 @@ class TimelineEngineAdapter(EngineAdapter):
         try:
             builder = self._get_builder()
             settings = get_settings()
+
+            # Use entity context for focused timeline if available
+            primary_entity_id = None
+            if context and context.get("detected_entity_ids"):
+                entity_ids = context["detected_entity_ids"]
+                if len(entity_ids) <= 3:  # Only filter when query is entity-focused
+                    primary_entity_id = entity_ids[0]
+                    logger.info(
+                        "timeline_entity_filter_applied",
+                        entity_id=primary_entity_id[:8] if primary_entity_id else None,
+                        total_entities=len(entity_ids),
+                    )
+
             timeline = await builder.build_timeline(
                 matter_id=matter_id,
                 include_entities=True,
+                entity_id=primary_entity_id,
                 page=1,
                 per_page=settings.timeline_default_page_size,
             )
@@ -853,6 +867,76 @@ class RAGEngineAdapter(EngineAdapter):
         results.results = expanded_results
         return results
 
+    async def _detect_entities_in_query(
+        self,
+        query: str,
+        matter_id: str,
+    ) -> list[str]:
+        """Detect entity references in query using fuzzy matching against MIG entities.
+
+        Fetches all entities for the matter and matches each against the query
+        using exact substring and fuzzy matching. Returns entity IDs for any
+        matches above the confidence threshold.
+
+        Args:
+            query: User's search query.
+            matter_id: Matter UUID for entity lookup.
+
+        Returns:
+            List of matched entity UUIDs (empty if no matches).
+        """
+        try:
+            from app.core.fuzzy_match import fuzzy_match_name
+            from app.services.mig import get_mig_graph_service
+
+            mig_service = get_mig_graph_service()
+            entities, _total = await mig_service.get_entities_by_matter(
+                matter_id=matter_id,
+                per_page=500,
+            )
+
+            if not entities:
+                return []
+
+            matched_ids: list[str] = []
+            for entity in entities:
+                result = fuzzy_match_name(
+                    query=query,
+                    canonical_name=entity.canonical_name,
+                    aliases=entity.aliases,
+                    threshold=85,  # Conservative: >=85% for fuzzy, any for exact
+                )
+                if result.matched:
+                    matched_ids.append(entity.id)
+                    logger.debug(
+                        "entity_detected_in_query",
+                        entity_name=entity.canonical_name,
+                        score=result.score,
+                        is_exact=result.is_exact,
+                        matched_name=result.matched_name,
+                    )
+
+            if matched_ids:
+                logger.info(
+                    "entities_detected_in_query",
+                    matter_id=matter_id,
+                    query_len=len(query),
+                    matched_count=len(matched_ids),
+                    entity_names=[
+                        e.canonical_name for e in entities if e.id in matched_ids
+                    ][:5],
+                )
+
+            return matched_ids
+
+        except Exception as e:
+            logger.warning(
+                "entity_detection_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            return []  # Fail open — no entity boost, normal search proceeds
+
     async def execute(
         self,
         matter_id: str,
@@ -936,19 +1020,79 @@ class RAGEngineAdapter(EngineAdapter):
             rerank_top_n = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
             hybrid_limit = query_profile.hybrid_limit if query_profile else DEFAULT_HYBRID_LIMIT
 
+            # Entity-Aware RAG: detect entities in query for all types
+            # except SUMMARY/COMPARISON which genuinely need broad context
+            detected_entity_ids = []
+            query_type = query_profile.query_type if query_profile else None
+
+            from app.engines.rag.query_profile import QueryType
+            entity_boost_eligible = query_type not in (
+                QueryType.SUMMARY, QueryType.COMPARISON,
+            )
+
+            if entity_boost_eligible:
+                detected_entity_ids = await self._detect_entities_in_query(
+                    query=query,
+                    matter_id=matter_id,
+                )
+
+            # Relationship query boost: expand reranker output when multiple
+            # entities are detected and query uses relationship language
+            _RELATIONSHIP_WORDS = frozenset({
+                "connection", "relationship", "between", "link", "linked",
+                "related", "together", "associate", "associated",
+                "involvement", "involved", "dealings", "role",
+            })
+
+            if len(detected_entity_ids) >= 2:
+                query_words = set(query.lower().split())
+                if query_words & _RELATIONSHIP_WORDS:
+                    relationship_boost = len(detected_entity_ids) + 1
+                    rerank_top_n += relationship_boost
+                    logger.info(
+                        "relationship_query_boost_applied",
+                        entity_count=len(detected_entity_ids),
+                        boost=relationship_boost,
+                        new_rerank_top_n=rerank_top_n,
+                    )
+
             # Gap 10: Track search latency separately for A/B comparison
             search_start = time.time()
-            results = await search.search_with_rerank_and_library(
-                query=query,
-                matter_id=matter_id,
-                hybrid_limit=hybrid_limit,
-                rerank_top_n=rerank_top_n,
-                library_limit=10,
-                weights=query_profile.search_weights if query_profile else None,
-                rerank_provider=rerank_provider,
-                embedding_provider=embedding_provider,
-                filters=search_filters,
-            )
+
+            if detected_entity_ids:
+                # Dual-pool search: entity-filtered + unfiltered, merged and reranked
+                logger.info(
+                    "rag_adapter_entity_boost_activated",
+                    matter_id=matter_id,
+                    entity_count=len(detected_entity_ids),
+                    entity_ids=[eid[:8] for eid in detected_entity_ids],
+                )
+                results = await search.search_with_entity_boost(
+                    query=query,
+                    matter_id=matter_id,
+                    entity_ids=detected_entity_ids,
+                    pool_limit=hybrid_limit,
+                    rerank_top_n=rerank_top_n,
+                    library_limit=10,
+                    weights=query_profile.search_weights if query_profile else None,
+                    rerank_provider=rerank_provider,
+                    embedding_provider=embedding_provider,
+                    filters=search_filters,
+                )
+            else:
+                # Normal search path (unchanged)
+                results = await search.search_with_rerank_and_library(
+                    query=query,
+                    matter_id=matter_id,
+                    hybrid_limit=hybrid_limit,
+                    rerank_top_n=rerank_top_n,
+                    library_limit=10,
+                    weights=query_profile.search_weights if query_profile else None,
+                    rerank_provider=rerank_provider,
+                    embedding_provider=embedding_provider,
+                    filters=search_filters,
+                )
+
             search_latency_ms = int((time.time() - search_start) * 1000)
 
             # Step 1b: Parent context expansion — replace child content with
@@ -997,26 +1141,58 @@ class RAGEngineAdapter(EngineAdapter):
                     query_profile=query_profile,
                 )
             except Exception as gen_error:
-                # Graceful degradation: return retrieved chunks without LLM answer
-                # This is better than failing the entire RAG engine
                 from app.engines.rag.generator import RAGGenerationTimeoutError
 
-                generation_degraded = True
                 if isinstance(gen_error, RAGGenerationTimeoutError):
-                    degraded_answer = (
-                        "The answer is taking longer than expected to generate. "
-                        "Here are the most relevant document excerpts found:"
-                    )
-                    logger.warning(
-                        "rag_generation_timeout_degraded",
+                    # Smart retry: reduce context to top 3 chunks by relevance score
+                    reduced_chunks = sorted(
+                        chunks_for_generation,
+                        key=lambda c: c.get("relevance_score", 0),
+                        reverse=True,
+                    )[:3]
+
+                    logger.info(
+                        "rag_generation_timeout_retrying_reduced",
                         matter_id=matter_id,
-                        timeout_seconds=gen_error.timeout_seconds,
-                        chunks_available=len(chunks_for_generation),
+                        original_chunks=len(chunks_for_generation),
+                        reduced_chunks=len(reduced_chunks),
+                        top_score=reduced_chunks[0].get("relevance_score") if reduced_chunks else None,
                     )
+
+                    try:
+                        answer_result = await generator.generate_answer(
+                            query=query,
+                            chunks=reduced_chunks,
+                            matter_id=matter_id,
+                            query_profile=query_profile,
+                        )
+                        # Retry succeeded — continue normally
+                    except Exception:
+                        # Retry also failed — degrade gracefully
+                        generation_degraded = True
+                        answer_result = _DegradedGenerationResult(
+                            answer=(
+                                "I found relevant document passages but couldn't synthesize a complete answer. "
+                                "The most relevant excerpts are shown below — please review them directly."
+                            ),
+                            chunks_used=len(chunks_for_generation),
+                            generation_time_ms=int((time.time() - gen_start) * 1000),
+                        )
+                        logger.warning(
+                            "rag_generation_timeout_retry_also_failed",
+                            matter_id=matter_id,
+                            chunks_available=len(chunks_for_generation),
+                        )
                 else:
-                    degraded_answer = (
-                        "Answer generation encountered an error. "
-                        "Here are the most relevant document excerpts found:"
+                    # Non-timeout error — degrade immediately
+                    generation_degraded = True
+                    answer_result = _DegradedGenerationResult(
+                        answer=(
+                            "I found relevant document passages but couldn't synthesize a complete answer. "
+                            "The most relevant excerpts are shown below — please review them directly."
+                        ),
+                        chunks_used=len(chunks_for_generation),
+                        generation_time_ms=int((time.time() - gen_start) * 1000),
                     )
                     logger.warning(
                         "rag_generation_error_degraded",
@@ -1024,12 +1200,6 @@ class RAGEngineAdapter(EngineAdapter):
                         error=str(gen_error),
                         chunks_available=len(chunks_for_generation),
                     )
-
-                answer_result = _DegradedGenerationResult(
-                    answer=degraded_answer,
-                    chunks_used=len(chunks_for_generation),
-                    generation_time_ms=int((time.time() - gen_start) * 1000),
-                )
 
             # Count library results for logging
             library_count = sum(1 for item in results.results if item.is_library)

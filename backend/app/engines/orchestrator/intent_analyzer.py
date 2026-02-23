@@ -85,15 +85,13 @@ CITATION_PATTERNS = [
 
 # Timeline patterns - detect chronological/date queries
 TIMELINE_PATTERNS = [
+    # Only unambiguous timeline signals on the fast path (0.95 confidence).
+    # Broad patterns like "when did/was" moved to INTENT_PATTERNS at low confidence.
     re.compile(r"\btimeline\b", re.IGNORECASE),
     re.compile(r"\bchronolog(y|ical|ically)?\b", re.IGNORECASE),
-    re.compile(r"\bwhen\s+did\b", re.IGNORECASE),
-    re.compile(r"\bsequence\s+(of\s+)?events?\b", re.IGNORECASE),  # "sequence of events"
-    re.compile(r"\bwhat\s+happened\b.*\b(order|first|then|before|after)\b", re.IGNORECASE),
-    re.compile(r"\b(date|dates|dated)\b.*\b(event|occur|happen)\b", re.IGNORECASE),
-    re.compile(r"\b(before|after|between)\b.*\d{4}", re.IGNORECASE),  # date references
+    re.compile(r"\bsequence\s+(of\s+)?events?\b", re.IGNORECASE),
     re.compile(r"\bchronological\s+order\b", re.IGNORECASE),
-    re.compile(r"\bwhen\s+was\b", re.IGNORECASE),  # "when was"
+    re.compile(r"\b(date|dates|dated)\b.*\b(event|occur|happen)\b", re.IGNORECASE),
 ]
 
 # Contradiction patterns - detect inconsistency queries
@@ -673,8 +671,9 @@ INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\btimeline\b", re.IGNORECASE), 0.9),
         (re.compile(r"\bchronolog(y|ical|ically)?\b", re.IGNORECASE), 0.9),
         (re.compile(r"\bsequence\s+(of\s+)?events?\b", re.IGNORECASE), 0.85),
-        (re.compile(r"\bwhen\s+(did|was)\b", re.IGNORECASE), 0.7),
-        (re.compile(r"\b(dates?|order\s+of)\b", re.IGNORECASE), 0.6),
+        (re.compile(r"\bchronological\s+order\b", re.IGNORECASE), 0.85),
+        (re.compile(r"\bwhen\s+(did|was)\b", re.IGNORECASE), 0.5),         # Secondary — below LOW_CONFIDENCE_THRESHOLD
+        (re.compile(r"\b(dates?|order\s+of)\b", re.IGNORECASE), 0.45),     # Secondary — below LOW_CONFIDENCE_THRESHOLD
     ],
     EngineType.CONTRADICTION: [
         (re.compile(r"\bcontradictions?\b", re.IGNORECASE), 0.9),

@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # Gemini Configuration
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
-    gemini_generation_timeout: float = 20.0  # Hard timeout for Gemini generation calls (seconds)
+    gemini_generation_timeout: float = 35.0  # Hard timeout for Gemini generation calls (seconds)
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4o"  # Was gpt-4-turbo-preview; gpt-4o is 75% cheaper
@@ -201,7 +201,7 @@ class Settings(BaseSettings):
 
     # RAG adapter configuration
     rag_search_limit: int = 20     # Candidates to retrieve before reranking
-    rag_rerank_top_n: int = 5      # Results to return after reranking
+    rag_rerank_top_n: int = 6      # Results to return after reranking (fallback when no QueryProfile)
     timeline_default_page_size: int = 50  # Default timeline events per page
 
     # Memory System Configuration (Story 7 - Epic 7 Code Review Fixes)

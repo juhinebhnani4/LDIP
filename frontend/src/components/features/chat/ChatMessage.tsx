@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { User, Bot, AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Edit2 } from 'lucide-react';
@@ -43,6 +44,17 @@ function formatTimestamp(timestamp: string): string {
 export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const roleLabel = isUser ? 'Your message' : 'LDIP assistant message';
+
+  // Deduplicate sources by documentId:page to avoid duplicate buttons
+  const dedupedSources = useMemo(() => {
+    const seen = new Set<string>();
+    return (message.sources ?? []).filter((source) => {
+      const key = `${source.documentId}:${source.page ?? 'none'}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [message.sources]);
 
   return (
     <article
@@ -104,12 +116,12 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
             </>
           )}
 
-          {/* Source references (assistant only) */}
-          {!isUser && message.sources && message.sources.length > 0 && (
+          {/* Source references (assistant only), deduplicated by documentId:page */}
+          {!isUser && dedupedSources.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border/50 pt-3">
-              {message.sources.map((source, index) => (
+              {dedupedSources.map((source) => (
                 <SourceReference
-                  key={`${source.documentId}-${index}`}
+                  key={`${source.documentId}-${source.page ?? 'none'}`}
                   source={source}
                   onClick={() => onSourceClick?.(source)}
                 />

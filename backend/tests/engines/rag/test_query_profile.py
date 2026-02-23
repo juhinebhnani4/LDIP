@@ -23,24 +23,26 @@ class TestScaleForMatterSize:
     """Tests for the _scale_for_matter_size class method."""
 
     def test_small_matter_applies_50_percent_scale(self):
-        """Matters with <=10 docs get 50% scaling."""
+        """Matters with <=10 docs get 50% scaling on hybrid_limit only."""
         profile = QueryProfile.for_summary()  # 100, 12, 12, 5000
         scaled = QueryProfile._scale_for_matter_size(profile, 5)
 
         assert scaled.hybrid_limit == 50  # 100 * 0.5
-        assert scaled.rerank_top_n == 6  # 12 * 0.5
-        assert scaled.max_context_chunks == 6  # 12 * 0.5
-        assert scaled.max_answer_length == 2500  # 5000 * 0.5
+        # Quality params preserved (not scaled)
+        assert scaled.rerank_top_n == 12
+        assert scaled.max_context_chunks == 12
+        assert scaled.max_answer_length == 5000
 
     def test_medium_matter_applies_70_percent_scale(self):
-        """Matters with 11-30 docs get 70% scaling."""
+        """Matters with 11-30 docs get 70% scaling on hybrid_limit only."""
         profile = QueryProfile.for_summary()
         scaled = QueryProfile._scale_for_matter_size(profile, 28)
 
         assert scaled.hybrid_limit == 70  # 100 * 0.7
-        assert scaled.rerank_top_n == 8  # int(12 * 0.7) = 8
-        assert scaled.max_context_chunks == 8
-        assert scaled.max_answer_length == 3500  # 5000 * 0.7
+        # Quality params preserved (not scaled)
+        assert scaled.rerank_top_n == 12
+        assert scaled.max_context_chunks == 12
+        assert scaled.max_answer_length == 5000
 
     def test_large_matter_returns_original(self):
         """Matters with 31+ docs keep original parameters."""
@@ -89,14 +91,15 @@ class TestScaleForMatterSize:
         assert scaled.hybrid_limit == 50
 
     def test_minimum_clamps_on_small_default_profile(self):
-        """Small default profile (50, 3, 5, 2000) respects minimum clamps."""
-        profile = QueryProfile.default()  # 50, 3, 5, 2000
+        """Small default profile (50, 5, 6, 2000) — quality params preserved."""
+        profile = QueryProfile.default()  # 50, 5, 6, 2000
         scaled = QueryProfile._scale_for_matter_size(profile, 3)
 
         assert scaled.hybrid_limit == 25  # 50 * 0.5 = 25 (>= 20 min)
-        assert scaled.rerank_top_n == 3  # max(3, int(3*0.5)) = max(3, 1) = 3
-        assert scaled.max_context_chunks == 3  # max(3, int(5*0.5)) = max(3, 2) = 3
-        assert scaled.max_answer_length == 1500  # max(1500, 1000) = 1500
+        # Quality params preserved (not scaled)
+        assert scaled.rerank_top_n == 5
+        assert scaled.max_context_chunks == 6
+        assert scaled.max_answer_length == 2000
 
     def test_preserves_query_type(self):
         """Scaled profile keeps the original query type."""
@@ -166,7 +169,7 @@ class TestFromIntentSignalsWithDocumentCount:
         assert profile.rerank_top_n == 12
 
     def test_summary_with_small_matter(self):
-        """Summary query + small matter = scaled parameters."""
+        """Summary query + small matter = scaled hybrid_limit, preserved quality."""
         signals = [self._make_rag_signal()]
         profile = QueryProfile.from_intent_signals(
             signals, "summarize the allegations", document_count=5
@@ -174,7 +177,7 @@ class TestFromIntentSignalsWithDocumentCount:
 
         assert profile.query_type == QueryType.SUMMARY
         assert profile.hybrid_limit == 50  # 100 * 0.5
-        assert profile.rerank_top_n == 6  # 12 * 0.5
+        assert profile.rerank_top_n == 12  # Preserved (not scaled)
 
     def test_summary_with_large_matter(self):
         """Summary query + large matter = original parameters."""
@@ -197,7 +200,7 @@ class TestFromIntentSignalsWithDocumentCount:
         assert profile.hybrid_limit == 56  # int(80 * 0.7)
 
     def test_default_query_with_small_matter(self):
-        """Default/lookup query + small matter."""
+        """Default/lookup query + small matter — only hybrid_limit scaled."""
         signals = [self._make_rag_signal()]
         profile = QueryProfile.from_intent_signals(
             signals, "who is the petitioner", document_count=3
@@ -205,6 +208,7 @@ class TestFromIntentSignalsWithDocumentCount:
 
         assert profile.query_type == QueryType.LOOKUP
         assert profile.hybrid_limit == 25  # int(50 * 0.5)
+        assert profile.rerank_top_n == 5   # Preserved (default profile value)
 
     def test_timeline_with_medium_matter(self):
         """Timeline query + medium matter."""

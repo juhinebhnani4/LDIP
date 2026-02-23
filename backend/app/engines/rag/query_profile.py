@@ -92,16 +92,17 @@ class QueryProfile:
 
     @classmethod
     def default(cls) -> "QueryProfile":
-        """Current behavior — backward compatible.
+        """Default retrieval profile for lookup/general queries.
 
-        Matches existing constants: MAX_CONTEXT_CHUNKS=5, MAX_CHUNK_CONTENT=2000,
-        MAX_ANSWER_LENGTH=2000, DEFAULT_RERANK_TOP_N=3.
+        Conservative bump: rerank 3→5, context 5→6 to widen retrieval
+        funnel and improve recall for entity-specific factoid queries
+        (e.g., addresses, dates) that previously fell outside top-3.
         """
         return cls(
             query_type=QueryType.LOOKUP,
             hybrid_limit=50,
-            rerank_top_n=3,
-            max_context_chunks=5,
+            rerank_top_n=5,
+            max_context_chunks=6,
             max_chunk_content=2000,
             max_answer_length=2000,
             system_prompt_key="default",
@@ -142,8 +143,8 @@ class QueryProfile:
         return cls(
             query_type=QueryType.TIMELINE,
             hybrid_limit=50,
-            rerank_top_n=5,
-            max_context_chunks=5,
+            rerank_top_n=6,
+            max_context_chunks=6,
             max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
@@ -156,8 +157,8 @@ class QueryProfile:
         return cls(
             query_type=QueryType.CITATION,
             hybrid_limit=50,
-            rerank_top_n=5,
-            max_context_chunks=5,
+            rerank_top_n=6,
+            max_context_chunks=6,
             max_chunk_content=2000,
             max_answer_length=3000,
             system_prompt_key="default",
@@ -192,11 +193,11 @@ class QueryProfile:
 
         scaled = cls(
             query_type=profile.query_type,
-            hybrid_limit=max(20, int(profile.hybrid_limit * scale)),
-            rerank_top_n=max(3, int(profile.rerank_top_n * scale)),
-            max_context_chunks=max(3, int(profile.max_context_chunks * scale)),
+            hybrid_limit=max(20, int(profile.hybrid_limit * scale)),  # Scale retrieval pool
+            rerank_top_n=profile.rerank_top_n,                        # Preserve quality
+            max_context_chunks=profile.max_context_chunks,             # Preserve quality
             max_chunk_content=profile.max_chunk_content,
-            max_answer_length=max(1500, int(profile.max_answer_length * scale)),
+            max_answer_length=profile.max_answer_length,               # Preserve quality
             system_prompt_key=profile.system_prompt_key,
             search_weights=profile.search_weights,
         )

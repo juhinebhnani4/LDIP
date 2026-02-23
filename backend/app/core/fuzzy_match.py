@@ -128,6 +128,46 @@ def fuzzy_match_name(
     )
 
 
+def _deduplicate_subsumed_matches(
+    query: str,
+    matches: list[tuple[str, FuzzyMatchResult]],
+) -> list[tuple[str, FuzzyMatchResult]]:
+    """Remove exact matches whose span is entirely inside a longer exact match's span.
+
+    For example, if "Smitaben Dalichand Jobalia" matches at (18, 44) and
+    "Jobalia" matches at (37, 44), the shorter "Jobalia" match is suppressed
+    because it's subsumed by the longer match.
+
+    Fuzzy matches (is_exact=False) are kept as-is since they have no position info.
+    """
+    query_lower = query.lower()
+
+    # Build (start, end) spans for exact matches
+    spans: list[tuple[int, int, int]] = []  # (start, end, match_index)
+    for i, (_, result) in enumerate(matches):
+        if result.is_exact:
+            pos = query_lower.find(result.matched_name.lower())
+            if pos >= 0:
+                spans.append((pos, pos + len(result.matched_name), i))
+
+    if len(spans) <= 1:
+        return matches
+
+    # Sort by span length descending (longest first)
+    spans.sort(key=lambda s: s[1] - s[0], reverse=True)
+
+    # Find which match indices are subsumed by a longer span
+    suppressed: set[int] = set()
+    for i, (s1_start, s1_end, _) in enumerate(spans):
+        for j in range(i + 1, len(spans)):
+            s2_start, s2_end, s2_idx = spans[j]
+            # Shorter span is entirely inside longer span
+            if s2_start >= s1_start and s2_end <= s1_end:
+                suppressed.add(s2_idx)
+
+    return [(eid, res) for idx, (eid, res) in enumerate(matches) if idx not in suppressed]
+
+
 def fuzzy_match_entities(
     query: str,
     entities: list[tuple[str, str, list[str] | None]],  # (entity_id, canonical_name, aliases)
@@ -149,6 +189,10 @@ def fuzzy_match_entities(
         result = fuzzy_match_name(query, canonical_name, aliases, threshold)
         if result.matched:
             matches.append((entity_id, result))
+
+    # Span-based dedup: suppress short-name matches subsumed by longer matches
+    if len(matches) > 1:
+        matches = _deduplicate_subsumed_matches(query, matches)
 
     # Sort by score descending (best matches first)
     matches.sort(key=lambda x: x[1].score, reverse=True)

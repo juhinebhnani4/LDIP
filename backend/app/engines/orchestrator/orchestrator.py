@@ -382,6 +382,34 @@ class QueryOrchestrator:
             if document_count is not None:
                 context["document_count"] = document_count
 
+        # Step 1.7: Lightweight entity detection for cross-engine context.
+        # When timeline engine is requested, detect entities so the timeline
+        # adapter can filter events by entity (avoiding irrelevant birth dates etc.)
+        if EngineType.TIMELINE in engines:
+            try:
+                from app.core.fuzzy_match import fuzzy_match_entities
+                from app.services.mig import get_mig_graph_service
+
+                mig_service = get_mig_graph_service()
+                ent_list, _ = await mig_service.get_entities_by_matter(
+                    matter_id=matter_id, per_page=500,
+                )
+                if ent_list:
+                    ent_tuples = [
+                        (e.id, e.canonical_name, e.aliases) for e in ent_list
+                    ]
+                    ent_matches = fuzzy_match_entities(query, ent_tuples)
+                    if ent_matches:
+                        context = dict(context) if context else {}
+                        context["detected_entity_ids"] = [eid for eid, _ in ent_matches]
+                        logger.info(
+                            "orchestrator_entity_detection_for_timeline",
+                            matter_id=matter_id,
+                            matched_count=len(ent_matches),
+                        )
+            except Exception as e:
+                logger.warning("orchestrator_entity_detection_failed", error=str(e))
+
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(
             matter_id=matter_id,

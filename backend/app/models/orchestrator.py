@@ -427,6 +427,10 @@ class OrchestratorResult(BaseModel):
         default="",
         description="Original query before safety rewrite (if rewritten)",
     )
+    rewritten_query: str = Field(
+        default="",
+        description="Rewritten query after safety rewrite (if rewritten)",
+    )
 
     # Story 8-3: Language policing metadata (Task 7.4)
     policing_metadata: dict[str, Any] = Field(

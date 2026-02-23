@@ -115,6 +115,7 @@ export interface CompleteData {
   // Query safety rewrite metadata
   queryWasRewritten?: boolean;
   originalQuery?: string;
+  rewrittenQuery?: string;
   // A/B testing provider metadata
   embeddingProvider?: 'openai' | 'voyage';
   rerankProvider?: 'cohere' | 'voyage';
@@ -352,6 +353,7 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             // Query safety rewrite metadata
             queryWasRewritten: (rawData.queryWasRewritten ?? rawData.query_was_rewritten) as boolean | undefined,
             originalQuery: (rawData.originalQuery ?? rawData.original_query) as string | undefined,
+            rewrittenQuery: (rawData.rewrittenQuery ?? rawData.rewritten_query) as string | undefined,
             // A/B testing provider metadata
             embeddingProvider: (rawData.embeddingProvider ?? rawData.embedding_provider) as CompleteData['embeddingProvider'],
             rerankProvider: (rawData.rerankProvider ?? rawData.rerank_provider) as CompleteData['rerankProvider'],

@@ -96,7 +96,7 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
           ) : (
             <>
               {/* Query rewrite notice */}
-              {message.queryWasRewritten && message.originalQuery && (
+              {message.queryWasRewritten && message.rewrittenQuery && (
                 <div
                   className="mb-2 flex items-start gap-2 rounded-md bg-blue-50 p-2 text-xs text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
                   role="status"
@@ -105,7 +105,7 @@ export function ChatMessage({ message, onSourceClick, onRetry }: ChatMessageProp
                   <div>
                     <p className="font-medium">Your question was rephrased for better results:</p>
                     <p className="mt-0.5 italic text-blue-600 dark:text-blue-400">
-                      &ldquo;{message.originalQuery}&rdquo;
+                      &ldquo;{message.rewrittenQuery}&rdquo;
                     </p>
                   </div>
                 </div>

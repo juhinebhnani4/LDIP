@@ -505,6 +505,7 @@ class QueryOrchestrator:
         if query_was_rewritten:
             result.query_was_rewritten = True
             result.original_query = original_query
+            result.rewritten_query = query
 
         # Step 4: Audit logging (non-blocking, fire-and-forget)
         # Story 6-3: AC #5 - audit failures should not fail the query

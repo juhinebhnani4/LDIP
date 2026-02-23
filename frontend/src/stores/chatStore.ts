@@ -210,6 +210,7 @@ interface ChatActions {
     embeddingCompletionPct?: number,
     queryWasRewritten?: boolean,
     originalQuery?: string,
+    rewrittenQuery?: string,
     embeddingProvider?: 'openai' | 'voyage',
     rerankProvider?: 'cohere' | 'voyage'
   ) => void;
@@ -389,7 +390,7 @@ export const useChatStore = create<ChatStore>()(
         }));
       },
 
-      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct, queryWasRewritten, originalQuery, embeddingProvider, rerankProvider) => {
+      completeStreaming: (finalContent, traces, sources, searchNotice, searchMode, embeddingCompletionPct, queryWasRewritten, originalQuery, rewrittenQuery, embeddingProvider, rerankProvider) => {
         const { streamingMessageId, messages } = get();
         if (!streamingMessageId) return;
 
@@ -411,6 +412,7 @@ export const useChatStore = create<ChatStore>()(
           // Query safety rewrite metadata
           queryWasRewritten,
           originalQuery,
+          rewrittenQuery,
           // A/B testing provider metadata
           embeddingProvider,
           rerankProvider,

@@ -141,6 +141,7 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
       data.embeddingCompletionPct,
       data.queryWasRewritten,
       data.originalQuery,
+      data.rewrittenQuery,
       data.embeddingProvider,
       data.rerankProvider,
     );

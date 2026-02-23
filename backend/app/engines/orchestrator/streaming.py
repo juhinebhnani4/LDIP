@@ -279,6 +279,7 @@ class StreamingOrchestrator:
                 # Query safety rewrite metadata
                 query_was_rewritten=result.query_was_rewritten,
                 original_query=result.original_query if result.query_was_rewritten else None,
+                rewritten_query=result.rewritten_query if result.query_was_rewritten else None,
                 # A/B testing provider metadata
                 # Read actual provider from RAG engine result (adapter may have overridden
                 # via percentage-based routing), falling back to request-level context

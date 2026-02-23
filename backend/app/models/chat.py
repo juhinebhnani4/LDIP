@@ -15,7 +15,7 @@ CRITICAL: Events are serialized as JSON for SSE transport.
 """
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -165,6 +165,10 @@ class StreamCompleteEvent(BaseModel):
         default=None,
         description="Original query before safety rewrite (if rewritten)"
     )
+    rewritten_query: str | None = Field(
+        default=None,
+        description="Rewritten query after safety rewrite (if rewritten)"
+    )
     # A/B testing: provider metadata
     embedding_provider: str | None = Field(
         default=None,
@@ -188,11 +192,15 @@ class ChatStreamRequest(BaseModel):
 
     query: str = Field(min_length=1, max_length=4000, description="User's question")
     session_id: str | None = Field(default=None, description="Session ID for context")
-    embedding_provider: str | None = Field(default=None, description="'openai' or 'voyage'")
-    rerank_provider: str | None = Field(default=None, description="'cohere' or 'voyage'")
+    embedding_provider: Literal["openai", "voyage"] | None = Field(
+        default=None, description="Embedding provider: 'openai' or 'voyage'"
+    )
+    rerank_provider: Literal["cohere", "voyage"] | None = Field(
+        default=None, description="Reranker provider: 'cohere' or 'voyage'"
+    )
     search_filters: dict | None = Field(
         default=None,
-        description="Gap 4: Optional metadata filters {document_ids, document_types, page_min, page_max}",
+        description="Optional metadata filters {document_ids, document_types, page_min, page_max, entity_ids}",
     )
 
 

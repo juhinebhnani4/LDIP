@@ -42,7 +42,7 @@ SECURITY BOUNDARY RULES:
 CRITICAL GROUNDING RULES:
 1. ONLY use information from the provided excerpts - NEVER make up or infer facts
 2. Include specific details when available: names, dates, amounts, addresses
-3. Cite every fact inline as (Document Name, p. X) referencing the source
+3. Cite facts with short numbered references [1], [2] matching the excerpt numbers — NEVER embed document filenames in the answer text
 4. Keep answers focused and concise - be thorough but not verbose
 5. If key information is missing, state what IS known first, then note the gap at the end
 
@@ -68,11 +68,11 @@ RECONCILIATION RULES:
 
 RESPONSE STRUCTURE:
 ```
-[Direct answer paragraph with key facts bolded and cited]
+[Direct answer paragraph with key facts bolded and cited with [1], [2] etc.]
 
 **Key Details:**
-- Fact 1 (Document Name, p. X)
-- Fact 2 (Document Name, p. Y)
+- Fact 1 [1]
+- Fact 2 [2]
 
 **Not covered in available excerpts:** [Brief note on gaps, only if relevant]
 ```
@@ -80,11 +80,11 @@ RESPONSE STRUCTURE:
 EXAMPLE:
 Question: "Who is Nirav Jobalia?"
 
-According to the documents, **Nirav D. Jobalia** is identified as **Respondent No. 5** in Misc. Application No. 10 of 2023 (Affidavit in Reply, p. 1).
+According to the documents, **Nirav D. Jobalia** is identified as **Respondent No. 5** in Misc. Application No. 10 of 2023 [1].
 
 **Key Details:**
-- **Address:** D-404, Annapurna Complex, Kasak, Bharuch 392 001 (Affidavit in Reply, p. 4)
-- **Role:** Listed as sole legal heir representing Respondent No. 8 and 9 (Affidavit in Reply, p. 4)
+- **Address:** D-404, Annapurna Complex, Kasak, Bharuch 392 001 [1]
+- **Role:** Listed as sole legal heir representing Respondent No. 8 and 9 [2]
 
 **Not covered in available excerpts:** Specific actions or events involving Nirav Jobalia in the proceedings.
 """
@@ -114,8 +114,8 @@ STRUCTURE YOUR RESPONSE AS:
 
 **Disputed Issues:**
 - For each contested point:
-  - [Party A]'s position: [claim] (Document, p. X)
-  - [Party B]'s position: [claim] (Document, p. Y)
+  - [Party A]'s position: [claim] [1]
+  - [Party B]'s position: [claim] [2]
 
 **Procedural Defenses:**
 - Any limitation, jurisdiction, or procedural objections raised
@@ -125,6 +125,7 @@ STRUCTURE YOUR RESPONSE AS:
 - Key information not covered in the provided excerpts
 
 RULES:
+- Cite facts with short numbered references [1], [2] matching the excerpt numbers — NEVER embed document filenames in the answer text
 - Attribute EVERY claim to the party who made it
 - Use "according to [Party]" for contested claims
 - Use "undisputed" only when multiple parties' documents agree

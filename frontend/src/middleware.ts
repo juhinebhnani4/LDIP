@@ -79,8 +79,10 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
 
-    // Add session_expired param if there was an auth error (likely expired session)
-    if (userError) {
+    // Only show session_expired if there was an actual session that expired
+    // (i.e., cookies exist but token validation failed), not for users who
+    // simply haven't logged in yet (no session cookies at all)
+    if (userError && session) {
       url.searchParams.set('session_expired', 'true');
     }
 

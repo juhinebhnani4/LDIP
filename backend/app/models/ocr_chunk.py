@@ -54,6 +54,7 @@ class DocumentOCRChunk(BaseModel):
     error_message: str | None = Field(None, alias="errorMessage")
     result_storage_path: str | None = Field(None, alias="resultStoragePath")
     result_checksum: str | None = Field(None, alias="resultChecksum")
+    ocr_full_text: str | None = Field(None, alias="ocrFullText")
     processing_started_at: datetime | None = Field(None, alias="processingStartedAt")
     processing_completed_at: datetime | None = Field(None, alias="processingCompletedAt")
     created_at: datetime = Field(..., alias="createdAt")

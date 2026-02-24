@@ -3,8 +3,20 @@ nul
 backend/nul
 frontend/nul
 
-# Screenshots and images
+# Screenshots and images (all directories)
 *.png
+*.jpeg
+*.jpg
+
+# Root-level test/debug artifacts (untracked files)
+/package.json
+/package-lock.json
+/*.txt
+/*.py
+/*.js
+/*.ps1
+/*.md
+/*.bat
 
 # Debug/utility scripts in backend root
 backend/=*

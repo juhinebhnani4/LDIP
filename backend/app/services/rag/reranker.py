@@ -40,7 +40,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 RERANK_MODEL = "rerank-v3.5"
-DEFAULT_TOP_N = 3
+DEFAULT_TOP_N = 5
 DEFAULT_HYBRID_LIMIT = 20
 RERANK_TIMEOUT_SECONDS = 10
 

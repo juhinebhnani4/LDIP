@@ -742,6 +742,7 @@ class StatementComparator:
         batch_size: int = DEFAULT_BATCH_SIZE,
         cross_document_only: bool = False,
         matter_id: str | None = None,
+        source_chunk_ids: set[str] | None = None,
     ) -> ComparisonBatchResult:
         """Compare all statement pairs for an entity.
 
@@ -764,6 +765,7 @@ class StatementComparator:
             entity_statements=entity_statements,
             max_pairs=max_pairs,
             cross_document_only=cross_document_only,
+            source_chunk_ids=source_chunk_ids,
         )
 
         if not pairs:
@@ -843,16 +845,23 @@ class StatementComparator:
         entity_statements: EntityStatements,
         max_pairs: int,
         cross_document_only: bool = False,
+        source_chunk_ids: set[str] | None = None,
     ) -> list[StatementPair]:
         """Generate unique statement pairs for comparison.
 
         Story 5-2: Generates N*(N-1)/2 unique pairs, deduplicating (A,B) == (B,A).
         Applies pre-filtering optimization to prioritize suspicious pairs.
 
+        Stage 2.3: When source_chunk_ids is provided, only generates pairs where
+        at least one side is from the new document's chunks. This makes contradiction
+        detection incremental — uploading doc B only compares doc B's chunks against
+        everything else, not the full O(n^2) across all documents.
+
         Args:
             entity_statements: All statements grouped by document.
             max_pairs: Maximum pairs to generate.
             cross_document_only: Only compare statements from different documents.
+            source_chunk_ids: If provided, only pairs involving at least one of these chunk IDs.
 
         Returns:
             List of StatementPair objects, sorted by suspiciousness score.
@@ -874,6 +883,13 @@ class StatementComparator:
             # Skip same-document pairs if cross_document_only
             if cross_document_only and stmt_a.document_id == stmt_b.document_id:
                 continue
+
+            # Stage 2.3: Incremental — only pairs involving the new document's chunks
+            if source_chunk_ids is not None:
+                a_in_source = stmt_a.chunk_id in source_chunk_ids
+                b_in_source = stmt_b.chunk_id in source_chunk_ids
+                if not (a_in_source or b_in_source):
+                    continue
 
             # Create pair
             pair = StatementPair(

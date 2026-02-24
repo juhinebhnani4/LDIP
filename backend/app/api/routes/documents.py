@@ -9,6 +9,7 @@ Security notes:
 - Storage access uses Service Role client (RLS bypassed - access validated at API layer)
 """
 
+import asyncio
 import io
 import os
 import tempfile
@@ -122,67 +123,70 @@ async def _get_document_features(document_id: str) -> DocumentFeatures:
     try:
         client = get_service_client()
 
-        # Check if chunks exist (search available)
-        chunks_resp = (
-            client.table("document_chunks")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        features.search = (chunks_resp.count or 0) > 0
+        # Run all feature checks in a single thread to avoid blocking
+        # the async event loop (sync Supabase client uses httpx.Client).
+        def _check_features() -> DocumentFeatures:
+            f = DocumentFeatures()
 
-        # Check if any chunks have embeddings (semantic search available)
-        if features.search:
-            embeddings_resp = (
-                client.table("document_chunks")
+            chunks_resp = (
+                client.table("chunks")
                 .select("id", count="exact")
                 .eq("document_id", document_id)
-                .not_.is_("embedding", "null")
                 .limit(1)
                 .execute()
             )
-            features.semantic_search = (embeddings_resp.count or 0) > 0
+            f.search = (chunks_resp.count or 0) > 0
 
-        # Check if entities exist (entity data available)
-        entities_resp = (
-            client.table("identity_nodes")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        features.entities = (entities_resp.count or 0) > 0
+            if f.search:
+                embeddings_resp = (
+                    client.table("chunks")
+                    .select("id", count="exact")
+                    .eq("document_id", document_id)
+                    .not_.is_("embedding", "null")
+                    .limit(1)
+                    .execute()
+                )
+                f.semantic_search = (embeddings_resp.count or 0) > 0
 
-        # Check if timeline events exist (timeline available)
-        timeline_resp = (
-            client.table("timeline_events")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        features.timeline = (timeline_resp.count or 0) > 0
+            entities_resp = (
+                client.table("identity_nodes")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .limit(1)
+                .execute()
+            )
+            f.entities = (entities_resp.count or 0) > 0
 
-        # Check if citations exist (citations available)
-        citations_resp = (
-            client.table("citations")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        features.citations = (citations_resp.count or 0) > 0
+            timeline_resp = (
+                client.table("timeline_events")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .limit(1)
+                .execute()
+            )
+            f.timeline = (timeline_resp.count or 0) > 0
 
-        # Check if bbox links exist (bbox highlighting available)
-        bbox_resp = (
-            client.table("chunk_bounding_boxes")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .limit(1)
-            .execute()
-        )
-        features.bbox_highlighting = (bbox_resp.count or 0) > 0
+            citations_resp = (
+                client.table("citations")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .limit(1)
+                .execute()
+            )
+            f.citations = (citations_resp.count or 0) > 0
+
+            bbox_resp = (
+                client.table("chunk_bounding_boxes")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .limit(1)
+                .execute()
+            )
+            f.bbox_highlighting = (bbox_resp.count or 0) > 0
+
+            return f
+
+        features = await asyncio.to_thread(_check_features)
 
         logger.debug(
             "document_features_checked",
@@ -646,11 +650,14 @@ async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
     return content, total_size
 
 
-def _queue_ocr_task(document_id: str, file_size: int) -> None:
+def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = None) -> None:
     """Queue full document processing pipeline for a document.
 
     Uses Celery chain to run the complete document ingestion pipeline.
-    Smaller documents (<10MB, ~100 pages) get 'high' priority.
+
+    Stage 2.4: If the matter already has >= max_concurrent_docs_per_matter
+    documents in PROCESSING, the document stays QUEUED and will be picked up
+    by the dispatch_stuck_queued_jobs maintenance task when a slot opens.
 
     The task chain:
     1. process_document: OCR with Google Document AI
@@ -667,23 +674,64 @@ def _queue_ocr_task(document_id: str, file_size: int) -> None:
     Args:
         document_id: Document UUID to process.
         file_size: File size in bytes.
+        matter_id: Matter UUID (for concurrency limit check).
     """
     from celery import chain
 
-    # Heuristic: ~100KB per page average for scanned PDFs
-    # 10MB ~ 100 pages
-    is_small_document = file_size < 10 * 1024 * 1024
+    # Stage 2.4: Per-matter concurrency limit
+    if matter_id:
+        try:
+            from app.services.supabase.client import get_service_client
+            settings = get_settings()
+            client = get_service_client()
+            if client:
+                processing_count = (
+                    client.table("processing_jobs")
+                    .select("id", count="exact")
+                    .eq("matter_id", matter_id)
+                    .eq("status", "PROCESSING")
+                    .execute()
+                ).count or 0
 
-    queue_name = "high" if is_small_document else "default"
+                if processing_count >= settings.max_concurrent_docs_per_matter:
+                    # Create a QUEUED processing_job so dispatch_stuck_queued_jobs
+                    # maintenance task (runs every 10 min) picks it up when a slot opens
+                    try:
+                        client.table("processing_jobs").insert({
+                            "matter_id": matter_id,
+                            "document_id": document_id,
+                            "job_type": "DOCUMENT_PROCESSING",
+                            "status": "QUEUED",
+                            "current_stage": "queued_concurrency_limit",
+                        }).execute()
+                    except Exception as insert_err:
+                        logger.warning(
+                            "queued_job_insert_failed",
+                            document_id=document_id,
+                            error=str(insert_err),
+                        )
+                    logger.info(
+                        "document_queued_concurrency_limit",
+                        document_id=document_id,
+                        matter_id=matter_id,
+                        processing_count=processing_count,
+                        limit=settings.max_concurrent_docs_per_matter,
+                    )
+                    return
+        except Exception as e:
+            # Fail open: if check fails, dispatch anyway
+            logger.warning(
+                "concurrency_limit_check_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+
+    # Stage 2.1: All document processing starts in "default" queue.
+    # Individual tasks route to llm/heavy queues via task_routes in celery.py.
+    queue_name = "default"
 
     # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding ->
     # Entity Extraction -> (fan-out: citations, dates, aliases)
-    # Each task receives the result from the previous task as first argument.
-    # After extract_entities completes, it dispatches extract_citations,
-    # extract_dates_from_document, and resolve_aliases in parallel.
-    # Full pipeline makes documents searchable via hybrid search (BM25 + semantic),
-    # populates the Matter Identity Graph (MIG) with extracted entities,
-    # extracts Act citations, and builds the timeline with extracted dates.
     task_chain = chain(
         process_document.s(document_id),
         validate_ocr.s(),
@@ -879,7 +927,7 @@ async def _extract_and_upload_zip(
                 created_doc_ids.append(doc.document_id)
 
                 # Queue OCR processing for this document
-                _queue_ocr_task(doc.document_id, len(pdf_content))
+                _queue_ocr_task(doc.document_id, len(pdf_content), matter_id=matter_id)
 
             logger.info(
                 "zip_extraction_complete",
@@ -1134,8 +1182,7 @@ async def upload_document(
             )
 
             # Queue OCR processing task
-            # Use 'high' priority for small files (under 10MB heuristic for <100 pages)
-            _queue_ocr_task(doc.document_id, file_size)
+            _queue_ocr_task(doc.document_id, file_size, matter_id=matter_id)
 
             logger.info(
                 "document_upload_complete",
@@ -1217,7 +1264,9 @@ async def list_documents(
     Requires viewer, editor, or owner role on the matter.
     """
     try:
-        documents, meta = document_service.list_documents(
+        # Wrap sync service call in thread to avoid blocking event loop
+        documents, meta = await asyncio.to_thread(
+            document_service.list_documents,
             matter_id=membership.matter_id,
             page=page,
             per_page=per_page,
@@ -1352,11 +1401,9 @@ async def get_document(
     User must have access to the document's matter.
     """
     try:
-        # Get document (RLS will filter if user doesn't have access)
-        doc = document_service.get_document(document_id)
-
-        # Generate signed URL for storage access (valid for 1 hour)
-        signed_url = storage_service.get_signed_url(doc.storage_path, expires_in=3600)
+        # Get document and signed URL in thread to avoid blocking event loop
+        doc = await asyncio.to_thread(document_service.get_document, document_id)
+        signed_url = await asyncio.to_thread(storage_service.get_signed_url, doc.storage_path, 3600)
 
         # Query feature availability (Story 7.2)
         features = await _get_document_features(document_id)
@@ -1838,8 +1885,8 @@ async def retry_document_processing(
     matter_id = membership.matter_id
 
     try:
-        # Get document
-        doc = doc_service.get_document(document_id)
+        # Get document (in thread to avoid blocking event loop)
+        doc = await asyncio.to_thread(doc_service.get_document, document_id)
         if not doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1883,36 +1930,40 @@ async def retry_document_processing(
         try:
             supa = get_supa_client()
             if supa:
-                # Try to reset existing FAILED job
-                existing = (
-                    supa.table("processing_jobs")
-                    .select("id")
-                    .eq("document_id", document_id)
-                    .in_("status", ["FAILED", "CANCELLED"])
-                    .order("created_at", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                if existing.data:
-                    job_id = existing.data[0]["id"]
-                    supa.table("processing_jobs").update({
-                        "status": "PROCESSING",
-                        "current_stage": "retry_started",
-                        "error_message": None,
-                    }).eq("id", job_id).execute()
-                    logger.info("retry_reset_processing_job", job_id=job_id, document_id=document_id)
-                else:
-                    # Create new processing_job
-                    new_job = supa.table("processing_jobs").insert({
-                        "matter_id": matter_id,
-                        "document_id": document_id,
-                        "job_type": "DOCUMENT_PROCESSING",
-                        "status": "PROCESSING",
-                        "current_stage": "retry_started",
-                    }).execute()
-                    if new_job.data:
-                        job_id = new_job.data[0]["id"]
-                        logger.info("retry_created_processing_job", job_id=job_id, document_id=document_id)
+                def _reset_or_create_job() -> str | None:
+                    """Reset failed job or create new one (sync Supabase calls)."""
+                    existing = (
+                        supa.table("processing_jobs")
+                        .select("id")
+                        .eq("document_id", document_id)
+                        .in_("status", ["FAILED", "CANCELLED"])
+                        .order("created_at", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    if existing.data:
+                        jid = existing.data[0]["id"]
+                        supa.table("processing_jobs").update({
+                            "status": "PROCESSING",
+                            "current_stage": "retry_started",
+                            "error_message": None,
+                        }).eq("id", jid).execute()
+                        return jid
+                    else:
+                        new_job = supa.table("processing_jobs").insert({
+                            "matter_id": matter_id,
+                            "document_id": document_id,
+                            "job_type": "DOCUMENT_PROCESSING",
+                            "status": "PROCESSING",
+                            "current_stage": "retry_started",
+                        }).execute()
+                        if new_job.data:
+                            return new_job.data[0]["id"]
+                    return None
+
+                job_id = await asyncio.to_thread(_reset_or_create_job)
+                if job_id:
+                    logger.info("retry_job_tracking_setup", job_id=job_id, document_id=document_id)
         except Exception as job_err:
             logger.warning("retry_job_tracking_setup_failed", error=str(job_err), document_id=document_id)
 
@@ -2015,83 +2066,81 @@ async def retry_all_stuck_documents(
     try:
         client = get_supabase_client()
 
-        # Find stuck/failed documents in this matter
-        stuck_statuses = ["ocr_complete", "failed", "ocr_failed", "chunking_failed", "embedding_failed"]
-        docs_response = (
-            client.table("documents")
-            .select("id, filename, status, extracted_text")
-            .eq("matter_id", matter_id)
-            .in_("status", stuck_statuses)
-            .execute()
-        )
+        # Run all sync Supabase queries in a thread to avoid blocking event loop
+        def _find_and_retry_stuck() -> dict:
+            stuck_statuses = ["ocr_complete", "failed", "ocr_failed", "chunking_failed", "embedding_failed"]
+            docs_response = (
+                client.table("documents")
+                .select("id, filename, status, extracted_text")
+                .eq("matter_id", matter_id)
+                .in_("status", stuck_statuses)
+                .execute()
+            )
 
-        documents = docs_response.data or []
-        results = {
-            "total_checked": len(documents),
-            "retried": 0,
-            "skipped": 0,
-            "errors": [],
-        }
+            documents = docs_response.data or []
+            results = {
+                "total_checked": len(documents),
+                "retried": 0,
+                "skipped": 0,
+                "errors": [],
+            }
 
-        for doc in documents:
-            doc_id = doc["id"]
-            doc_status = doc.get("status", "")
-            has_text = bool(doc.get("extracted_text"))
+            for doc in documents:
+                doc_id = doc["id"]
+                doc_status = doc.get("status", "")
+                has_text = bool(doc.get("extracted_text"))
 
-            # Determine retry type based on status
-            # chunking_failed/embedding_failed/ocr_complete: OCR succeeded → RAG-only
-            # failed/ocr_failed WITH extracted_text: OCR succeeded → RAG-only
-            # failed/ocr_failed WITHOUT extracted_text: full OCR pipeline
-            rag_only_statuses = ["ocr_complete", "chunking_failed", "embedding_failed"]
-            needs_full_ocr = doc_status in ["failed", "ocr_failed"] and not has_text
+                needs_full_ocr = doc_status in ["failed", "ocr_failed"] and not has_text
 
-            if needs_full_ocr:
+                if needs_full_ocr:
+                    try:
+                        task_chain = chain(
+                            process_document.s(doc_id),
+                            validate_ocr.s(),
+                            calculate_confidence.s(),
+                            chunk_document.s(),
+                            embed_chunks.s(),
+                            extract_entities.s(),
+                        )
+                        task_chain.apply_async()
+                        results["retried"] += 1
+                        logger.info("stuck_document_full_retry_queued", document_id=doc_id, matter_id=matter_id)
+                    except Exception as e:
+                        results["errors"].append({"document_id": doc_id, "error": str(e)})
+                    continue
+
+                if not has_text:
+                    results["skipped"] += 1
+                    continue
+
+                chunks_response = (
+                    client.table("chunks")
+                    .select("id", count="exact")
+                    .eq("document_id", doc_id)
+                    .limit(1)
+                    .execute()
+                )
+                has_chunks = (chunks_response.count or 0) > 0
+
+                if has_chunks and doc_status == "ocr_complete":
+                    results["skipped"] += 1
+                    continue
+
                 try:
                     task_chain = chain(
-                        process_document.s(doc_id),
-                        validate_ocr.s(),
-                        calculate_confidence.s(),
-                        chunk_document.s(),
+                        chunk_document.s({"document_id": doc_id}),
                         embed_chunks.s(),
                         extract_entities.s(),
                     )
                     task_chain.apply_async()
                     results["retried"] += 1
-                    logger.info("stuck_document_full_retry_queued", document_id=doc_id, matter_id=matter_id)
+                    logger.info("stuck_document_rag_retry_queued", document_id=doc_id, matter_id=matter_id)
                 except Exception as e:
                     results["errors"].append({"document_id": doc_id, "error": str(e)})
-                continue
 
-            # RAG-only retry: skip if no text
-            if not has_text:
-                results["skipped"] += 1
-                continue
+            return results
 
-            # Check if document already has chunks (RAG done)
-            chunks_response = (
-                client.table("chunks")
-                .select("id", count="exact")
-                .eq("document_id", doc_id)
-                .limit(1)
-                .execute()
-            )
-            has_chunks = (chunks_response.count or 0) > 0
-
-            if has_chunks and doc_status == "ocr_complete":
-                results["skipped"] += 1
-                continue
-
-            try:
-                task_chain = chain(
-                    chunk_document.s({"document_id": doc_id}),
-                    embed_chunks.s(),
-                    extract_entities.s(),
-                )
-                task_chain.apply_async()
-                results["retried"] += 1
-                logger.info("stuck_document_rag_retry_queued", document_id=doc_id, matter_id=matter_id)
-            except Exception as e:
-                results["errors"].append({"document_id": doc_id, "error": str(e)})
+        results = await asyncio.to_thread(_find_and_retry_stuck)
 
         logger.info(
             "retry_all_stuck_completed",

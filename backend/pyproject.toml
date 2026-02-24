@@ -15,6 +15,7 @@ dependencies = [
     "alembic>=1.17.2",
     "axiom-py>=0.9.0",
     "celery[gevent]>=5.6.1", # gevent pool for I/O-bound worker concurrency
+    "celery-redbeat>=2.3.0", # Redis-backed beat scheduler with distributed locking
     "cohere>=5.20.1",
     "voyageai>=0.3.0",
     "fastapi>=0.128.0",

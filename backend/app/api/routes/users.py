@@ -5,6 +5,7 @@ Story 14.14: Settings Page Implementation
 Endpoints for user profile and preferences management.
 """
 
+import asyncio
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -118,10 +119,12 @@ class UpdateProfileRequest(BaseModel):
 
 async def ensure_preferences_exist(supabase: Client, user_id: str) -> None:
     """Create default preferences if they don't exist."""
-    result = supabase.table("user_preferences").select("user_id").eq("user_id", user_id).execute()
+    def _ensure():
+        result = supabase.table("user_preferences").select("user_id").eq("user_id", user_id).execute()
+        if not result.data:
+            supabase.table("user_preferences").insert({"user_id": user_id}).execute()
 
-    if not result.data:
-        supabase.table("user_preferences").insert({"user_id": user_id}).execute()
+    await asyncio.to_thread(_ensure)
 
 
 # =============================================================================
@@ -144,8 +147,10 @@ async def get_user_preferences(
     # Ensure preferences exist
     await ensure_preferences_exist(supabase, user_id)
 
-    # Fetch preferences
-    result = supabase.table("user_preferences").select("*").eq("user_id", user_id).single().execute()
+    # Fetch preferences (in thread to avoid blocking event loop)
+    result = await asyncio.to_thread(
+        lambda: supabase.table("user_preferences").select("*").eq("user_id", user_id).single().execute()
+    )
 
     if not result.data:
         raise HTTPException(
@@ -189,9 +194,9 @@ async def update_user_preferences(
         # No updates, just return current preferences
         return await get_user_preferences(current_user, supabase)
 
-    # Update preferences
-    result = (
-        supabase.table("user_preferences")
+    # Update preferences (in thread to avoid blocking event loop)
+    result = await asyncio.to_thread(
+        lambda: supabase.table("user_preferences")
         .update(update_data)
         .eq("user_id", user_id)
         .execute()
@@ -225,9 +230,9 @@ async def get_user_profile(
     """Get current user's profile information."""
     user_id = current_user.id
 
-    # Fetch user from Supabase Auth to get metadata
+    # Fetch user from Supabase Auth to get metadata (in thread to avoid blocking)
     try:
-        result = supabase.auth.admin.get_user_by_id(user_id)
+        result = await asyncio.to_thread(supabase.auth.admin.get_user_by_id, user_id)
         if result.user:
             metadata = result.user.user_metadata or {}
             return UserProfile(
@@ -261,8 +266,8 @@ async def sign_out_all_devices(
     user_id = current_user.id
 
     try:
-        # Sign out user from all sessions via Supabase Admin API
-        supabase.auth.admin.sign_out(user_id, scope="global")
+        # Sign out user from all sessions via Supabase Admin API (in thread)
+        await asyncio.to_thread(lambda: supabase.auth.admin.sign_out(user_id, scope="global"))
         return {"message": "Successfully signed out from all devices"}
     except Exception as e:
         raise HTTPException(
@@ -284,11 +289,12 @@ async def delete_account(
     user_id = current_user.id
 
     try:
-        # Delete user preferences first
-        supabase.table("user_preferences").delete().eq("user_id", user_id).execute()
+        # Delete user preferences first, then auth user (in thread to avoid blocking)
+        def _delete_account():
+            supabase.table("user_preferences").delete().eq("user_id", user_id).execute()
+            supabase.auth.admin.delete_user(user_id)
 
-        # Delete the user from Supabase Auth
-        supabase.auth.admin.delete_user(user_id)
+        await asyncio.to_thread(_delete_account)
 
         return {"message": "Account deleted successfully"}
     except Exception as e:
@@ -322,11 +328,11 @@ async def update_user_profile(
         # No updates
         return await get_user_profile(current_user, supabase)
 
-    # Update user metadata via Supabase Admin API
-    # Note: This requires service role key for admin operations
+    # Update user metadata via Supabase Admin API (in thread to avoid blocking)
     try:
-        result = supabase.auth.admin.update_user_by_id(
-            user_id, {"user_metadata": metadata_update}
+        result = await asyncio.to_thread(
+            supabase.auth.admin.update_user_by_id,
+            user_id, {"user_metadata": metadata_update},
         )
 
         if result.user:

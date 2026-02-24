@@ -321,6 +321,9 @@ class Settings(BaseSettings):
     # Rate limiter: in-process vs distributed (1 = in-process, 2+ = Redis distributed)
     worker_count: int = 1                              # WORKER_COUNT=2 for multi-worker
 
+    # Stage 2.4: Per-matter concurrency limit (prevents one user from saturating all workers)
+    max_concurrent_docs_per_matter: int = 3            # MAX_CONCURRENT_DOCS_PER_MATTER=3
+
     # D1: Contradiction cache (48h TTL, cache by content hash)
     contradiction_cache_enabled: bool = True           # CONTRADICTION_CACHE_ENABLED=false to disable
     contradiction_cache_ttl: int = 172800              # 48 hours in seconds

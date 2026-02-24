@@ -168,7 +168,7 @@ export function renderBboxHighlight(
   ctx: CanvasRenderingContext2D,
   rect: CanvasRect,
   colors: HighlightColors,
-  opacity: number = 0.02
+  opacity: number = 0.15
 ): void {
   // Save current context state
   ctx.save();

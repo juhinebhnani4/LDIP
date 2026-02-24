@@ -103,6 +103,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
+SET search_path = public
 AS $$
     SELECT
         DATE(er.evaluated_at) AS eval_date,
@@ -161,6 +162,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
+SET search_path = public
 AS $$
     WITH matters_with_golden AS (
         -- Only include matters that have golden dataset items (evaluation-ready)

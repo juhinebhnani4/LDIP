@@ -1,5 +1,6 @@
 """Health check endpoints (Story 13.2, 13.3 - Circuit Breaker + Rate Limit Status)."""
 
+import asyncio
 from typing import Any
 
 import structlog
@@ -339,7 +340,7 @@ async def get_celery_status() -> dict[str, Any]:
     """
     try:
         # Ping workers with a short timeout
-        inspect = celery_app.control.inspect(timeout=2.0)
+        inspect = celery_app.control.inspect(timeout=5.0)
         ping_response = inspect.ping()
 
         if ping_response:
@@ -456,49 +457,54 @@ async def get_pipeline_health(
             from app.services.supabase.client import get_service_client
             client = get_service_client()
 
-            # Count processing jobs
-            jobs_resp = (
-                client.table("processing_jobs")
-                .select("id", count="exact")
-                .eq("status", "PROCESSING")
-                .execute()
-            )
-            processing_status["processing_jobs_count"] = jobs_resp.count or 0
+            # Run all DB queries in a thread to avoid blocking the event loop
+            def _check_processing_status() -> dict:
+                ps: dict[str, int] = {
+                    "processing_jobs_count": 0,
+                    "stuck_jobs_count": 0,
+                    "stale_chunks_count": 0,
+                    "pending_merges_count": 0,
+                }
 
-            # Count stuck jobs (processing > 30 min)
-            stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
-            stuck_resp = (
-                client.table("processing_jobs")
-                .select("id", count="exact")
-                .eq("status", "PROCESSING")
-                .lt("updated_at", stuck_threshold.isoformat())
-                .execute()
-            )
-            processing_status["stuck_jobs_count"] = stuck_resp.count or 0
+                jobs_resp = (
+                    client.table("processing_jobs")
+                    .select("id", count="exact")
+                    .eq("status", "PROCESSING")
+                    .execute()
+                )
+                ps["processing_jobs_count"] = jobs_resp.count or 0
 
-            # Count stale OCR chunks (processing > configurable threshold)
-            chunk_threshold = datetime.now(timezone.utc) - timedelta(
-                seconds=settings.chunk_stale_threshold_seconds
-            )
-            stale_chunks_resp = (
-                client.table("ocr_chunks")
-                .select("id", count="exact")
-                .eq("status", "processing")
-                .lt("updated_at", chunk_threshold.isoformat())
-                .execute()
-            )
-            processing_status["stale_chunks_count"] = stale_chunks_resp.count or 0
+                stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
+                stuck_resp = (
+                    client.table("processing_jobs")
+                    .select("id", count="exact")
+                    .eq("status", "PROCESSING")
+                    .lt("updated_at", stuck_threshold.isoformat())
+                    .execute()
+                )
+                ps["stuck_jobs_count"] = stuck_resp.count or 0
 
-            # Count pending merges (all chunks completed but document not finalized)
-            # This is a simplified check - could be more sophisticated
-            pending_merges_resp = (
-                client.rpc(
-                    "count_pending_merges",
-                    {},
-                ).execute()
-            )
-            if pending_merges_resp.data:
-                processing_status["pending_merges_count"] = pending_merges_resp.data or 0
+                chunk_threshold = datetime.now(timezone.utc) - timedelta(
+                    seconds=settings.chunk_stale_threshold_seconds
+                )
+                stale_chunks_resp = (
+                    client.table("ocr_chunks")
+                    .select("id", count="exact")
+                    .eq("status", "processing")
+                    .lt("updated_at", chunk_threshold.isoformat())
+                    .execute()
+                )
+                ps["stale_chunks_count"] = stale_chunks_resp.count or 0
+
+                pending_merges_resp = (
+                    client.rpc("count_pending_merges", {}).execute()
+                )
+                if pending_merges_resp.data:
+                    ps["pending_merges_count"] = pending_merges_resp.data or 0
+
+                return ps
+
+            processing_status = await asyncio.to_thread(_check_processing_status)
 
         except Exception as e:
             logger.warning("pipeline_health_db_error", error=str(e))

@@ -62,23 +62,48 @@ celery_app.conf.update(
     worker_max_memory_per_child=400000,  # 400MB in KB - restart if memory exceeds this (Python high watermark protection)
     task_time_limit=3600,  # Hard timeout: 1 hour per task
     task_soft_time_limit=3300,  # Soft timeout: 55 minutes (gives 5 min cleanup)
-    # Priority queues configuration
+    # Stage 2.1: Queue splitting — 4 queues by work type
+    # default: fast CPU/IO tasks (OCR, chunking, validation)
+    # llm: LLM-bound tasks (embedding, entity extraction, citations, summaries)
+    # heavy: O(n^2) tasks (contradiction detection) — longest running, least urgent
+    # low: maintenance, background tasks — can wait
+    # With 1 worker, all queues are consumed. With 2+ workers, workers can specialize.
     task_queues={
-        # Align with architecture convention: high / default / low
         "default": {"exchange": "default", "binding_key": "default"},
-        "high": {"exchange": "high", "binding_key": "high"},
+        "llm": {"exchange": "llm", "binding_key": "llm"},
+        "heavy": {"exchange": "heavy", "binding_key": "heavy"},
         "low": {"exchange": "low", "binding_key": "low"},
     },
     task_default_queue="default",
-    # Task routing based on priority
+    # Task routing by work type
     task_routes={
-        # Document ingestion tasks can be long-running; keep in default until
-        # we implement true priority routing by story.
-        "app.workers.tasks.document_tasks.*": {"queue": "default"},
+        # --- default queue: fast CPU/IO, no LLM ---
+        "app.workers.tasks.document_tasks.process_document": {"queue": "default"},
+        "app.workers.tasks.document_tasks.validate_ocr": {"queue": "default"},
+        "app.workers.tasks.document_tasks.calculate_confidence": {"queue": "default"},
+        "app.workers.tasks.document_tasks.chunk_document": {"queue": "default"},
         "app.workers.tasks.chunked_document_tasks.*": {"queue": "default"},
-        "app.workers.tasks.engine_tasks.*": {"queue": "default"},
         "app.workers.tasks.library_tasks.*": {"queue": "default"},
-        "app.workers.tasks.summary_tasks.*": {"queue": "default"},
+        "app.workers.tasks.table_extraction_tasks.*": {"queue": "default"},
+        # --- llm queue: LLM-bound, moderate duration ---
+        "app.workers.tasks.document_tasks.embed_chunks": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.extract_entities": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.extract_citations": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.resolve_aliases": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.extract_dates_from_document": {"queue": "llm"},
+        "app.workers.tasks.engine_tasks.*": {"queue": "llm"},
+        "app.workers.tasks.summary_tasks.*": {"queue": "llm"},
+        "app.workers.tasks.voyage_embedding_tasks.*": {"queue": "llm"},
+        "app.workers.tasks.verification_tasks.*": {"queue": "llm"},
+        # --- heavy queue: O(n^2), longest running ---
+        "app.workers.tasks.document_tasks.detect_contradictions": {"queue": "heavy"},
+        # --- low queue: maintenance, background ---
+        "app.workers.tasks.maintenance_tasks.*": {"queue": "low"},
+        "app.workers.tasks.act_validation_tasks.*": {"queue": "low"},
+        "app.workers.tasks.evaluation_tasks.*": {"queue": "low"},
+        "app.workers.tasks.quota_monitoring_tasks.*": {"queue": "low"},
+        "app.workers.tasks.reasoning_archive_tasks.*": {"queue": "low"},
+        "app.workers.tasks.email_tasks.*": {"queue": "low"},
     },
     # === BROKER TRANSPORT OPTIONS ===
     # CRITICAL: visibility_timeout must exceed task_time_limit to prevent duplicate execution
@@ -99,6 +124,14 @@ celery_app.conf.update(
     # These settings are required for TLS connections to serverless Redis
     broker_use_ssl=_ssl_config if _uses_tls else None,
     redis_backend_use_ssl=_ssl_config if _uses_tls else None,
+    # --- RedBeat: Redis-backed beat scheduler with distributed locking ---
+    # Only one beat instance fires tasks at a time (even with multiple replicas).
+    # Uses a Redis lock with automatic failover if the leader dies.
+    beat_scheduler="redbeat.RedBeatScheduler",
+    redbeat_redis_url=settings.celery_broker_url,
+    redbeat_redis_use_ssl=_ssl_config if _uses_tls else None,
+    redbeat_key_prefix="redbeat",
+    redbeat_lock_timeout=300,  # 5 min — if beat dies, another takes over within 5 min
     # Celery Beat schedule for periodic tasks
     beat_schedule={
         "recover-stale-jobs": {
@@ -260,6 +293,7 @@ _TASK_MODULES = [
     "app.workers.tasks.quota_monitoring_tasks",
     "app.workers.tasks.reasoning_archive_tasks",
     "app.workers.tasks.summary_tasks",
+    "app.workers.tasks.table_extraction_tasks",
     "app.workers.tasks.verification_tasks",
     "app.workers.tasks.voyage_embedding_tasks",
 ]
@@ -279,6 +313,7 @@ try:
         quota_monitoring_tasks,
         reasoning_archive_tasks,
         summary_tasks,
+        table_extraction_tasks,
         verification_tasks,
         voyage_embedding_tasks,
     )

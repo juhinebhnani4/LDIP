@@ -47,6 +47,54 @@ def _get_effective_stage_from_job(job: dict) -> str | None:
     return job.get("current_stage")
 
 
+def _is_pipeline_data_complete(client, document_id: str) -> bool:
+    """Check if all pipeline stages produced output for a document.
+
+    Stage 1.3: Smarter Recovery — prevents re-dispatching documents that
+    already have all their data but whose job row is stuck at PROCESSING.
+
+    Returns True if chunks, embeddings, AND entity mentions all exist.
+    """
+    try:
+        # 1. Check chunks exist
+        chunks = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        if not chunks.count:
+            return False
+
+        # 2. Check embeddings exist (at least some chunks have embeddings)
+        embedded = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .not_.is_("embedding", "null")
+            .execute()
+        )
+        if not embedded.count:
+            return False
+
+        # 3. Check entity mentions exist (pipeline ran through entity extraction)
+        entities = (
+            client.table("entity_mentions")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        return bool(entities.count and entities.count > 0)
+
+    except Exception as e:
+        logger.warning(
+            "pipeline_data_completeness_check_failed",
+            document_id=document_id,
+            error=str(e),
+        )
+        return False
+
+
 @celery_app.task(
     name="app.workers.tasks.maintenance_tasks.recover_stale_jobs",
     bind=True,
@@ -166,12 +214,25 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
         skipped = 0
         errors = []
 
+        # Stage 1.2: Import PipelineLock for dedup checks
+        from app.services.distributed_lock import PipelineLock
+
         for job in stuck_jobs:
             job_id = job["id"]
             doc_id = job.get("document_id")
             matter_id = job.get("matter_id")
             job_type = job.get("job_type")
             stage = _get_effective_stage_from_job(job)
+
+            # Stage 1.2: Skip if pipeline is already running for this document
+            if doc_id and PipelineLock(doc_id).is_locked():
+                logger.info(
+                    "dispatch_stuck_queued_skipped_locked",
+                    job_id=job_id,
+                    document_id=doc_id,
+                )
+                skipped += 1
+                continue
 
             # Handle engine task job types (DATE_EXTRACTION, etc.)
             # These are matter-level jobs that may not have a document_id
@@ -233,6 +294,76 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             if not doc_id:
                 errors.append({"job_id": job_id, "error": "no document_id"})
                 continue
+
+            # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
+            # Zombie QUEUED jobs for completed documents should be auto-completed, not re-dispatched.
+            try:
+                doc_resp = client.table("documents").select("status").eq("id", doc_id).execute()
+                doc_status = (doc_resp.data[0]["status"] if doc_resp.data else None)
+                if doc_status == "completed":
+                    logger.info(
+                        "stuck_queued_job_auto_completed",
+                        job_id=job_id,
+                        document_id=doc_id,
+                        reason="document already completed",
+                    )
+                    client.table("processing_jobs").update({
+                        "status": "COMPLETED",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }).eq("id", job_id).execute()
+                    skipped += 1
+                    continue
+            except Exception:
+                pass  # If check fails, proceed with normal dispatch logic
+
+            # Stage 1.3: Check if pipeline data is already complete
+            # If so, just mark the job COMPLETED instead of re-dispatching
+            if _is_pipeline_data_complete(client, doc_id):
+                logger.info(
+                    "stuck_queued_job_data_complete",
+                    job_id=job_id,
+                    document_id=doc_id,
+                    reason="all pipeline data exists, marking COMPLETED",
+                )
+                client.table("processing_jobs").update({
+                    "status": "COMPLETED",
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }).eq("id", job_id).execute()
+                # Also update document status if needed
+                try:
+                    client.table("documents").update(
+                        {"status": "completed"}
+                    ).eq("id", doc_id).neq("status", "completed").execute()
+                except Exception:
+                    pass
+                skipped += 1
+                continue
+
+            # Stage 2.4: Per-matter concurrency limit
+            if matter_id:
+                try:
+                    from app.core.config import get_settings as _get_settings
+                    _settings = _get_settings()
+                    matter_processing = (
+                        client.table("processing_jobs")
+                        .select("id", count="exact")
+                        .eq("matter_id", matter_id)
+                        .eq("status", "PROCESSING")
+                        .execute()
+                    ).count or 0
+                    if matter_processing >= _settings.max_concurrent_docs_per_matter:
+                        logger.info(
+                            "dispatch_stuck_queued_skipped_concurrency",
+                            job_id=job_id,
+                            document_id=doc_id,
+                            matter_id=matter_id,
+                            processing_count=matter_processing,
+                            limit=_settings.max_concurrent_docs_per_matter,
+                        )
+                        skipped += 1
+                        continue
+                except Exception:
+                    pass  # Fail open
 
             try:
                 # Dispatch based on current stage — targeted dispatch avoids
@@ -1033,12 +1164,50 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
         results["checked"] = len(stuck_docs.data)
 
+        # Stage 1.2: Import PipelineLock for dedup checks
+        from app.services.distributed_lock import PipelineLock
+
         for doc in stuck_docs.data:
             doc_id = doc["id"]
             matter_id = doc["matter_id"]
             filename = doc.get("filename", "unknown")
 
+            # Stage 1.2: Skip if pipeline is already running
+            if PipelineLock(doc_id).is_locked():
+                logger.info(
+                    "resume_stuck_pipeline_skipped_locked",
+                    document_id=doc_id,
+                    filename=filename,
+                )
+                results["skipped"] += 1
+                continue
+
             try:
+                # Stage 1.3: Fast path — if all pipeline data exists, mark complete
+                if _is_pipeline_data_complete(client, doc_id):
+                    logger.info(
+                        "resume_pipeline_data_complete",
+                        document_id=doc_id,
+                        filename=filename,
+                        reason="all pipeline data exists, marking completed",
+                    )
+                    client.table("documents").update(
+                        {"status": "completed"}
+                    ).eq("id", doc_id).execute()
+                    # Also complete any stuck processing jobs
+                    try:
+                        from datetime import datetime as dt_cls, timezone as tz_cls
+                        client.table("processing_jobs").update({
+                            "status": "COMPLETED",
+                            "updated_at": dt_cls.now(tz_cls.utc).isoformat(),
+                        }).eq("document_id", doc_id).in_(
+                            "status", ["PROCESSING", "QUEUED"]
+                        ).execute()
+                    except Exception:
+                        pass
+                    results["resumed"] += 1
+                    continue
+
                 # Check what stages are missing for this document
                 # 1. Check if chunks exist
                 chunks = (
@@ -1139,6 +1308,53 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 stage = job.get("current_stage", "")
 
                 if not job_doc_id:
+                    continue
+
+                # Stage 1.2: Skip if pipeline is already running
+                if PipelineLock(job_doc_id).is_locked():
+                    logger.info(
+                        "resume_stuck_job_skipped_locked",
+                        job_id=job["id"],
+                        document_id=job_doc_id,
+                    )
+                    continue
+
+                # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
+                try:
+                    doc_check = client.table("documents").select("status").eq("id", job_doc_id).execute()
+                    doc_st = (doc_check.data[0]["status"] if doc_check.data else None)
+                    if doc_st == "completed":
+                        logger.info(
+                            "stuck_processing_job_auto_completed",
+                            job_id=job["id"],
+                            document_id=job_doc_id,
+                            reason="document already completed",
+                        )
+                        client.table("processing_jobs").update({
+                            "status": "COMPLETED",
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }).eq("id", job["id"]).execute()
+                        results["resumed"] += 1
+                        continue
+                except Exception:
+                    pass  # If check fails, proceed with normal dispatch
+
+                # Stage 1.3: Check if pipeline data is complete — mark done instead of re-dispatching
+                if _is_pipeline_data_complete(client, job_doc_id):
+                    logger.info(
+                        "stuck_processing_job_data_complete",
+                        job_id=job["id"],
+                        document_id=job_doc_id,
+                        reason="all pipeline data exists, marking COMPLETED",
+                    )
+                    client.table("processing_jobs").update({
+                        "status": "COMPLETED",
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }).eq("id", job["id"]).execute()
+                    client.table("documents").update(
+                        {"status": "completed"}
+                    ).eq("id", job_doc_id).neq("status", "completed").execute()
+                    results["resumed"] += 1
                     continue
 
                 try:

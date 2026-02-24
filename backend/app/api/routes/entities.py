@@ -347,29 +347,34 @@ async def get_all_relationships(
                 },
             )
 
-        # Query all relationships for this matter
-        # Schema: source_node_id, target_node_id, relationship_type, confidence
-        result = client.table("identity_edges").select(
-            "id, source_node_id, target_node_id, relationship_type, confidence"
-        ).eq("matter_id", matter_id).execute()
+        # Run sync Supabase queries in thread to avoid blocking event loop
+        def _fetch_relationships() -> tuple[list, dict]:
+            result = client.table("identity_edges").select(
+                "id, source_node_id, target_node_id, relationship_type, confidence"
+            ).eq("matter_id", matter_id).execute()
 
-        if not result.data:
+            if not result.data:
+                return [], {}
+
+            ids = set()
+            for row in result.data:
+                ids.add(row["source_node_id"])
+                ids.add(row["target_node_id"])
+
+            names: dict[str, str] = {}
+            if ids:
+                entities_result = client.table("identity_nodes").select(
+                    "id, canonical_name"
+                ).in_("id", list(ids)).execute()
+                for e in (entities_result.data or []):
+                    names[e["id"]] = e["canonical_name"]
+
+            return result.data, names
+
+        rows, entity_names = await asyncio.to_thread(_fetch_relationships)
+
+        if not rows:
             return BulkRelationshipsResponse(data=[], total=0)
-
-        # Collect all entity IDs to fetch names in one query
-        entity_ids = set()
-        for row in result.data:
-            entity_ids.add(row["source_node_id"])
-            entity_ids.add(row["target_node_id"])
-
-        # Fetch entity names in a single query
-        entity_names: dict[str, str] = {}
-        if entity_ids:
-            entities_result = client.table("identity_nodes").select(
-                "id, canonical_name"
-            ).in_("id", list(entity_ids)).execute()
-            for e in (entities_result.data or []):
-                entity_names[e["id"]] = e["canonical_name"]
 
         edges = [
             BulkRelationshipEdge(
@@ -381,7 +386,7 @@ async def get_all_relationships(
                 target_entity_name=entity_names.get(row["target_node_id"]),
                 weight=row.get("confidence", 1.0) or 1.0,
             )
-            for row in result.data
+            for row in rows
         ]
 
         logger.info(
@@ -1274,16 +1279,18 @@ async def merge_entities(
                 },
             )
 
-        # Call the merge function with user_id for auth
-        client.rpc(
-            "merge_entities",
-            {
-                "p_matter_id": matter_id,
-                "p_keep_id": request.target_entity_id,
-                "p_merge_id": request.source_entity_id,
-                "p_user_id": membership.user_id,
-            },
-        ).execute()
+        # Call the merge function with user_id for auth (in thread to avoid blocking)
+        await asyncio.to_thread(
+            lambda: client.rpc(
+                "merge_entities",
+                {
+                    "p_matter_id": matter_id,
+                    "p_keep_id": request.target_entity_id,
+                    "p_merge_id": request.source_entity_id,
+                    "p_user_id": membership.user_id,
+                },
+            ).execute()
+        )
 
         # Record the correction for learning (AC #4)
         try:
@@ -1405,10 +1412,12 @@ async def unmerge_entity(
                 },
             )
 
-        # Check if entity exists and is merged
-        entity_result = client.table("identity_nodes").select(
-            "id, canonical_name, merged_into_id, matter_id"
-        ).eq("id", request.entity_id).eq("matter_id", matter_id).execute()
+        # Check if entity exists and is merged (in thread to avoid blocking)
+        entity_result = await asyncio.to_thread(
+            lambda: client.table("identity_nodes").select(
+                "id, canonical_name, merged_into_id, matter_id"
+            ).eq("id", request.entity_id).eq("matter_id", matter_id).execute()
+        )
 
         if not entity_result.data or len(entity_result.data) == 0:
             raise HTTPException(
@@ -1437,15 +1446,17 @@ async def unmerge_entity(
                 },
             )
 
-        # Call the unmerge function with user_id for auth
-        client.rpc(
-            "unmerge_entity",
-            {
-                "p_matter_id": matter_id,
-                "p_merged_id": request.entity_id,
-                "p_user_id": membership.user_id,
-            },
-        ).execute()
+        # Call the unmerge function with user_id for auth (in thread to avoid blocking)
+        await asyncio.to_thread(
+            lambda: client.rpc(
+                "unmerge_entity",
+                {
+                    "p_matter_id": matter_id,
+                    "p_merged_id": request.entity_id,
+                    "p_user_id": membership.user_id,
+                },
+            ).execute()
+        )
 
         # Code Review Fix: Record the unmerge correction for audit trail
         try:
@@ -1573,10 +1584,12 @@ async def get_merged_entities(
                 },
             )
 
-        # Query entities where merged_into_id = entity_id
-        result = client.table("identity_nodes").select(
-            "id, canonical_name, entity_type, merged_at"
-        ).eq("merged_into_id", entity_id).eq("matter_id", matter_id).execute()
+        # Query entities where merged_into_id = entity_id (in thread to avoid blocking)
+        result = await asyncio.to_thread(
+            lambda: client.table("identity_nodes").select(
+                "id, canonical_name, entity_type, merged_at"
+            ).eq("merged_into_id", entity_id).eq("matter_id", matter_id).execute()
+        )
 
         merged_entities = [
             MergedEntityItem(

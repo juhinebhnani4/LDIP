@@ -77,5 +77,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/api/health')" || exit 1
 
-# Run the application with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with uvicorn (4 workers to handle concurrent page-load requests).
+# The Supabase client is synchronous, so each DB call blocks the worker's event loop.
+# More workers = more concurrent blocking calls can proceed in parallel.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

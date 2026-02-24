@@ -41,6 +41,10 @@ class SearchFilters(BaseModel):
         ge=1,
         description="Maximum page number (inclusive)",
     )
+    entity_ids: list[str] | None = Field(
+        None,
+        description="Filter to chunks associated with specific entity UUIDs (overlap match)",
+    )
 
     @model_validator(mode="after")
     def validate_filters(self) -> "SearchFilters":
@@ -65,25 +69,32 @@ class SearchFilters(BaseModel):
 
     @property
     def is_empty(self) -> bool:
-        """True if no filters are set (all None)."""
+        """True if no effective filters are set (all None or empty lists)."""
         return (
-            self.document_ids is None
-            and self.document_types is None
+            not self.document_ids  # None or []
+            and not self.document_types  # None or []
             and self.page_min is None
             and self.page_max is None
+            and not self.entity_ids  # None or []
         )
 
     def to_rpc_params(self) -> dict:
-        """Convert to SQL RPC parameter dict. Only includes non-None values."""
+        """Convert to SQL RPC parameter dict.
+
+        Only includes non-None, non-empty values. An empty list []
+        is treated as "no filter" (same as None), not "match nothing".
+        """
         params: dict = {}
-        if self.document_ids is not None:
+        if self.document_ids:  # truthy: non-None AND non-empty
             params["filter_document_ids"] = self.document_ids
-        if self.document_types is not None:
+        if self.document_types:  # truthy: non-None AND non-empty
             params["filter_document_types"] = self.document_types
         if self.page_min is not None:
             params["filter_page_min"] = self.page_min
         if self.page_max is not None:
             params["filter_page_max"] = self.page_max
+        if self.entity_ids:  # truthy: non-None AND non-empty
+            params["filter_entity_ids"] = self.entity_ids
         return params
 
 

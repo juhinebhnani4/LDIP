@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from app.api.ws.auth import (
     WS_CLOSE_ACCESS_DENIED,
     WS_CLOSE_AUTH_FAILED,
+    WS_CLOSE_SERVER_ERROR,
     WebSocketAuthError,
     authenticate_websocket,
     close_with_error,
@@ -97,8 +98,24 @@ async def websocket_endpoint(
         await close_with_error(websocket, e.close_code, e.message)
         return
 
-    # Validate matter access
-    has_access = await validate_matter_access(user, matter_id)
+    # Validate matter access (with timeout to prevent 502 from slow DB)
+    try:
+        has_access = await asyncio.wait_for(
+            validate_matter_access(user, matter_id),
+            timeout=5.0,
+        )
+    except TimeoutError:
+        log_websocket_disconnected(
+            user_id=user.id,
+            matter_id=matter_id,
+            session_id=ws_session_id,
+            reason="matter_access_timeout",
+            code=WS_CLOSE_SERVER_ERROR,
+        )
+        await websocket.accept()
+        await close_with_error(websocket, WS_CLOSE_SERVER_ERROR, "Server timeout validating access")
+        return
+
     if not has_access:
         # Story 6.3: Log access denied
         log_websocket_disconnected(

@@ -65,7 +65,7 @@ CHUNK_GROUP_TIMEOUT = 600  # 10 minute timeout for entire group
 CHUNK_LOCK_TIMEOUT = 120  # 2 minute lock expiry
 
 # Story 17.3: Per-Chunk Timeout and Rate Limiting
-CHUNK_OCR_TIMEOUT = 120  # 2 minutes per chunk OCR
+CHUNK_OCR_TIMEOUT = 300  # 5 minutes per chunk OCR (legal docs with images can take 2-3 min)
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limit window
 MAX_CHUNKS_PER_WINDOW = 30  # Max chunks per minute (Document AI limit)
 
@@ -673,11 +673,14 @@ def process_single_chunk(
             result_checksum = hashlib.sha256(result_json.encode()).hexdigest()
 
             # Update chunk record with completion info (no storage path needed)
+            # BUG-BBOX-0: Store full_text so finalize can merge properly and
+            # compute cumulative offsets for document-relative bbox linking
             _run_async(
                 chunks_svc.update_result(
                     chunk_id=chunk_id,
                     result_storage_path=None,  # Not using storage
                     result_checksum=result_checksum,
+                    ocr_full_text=ocr_result.full_text,
                 )
             )
 
@@ -803,6 +806,166 @@ def process_single_chunk(
                 error=str(e),
             )
             raise
+
+
+# =============================================================================
+# BUG-BBOX-0: Bbox Offset Adjustment
+# =============================================================================
+
+
+def _adjust_bbox_offsets_to_document_relative(
+    document_id: str,
+    chunks: list,
+    bbox_service,
+) -> None:
+    """Adjust bbox text offsets from per-chunk to document-relative.
+
+    Each OCR chunk's bboxes have text_start_offset/text_end_offset relative
+    to that chunk's OCR text. To enable offset-based bbox-to-chunk linking,
+    we adjust them to be relative to the merged document text.
+
+    The cumulative offset for chunk N = sum of (text_length + 2) for chunks 0..N-1,
+    where +2 accounts for the "\\n\\n" separator used in text merging.
+    """
+    from app.services.supabase.client import get_service_client
+
+    sorted_chunks = sorted(chunks, key=lambda c: c.chunk_index)
+
+    if len(sorted_chunks) <= 1:
+        # Single chunk or no chunks — no adjustment needed
+        return
+
+    # Idempotency guard: check if offsets have already been adjusted.
+    # If chunk 1's bboxes already have offsets > chunk 0's max offset,
+    # a previous finalize run already adjusted them (race condition).
+    client = get_service_client()
+    chunk_1 = sorted_chunks[1]
+    try:
+        min_offset_resp = (
+            client.table("bounding_boxes")
+            .select("text_start_offset")
+            .eq("document_id", document_id)
+            .gte("page_number", chunk_1.page_start)
+            .lte("page_number", chunk_1.page_end)
+            .not_.is_("text_start_offset", "null")
+            .order("text_start_offset", desc=False)
+            .limit(1)
+            .execute()
+        )
+        if min_offset_resp.data:
+            chunk_1_min = min_offset_resp.data[0]["text_start_offset"]
+            # Raw (unadjusted) offsets for chunk 1 should start near 0.
+            # If they're already > 1000, offsets were already adjusted.
+            if chunk_1_min > 1000:
+                logger.info(
+                    "bbox_offset_adjustment_already_done",
+                    document_id=document_id,
+                    chunk_1_min_offset=chunk_1_min,
+                )
+                return
+    except Exception:
+        pass  # If check fails, proceed with adjustment
+
+    # Build cumulative offset map from per-chunk text lengths.
+    # REQUIRES ocr_full_text on each chunk — caller must only invoke this
+    # when per-chunk OCR text is available (to stay coupled with extracted_text).
+    cumulative_offset = 0
+    adjustments = []  # list of (page_start, page_end, offset_delta)
+
+    for chunk in sorted_chunks:
+        if cumulative_offset > 0:
+            adjustments.append((chunk.page_start, chunk.page_end, cumulative_offset))
+
+        # Get this chunk's text length from ocr_full_text
+        chunk_text = getattr(chunk, "ocr_full_text", None) or ""
+        if chunk_text:
+            chunk_text_len = len(chunk_text)
+        else:
+            # ocr_full_text missing for this chunk — cannot adjust offsets safely.
+            # Caller should not have invoked this function without per-chunk text.
+            logger.error(
+                "bbox_offset_adjustment_aborted",
+                document_id=document_id,
+                chunk_index=chunk.chunk_index,
+                reason="ocr_full_text missing — offsets would be in wrong coordinate space",
+            )
+            return
+
+        cumulative_offset += chunk_text_len + 2  # +2 for "\n\n" separator
+
+    if not adjustments:
+        logger.info(
+            "bbox_offset_adjustment_skipped",
+            document_id=document_id,
+            reason="no_adjustments_needed",
+        )
+        return
+
+    # Apply adjustments via batch UPDATE
+    total_adjusted = 0
+    for page_start, page_end, offset_delta in adjustments:
+        try:
+            # UPDATE bboxes SET text_start_offset = text_start_offset + delta,
+            #                   text_end_offset = text_end_offset + delta
+            # WHERE document_id = ... AND page_number BETWEEN page_start AND page_end
+            # AND text_start_offset IS NOT NULL
+            #
+            # Supabase client doesn't support arithmetic in updates,
+            # so use RPC or raw SQL via postgrest
+            result = client.rpc(
+                "adjust_bbox_text_offsets",
+                {
+                    "p_document_id": document_id,
+                    "p_page_start": page_start,
+                    "p_page_end": page_end,
+                    "p_offset_delta": offset_delta,
+                },
+            ).execute()
+            adjusted = result.data if isinstance(result.data, int) else 0
+            total_adjusted += adjusted
+        except Exception as e:
+            # If RPC doesn't exist, fall back to reading + updating
+            logger.warning(
+                "bbox_offset_rpc_failed_using_fallback",
+                document_id=document_id,
+                page_start=page_start,
+                page_end=page_end,
+                error=str(e),
+            )
+            try:
+                # Read bboxes in this page range with offsets
+                read_resp = (
+                    client.table("bounding_boxes")
+                    .select("id, text_start_offset, text_end_offset")
+                    .eq("document_id", document_id)
+                    .gte("page_number", page_start)
+                    .lte("page_number", page_end)
+                    .not_.is_("text_start_offset", "null")
+                    .execute()
+                )
+                if read_resp.data:
+                    for row in read_resp.data:
+                        client.table("bounding_boxes").update({
+                            "text_start_offset": row["text_start_offset"] + offset_delta,
+                            "text_end_offset": row["text_end_offset"] + offset_delta,
+                        }).eq("id", row["id"]).execute()
+                    total_adjusted += len(read_resp.data)
+            except Exception as e2:
+                logger.error(
+                    "bbox_offset_fallback_failed",
+                    document_id=document_id,
+                    page_start=page_start,
+                    page_end=page_end,
+                    error=str(e2),
+                )
+
+    logger.info(
+        "bbox_offsets_adjusted_to_document_relative",
+        document_id=document_id,
+        chunk_count=len(sorted_chunks),
+        adjustments_count=len(adjustments),
+        total_bboxes_adjusted=total_adjusted,
+    )
 
 
 # =============================================================================
@@ -1312,6 +1475,34 @@ def finalize_chunked_document(
         chunk_results_count=len(chunk_results) if chunk_results else 0,
     )
 
+    # =========================================================================
+    # Redis dedup lock: prevent concurrent finalize runs for the same document.
+    # Auto-finalize (from last chunk) and chord callback can race.
+    # Only one should proceed; the others return early.
+    # =========================================================================
+    try:
+        from app.services.distributed_lock import get_sync_redis_client
+        redis_client = get_sync_redis_client()
+        if redis_client:
+            lock_key = f"finalize_lock:{document_id}"
+            acquired = redis_client.set(lock_key, self.request.id or "1", nx=True, ex=600)
+            if not acquired:
+                existing = redis_client.get(lock_key)
+                logger.info(
+                    "finalize_dedup_skipped",
+                    document_id=document_id,
+                    reason="Another finalize already running",
+                    lock_holder=str(existing) if existing else "unknown",
+                    this_task_id=self.request.id,
+                )
+                return {
+                    "status": "dedup_skipped",
+                    "document_id": document_id,
+                    "reason": "Another finalize already holds the lock",
+                }
+    except Exception as lock_err:
+        logger.warning("finalize_dedup_lock_failed", error=str(lock_err))
+
     # Idempotency check - skip if already finalized
     document = doc_service.get_document(document_id)
     if not document:
@@ -1531,13 +1722,28 @@ def finalize_chunked_document(
     bbox_service = get_bounding_box_service()
     bboxes, bbox_count = bbox_service.get_bounding_boxes_for_document(document_id)
 
-    # Merge full_text from chunk results (if provided) or from bboxes
+    # =========================================================================
+    # BUG-BBOX-0: Merge full_text + adjust bbox offsets (COUPLED)
+    #
+    # These MUST use the same per-chunk text source. If bbox offsets are
+    # adjusted using text lengths X, extracted_text MUST be built from the
+    # same texts. Otherwise offsets and extracted_text are in different
+    # coordinate spaces and offset-based linking fails.
+    #
+    # Priority: 1) chord results, 2) DB ocr_full_text
+    # If neither available: bbox text fallback WITHOUT offset adjustment.
+    # =========================================================================
+    overall_confidence = None
+    per_chunk_texts = None  # list[(chunk_index, text)] - used for coupled offset adjustment
+
     if successful_results:
         # Sort by chunk_index and merge full_text
         sorted_results = sorted(successful_results, key=lambda x: x.get("chunk_index", 0))
-        full_text = "\n\n".join(
-            result.get("full_text", "") for result in sorted_results if result.get("full_text")
-        )
+        per_chunk_texts = [
+            (r.get("chunk_index", i), r.get("full_text", ""))
+            for i, r in enumerate(sorted_results) if r.get("full_text")
+        ]
+        full_text = "\n\n".join(text for _, text in per_chunk_texts)
         # Calculate confidence as weighted average
         total_pages = sum(r.get("page_count", 0) for r in sorted_results)
         if total_pages > 0:
@@ -1550,14 +1756,60 @@ def finalize_chunked_document(
         logger.info(
             "merged_chunk_text",
             document_id=document_id,
-            chunk_count=len(sorted_results),
+            source="chord_results",
+            chunk_count=len(per_chunk_texts),
             text_length=len(full_text),
             overall_confidence=round(overall_confidence, 4),
         )
     else:
-        # Fallback: Get full text from bounding boxes
-        full_text = " ".join(bbox["text"] for bbox in bboxes if bbox.get("text"))
-        overall_confidence = None
+        # Try to merge from per-chunk ocr_full_text stored in DB
+        sorted_chunks = sorted(chunks, key=lambda c: c.chunk_index)
+        per_chunk_texts = []
+        for chunk in sorted_chunks:
+            chunk_text = getattr(chunk, "ocr_full_text", None) or ""
+            if chunk_text:
+                per_chunk_texts.append((chunk.chunk_index, chunk_text))
+
+        if per_chunk_texts and len(per_chunk_texts) == len(sorted_chunks):
+            full_text = "\n\n".join(text for _, text in per_chunk_texts)
+            logger.info(
+                "merged_chunk_text_from_db",
+                document_id=document_id,
+                source="db_ocr_full_text",
+                chunk_count=len(per_chunk_texts),
+                text_length=len(full_text),
+            )
+        else:
+            # Fallback: bbox text. DO NOT adjust offsets — they'd be incompatible.
+            per_chunk_texts = None  # Signal: no offset adjustment
+            full_text = " ".join(bbox["text"] for bbox in bboxes if bbox.get("text"))
+            logger.warning(
+                "merged_text_from_bboxes_fallback",
+                document_id=document_id,
+                source="bbox_fallback",
+                bbox_count=len(bboxes),
+                text_length=len(full_text),
+                chunks_with_text=len([c for c in sorted_chunks if getattr(c, "ocr_full_text", None)]),
+                total_chunks=len(sorted_chunks),
+            )
+
+    # =========================================================================
+    # BUG-BBOX-0: Adjust bbox text offsets from per-chunk to document-relative
+    # ONLY when per_chunk_texts is available (same source as extracted_text).
+    # This ensures offsets and extracted_text are always in the same space.
+    # =========================================================================
+    if per_chunk_texts is not None:
+        _adjust_bbox_offsets_to_document_relative(
+            document_id=document_id,
+            chunks=chunks,
+            bbox_service=bbox_service,
+        )
+    else:
+        logger.warning(
+            "bbox_offset_adjustment_skipped",
+            document_id=document_id,
+            reason="no_per_chunk_ocr_text_available",
+        )
 
     # Update document status to OCR_COMPLETE with extracted text
     update_kwargs = {

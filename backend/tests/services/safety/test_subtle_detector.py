@@ -65,6 +65,7 @@ def mock_openai_blocked():
     response.usage = MagicMock()
     response.usage.prompt_tokens = 150
     response.usage.completion_tokens = 50
+    response.usage.prompt_tokens_details = None  # Avoid MagicMock comparison errors
     return response
 
 
@@ -83,6 +84,7 @@ def mock_openai_allowed():
     response.usage = MagicMock()
     response.usage.prompt_tokens = 100
     response.usage.completion_tokens = 30
+    response.usage.prompt_tokens_details = None  # Avoid MagicMock comparison errors
     return response
 
 
@@ -138,6 +140,7 @@ class TestImplicitConclusionBlocked:
         blocked_response.usage = MagicMock()
         blocked_response.usage.prompt_tokens = 150
         blocked_response.usage.completion_tokens = 50
+        blocked_response.usage.prompt_tokens_details = None
 
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
@@ -170,6 +173,7 @@ class TestImplicitConclusionBlocked:
         blocked_response.usage = MagicMock()
         blocked_response.usage.prompt_tokens = 150
         blocked_response.usage.completion_tokens = 50
+        blocked_response.usage.prompt_tokens_details = None
 
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
@@ -378,6 +382,7 @@ class TestMockOpenAIResponses:
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 30
+        response.usage.prompt_tokens_details = None
 
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(return_value=response)
@@ -398,6 +403,7 @@ class TestMockOpenAIResponses:
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 30
+        response.usage.prompt_tokens_details = None
 
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(return_value=response)
@@ -480,7 +486,7 @@ class TestRetryLogic:
         async def mock_create(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count < 3:
+            if call_count < 2:
                 raise Exception("Error 429: Rate limit exceeded")
             return mock_openai_allowed
 
@@ -490,7 +496,7 @@ class TestRetryLogic:
             check = await detector.detect_violation("Test query")
 
             assert check.is_safe is True
-            assert call_count == 3  # Retried twice before success
+            assert call_count == 2  # Retried once before success
 
     async def test_retry_on_server_error(self, detector, mock_openai_allowed) -> None:
         """Should retry on 500/502/503/504 server errors."""
@@ -526,8 +532,8 @@ class TestRetryLogic:
             with pytest.raises(SubtleDetectorError) as exc_info:
                 await detector.detect_violation("Test query")
 
-            assert call_count == 3  # MAX_RETRIES
-            assert "after 3 attempts" in str(exc_info.value)
+            assert call_count == 2  # MAX_RETRIES
+            assert "after 2 attempts" in str(exc_info.value)
 
     async def test_no_retry_on_non_retryable_error(
         self, detector, mock_settings
@@ -597,6 +603,7 @@ class TestViolationTypeValidation:
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 30
+        response.usage.prompt_tokens_details = None
 
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(return_value=response)
@@ -629,6 +636,7 @@ class TestViolationTypeValidation:
             response.usage = MagicMock()
             response.usage.prompt_tokens = 100
             response.usage.completion_tokens = 30
+            response.usage.prompt_tokens_details = None
 
             with patch.object(detector, "_client") as mock_client:
                 mock_client.chat.completions.create = AsyncMock(return_value=response)

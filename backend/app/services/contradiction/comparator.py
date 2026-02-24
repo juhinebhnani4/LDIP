@@ -306,6 +306,7 @@ class StatementComparisonService:
         matter_id: str,
         max_pairs: int = DEFAULT_MAX_PAIRS,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        source_chunk_ids: set[str] | None = None,
     ) -> EntityComparisonsResponse:
         """Compare statements across ALL entity_ids with the same canonical_name.
 
@@ -378,6 +379,7 @@ class StatementComparisonService:
             max_pairs=max_pairs,
             confidence_threshold=confidence_threshold,
             primary_entity_id=primary_entity_id,
+            source_chunk_ids=source_chunk_ids,
         )
 
     async def _compare_merged_entity_statements(
@@ -388,6 +390,7 @@ class StatementComparisonService:
         max_pairs: int,
         confidence_threshold: float,
         primary_entity_id: str,
+        source_chunk_ids: set[str] | None = None,
     ) -> EntityComparisonsResponse:
         """Compare statements that mention ANY of the given entity_ids.
 
@@ -499,11 +502,12 @@ class StatementComparisonService:
             aliases_included=[],
         )
 
-        # Run comparisons
+        # Run comparisons (Stage 2.3: pass source_chunk_ids for incremental detection)
         batch_result = await self.comparator.compare_all_entity_statements(
             entity_statements=entity_statements,
             max_pairs=max_pairs,
             matter_id=matter_id,
+            source_chunk_ids=source_chunk_ids,
         )
 
         # Filter by confidence threshold

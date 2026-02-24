@@ -1034,6 +1034,18 @@ def _mark_job_completed(
                     error=str(eta_err),
                 )
 
+        # Stage 1.2: Release pipeline deduplication lock
+        if document_id:
+            try:
+                from app.services.distributed_lock import PipelineLock
+                PipelineLock(document_id).release()
+            except Exception as lock_err:
+                logger.warning(
+                    "pipeline_lock_release_failed_in_mark_completed",
+                    document_id=document_id,
+                    error=str(lock_err),
+                )
+
         logger.info(
             "job_tracking_job_completed",
             job_id=job_id,
@@ -2164,6 +2176,21 @@ def validate_ocr(
             "error_message": "No document_id provided",
         }
 
+    # Stage 1.2: Pipeline deduplication — acquire lock to prevent duplicate runs
+    from app.services.distributed_lock import PipelineLock
+    pipeline_lock = PipelineLock(doc_id)
+    if not pipeline_lock.acquire():
+        logger.info(
+            "validate_ocr_skipped_pipeline_locked",
+            document_id=doc_id,
+        )
+        return {
+            "status": "validation_skipped",
+            "document_id": doc_id,
+            "reason": "Pipeline already running for this document",
+            "job_id": job_id,
+        }
+
     # Check if OCR was successful
     if prev_result and prev_result.get("status") != "ocr_complete":
         logger.info(
@@ -3274,8 +3301,8 @@ EMBEDDING_RATE_LIMIT_DELAY = 0.5  # Seconds between batches to respect rate limi
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=600,  # 10 minutes - embedding large docs
-    time_limit=660,  # 11 minutes - hard kill
+    soft_time_limit=900,  # 15 minutes - embedding 500+ chunks on large docs
+    time_limit=960,  # 16 minutes - hard kill
 )  # type: ignore[misc]
 def embed_chunks(
     self,  # type: ignore[no-untyped-def]
@@ -4707,8 +4734,8 @@ def _dispatch_post_entity_tasks(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=600,  # 10 minutes - large matters with many entities
-    time_limit=660,  # 11 minutes - hard kill
+    soft_time_limit=1800,  # 30 minutes - large matters with 8000+ entity mentions
+    time_limit=1860,  # 31 minutes - hard kill
 )  # type: ignore[misc]
 def resolve_aliases(
     self,  # type: ignore[no-untyped-def]
@@ -5671,6 +5698,7 @@ def _store_comparison_results(
     comparison_response: EntityComparisonsResponse,
     matter_id: str,
     entity_id: str,
+    source_document_id: str | None = None,
 ) -> int:
     """Store comparison results to the statement_comparisons table.
 
@@ -5740,6 +5768,9 @@ def _store_comparison_results(
             "confidence": comparison.confidence,
             "evidence": evidence_json,
         }
+        # Stage 2.3: Track which document triggered this comparison
+        if source_document_id:
+            record["source_document_id"] = source_document_id
         records.append(record)
 
     if records:
@@ -5892,52 +5923,52 @@ def detect_contradictions(
         # Track contradiction detection stage start (Story 2c-3)
         _update_job_stage_start(job_id, "contradiction_detection", matter_id)
 
-        # Get entities mentioned in this document from chunks.entity_ids
+        # Get entities and chunk IDs from this document
         response = (
             client.table("chunks")
-            .select("entity_ids")
+            .select("id, entity_ids")
             .eq("document_id", doc_id)
             .not_.is_("entity_ids", "null")
             .execute()
         )
 
-        # Collect unique entity IDs
+        # Collect unique entity IDs and chunk IDs for this document
         entity_ids: set[str] = set()
+        source_chunk_ids: set[str] = set()  # Stage 2.3: for incremental comparison
         for chunk in response.data or []:
             chunk_entities = chunk.get("entity_ids") or []
             entity_ids.update(chunk_entities)
+            if chunk.get("id"):
+                source_chunk_ids.add(chunk["id"])
 
-        # BUG-LT-H FIX: Document-level idempotency check.
-        # Check if contradictions already exist for the entities in THIS
-        # document, not the entire matter.  This ensures uploading a second
-        # document to a matter still triggers contradiction detection for its
-        # new entities.
+        # Stage 2.3: Incremental idempotency check.
+        # Instead of checking "does entity have ANY comparisons?", check
+        # "has THIS document already been used as source for comparisons?"
+        # This ensures uploading doc B triggers cross-document comparisons
+        # with doc A's chunks, even if doc A's entities were already compared.
         if entity_ids:
-            existing_for_entities = (
+            existing_for_doc = (
                 client.table("statement_comparisons")
-                .select("entity_id")
+                .select("id", count="exact")
                 .eq("matter_id", matter_id)
-                .in_("entity_id", list(entity_ids))
+                .eq("source_document_id", doc_id)
                 .execute()
             )
-            already_compared = {
-                r["entity_id"] for r in (existing_for_entities.data or [])
-            }
-            if entity_ids.issubset(already_compared):
+            if existing_for_doc.count and existing_for_doc.count > 0:
                 logger.info(
                     "detect_contradictions_idempotency_skip",
                     document_id=doc_id,
                     matter_id=matter_id,
-                    entities_already_compared=len(already_compared),
-                    reason="All entities from this document already have comparisons",
+                    existing_comparisons=existing_for_doc.count,
+                    reason="This document already has comparisons as source",
                 )
                 _populate_verification_records(matter_id, doc_id)
                 _mark_job_completed(job_id, matter_id, document_id=doc_id)
                 return {
                     "status": "contradiction_detection_complete",
                     "document_id": doc_id,
-                    "contradictions_found": len(already_compared),
-                    "reason": "Idempotency: all document entities already compared",
+                    "contradictions_found": existing_for_doc.count,
+                    "reason": "Idempotency: document already compared as source",
                     "job_id": job_id,
                 }
 
@@ -6056,6 +6087,7 @@ def detect_contradictions(
                             matter_id=matter_id,
                             max_pairs=CONTRADICTION_MAX_PAIRS_PER_ENTITY,
                             confidence_threshold=0.5,
+                            source_chunk_ids=source_chunk_ids,  # Stage 2.3: incremental
                         )
 
                     _entity_elapsed = _time.monotonic() - _entity_start
@@ -6067,6 +6099,7 @@ def detect_contradictions(
                             comparison_response=comparison_result,
                             matter_id=matter_id,
                             entity_id=comparison_result.data.entity_id,
+                            source_document_id=doc_id,  # Stage 2.3: track source
                         )
 
                     logger.info(

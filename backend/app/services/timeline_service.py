@@ -10,6 +10,7 @@ Note: RawDateListItem now includes event_type from LLM extraction (2026-01-26)
 """
 
 import asyncio
+import time
 from functools import lru_cache
 from math import ceil
 
@@ -371,23 +372,42 @@ class TimelineService:
             RawDatesListResponse with paginated events.
         """
         def _query():
-            query = (
-                self.client.table("events")
-                .select("*", count="exact")
-                .eq("matter_id", matter_id)
-            )
+            # Retry up to 2 times for transient Supabase 416 errors
+            # (Range Not Satisfiable during concurrent writes)
+            last_err = None
+            for attempt in range(3):
+                try:
+                    query = (
+                        self.client.table("events")
+                        .select("*", count="exact")
+                        .eq("matter_id", matter_id)
+                    )
 
-            if event_type:
-                query = query.eq("event_type", event_type)
+                    if event_type:
+                        query = query.eq("event_type", event_type)
 
-            # Order by event_date
-            query = query.order("event_date", desc=False)
+                    # Order by event_date
+                    query = query.order("event_date", desc=False)
 
-            # Pagination
-            offset = (page - 1) * per_page
-            query = query.range(offset, offset + per_page - 1)
+                    # Pagination
+                    offset = (page - 1) * per_page
+                    query = query.range(offset, offset + per_page - 1)
 
-            return query.execute()
+                    return query.execute()
+                except Exception as e:
+                    err_str = str(e)
+                    if "416" in err_str or "JSON could not be generated" in err_str:
+                        last_err = e
+                        logger.warning(
+                            "timeline_query_retrying",
+                            attempt=attempt + 1,
+                            error=err_str[:200],
+                            matter_id=matter_id,
+                        )
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    raise
+            raise last_err  # type: ignore[misc]
 
         response = await asyncio.to_thread(_query)
 
@@ -1120,25 +1140,43 @@ class TimelineService:
             ClassifiedEventsListResponse with paginated events.
         """
         def _query():
-            query = (
-                self.client.table("events")
-                .select("*", count="exact")
-                .eq("matter_id", matter_id)
-                .neq("event_type", "raw_date")
-            )
+            # Retry up to 2 times for transient Supabase 416 errors
+            last_err = None
+            for attempt in range(3):
+                try:
+                    query = (
+                        self.client.table("events")
+                        .select("*", count="exact")
+                        .eq("matter_id", matter_id)
+                        .neq("event_type", "raw_date")
+                    )
 
-            if event_type:
-                query = query.eq("event_type", event_type)
+                    if event_type:
+                        query = query.eq("event_type", event_type)
 
-            if confidence_min is not None:
-                query = query.gte("confidence", confidence_min)
+                    if confidence_min is not None:
+                        query = query.gte("confidence", confidence_min)
 
-            query = query.order("event_date", desc=False)
+                    query = query.order("event_date", desc=False)
 
-            offset = (page - 1) * per_page
-            query = query.range(offset, offset + per_page - 1)
+                    offset = (page - 1) * per_page
+                    query = query.range(offset, offset + per_page - 1)
 
-            return query.execute()
+                    return query.execute()
+                except Exception as e:
+                    err_str = str(e)
+                    if "416" in err_str or "JSON could not be generated" in err_str:
+                        last_err = e
+                        logger.warning(
+                            "classified_events_query_retrying",
+                            attempt=attempt + 1,
+                            error=err_str[:200],
+                            matter_id=matter_id,
+                        )
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    raise
+            raise last_err  # type: ignore[misc]
 
         try:
             response = await asyncio.to_thread(_query)

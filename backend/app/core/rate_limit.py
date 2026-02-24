@@ -120,6 +120,24 @@ def _get_limiter_with_fallback() -> tuple[Limiter, str]:
 limiter, storage_uri = _get_limiter_with_fallback()
 
 
+def switch_to_memory_limiter() -> None:
+    """Switch rate limiter to in-memory storage at runtime.
+
+    Called when Redis fails mid-flight (e.g., Upstash request limit exceeded).
+    Replaces the global limiter with a memory-backed one so subsequent
+    requests don't crash.
+    """
+    global limiter, storage_uri, _redis_degraded
+    if "memory" not in storage_uri:
+        limiter = _create_limiter("memory://")
+        storage_uri = "memory://"
+        _redis_degraded = True
+        logger.warning(
+            "rate_limiter_switched_to_memory",
+            reason="Redis failed at runtime, switching to in-memory rate limiting",
+        )
+
+
 # =============================================================================
 # Rate Limit Tier Constants (from config with fallbacks)
 # =============================================================================

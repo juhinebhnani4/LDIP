@@ -330,6 +330,7 @@ class OCRChunkService:
         chunk_id: str,
         result_storage_path: str,
         result_checksum: str,
+        ocr_full_text: str | None = None,
     ) -> DocumentOCRChunk:
         """Update chunk with OCR result storage information.
 
@@ -339,6 +340,7 @@ class OCRChunkService:
             chunk_id: Chunk UUID.
             result_storage_path: Supabase Storage path for cached OCR results.
             result_checksum: SHA256 checksum for result validation.
+            ocr_full_text: Full OCR text for this chunk (for text merging in finalize).
 
         Returns:
             Updated DocumentOCRChunk.
@@ -353,13 +355,16 @@ class OCRChunkService:
             raise ChunkNotFoundError(chunk_id)
 
         def _update():
+            update_data = {
+                "status": ChunkStatus.COMPLETED.value,
+                "result_storage_path": result_storage_path,
+                "result_checksum": result_checksum,
+            }
+            if ocr_full_text is not None:
+                update_data["ocr_full_text"] = ocr_full_text
             return (
                 self.client.table("document_ocr_chunks")
-                .update({
-                    "status": ChunkStatus.COMPLETED.value,
-                    "result_storage_path": result_storage_path,
-                    "result_checksum": result_checksum,
-                })
+                .update(update_data)
                 .eq("id", chunk_id)
                 .execute()
             )
@@ -1209,6 +1214,7 @@ class OCRChunkService:
             error_message=row.get("error_message"),
             result_storage_path=row.get("result_storage_path"),
             result_checksum=row.get("result_checksum"),
+            ocr_full_text=row.get("ocr_full_text"),
             processing_started_at=self._parse_timestamp(row.get("processing_started_at")),
             processing_completed_at=self._parse_timestamp(row.get("processing_completed_at")),
             created_at=self._parse_timestamp_required(row["created_at"], "created_at"),

@@ -36,15 +36,16 @@ export default async function AdminPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // F1 fix: Use NEXT_PUBLIC_ prefix for runtime access, or skip check entirely
-  // and rely on backend API protection (fail-open for UI, fail-closed for data)
+  // Fail-closed: admin access requires NEXT_PUBLIC_ADMIN_EMAILS to be configured.
+  // If the env var is empty/unset, NO ONE gets admin UI access.
+  // Backend API endpoints still enforce their own admin checks independently.
   const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
     .filter(Boolean);
 
   const userEmail = user?.email?.toLowerCase() || '';
-  const isAdmin = adminEmails.length === 0 || adminEmails.includes(userEmail);
+  const isAdmin = adminEmails.length > 0 && adminEmails.includes(userEmail);
 
   // Redirect non-admins to main dashboard
   // Note: Even if this check is bypassed, the LLM quota API requires backend admin auth
@@ -115,7 +116,7 @@ export default async function AdminPage() {
 
         {/* Admin info footer */}
         <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-          Admin access granted to: {userEmail}
+          Admin Dashboard
         </div>
       </div>
     </div>

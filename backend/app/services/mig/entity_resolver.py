@@ -696,9 +696,9 @@ class EntityResolver:
 
             except Exception as e:
                 error_str = str(e).lower()
-                is_rate_limit = "429" in error_str or "rate" in error_str
+                is_retryable = "429" in error_str or "rate" in error_str or "503" in error_str or "unavailable" in error_str
 
-                if is_rate_limit and attempt < MAX_RETRIES - 1:
+                if is_retryable and attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
                 else:

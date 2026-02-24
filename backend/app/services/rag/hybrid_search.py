@@ -12,6 +12,7 @@ The matter_id parameter is MANDATORY for every search query.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
@@ -38,7 +39,7 @@ logger = structlog.get_logger(__name__)
 # "needle in haystack" performance where the best result might be ranked
 # 25-30 by BM25/semantic but would be top-3 after reranking
 DEFAULT_HYBRID_LIMIT = 50
-DEFAULT_RERANK_TOP_N = 3
+DEFAULT_RERANK_TOP_N = 5
 
 
 # =============================================================================
@@ -165,6 +166,7 @@ class RerankedSearchResultItem:
     is_library: bool = False
     library_document_title: str | None = None
     parent_chunk_id: str | None = None
+    original_content: str | None = None  # Preserved child content when parent-expanded
 
 
 @dataclass
@@ -1291,6 +1293,297 @@ class HybridSearchService:
                 )
 
         return rerank_result
+
+
+    async def search_with_entity_boost(
+        self,
+        query: str,
+        matter_id: str,
+        entity_ids: list[str],
+        pool_limit: int = 25,
+        rerank_top_n: int = DEFAULT_RERANK_TOP_N,
+        library_limit: int = 10,
+        weights: SearchWeights | None = None,
+        rerank_provider: str | None = None,
+        embedding_provider: str | None = None,
+        filters: SearchFilters | None = None,
+    ) -> RerankedSearchResult:
+        """Dual-pool search with entity boost for entity-aware RAG.
+
+        Runs two search pools in parallel:
+        - Pool A: entity-filtered hybrid search (chunks about specific entities)
+        - Pool B: unfiltered hybrid search (standard relevance-ranked results)
+
+        Merges, deduplicates by chunk ID (keeping higher RRF score), then
+        reranks the combined set. Non-entity queries should use the normal
+        search_with_rerank_and_library() instead.
+
+        Args:
+            query: Search query text.
+            matter_id: REQUIRED - matter UUID for isolation.
+            entity_ids: Entity UUIDs to boost in Pool A.
+            pool_limit: Max results per pool (default 25).
+            rerank_top_n: Final results after reranking (default 5).
+            library_limit: Max library results (default 10).
+            weights: Optional custom weights for hybrid search.
+            rerank_provider: Optional rerank provider override.
+            embedding_provider: Optional embedding provider override.
+            filters: Optional base metadata filters.
+
+        Returns:
+            RerankedSearchResult with results from merged dual-pool search.
+        """
+        from app.services.rag.reranker import CohereRerankServiceError
+        from app.services.rag.reranker_factory import get_rerank_service
+
+        validate_namespace(matter_id)
+
+        # Pre-compute embedding once (shared by both pools + library search)
+        use_voyage = embedding_provider == "voyage"
+        if use_voyage:
+            embedder = get_embedding_service_by_provider("voyage")
+            query_embedding = await embedder.embed_text(query, matter_id=matter_id)
+        else:
+            query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
+
+        # If embedding fails, fall back to non-boosted search
+        if query_embedding is None:
+            logger.warning(
+                "entity_boost_embedding_failed_fallback",
+                matter_id=matter_id,
+            )
+            return await self.search_with_rerank_and_library(
+                query=query,
+                matter_id=matter_id,
+                hybrid_limit=pool_limit,
+                rerank_top_n=rerank_top_n,
+                library_limit=library_limit,
+                weights=weights,
+                rerank_provider=rerank_provider,
+                embedding_provider=embedding_provider,
+                filters=filters,
+            )
+
+        # Build entity-filtered filters for Pool A
+        from app.models.search import SearchFilters as _SearchFilters
+        base_filter_dict = filters.model_dump(exclude_none=True) if filters else {}
+        entity_filters = _SearchFilters(**base_filter_dict, entity_ids=entity_ids)
+
+        logger.info(
+            "entity_boost_search_start",
+            matter_id=matter_id,
+            entity_count=len(entity_ids),
+            pool_limit=pool_limit,
+            rerank_top_n=rerank_top_n,
+        )
+
+        # Run Pool A (entity-filtered) and Pool B (unfiltered) in parallel
+        pool_a_coro = self.search(
+            query=query,
+            matter_id=matter_id,
+            limit=pool_limit,
+            weights=weights,
+            query_embedding=query_embedding,
+            embedding_provider=embedding_provider,
+            filters=entity_filters,
+        )
+        pool_b_coro = self.search(
+            query=query,
+            matter_id=matter_id,
+            limit=pool_limit,
+            weights=weights,
+            query_embedding=query_embedding,
+            embedding_provider=embedding_provider,
+            filters=filters,
+        )
+
+        pool_a_result, pool_b_result = await asyncio.gather(
+            pool_a_coro, pool_b_coro, return_exceptions=True,
+        )
+
+        # Handle pool failures gracefully
+        pool_a_results: list[SearchResult] = []
+        pool_b_results: list[SearchResult] = []
+
+        if isinstance(pool_a_result, Exception):
+            logger.warning(
+                "entity_boost_pool_a_failed",
+                matter_id=matter_id,
+                error=str(pool_a_result),
+            )
+        else:
+            pool_a_results = pool_a_result.results
+
+        if isinstance(pool_b_result, Exception):
+            logger.warning(
+                "entity_boost_pool_b_failed",
+                matter_id=matter_id,
+                error=str(pool_b_result),
+            )
+        else:
+            pool_b_results = pool_b_result.results
+
+        # Merge and deduplicate by chunk ID, keeping higher RRF score
+        seen: dict[str, SearchResult] = {}
+        for result in pool_a_results:
+            seen[result.id] = result
+        for result in pool_b_results:
+            if result.id not in seen or result.rrf_score > seen[result.id].rrf_score:
+                seen[result.id] = result
+
+        merged = sorted(seen.values(), key=lambda r: r.rrf_score, reverse=True)
+
+        logger.info(
+            "entity_boost_pools_merged",
+            matter_id=matter_id,
+            pool_a_count=len(pool_a_results),
+            pool_b_count=len(pool_b_results),
+            merged_count=len(merged),
+        )
+
+        # Determine search mode from whichever pool succeeded
+        search_mode = "hybrid"
+        embedding_completion_pct = None
+        if not isinstance(pool_b_result, Exception):
+            search_mode = pool_b_result.search_mode
+            embedding_completion_pct = pool_b_result.embedding_completion_pct
+
+        weights = weights or SearchWeights()
+
+        if not merged:
+            return RerankedSearchResult(
+                results=[],
+                query=query,
+                matter_id=matter_id,
+                weights=weights,
+                total_candidates=0,
+                rerank_used=False,
+                fallback_reason="No results from either pool",
+                search_mode=search_mode,
+                embedding_completion_pct=embedding_completion_pct,
+                rerank_provider=rerank_provider,
+            )
+
+        # Rerank the merged set
+        documents = [r.content for r in merged]
+        try:
+            reranker = get_rerank_service(rerank_provider)
+            rerank_result = await reranker.rerank(
+                query=query,
+                documents=documents,
+                top_n=rerank_top_n,
+                matter_id=matter_id,
+            )
+
+            reranked_results = []
+            for item in rerank_result.results:
+                original = merged[item.index]
+                reranked_results.append(
+                    RerankedSearchResultItem(
+                        id=original.id,
+                        matter_id=original.matter_id,
+                        document_id=original.document_id,
+                        content=original.content,
+                        page_number=original.page_number,
+                        bbox_ids=original.bbox_ids,
+                        chunk_type=original.chunk_type,
+                        token_count=original.token_count,
+                        bm25_rank=original.bm25_rank,
+                        semantic_rank=original.semantic_rank,
+                        rrf_score=original.rrf_score,
+                        relevance_score=item.relevance_score,
+                        is_library=original.is_library,
+                        library_document_title=original.library_document_title,
+                        parent_chunk_id=original.parent_chunk_id,
+                    )
+                )
+
+            rerank_used = True
+            fallback_reason = None
+
+        except (CohereRerankServiceError, Exception) as e:
+            logger.warning(
+                "entity_boost_rerank_fallback",
+                matter_id=matter_id,
+                error=str(e),
+            )
+            reranked_results = [
+                RerankedSearchResultItem(
+                    id=r.id,
+                    matter_id=r.matter_id,
+                    document_id=r.document_id,
+                    content=r.content,
+                    page_number=r.page_number,
+                    bbox_ids=r.bbox_ids,
+                    chunk_type=r.chunk_type,
+                    token_count=r.token_count,
+                    bm25_rank=r.bm25_rank,
+                    semantic_rank=r.semantic_rank,
+                    rrf_score=r.rrf_score,
+                    relevance_score=None,
+                    is_library=r.is_library,
+                    library_document_title=r.library_document_title,
+                    parent_chunk_id=r.parent_chunk_id,
+                )
+                for r in merged[:rerank_top_n]
+            ]
+            rerank_used = False
+            fallback_reason = str(e)
+
+        # Append library results (best-effort, uses same embedding)
+        if query_embedding is not None:
+            rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
+            library_results = await self._search_library_chunks(
+                query_embedding=query_embedding,
+                matter_id=matter_id,
+                library_limit=library_limit,
+                rpc_function=rpc_func,
+            )
+            if library_results:
+                for lib in library_results:
+                    reranked_results.append(
+                        RerankedSearchResultItem(
+                            id=lib.id,
+                            matter_id=lib.matter_id,
+                            document_id=lib.document_id,
+                            content=lib.content,
+                            page_number=lib.page_number,
+                            bbox_ids=lib.bbox_ids,
+                            chunk_type=lib.chunk_type,
+                            token_count=lib.token_count,
+                            bm25_rank=lib.bm25_rank,
+                            semantic_rank=lib.semantic_rank,
+                            rrf_score=lib.rrf_score,
+                            relevance_score=lib.rrf_score,
+                            is_library=True,
+                            library_document_title=lib.library_document_title,
+                            parent_chunk_id=None,
+                        )
+                    )
+
+        logger.info(
+            "entity_boost_search_complete",
+            matter_id=matter_id,
+            entity_boost_activated=True,
+            pool_a_count=len(pool_a_results),
+            pool_b_count=len(pool_b_results),
+            merged_count=len(merged),
+            final_count=len(reranked_results),
+            rerank_used=rerank_used,
+        )
+
+        return RerankedSearchResult(
+            results=reranked_results,
+            query=query,
+            matter_id=matter_id,
+            weights=weights,
+            total_candidates=len(merged),
+            rerank_used=rerank_used,
+            fallback_reason=fallback_reason,
+            search_mode=search_mode,
+            embedding_completion_pct=embedding_completion_pct,
+            rerank_provider=rerank_provider or "cohere",
+        )
 
 
 @lru_cache(maxsize=1)

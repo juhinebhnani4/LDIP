@@ -14,6 +14,7 @@ CRITICAL: LLM failures should NOT block queries - fail open to prevent DoS.
 
 from __future__ import annotations
 
+import asyncio
 from functools import lru_cache
 
 import structlog
@@ -124,8 +125,15 @@ class SafetyGuard:
                 regex_check_ms=regex_check.check_time_ms,
             )
 
+        # Budget timeout: cap total LLM safety check at 15s regardless of per-call
+        # timeouts and retries. Prevents 45s+ overhead when OpenAI is unreachable.
+        SAFETY_LLM_BUDGET_SECONDS = 15.0
+
         try:
-            llm_check = await self._subtle_detector.detect_violation(query, matter_id=matter_id)
+            llm_check = await asyncio.wait_for(
+                self._subtle_detector.detect_violation(query, matter_id=matter_id),
+                timeout=SAFETY_LLM_BUDGET_SECONDS,
+            )
 
             if not llm_check.is_safe:
                 logger.info(

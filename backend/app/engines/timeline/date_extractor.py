@@ -706,6 +706,31 @@ class DateExtractor:
             )
 
         except json.JSONDecodeError as e:
+            # Attempt JSON repair for truncated Gemini responses
+            repaired = self._try_repair_json(json_text)
+            if repaired is not None:
+                logger.info(
+                    "date_response_json_repaired",
+                    original_error=str(e),
+                )
+                dates_list: list[ExtractedDate] = []
+                for raw_date in repaired.get("dates", []):
+                    try:
+                        extracted = self._parse_single_date(
+                            raw_date, page_number, bbox_ids, document_id, matter_id
+                        )
+                        if extracted:
+                            dates_list.append(extracted)
+                    except Exception:
+                        continue
+                return DateExtractionResult(
+                    dates=dates_list,
+                    document_id=document_id,
+                    matter_id=matter_id,
+                    total_dates_found=len(dates_list),
+                    processing_time_ms=0,
+                )
+
             logger.warning(
                 "date_response_json_error",
                 error=str(e),
@@ -719,6 +744,42 @@ class DateExtractor:
                 error=str(e),
             )
             return self._empty_result(document_id, matter_id)
+
+    @staticmethod
+    def _try_repair_json(text: str) -> dict | None:
+        """Attempt to repair truncated JSON from LLM responses.
+
+        Handles common truncation patterns: missing closing brackets/braces,
+        trailing commas, and incomplete string values.
+        """
+        import re
+
+        if not text or not text.strip():
+            return None
+
+        repaired = text.strip()
+        # Remove trailing incomplete key-value pairs (e.g., truncated mid-string)
+        repaired = re.sub(r',\s*"[^"]*"?\s*:\s*"?[^"]*$', '', repaired)
+        # Remove trailing comma
+        repaired = re.sub(r',\s*$', '', repaired)
+
+        # Close any open brackets/braces
+        open_braces = repaired.count('{') - repaired.count('}')
+        open_brackets = repaired.count('[') - repaired.count(']')
+
+        # Close open strings — if odd number of unescaped quotes, add one
+        # (simplified: just try parsing and if it fails, skip)
+
+        repaired += ']' * max(0, open_brackets)
+        repaired += '}' * max(0, open_braces)
+
+        try:
+            result = json.loads(repaired)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+        return None
 
     def _parse_single_date(
         self,

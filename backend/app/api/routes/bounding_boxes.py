@@ -5,6 +5,8 @@ pages, and chunks. All endpoints enforce matter isolation via RLS
 and Layer 4 validation.
 """
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
@@ -349,9 +351,9 @@ async def get_chunk_bounding_boxes(
         )
 
     try:
-        # Get chunk to access matter_id and bbox_ids
-        chunk_result = (
-            db_client.table("chunks")
+        # Get chunk to access matter_id and bbox_ids (in thread to avoid blocking)
+        chunk_result = await asyncio.to_thread(
+            lambda: db_client.table("chunks")
             .select("matter_id, bbox_ids")
             .eq("id", chunk_id)
             .execute()

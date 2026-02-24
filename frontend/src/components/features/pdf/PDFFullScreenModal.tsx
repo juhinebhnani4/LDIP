@@ -30,6 +30,7 @@ import {
   selectIsFullScreenOpen,
   selectPdfDocumentUrl,
   selectPdfDocumentName,
+  selectPdfInitialPage,
   selectPdfCurrentPage,
   selectPdfTotalPages,
   selectPdfScale,
@@ -51,6 +52,7 @@ export function PDFFullScreenModal() {
   const isOpen = usePdfSplitViewStore(selectIsFullScreenOpen);
   const documentUrl = usePdfSplitViewStore(selectPdfDocumentUrl);
   const documentName = usePdfSplitViewStore(selectPdfDocumentName);
+  const initialPage = usePdfSplitViewStore(selectPdfInitialPage);
   const currentPage = usePdfSplitViewStore(selectPdfCurrentPage);
   const totalPages = usePdfSplitViewStore(selectPdfTotalPages);
   const scale = usePdfSplitViewStore(selectPdfScale);
@@ -179,6 +181,7 @@ export function PDFFullScreenModal() {
           <PdfErrorBoundary>
             <PdfViewerPanel
               documentUrl={documentUrl}
+              initialPage={initialPage}
               currentPage={currentPage}
               scale={scale}
               onPageChange={setCurrentPage}

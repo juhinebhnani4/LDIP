@@ -15,6 +15,7 @@ Provides endpoints for:
 CRITICAL: Uses matter access validation for Layer 4 security.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import structlog
@@ -327,7 +328,11 @@ async def get_matter_summary(
             max_retries=2,
         )
 
-        result = generate_summary.delay(matter_id, job.id)
+        # CRITICAL: .delay() is synchronous (blocks on Redis broker).
+        # Run in a thread to avoid freezing the async event loop.
+        result = await asyncio.to_thread(
+            generate_summary.delay, matter_id, job.id
+        )
 
         # Store Celery task ID on the job record for debugging correlation
         await tracker.update_job_status(
@@ -338,9 +343,13 @@ async def get_matter_summary(
         # update_job_status doesn't accept celery_task_id, so patch it directly
         try:
             from app.services.supabase.client import get_supabase_client
-            get_supabase_client().table("processing_jobs").update(
-                {"celery_task_id": result.id}
-            ).eq("id", job.id).execute()
+
+            def _store_celery_id():
+                get_supabase_client().table("processing_jobs").update(
+                    {"celery_task_id": result.id}
+                ).eq("id", job.id).execute()
+
+            await asyncio.to_thread(_store_celery_id)
         except Exception:
             pass  # Non-critical — ID is also in logs
 

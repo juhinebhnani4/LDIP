@@ -37,10 +37,11 @@ logger = structlog.get_logger(__name__)
 # Constants
 # =============================================================================
 
-# Retry configuration
-MAX_RETRIES = 3
+# Retry configuration — fail-open safety check, so fewer retries is acceptable.
+# 2 attempts (1 retry) keeps worst-case overhead under ~22s instead of ~45s.
+MAX_RETRIES = 2
 INITIAL_RETRY_DELAY = 0.5
-MAX_RETRY_DELAY = 10.0
+MAX_RETRY_DELAY = 5.0
 
 # GPT-4o-mini pricing (as of Jan 2025)
 # https://openai.com/pricing

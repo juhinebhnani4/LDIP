@@ -48,13 +48,19 @@ def create_post_ocr_chain(
         embed_chunks,
         extract_entities,
     )
-    from app.workers.tasks.table_extraction_tasks import extract_tables
+    try:
+        from app.workers.tasks.table_extraction_tasks import extract_tables
+        _has_extract_tables = True
+    except ImportError:
+        _has_extract_tables = False
+        logger.warning("extract_tables_import_failed", reason="docling not available")
 
     logger.info(
         "creating_post_ocr_chain",
         document_id=document_id,
         matter_id=matter_id,
         job_id=job_id,
+        has_extract_tables=_has_extract_tables,
     )
 
     # NOTE: validate_ocr only accepts document_id, not matter_id/job_id
@@ -62,11 +68,15 @@ def create_post_ocr_chain(
     # extract_tables runs after chunking to create table chunks (Gap 5)
     # embed_chunks embeds ALL chunks (text + table) — queries by embedding IS NULL
     # extract_entities dispatches citations, dates, and aliases via _dispatch_post_entity_tasks()
-    return celery_chain(
+    steps = [
         validate_ocr.s(document_id=document_id),
         calculate_confidence.s(),
         chunk_document.s(skip_bbox_linking=False),  # Docling layout runs here (2-4 sec)
-        extract_tables.s(),  # Gap 5: extract tables + create table chunks
+    ]
+    if _has_extract_tables:
+        steps.append(extract_tables.s())  # Gap 5: extract tables + create table chunks
+    steps.extend([
         embed_chunks.s(),
         extract_entities.s(),
-    )
+    ])
+    return celery_chain(*steps)

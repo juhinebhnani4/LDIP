@@ -17,8 +17,12 @@ from app.core.config import get_settings
 logger = structlog.get_logger(__name__)
 
 # Lock configuration
-DEFAULT_LOCK_TIMEOUT = 120  # seconds
+DEFAULT_LOCK_TIMEOUT = 300  # seconds (5 min — OCR chunks can take 2-3 min)
 CHUNK_LOCK_KEY_PATTERN = "chunk_lock:{document_id}:{chunk_index}"
+
+# Pipeline deduplication lock (Stage 1.2: prevents duplicate pipeline runs)
+PIPELINE_LOCK_KEY = "pipeline_lock:{document_id}"
+PIPELINE_LOCK_TIMEOUT = 1800  # 30 min — covers longest pipeline (422-page contradiction detection)
 
 
 class DistributedLockError(Exception):
@@ -166,6 +170,61 @@ class ChunkLock:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit - release lock."""
         self.release()
+
+
+class PipelineLock:
+    """Prevents duplicate pipeline runs for the same document.
+
+    Stage 1.2: Pipeline Deduplication
+
+    Uses a Redis SET NX lock with 30-min TTL to ensure only one pipeline
+    runs per document at a time. Manual retry + maintenance recovery can
+    otherwise dispatch two pipelines simultaneously.
+
+    Example:
+        >>> lock = PipelineLock("doc-123")
+        >>> if lock.acquire():
+        ...     run_pipeline(...)
+        ...     lock.release()
+        ... else:
+        ...     logger.info("pipeline_already_running")
+    """
+
+    def __init__(self, document_id: str, timeout: int = PIPELINE_LOCK_TIMEOUT):
+        self.document_id = document_id
+        self.lock_key = PIPELINE_LOCK_KEY.format(document_id=document_id)
+        self._client = get_sync_redis_client()
+        self._timeout = timeout
+
+    def acquire(self) -> bool:
+        """Acquire pipeline lock. Returns True if acquired, False if already locked."""
+        try:
+            result = self._client.set(self.lock_key, "1", nx=True, ex=self._timeout)
+            acquired = bool(result)
+            if acquired:
+                logger.info("pipeline_lock_acquired", document_id=self.document_id)
+            else:
+                logger.info("pipeline_already_running", document_id=self.document_id)
+            return acquired
+        except redis.RedisError as e:
+            logger.error("pipeline_lock_acquire_error", document_id=self.document_id, error=str(e))
+            # Fail open: allow pipeline to proceed if Redis is down
+            return True
+
+    def release(self) -> None:
+        """Release the pipeline lock."""
+        try:
+            self._client.delete(self.lock_key)
+            logger.info("pipeline_lock_released", document_id=self.document_id)
+        except redis.RedisError as e:
+            logger.warning("pipeline_lock_release_error", document_id=self.document_id, error=str(e))
+
+    def is_locked(self) -> bool:
+        """Check if a pipeline is currently running for this document."""
+        try:
+            return bool(self._client.exists(self.lock_key))
+        except redis.RedisError:
+            return False
 
 
 def acquire_chunk_lock(

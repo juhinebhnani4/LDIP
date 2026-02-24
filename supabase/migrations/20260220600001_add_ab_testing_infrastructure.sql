@@ -128,6 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_eval_results_job_provider
 CREATE OR REPLACE FUNCTION get_ab_test_scores(p_job_id text)
 RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
 AS $$
     SELECT jsonb_build_object(
         'count', COUNT(*)::int,

@@ -556,15 +556,15 @@ CREATE OR REPLACE FUNCTION public.match_library_chunks_for_matter_voyage(
 )
 RETURNS TABLE (
   id uuid,
-  content text,
-  chunk_type text,
-  document_id uuid,
-  page_number integer,
-  bbox_ids uuid[],
-  token_count integer,
-  similarity float,
   library_document_id uuid,
-  library_document_title text
+  document_title text,
+  document_type text,
+  chunk_index integer,
+  content text,
+  page_number integer,
+  section_title text,
+  chunk_type text,
+  similarity float
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -574,35 +574,33 @@ BEGIN
   -- Gap 8: Improve HNSW query-time recall (default ~40 -> 80)
   SET LOCAL hnsw.ef_search = 80;
 
-  IF filter_matter_id IS NULL THEN
-    RAISE EXCEPTION 'filter_matter_id is required';
-  END IF;
-
-  IF auth.uid() IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM public.matter_attorneys ma
-    WHERE ma.matter_id = filter_matter_id AND ma.user_id = auth.uid()
+  -- Verify matter exists (Layer 4 app auth already validated user access)
+  IF NOT EXISTS (
+    SELECT 1 FROM public.matters m
+    WHERE m.id = filter_matter_id
   ) THEN
-    RAISE EXCEPTION 'Access denied to matter %', filter_matter_id;
+    RAISE EXCEPTION 'Matter not found: %', filter_matter_id;
   END IF;
 
   RETURN QUERY
   SELECT
     lc.id,
+    lc.library_document_id,
+    ld.title AS document_title,
+    ld.document_type,
+    lc.chunk_index,
     lc.content,
-    lc.chunk_type,
-    lc.document_id,
     lc.page_number,
-    lc.bbox_ids,
-    lc.token_count,
-    (1 - (lc.embedding_voyage <=> query_embedding))::float AS similarity,
-    ld.id AS library_document_id,
-    ld.title AS library_document_title
+    lc.section_title,
+    lc.chunk_type,
+    (1 - (lc.embedding_voyage <=> query_embedding))::float AS similarity
   FROM public.library_chunks lc
-  JOIN public.library_documents ld ON lc.document_id = ld.id
-  JOIN public.matter_library_links mll ON ld.id = mll.library_document_id
+  JOIN public.library_documents ld ON ld.id = lc.library_document_id
+  JOIN public.matter_library_links mll ON mll.library_document_id = ld.id
   WHERE mll.matter_id = filter_matter_id
     AND lc.embedding_voyage IS NOT NULL
     AND 1 - (lc.embedding_voyage <=> query_embedding) >= similarity_threshold
+    AND ld.status = 'completed'
   ORDER BY lc.embedding_voyage <=> query_embedding
   LIMIT match_count;
 END;

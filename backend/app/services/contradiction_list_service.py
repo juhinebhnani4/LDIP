@@ -646,7 +646,7 @@ class ContradictionListService:
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("chunks")
                 .select(
-                    "id, content, page_number, document_id, "
+                    "id, content, page_number, document_id, bbox_ids, "
                     "documents(id, filename)"
                 )
                 .in_("id", chunk_ids)
@@ -664,6 +664,7 @@ class ContradictionListService:
                         "page_number": row.get("page_number"),
                         "document_id": row.get("document_id") or doc_data.get("id"),
                         "document_name": doc_data.get("filename", "Unknown"),
+                        "bbox_ids": row.get("bbox_ids") or [],
                     }
 
             return chunks_map
@@ -799,7 +800,7 @@ class ContradictionListService:
             date=date_b,
         )
 
-        # Build evidence links (bbox_ids populated when bbox data is available)
+        # Build evidence links with bbox_ids from chunk data
         evidence_links: list[ContradictionEvidenceLink] = []
         if statement_a.get("chunk_id"):
             evidence_links.append(
@@ -808,7 +809,7 @@ class ContradictionListService:
                     document_id=statement_a.get("document_id", ""),
                     document_name=statement_a.get("document_name", "Unknown"),
                     page=statement_a.get("page_number"),
-                    bbox_ids=[],
+                    bbox_ids=statement_a.get("bbox_ids", []),
                 )
             )
         if statement_b.get("chunk_id"):
@@ -818,7 +819,7 @@ class ContradictionListService:
                     document_id=statement_b.get("document_id", ""),
                     document_name=statement_b.get("document_name", "Unknown"),
                     page=statement_b.get("page_number"),
-                    bbox_ids=[],
+                    bbox_ids=statement_b.get("bbox_ids", []),
                 )
             )
 

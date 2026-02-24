@@ -274,6 +274,9 @@ class RawDateListItem(BaseModel):
         default_factory=list, alias="entitiesInvolved", description="Related entity UUIDs"
     )
     is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+    )
 
 
 class RawDatesListResponse(BaseModel):
@@ -359,6 +362,9 @@ class EventClassificationListItem(BaseModel):
     )
     document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
     source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+    )
     verified: bool = Field(default=False, description="Whether verified")
 
 
@@ -474,6 +480,9 @@ class TimelineEventWithEntities(BaseModel):
     is_ambiguous: bool = Field(default=False, alias="isAmbiguous", description="Whether date is ambiguous")
     is_verified: bool = Field(default=False, alias="isVerified", description="Whether manually verified")
     is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+    )
 
 
 class TimelineWithEntitiesResponse(BaseModel):

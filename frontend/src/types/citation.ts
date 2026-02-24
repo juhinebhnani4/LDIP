@@ -50,6 +50,7 @@ export interface CitationListItem extends CitationBase {
   confidence: number;
   documentId: string;
   documentName: string | null;
+  sourceBboxIds: string[];
 }
 
 /** Complete citation model from API */

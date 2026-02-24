@@ -1041,6 +1041,7 @@ async def get_timeline_with_entities(
                         is_ambiguous=e.is_ambiguous,
                         is_verified=e.is_verified,
                         is_manual=e.is_verified,  # is_verified maps to is_manual in cache
+                        source_bbox_ids=getattr(e, 'source_bbox_ids', []),
                     )
                     for e in cached.events
                 ]
@@ -1113,6 +1114,7 @@ async def get_timeline_with_entities(
                 is_ambiguous=e.is_ambiguous,
                 is_verified=e.is_verified,
                 is_manual=e.is_verified,  # is_verified maps to is_manual in builder
+                source_bbox_ids=e.source_bbox_ids,
             )
             for e in timeline.events
         ]

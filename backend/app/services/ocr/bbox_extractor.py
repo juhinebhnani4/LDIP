@@ -194,11 +194,13 @@ def extract_bounding_boxes(
         for block in page.blocks:
             bbox = _extract_bbox_from_layout(block.layout, current_page)
             if bbox:
-                # Extract text from text anchor
-                text = _extract_text_from_anchor(
+                # Extract text and character offsets from text anchor
+                text, start_offset, end_offset = _extract_text_from_anchor(
                     block.layout.text_anchor, full_text
                 )
                 bbox.text = text
+                bbox.text_start_offset = start_offset
+                bbox.text_end_offset = end_offset
                 page_boxes.append(bbox)
 
         # Apply reading order for this page
@@ -254,10 +256,12 @@ def extract_bounding_boxes_by_token(
         for token in page.tokens:
             bbox = _extract_bbox_from_layout(token.layout, current_page)
             if bbox:
-                text = _extract_text_from_anchor(
+                text, start_offset, end_offset = _extract_text_from_anchor(
                     token.layout.text_anchor, full_text
                 )
                 bbox.text = text
+                bbox.text_start_offset = start_offset
+                bbox.text_end_offset = end_offset
                 # Token-level confidence
                 if hasattr(token.layout, "confidence"):
                     bbox.confidence = token.layout.confidence
@@ -282,23 +286,28 @@ def extract_bounding_boxes_by_token(
 def _extract_text_from_anchor(
     text_anchor: "Document.TextAnchor",  # type: ignore[name-defined]
     full_text: str,
-) -> str:
-    """Extract text content from a Document AI text anchor.
+) -> tuple[str, int | None, int | None]:
+    """Extract text content and character offsets from a Document AI text anchor.
 
     Args:
         text_anchor: Text anchor with segment references.
         full_text: Full document text.
 
     Returns:
-        Extracted text string.
+        Tuple of (extracted text, start offset in full_text, end offset in full_text).
     """
     if not text_anchor or not text_anchor.text_segments:
-        return ""
+        return "", None, None
 
     text_parts: list[str] = []
-    for segment in text_anchor.text_segments:
-        start_idx = int(segment.start_index) if segment.start_index else 0
-        end_idx = int(segment.end_index) if segment.end_index else len(full_text)
-        text_parts.append(full_text[start_idx:end_idx])
+    min_start: int | None = None
+    max_end: int | None = None
 
-    return "".join(text_parts).strip()
+    for segment in text_anchor.text_segments:
+        start_idx = int(segment.start_index) if segment.start_index is not None else 0
+        end_idx = int(segment.end_index) if segment.end_index is not None else len(full_text)
+        text_parts.append(full_text[start_idx:end_idx])
+        min_start = start_idx if min_start is None else min(min_start, start_idx)
+        max_end = end_idx if max_end is None else max(max_end, end_idx)
+
+    return "".join(text_parts).strip(), min_start, max_end

@@ -39,6 +39,7 @@ export interface SourceReferenceAPI {
   chunk_id?: string | null;
   confidence?: number | null;
   context_snippet?: string | null;
+  bbox_ids?: string[] | null;
 }
 
 /**
@@ -52,6 +53,7 @@ export function transformSourceReference(api: SourceReferenceAPI): SourceReferen
     chunkId: api.chunk_id ?? undefined,
     confidence: api.confidence ?? undefined,
     contextSnippet: api.context_snippet ?? undefined,
+    bboxIds: api.bbox_ids ?? undefined,
   };
 }
 

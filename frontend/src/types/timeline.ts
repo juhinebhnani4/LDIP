@@ -60,6 +60,8 @@ export interface TimelineEvent {
   documentName: string | null;
   /** Source page number */
   sourcePage: number | null;
+  /** Bounding box IDs for highlighting source text in PDF */
+  sourceBboxIds?: string[];
   /** Classification confidence */
   confidence: number;
   /** Linked entities (actors) */

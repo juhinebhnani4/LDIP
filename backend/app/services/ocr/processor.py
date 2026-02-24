@@ -228,21 +228,27 @@ class OCRProcessor:
         total_conf = 0.0
         conf_count = 0
         current_page_offset = 0
-        
+        cumulative_text_length = 0
+
         for res in results:
             # 1. Merge pages with offset
             for page in res.pages:
                 page.page_number += current_page_offset
                 merged.pages.append(page)
-                
-            # 2. Merge bounding boxes with offset
+
+            # 2. Merge bounding boxes with page and text offsets
             for bbox in res.bounding_boxes:
                 bbox.page += current_page_offset
+                if bbox.text_start_offset is not None:
+                    bbox.text_start_offset += cumulative_text_length
+                if bbox.text_end_offset is not None:
+                    bbox.text_end_offset += cumulative_text_length
                 merged.bounding_boxes.append(bbox)
-                
+
             # 3. Concatenate text
             merged.full_text += res.full_text + "\n"
-            
+            cumulative_text_length += len(res.full_text) + 1  # +1 for "\n"
+
             # 4. Aggregate stats
             if res.overall_confidence:
                 total_conf += res.overall_confidence * len(res.pages) # Weight by pages

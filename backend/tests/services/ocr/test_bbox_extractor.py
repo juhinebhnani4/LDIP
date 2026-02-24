@@ -66,7 +66,7 @@ class TestExtractTextFromAnchor:
     """Tests for text extraction from Document AI text anchors."""
 
     def test_extracts_single_segment(self) -> None:
-        """Should extract text from single segment."""
+        """Should extract text and offsets from single segment."""
         segment = MagicMock()
         segment.start_index = 0
         segment.end_index = 5
@@ -74,12 +74,14 @@ class TestExtractTextFromAnchor:
         text_anchor = MagicMock()
         text_anchor.text_segments = [segment]
 
-        result = _extract_text_from_anchor(text_anchor, "Hello World")
+        text, start, end = _extract_text_from_anchor(text_anchor, "Hello World")
 
-        assert result == "Hello"
+        assert text == "Hello"
+        assert start == 0
+        assert end == 5
 
     def test_extracts_multiple_segments(self) -> None:
-        """Should concatenate text from multiple segments."""
+        """Should concatenate text from multiple segments and track min/max offsets."""
         segment1 = MagicMock()
         segment1.start_index = 0
         segment1.end_index = 5
@@ -91,27 +93,33 @@ class TestExtractTextFromAnchor:
         text_anchor = MagicMock()
         text_anchor.text_segments = [segment1, segment2]
 
-        result = _extract_text_from_anchor(text_anchor, "Hello World")
+        text, start, end = _extract_text_from_anchor(text_anchor, "Hello World")
 
-        assert result == "HelloWorld"
+        assert text == "HelloWorld"
+        assert start == 0
+        assert end == 11
 
     def test_returns_empty_for_none_anchor(self) -> None:
-        """Should return empty string for None anchor."""
-        result = _extract_text_from_anchor(None, "Hello")  # type: ignore
+        """Should return empty string and None offsets for None anchor."""
+        text, start, end = _extract_text_from_anchor(None, "Hello")  # type: ignore
 
-        assert result == ""
+        assert text == ""
+        assert start is None
+        assert end is None
 
     def test_returns_empty_for_no_segments(self) -> None:
-        """Should return empty string when no segments."""
+        """Should return empty string and None offsets when no segments."""
         text_anchor = MagicMock()
         text_anchor.text_segments = []
 
-        result = _extract_text_from_anchor(text_anchor, "Hello")
+        text, start, end = _extract_text_from_anchor(text_anchor, "Hello")
 
-        assert result == ""
+        assert text == ""
+        assert start is None
+        assert end is None
 
     def test_handles_missing_start_index(self) -> None:
-        """Should default to 0 when start_index is missing."""
+        """Should default to 0 when start_index is None (not falsy check)."""
         segment = MagicMock()
         segment.start_index = None
         segment.end_index = 5
@@ -119,9 +127,11 @@ class TestExtractTextFromAnchor:
         text_anchor = MagicMock()
         text_anchor.text_segments = [segment]
 
-        result = _extract_text_from_anchor(text_anchor, "Hello")
+        text, start, end = _extract_text_from_anchor(text_anchor, "Hello")
 
-        assert result == "Hello"
+        assert text == "Hello"
+        assert start == 0
+        assert end == 5
 
 
 class TestExtractBoundingBoxes:

@@ -128,14 +128,16 @@ class OCRResultMerger:
             if chunk.checksum:
                 self._validate_checksum(chunk)
 
-        # Merge bounding boxes with page offset transformation
+        # Merge bounding boxes with page and text offset transformation
         merged_bboxes = []
         page_offset = 0
+        text_offset = 0
 
         for chunk in sorted_results:
-            transformed = self._transform_bboxes(chunk.bounding_boxes, page_offset)
+            transformed = self._transform_bboxes(chunk.bounding_boxes, page_offset, text_offset)
             merged_bboxes.extend(transformed)
             page_offset += chunk.page_count
+            text_offset += len(chunk.full_text) + 2  # +2 for "\n\n" separator in _merge_text
 
         # Merge full text
         merged_text = self._merge_text(sorted_results)
@@ -176,6 +178,7 @@ class OCRResultMerger:
         self,
         bboxes: list[dict],
         page_offset: int,
+        text_offset: int = 0,
     ) -> list[dict]:
         """Transform bbox page numbers from chunk-relative to absolute.
 
@@ -186,9 +189,10 @@ class OCRResultMerger:
         Args:
             bboxes: Bounding boxes with chunk-relative page numbers.
             page_offset: Page offset to add (sum of previous chunks' pages).
+            text_offset: Character offset to add to text_start_offset/text_end_offset.
 
         Returns:
-            Bounding boxes with absolute page numbers.
+            Bounding boxes with absolute page numbers and text offsets.
         """
         transformed = []
         for bbox in bboxes:
@@ -201,6 +205,13 @@ class OCRResultMerger:
 
             new_bbox["page"] = absolute_page
             new_bbox["page_number"] = absolute_page  # Alias for compatibility
+
+            # Adjust text offsets for merged full_text
+            if text_offset > 0:
+                if new_bbox.get("text_start_offset") is not None:
+                    new_bbox["text_start_offset"] += text_offset
+                if new_bbox.get("text_end_offset") is not None:
+                    new_bbox["text_end_offset"] += text_offset
 
             transformed.append(new_bbox)
 

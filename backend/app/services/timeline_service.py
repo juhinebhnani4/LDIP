@@ -1400,6 +1400,7 @@ class TimelineService:
             is_ambiguous=is_ambiguous,
             entities_involved=row.get("entities_involved") or [],
             is_manual=row.get("is_manual", False),
+            source_bbox_ids=row.get("source_bbox_ids") or [],
         )
 
     def _db_row_to_classification_list_item(self, row: dict) -> EventClassificationListItem:

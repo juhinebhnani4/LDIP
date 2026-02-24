@@ -311,6 +311,9 @@ class CitationListItem(BaseModel):
     confidence: float = Field(..., description="Extraction confidence")
     document_id: str = Field(..., alias="documentId", description="Source document UUID")
     document_name: str | None = Field(None, alias="documentName", description="Source document name")
+    source_bbox_ids: list[str] = Field(
+        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+    )
 
 
 class CitationsListResponse(BaseModel):

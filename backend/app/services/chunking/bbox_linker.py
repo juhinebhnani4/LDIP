@@ -1,11 +1,15 @@
 """Bounding box linker for chunks.
 
-Links chunks to their source bounding boxes using fuzzy text matching.
-This enables click-to-highlight functionality in the PDF viewer.
+Links chunks to their source bounding boxes using either:
+1. Deterministic offset-based interval overlap (new documents with offsets), or
+2. Fuzzy text matching as legacy fallback (old documents without offsets).
 
 Story 6.1: Optimized from O(n²) to O(n) by pre-indexing bboxes by page.
+BUG-BBOX-0: Added offset-based deterministic linking using character offsets
+from OCR text_anchor — eliminates fuzzy matching entirely for new documents.
 """
 
+import bisect
 from collections import Counter, defaultdict
 from uuid import UUID
 
@@ -362,6 +366,83 @@ async def _link_chunk_with_page_index(
     return matched_bbox_ids, most_common_page
 
 
+def _link_by_offset_overlap(
+    chunks: list[ChunkData],
+    all_bboxes: list[dict],
+) -> int:
+    """Link chunks to bboxes using deterministic character offset interval overlap.
+
+    BUG-BBOX-0: For documents where both bboxes and chunks have text offsets,
+    linking is a simple interval overlap check: bbox.end > chunk.start AND
+    bbox.start < chunk.end. Zero fuzzy matching, 100% accurate.
+
+    Modifies chunks in place, setting bbox_ids and page_number.
+
+    Args:
+        chunks: Chunks with text_start_offset/text_end_offset set.
+        all_bboxes: All bboxes with text_start_offset/text_end_offset set.
+
+    Returns:
+        Number of chunks that got at least one bbox linked.
+    """
+    # Filter and sort bboxes by start offset
+    offset_bboxes = [
+        b for b in all_bboxes
+        if b.get("text_start_offset") is not None and b.get("text_end_offset") is not None
+    ]
+    offset_bboxes.sort(key=lambda b: b["text_start_offset"])
+
+    # Build sorted start offsets for binary search
+    bbox_starts = [b["text_start_offset"] for b in offset_bboxes]
+
+    linked_count = 0
+
+    for chunk in chunks:
+        if chunk.text_start_offset is None or chunk.text_end_offset is None:
+            continue
+
+        chunk_start = chunk.text_start_offset
+        chunk_end = chunk.text_end_offset
+
+        # Binary search: find first bbox that could overlap
+        # A bbox overlaps if: bbox.end > chunk_start AND bbox.start < chunk_end
+        # Find insertion point for chunk_start in bbox_starts
+        right_idx = bisect.bisect_left(bbox_starts, chunk_end)
+
+        matched_bbox_ids: list[UUID] = []
+        page_counts: Counter[int] = Counter()
+
+        # Scan backwards from right_idx to find all overlapping bboxes
+        for i in range(right_idx - 1, -1, -1):
+            bbox = offset_bboxes[i]
+            bbox_end = bbox["text_end_offset"]
+
+            # If bbox ends before chunk starts, no more overlaps possible
+            if bbox_end <= chunk_start:
+                break
+
+            # This bbox overlaps with the chunk
+            bbox_id = bbox.get("id")
+            if bbox_id:
+                try:
+                    matched_bbox_ids.append(UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id)
+                    page = bbox.get("page_number")
+                    if page is not None:
+                        page_counts[page] += 1
+                except (ValueError, TypeError):
+                    pass
+
+        # Reverse to maintain reading order (we scanned backwards)
+        matched_bbox_ids.reverse()
+
+        chunk.bbox_ids = matched_bbox_ids
+        if page_counts:
+            chunk.page_number = page_counts.most_common(1)[0][0]
+            linked_count += 1
+
+    return linked_count
+
+
 async def link_chunks_to_bboxes(
     chunks: list[ChunkData],
     document_id: str,
@@ -427,42 +508,75 @@ async def link_chunks_to_bboxes(
         load_time_seconds=round(load_time, 2),
     )
 
-    # Story 6.1: Build page index for O(n) lookup
-    page_index = BboxPageIndex(all_bboxes) if use_optimized else None
+    # BUG-BBOX-0: Check if offsets are available for deterministic linking
+    bboxes_with_offsets = sum(
+        1 for b in all_bboxes if b.get("text_start_offset") is not None
+    )
+    chunks_with_offsets = sum(
+        1 for c in chunks if c.text_start_offset is not None
+    )
+    use_offset_linking = (
+        bboxes_with_offsets > len(all_bboxes) * 0.5
+        and chunks_with_offsets > len(chunks) * 0.5
+    )
 
-    if page_index:
-        logger.info(
-            "bbox_page_index_built",
-            document_id=document_id,
-            page_count=len(page_index.all_pages),
-            pages=page_index.all_pages[:10],  # Log first 10 pages
-        )
-
-    # Link each chunk
-    linked_count = 0
     link_start_time = time.time()
 
-    for chunk in chunks:
-        bbox_ids, page_number = await link_chunk_to_bboxes(
-            chunk=chunk,
+    if use_offset_linking:
+        # Deterministic offset-based interval overlap (BUG-BBOX-0)
+        logger.info(
+            "using_offset_based_linking",
             document_id=document_id,
-            all_bboxes=all_bboxes,
-            page_index=page_index,
+            bboxes_with_offsets=bboxes_with_offsets,
+            chunks_with_offsets=chunks_with_offsets,
+        )
+        linked_count = _link_by_offset_overlap(chunks, all_bboxes)
+        link_method = "offset"
+    else:
+        # Legacy fuzzy matching fallback for old documents without offsets
+        logger.info(
+            "using_fuzzy_linking_fallback",
+            document_id=document_id,
+            bboxes_with_offsets=bboxes_with_offsets,
+            chunks_with_offsets=chunks_with_offsets,
         )
 
-        # Update chunk with results
-        chunk.bbox_ids = bbox_ids
-        chunk.page_number = page_number
+        # Story 6.1: Build page index for O(n) lookup
+        page_index = BboxPageIndex(all_bboxes) if use_optimized else None
 
-        if bbox_ids:
-            linked_count += 1
+        if page_index:
+            logger.info(
+                "bbox_page_index_built",
+                document_id=document_id,
+                page_count=len(page_index.all_pages),
+                pages=page_index.all_pages[:10],  # Log first 10 pages
+            )
+
+        # Link each chunk using fuzzy matching
+        linked_count = 0
+        for chunk in chunks:
+            bbox_ids, page_number = await link_chunk_to_bboxes(
+                chunk=chunk,
+                document_id=document_id,
+                all_bboxes=all_bboxes,
+                page_index=page_index,
+            )
+            chunk.bbox_ids = bbox_ids
+            chunk.page_number = page_number
+            if bbox_ids:
+                linked_count += 1
+
+        link_method = "fuzzy"
 
     # BUG-014: Positional interpolation for remaining page=None chunks.
     # After bbox linking, interpolate page numbers from neighboring chunks
     # that DO have pages, or estimate proportionally from total page count.
+    all_pages_list = sorted(set(
+        b.get("page_number") for b in all_bboxes if b.get("page_number") is not None
+    ))
     none_count_before = sum(1 for c in chunks if c.page_number is None)
-    if none_count_before > 0 and page_index and page_index.all_pages:
-        _interpolate_missing_pages(chunks, page_index.all_pages)
+    if none_count_before > 0 and all_pages_list:
+        _interpolate_missing_pages(chunks, all_pages_list)
 
     link_time = time.time() - link_start_time
     total_time = time.time() - start_time
@@ -473,6 +587,7 @@ async def link_chunks_to_bboxes(
         document_id=document_id,
         total_chunks=len(chunks),
         linked_chunks=linked_count,
+        method=link_method,
         link_time_seconds=round(link_time, 2),
         total_time_seconds=round(total_time, 2),
         optimized=use_optimized,

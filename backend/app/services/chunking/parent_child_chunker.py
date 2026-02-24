@@ -57,6 +57,8 @@ class ChunkData:
     page_number: int | None = None
     bbox_ids: list[UUID] = field(default_factory=list)
     block_types: list[str] = field(default_factory=list)
+    text_start_offset: int | None = None
+    text_end_offset: int | None = None
     layout_derived: bool = False
     source_block_ids: list[UUID] = field(default_factory=list)  # Track source layout blocks
 
@@ -225,8 +227,20 @@ class ParentChildChunker:
         parent_texts = self.parent_splitter.split_text(text)
         parent_chunks: list[ChunkData] = []
 
+        # Track offsets using cursor-based str.find()
+        cursor = 0
         for idx, parent_text in enumerate(parent_texts):
             token_count = count_tokens(parent_text)
+
+            # Find position of this chunk in original text
+            search_start = max(0, cursor - len(parent_text))
+            pos = text.find(parent_text, search_start)
+            if pos == -1:
+                pos = text.find(parent_text)
+            text_start = pos if pos >= 0 else None
+            text_end = pos + len(parent_text) if pos >= 0 else None
+            if pos >= 0:
+                cursor = pos + 1
 
             # Skip chunks below minimum size
             if token_count < self.min_size:
@@ -246,6 +260,8 @@ class ParentChildChunker:
                     chunk_index=idx,
                     parent_id=None,
                     token_count=token_count,
+                    text_start_offset=text_start,
+                    text_end_offset=text_end,
                 )
             )
 
@@ -256,8 +272,24 @@ class ParentChildChunker:
         for parent in parent_chunks:
             child_texts = self.child_splitter.split_text(parent.content)
 
+            child_cursor = 0
             for child_text in child_texts:
                 token_count = count_tokens(child_text)
+
+                # Find child position within parent content
+                child_search_start = max(0, child_cursor - len(child_text))
+                child_pos = parent.content.find(child_text, child_search_start)
+                if child_pos == -1:
+                    child_pos = parent.content.find(child_text)
+
+                # Map child position to full_text offsets via parent
+                if child_pos >= 0 and parent.text_start_offset is not None:
+                    child_start = parent.text_start_offset + child_pos
+                    child_end = child_start + len(child_text)
+                    child_cursor = child_pos + 1
+                else:
+                    child_start = None
+                    child_end = None
 
                 # Skip chunks below minimum size
                 if token_count < self.min_size:
@@ -277,6 +309,8 @@ class ParentChildChunker:
                         chunk_index=child_index,
                         parent_id=parent.id,
                         token_count=token_count,
+                        text_start_offset=child_start,
+                        text_end_offset=child_end,
                     )
                 )
                 child_index += 1
@@ -407,11 +441,42 @@ class ParentChildChunker:
             # Split parent into children using text splitter
             child_texts = self.child_splitter.split_text(parent.content)
 
+            # Get block offset map for computing child offsets
+            block_offset_map = getattr(parent, "_block_offset_map", None)
+
+            child_cursor = 0
             for child_text in child_texts:
                 token_count = count_tokens(child_text)
 
                 if token_count < self.min_size:
                     continue
+
+                # Compute child text offsets
+                child_start_offset = None
+                child_end_offset = None
+
+                # Find child position within parent content
+                child_search_start = max(0, child_cursor - len(child_text))
+                child_pos = parent.content.find(child_text, child_search_start)
+                if child_pos == -1:
+                    child_pos = parent.content.find(child_text)
+
+                if child_pos >= 0:
+                    child_cursor = child_pos + 1
+                    child_end_pos = child_pos + len(child_text)
+
+                    if block_offset_map:
+                        # Map child start/end to full_text using block offset map
+                        child_start_offset = self._map_parent_pos_to_fulltext(
+                            child_pos, block_offset_map
+                        )
+                        child_end_offset = self._map_parent_pos_to_fulltext(
+                            child_end_pos, block_offset_map
+                        )
+                    elif parent.text_start_offset is not None:
+                        # Fallback: simple offset from parent start
+                        child_start_offset = parent.text_start_offset + child_pos
+                        child_end_offset = parent.text_start_offset + child_end_pos
 
                 child_chunks.append(
                     ChunkData(
@@ -421,6 +486,8 @@ class ParentChildChunker:
                         chunk_index=child_index,
                         parent_id=parent.id,
                         token_count=token_count,
+                        text_start_offset=child_start_offset,
+                        text_end_offset=child_end_offset,
                         # Inherit page and source blocks from parent
                         page_number=parent.page_number,
                         block_types=parent.block_types.copy(),
@@ -541,18 +608,77 @@ class ParentChildChunker:
         # Collect unique block types
         block_types = list(set(block.block_type for block in blocks))
 
-        return ChunkData(
+        # Compute text offsets from source block ranges
+        block_starts = [b.text_start for b in blocks if b.text_start is not None]
+        block_ends = [b.text_end for b in blocks if b.text_end is not None]
+        text_start_offset = min(block_starts) if block_starts else None
+        text_end_offset = max(block_ends) if block_ends else None
+
+        # Build block offset map for child chunk offset calculation
+        # Maps positions in parent content to positions in full_text
+        block_offset_map: list[tuple[int, int, int | None, int | None]] = []
+        pos_in_parent = 0
+        for i, block_text in enumerate(text_parts):
+            block = blocks[i]
+            end_in_parent = pos_in_parent + len(block_text)
+            block_offset_map.append((
+                pos_in_parent,
+                end_in_parent,
+                block.text_start,
+                block.text_end,
+            ))
+            pos_in_parent = end_in_parent + 2  # +2 for "\n\n" joiner
+
+        chunk = ChunkData(
             id=uuid4(),
             content=content,
             chunk_type="parent",
             chunk_index=chunk_index,
             parent_id=None,
             token_count=token_count,
+            text_start_offset=text_start_offset,
+            text_end_offset=text_end_offset,
             page_number=primary_page,
             block_types=block_types,
             layout_derived=True,
             source_block_ids=[block.id for block in blocks],  # Track source blocks
         )
+        # Attach block offset map as transient attribute (not persisted to DB)
+        chunk._block_offset_map = block_offset_map  # type: ignore[attr-defined]
+        return chunk
+
+    @staticmethod
+    def _map_parent_pos_to_fulltext(
+        pos: int,
+        block_offset_map: list[tuple[int, int, int | None, int | None]],
+    ) -> int | None:
+        """Map a character position in parent content to full_text offset.
+
+        Uses the block offset map built during parent chunk creation to
+        translate positions from the joined parent content back to the
+        original full_text character offsets.
+
+        Args:
+            pos: Character position in parent.content.
+            block_offset_map: List of (start_in_parent, end_in_parent,
+                text_start_in_fulltext, text_end_in_fulltext) tuples.
+
+        Returns:
+            Position in full_text, or None if unmappable.
+        """
+        for start_in_parent, end_in_parent, text_start, text_end in block_offset_map:
+            if start_in_parent <= pos <= end_in_parent and text_start is not None:
+                offset_in_block = pos - start_in_parent
+                return text_start + offset_in_block
+        # If position falls in a joiner gap, use the nearest block boundary
+        for i, (start_in_parent, end_in_parent, text_start, text_end) in enumerate(block_offset_map):
+            if pos < start_in_parent and text_start is not None:
+                return text_start
+        # Past all blocks — use end of last block
+        if block_offset_map:
+            _, _, _, last_end = block_offset_map[-1]
+            return last_end
+        return None
 
     def _assign_page_numbers_from_layout(
         self,

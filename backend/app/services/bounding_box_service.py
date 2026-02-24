@@ -28,7 +28,7 @@ MAX_PARALLEL_BATCHES = 4  # Max concurrent batch inserts
 
 
 # Columns to select for bbox queries (without text for egress optimization)
-BBOX_COLUMNS_NO_TEXT = "id, document_id, page_number, x, y, width, height, confidence, reading_order_index"
+BBOX_COLUMNS_NO_TEXT = "id, document_id, page_number, x, y, width, height, confidence, reading_order_index, text_start_offset, text_end_offset"
 BBOX_COLUMNS_WITH_TEXT = "*"
 
 
@@ -50,6 +50,8 @@ def _row_to_bbox_dict(row: dict[str, Any]) -> dict[str, Any]:
         "text": row.get("text", ""),  # Default to empty string if not fetched
         "confidence": row["confidence"],
         "reading_order_index": row.get("reading_order_index"),
+        "text_start_offset": row.get("text_start_offset"),
+        "text_end_offset": row.get("text_end_offset"),
     }
 
 
@@ -149,6 +151,8 @@ class BoundingBoxService:
                     "text": bbox.text,
                     "confidence": bbox.confidence,
                     "reading_order_index": bbox.reading_order_index,
+                    "text_start_offset": bbox.text_start_offset,
+                    "text_end_offset": bbox.text_end_offset,
                 }
                 for bbox in bounding_boxes
             ]

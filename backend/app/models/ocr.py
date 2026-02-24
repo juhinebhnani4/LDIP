@@ -43,6 +43,8 @@ class OCRBoundingBox(BaseModel):
     reading_order_index: int | None = Field(
         None, ge=0, description="Reading order within page (0-indexed, top-to-bottom, left-to-right)"
     )
+    text_start_offset: int | None = Field(None, ge=0, description="Char start in OCR full_text (inclusive)")
+    text_end_offset: int | None = Field(None, ge=0, description="Char end in OCR full_text (exclusive)")
 
 
 class OCRPage(BaseModel):

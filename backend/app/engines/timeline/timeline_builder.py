@@ -59,6 +59,7 @@ class TimelineEvent:
     entities: list[EntityReference] = field(default_factory=list)
     is_ambiguous: bool = False
     is_verified: bool = False
+    source_bbox_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -290,6 +291,7 @@ class TimelineBuilder:
                     entities=entity_refs,
                     is_ambiguous=getattr(event_item, 'is_ambiguous', False),
                     is_verified=getattr(event_item, 'is_manual', False),
+                    source_bbox_ids=getattr(event_item, 'source_bbox_ids', []),
                 )
             )
 
@@ -429,6 +431,7 @@ class TimelineBuilder:
                     entities=[],  # Don't need entity info for entity-focused view
                     is_ambiguous=getattr(event_item, 'is_ambiguous', False),
                     is_verified=False,
+                    source_bbox_ids=getattr(event_item, 'source_bbox_ids', []),
                 )
             )
 

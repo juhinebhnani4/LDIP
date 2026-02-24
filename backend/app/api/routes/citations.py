@@ -211,6 +211,7 @@ async def list_citations(
                 confidence=c.confidence,
                 document_id=c.document_id,
                 document_name=c.document_name,
+                source_bbox_ids=c.source_bbox_ids,
             )
             for c in citations
         ]

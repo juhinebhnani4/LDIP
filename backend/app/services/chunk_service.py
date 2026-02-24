@@ -130,6 +130,8 @@ class ChunkService:
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
                     "layout_derived": chunk.layout_derived,
+                    "text_start_offset": chunk.text_start_offset,
+                    "text_end_offset": chunk.text_end_offset,
                 }
                 for chunk in parent_chunks
             ]
@@ -159,6 +161,8 @@ class ChunkService:
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
                     "layout_derived": chunk.layout_derived,
+                    "text_start_offset": chunk.text_start_offset,
+                    "text_end_offset": chunk.text_end_offset,
                 }
                 for chunk in child_chunks
             ]

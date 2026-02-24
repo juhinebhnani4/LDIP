@@ -6,10 +6,11 @@ import {
   FileSearch,
   Clock,
   Users,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
   ArrowRight,
+  MessageSquare,
+  Shield,
+  Search,
 } from "lucide-react"
 
 export default function LandingPage() {
@@ -50,86 +51,85 @@ export default function LandingPage() {
             {/* Left: Copy */}
             <div className="text-center lg:text-left">
               <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-primary leading-tight mb-6">
-                Lawyers miss what matters.
+                Ask your case files
                 <br />
-                <span className="text-accent">We don&apos;t.</span>
+                <span className="text-accent">anything.</span>
               </h1>
               <p className="text-lg text-muted-foreground mb-3 font-medium">
-                Verify, don&apos;t trust.
+                Get answers with the page number.
               </p>
               <p className="text-lg text-foreground/80 mb-8 leading-relaxed">
-                jaanch.ai reads every page and finds what humans miss — contradictions,
-                misquoted laws, timeline gaps. Every finding cited to the exact page.
+                Upload your case files. Ask jaanch a question. It searches across
+                every document and gives you cited answers — with the document
+                name and page.
               </p>
               <Link href="/signup">
                 <Button
                   size="lg"
                   className="bg-primary text-primary-foreground hover:bg-primary/90 text-lg px-8 py-6 h-auto"
                 >
-                  See what you&apos;re missing
+                  Try it on your case files
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
             </div>
 
-            {/* Right: Finding Card Mockup */}
+            {/* Right: Chat Interaction Mockup */}
             <div className="relative">
-              {/* Background document stack effect */}
               <div className="absolute -top-4 -left-4 w-full h-full bg-muted/50 rounded-lg transform rotate-2" />
               <div className="absolute -top-2 -left-2 w-full h-full bg-muted/30 rounded-lg transform rotate-1" />
 
-              {/* Main finding card */}
               <div className="relative bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-                {/* Card header */}
-                <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                  <span className="text-sm font-semibold text-destructive">Contradiction Found</span>
+                {/* Chat header */}
+                <div className="bg-primary/5 border-b border-border px-4 py-3 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-primary">jaanch chat</span>
+                  <span className="text-xs text-muted-foreground ml-auto">3 documents uploaded</span>
                 </div>
 
-                {/* Card content */}
                 <div className="p-5 space-y-4">
-                  {/* Statement A */}
-                  <div className="bg-muted/50 rounded-md p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
-                        Affidavit_2019.pdf • Page 47
+                  {/* User question */}
+                  <div className="flex justify-end">
+                    <div className="bg-primary text-primary-foreground rounded-lg rounded-br-sm px-4 py-2.5 max-w-[85%]">
+                      <p className="text-sm">
+                        What did the respondent say about the share transfer?
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* AI answer */}
+                  <div className="bg-muted/50 rounded-lg rounded-bl-sm p-4 space-y-3">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      The respondent&apos;s position on the share transfer is stated differently
+                      across two documents:
+                    </p>
+                    <p className="text-sm text-foreground leading-relaxed">
+                      In the <strong>Affidavit</strong> (p. 47), the respondent claims the shares
+                      were transferred on{" "}
+                      <span className="bg-accent/20 px-1 font-medium">15th March 2018</span>{" "}
+                      with the petitioner&apos;s consent.
+                    </p>
+                    <p className="text-sm text-foreground leading-relaxed">
+                      However, in the <strong>Company Letter</strong> (p. 12), the company states
+                      that no transfer occurred until{" "}
+                      <span className="bg-accent/20 px-1 font-medium">22nd August 2019</span>.
+                    </p>
+
+                    {/* Source buttons */}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                      <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded cursor-pointer hover:bg-primary/20 transition-colors">
+                        Affidavit_2019.pdf &middot; p. 47
+                      </span>
+                      <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded cursor-pointer hover:bg-primary/20 transition-colors">
+                        Company_Letter.pdf &middot; p. 12
                       </span>
                     </div>
-                    <p className="text-sm text-foreground">
-                      &ldquo;The shares were transferred to the petitioner on{" "}
-                      <span className="bg-accent/20 px-1 font-medium">15th March 2018</span>.&rdquo;
-                    </p>
-                  </div>
 
-                  {/* Conflict indicator */}
-                  <div className="flex items-center justify-center">
-                    <div className="flex items-center gap-2 text-destructive">
-                      <div className="h-px w-8 bg-destructive/30" />
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-xs font-semibold">CONFLICTS WITH</span>
-                      <div className="h-px w-8 bg-destructive/30" />
+                    {/* Contradiction flag */}
+                    <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/5 px-3 py-1.5 rounded">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span className="font-medium">Contradiction detected — dates differ by 17 months</span>
                     </div>
-                  </div>
-
-                  {/* Statement B */}
-                  <div className="bg-muted/50 rounded-md p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
-                        Company_Letter.pdf • Page 12
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground">
-                      &ldquo;No transfer occurred until{" "}
-                      <span className="bg-accent/20 px-1 font-medium">22nd August 2019</span>.&rdquo;
-                    </p>
-                  </div>
-
-                  {/* Confidence badge */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
-                    <span className="text-xs text-muted-foreground">Confidence: 94%</span>
-                    <button className="text-xs text-primary font-medium hover:underline">
-                      View in documents →
-                    </button>
                   </div>
                 </div>
               </div>
@@ -138,14 +138,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* The Problem Section */}
+      {/* Problem Section */}
       <section className="py-20 px-6 bg-muted/30">
         <div className="max-w-5xl mx-auto">
           <div className="grid lg:grid-cols-5 gap-10 items-center">
             {/* Left: Document stack visual */}
             <div className="lg:col-span-2 flex justify-center">
               <div className="relative w-48 h-64">
-                {/* Stacked documents */}
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
@@ -157,7 +156,6 @@ export default function LandingPage() {
                       zIndex: i,
                     }}
                   >
-                    {/* Document lines */}
                     <div className="p-4 space-y-2">
                       <div className="h-2 bg-muted rounded w-3/4" />
                       <div className="h-2 bg-muted rounded w-full" />
@@ -173,7 +171,6 @@ export default function LandingPage() {
                     </div>
                   </div>
                 ))}
-                {/* Page count badge */}
                 <div className="absolute -bottom-4 -right-4 bg-primary text-primary-foreground text-sm font-bold px-3 py-1 rounded-full shadow-lg z-10">
                   700+ pages
                 </div>
@@ -183,40 +180,162 @@ export default function LandingPage() {
             {/* Right: Copy */}
             <div className="lg:col-span-3">
               <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-6">
-                Contradictions hiding
+                700 pages. 15 years of documents.
                 <br />
-                <span className="text-destructive">in plain sight.</span>
+                <span className="text-accent">A hearing next week.</span>
               </h2>
               <div className="space-y-4 text-foreground/80">
                 <p>
-                  A Special Court dispute over shares worth crores. 25 years of documents.
-                  Affidavits, company letters, court orders.
+                  A Special Court dispute. 25 years of documents. Affidavits,
+                  company letters, court orders.
                 </p>
                 <p>
-                  Buried inside: contradictory ownership claims, meetings that violated
-                  court provisions, transfers without notification.
+                  Names that appear differently across filings. Dates scattered
+                  across hundreds of pages. Cross-references between documents
+                  that span decades.
                 </p>
                 <p className="font-medium text-foreground">
-                  Multiple legal teams reviewed these files.
-                  <span className="text-destructive"> Nobody caught them all.</span>
+                  jaanch reads it all and lets you search across everything.
                 </p>
               </div>
-              <p className="text-lg font-serif font-semibold text-primary mt-6">
-                That&apos;s the gap jaanch.ai fills.
-              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* What jaanch Finds Section */}
+      {/* Product Mockups Section */}
       <section className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-4 text-center">
-            What jaanch catches that humans miss
+            See what jaanch gives you
           </h2>
           <p className="text-center text-muted-foreground mb-12 text-lg">
-            Four specialized engines working in parallel
+            Document names, page numbers, everything cited.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Chat Mockup */}
+            <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-primary/5 border-b border-border px-4 py-2.5 flex items-center gap-2">
+                <Search className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold text-primary">Search &amp; Chat</span>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="flex justify-end">
+                  <div className="bg-primary/10 rounded-lg px-3 py-2 text-xs text-foreground">
+                    What did the respondent say about the share transfer?
+                  </div>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-foreground leading-relaxed">
+                    In the <strong>Affidavit</strong> (p. 47), the respondent claims
+                    the shares were transferred on 15th March 2018...
+                  </p>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    However, in the <strong>Company Letter</strong> (p. 12), the
+                    company states no transfer occurred until 22nd August 2019.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border">
+                    <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      Affidavit &middot; p. 47
+                    </span>
+                    <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      Company Letter &middot; p. 12
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Mockup */}
+            <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-accent/5 border-b border-border px-4 py-2.5 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-accent" />
+                <span className="text-sm font-semibold text-primary">Timeline</span>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Timeline events */}
+                <div className="relative pl-4 border-l-2 border-primary/20 space-y-3">
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground">12 Jan 2016</p>
+                    <p className="text-xs text-foreground">Notice issued to respondent</p>
+                    <p className="text-[10px] text-muted-foreground">Court Order &middot; p. 3</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground">15 Mar 2018</p>
+                    <p className="text-xs text-foreground">Shares transferred to petitioner</p>
+                    <p className="text-[10px] text-muted-foreground">Affidavit &middot; p. 47</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-mono text-muted-foreground">22 Aug 2019</p>
+                    <p className="text-xs text-foreground">Company denies any transfer</p>
+                    <p className="text-[10px] text-muted-foreground">Company Letter &middot; p. 12</p>
+                  </div>
+                </div>
+                {/* Anomaly */}
+                <div className="flex items-center gap-1.5 text-[10px] text-accent bg-accent/5 px-2 py-1 rounded">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span className="font-medium">3-year gap between notice and filing</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Entity Mockup */}
+            <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-primary/5 border-b border-border px-4 py-2.5 flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold text-primary">Entities</span>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Entity group */}
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-semibold text-foreground">R.K. Sharma</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      &ldquo;Sharma&rdquo;
+                    </span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      &ldquo;R.K. Sharma&rdquo;
+                    </span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      &ldquo;the respondent&rdquo;
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Appears in 4 documents &middot; 23 mentions
+                  </p>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-semibold text-foreground">Apex Holdings Ltd.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      &ldquo;Apex Holdings&rdquo;
+                    </span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      &ldquo;the Company&rdquo;
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Appears in 3 documents &middot; 15 mentions
+                  </p>
+                </div>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Aliases linked automatically. You verify.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* What Else jaanch Surfaces — Engines Section */}
+      <section className="py-20 px-6 bg-muted/30">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-4 text-center">
+            What else jaanch surfaces
+          </h2>
+          <p className="text-center text-muted-foreground mb-12 text-lg">
+            These run automatically alongside search
           </p>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -253,7 +372,7 @@ export default function LandingPage() {
                 opposite.&rdquo;
               </p>
               <p className="text-sm text-muted-foreground font-medium">
-                Caught across 2000 pages.
+                Flagged across thousands of pages.
               </p>
             </div>
 
@@ -268,10 +387,10 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="text-foreground/80 mb-4">
-                &ldquo;This document was supposedly signed two days before it existed.&rdquo;
+                &ldquo;There&apos;s a 3-year gap between the notice and the filing.&rdquo;
               </p>
               <p className="text-sm text-muted-foreground font-medium">
-                Impossible dates, flagged automatically.
+                Unusual gaps and out-of-order events, flagged automatically.
               </p>
             </div>
 
@@ -290,29 +409,25 @@ export default function LandingPage() {
                 &ldquo;the respondent&rdquo;
               </p>
               <p className="text-sm text-muted-foreground font-medium">
-                All linked automatically, no matter how they appear.
+                Linked automatically where possible. You verify the rest.
               </p>
             </div>
           </div>
 
           <p className="text-center mt-10 text-lg font-medium text-primary">
-            Every finding links to the source document and page.
-            <br />
-            <span className="text-muted-foreground">
-              If jaanch can&apos;t trace it back, it doesn&apos;t show it.
-            </span>
+            You decide what matters. jaanch just puts it in front of you.
           </p>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20 px-6 bg-muted/30">
+      <section className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-4 text-center">
-            Three steps. Every finding cited.
+            Three steps. Sources linked.
           </h2>
           <p className="text-center text-muted-foreground mb-12 text-lg">
-            From upload to insights in minutes, not days
+            Upload. Process. Review.
           </p>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -325,8 +440,10 @@ export default function LandingPage() {
                 Upload your case files
               </h3>
               <p className="text-foreground/80">
-                Drop your PDFs — even messy scans, ZIPs with hundreds of documents. Our AI
-                reads everything.
+                Drop your PDFs — even messy scans, ZIPs with hundreds of documents.
+              </p>
+              <p className="text-xs text-muted-foreground mt-3">
+                Files are encrypted, stored privately, and isolated per matter. AI models don&apos;t train on your data.
               </p>
             </div>
 
@@ -336,12 +453,18 @@ export default function LandingPage() {
                 2
               </div>
               <h3 className="font-serif text-xl font-semibold text-primary mb-4">
-                AI analyzes everything
+                jaanch processes your documents
               </h3>
               <p className="text-foreground/80 mb-4">
-                jaanch runs 4 specialized engines in parallel:
+                4 engines run in parallel, plus a search index across everything:
               </p>
               <ul className="text-sm text-muted-foreground space-y-2 text-left max-w-xs mx-auto">
+                <li className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-primary" />
+                  <span>
+                    <strong>Search</strong> — Ask anything, get cited answers
+                  </span>
+                </li>
                 <li className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-accent" />
                   <span>
@@ -357,7 +480,7 @@ export default function LandingPage() {
                 <li className="flex items-center gap-2">
                   <Scale className="h-4 w-4 text-destructive" />
                   <span>
-                    <strong>Citations</strong> — Finds every Act reference
+                    <strong>Citations</strong> — Finds Act references
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
@@ -375,10 +498,10 @@ export default function LandingPage() {
                 3
               </div>
               <h3 className="font-serif text-xl font-semibold text-primary mb-4">
-                Review cited findings
+                Ask questions, review findings
               </h3>
               <p className="text-foreground/80">
-                Every finding is tied to the exact document, page, and line. Nothing vague —
+                Every answer and finding is tied to a document and page. Nothing vague —
                 you verify, you decide.
               </p>
             </div>
@@ -386,76 +509,49 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ChatGPT vs jaanch Section */}
-      <section className="py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-4 text-center">
-            ChatGPT summarizes. jaanch verifies.
+      {/* What jaanch Gives You Section */}
+      <section className="py-20 px-6 bg-muted/30">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-10 text-center">
+            What jaanch gives you.
           </h2>
-          <p className="text-center text-muted-foreground mb-12">
-            AI that sounds right vs. AI that is right
-          </p>
 
-          {/* Side-by-side comparison cards */}
-          <div className="grid md:grid-cols-2 gap-6 mb-12">
-            {/* ChatGPT side */}
-            <div className="bg-muted/30 rounded-lg p-6 border border-border/50">
-              <h3 className="font-serif text-lg font-semibold text-muted-foreground mb-4 flex items-center gap-2">
-                <XCircle className="h-5 w-5 text-destructive" />
-                Generic AI
-              </h3>
-              <ul className="space-y-3 text-foreground/70">
-                <li className="flex items-start gap-2">
-                  <span className="text-destructive mt-1">✗</span>
-                  <span>&ldquo;The parties dispute ownership...&rdquo;</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-destructive mt-1">✗</span>
-                  <span>No citations, no page numbers</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-destructive mt-1">✗</span>
-                  <span>Hallucinations possible</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-destructive mt-1">✗</span>
-                  <span>Confident even when wrong</span>
-                </li>
-              </ul>
+          <div className="space-y-4 max-w-2xl mx-auto">
+            <div className="flex items-start gap-3">
+              <Search className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <p className="text-foreground/80 text-lg">
+                Ask a question about your case files — get an answer with the document and page.
+              </p>
             </div>
-
-            {/* jaanch side */}
-            <div className="bg-card rounded-lg p-6 border-2 border-primary/20 shadow-sm">
-              <h3 className="font-serif text-lg font-semibold text-primary mb-4 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-success" />
-                jaanch.ai
-              </h3>
-              <ul className="space-y-3 text-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="text-success mt-1">✓</span>
-                  <span>&ldquo;Party A claims X on <strong>Page 45</strong>, but states Y on <strong>Page 312</strong>&rdquo;</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-success mt-1">✓</span>
-                  <span>Every finding cited to exact page & line</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-success mt-1">✓</span>
-                  <span>Evidence-bound — no hallucinations</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-accent mt-1">!</span>
-                  <span>Says &ldquo;I don&apos;t know&rdquo; when unsure</span>
-                </li>
-              </ul>
+            <div className="flex items-start gap-3">
+              <Clock className="h-5 w-5 text-accent mt-0.5 shrink-0" />
+              <p className="text-foreground/80 text-lg">
+                A chronology built from every date across every document.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <Users className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+              <p className="text-foreground/80 text-lg">
+                Names and aliases linked across filings.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <FileSearch className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+              <p className="text-foreground/80 text-lg">
+                Contradictions and citation issues flagged with sources.
+              </p>
             </div>
           </div>
 
+          <p className="text-center mt-10 text-foreground/70">
+            You already do the hard work. jaanch just makes some of it searchable.
+          </p>
+
           {/* Trust Statement */}
-          <div className="bg-primary/5 border border-primary/10 rounded-lg p-6 text-center max-w-2xl mx-auto">
+          <div className="bg-primary/5 border border-primary/10 rounded-lg p-6 text-center max-w-2xl mx-auto mt-8">
             <p className="text-lg text-foreground/80">
               If jaanch can&apos;t trace it back to a source document,
-              <span className="font-semibold text-primary"> it doesn&apos;t show it.</span>
+              <span className="font-semibold text-primary"> it tells you.</span>
             </p>
           </div>
         </div>
@@ -466,10 +562,10 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary mb-3">
-              700 pages. 48 hours.
+              A hearing on Monday. A mountain of files.
             </h2>
             <p className="text-xl text-foreground/80">
-              jaanch finds the patterns. You verify and win.
+              jaanch surfaces the patterns. You decide what to do with them.
             </p>
           </div>
 
@@ -479,7 +575,7 @@ export default function LandingPage() {
                 Junior Lawyers
               </h3>
               <p className="text-sm text-foreground/70">
-                Find what matters in hours, not days.
+                Get a head start on what to look for.
               </p>
             </div>
 
@@ -488,7 +584,7 @@ export default function LandingPage() {
                 Senior Lawyers
               </h3>
               <p className="text-sm text-foreground/70">
-                Validate research in minutes. Every finding cited.
+                Validate research faster. Findings are cited.
               </p>
             </div>
 
@@ -497,7 +593,33 @@ export default function LandingPage() {
                 Law Firms
               </h3>
               <p className="text-sm text-foreground/70">
-                Better outcomes. Reduced risk. Work smarter.
+                Less time searching. More time building arguments.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust Section */}
+      <section className="py-10 px-6 bg-muted/30">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 text-center">
+            <div className="flex flex-col items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <p className="text-sm text-foreground/80">
+                Your files are stored in encrypted private storage, isolated per matter.
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <p className="text-sm text-foreground/80">
+                Documents are sent to AI for processing — not for training.
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <p className="text-sm text-foreground/80">
+                Each matter is access-controlled. Nobody sees your files but you.
               </p>
             </div>
           </div>
@@ -505,11 +627,15 @@ export default function LandingPage() {
       </section>
 
       {/* Built By Section */}
-      <section className="py-12 px-6 bg-muted/30">
+      <section className="py-12 px-6">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-muted-foreground mb-2">Built for lawyers who can&apos;t afford to miss anything</p>
           <p className="text-foreground/80">
-            <strong>Juhi Nebhnani</strong> and <strong>Siddhi Maheshwari</strong> • 100xEngineers
+            Built by <strong>Juhi Nebhnani</strong> and <strong>Siddhi Maheshwari</strong>.
+            We&apos;re not lawyers — we built this after seeing how much work goes into
+            reading case files.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Your method, your files. jaanch just makes them searchable.
           </p>
         </div>
       </section>
@@ -518,11 +644,14 @@ export default function LandingPage() {
       <section className="py-24 px-6 bg-primary text-primary-foreground">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="font-serif text-3xl md:text-4xl font-bold mb-6">
-            What if you could walk into court knowing you&apos;ve found every gap in the
+            What if you had one more way to spot the gaps in the
             other side&apos;s story?
           </h2>
-          <p className="text-xl mb-10 opacity-90">
-            That&apos;s jaanch.ai. Verify, don&apos;t trust.
+          <p className="text-xl mb-4 opacity-90">
+            That&apos;s jaanch. One more tool in your corner.
+          </p>
+          <p className="text-base mb-10 opacity-70">
+            Free during early access. Help us build it how you want it.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/signup">
@@ -531,7 +660,7 @@ export default function LandingPage() {
                 variant="secondary"
                 className="text-lg px-8 py-6 h-auto bg-white text-primary hover:bg-white/90"
               >
-                See what you&apos;re missing
+                Try it on your case files
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
@@ -539,7 +668,7 @@ export default function LandingPage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="text-lg px-8 py-6 h-auto border-white/30 text-white hover:bg-white/10"
+                className="text-lg px-8 py-6 h-auto border-2 border-white !text-white hover:bg-white/10 bg-transparent"
               >
                 Book a demo for your firm
               </Button>

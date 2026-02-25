@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS public.statement_comparisons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     matter_id UUID NOT NULL REFERENCES public.matters(id) ON DELETE CASCADE,
     entity_id UUID NOT NULL,
-    statement_a_id UUID NOT NULL,  -- References chunks.chunk_id
-    statement_b_id UUID NOT NULL,  -- References chunks.chunk_id
+    statement_a_id UUID NOT NULL,  -- References chunks.id
+    statement_b_id UUID NOT NULL,  -- References chunks.id
     result VARCHAR(20) NOT NULL CHECK (result IN ('contradiction', 'consistent', 'uncertain', 'unrelated')),
     confidence NUMERIC(3,2) NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
     reasoning TEXT NOT NULL,

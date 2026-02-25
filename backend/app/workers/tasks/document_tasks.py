@@ -690,14 +690,14 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             chunk_ids_needed.add(row["statement_a_id"])
             chunk_ids_needed.add(row["statement_b_id"])
 
-        chunk_info: dict[str, dict] = {}  # chunk_id -> {document_id, page_number}
+        chunk_info: dict[str, dict] = {}  # chunk id -> {document_id, page_number}
         if chunk_ids_needed:
             chunks_result = client.table("chunks") \
-                .select("chunk_id, document_id, page_number") \
-                .in_("chunk_id", list(chunk_ids_needed)) \
+                .select("id, document_id, page_number") \
+                .in_("id", list(chunk_ids_needed)) \
                 .execute()
             for c in (chunks_result.data or []):
-                chunk_info[c["chunk_id"]] = {
+                chunk_info[c["id"]] = {
                     "document_id": c.get("document_id"),
                     "page_number": c.get("page_number"),
                 }
@@ -3212,9 +3212,12 @@ def link_chunks_to_bboxes_task(
             client = get_service_client()
 
             # Get all chunks for this document
+            # Schema verified against migration 20260106000002 + 20260224000001:
+            # id, content, chunk_index, parent_chunk_id, chunk_type, page_number,
+            # token_count, text_start_offset, text_end_offset
             result = (
                 client.table("chunks")
-                .select("id, content, char_start, char_end, parent_id, document_id")
+                .select("id, content, chunk_index, parent_chunk_id, chunk_type, page_number, token_count, text_start_offset, text_end_offset")
                 .eq("document_id", document_id)
                 .execute()
             )
@@ -3222,24 +3225,22 @@ def link_chunks_to_bboxes_task(
             if not result.data:
                 return 0
 
-            # Convert to chunk-like objects for link_chunks_to_bboxes
-            from dataclasses import dataclass
+            # Use the real ChunkData from parent_child_chunker (expected by link_chunks_to_bboxes)
+            from uuid import UUID as _UUID
 
-            @dataclass
-            class ChunkData:
-                id: str
-                content: str
-                char_start: int
-                char_end: int
-                parent_id: str | None
+            from app.services.chunking.parent_child_chunker import ChunkData
 
             chunks = [
                 ChunkData(
-                    id=row["id"],
+                    id=_UUID(row["id"]) if isinstance(row["id"], str) else row["id"],
                     content=row["content"],
-                    char_start=row["char_start"],
-                    char_end=row["char_end"],
-                    parent_id=row.get("parent_id"),
+                    chunk_type=row.get("chunk_type", "parent"),
+                    chunk_index=row.get("chunk_index", 0),
+                    parent_id=_UUID(row["parent_chunk_id"]) if row.get("parent_chunk_id") else None,
+                    token_count=row.get("token_count", 0),
+                    page_number=row.get("page_number"),
+                    text_start_offset=row.get("text_start_offset"),
+                    text_end_offset=row.get("text_end_offset"),
                 )
                 for row in result.data
             ]

@@ -192,6 +192,8 @@ export interface DocumentFilters {
   documentType?: DocumentType;
   status?: DocumentStatus;
   isReferenceMaterial?: boolean;
+  /** Exact filename match for direct document lookup */
+  filename?: string;
 }
 
 /** Sortable columns for document list */

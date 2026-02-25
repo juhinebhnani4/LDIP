@@ -13,6 +13,7 @@ import {
   type AnomalyListItem,
 } from '@/hooks/useAnomalies';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
+import { useBoundingBoxes } from '@/hooks/useBoundingBoxes';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineList } from './TimelineList';
 import { TimelineHorizontal } from './TimelineHorizontal';
@@ -165,6 +166,8 @@ export function TimelineContent({ className }: TimelineContentProps) {
 
   // PDF split view for source document viewing
   const openPdfSplitView = usePdfSplitViewStore((state) => state.openPdfSplitView);
+  const setBoundingBoxes = usePdfSplitViewStore((state) => state.setBoundingBoxes);
+  const { fetchByBboxIds } = useBoundingBoxes();
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: TimelineViewMode) => {
@@ -329,15 +332,31 @@ export function TimelineContent({ className }: TimelineContentProps) {
             documentId: event.documentId,
             documentName: document.filename,
             page: pageNumber,
+            bboxIds: event.sourceBboxIds || [],
           },
           matterId,
           documentUrl
         );
+
+        // Fetch and set bounding boxes for highlighting (BBOX-3 Gap 2 + BBOX-8)
+        if (event.sourceBboxIds && event.sourceBboxIds.length > 0) {
+          try {
+            const { bboxes, pageNumber: bboxPage } = await fetchByBboxIds(
+              event.sourceBboxIds,
+              matterId
+            );
+            if (bboxes.length > 0) {
+              setBoundingBoxes(bboxes, bboxPage ?? pageNumber);
+            }
+          } catch {
+            // Bbox fetch failure shouldn't block document viewing
+          }
+        }
       } catch {
         toast.error('Unable to open document. Please try again.');
       }
     },
-    [matterId, openPdfSplitView]
+    [matterId, openPdfSplitView, fetchByBboxIds, setBoundingBoxes]
   );
 
   // Calculate active filter count for display

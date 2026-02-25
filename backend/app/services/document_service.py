@@ -270,6 +270,7 @@ class DocumentService:
         is_reference_material: bool | None = None,
         sort_by: str = "uploaded_at",
         sort_order: str = "desc",
+        filename: str | None = None,
     ) -> tuple[list[DocumentListItem], PaginationMeta]:
         """List documents for a matter with pagination, filtering, and sorting.
 
@@ -282,6 +283,7 @@ class DocumentService:
             is_reference_material: Optional filter by reference material flag.
             sort_by: Column to sort by (uploaded_at, filename, file_size, document_type, status).
             sort_order: Sort direction ('asc' or 'desc').
+            filename: Optional exact filename match.
 
         Returns:
             Tuple of (documents list, pagination metadata).
@@ -315,6 +317,8 @@ class DocumentService:
                 query = query.eq("status", status)
             if is_reference_material is not None:
                 query = query.eq("is_reference_material", is_reference_material)
+            if filename is not None:
+                query = query.eq("filename", filename)
 
             # Calculate offset for pagination
             offset = (page - 1) * per_page

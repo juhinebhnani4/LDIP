@@ -1,9 +1,13 @@
 'use client';
 
+import { useCallback } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { useMatterSummary } from '@/hooks/useMatterSummary';
+import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
+import { resolveDocumentByName } from '@/lib/utils/openDocument';
 import {
   AttentionBanner,
   AttentionBannerSkeleton,
@@ -127,6 +131,38 @@ export function SummaryContent({ matterId }: SummaryContentProps) {
     generationError,
   } = useMatterSummary(matterId);
 
+  const openPdfSplitView = usePdfSplitViewStore((state) => state.openPdfSplitView);
+
+  /**
+   * Open a source document in the in-app PDF split view (BBOX-7).
+   * Resolves document name → ID → signed URL, then opens split view.
+   */
+  const handleViewSource = useCallback(
+    async (documentName: string, page?: number) => {
+      const toastId = toast.loading('Opening document…');
+      try {
+        const resolved = await resolveDocumentByName(matterId, documentName);
+        if (!resolved) {
+          toast.error('Document not found', { id: toastId });
+          return;
+        }
+        openPdfSplitView(
+          {
+            documentId: resolved.id,
+            documentName: resolved.filename,
+            page: page ?? 1,
+          },
+          matterId,
+          resolved.storagePath
+        );
+        toast.dismiss(toastId);
+      } catch {
+        toast.error('Failed to open document', { id: toastId });
+      }
+    },
+    [matterId, openPdfSplitView]
+  );
+
   if (isLoading) {
     return <SummarySkeleton />;
   }
@@ -147,13 +183,13 @@ export function SummaryContent({ matterId }: SummaryContentProps) {
       )}
 
       {/* Parties Section */}
-      <PartiesSection parties={summary.parties} />
+      <PartiesSection parties={summary.parties} onViewSource={handleViewSource} />
 
       {/* Subject Matter */}
-      <SubjectMatterSection subjectMatter={summary.subjectMatter} />
+      <SubjectMatterSection subjectMatter={summary.subjectMatter} onViewSource={handleViewSource} />
 
       {/* Current Status */}
-      <CurrentStatusSection currentStatus={summary.currentStatus} />
+      <CurrentStatusSection currentStatus={summary.currentStatus} onViewSource={handleViewSource} />
 
       {/* Key Issues */}
       <KeyIssuesSection keyIssues={summary.keyIssues} />

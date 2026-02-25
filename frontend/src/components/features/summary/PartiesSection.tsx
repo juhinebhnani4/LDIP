@@ -38,6 +38,8 @@ interface PartiesSectionProps {
   onFlagParty?: (entityId: string) => Promise<void>;
   /** Callback when note is saved for a party */
   onSavePartyNote?: (entityId: string, note: string) => Promise<void>;
+  /** Callback to open document in split view instead of new tab (BBOX-7) */
+  onViewSource?: (documentName: string, page?: number) => void;
 }
 
 interface PartyCardProps {
@@ -51,6 +53,8 @@ interface PartyCardProps {
   onFlag?: () => Promise<void>;
   /** Callback when note is saved */
   onSaveNote?: (note: string) => Promise<void>;
+  /** Callback to open document in split view (BBOX-7) */
+  onViewSource?: (documentName: string, page?: number) => void;
 }
 
 /**
@@ -86,7 +90,7 @@ function getRoleBadgeVariant(role: PartyRole): 'default' | 'secondary' | 'outlin
  *
  * Story 14.6: Added CitationLink for source reference (AC #6)
  */
-function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardProps) {
+function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote, onViewSource }: PartyCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
   const [verificationDecision, setVerificationDecision] = useState<SummaryVerificationDecision | undefined>(
@@ -154,6 +158,7 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
                     pageNumber={party.citation.page}
                     excerpt={party.citation.excerpt}
                     displayText={party.sourcePage ? `${party.sourceDocument}, p. ${party.sourcePage}` : party.sourceDocument}
+                    onViewSource={onViewSource}
                   />
                 ) : (
                   <span>
@@ -179,7 +184,10 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote }: PartyCardP
               variant="ghost"
               size="sm"
               className="flex-1"
-              onClick={() => openDocumentByName(matterId, party.sourceDocument, party.sourcePage)}
+              onClick={() => onViewSource
+                ? onViewSource(party.sourceDocument, party.sourcePage ?? undefined)
+                : openDocumentByName(matterId, party.sourceDocument, party.sourcePage)
+              }
               aria-label={`View source: ${party.sourceDocument}${party.sourcePage ? `, page ${party.sourcePage}` : ''}`}
             >
               <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />
@@ -206,6 +214,7 @@ export function PartiesSection({
   onVerifyParty,
   onFlagParty,
   onSavePartyNote,
+  onViewSource,
 }: PartiesSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
@@ -236,6 +245,7 @@ export function PartiesSection({
       onVerify={onVerifyParty ? () => onVerifyParty(party.entityId) : undefined}
       onFlag={onFlagParty ? () => onFlagParty(party.entityId) : undefined}
       onSaveNote={onSavePartyNote ? (note) => onSavePartyNote(party.entityId, note) : undefined}
+      onViewSource={onViewSource}
     />
   );
 

@@ -10,6 +10,41 @@ import { toast } from 'sonner';
 import { fetchDocuments, fetchDocument } from '@/lib/api/documents';
 
 /**
+ * Resolve a document filename to its ID, filename, and signed storage URL.
+ * Uses server-side filename filter for O(1) lookup regardless of document count.
+ *
+ * @param matterId - Matter the document belongs to
+ * @param documentName - Filename to look up
+ * @returns Resolved document info, or null if not found
+ */
+export async function resolveDocumentByName(
+  matterId: string,
+  documentName: string
+): Promise<{ id: string; filename: string; storagePath: string } | null> {
+  // Try exact match first, then URL-decoded form
+  let response = await fetchDocuments(matterId, {
+    perPage: 1,
+    filters: { filename: documentName },
+  });
+  if (response.data.length === 0) {
+    const decoded = decodeURIComponent(documentName);
+    if (decoded !== documentName) {
+      response = await fetchDocuments(matterId, {
+        perPage: 1,
+        filters: { filename: decoded },
+      });
+    }
+  }
+  const doc = response.data[0];
+  if (!doc) return null;
+
+  const fullDoc = await fetchDocument(doc.id);
+  if (!fullDoc.storagePath) return null;
+
+  return { id: doc.id, filename: doc.filename, storagePath: fullDoc.storagePath };
+}
+
+/**
  * Open a document in a new browser tab, given its filename.
  *
  * @param matterId - Matter the document belongs to
@@ -23,23 +58,15 @@ export async function openDocumentByName(
 ): Promise<void> {
   const toastId = toast.loading('Opening document…');
   try {
-    // Resolve filename → document ID
-    const response = await fetchDocuments(matterId, { perPage: 100 });
-    const decoded = decodeURIComponent(documentName);
-    const doc = response.data.find(
-      (d) => d.filename === documentName || d.filename === decoded
-    );
-
-    if (!doc) {
+    const resolved = await resolveDocumentByName(matterId, documentName);
+    if (!resolved) {
       toast.error('Document not found', { id: toastId });
       return;
     }
 
-    // Fetch signed URL
-    const fullDoc = await fetchDocument(doc.id);
     const url = page
-      ? `${fullDoc.storagePath}#page=${page}`
-      : fullDoc.storagePath;
+      ? `${resolved.storagePath}#page=${page}`
+      : resolved.storagePath;
 
     window.open(url, '_blank');
     toast.dismiss(toastId);

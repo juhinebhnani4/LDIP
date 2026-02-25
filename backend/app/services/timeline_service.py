@@ -1464,6 +1464,7 @@ class TimelineService:
             document_id=row.get("document_id"),
             source_page=row.get("source_page"),
             verified=row.get("is_manual", False),
+            source_bbox_ids=row.get("source_bbox_ids") or [],
         )
 
     def _db_row_to_unclassified_item(self, row: dict) -> UnclassifiedEventItem:

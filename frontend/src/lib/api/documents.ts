@@ -419,6 +419,9 @@ export async function fetchDocuments(
   if (filters.isReferenceMaterial !== undefined) {
     params.set('is_reference_material', filters.isReferenceMaterial.toString());
   }
+  if (filters.filename) {
+    params.set('filename', filters.filename);
+  }
 
   // Add sorting params
   if (sort) {

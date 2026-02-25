@@ -29,6 +29,8 @@ interface CitationLinkProps {
   displayText?: string;
   /** Additional className */
   className?: string;
+  /** Optional callback to open document in split view instead of new tab */
+  onViewSource?: (documentName: string, page?: number) => void;
 }
 
 /** Truncate a filename to maxLen chars, preserving the extension. */
@@ -45,6 +47,7 @@ export function CitationLink({
   excerpt,
   displayText,
   className,
+  onViewSource,
 }: CitationLinkProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
@@ -61,7 +64,11 @@ export function CitationLink({
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              openDocumentByName(matterId, documentName, pageNumber ?? undefined);
+              if (onViewSource) {
+                onViewSource(documentName, pageNumber ?? undefined);
+              } else {
+                openDocumentByName(matterId, documentName, pageNumber ?? undefined);
+              }
             }}
             className={cn(
               'text-blue-600 hover:text-blue-800 underline underline-offset-2 inline-flex items-center gap-1 cursor-pointer',

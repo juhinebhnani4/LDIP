@@ -883,7 +883,11 @@ class MIGGraphService:
         return []
 
     def _db_row_to_entity_mention(self, row: dict) -> EntityMention:
-        """Convert database row to EntityMention model."""
+        """Convert database row to EntityMention model.
+
+        Handles optional joined `documents(filename)` data when present.
+        """
+        doc_data = row.get("documents") or {}
         return EntityMention(
             id=row["id"],
             entity_id=row["entity_id"],
@@ -895,6 +899,7 @@ class MIGGraphService:
             context=row.get("context"),
             confidence=row.get("confidence", 1.0) or 1.0,
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
+            document_name=doc_data.get("filename") if doc_data else None,
         )
 
     # =========================================================================
@@ -1010,7 +1015,7 @@ class MIGGraphService:
         def _query():
             return (
                 self.client.table("entity_mentions")
-                .select("*", count="exact")
+                .select("*, documents(filename)", count="exact")
                 .eq("entity_id", entity_id)
                 .order("created_at", desc=True)
                 .range(offset, offset + per_page - 1)

@@ -730,15 +730,21 @@ def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = No
     # Individual tasks route to llm/heavy queues via task_routes in celery.py.
     queue_name = "default"
 
-    # Create task chain: OCR -> Validation -> Confidence -> Chunking -> Embedding ->
-    # Entity Extraction -> (fan-out: citations, dates, aliases)
+    # BUG-4 fix: Use create_post_ocr_chain() factory (single source of truth)
+    # instead of hardcoded chain that was missing extract_tables.
+    # process_document handles OCR; the factory handles everything after.
+    from app.workers.tasks.pipeline_chains import create_post_ocr_chain
+
+    # Need matter_id and job_id for the factory chain.
+    # job_id may not exist yet — the factory chain handles this gracefully.
+    post_ocr_chain = create_post_ocr_chain(
+        document_id=document_id,
+        matter_id=matter_id or "",
+        job_id="",  # Job created during process_document
+    )
     task_chain = chain(
         process_document.s(document_id),
-        validate_ocr.s(),
-        calculate_confidence.s(),
-        chunk_document.s(),
-        embed_chunks.s(),
-        extract_entities.s(),
+        post_ocr_chain,
     )
 
     # Apply the chain to the appropriate queue
@@ -749,7 +755,7 @@ def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = No
         document_id=document_id,
         queue=queue_name,
         file_size=file_size,
-        stages="ocr->validation->confidence->chunking->embedding->entity_extraction->(citations+dates+aliases)",
+        stages="ocr->validation->confidence->chunking->extract_tables->embedding->entity_extraction->(citations+dates+aliases)",
     )
 
 
@@ -1242,6 +1248,9 @@ async def list_documents(
     is_reference_material: bool | None = Query(
         None, description="Filter by reference material flag"
     ),
+    filename: str | None = Query(
+        None, description="Filter by exact filename match"
+    ),
     sort_by: str = Query(
         "uploaded_at",
         description="Column to sort by (uploaded_at, filename, file_size, document_type, status)",
@@ -1275,6 +1284,7 @@ async def list_documents(
             is_reference_material=is_reference_material,
             sort_by=sort_by,
             sort_order=sort_order,
+            filename=filename,
         )
 
         return DocumentListResponseWithPagination(data=documents, meta=meta)
@@ -1971,14 +1981,15 @@ async def retry_document_processing(
         from app.workers.tasks.pipeline_chains import create_post_ocr_chain
 
         if actual_retry_type == "full":
-            # Full OCR pipeline
+            # Full OCR pipeline — use factory chain for post-OCR consistency (BUG-4 fix)
+            post_ocr = create_post_ocr_chain(
+                document_id=document_id,
+                matter_id=matter_id,
+                job_id=job_id,
+            )
             task_chain = chain(
                 process_document.s(document_id),
-                validate_ocr.s(),
-                calculate_confidence.s(),
-                chunk_document.s(),
-                embed_chunks.s(),
-                extract_entities.s(),
+                post_ocr,
             )
             message = "Full OCR + RAG pipeline queued (entities fan out to citations, dates, aliases)"
         else:

@@ -41,6 +41,8 @@ interface SubjectMatterSectionProps {
   onSave?: (newContent: string) => Promise<void>;
   /** Callback to regenerate content (Story 14.6) */
   onRegenerate?: () => Promise<void>;
+  /** Callback to open document in split view instead of new tab (BBOX-7) */
+  onViewSource?: (documentName: string, page?: number) => void;
 }
 
 export function SubjectMatterSection({
@@ -51,6 +53,7 @@ export function SubjectMatterSection({
   onSaveNote,
   onSave,
   onRegenerate,
+  onViewSource,
 }: SubjectMatterSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
@@ -123,6 +126,7 @@ export function SubjectMatterSection({
                 excerpt={citation.excerpt}
                 displayText={fallbackText}
                 className="text-xs"
+                onViewSource={onViewSource}
               />
             );
           })}
@@ -140,7 +144,10 @@ export function SubjectMatterSection({
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs"
-                onClick={() => openDocumentByName(matterId, source.documentName, source.pageRange.split('-')[0])}
+                onClick={() => onViewSource
+                  ? onViewSource(source.documentName, Number(source.pageRange.split('-')[0]) || undefined)
+                  : openDocumentByName(matterId, source.documentName, source.pageRange.split('-')[0])
+                }
                 aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
               >
                 <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />

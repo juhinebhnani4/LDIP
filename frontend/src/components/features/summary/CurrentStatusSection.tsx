@@ -41,6 +41,8 @@ interface CurrentStatusSectionProps {
   onSave?: (newContent: string) => Promise<void>;
   /** Callback to regenerate content (Story 14.6) */
   onRegenerate?: () => Promise<void>;
+  /** Callback to open document in split view instead of new tab (BBOX-7) */
+  onViewSource?: (documentName: string, page?: number) => void;
 }
 
 /**
@@ -71,6 +73,7 @@ export function CurrentStatusSection({
   onSaveNote,
   onSave,
   onRegenerate,
+  onViewSource,
 }: CurrentStatusSectionProps) {
   const params = useParams<{ matterId: string }>();
   const matterId = params.matterId;
@@ -135,6 +138,7 @@ export function CurrentStatusSection({
               pageNumber={currentStatus.citation.page}
               excerpt={currentStatus.citation.excerpt}
               displayText={currentStatus.sourcePage ? `${currentStatus.sourceDocument}, p. ${currentStatus.sourcePage}` : currentStatus.sourceDocument}
+              onViewSource={onViewSource}
             />
           ) : (
             <span>
@@ -150,7 +154,10 @@ export function CurrentStatusSection({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => openDocumentByName(matterId, currentStatus.sourceDocument, currentStatus.sourcePage)}
+          onClick={() => onViewSource
+            ? onViewSource(currentStatus.sourceDocument, currentStatus.sourcePage ?? undefined)
+            : openDocumentByName(matterId, currentStatus.sourceDocument, currentStatus.sourcePage)
+          }
           aria-label={`View full order: ${currentStatus.sourceDocument}${currentStatus.sourcePage ? `, page ${currentStatus.sourcePage}` : ''}`}
         >
           <ExternalLink className="h-4 w-4 mr-1.5" aria-hidden="true" />

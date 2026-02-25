@@ -505,13 +505,30 @@ class ParentChildChunker:
         # Fallback: If layout-aware chunking produced no chunks but we have text,
         # use text-based chunking instead. This handles cases where Docling extracts
         # layout but blocks have no usable text_content (e.g., OCR disabled).
-        if len(parent_chunks) == 0 and text and text.strip():
+        #
+        # Also fall back when layout-aware chunking drops significant content.
+        # This happens when Docling detects table blocks but has no text for them
+        # (OCR disabled) — heading/paragraph blocks produce some content but all
+        # table cell data is lost, giving a misleadingly small chunk.
+        expected_tokens = count_tokens(text) if text else 0
+        coverage_ratio = parent_tokens / expected_tokens if expected_tokens > 0 else 1.0
+        low_coverage = coverage_ratio < 0.5 and expected_tokens >= self.min_size
+
+        if (len(parent_chunks) == 0 or low_coverage) and text and text.strip():
+            reason = (
+                "layout_produced_zero_chunks"
+                if len(parent_chunks) == 0
+                else "layout_low_text_coverage"
+            )
             logger.info(
                 "layout_aware_chunking_fallback_to_text",
                 document_id=document_id,
-                reason="layout_produced_zero_chunks",
+                reason=reason,
                 block_count=len(layout.blocks),
                 blocks_with_text=blocks_with_text,
+                parent_tokens=parent_tokens,
+                expected_tokens=expected_tokens,
+                coverage_ratio=round(coverage_ratio, 3),
             )
             result = self._chunk_text_based(document_id, text)
             # Try to assign page numbers from layout blocks based on reading position

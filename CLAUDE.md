@@ -1,5 +1,15 @@
 # CLAUDE.md - Project Configuration
 
+## Engineering Philosophy
+
+When fixing bugs or making architectural decisions, follow these principles:
+
+1. **No band-aid fixes.** Every code change should be a long-term solution, not a quick patch. If a proper fix requires deeper work, do the deeper work.
+2. **Research before implementing.** Explore all viable approaches, study how the industry solves the same problem (Unstructured.io, LangChain, LlamaIndex, Docling internals, etc.), and choose the approach that best fits jaanch's architecture.
+3. **Future-ready design.** Code should accommodate foreseeable growth — new document types, new embedding providers, new pipeline stages — without requiring rewrites. Prefer extensible patterns over hardcoded solutions.
+4. **Understand before changing.** Read the full call chain. Trace data flow end-to-end. Identify all callers and edge cases. Never modify code you haven't fully understood.
+5. **Fix root causes, not symptoms.** If a table's text is missing from chunks, don't just add a fallback — find WHY it's missing (e.g., a type mismatch in extraction) and fix that. Fallbacks are safety nets, not solutions.
+
 ## Deployment
 
 **IMPORTANT**: When deploying, always deploy ALL services that have changes. Run commands from the repo root.

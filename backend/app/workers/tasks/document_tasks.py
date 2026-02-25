@@ -42,6 +42,10 @@ from app.services.chunk_service import (
 )
 from app.services.chunking.bbox_linker import link_chunks_to_bboxes
 from app.services.chunking.parent_child_chunker import ParentChildChunker
+from app.services.chunking.spatial_text_mapper import (
+    enrich_layout_with_text,
+    fetch_all_bboxes_for_document,
+)
 from app.services.table_extraction.layout_extractor import (
     LayoutExtractor,
     LayoutExtractorError,
@@ -2960,6 +2964,25 @@ def chunk_document(
                         block_count=len(layout.blocks),
                         page_count=layout.page_count,
                     )
+
+                    # Enrich layout blocks with Document AI text via IoS
+                    # spatial matching. This bridges the gap between Docling
+                    # (layout structure) and Document AI (OCR text).
+                    try:
+                        docai_bboxes = fetch_all_bboxes_for_document(
+                            bbox_service, doc_id
+                        )
+                        if docai_bboxes:
+                            enrich_layout_with_text(
+                                layout, docai_bboxes, doc.extracted_text or ""
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "spatial_text_mapping_failed",
+                            document_id=doc_id,
+                            error=str(e),
+                            action="chunking_proceeds_without_enrichment",
+                        )
                 else:
                     logger.info(
                         "layout_extraction_for_chunking_fallback",
@@ -2986,16 +3009,17 @@ def chunk_document(
 
         # Run async operations in sync context
         async def _save_chunks_async():
-            # Link chunks to bounding boxes (can be slow for large documents)
-            # Skip if layout was used (chunks already have page info) or if explicitly skipped
-            if not skip_bbox_linking and not layout_used:
+            # Link chunks to bounding boxes for citation highlighting.
+            # With spatial text mapping, layout-derived chunks now have
+            # text_start/text_end offsets, enabling deterministic bbox linking.
+            if not skip_bbox_linking:
                 await link_chunks_to_bboxes(all_chunks, doc_id, bbox_service)
             else:
                 logger.info(
                     "chunk_document_bbox_linking_skipped",
                     document_id=doc_id,
                     chunk_count=len(all_chunks),
-                    reason="layout_derived" if layout_used else "skip_bbox_linking=True",
+                    reason="skip_bbox_linking=True",
                 )
 
             return await chunks_service.save_chunks(

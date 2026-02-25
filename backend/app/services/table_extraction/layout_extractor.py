@@ -427,31 +427,55 @@ class LayoutExtractor:
         return None
 
     def _extract_table_markdown(self, item: object) -> str | None:
-        """Extract table content as markdown.
+        """Extract table content as markdown from a Docling TableItem.
 
-        Issue #1 fix: Convert table data to markdown for chunking.
+        Docling's TableItem.data is a TableData Pydantic model (not a list)
+        containing table_cells, num_rows, num_cols, and a computed grid
+        property. We use export_to_markdown() as the primary path, with a
+        manual grid fallback.
 
         Args:
-            item: Docling table item.
+            item: Docling TableItem with a .data (TableData) attribute.
 
         Returns:
-            Markdown table string or None if not available.
+            Markdown table string, or None if the table has no text content.
         """
         try:
-            # Try to get table data (list of lists)
-            table_data = getattr(item, "data", None)
-            if not table_data or not isinstance(table_data, list):
-                # Try alternative attribute
-                table_data = getattr(item, "cells", None)
+            # Primary path: use Docling's built-in markdown export
+            # This handles cell spanning, headers, and formatting correctly
+            export_fn = getattr(item, "export_to_markdown", None)
+            if callable(export_fn):
+                markdown = export_fn()
+                if markdown and markdown.strip():
+                    return markdown.strip()
 
-            if not table_data or len(table_data) < 1:
+            # Fallback: manually extract from TableData.grid
+            table_data = getattr(item, "data", None)
+            if table_data is None:
                 return None
 
-            # Convert to markdown
+            grid = getattr(table_data, "grid", None)
+            if not grid or len(grid) < 1:
+                return None
+
+            # Convert grid (list[list[TableCell]]) to list[list[str]]
+            rows: list[list[str]] = []
+            for row in grid:
+                cells = []
+                for cell in row:
+                    text = getattr(cell, "text", None) or ""
+                    cells.append(text)
+                rows.append(cells)
+
+            # Skip tables where all cells are empty (scanned PDF, no native text)
+            has_content = any(cell.strip() for row in rows for cell in row)
+            if not has_content:
+                return None
+
             from app.services.table_extraction.formatter import TableFormatter
 
             formatter = TableFormatter()
-            return formatter.to_markdown(table_data)
+            return formatter.to_markdown(rows)
         except Exception as e:
             logger.debug("table_markdown_extraction_failed", error=str(e))
             return None

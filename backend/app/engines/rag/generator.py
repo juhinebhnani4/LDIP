@@ -42,7 +42,7 @@ logger = structlog.get_logger(__name__)
 
 MAX_RETRIES = 2
 INITIAL_RETRY_DELAY = 0.5
-MAX_ANSWER_LENGTH = 2000  # Max characters in generated answer
+MAX_ANSWER_LENGTH = 3500  # Max characters in generated answer (fallback; QueryProfile overrides)
 GEMINI_GENERATION_TIMEOUT_SECONDS = 35.0  # Hard timeout per Gemini call (overridden by config)
 
 

@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # Gemini Configuration
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
-    gemini_generation_timeout: float = 35.0  # Hard timeout for Gemini generation calls (seconds)
+    gemini_generation_timeout: float = 50.0  # Hard timeout for Gemini generation calls (seconds)
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
     openai_comparison_model: str = "gpt-4o"  # Was gpt-4-turbo-preview; gpt-4o is 75% cheaper
@@ -239,7 +239,7 @@ class Settings(BaseSettings):
 
     # Evaluation Framework Configuration (RAG Production Gaps - Feature 2)
     auto_evaluation_enabled: bool = False  # Auto-evaluate after ingestion (cost warning)
-    openai_evaluation_model: str = "gpt-4"  # Model for RAGAS evaluation
+    openai_evaluation_model: str = "gpt-4o"  # Model for RAGAS evaluation (needs structured output support)
     evaluation_batch_size: int = 10  # Golden dataset items per batch
 
     # Gap 9: Automated RAGAS Regression — Scheduled evaluation + regression detection

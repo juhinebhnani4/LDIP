@@ -8,9 +8,11 @@ Provides endpoints for:
 - Checking current A/B testing status and traffic routing
 """
 
+import uuid as _uuid
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
 from app.api.deps import get_matter_service
@@ -52,6 +54,16 @@ class ABCompareRequest(BaseModel):
     """Request to trigger an A/B comparison experiment."""
 
     matter_id: str = Field(..., description="Matter UUID to evaluate")
+
+    @field_validator("matter_id")
+    @classmethod
+    def validate_matter_id_is_uuid(cls, v: str) -> str:
+        """BUG-6 fix: reject empty/invalid matter_id before it hits PostgreSQL."""
+        try:
+            _uuid.UUID(v)
+        except (ValueError, AttributeError):
+            raise ValueError("matter_id must be a valid UUID")
+        return v
     tags: list[str] | None = Field(None, description="Golden dataset tag filters")
     control_embedding: Literal["openai", "voyage"] = Field("openai", description="Control embedding provider")
     control_reranker: Literal["cohere", "voyage"] = Field("cohere", description="Control reranker provider")
@@ -94,6 +106,29 @@ async def trigger_comparison(
     try:
         from app.services.evaluation.ab_testing import ABTestRunner
         from app.workers.tasks.evaluation_tasks import run_ab_comparison
+
+        # BUG-2 fix: Check for active runs BEFORE creating a new one.
+        # Previously this check only existed in the Celery task (too late).
+        active_statuses = ("pending", "running_control", "running_treatment", "comparing")
+        existing_runs = await ABTestRunner.list_runs(
+            matter_id=body.matter_id,
+            status=None,
+            limit=10,
+        )
+        active_run = next(
+            (r for r in existing_runs if r.get("status") in active_statuses),
+            None,
+        )
+        if active_run:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": {
+                        "code": "ACTIVE_RUN_EXISTS",
+                        "message": f"An A/B test run is already active (status: {active_run['status']}, id: {active_run['id']}). Wait for it to complete or cancel it.",
+                    }
+                },
+            )
 
         # Create the run record
         run = await ABTestRunner.create_run(

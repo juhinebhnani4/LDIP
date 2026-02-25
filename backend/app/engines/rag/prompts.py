@@ -17,12 +17,12 @@ from app.core.prompt_boundaries import format_document_excerpt, wrap_user_query
 # Configuration Constants
 # =============================================================================
 
-# Maximum chunks to include in context
-MAX_CONTEXT_CHUNKS = 5
+# Maximum chunks to include in context (fallback; QueryProfile overrides this)
+MAX_CONTEXT_CHUNKS = 8
 
 # Maximum content length per chunk (characters)
-# Set to 2000 to accommodate parent chunk content (Gap 1: parent-child context expansion)
-MAX_CHUNK_CONTENT = 2000
+# Set to 3000 to accommodate full parent chunk content without mid-paragraph truncation
+MAX_CHUNK_CONTENT = 3000
 
 # =============================================================================
 # RAG Answer Generation Prompt

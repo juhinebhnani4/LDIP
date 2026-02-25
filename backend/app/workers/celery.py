@@ -105,6 +105,13 @@ celery_app.conf.update(
         "app.workers.tasks.reasoning_archive_tasks.*": {"queue": "low"},
         "app.workers.tasks.email_tasks.*": {"queue": "low"},
     },
+    # === BROKER CONNECTION RESILIENCE (BUG-1 fix) ===
+    # Upstash Redis closes idle connections after 5-10 min.
+    # Without these settings, the worker silently loses its broker connection
+    # and never recovers — blocking ALL Celery tasks.
+    broker_connection_retry_on_startup=True,  # Retry broker connection on worker boot
+    broker_connection_retry=True,  # Auto-reconnect on connection loss during operation
+    broker_connection_max_retries=None,  # Retry indefinitely (don't give up)
     # === BROKER TRANSPORT OPTIONS ===
     # CRITICAL: visibility_timeout must exceed task_time_limit to prevent duplicate execution
     # Redis redelivers unacknowledged tasks after visibility_timeout expires
@@ -112,6 +119,10 @@ celery_app.conf.update(
     broker_transport_options={
         'visibility_timeout': 7200,  # 2 hours - must exceed task_time_limit (3600)
         'polling_interval': 10,  # BRPOP every 10s instead of 1s — saves ~233K Redis cmds/day
+        'socket_keepalive': True,  # BUG-1 fix: TCP keepalive prevents idle disconnects
+        'socket_connect_timeout': 30,
+        'socket_timeout': 30,
+        'retry_on_timeout': True,
         **(_ssl_config if _uses_tls else {}),  # Merge SSL config if TLS enabled
     },
     # Result backend resilience for Redis connection drops

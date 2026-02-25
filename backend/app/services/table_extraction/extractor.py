@@ -221,28 +221,63 @@ class TableExtractor:
             )
 
     def _process_table(self, table: object, idx: int) -> ExtractedTable | None:
-        """Process a single Docling table into ExtractedTable.
+        """Process a single Docling TableItem into ExtractedTable.
+
+        Docling's TableItem.data is a TableData Pydantic model containing
+        table_cells, num_rows, num_cols, and a computed grid property.
 
         Args:
-            table: Docling Table object.
+            table: Docling TableItem with .data (TableData) and optional
+                   .export_to_markdown() method.
             idx: Table index in document.
 
         Returns:
             ExtractedTable or None if table is empty/invalid.
         """
-        # Get table data (list of lists)
-        table_data = getattr(table, "data", None)
-        if not table_data or not isinstance(table_data, list):
-            return None
+        # Extract markdown using Docling's export or manual grid extraction
+        markdown = None
+        num_rows = 0
+        num_cols = 0
 
-        # Skip empty tables
-        if len(table_data) < 2:  # Need at least header + 1 row
-            return None
+        # Primary path: Docling's built-in markdown export
+        export_fn = getattr(table, "export_to_markdown", None)
+        if callable(export_fn):
+            try:
+                md = export_fn()
+                if md and md.strip():
+                    markdown = md.strip()
+            except Exception:
+                pass  # Fall through to grid-based extraction
 
-        # Convert to Markdown
-        markdown = self._formatter.to_markdown(table_data)
+        # Fallback: extract from TableData.grid manually
         if not markdown:
-            return None
+            table_data = getattr(table, "data", None)
+            if table_data is None:
+                return None
+
+            grid = getattr(table_data, "grid", None)
+            if not grid or len(grid) < 2:  # Need at least header + 1 row
+                return None
+
+            # Convert grid (list[list[TableCell]]) to list[list[str]]
+            rows: list[list[str]] = []
+            for row in grid:
+                cells = [getattr(cell, "text", None) or "" for cell in row]
+                rows.append(cells)
+
+            # Skip tables where all cells are empty
+            if not any(cell.strip() for row in rows for cell in row):
+                return None
+
+            markdown = self._formatter.to_markdown(rows)
+            if not markdown:
+                return None
+
+        # Get row/col counts from TableData if available
+        table_data = getattr(table, "data", None)
+        if table_data:
+            num_rows = getattr(table_data, "num_rows", 0) or 0
+            num_cols = getattr(table_data, "num_cols", 0) or 0
 
         # Extract bounding box if available
         bbox = self._extract_bbox(table)
@@ -265,8 +300,8 @@ class TableExtractor:
             table_index=idx,
             page_number=page_number,
             markdown_content=markdown,
-            row_count=len(table_data),
-            col_count=len(table_data[0]) if table_data else 0,
+            row_count=num_rows,
+            col_count=num_cols,
             confidence=confidence,
             bounding_box=bbox,
             caption=caption,

@@ -94,17 +94,18 @@ class QueryProfile:
     def default(cls) -> "QueryProfile":
         """Default retrieval profile for lookup/general queries.
 
-        Conservative bump: rerank 3→5, context 5→6 to widen retrieval
-        funnel and improve recall for entity-specific factoid queries
-        (e.g., addresses, dates) that previously fell outside top-3.
+        Widened funnel: rerank 5→8, context 6→8, chunk content 2000→3000,
+        answer 2000→3500. Legal documents need more context per chunk
+        (paragraphs often exceed 2000 chars) and more chunks for complete
+        answers spanning multiple document sections.
         """
         return cls(
             query_type=QueryType.LOOKUP,
             hybrid_limit=50,
-            rerank_top_n=5,
-            max_context_chunks=6,
-            max_chunk_content=2000,
-            max_answer_length=2000,
+            rerank_top_n=8,
+            max_context_chunks=8,
+            max_chunk_content=3000,
+            max_answer_length=3500,
             system_prompt_key="default",
             search_weights=SearchWeights(bm25=1.0, semantic=1.0),
         )
@@ -117,8 +118,8 @@ class QueryProfile:
             hybrid_limit=100,
             rerank_top_n=12,
             max_context_chunks=12,
-            max_chunk_content=2000,
-            max_answer_length=5000,
+            max_chunk_content=3000,
+            max_answer_length=6000,
             system_prompt_key="summary",
             search_weights=SearchWeights(bm25=0.7, semantic=1.3),
         )
@@ -129,10 +130,10 @@ class QueryProfile:
         return cls(
             query_type=QueryType.COMPARISON,
             hybrid_limit=80,
-            rerank_top_n=8,
-            max_context_chunks=8,
-            max_chunk_content=2000,
-            max_answer_length=4000,
+            rerank_top_n=10,
+            max_context_chunks=10,
+            max_chunk_content=3000,
+            max_answer_length=5000,
             system_prompt_key="default",
             search_weights=SearchWeights(bm25=0.8, semantic=1.2),
         )
@@ -143,10 +144,10 @@ class QueryProfile:
         return cls(
             query_type=QueryType.TIMELINE,
             hybrid_limit=50,
-            rerank_top_n=6,
-            max_context_chunks=6,
-            max_chunk_content=2000,
-            max_answer_length=3000,
+            rerank_top_n=8,
+            max_context_chunks=8,
+            max_chunk_content=3000,
+            max_answer_length=4000,
             system_prompt_key="default",
             search_weights=SearchWeights(bm25=1.0, semantic=1.0),
         )
@@ -157,10 +158,10 @@ class QueryProfile:
         return cls(
             query_type=QueryType.CITATION,
             hybrid_limit=50,
-            rerank_top_n=6,
-            max_context_chunks=6,
-            max_chunk_content=2000,
-            max_answer_length=3000,
+            rerank_top_n=8,
+            max_context_chunks=8,
+            max_chunk_content=3000,
+            max_answer_length=4000,
             system_prompt_key="default",
             search_weights=SearchWeights(bm25=1.5, semantic=0.7),
         )

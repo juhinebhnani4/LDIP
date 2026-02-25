@@ -9,6 +9,14 @@ Measures:
 
 CRITICAL: Uses GPT-4 for evaluation per LLM routing rules (ADR-002).
 Evaluation is a high-stakes task requiring accurate assessment.
+
+Implementation note: Uses RAGAS 0.4.x collections API with direct
+``await metric.ascore()`` calls instead of the legacy ``evaluate()``
+function. The legacy ``evaluate()`` calls ``asyncio.run()`` internally
+which creates a nested event loop — this conflicts with both FastAPI's
+uvloop (BUG-7) and Celery gevent workers where gevent monkey-patches
+socket/ssl modules, breaking I/O in spawned threads (BUG-10b).
+The collections API is purely async and avoids all of these issues.
 """
 
 from __future__ import annotations
@@ -56,6 +64,26 @@ class RAGASNotConfiguredError(EvaluationError):
         super().__init__(message, code="RAGAS_NOT_CONFIGURED", is_retryable=False)
 
 
+def _safe_score(val) -> float | None:  # noqa: ANN001
+    """Convert a metric score to float, treating NaN as None."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        return None if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return None
+
+
+# Faithfulness breaks the answer into atomic statements via an LLM call,
+# then verifies each statement against contexts (second LLM call).
+# Long answers (>2500 chars) produce too many statements, causing the
+# statement-extraction LLM call to return malformed JSON that fails
+# parsing after 3 retries.  Truncating to ~2500 chars keeps the
+# statement count manageable while still evaluating the core answer.
+_MAX_ANSWER_CHARS_FOR_FAITHFULNESS = 2500
+
+
 class RAGASEvaluator:
     """Evaluate RAG quality using RAGAS metrics.
 
@@ -78,30 +106,28 @@ class RAGASEvaluator:
     def __init__(self) -> None:
         """Initialize RAGAS evaluator."""
         self._initialized = False
-        self._metrics: list = []
         settings = get_settings()
         self._llm_model = settings.openai_evaluation_model
 
     def _ensure_initialized(self) -> None:
-        """Lazy initialization of RAGAS components."""
+        """Lazy initialization — verify RAGAS collections API is available."""
         if self._initialized:
             return
 
         try:
-            from ragas.metrics import (
-                answer_relevancy,
-                context_recall,
-                faithfulness,
+            from ragas.metrics.collections import (  # noqa: F401
+                AnswerRelevancy,
+                ContextRecall,
+                Faithfulness,
             )
 
-            self._metrics = [context_recall, faithfulness, answer_relevancy]
             self._initialized = True
             logger.info("ragas_evaluator_initialized", model=self._llm_model)
 
         except ImportError as e:
             logger.error("ragas_import_failed", error=str(e))
             raise RAGASNotConfiguredError(
-                "RAGAS not installed. Run: pip install ragas"
+                "RAGAS collections API not available. Requires ragas>=0.4.0"
             ) from e
 
     async def evaluate_single(
@@ -111,7 +137,11 @@ class RAGASEvaluator:
         contexts: list[str],
         ground_truth: str | None = None,
     ) -> EvaluationResult:
-        """Evaluate a single QA pair.
+        """Evaluate a single QA pair using RAGAS collections API.
+
+        Uses ``await metric.ascore()`` directly instead of the legacy
+        ``evaluate()`` wrapper. This is purely async and works correctly
+        in both FastAPI (uvloop) and Celery gevent workers.
 
         Args:
             question: User's question.
@@ -138,62 +168,95 @@ class RAGASEvaluator:
         )
 
         try:
-            from datasets import Dataset
-            from ragas import evaluate
-            from ragas.metrics import answer_relevancy, context_recall, faithfulness
+            from openai import AsyncOpenAI
+            from ragas.embeddings.base import embedding_factory
+            from ragas.llms import llm_factory
+            from ragas.metrics.collections import (
+                AnswerRelevancy,
+                ContextRecall,
+                Faithfulness,
+            )
 
-            # Prepare dataset for RAGAS
-            data = {
-                "question": [question],
-                "answer": [answer],
-                "contexts": [contexts],
-            }
+            # Create RAGAS-native LLM and embeddings (not LangChain wrappers).
+            # The collections API requires InstructorBaseRagasLLM, not
+            # LangchainLLMWrapper.
+            client = AsyncOpenAI()
+            # max_tokens=4096: RAGAS defaults to 1024 which is too low
+            # for Faithfulness NLI verdicts on long answers (each verdict
+            # is ~200 tokens; 15+ statements → 3000+ output tokens).
+            llm = llm_factory(self._llm_model, client=client, max_tokens=4096)
+            embeddings = embedding_factory(
+                "openai", model="text-embedding-3-small", client=client,
+            )
+
+            # Score each metric individually with await — no evaluate(),
+            # no asyncio.run(), no thread hacks.
+            faithfulness_score = None
+            answer_relevancy_score = None
+            context_recall_score = None
+
+            # --- Faithfulness ---
+            # Truncate long answers to prevent statement-extraction JSON
+            # parse failures (see _MAX_ANSWER_CHARS_FOR_FAITHFULNESS).
+            faith_answer = answer
+            if len(answer) > _MAX_ANSWER_CHARS_FOR_FAITHFULNESS:
+                faith_answer = answer[:_MAX_ANSWER_CHARS_FOR_FAITHFULNESS]
+                logger.info(
+                    "faithfulness_answer_truncated",
+                    original_len=len(answer),
+                    truncated_len=len(faith_answer),
+                )
+            try:
+                faith_metric = Faithfulness(llm=llm)
+                faith_result = await faith_metric.ascore(
+                    user_input=question,
+                    response=faith_answer,
+                    retrieved_contexts=contexts,
+                )
+                faithfulness_score = _safe_score(faith_result.value)
+            except Exception as e:
+                logger.warning(
+                    "metric_faithfulness_failed", error=str(e),
+                    error_type=type(e).__name__,
+                    answer_length=len(faith_answer),
+                )
+
+            # --- Answer Relevancy ---
+            try:
+                relevancy_metric = AnswerRelevancy(
+                    llm=llm, embeddings=embeddings,
+                )
+                relevancy_result = await relevancy_metric.ascore(
+                    user_input=question,
+                    response=answer,
+                )
+                answer_relevancy_score = _safe_score(relevancy_result.value)
+            except Exception as e:
+                logger.warning(
+                    "metric_answer_relevancy_failed", error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+            # --- Context Recall (requires ground_truth) ---
             if ground_truth:
-                data["ground_truth"] = [ground_truth]
-
-            dataset = Dataset.from_dict(data)
-
-            # Select metrics based on available data
-            # context_recall requires ground_truth
-            metrics = (
-                [context_recall, faithfulness, answer_relevancy]
-                if ground_truth
-                else [faithfulness, answer_relevancy]
-            )
-
-            # Run evaluation — pass explicit LLM and embeddings.
-            # Without explicit LLM, RAGAS defaults to gpt-4o-mini with low
-            # max_tokens, causing truncated outputs ("output incomplete due to
-            # max_tokens") which make faithfulness score None/0.0 on long answers.
-            from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
-            result = evaluate(
-                dataset,
-                metrics=metrics,
-                llm=ChatOpenAI(model=self._llm_model, max_tokens=4096),
-                embeddings=OpenAIEmbeddings(model="text-embedding-3-small"),
-            )
-
-            # Extract scores — RAGAS v0.4+ returns an EvaluationResult object.
-            # result.scores is List[Dict[str, Any]] — one dict per sample.
-            # For single-sample eval, grab the first dict.
-            # NaN values come from metrics that failed internally (e.g.
-            # answer_relevancy when embeddings are broken) — treat as None.
-            sample_scores = result.scores[0]
-
-            def _safe_score(val):  # noqa: ANN001, ANN202
-                if val is None:
-                    return None
                 try:
-                    f = float(val)
-                    return None if math.isnan(f) else f
-                except (TypeError, ValueError):
-                    return None
+                    recall_metric = ContextRecall(llm=llm)
+                    recall_result = await recall_metric.ascore(
+                        user_input=question,
+                        retrieved_contexts=contexts,
+                        reference=ground_truth,
+                    )
+                    context_recall_score = _safe_score(recall_result.value)
+                except Exception as e:
+                    logger.warning(
+                        "metric_context_recall_failed", error=str(e),
+                        error_type=type(e).__name__,
+                    )
 
             scores = MetricScores(
-                context_recall=_safe_score(sample_scores.get("context_recall")),
-                faithfulness=_safe_score(sample_scores.get("faithfulness")),
-                answer_relevancy=_safe_score(sample_scores.get("answer_relevancy")),
+                context_recall=context_recall_score,
+                faithfulness=faithfulness_score,
+                answer_relevancy=answer_relevancy_score,
             )
 
             processing_time = int((time.time() - start_time) * 1000)

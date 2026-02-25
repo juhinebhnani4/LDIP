@@ -93,6 +93,25 @@ class BaselineService:
             Created baseline record, or None on failure.
         """
         try:
+            # BUG-3 fix: Idempotency check — if this job_id was already promoted,
+            # return the existing baseline instead of creating a duplicate.
+            existing = (
+                self._supabase.table("evaluation_baselines")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("promoted_from_job_id", job_id)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                logger.info(
+                    "baseline_already_exists_for_job",
+                    matter_id=matter_id,
+                    job_id=job_id,
+                    baseline_id=existing.data[0].get("id"),
+                )
+                return existing.data[0]
+
             # Step 1: Fetch batch results
             result = (
                 self._supabase.table("evaluation_results")

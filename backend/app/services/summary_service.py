@@ -265,25 +265,28 @@ class SummaryService:
         # Entity extraction (Gemini) often hallucinates names (e.g., "Prisoner",
         # "State of Maharashtra"). Use overview names as primary, enriched with
         # entity metadata (entity_id, citations, pages) when available.
+        #
+        # BUG-005b fix: Use fuzzy name matching so entity source_document
+        # traceability is preserved even when names don't exactly match
+        # (e.g., "Jyoti H. Mehta" vs "Smt. Jyoti Harshad Mehta").
         overview_parties = self._parse_parties_from_overview(
             subject_matter.description
         )
         if overview_parties:
-            entity_by_role = {}
+            # Build all entities per role (not just first) for better matching
+            entities_by_role: dict[PartyRole, list[PartyInfo]] = {}
             for p in parties:
-                if p.role not in entity_by_role:
-                    entity_by_role[p.role] = p
+                entities_by_role.setdefault(p.role, []).append(p)
 
             enriched = []
+            used_entity_ids: set[str] = set()
+
             for op in overview_parties:
-                entity_match = entity_by_role.get(op.role)
+                entity_match = self._find_best_entity_match(
+                    op, entities_by_role, parties, used_entity_ids
+                )
                 if entity_match:
-                    # If entity name differs from overview name, the entity had
-                    # a wrong/generic name (e.g. "Prisoner" instead of "State of
-                    # Uttar Pradesh"). In that case the entity's source_page
-                    # points to where the wrong name appears, not the real party.
-                    # Default to page 1 (cover page lists parties in Indian
-                    # court judgments).
+                    used_entity_ids.add(entity_match.entity_id)
                     names_match = (
                         entity_match.entity_name.lower().strip()
                         == op.entity_name.lower().strip()
@@ -600,6 +603,81 @@ class SummaryService:
         except Exception as e:
             logger.warning("get_parties_failed", error=str(e), matter_id=matter_id)
             return []
+
+    # ------------------------------------------------------------------
+    # Party name matching helpers (BUG-005b)
+    # ------------------------------------------------------------------
+
+    _NAME_STOPWORDS = frozenset({
+        "smt", "shri", "shrimati", "mr", "mrs", "ms", "dr", "sri",
+        "kumari", "late", "hon", "honble", "justice",
+        "the", "of", "and", "vs", "v", "through", "by", "in", "at",
+        "no", "nos", "etc", "ors", "anr", "another", "others",
+    })
+
+    @staticmethod
+    def _name_tokens(name: str) -> set[str]:
+        """Extract meaningful tokens from a name, stripping honorifics and filler."""
+        cleaned = re.sub(r"[.,;:!?()[\]{}<>\"'/\\]+", " ", name.lower())
+        tokens = {t for t in cleaned.split() if len(t) > 1}
+        return tokens - SummaryService._NAME_STOPWORDS
+
+    @staticmethod
+    def _name_similarity(tokens_a: set[str], tokens_b: set[str]) -> float:
+        """Token-overlap similarity. Divides by the smaller set so partial
+        names ("Jyoti Mehta" vs "Smt. Jyoti Harshad Mehta") still score 1.0."""
+        if not tokens_a or not tokens_b:
+            return 0.0
+        overlap = tokens_a & tokens_b
+        return len(overlap) / min(len(tokens_a), len(tokens_b))
+
+    def _find_best_entity_match(
+        self,
+        overview_party: PartyInfo,
+        entities_by_role: dict,
+        all_entities: list[PartyInfo],
+        used_ids: set[str],
+    ) -> PartyInfo | None:
+        """Find the best MIG entity for an overview party.
+
+        Multi-level strategy:
+        1. Exact name within same role
+        2. Fuzzy name (>=0.5 token overlap) within same role
+        3. Fuzzy name (>=0.6 token overlap) across all entities
+        """
+        target = overview_party.entity_name.lower().strip()
+        target_tokens = self._name_tokens(overview_party.entity_name)
+
+        same_role = entities_by_role.get(overview_party.role, [])
+
+        # Level 1: exact name, same role
+        for entity in same_role:
+            if entity.entity_id not in used_ids and entity.entity_name.lower().strip() == target:
+                return entity
+
+        # Level 2: fuzzy name, same role (threshold 0.5)
+        best, best_score = None, 0.0
+        for entity in same_role:
+            if entity.entity_id in used_ids:
+                continue
+            score = self._name_similarity(target_tokens, self._name_tokens(entity.entity_name))
+            if score > best_score:
+                best_score, best = score, entity
+        if best and best_score >= 0.5:
+            return best
+
+        # Level 3: fuzzy name, any role (threshold 0.6 — stricter for cross-role)
+        best, best_score = None, 0.0
+        for entity in all_entities:
+            if entity.entity_id in used_ids:
+                continue
+            score = self._name_similarity(target_tokens, self._name_tokens(entity.entity_name))
+            if score > best_score:
+                best_score, best = score, entity
+        if best and best_score >= 0.6:
+            return best
+
+        return None
 
     def _is_placeholder_party_name(self, name: str) -> bool:
         """Check if a name is a generic placeholder like 'Respondent No.1'.

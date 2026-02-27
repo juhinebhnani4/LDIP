@@ -26,6 +26,7 @@ from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost
 from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import RawEvent
 from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver
@@ -724,13 +725,15 @@ class EventEntityLinker:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
-                    ),
-                )
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=ENTITY_EXTRACTION_SYSTEM_PROMPT,
+                        ),
+                    )
                 # Track cost
                 tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,

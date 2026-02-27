@@ -168,6 +168,7 @@ def _link_act_from_library(
     storage_path: str,
     india_code_url: str | None,
     file_size: int,
+    on_complete_callbacks: list[dict] | None = None,
 ) -> str | None:
     """Link an Act from the shared library to a matter.
 
@@ -182,6 +183,8 @@ def _link_act_from_library(
         storage_path: Global storage path to the cached Act PDF.
         india_code_url: Original URL from India Code.
         file_size: Size of the PDF in bytes.
+        on_complete_callbacks: Optional callbacks to fire after library
+            processing (chunk + embed) completes.
 
     Returns:
         Library document UUID if linked/created, None on error.
@@ -210,8 +213,14 @@ def _link_act_from_library(
                 storage_path_existing = library_doc.get("storage_path")
                 if storage_path_existing:
                     from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    ocr_kwargs = {
+                        "library_document_id": library_doc_id,
+                        "storage_path": storage_path_existing,
+                    }
+                    if on_complete_callbacks:
+                        ocr_kwargs["on_complete_callbacks"] = on_complete_callbacks
                     ocr_and_process_library_document.apply_async(
-                        kwargs={"library_document_id": library_doc_id, "storage_path": storage_path_existing},
+                        kwargs=ocr_kwargs,
                         queue="default",
                     )
                     logger.info("act_ocr_processing_triggered_existing", library_document_id=library_doc_id)
@@ -249,8 +258,14 @@ def _link_act_from_library(
 
             # Trigger OCR + processing for the new library document
             from app.workers.tasks.library_tasks import ocr_and_process_library_document
+            ocr_kwargs = {
+                "library_document_id": library_doc_id,
+                "storage_path": storage_path,
+            }
+            if on_complete_callbacks:
+                ocr_kwargs["on_complete_callbacks"] = on_complete_callbacks
             ocr_and_process_library_document.apply_async(
-                kwargs={"library_document_id": library_doc_id, "storage_path": storage_path},
+                kwargs=ocr_kwargs,
                 queue="default",
             )
             logger.info("act_ocr_processing_triggered", library_document_id=library_doc_id)
@@ -322,6 +337,7 @@ def _create_document_for_auto_fetched_act(
     storage_path: str,
     india_code_url: str | None,
     file_size: int,
+    on_complete_callbacks: list[dict] | None = None,
 ) -> str | None:
     """Link an auto-fetched Act from the shared library to a matter.
 
@@ -337,6 +353,7 @@ def _create_document_for_auto_fetched_act(
         storage_path: Global storage path to the cached Act PDF.
         india_code_url: Original URL from India Code.
         file_size: Size of the PDF in bytes.
+        on_complete_callbacks: Callbacks to fire after processing completes.
 
     Returns:
         Library document UUID if linked, None on error.
@@ -350,6 +367,7 @@ def _create_document_for_auto_fetched_act(
         storage_path=storage_path,
         india_code_url=india_code_url,
         file_size=file_size,
+        on_complete_callbacks=on_complete_callbacks,
     )
 
 
@@ -532,14 +550,76 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                 )
                 results["valid"] += 1
             else:
-                # Unknown - needs India Code lookup
+                # Unknown — regex can't decide. Use LLM fallback before
+                # assuming valid and sending to India Code (wastes fetches).
+                try:
+                    from app.engines.citation.validation import validate_act_name_with_llm
+                    llm_result = run_async(validate_act_name_with_llm(
+                        act_name=act_display,
+                        context=None,
+                        document_id=None,
+                        matter_id=matter_id,
+                    ))
+
+                    if not llm_result.is_valid:
+                        # LLM says garbage — mark invalid
+                        _update_validation_cache(
+                            client,
+                            validation.act_name_normalized,
+                            ValidationStatus.INVALID.value,
+                            ValidationSource.GARBAGE_DETECTION.value,
+                            confidence=llm_result.confidence,
+                            metadata={
+                                "llm_reason": llm_result.reason,
+                                "garbage_patterns": validation.garbage_patterns_matched,
+                            },
+                        )
+                        _update_act_resolution(
+                            client,
+                            matter_id,
+                            normalized,
+                            "invalid",
+                            is_valid=False,
+                            validation_cache_id=cache_id,
+                        )
+                        results["invalid"] += 1
+                        logger.info(
+                            "validate_act_llm_invalid",
+                            act_name=normalized,
+                            reason=llm_result.reason,
+                            confidence=llm_result.confidence,
+                        )
+                        continue
+
+                    if llm_result.canonical_name:
+                        # LLM identified a valid canonical name
+                        _update_validation_cache(
+                            client,
+                            validation.act_name_normalized,
+                            ValidationStatus.VALID.value,
+                            "llm_validation",
+                            confidence=llm_result.confidence,
+                            metadata={
+                                "llm_canonical": llm_result.canonical_name,
+                                "llm_reason": llm_result.reason,
+                            },
+                        )
+                except Exception as llm_err:
+                    logger.warning(
+                        "validate_act_llm_fallback_error",
+                        act_name=normalized,
+                        error=str(llm_err),
+                    )
+                    # Fall through to default behavior on LLM failure
+
+                # Proceed with India Code lookup (either LLM confirmed or LLM unavailable)
                 status = "auto_fetching" if settings.india_code_auto_fetch_enabled else "missing"
                 _update_act_resolution(
                     client,
                     matter_id,
                     normalized,
                     status,
-                    is_valid=True,  # Assume valid until proven otherwise
+                    is_valid=True,
                     validation_cache_id=cache_id,
                 )
                 results["unknown"] += 1
@@ -811,6 +891,11 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                     file_size = 0
 
                 # Create document record for this matter
+                # Pass verification as a callback so it fires AFTER library
+                # processing (chunk + embed) completes — prevents race condition
+                # where verification runs before chunks exist.
+                # NOTE: act_document_id is set in the callback kwargs below
+                # after we know the library_document_id.
                 doc_id = _create_document_for_auto_fetched_act(
                     client,
                     matter_id,
@@ -819,6 +904,15 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                     storage_path,
                     india_code_url,
                     file_size,
+                    on_complete_callbacks=[{
+                        "task_name": "app.workers.tasks.verification_tasks.trigger_verification_on_act_upload",
+                        "kwargs": {
+                            "matter_id": matter_id,
+                            "act_name": canonical or normalized,
+                            # act_document_id auto-injected by fire_library_callbacks
+                        },
+                        "queue": "default",
+                    }],
                 )
 
                 if doc_id:
@@ -838,32 +932,17 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                     updated_resolutions += 1
                     affected_matter_ids.add(matter_id)
 
-                    # Trigger verification now that Act is available
-                    try:
-                        from app.workers.tasks.verification_tasks import (
-                            trigger_verification_on_act_upload,
-                        )
-                        trigger_verification_on_act_upload.apply_async(
-                            kwargs={
-                                "matter_id": matter_id,
-                                "act_name": canonical or normalized,
-                                "act_document_id": doc_id,
-                            },
-                            queue="default",
-                        )
-                        logger.info(
-                            "verification_triggered_for_auto_fetched_act",
-                            matter_id=matter_id,
-                            act_name=normalized,
-                            document_id=doc_id,
-                        )
-                    except Exception as ve:
-                        logger.warning(
-                            "verification_trigger_failed_for_auto_fetched_act",
-                            matter_id=matter_id,
-                            act_name=normalized,
-                            error=str(ve),
-                        )
+                    # NOTE: Verification is NOT triggered here. It is passed as a
+                    # callback to the library processing pipeline (chunk → embed →
+                    # fire_library_callbacks) so it only fires AFTER chunks and
+                    # embeddings exist. See _link_act_from_library which receives
+                    # on_complete_callbacks and passes them to ocr_and_process_library_document.
+                    logger.info(
+                        "verification_deferred_to_library_processing_callback",
+                        matter_id=matter_id,
+                        act_name=normalized,
+                        library_document_id=doc_id,
+                    )
 
         # === FAILURE PATH: Mark acts as not_on_indiacode if validation says so ===
         try:

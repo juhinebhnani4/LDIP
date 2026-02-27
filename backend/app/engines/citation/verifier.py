@@ -32,7 +32,6 @@ from app.engines.citation.act_indexer import (
 from app.engines.citation.verification_prompts import (
     SECTION_MATCHING_PROMPT,
     TEXT_COMPARISON_PROMPT,
-    VERIFICATION_EXPLANATION_PROMPT,
     VERIFICATION_SYSTEM_PROMPT,
 )
 from app.models.chunk import ChunkWithContent
@@ -388,6 +387,8 @@ class CitationVerifier:
                         act_name=act_name,
                         section=section,
                         chunks=all_chunks[:20],  # Limit to first 20 chunks
+                        document_id=document_id,
+                        matter_id=matter_id,
                     )
                 return None
 
@@ -422,6 +423,8 @@ class CitationVerifier:
         act_name: str,
         section: str,
         chunks: list[ChunkWithContent],
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> SectionMatch | None:
         """Use LLM to find section when regex fails.
 
@@ -429,6 +432,8 @@ class CitationVerifier:
             act_name: Name of the Act.
             section: Section number to find.
             chunks: Act document chunks.
+            document_id: Document UUID for cost tracking.
+            matter_id: Matter UUID for cost tracking.
 
         Returns:
             SectionMatch if found, None otherwise.
@@ -557,6 +562,11 @@ class CitationVerifier:
     ) -> str:
         """Generate human-readable verification explanation.
 
+        Uses template-based explanations (no LLM call). The templates produce
+        equally good explanations as the previous Gemini call, which was broken
+        anyway (undefined document_id/matter_id caused NameError → always fell
+        through to the template). Saves 1 Gemini call per citation.
+
         Args:
             act_name: Name of the Act.
             section: Section number.
@@ -570,37 +580,19 @@ class CitationVerifier:
         Returns:
             Human-readable explanation.
         """
-        prompt = VERIFICATION_EXPLANATION_PROMPT.format(
-            act_name=act_name,
-            section_number=section,
-            quoted_text=quoted_text[:500] if quoted_text else "None",
-            status=status.value,
-            section_found=section_found,
-            similarity_score=similarity_score,
-            match_type=match_type,
-            differences=", ".join(differences) if differences else "None",
-        )
-
-        try:
-            response = await self._call_gemini_with_retry(
-                prompt, document_id=document_id, matter_id=matter_id,
-            )
-            result = self._parse_json_response(response)
-
-            if result and result.get("explanation"):
-                return result["explanation"]
-
-        except Exception as e:
-            logger.warning(
-                "explanation_generation_failed",
-                error=str(e),
-            )
-
-        # Fallback explanations
         if status == VerificationStatus.VERIFIED:
+            if match_type == "paraphrase":
+                return (
+                    f"Section {section} of {act_name} verified. "
+                    f"The quoted text is a paraphrase of the Act text (similarity: {similarity_score:.0f}%)."
+                )
             return f"Section {section} of {act_name} verified. Citation matches Act text."
         elif status == VerificationStatus.MISMATCH:
-            return f"Section {section} found in {act_name} but quoted text differs. Similarity: {similarity_score:.0f}%"
+            diff_str = f" Differences: {', '.join(differences)}" if differences else ""
+            return (
+                f"Section {section} found in {act_name} but quoted text differs. "
+                f"Similarity: {similarity_score:.0f}%.{diff_str}"
+            )
         else:
             return f"Section {section} verification result: {status.value}"
 

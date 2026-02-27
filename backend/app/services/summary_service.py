@@ -269,6 +269,9 @@ class SummaryService:
         # BUG-005b fix: Use fuzzy name matching so entity source_document
         # traceability is preserved even when names don't exactly match
         # (e.g., "Jyoti H. Mehta" vs "Smt. Jyoti Harshad Mehta").
+        # Also handles the common case where get_parties() returns empty
+        # because no entities have party roles — falls back to searching
+        # ALL person/org entities by name.
         overview_parties = self._parse_parties_from_overview(
             subject_matter.description
         )
@@ -278,12 +281,43 @@ class SummaryService:
             for p in parties:
                 entities_by_role.setdefault(p.role, []).append(p)
 
+            logger.info(
+                "party_enrichment_start",
+                matter_id=matter_id,
+                overview_count=len(overview_parties),
+                entity_party_count=len(parties),
+                overview_names=[op.entity_name for op in overview_parties],
+            )
+
+            # When no entities have party roles, query ALL person/org
+            # entities as a name-match pool (runs on cache miss only).
+            all_entity_pool = list(parties)
+            if not all_entity_pool:
+                logger.info("party_enrichment_fallback_triggered", matter_id=matter_id)
+                all_entity_pool = await self._get_all_person_entities(matter_id)
+
+            logger.info(
+                "party_enrichment_pool",
+                matter_id=matter_id,
+                pool_size=len(all_entity_pool),
+                pool_names=[e.entity_name for e in all_entity_pool[:10]],
+                pool_sources=[e.source_document for e in all_entity_pool[:10]],
+            )
+
             enriched = []
             used_entity_ids: set[str] = set()
 
             for op in overview_parties:
                 entity_match = self._find_best_entity_match(
-                    op, entities_by_role, parties, used_entity_ids
+                    op, entities_by_role, all_entity_pool, used_entity_ids
+                )
+                logger.info(
+                    "party_enrichment_match",
+                    matter_id=matter_id,
+                    overview_name=op.entity_name,
+                    matched=entity_match is not None,
+                    match_name=entity_match.entity_name if entity_match else None,
+                    match_source=entity_match.source_document if entity_match else None,
                 )
                 if entity_match:
                     used_entity_ids.add(entity_match.entity_id)
@@ -309,7 +343,29 @@ class SummaryService:
                         citation=corrected_citation,
                     ))
                 else:
-                    enriched.append(op)
+                    # No entity match — search chunks for where the name
+                    # actually appears (handles rate-limited extraction).
+                    chunk_hit = await self._find_party_in_chunks(
+                        matter_id, op.entity_name
+                    )
+                    if chunk_hit:
+                        doc_id, doc_name, page = chunk_hit
+                        enriched.append(PartyInfo(
+                            entity_id=op.entity_id,
+                            entity_name=op.entity_name,
+                            role=op.role,
+                            source_document=doc_name,
+                            source_page=page,
+                            is_verified=False,
+                            citation=Citation(
+                                document_id=doc_id,
+                                document_name=doc_name,
+                                page=page,
+                                excerpt=None,
+                            ),
+                        ))
+                    else:
+                        enriched.append(op)
             parties = enriched
         # else: no overview available, keep entity-extracted parties as-is
 
@@ -604,6 +660,196 @@ class SummaryService:
             logger.warning("get_parties_failed", error=str(e), matter_id=matter_id)
             return []
 
+    async def _get_all_person_entities(self, matter_id: str) -> list[PartyInfo]:
+        """Query ALL person/org entities regardless of party roles.
+
+        Fallback for enrichment when get_parties() returns empty because no
+        entities have party roles in metadata. Runs only on summary cache miss.
+        """
+        try:
+            docs_result = await asyncio.to_thread(
+                lambda: self.supabase.table("documents")
+                .select("id, filename")
+                .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            active_docs = {d["id"]: d["filename"] for d in docs_result.data or []}
+            logger.info(
+                "fallback_entities_docs",
+                matter_id=matter_id,
+                active_doc_count=len(active_docs),
+            )
+            if not active_docs:
+                return []
+
+            entities_result = await asyncio.to_thread(
+                lambda: self.supabase.table("identity_nodes")
+                .select("id, canonical_name, entity_type")
+                .eq("matter_id", matter_id)
+                .in_("entity_type", ["PERSON", "ORG"])
+                .order("mention_count", desc=True)
+                .limit(50)
+                .execute()
+            )
+
+            entity_ids = [
+                e["id"]
+                for e in (entities_result.data or [])
+                if not self._is_placeholder_party_name(e.get("canonical_name", ""))
+            ]
+            logger.info(
+                "fallback_entities_found",
+                matter_id=matter_id,
+                raw_count=len(entities_result.data or []),
+                filtered_count=len(entity_ids),
+                top_names=[e.get("canonical_name") for e in (entities_result.data or [])[:10]],
+            )
+            if not entity_ids:
+                return []
+
+            mentions_result = await asyncio.to_thread(
+                lambda: self.supabase.table("entity_mentions")
+                .select("entity_id, document_id, page_number")
+                .in_("entity_id", entity_ids[:30])
+                .in_("document_id", list(active_docs.keys()))
+                .execute()
+            )
+            first_mention: dict[str, dict] = {}
+            for m in mentions_result.data or []:
+                if m["entity_id"] not in first_mention:
+                    first_mention[m["entity_id"]] = m
+
+            logger.info(
+                "fallback_entities_mentions",
+                matter_id=matter_id,
+                mention_count=len(mentions_result.data or []),
+                unique_entities_with_mentions=len(first_mention),
+            )
+
+            pool: list[PartyInfo] = []
+            for entity in entities_result.data or []:
+                name = entity.get("canonical_name", "")
+                if self._is_placeholder_party_name(name):
+                    continue
+                mention = first_mention.get(entity["id"])
+                if mention:
+                    doc_id = mention["document_id"]
+                    src = active_docs.get(doc_id, "Unknown")
+                    page = mention.get("page_number")
+                    citation = Citation(
+                        document_id=doc_id, document_name=src,
+                        page=page, excerpt=None,
+                    )
+                else:
+                    src, page, citation = "Unknown", None, None
+
+                pool.append(PartyInfo(
+                    entity_id=entity["id"],
+                    entity_name=name,
+                    role=PartyRole.OTHER,
+                    source_document=src,
+                    source_page=page,
+                    is_verified=False,
+                    citation=citation,
+                ))
+            return pool
+        except Exception as e:
+            logger.warning(
+                "get_all_person_entities_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                matter_id=matter_id,
+            )
+            return []
+
+    async def _find_party_in_chunks(
+        self,
+        matter_id: str,
+        party_name: str,
+        active_docs: dict[str, str] | None = None,
+    ) -> tuple[str, str, int | None] | None:
+        """Search chunks for a party name to find its actual document source.
+
+        Used as fallback when entity enrichment can't match a name
+        (e.g. entity extraction didn't run due to rate limits).
+
+        Returns:
+            (document_id, filename, page_number) or None.
+        """
+        try:
+            if active_docs is None:
+                docs_result = await asyncio.to_thread(
+                    lambda: self.supabase.table("documents")
+                    .select("id, filename")
+                    .eq("matter_id", matter_id)
+                    .is_("deleted_at", "null")
+                    .execute()
+                )
+                active_docs = {
+                    d["id"]: d["filename"] for d in docs_result.data or []
+                }
+            if not active_docs:
+                return None
+
+            # Escape ilike wildcards in name
+            safe_name = (
+                party_name.replace("%", r"\%").replace("_", r"\_")
+            )
+
+            # Try full name first
+            result = await asyncio.to_thread(
+                lambda: self.supabase.table("chunks")
+                .select("document_id, page_number")
+                .eq("matter_id", matter_id)
+                .eq("chunk_type", "parent")
+                .in_("document_id", list(active_docs.keys()))
+                .ilike("content", f"%{safe_name}%")
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                chunk = result.data[0]
+                doc_id = chunk["document_id"]
+                return (
+                    doc_id,
+                    active_docs.get(doc_id, "Unknown"),
+                    chunk.get("page_number"),
+                )
+
+            # Fall back to surname (last meaningful token)
+            tokens = [
+                t for t in party_name.split() if len(t) > 2 and t not in ("Smt", "Shri", "Mr", "Mrs", "Ms", "Dr")
+            ]
+            if tokens:
+                surname = tokens[-1].replace("%", r"\%").replace("_", r"\_")
+                result = await asyncio.to_thread(
+                    lambda: self.supabase.table("chunks")
+                    .select("document_id, page_number")
+                    .eq("matter_id", matter_id)
+                    .eq("chunk_type", "parent")
+                    .in_("document_id", list(active_docs.keys()))
+                    .ilike("content", f"%{surname}%")
+                    .limit(1)
+                    .execute()
+                )
+                if result.data:
+                    chunk = result.data[0]
+                    doc_id = chunk["document_id"]
+                    return (
+                        doc_id,
+                        active_docs.get(doc_id, "Unknown"),
+                        chunk.get("page_number"),
+                    )
+
+        except Exception as e:
+            logger.debug(
+                "find_party_in_chunks_failed",
+                party_name=party_name,
+                error=str(e),
+            )
+        return None
+
     # ------------------------------------------------------------------
     # Party name matching helpers (BUG-005b)
     # ------------------------------------------------------------------
@@ -616,11 +862,24 @@ class SummaryService:
     })
 
     @staticmethod
+    def _normalize_hindi_token(token: str) -> str:
+        """Normalize common Hindi transliteration variants.
+
+        e.g., jyothi→jyoti, sudheer→sudhir, shree→shri
+        """
+        # Trailing vowel variants: -hi, -ee, -ey → strip
+        token = re.sub(r"(?:ee|hi|ey)$", "i", token)
+        # Double vowels: aa→a, oo→u, ee→i
+        token = token.replace("aa", "a").replace("oo", "u").replace("ee", "i")
+        return token
+
+    @staticmethod
     def _name_tokens(name: str) -> set[str]:
         """Extract meaningful tokens from a name, stripping honorifics and filler."""
         cleaned = re.sub(r"[.,;:!?()[\]{}<>\"'/\\]+", " ", name.lower())
         tokens = {t for t in cleaned.split() if len(t) > 1}
-        return tokens - SummaryService._NAME_STOPWORDS
+        tokens = tokens - SummaryService._NAME_STOPWORDS
+        return {SummaryService._normalize_hindi_token(t) for t in tokens}
 
     @staticmethod
     def _name_similarity(tokens_a: set[str], tokens_b: set[str]) -> float:

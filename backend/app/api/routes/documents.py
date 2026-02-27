@@ -1610,6 +1610,43 @@ async def update_document(
             filename=update.filename,
         )
 
+        # Detect transition to Act → promote to shared library
+        if (
+            update.document_type == DocumentType.ACT
+            and doc.document_type != "act"
+        ):
+            try:
+                library_service = get_library_service()
+                library_doc_id = library_service.promote_document_to_library(
+                    document_id=str(document_id),
+                    matter_id=str(doc.matter_id),
+                    user_id=current_user.id,
+                )
+
+                from app.workers.tasks.library_tasks import promote_chunks_to_library
+                promote_chunks_to_library.apply_async(
+                    kwargs={
+                        "library_document_id": library_doc_id,
+                        "source_document_id": str(document_id),
+                        "storage_path": doc.storage_path,
+                    },
+                    queue="default",
+                )
+
+                logger.info(
+                    "document_promoted_to_library_on_type_change",
+                    document_id=str(document_id),
+                    library_document_id=library_doc_id,
+                    matter_id=str(doc.matter_id),
+                )
+            except Exception as promo_err:
+                # Log but don't fail the PATCH — the type change itself succeeded
+                logger.error(
+                    "promote_to_library_on_type_change_failed",
+                    document_id=str(document_id),
+                    error=str(promo_err),
+                )
+
         # Query feature availability (Story 7.2)
         features = await _get_document_features(document_id)
 

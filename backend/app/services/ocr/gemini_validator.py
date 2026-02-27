@@ -17,6 +17,11 @@ from functools import lru_cache
 import structlog
 
 from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
 from app.core.circuit_breaker import (
     CircuitOpenError,
     CircuitService,
@@ -205,11 +210,13 @@ Example response:
         )
 
         try:
-            # Call Gemini synchronously
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-            )
+            # Call Gemini synchronously (rate-limited)
+            gemini_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+            with gemini_limiter:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                )
 
             # Parse response
             results = self._parse_response(response.text, words)
@@ -361,10 +368,12 @@ Example response:
         Returns:
             Response text from Gemini.
         """
-        response = await self.client.aio.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-        )
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+        async with gemini_limiter:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
         # Track cost
         tracker = CostTracker(
             provider=LLMProvider.GEMINI_FLASH,

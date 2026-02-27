@@ -255,12 +255,12 @@ class MIGGraphService:
         else:
             new_entity_map = {}
 
-        # Step 4: Batch update mention counts for existing entities
+        # Step 4: Batch update mention counts + merge roles for existing entities
         if existing_entities:
             updated = await self._batch_update_mention_counts(
                 matter_id=matter_id,
                 updates=[
-                    (row["id"], len(extracted.mentions) or 1)
+                    (row["id"], len(extracted.mentions) or 1, extracted.roles)
                     for extracted, row in existing_entities
                 ],
             )
@@ -489,9 +489,9 @@ class MIGGraphService:
     async def _batch_update_mention_counts(
         self,
         matter_id: str,
-        updates: list[tuple[str, int]],
+        updates: list[tuple[str, int, list[str]]],
     ) -> list[EntityNode]:
-        """Batch update mention counts for existing entities.
+        """Batch update mention counts and merge roles for existing entities.
 
         Story 6.2: Uses individual updates but in parallel.
         Note: Supabase doesn't support bulk UPDATE with different values,
@@ -499,7 +499,7 @@ class MIGGraphService:
 
         Args:
             matter_id: Matter UUID.
-            updates: List of (entity_id, additional_mentions) tuples.
+            updates: List of (entity_id, additional_mentions, new_roles) tuples.
 
         Returns:
             List of updated EntityNode objects.
@@ -507,12 +507,15 @@ class MIGGraphService:
         if not updates:
             return []
 
-        async def _update_one(entity_id: str, additional: int) -> EntityNode | None:
+        async def _update_one(
+            entity_id: str, additional: int, new_roles: list[str],
+        ) -> EntityNode | None:
             try:
                 updated = await self._update_entity_mention_count(
                     entity_id=entity_id,
                     matter_id=matter_id,
                     additional_mentions=additional,
+                    new_roles=new_roles,
                 )
                 if updated:
                     return self._db_row_to_entity_node(updated)
@@ -526,7 +529,7 @@ class MIGGraphService:
 
         # Run updates concurrently
         results = await asyncio.gather(
-            *[_update_one(eid, add) for eid, add in updates],
+            *[_update_one(eid, add, roles) for eid, add, roles in updates],
             return_exceptions=True,
         )
 
@@ -627,13 +630,13 @@ class MIGGraphService:
         entity_id: str,
         matter_id: str,
         additional_mentions: int,
+        new_roles: list[str] | None = None,
     ) -> dict | None:
-        """Increment mention count for existing entity."""
-        # First get current count
+        """Increment mention count and merge any new roles for existing entity."""
         def _get_current():
             return (
                 self.client.table("identity_nodes")
-                .select("mention_count")
+                .select("mention_count, metadata")
                 .eq("id", entity_id)
                 .eq("matter_id", matter_id)
                 .limit(1)
@@ -645,15 +648,27 @@ class MIGGraphService:
         if not current.data:
             return None
 
-        new_count = (current.data[0].get("mention_count", 0) or 0) + additional_mentions
+        row = current.data[0]
+        new_count = (row.get("mention_count", 0) or 0) + additional_mentions
+
+        update_payload: dict = {
+            "mention_count": new_count,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+
+        # Merge new roles into existing metadata.roles (set union)
+        if new_roles:
+            metadata = row.get("metadata", {}) or {}
+            existing_roles = set(metadata.get("roles", []))
+            merged = existing_roles | set(new_roles)
+            if merged != existing_roles:
+                metadata["roles"] = sorted(merged)
+                update_payload["metadata"] = metadata
 
         def _update():
             return (
                 self.client.table("identity_nodes")
-                .update({
-                    "mention_count": new_count,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(update_payload)
                 .eq("id", entity_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -1155,22 +1170,25 @@ class MIGGraphService:
         """
         from app.models.entity import RelationshipType
 
-        def _insert():
+        def _upsert():
             return (
                 self.client.table("identity_edges")
-                .insert({
-                    "matter_id": matter_id,
-                    "source_node_id": source_id,
-                    "target_node_id": target_id,
-                    "relationship_type": RelationshipType.ALIAS_OF.value,
-                    "confidence": confidence,
-                    "metadata": metadata or {},
-                })
+                .upsert(
+                    {
+                        "matter_id": matter_id,
+                        "source_node_id": source_id,
+                        "target_node_id": target_id,
+                        "relationship_type": RelationshipType.ALIAS_OF.value,
+                        "confidence": confidence,
+                        "metadata": metadata or {},
+                    },
+                    on_conflict="matter_id,source_node_id,target_node_id,relationship_type",
+                )
                 .execute()
             )
 
         try:
-            response = await asyncio.to_thread(_insert)
+            response = await asyncio.to_thread(_upsert)
 
             if response.data:
                 logger.info(
@@ -1183,9 +1201,8 @@ class MIGGraphService:
                 return self._db_row_to_entity_edge(response.data[0])
 
         except Exception as e:
-            # Likely duplicate (unique constraint)
-            logger.debug(
-                "mig_alias_edge_exists",
+            logger.warning(
+                "mig_alias_edge_upsert_failed",
                 source_id=source_id,
                 target_id=target_id,
                 error=str(e),

@@ -1150,13 +1150,14 @@ class DocumentService:
             return []
 
     def sync_act_resolutions_for_matter(self, matter_id: str) -> int:
-        """Sync act_resolutions table with existing Act documents.
+        """Sync act_resolutions table with Acts linked to this matter.
 
-        This method finds Act documents in the matter that are not reflected
-        in the act_resolutions table and updates them to AVAILABLE status.
+        Queries matter_library_links joined with library_documents to find Acts
+        linked to this matter. Uses library_documents.id for act_document_id
+        (which FKs to library_documents, NOT documents).
 
-        This fixes the issue where Acts uploaded via India Code or manually
-        still show as "missing" in the Citations tab.
+        Also detects un-promoted Acts in the documents table and triggers
+        promotion to the library.
 
         Args:
             matter_id: Matter UUID.
@@ -1169,31 +1170,33 @@ class DocumentService:
             return 0
 
         try:
-            # Get all Act documents in the matter
-            act_docs_result = self.client.table("documents").select(
-                "id, filename, source"
-            ).eq("matter_id", matter_id).eq("document_type", "act").execute()
-
-            act_docs = act_docs_result.data or []
-            if not act_docs:
-                return 0
-
             updated_count = 0
 
-            for doc in act_docs:
-                doc_id = doc["id"]
-                filename = doc["filename"]
-                source = doc.get("source", "uploaded")
+            # === Path 1: Acts already in library (correct path) ===
+            # Query matter_library_links → library_documents for Acts
+            links_result = self.client.table("matter_library_links").select(
+                "library_document_id, library_documents(id, title, filename, source, status)"
+            ).eq("matter_id", matter_id).execute()
 
-                # Extract act name from filename (remove .pdf extension)
-                act_name = filename
-                if act_name.lower().endswith(".pdf"):
-                    act_name = act_name[:-4]
+            linked_acts = links_result.data or []
 
+            for link in linked_acts:
+                lib_doc = link.get("library_documents")
+                if not lib_doc:
+                    continue
+
+                # Only process Act-type library documents
+                library_doc_id = lib_doc["id"]
+                title = lib_doc.get("title", "")
+                filename = lib_doc.get("filename", "")
+                source = lib_doc.get("source", "user_upload")
+
+                # Extract act name from title
+                act_name = title or (filename.rsplit(".", 1)[0] if "." in filename else filename)
                 normalized_name = normalize_act_name(act_name)
 
-                # Determine resolution status based on source
-                if source in ("india_code", "auto_fetched"):
+                # Determine resolution status
+                if source in ("india_code",):
                     resolution_status = "auto_fetched"
                 else:
                     resolution_status = "available"
@@ -1207,12 +1210,15 @@ class DocumentService:
 
                 if existing.data:
                     resolution = existing.data[0]
-                    # Only update if currently missing and no document linked
-                    if resolution.get("resolution_status") == "missing":
+                    # Update if missing or if act_document_id is wrong
+                    if (
+                        resolution.get("resolution_status") == "missing"
+                        or resolution.get("act_document_id") != library_doc_id
+                    ):
                         self.client.table("act_resolutions").update({
                             "resolution_status": resolution_status,
-                            "act_document_id": doc_id,
-                            "user_action": "uploaded" if source == "uploaded" else "auto_fetched",
+                            "act_document_id": library_doc_id,
+                            "user_action": "auto_fetched" if source == "india_code" else "uploaded",
                             "updated_at": datetime.now(UTC).isoformat(),
                         }).eq("id", resolution["id"]).execute()
 
@@ -1221,18 +1227,18 @@ class DocumentService:
                             "act_resolution_synced",
                             matter_id=matter_id,
                             act_name=act_name,
-                            document_id=doc_id,
+                            library_document_id=library_doc_id,
                             resolution_status=resolution_status,
                         )
                 else:
-                    # No resolution exists - create one
+                    # Create resolution with library_documents.id
                     self.client.table("act_resolutions").insert({
                         "matter_id": matter_id,
                         "act_name_normalized": normalized_name,
                         "act_name_display": act_name,
                         "resolution_status": resolution_status,
-                        "act_document_id": doc_id,
-                        "user_action": "uploaded" if source == "uploaded" else "auto_fetched",
+                        "act_document_id": library_doc_id,
+                        "user_action": "auto_fetched" if source == "india_code" else "uploaded",
                         "citation_count": 0,
                     }).execute()
 
@@ -1241,7 +1247,61 @@ class DocumentService:
                         "act_resolution_created",
                         matter_id=matter_id,
                         act_name=act_name,
-                        document_id=doc_id,
+                        library_document_id=library_doc_id,
+                    )
+
+            # === Path 2: Detect un-promoted Acts still in documents table ===
+            unpromoted = self.client.table("documents").select(
+                "id, filename, storage_path"
+            ).eq(
+                "matter_id", matter_id
+            ).eq(
+                "document_type", "act"
+            ).or_(
+                "migrated_to_library.is.null,migrated_to_library.eq.false"
+            ).is_("deleted_at", "null").execute()
+
+            unpromoted_docs = unpromoted.data or []
+            for doc in unpromoted_docs:
+                try:
+                    from app.services.library_service import get_library_service
+                    lib_service = get_library_service()
+                    # Get a user_id for the promotion
+                    user_result = self.client.table("documents").select(
+                        "uploaded_by"
+                    ).eq("matter_id", matter_id).not_.is_(
+                        "uploaded_by", "null"
+                    ).limit(1).execute()
+                    user_id = user_result.data[0]["uploaded_by"] if user_result.data else None
+
+                    if user_id:
+                        library_doc_id = lib_service.promote_document_to_library(
+                            document_id=doc["id"],
+                            matter_id=matter_id,
+                            user_id=user_id,
+                        )
+
+                        from app.workers.tasks.library_tasks import promote_chunks_to_library
+                        promote_chunks_to_library.apply_async(
+                            kwargs={
+                                "library_document_id": library_doc_id,
+                                "source_document_id": doc["id"],
+                                "storage_path": doc["storage_path"],
+                            },
+                            queue="default",
+                        )
+
+                        logger.info(
+                            "sync_act_resolution_promoted_unpromoted_doc",
+                            document_id=doc["id"],
+                            library_document_id=library_doc_id,
+                            matter_id=matter_id,
+                        )
+                except Exception as promo_err:
+                    logger.warning(
+                        "sync_act_resolution_promote_failed",
+                        document_id=doc["id"],
+                        error=str(promo_err),
                     )
 
             if updated_count > 0:

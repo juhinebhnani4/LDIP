@@ -770,6 +770,169 @@ class LibraryService:
             ) from e
 
     # =========================================================================
+    # Document Promotion (documents → library_documents)
+    # =========================================================================
+
+    def promote_document_to_library(
+        self,
+        document_id: str,
+        matter_id: str,
+        user_id: str,
+    ) -> str:
+        """Promote a matter-specific Act document to the shared library.
+
+        Finds or creates a library_documents record, links it to the matter,
+        and marks the original document as migrated.
+
+        Args:
+            document_id: Source document UUID (from documents table).
+            matter_id: Matter UUID.
+            user_id: User performing the promotion.
+
+        Returns:
+            library_document_id (UUID string).
+
+        Raises:
+            LibraryServiceError: If promotion fails.
+        """
+        if self.client is None:
+            raise LibraryServiceError(
+                message="Database client not configured",
+                code="DATABASE_NOT_CONFIGURED",
+            )
+
+        try:
+            # 1. Read the source document
+            doc_result = self.client.table("documents").select(
+                "id, filename, storage_path, file_size, page_count, document_type"
+            ).eq("id", document_id).execute()
+
+            if not doc_result.data:
+                raise LibraryServiceError(
+                    message=f"Document not found: {document_id}",
+                    code="DOCUMENT_NOT_FOUND",
+                    status_code=404,
+                )
+
+            doc = doc_result.data[0]
+            filename = doc["filename"]
+            title = filename.rsplit(".", 1)[0] if "." in filename else filename
+
+            # 2. Check if matching library document already exists (dedup by title)
+            existing_result = self.client.table("library_documents").select(
+                "id, title, storage_path, status"
+            ).ilike("title", title).limit(1).execute()
+
+            library_doc_id = None
+
+            if existing_result.data:
+                # Found existing — reuse it
+                library_doc_id = existing_result.data[0]["id"]
+                logger.info(
+                    "promote_reusing_existing_library_doc",
+                    document_id=document_id,
+                    library_document_id=library_doc_id,
+                    title=title,
+                )
+            else:
+                # Try fuzzy match: strip year suffix
+                base_title = title.rsplit(",", 1)[0].strip() if "," in title else title
+                fuzzy_result = self.client.table("library_documents").select(
+                    "id, title, storage_path, status"
+                ).ilike("title", f"{base_title}%").limit(1).execute()
+
+                if fuzzy_result.data:
+                    library_doc_id = fuzzy_result.data[0]["id"]
+                    logger.info(
+                        "promote_reusing_fuzzy_match_library_doc",
+                        document_id=document_id,
+                        library_document_id=library_doc_id,
+                        title=title,
+                    )
+
+            if library_doc_id is None:
+                # 3. Create new library document
+                import re
+                year_match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', title)
+                year = int(year_match.group(1)) if year_match else None
+
+                create_data = LibraryDocumentCreate(
+                    filename=filename,
+                    title=title,
+                    document_type=LibraryDocumentType.ACT,
+                    year=year,
+                    jurisdiction="central",
+                )
+
+                library_doc = self.create_document(
+                    create_data=create_data,
+                    storage_path=doc["storage_path"],
+                    file_size=doc["file_size"],
+                    added_by=user_id,
+                    source=LibraryDocumentSource.USER_UPLOAD,
+                )
+                library_doc_id = library_doc.id
+
+                logger.info(
+                    "promote_created_new_library_doc",
+                    document_id=document_id,
+                    library_document_id=library_doc_id,
+                    title=title,
+                )
+
+            # 4. Create matter_library_links if not already linked
+            existing_link = (
+                self.client.table("matter_library_links")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .eq("library_document_id", library_doc_id)
+                .execute()
+            )
+
+            if not existing_link.data:
+                self.client.table("matter_library_links").insert({
+                    "matter_id": matter_id,
+                    "library_document_id": library_doc_id,
+                    "linked_by": user_id,
+                }).execute()
+
+                logger.info(
+                    "promote_linked_to_matter",
+                    matter_id=matter_id,
+                    library_document_id=library_doc_id,
+                )
+
+            # 5. Mark original document as migrated
+            self.client.table("documents").update({
+                "migrated_to_library": True,
+                "library_document_id": library_doc_id,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }).eq("id", document_id).execute()
+
+            logger.info(
+                "promote_document_complete",
+                document_id=document_id,
+                library_document_id=library_doc_id,
+                matter_id=matter_id,
+            )
+
+            return library_doc_id
+
+        except LibraryServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "promote_document_to_library_failed",
+                document_id=document_id,
+                matter_id=matter_id,
+                error=str(e),
+            )
+            raise LibraryServiceError(
+                message=f"Failed to promote document to library: {e!s}",
+                code="PROMOTE_FAILED",
+            ) from e
+
+    # =========================================================================
     # Helpers
     # =========================================================================
 

@@ -4096,8 +4096,10 @@ def extract_entities(
 
         # IDEMPOTENCY CHECK: Skip if entity mentions already exist for this DOCUMENT
         # Changed from per-matter to per-document to ensure all documents get processed
+        # On Celery retry, bypass idempotency to allow partial re-extraction
+        is_celery_retry = self.request.retries > 0
         has_mentions, mention_count = _check_entity_mentions_exist_for_document(doc_id)
-        if has_mentions and not force:
+        if has_mentions and not force and not is_celery_retry:
             logger.info(
                 "extract_entities_idempotency_skip",
                 document_id=doc_id,
@@ -4116,6 +4118,15 @@ def extract_entities(
                 "reason": "Idempotency check: entity mentions already exist for document",
                 "job_id": job_id,
             }
+
+        if is_celery_retry and has_mentions:
+            logger.warning(
+                "extract_entities_retry_bypassing_idempotency",
+                document_id=doc_id,
+                retry_number=self.request.retries,
+                existing_mention_count=mention_count,
+                reason="Previous run may have been partial; re-extracting remaining chunks",
+            )
 
         # F1: Try shared chunk cache first (avoids Supabase read)
         from app.services.chunk_service import get_cached_chunks
@@ -5198,13 +5209,15 @@ def extract_citations(
             }
 
     # IDEMPOTENCY CHECK: Skip if citations already exist for this document
+    # On Celery retry, bypass idempotency to allow partial re-extraction
+    is_celery_retry = self.request.retries > 0
     client = get_service_client()
     citation_check = None
     if client:
         citation_check = client.table("citations").select("id", count="exact").eq(
             "source_document_id", doc_id
         ).execute()
-    if citation_check and citation_check.count and citation_check.count > 0:
+    if citation_check and citation_check.count and citation_check.count > 0 and not is_celery_retry:
         logger.info(
             "extract_citations_idempotency_skip",
             document_id=doc_id,
@@ -5275,6 +5288,15 @@ def extract_citations(
             "reason": "Idempotency check: citations already exist",
             "job_id": job_id,
         }
+
+    if is_celery_retry and citation_check and citation_check.count and citation_check.count > 0:
+        logger.warning(
+            "extract_citations_retry_bypassing_idempotency",
+            document_id=doc_id,
+            retry_number=self.request.retries,
+            existing_citation_count=citation_check.count,
+            reason="Previous run may have been partial; re-extracting remaining chunks",
+        )
 
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
@@ -5971,6 +5993,8 @@ def detect_contradictions(
         # "has THIS document already been used as source for comparisons?"
         # This ensures uploading doc B triggers cross-document comparisons
         # with doc A's chunks, even if doc A's entities were already compared.
+        # On Celery retry, bypass idempotency to allow partial re-detection
+        is_celery_retry = self.request.retries > 0
         if entity_ids:
             existing_for_doc = (
                 client.table("statement_comparisons")
@@ -5979,7 +6003,7 @@ def detect_contradictions(
                 .eq("source_document_id", doc_id)
                 .execute()
             )
-            if existing_for_doc.count and existing_for_doc.count > 0:
+            if existing_for_doc.count and existing_for_doc.count > 0 and not is_celery_retry:
                 logger.info(
                     "detect_contradictions_idempotency_skip",
                     document_id=doc_id,
@@ -5996,6 +6020,15 @@ def detect_contradictions(
                     "reason": "Idempotency: document already compared as source",
                     "job_id": job_id,
                 }
+
+            if is_celery_retry and existing_for_doc.count and existing_for_doc.count > 0:
+                logger.warning(
+                    "detect_contradictions_retry_bypassing_idempotency",
+                    document_id=doc_id,
+                    retry_number=self.request.retries,
+                    existing_comparison_count=existing_for_doc.count,
+                    reason="Previous run may have been partial; re-detecting remaining entities",
+                )
 
         if not entity_ids:
             logger.info(

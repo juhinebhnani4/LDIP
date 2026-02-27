@@ -26,6 +26,7 @@ from google.genai import types
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
 from app.core.gemini_client import get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.models.entity import EntityEdgeCreate, EntityNode, EntityType, RelationshipType
 from app.services.mig.alias_prompts import (
     ALIAS_BATCH_USER_PROMPT,
@@ -559,13 +560,15 @@ class EntityResolver:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await client.aio.models.generate_content(
-                    model=self._gemini_model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
-                    ),
-                )
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await client.aio.models.generate_content(
+                        model=self._gemini_model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 # Track cost
                 usage = getattr(response, 'usage_metadata', None)
@@ -652,13 +655,15 @@ class EntityResolver:
         retry_delay = INITIAL_RETRY_DELAY
         for attempt in range(MAX_RETRIES):
             try:
-                response = await client.aio.models.generate_content(
-                    model=self._gemini_model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
-                    ),
-                )
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await client.aio.models.generate_content(
+                        model=self._gemini_model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=ALIAS_CONTEXT_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 # Track cost
                 usage = getattr(response, 'usage_metadata', None)

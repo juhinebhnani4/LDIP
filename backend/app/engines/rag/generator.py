@@ -26,6 +26,7 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.engines.rag.prompts import (
     MAX_CONTEXT_CHUNKS,
     SYSTEM_PROMPTS,
@@ -240,16 +241,18 @@ class RAGAnswerGenerator:
                     profile.system_prompt_key, RAG_ANSWER_SYSTEM_PROMPT
                 )
 
-                response = await asyncio.wait_for(
-                    self.client.aio.models.generate_content(
-                        model=self.model_name,
-                        contents=user_prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await asyncio.wait_for(
+                        self.client.aio.models.generate_content(
+                            model=self.model_name,
+                            contents=user_prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_prompt,
+                            ),
                         ),
-                    ),
-                    timeout=generation_timeout,
-                )
+                        timeout=generation_timeout,
+                    )
 
                 # Extract answer text
                 answer_text = response.text.strip()

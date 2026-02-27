@@ -22,6 +22,7 @@ from google.genai import types
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
 from app.core.gemini_client import get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.core.prompt_boundaries import detect_injection_patterns, has_injection_patterns
 
 logger = structlog.get_logger(__name__)
@@ -290,13 +291,15 @@ class InjectionDetector:
         prompt = INJECTION_DETECTION_USER_PROMPT.format(text=text[:5000])
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=INJECTION_DETECTION_SYSTEM_PROMPT,
-                ),
-            )
+            gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+            async with gemini_limiter:
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=INJECTION_DETECTION_SYSTEM_PROMPT,
+                    ),
+                )
 
             # Track cost
             tracker = CostTracker(

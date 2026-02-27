@@ -130,10 +130,11 @@ class Settings(BaseSettings):
 
     # LLM Rate Limiting Configuration (Application-level throttling)
     # Prevents hitting provider rate limits (429 errors) with concurrent workers
-    # Gemini rate limits (conservative for free tier ~60 RPM)
-    gemini_max_concurrent_requests: int = 3         # Max parallel Gemini API calls
-    gemini_min_request_delay: float = 0.2           # Min seconds between requests
-    gemini_requests_per_minute: int = 60            # Target RPM (for monitoring)
+    # Gemini rate limits (free tier: ~10 RPM, 250 RPD)
+    gemini_max_concurrent_requests: int = 1         # Max parallel Gemini API calls (10 RPM can't sustain >1)
+    gemini_min_request_delay: float = 6.0           # Min seconds between requests (10 RPM = 1 req/6s)
+    gemini_requests_per_minute: int = 10            # Target RPM (match actual free tier)
+    gemini_requests_per_day: int = 250              # Daily quota (free tier limit, not yet enforced)
     # OpenAI rate limits (tier 1 ~500 RPM)
     openai_max_concurrent_requests: int = 5         # Max parallel OpenAI API calls
     openai_min_request_delay: float = 0.1           # Min seconds between requests

@@ -527,6 +527,7 @@ async def validate_act_name_with_llm(
     try:
         from google.genai import types
         from app.core.gemini_client import get_gemini_client
+        from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
         import json
 
         client = get_gemini_client()
@@ -557,14 +558,16 @@ VALID examples (real Indian statutes):
 
 JSON response:'''
 
-        response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=200,
-            ),
-        )
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+        async with gemini_limiter:
+            response = await client.aio.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=200,
+                ),
+            )
 
         # Track cost
         from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost

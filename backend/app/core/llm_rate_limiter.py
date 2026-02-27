@@ -3,8 +3,8 @@
 This module provides application-level rate limiting for LLM API calls
 to prevent hitting provider rate limits (429 errors).
 
-Rate Limits (as of Jan 2025):
-- Gemini Flash (free tier): ~60 RPM, ~1M TPM
+Rate Limits (as of Feb 2026):
+- Gemini Flash (free tier): ~10 RPM, 250 RPD
 - Gemini Flash (paid tier): ~1000 RPM, ~4M TPM
 - OpenAI GPT-4 (tier 1): ~500 RPM
 - OpenAI GPT-4 (tier 5): ~10,000 RPM
@@ -59,9 +59,9 @@ class RateLimiterConfig:
 # These are conservative defaults for free/low tiers
 DEFAULT_CONFIGS: dict[LLMProvider, RateLimiterConfig] = {
     LLMProvider.GEMINI: RateLimiterConfig(
-        max_concurrent=3,  # Conservative for free tier
-        min_delay_seconds=0.2,  # ~300 RPM max theoretical
-        requests_per_minute=60,
+        max_concurrent=1,  # Free tier: 10 RPM can't sustain >1 concurrent
+        min_delay_seconds=6.0,  # 10 RPM = 1 request every 6 seconds
+        requests_per_minute=10,
     ),
     LLMProvider.OPENAI: RateLimiterConfig(
         max_concurrent=5,

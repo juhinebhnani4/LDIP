@@ -27,6 +27,7 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.models.memory import SessionMessage
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import SESSION_TTL, _validate_uuid
@@ -129,15 +130,17 @@ class ConversationSummarizer:
         prompt = f"Summarize the following conversation context:\n\n{conversation_text}"
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=SUMMARIZER_SYSTEM_PROMPT,
-                    temperature=0.1,
-                    max_output_tokens=200,
-                ),
-            )
+            gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+            async with gemini_limiter:
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SUMMARIZER_SYSTEM_PROMPT,
+                        temperature=0.1,
+                        max_output_tokens=200,
+                    ),
+                )
 
             summary = response.text.strip() if response.text else None
 

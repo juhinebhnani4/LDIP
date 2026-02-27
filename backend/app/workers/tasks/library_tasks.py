@@ -417,6 +417,84 @@ def embed_library_chunks(
 
 
 # =============================================================================
+# Callback Dispatcher (fires after embed completes)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.library_tasks.fire_library_callbacks",
+)  # type: ignore[misc]
+def fire_library_callbacks(
+    prev_result: dict[str, str | int | None] | None = None,
+    library_document_id: str | None = None,
+    callbacks: list[dict] | None = None,
+) -> dict[str, str | int | None]:
+    """Fire callback tasks after library processing completes.
+
+    Chained after embed_library_chunks to ensure chunks and embeddings
+    exist before downstream tasks (like verification) run.
+
+    Args:
+        prev_result: Result from embed_library_chunks.
+        library_document_id: Library document UUID.
+        callbacks: List of dicts with "task_name" and "kwargs".
+
+    Returns:
+        Summary of dispatched callbacks.
+    """
+    if not callbacks:
+        return {"status": "no_callbacks", "library_document_id": library_document_id}
+
+    # Check if previous step succeeded
+    if prev_result:
+        prev_status = prev_result.get("status", "")
+        if "failed" in str(prev_status):
+            logger.warning(
+                "fire_library_callbacks_skipped_prev_failed",
+                library_document_id=library_document_id,
+                prev_status=prev_status,
+            )
+            return {
+                "status": "skipped",
+                "library_document_id": library_document_id,
+                "reason": f"Previous step failed: {prev_status}",
+            }
+
+    dispatched = 0
+    for cb in callbacks:
+        task_name = cb.get("task_name")
+        kwargs = dict(cb.get("kwargs", {}))
+        queue = cb.get("queue", "default")
+
+        # Auto-inject library_document_id as act_document_id if not set
+        # This solves the chicken-and-egg: callbacks are registered before
+        # the library_document_id is known, so we inject it at dispatch time.
+        if "act_document_id" not in kwargs and library_document_id:
+            kwargs["act_document_id"] = library_document_id
+
+        try:
+            celery_app.send_task(task_name, kwargs=kwargs, queue=queue)
+            dispatched += 1
+            logger.info(
+                "library_callback_dispatched",
+                task_name=task_name,
+                library_document_id=library_document_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "library_callback_dispatch_failed",
+                task_name=task_name,
+                error=str(e),
+            )
+
+    return {
+        "status": "callbacks_dispatched",
+        "library_document_id": library_document_id,
+        "dispatched": dispatched,
+    }
+
+
+# =============================================================================
 # Library Document OCR + Processing (for auto-fetched acts)
 # =============================================================================
 
@@ -431,6 +509,7 @@ def ocr_and_process_library_document(
     self,  # type: ignore[no-untyped-def]
     library_document_id: str,
     storage_path: str,
+    on_complete_callbacks: list[dict] | None = None,
 ) -> dict[str, str | int | None]:
     """Download a library document PDF, run OCR, then process (chunk + embed).
 
@@ -439,6 +518,9 @@ def ocr_and_process_library_document(
     Args:
         library_document_id: Library document UUID.
         storage_path: Supabase storage path to the PDF.
+        on_complete_callbacks: Optional list of task signatures to fire after
+            embed completes. Each dict has "task_name" and "kwargs".
+            Used to defer verification until chunks/embeddings exist.
 
     Returns:
         Task result with OCR + processing summary.
@@ -512,11 +594,22 @@ def ocr_and_process_library_document(
         }).eq("id", library_document_id).execute()
 
         # 5. Chain into existing processing pipeline (chunk → embed)
+        # If callbacks are provided, chain a dispatcher task after embed
         from celery import chain
-        pipeline = chain(
+        steps = [
             chunk_library_document.s(library_document_id, extracted_text),
             embed_library_chunks.s(),
-        )
+        ]
+
+        if on_complete_callbacks:
+            steps.append(
+                fire_library_callbacks.s(
+                    library_document_id=library_document_id,
+                    callbacks=on_complete_callbacks,
+                )
+            )
+
+        pipeline = chain(*steps)
         pipeline.apply_async(queue="default")
 
         logger.info(
@@ -524,6 +617,7 @@ def ocr_and_process_library_document(
             library_document_id=library_document_id,
             text_length=len(extracted_text),
             page_count=ocr_result.page_count,
+            has_callbacks=bool(on_complete_callbacks),
         )
 
         return {
@@ -607,3 +701,168 @@ def process_library_document(
         "library_document_id": library_document_id,
         "task_id": result.id,
     }
+
+
+# =============================================================================
+# Promote Chunks from Documents → Library
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.library_tasks.promote_chunks_to_library",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)  # type: ignore[misc]
+def promote_chunks_to_library(
+    self,  # type: ignore[no-untyped-def]
+    library_document_id: str,
+    source_document_id: str,
+    storage_path: str,
+) -> dict[str, str | int | None]:
+    """Copy chunks from documents table to library_chunks, or OCR if none exist.
+
+    Used when a document is promoted from the matter-specific documents table
+    to the shared library. Copies existing chunks to avoid re-processing.
+
+    Args:
+        library_document_id: Target library document UUID.
+        source_document_id: Source document UUID (from documents table).
+        storage_path: Supabase storage path to PDF (fallback for OCR).
+
+    Returns:
+        Task result dict.
+    """
+    logger.info(
+        "promote_chunks_started",
+        library_document_id=library_document_id,
+        source_document_id=source_document_id,
+    )
+
+    client = get_service_client()
+    if client is None:
+        return {
+            "status": "failed",
+            "library_document_id": library_document_id,
+            "reason": "database_not_configured",
+        }
+
+    try:
+        # Idempotency: skip if library_chunks already exist
+        existing = client.table("library_chunks").select(
+            "id", count="exact"
+        ).eq("library_document_id", library_document_id).execute()
+
+        if existing.count and existing.count > 0:
+            logger.info(
+                "promote_chunks_already_exist",
+                library_document_id=library_document_id,
+                count=existing.count,
+            )
+            # Ensure status is completed
+            client.table("library_documents").update({
+                "status": "completed",
+            }).eq("id", library_document_id).execute()
+            return {
+                "status": "already_exists",
+                "library_document_id": library_document_id,
+                "chunk_count": existing.count,
+            }
+
+        # Check if source document has chunks
+        source_chunks = client.table("chunks").select(
+            "content, embedding, page_number, chunk_index, token_count, chunk_type"
+        ).eq("document_id", source_document_id).is_(
+            "parent_chunk_id", "null"
+        ).order("chunk_index").execute()
+
+        if source_chunks.data and len(source_chunks.data) > 0:
+            # Copy chunks to library_chunks
+            library_chunks = []
+            for i, chunk in enumerate(source_chunks.data):
+                library_chunks.append({
+                    "library_document_id": library_document_id,
+                    "chunk_index": chunk.get("chunk_index", i),
+                    "content": chunk["content"],
+                    "page_number": chunk.get("page_number"),
+                    "token_count": chunk.get("token_count"),
+                    "chunk_type": chunk.get("chunk_type", "parent"),
+                    "embedding": chunk.get("embedding"),
+                })
+
+            # Insert in batches to avoid payload limits
+            batch_size = 100
+            total_inserted = 0
+            for start in range(0, len(library_chunks), batch_size):
+                batch = library_chunks[start : start + batch_size]
+                client.table("library_chunks").insert(batch).execute()
+                total_inserted += len(batch)
+
+            # Update library document status to completed
+            client.table("library_documents").update({
+                "status": "completed",
+                "page_count": max(
+                    (c.get("page_number") or 0 for c in source_chunks.data),
+                    default=None,
+                ),
+            }).eq("id", library_document_id).execute()
+
+            logger.info(
+                "promote_chunks_copied",
+                library_document_id=library_document_id,
+                source_document_id=source_document_id,
+                chunk_count=total_inserted,
+            )
+
+            return {
+                "status": "chunks_copied",
+                "library_document_id": library_document_id,
+                "chunk_count": total_inserted,
+            }
+
+        else:
+            # No chunks in source — fall back to OCR + processing
+            logger.info(
+                "promote_chunks_no_source_chunks_fallback_to_ocr",
+                library_document_id=library_document_id,
+                source_document_id=source_document_id,
+            )
+            ocr_and_process_library_document.apply_async(
+                kwargs={
+                    "library_document_id": library_document_id,
+                    "storage_path": storage_path,
+                },
+                queue="default",
+            )
+            return {
+                "status": "ocr_fallback_triggered",
+                "library_document_id": library_document_id,
+            }
+
+    except Exception as e:
+        logger.error(
+            "promote_chunks_failed",
+            library_document_id=library_document_id,
+            source_document_id=source_document_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        try:
+            raise self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            # Fall back to OCR as last resort
+            try:
+                ocr_and_process_library_document.apply_async(
+                    kwargs={
+                        "library_document_id": library_document_id,
+                        "storage_path": storage_path,
+                    },
+                    queue="default",
+                )
+            except Exception:
+                pass
+            return {
+                "status": "failed",
+                "library_document_id": library_document_id,
+                "reason": str(e),
+            }

@@ -18,6 +18,11 @@ import structlog
 from google.genai import types
 
 from app.core.config import get_settings
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
 from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost, persist_cost_sync
 from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import GeminiClientError, get_gemini_client
@@ -174,14 +179,16 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                # Call Gemini asynchronously
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-                    ),
-                )
+                # Call Gemini asynchronously (rate-limited)
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 # Parse response
                 result = self._parse_single_response(
@@ -332,14 +339,16 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                # Call Gemini
-                response = await self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-                    ),
-                )
+                # Call Gemini (rate-limited)
+                gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+                async with gemini_limiter:
+                    response = await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                        ),
+                    )
 
                 # Parse response
                 results = self._parse_batch_response(response.text, events)
@@ -454,13 +463,15 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-                    ),
-                )
+                gemini_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+                with gemini_limiter:
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                        ),
+                    )
                 # Track cost (sync)
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,
@@ -568,13 +579,15 @@ class EventClassifier:
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
-                    ),
-                )
+                gemini_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+                with gemini_limiter:
+                    response = self.client.models.generate_content(
+                        model=self.model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=EVENT_CLASSIFICATION_SYSTEM_PROMPT,
+                        ),
+                    )
                 # Track cost (sync)
                 ec_tracker = CostTracker(
                     provider=CostLLMProvider.GEMINI_FLASH,

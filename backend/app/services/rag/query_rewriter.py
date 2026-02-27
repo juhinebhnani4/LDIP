@@ -27,6 +27,7 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import get_gemini_client
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
 from app.core.prompt_boundaries import _escape_xml_tags
 
 logger = structlog.get_logger(__name__)
@@ -130,15 +131,17 @@ async def rewrite_query(
         settings = get_settings()
         client = get_gemini_client()
 
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=REWRITER_SYSTEM_PROMPT,
-                temperature=0.1,
-                max_output_tokens=256,
-            ),
-        )
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+        async with gemini_limiter:
+            response = await client.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=REWRITER_SYSTEM_PROMPT,
+                    temperature=0.1,
+                    max_output_tokens=256,
+                ),
+            )
 
         rewritten = response.text.strip() if response.text else None
 

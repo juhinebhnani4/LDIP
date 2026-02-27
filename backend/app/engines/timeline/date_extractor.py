@@ -27,6 +27,11 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.cost_tracking import (
     CostTracker,
@@ -307,15 +312,17 @@ class DateExtractor:
         """
         from google.genai import types
 
-        response = await self.client.aio.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
-                max_output_tokens=8192,
-                temperature=0.1,
-            ),
-        )
+        gemini_limiter = get_rate_limiter(RateLimitProvider.GEMINI)
+        async with gemini_limiter:
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                    max_output_tokens=8192,
+                    temperature=0.1,
+                ),
+            )
         return response.text
 
     async def _extract_from_chunks(
@@ -585,15 +592,17 @@ class DateExtractor:
         try:
             from google.genai import types
 
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
-                    max_output_tokens=8192,
-                    temperature=0.1,
-                ),
-            )
+            gemini_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+            with gemini_limiter:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                        max_output_tokens=8192,
+                        temperature=0.1,
+                    ),
+                )
 
             # Track costs (Gemini doesn't expose token counts, so estimate)
             response_text = response.text if response.text else ""

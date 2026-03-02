@@ -439,6 +439,8 @@ graph TB
 
 ## 5. Data Model (ER Diagram)
 
+> **Full-detail version:** See [`docs/schema.dbml`](schema.dbml) — paste into [dbdiagram.io](https://dbdiagram.io) for an interactive, zoomable diagram with all columns, constraints, and ON DELETE behaviors.
+
 ```mermaid
 erDiagram
     users ||--o{ matter_attorneys : "assigned to"
@@ -477,6 +479,10 @@ erDiagram
     matters ||--o{ ocr_human_review : "has OCR reviews"
     matters ||--o{ matter_query_history : "has query history"
     matters ||--o{ finding_verifications : "has finding checks"
+    matters ||--o{ document_tables : "has extracted tables"
+    matters ||--o{ section_index : "has section index"
+    matters ||--o{ consistency_issues : "has consistency issues"
+    matters ||--o{ ab_test_runs : "has A/B tests"
 
     documents ||--o{ chunks : "split into"
     documents ||--o{ bounding_boxes : "has bboxes"
@@ -485,6 +491,9 @@ erDiagram
     documents ||--o{ document_ocr_chunks : "split into OCR batches"
     documents ||--o{ ocr_validation_log : "validated"
     documents ||--o{ ocr_human_review : "reviewed"
+    documents ||--o{ document_tables : "has tables"
+    documents ||--o{ section_index : "has sections"
+    documents ||--o{ toc_pages : "has TOC pages"
 
     chunks ||--o{ chunks : "parent_chunk_id"
     chunks ||--o{ entity_mentions : "chunk_id"
@@ -508,6 +517,11 @@ erDiagram
     findings ||--o{ finding_verifications : "verified by"
 
     golden_dataset ||--o{ evaluation_results : "evaluated by"
+    ab_test_runs }o--|| matters : "test matter_id"
+
+    act_resolutions }o--o| act_validation_cache : "validated by cache"
+
+    consistency_issues }o--o| documents : "issue document_id"
 
     bounding_boxes ||--o{ ocr_validation_log : "corrected bbox"
 
@@ -908,6 +922,81 @@ erDiagram
         float confidence_after "nullable"
         uuid verified_by FK
         text notes
+    }
+
+    document_tables {
+        uuid id PK
+        uuid document_id FK
+        uuid matter_id FK
+        int table_index
+        int page_number
+        text markdown_content
+        jsonb json_content
+        int row_count
+        int col_count
+        float confidence
+    }
+
+    section_index {
+        uuid id PK
+        uuid document_id FK
+        uuid matter_id FK
+        text section_number
+        int page_number
+        float confidence
+        boolean is_toc
+        text section_title
+    }
+
+    toc_pages {
+        uuid id PK
+        uuid document_id FK
+        int page_number
+        float confidence
+        text detected_via
+    }
+
+    act_validation_cache {
+        uuid id PK "global — shared across matters"
+        text act_name_normalized "unique"
+        text act_name_canonical
+        int act_year
+        text india_code_url
+        text validation_status "valid|invalid|state_act|not_on_indiacode|unknown"
+    }
+
+    llm_quota_limits {
+        uuid id PK
+        varchar provider "unique"
+        bigint daily_token_limit
+        bigint monthly_token_limit
+        numeric daily_cost_limit_inr
+        numeric monthly_cost_limit_inr
+        int alert_threshold_pct
+    }
+
+    consistency_issues {
+        uuid id PK
+        uuid matter_id FK
+        text issue_type "date_mismatch|entity_name_mismatch|amount_discrepancy|..."
+        text severity "info|warning|error"
+        text source_engine "timeline|entity|citation|contradiction|rag"
+        text conflicting_engine
+        text description
+        uuid document_id FK "nullable"
+        text status "open|reviewed|resolved|dismissed"
+    }
+
+    ab_test_runs {
+        uuid id PK
+        uuid matter_id FK
+        text status "pending|running_control|running_treatment|comparing|completed|failed"
+        text control_embedding "default openai"
+        text treatment_embedding "default voyage"
+        jsonb control_scores
+        jsonb treatment_scores
+        text decision "control_wins|treatment_wins|no_significant_difference"
+        float decision_confidence
     }
 ```
 

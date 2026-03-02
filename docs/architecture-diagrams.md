@@ -481,8 +481,9 @@ erDiagram
     matters ||--o{ finding_verifications : "has finding checks"
     matters ||--o{ document_tables : "has extracted tables"
     matters ||--o{ section_index : "has section index"
-    matters ||--o{ consistency_issues : "has consistency issues"
     matters ||--o{ ab_test_runs : "has A/B tests"
+    matters ||--o{ evaluation_baselines : "has baselines"
+    matters ||--o{ llm_costs : "has LLM costs"
 
     documents ||--o{ chunks : "split into"
     documents ||--o{ bounding_boxes : "has bboxes"
@@ -504,7 +505,7 @@ erDiagram
     identity_nodes ||--o{ alias_corrections : "corrected entity"
 
     citations }o--|| documents : "source_document_id"
-    citations }o--o| documents : "target_act_document_id"
+    citations }o--o| library_documents : "target_act_document_id"
 
     processing_jobs ||--o{ job_stage_history : "has stages"
 
@@ -520,8 +521,6 @@ erDiagram
     ab_test_runs }o--|| matters : "test matter_id"
 
     act_resolutions }o--o| act_validation_cache : "validated by cache"
-
-    consistency_issues }o--o| documents : "issue document_id"
 
     bounding_boxes ||--o{ ocr_validation_log : "corrected bbox"
 
@@ -975,16 +974,30 @@ erDiagram
         int alert_threshold_pct
     }
 
-    consistency_issues {
+    evaluation_baselines {
         uuid id PK
         uuid matter_id FK
-        text issue_type "date_mismatch|entity_name_mismatch|amount_discrepancy|..."
-        text severity "info|warning|error"
-        text source_engine "timeline|entity|citation|contradiction|rag"
-        text conflicting_engine
-        text description
-        uuid document_id FK "nullable"
-        text status "open|reviewed|resolved|dismissed"
+        float avg_overall "CHECK 0-1"
+        float avg_faithfulness
+        float avg_relevancy
+        float avg_recall
+        jsonb per_item_scores
+        int total_items
+        int successful_items
+        text promoted_from_job_id
+        jsonb pipeline_config
+        boolean is_active "default true"
+    }
+
+    llm_pricing {
+        uuid id PK "standalone — no FK"
+        varchar provider
+        numeric input_cost_per_1k
+        numeric output_cost_per_1k
+        varchar unit "default tokens"
+        timestamptz effective_from
+        timestamptz effective_to "nullable"
+        text notes
     }
 
     ab_test_runs {

@@ -1,6 +1,7 @@
 // Jaanch AI — Complete Database Schema (DBML)
 // Generated from supabase/migrations/ — paste into https://dbdiagram.io
-// 46 tables · 4 enums · 4 views · 43 with RLS
+// 47 tables · 4 enums · 4 views · 44 with RLS
+// Verified against live Supabase schema dump (2026-03-02)
 
 // ─────────────────────────────────────────────
 // Enums
@@ -519,32 +520,6 @@ Table statement_comparisons {
   Note: 'RLS enabled. Pairwise statement contradiction analysis results.'
 }
 
-Table consistency_issues {
-  id uuid [pk, default: `gen_random_uuid()`]
-  matter_id uuid [not null]
-  issue_type text [not null, note: 'date_mismatch|entity_name_mismatch|amount_discrepancy|citation_conflict|timeline_gap|duplicate_event']
-  severity text [not null, default: 'warning', note: 'info|warning|error']
-  source_engine text [not null, note: 'timeline|entity|citation|contradiction|rag']
-  source_id uuid
-  source_value text
-  conflicting_engine text [not null, note: 'timeline|entity|citation|contradiction|rag']
-  conflicting_id uuid
-  conflicting_value text
-  description text [not null]
-  document_id uuid [note: 'ON DELETE SET NULL']
-  document_name text
-  status text [not null, default: 'open', note: 'open|reviewed|resolved|dismissed']
-  resolved_by uuid [note: 'ON DELETE SET NULL']
-  resolved_at timestamptz
-  resolution_notes text
-  detected_at timestamptz [not null, default: `now()`]
-  metadata jsonb [default: '{}']
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz [not null, default: `now()`]
-
-  Note: 'RLS enabled. Cross-engine consistency issues detected automatically.'
-}
-
 // ─────────────────────────────────────────────
 // Findings & Verification
 // ─────────────────────────────────────────────
@@ -901,6 +876,25 @@ Table ab_test_runs {
   Note: 'RLS enabled. A/B test runs comparing RAG pipeline configurations.'
 }
 
+Table evaluation_baselines {
+  id uuid [pk, default: `gen_random_uuid()`]
+  matter_id uuid [not null]
+  avg_overall float [not null, note: 'CHECK 0-1']
+  avg_faithfulness float [note: 'CHECK 0-1']
+  avg_relevancy float [note: 'CHECK 0-1']
+  avg_recall float [note: 'CHECK 0-1']
+  per_item_scores jsonb [not null, default: '{}']
+  total_items integer [not null, default: 0]
+  successful_items integer [not null, default: 0]
+  promoted_from_job_id text
+  pipeline_config jsonb [not null, default: '{}']
+  created_by text
+  created_at timestamptz [not null, default: `now()`]
+  is_active boolean [not null, default: true]
+
+  Note: 'RLS enabled. Baseline scores for regression detection in A/B testing.'
+}
+
 // ─────────────────────────────────────────────
 // Cost Tracking & Quotas
 // ─────────────────────────────────────────────
@@ -923,9 +917,24 @@ Table llm_costs {
   usd_to_inr_rate numeric [default: 83.50]
   duration_ms integer
   metadata jsonb [default: '{}']
+  user_id uuid [note: 'FK → auth.users']
   created_at timestamptz [default: `now()`]
 
   Note: 'RLS enabled. Per-API-call LLM cost tracking. INR is primary currency.'
+}
+
+Table llm_pricing {
+  id uuid [pk, default: `gen_random_uuid()`]
+  provider varchar [not null]
+  input_cost_per_1k numeric [not null]
+  output_cost_per_1k numeric [not null]
+  unit varchar [not null, default: 'tokens']
+  effective_from timestamptz [not null, default: `now()`]
+  effective_to timestamptz [note: 'nullable — NULL means current pricing']
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'RLS enabled. LLM pricing tiers — supports time-windowed pricing changes.'
 }
 
 Table llm_quota_limits {
@@ -1063,9 +1072,6 @@ Ref: statement_comparisons.entity_id > identity_nodes.id [delete: cascade]
 Ref: statement_comparisons.statement_a_id > chunks.id [delete: cascade]
 Ref: statement_comparisons.statement_b_id > chunks.id [delete: cascade]
 Ref: statement_comparisons.source_document_id > documents.id [delete: set null]
-Ref: consistency_issues.matter_id > matters.id [delete: cascade]
-Ref: consistency_issues.document_id > documents.id [delete: set null]
-Ref: consistency_issues.resolved_by > users.id [delete: set null]
 
 // Findings
 Ref: findings.matter_id > matters.id [delete: cascade]
@@ -1115,10 +1121,12 @@ Ref: golden_dataset.created_by > users.id
 Ref: evaluation_results.matter_id > matters.id [delete: cascade]
 Ref: evaluation_results.golden_item_id > golden_dataset.id [delete: set null]
 Ref: ab_test_runs.matter_id > matters.id [delete: cascade]
+Ref: evaluation_baselines.matter_id > matters.id [delete: cascade]
 
 // Costs
 Ref: llm_costs.matter_id > matters.id [delete: set null]
 Ref: llm_costs.document_id > documents.id [delete: set null]
+Ref: llm_costs.user_id > users.id
 
 // Audit
 Ref: audit_logs.user_id > users.id [delete: set null]
@@ -1173,7 +1181,6 @@ TableGroup timeline {
 
 TableGroup contradictions {
   statement_comparisons
-  consistency_issues
 }
 
 TableGroup findings_verification {
@@ -1210,10 +1217,12 @@ TableGroup evaluation {
   golden_dataset
   evaluation_results
   ab_test_runs
+  evaluation_baselines
 }
 
 TableGroup costs_audit {
   llm_costs
+  llm_pricing
   llm_quota_limits
   audit_logs
   reasoning_traces

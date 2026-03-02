@@ -484,6 +484,7 @@ erDiagram
     matters ||--o{ ab_test_runs : "has A/B tests"
     matters ||--o{ evaluation_baselines : "has baselines"
     matters ||--o{ llm_costs : "has LLM costs"
+    matters ||--o{ consistency_issues : "has consistency issues"
 
     documents ||--o{ chunks : "split into"
     documents ||--o{ bounding_boxes : "has bboxes"
@@ -521,6 +522,8 @@ erDiagram
     ab_test_runs }o--|| matters : "test matter_id"
 
     act_resolutions }o--o| act_validation_cache : "validated by cache"
+
+    consistency_issues }o--o| documents : "issue document_id"
 
     bounding_boxes ||--o{ ocr_validation_log : "corrected bbox"
 
@@ -998,6 +1001,18 @@ erDiagram
         timestamptz effective_from
         timestamptz effective_to "nullable"
         text notes
+    }
+
+    consistency_issues {
+        uuid id PK
+        uuid matter_id FK
+        text issue_type "date_mismatch|entity_name_mismatch|amount_discrepancy|..."
+        text severity "info|warning|error"
+        text source_engine "timeline|entity|citation|contradiction|rag"
+        text conflicting_engine
+        text description
+        uuid document_id FK "nullable"
+        text status "open|reviewed|resolved|dismissed"
     }
 
     ab_test_runs {

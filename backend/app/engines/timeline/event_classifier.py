@@ -17,6 +17,8 @@ from functools import lru_cache
 import structlog
 from google.genai import types
 
+from app.engines.base import ReasoningCaptureMixin
+from app.models.reasoning_trace import EngineType
 from app.core.config import get_settings
 from app.core.llm_rate_limiter import (
     LLMProvider as RateLimitProvider,
@@ -82,7 +84,7 @@ class ClassifierConfigurationError(EventClassifierError):
 # =============================================================================
 
 
-class EventClassifier:
+class EventClassifier(ReasoningCaptureMixin):
     """Service for classifying events using Gemini 3 Flash.
 
     Classifies raw_date events into specific event types (filing, notice,
@@ -211,6 +213,20 @@ class EventClassifier:
                 await persist_cost(ec_tracker)
 
                 processing_time = int((time.time() - start_time) * 1000)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    await self.store_reasoning(
+                        matter_id=matter_id,
+                        engine_type=EngineType.TIMELINE,
+                        model_used=self.model_name,
+                        reasoning_text=result.classification_reasoning or response.text or "",
+                        input_summary=f"Event classification for event {event_id}, date_text={date_text}",
+                        confidence_score=result.classification_confidence,
+                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        cost_usd=ec_tracker.total_cost_usd,
+                    )
+
                 logger.debug(
                     "event_classification_complete",
                     event_id=event_id,
@@ -368,6 +384,19 @@ class EventClassifier:
                 await persist_cost(ec_tracker)
 
                 processing_time = int((time.time() - start_time) * 1000)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    await self.store_reasoning(
+                        matter_id=matter_id,
+                        engine_type=EngineType.TIMELINE,
+                        model_used=self.model_name,
+                        reasoning_text=response.text or "",
+                        input_summary=f"Batch event classification for {len(events)} events",
+                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        cost_usd=ec_tracker.total_cost_usd,
+                    )
+
                 logger.info(
                     "event_classification_batch_complete",
                     event_count=len(events),
@@ -485,7 +514,22 @@ class EventClassifier:
                 )
                 ec_tracker.log_cost()
                 persist_cost_sync(ec_tracker)
-                return self._parse_single_response(response.text, event_id)
+                result = self._parse_single_response(response.text, event_id)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    self.store_reasoning_sync(
+                        matter_id=matter_id,
+                        engine_type=EngineType.TIMELINE,
+                        model_used=self.model_name,
+                        reasoning_text=result.classification_reasoning or response.text or "",
+                        input_summary=f"Event classification (sync) for event {event_id}, date_text={date_text}",
+                        confidence_score=result.classification_confidence,
+                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        cost_usd=ec_tracker.total_cost_usd,
+                    )
+
+                return result
 
             except ClassifierConfigurationError:
                 raise
@@ -601,7 +645,21 @@ class EventClassifier:
                 )
                 ec_tracker.log_cost()
                 persist_cost_sync(ec_tracker)
-                return self._parse_batch_response(response.text, events)
+                results = self._parse_batch_response(response.text, events)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    self.store_reasoning_sync(
+                        matter_id=matter_id,
+                        engine_type=EngineType.TIMELINE,
+                        model_used=self.model_name,
+                        reasoning_text=response.text or "",
+                        input_summary=f"Batch event classification (sync) for {len(events)} events",
+                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        cost_usd=ec_tracker.total_cost_usd,
+                    )
+
+                return results
 
             except ClassifierConfigurationError:
                 raise

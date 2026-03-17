@@ -130,6 +130,73 @@ class ReasoningCaptureMixin:
                 engine_type=engine_type.value,
             )
 
+    def store_reasoning_sync(
+        self,
+        matter_id: str,
+        engine_type: EngineType,
+        model_used: str,
+        reasoning_text: str,
+        finding_id: str | None = None,
+        reasoning_structured: dict[str, Any] | None = None,
+        input_summary: str | None = None,
+        prompt_version: str | None = None,
+        confidence_score: float | None = None,
+        tokens_used: int | None = None,
+        cost_usd: float | None = None,
+    ) -> None:
+        """Synchronous variant of store_reasoning for Celery task contexts.
+
+        Story 4.1: AC 4.1.2 - Graceful failure handling.
+        The underlying Supabase client is synchronous, so no event loop needed.
+        """
+        if not reasoning_text:
+            logger.debug(
+                "reasoning_trace_skipped_empty",
+                matter_id=matter_id,
+                engine_type=engine_type.value,
+            )
+            return
+
+        trace = ReasoningTraceCreate(
+            matter_id=matter_id,
+            finding_id=finding_id,
+            engine_type=engine_type,
+            model_used=model_used,
+            reasoning_text=reasoning_text,
+            reasoning_structured=reasoning_structured,
+            input_summary=input_summary[:1000] if input_summary else None,
+            prompt_template_version=prompt_version,
+            confidence_score=confidence_score,
+            tokens_used=tokens_used,
+            cost_usd=cost_usd,
+        )
+
+        try:
+            # store_trace is declared async but uses synchronous Supabase client
+            # Call the internal insert directly for sync contexts
+            service = self.reasoning_service
+            data = {
+                "matter_id": trace.matter_id,
+                "finding_id": trace.finding_id,
+                "engine_type": trace.engine_type.value,
+                "model_used": trace.model_used,
+                "reasoning_text": trace.reasoning_text,
+                "reasoning_structured": trace.reasoning_structured,
+                "input_summary": trace.input_summary[:1000] if trace.input_summary else None,
+                "prompt_template_version": trace.prompt_template_version,
+                "confidence_score": trace.confidence_score,
+                "tokens_used": trace.tokens_used,
+                "cost_usd": float(trace.cost_usd) if trace.cost_usd else None,
+            }
+            service.client.table("reasoning_traces").insert(data).execute()
+        except Exception as e:
+            logger.error(
+                "reasoning_trace_storage_failed",
+                error=str(e),
+                matter_id=matter_id,
+                engine_type=engine_type.value,
+            )
+
     async def store_reasoning_from_response(
         self,
         matter_id: str,

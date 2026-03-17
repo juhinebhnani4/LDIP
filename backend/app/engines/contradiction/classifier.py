@@ -18,6 +18,8 @@ from functools import lru_cache
 
 import structlog
 
+from app.engines.base import ReasoningCaptureMixin
+from app.models.reasoning_trace import EngineType
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
 from app.engines.contradiction.prompts import (
@@ -322,7 +324,7 @@ def create_extracted_values(
 # =============================================================================
 
 
-class ContradictionClassifier:
+class ContradictionClassifier(ReasoningCaptureMixin):
     """Engine for classifying contradictions by type.
 
     Story 5-3: Third stage of the Contradiction Engine pipeline.
@@ -654,6 +656,19 @@ class ContradictionClassifier:
                     explanation=parsed.get("explanation", comparison.reasoning),
                     classification_method="llm_fallback",
                 )
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    await self.store_reasoning(
+                        matter_id=matter_id,
+                        engine_type=EngineType.CONTRADICTION,
+                        model_used=self.model_name,
+                        reasoning_text=parsed.get("explanation", comparison.reasoning),
+                        input_summary=f"Contradiction classification: {comparison.statement_a_id} vs {comparison.statement_b_id}",
+                        confidence_score=float(parsed.get("confidence", 0)) if parsed.get("confidence") else None,
+                        tokens_used=(cost_tracker.input_tokens + cost_tracker.output_tokens),
+                        cost_usd=cost_tracker.cost_usd,
+                    )
 
                 return classified, cost_tracker
 

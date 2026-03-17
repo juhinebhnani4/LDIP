@@ -20,6 +20,8 @@ from functools import lru_cache
 
 import structlog
 
+from app.engines.base import ReasoningCaptureMixin
+from app.models.reasoning_trace import EngineType
 from app.core.bbox_filter import get_filtered_bbox_ids
 from app.core.circuit_breaker import (
     CircuitOpenError,
@@ -41,6 +43,7 @@ from app.core.cost_tracking import (
     persist_cost_sync,
 )
 from app.engines.timeline.prompts import (
+    DATE_EXTRACTION_BATCH_PROMPT,
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
 )
@@ -95,7 +98,7 @@ class DateConfigurationError(DateExtractorError):
 # =============================================================================
 
 
-class DateExtractor:
+class DateExtractor(ReasoningCaptureMixin):
     """Service for extracting dates from legal documents using Gemini 3 Flash.
 
     Extracts dates in various formats with surrounding context for timeline
@@ -266,6 +269,17 @@ class DateExtractor:
                 matter_id=matter_id,
                 page_number=page_number,
                 bbox_ids=bbox_ids,
+            )
+
+            # Store reasoning trace for legal defensibility
+            await self.store_reasoning(
+                matter_id=matter_id,
+                engine_type=EngineType.TIMELINE,
+                model_used=self.model_name,
+                reasoning_text=response_text or "",
+                input_summary=f"Date extraction from document {document_id}, text length {len(text)}",
+                tokens_used=(input_tokens + output_tokens),
+                cost_usd=cost_tracker.total_cost_usd,
             )
 
             logger.debug(
@@ -620,6 +634,17 @@ class DateExtractor:
                 bbox_ids=bbox_ids,
             )
 
+            # Store reasoning trace for legal defensibility
+            self.store_reasoning_sync(
+                matter_id=matter_id,
+                engine_type=EngineType.TIMELINE,
+                model_used=self.model_name,
+                reasoning_text=response_text,
+                input_summary=f"Date extraction (sync) from document {document_id}, text length {len(text)}",
+                tokens_used=(input_tokens + output_tokens),
+                cost_usd=cost_tracker.total_cost_usd,
+            )
+
             # Record success
             breaker.record_success()
 
@@ -930,6 +955,262 @@ class DateExtractor:
             ambiguity_reason=ambiguity_reason,
             confidence=confidence,
         )
+
+    def extract_dates_batch_sync(
+        self,
+        chunks: list[dict],
+        document_id: str,
+        matter_id: str | None = None,
+    ) -> dict[str, DateExtractionResult]:
+        """Extract dates from multiple chunks in a single Gemini call.
+
+        B3 optimization: Batches N chunks (default 3) per Gemini call using
+        [CHUNK:id] markers, reducing LLM calls by ~66%.
+
+        Falls back to per-chunk extraction on parse failure.
+
+        Args:
+            chunks: List of chunk dicts with 'id', 'content', 'page_number', 'bbox_ids'.
+            document_id: Document ID for cost tracking.
+            matter_id: Matter ID for cost tracking.
+
+        Returns:
+            Dict mapping chunk_id -> DateExtractionResult.
+        """
+        from app.core.circuit_breaker import get_circuit_registry
+
+        # Build combined text with chunk markers
+        marked_sections = []
+        for chunk in chunks:
+            chunk_id = chunk["id"]
+            content = chunk.get("content", "")
+            if not content or not content.strip():
+                continue
+            # Cap each chunk at MAX_TEXT_LENGTH (same as single-chunk mode)
+            truncated = content[:MAX_TEXT_LENGTH] if len(content) > MAX_TEXT_LENGTH else content
+            page_num = chunk.get("page_number", "unknown")
+            marked_sections.append(
+                f"[CHUNK:{chunk_id}] (page {page_num})\n{truncated}"
+            )
+
+        # If no valid content, return empty results for all chunks
+        if not marked_sections:
+            return {
+                chunk["id"]: self._empty_result(document_id, matter_id or "")
+                for chunk in chunks
+            }
+
+        batch_text = "\n\n".join(marked_sections)
+        prompt = DATE_EXTRACTION_BATCH_PROMPT.format(batch_sections=batch_text)
+
+        cost_tracker = CostTracker(
+            provider=LLMProvider.GEMINI_FLASH,
+            operation="date_extraction_batch",
+            matter_id=matter_id or "",
+            document_id=document_id,
+        )
+
+        # Check circuit state
+        registry = get_circuit_registry()
+        breaker = registry.get(CircuitService.GEMINI_FLASH)
+
+        if breaker.is_open:
+            logger.warning(
+                "date_extraction_batch_circuit_open",
+                document_id=document_id,
+                chunk_count=len(chunks),
+                cooldown_remaining=breaker.cooldown_remaining,
+            )
+            return {
+                chunk["id"]: self._empty_result(document_id, matter_id or "")
+                for chunk in chunks
+            }
+
+        try:
+            from google.genai import types
+
+            distributed_limiter = get_distributed_rate_limiter(RateLimitProvider.GEMINI)
+            with distributed_limiter:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=DATE_EXTRACTION_SYSTEM_PROMPT,
+                        max_output_tokens=8192,
+                        temperature=0.1,
+                    ),
+                )
+
+            response_text = response.text if response.text else ""
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(response_text)
+            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.log_cost()
+            persist_cost_sync(cost_tracker)
+
+            breaker.record_success()
+
+            # Parse batch response into per-chunk date lists
+            chunk_dates = self._parse_batch_response(
+                response_text, [c["id"] for c in chunks]
+            )
+
+            # Build DateExtractionResult per chunk, attaching page/bbox metadata
+            chunk_lookup = {c["id"]: c for c in chunks}
+            results: dict[str, DateExtractionResult] = {}
+
+            for chunk_id, raw_dates in chunk_dates.items():
+                chunk_meta = chunk_lookup.get(chunk_id, {})
+                page_number = chunk_meta.get("page_number")
+                bbox_ids = chunk_meta.get("bbox_ids") or []
+
+                dates: list[ExtractedDate] = []
+                for raw_date in raw_dates:
+                    try:
+                        extracted = self._parse_single_date(
+                            raw_date, page_number, bbox_ids, document_id, matter_id
+                        )
+                        if extracted:
+                            dates.append(extracted)
+                    except Exception as e:
+                        logger.debug(
+                            "date_batch_parse_single_error",
+                            error=str(e),
+                            chunk_id=chunk_id,
+                        )
+                        continue
+
+                results[chunk_id] = DateExtractionResult(
+                    dates=dates,
+                    document_id=document_id,
+                    matter_id=matter_id or "",
+                    total_dates_found=len(dates),
+                    processing_time_ms=0,
+                )
+
+            # Ensure every input chunk has a result (even if not in response)
+            for chunk in chunks:
+                if chunk["id"] not in results:
+                    results[chunk["id"]] = self._empty_result(
+                        document_id, matter_id or ""
+                    )
+
+            logger.info(
+                "date_extraction_batch_complete",
+                document_id=document_id,
+                chunk_count=len(chunks),
+                total_dates=sum(len(r.dates) for r in results.values()),
+            )
+
+            return results
+
+        except DateConfigurationError:
+            raise
+
+        except Exception as e:
+            breaker.record_failure()
+            logger.warning(
+                "date_extraction_batch_failed_fallback",
+                document_id=document_id,
+                chunk_count=len(chunks),
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
+            # Fallback: extract chunks individually
+            results = {}
+            for chunk in chunks:
+                chunk_result = self._extract_single_sync(
+                    text=chunk.get("content", ""),
+                    document_id=document_id,
+                    matter_id=matter_id or "",
+                    page_number=chunk.get("page_number"),
+                    bbox_ids=chunk.get("bbox_ids") or [],
+                )
+                results[chunk["id"]] = chunk_result
+
+            return results
+
+    def _parse_batch_response(
+        self,
+        response_text: str,
+        chunk_ids: list[str],
+    ) -> dict[str, list[dict]]:
+        """Parse Gemini batch response with per-chunk grouping.
+
+        Expected format: {"chunks": {"chunk_id": {"dates": [...]}}}
+        Falls back to flat format for backwards compatibility.
+
+        Args:
+            response_text: Raw Gemini response.
+            chunk_ids: Expected chunk IDs.
+
+        Returns:
+            Dict mapping chunk_id -> list of raw date dicts.
+        """
+        result: dict[str, list[dict]] = {cid: [] for cid in chunk_ids}
+
+        try:
+            json_text = response_text.strip()
+
+            # Remove markdown code blocks if present
+            if json_text.startswith("```"):
+                lines = json_text.split("\n")
+                json_lines = []
+                in_block = False
+                for line in lines:
+                    if line.strip().startswith("```"):
+                        in_block = not in_block
+                        continue
+                    if in_block:
+                        json_lines.append(line)
+                json_text = "\n".join(json_lines)
+
+            parsed = json.loads(json_text)
+
+            # Batch format: {"chunks": {"id": {"dates": [...]}}}
+            if "chunks" in parsed and isinstance(parsed["chunks"], dict):
+                for chunk_id, chunk_data in parsed["chunks"].items():
+                    if chunk_id in result:
+                        result[chunk_id] = chunk_data.get("dates", [])
+                return result
+
+            # Fallback: flat format {"dates": [...]} — assign all to first chunk
+            if "dates" in parsed and chunk_ids:
+                result[chunk_ids[0]] = parsed["dates"]
+                return result
+
+        except json.JSONDecodeError as e:
+            # Attempt JSON repair for truncated responses
+            repaired = self._try_repair_json(json_text)
+            if repaired is not None:
+                logger.info(
+                    "date_batch_response_json_repaired",
+                    original_error=str(e),
+                )
+                if "chunks" in repaired and isinstance(repaired["chunks"], dict):
+                    for chunk_id, chunk_data in repaired["chunks"].items():
+                        if chunk_id in result:
+                            result[chunk_id] = chunk_data.get("dates", [])
+                    return result
+                if "dates" in repaired and chunk_ids:
+                    result[chunk_ids[0]] = repaired["dates"]
+                    return result
+
+            logger.warning(
+                "date_batch_parse_failed",
+                error=str(e),
+                response_preview=response_text[:200] if response_text else "",
+            )
+
+        except (KeyError, TypeError) as e:
+            logger.warning(
+                "date_batch_parse_failed",
+                error=str(e),
+                response_preview=response_text[:200] if response_text else "",
+            )
+
+        return result
 
     def _empty_result(
         self,

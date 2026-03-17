@@ -35,6 +35,8 @@ from app.core.llm_rate_limiter import (
     get_rate_limiter,
     get_sync_rate_limiter,
 )
+from app.engines.base import ReasoningCaptureMixin
+from app.models.reasoning_trace import EngineType
 from app.engines.citation.abbreviations import (
     get_canonical_name,
     normalize_act_name,
@@ -127,7 +129,7 @@ class CitationConfigurationError(CitationExtractorError):
 # =============================================================================
 
 
-class CitationExtractor:
+class CitationExtractor(ReasoningCaptureMixin):
     """Service for extracting Act citations from legal documents using Gemini 3 Flash.
 
     Extracts:
@@ -485,6 +487,18 @@ class CitationExtractor:
                 response.text, [c["id"] for c in chunks]
             )
 
+            # Store reasoning trace for legal defensibility
+            if matter_id:
+                self.store_reasoning_sync(
+                    matter_id=matter_id,
+                    engine_type=EngineType.CITATION,
+                    model_used=self.model_name,
+                    reasoning_text=response.text or "",
+                    input_summary=f"Batch citation extraction from document {document_id}, {len(chunks)} chunks",
+                    tokens_used=(input_tokens + output_tokens),
+                    cost_usd=cost_tracker.total_cost_usd,
+                )
+
         except Exception as e:
             logger.warning(
                 "citation_batch_gemini_failed",
@@ -745,7 +759,21 @@ class CitationExtractor:
                 cost_tracker.log_cost()
                 await persist_cost(cost_tracker)
 
-                return self._parse_gemini_response(response.text)
+                parsed_citations = self._parse_gemini_response(response.text)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    await self.store_reasoning(
+                        matter_id=matter_id,
+                        engine_type=EngineType.CITATION,
+                        model_used=self.model_name,
+                        reasoning_text=response.text or "",
+                        input_summary=f"Citation extraction from document {document_id}, text length {len(text)}",
+                        tokens_used=(input_tokens + output_tokens),
+                        cost_usd=cost_tracker.total_cost,
+                    )
+
+                return parsed_citations
 
             except CitationConfigurationError:
                 raise
@@ -835,7 +863,21 @@ class CitationExtractor:
                 cost_tracker.log_cost()
                 persist_cost_sync(cost_tracker)
 
-                return self._parse_gemini_response(response.text)
+                parsed_citations = self._parse_gemini_response(response.text)
+
+                # Store reasoning trace for legal defensibility
+                if matter_id:
+                    self.store_reasoning_sync(
+                        matter_id=matter_id,
+                        engine_type=EngineType.CITATION,
+                        model_used=self.model_name,
+                        reasoning_text=response.text or "",
+                        input_summary=f"Citation extraction (sync) from document {document_id}, text length {len(text)}",
+                        tokens_used=(input_tokens + output_tokens),
+                        cost_usd=cost_tracker.total_cost_usd,
+                    )
+
+                return parsed_citations
 
             except CitationConfigurationError:
                 raise

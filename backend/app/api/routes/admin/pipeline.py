@@ -6,17 +6,20 @@ Provides admin-only endpoints for:
 - Resetting document status
 - Viewing pipeline status
 - Reprocessing stuck documents
+- Worker starvation diagnostics (jobs overview, bottleneck stats, error patterns)
 
 All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
+import asyncio
 from enum import Enum
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import require_admin_access
+from app.core.rate_limit import ADMIN_RATE_LIMIT, limiter
 from app.models.auth import AuthenticatedUser
 from app.services.supabase.client import get_service_client
 
@@ -701,6 +704,426 @@ async def trigger_voyage_migration(
                 "error": {
                     "code": "VOYAGE_MIGRATION_FAILED",
                     "message": f"Failed to trigger Voyage migration: {e!s}",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+# =============================================================================
+# Worker Starvation Diagnostics
+# =============================================================================
+
+
+class JobOverviewItem(BaseModel):
+    """A processing job visible across all matters."""
+
+    job_id: str
+    matter_id: str
+    document_id: str | None
+    job_type: str
+    status: str
+    current_stage: str | None
+    progress_pct: int
+    retry_count: int
+    error_message: str | None
+    queue_wait_seconds: float | None = None
+    created_at: str
+    started_at: str | None
+    updated_at: str
+
+
+class JobsOverviewResponse(BaseModel):
+    """Cross-matter jobs overview for admin."""
+
+    jobs: list[JobOverviewItem]
+    total_count: int
+    queued_count: int
+    processing_count: int
+
+
+class BottleneckStage(BaseModel):
+    """Duration stats for a pipeline stage."""
+
+    stage_name: str
+    avg_duration_seconds: float
+    max_duration_seconds: float
+    total_runs: int
+    failed_runs: int
+
+
+class BottleneckStatsResponse(BaseModel):
+    """Stage-level bottleneck analysis."""
+
+    stages: list[BottleneckStage]
+
+
+class ErrorPattern(BaseModel):
+    """Grouped error pattern from job stage history."""
+
+    error_message: str
+    count: int
+    stage_name: str
+    last_occurred: str
+
+
+class ErrorPatternsResponse(BaseModel):
+    """Aggregated error patterns."""
+
+    patterns: list[ErrorPattern]
+    total_errors: int
+
+
+class ActiveTaskDetail(BaseModel):
+    """A task currently running on a worker."""
+
+    task_name: str
+    task_id: str
+    worker_name: str
+    runtime_seconds: float
+
+
+class WorkerInfoResponse(BaseModel):
+    """Active worker and task information."""
+
+    worker_count: int
+    active_tasks: list[ActiveTaskDetail]
+
+
+@router.get(
+    "/worker-info",
+    response_model=WorkerInfoResponse,
+    summary="Get active worker and task details",
+    description="Shows what each worker is currently executing and for how long. Admin only.",
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_worker_info(
+    request: Request,
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> WorkerInfoResponse:
+    """Get active worker details including currently running tasks."""
+    from app.services.queue_metrics_service import get_queue_metrics_service
+
+    service = get_queue_metrics_service()
+    info = await service.get_active_worker_info()
+
+    tasks = [
+        ActiveTaskDetail(
+            task_name=t.task_name,
+            task_id=t.task_id,
+            worker_name=t.worker_name,
+            runtime_seconds=t.runtime_seconds,
+        )
+        for t in info["active_tasks"]
+    ]
+
+    return WorkerInfoResponse(
+        worker_count=info["worker_count"],
+        active_tasks=tasks,
+    )
+
+
+@router.get(
+    "/jobs-overview",
+    response_model=JobsOverviewResponse,
+    summary="Cross-matter jobs overview",
+    description="List all processing jobs across all matters. Shows queue contention. Admin only.",
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_jobs_overview(
+    request: Request,
+    status_filter: str | None = Query(
+        default=None,
+        description="Filter by status: QUEUED, PROCESSING, FAILED, COMPLETED",
+    ),
+    limit: int = Query(default=50, ge=1, le=200, description="Max jobs to return"),
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> JobsOverviewResponse:
+    """Get cross-matter job overview for diagnosing queue contention."""
+    client = get_service_client()
+
+    try:
+        # Query processing_jobs across all matters (service client bypasses RLS)
+        query = client.table("processing_jobs").select(
+            "id, matter_id, document_id, job_type, status, current_stage, "
+            "progress_pct, retry_count, error_message, "
+            "created_at, started_at, updated_at"
+        )
+
+        if status_filter:
+            query = query.eq("status", status_filter.upper())
+
+        # Order: QUEUED first (oldest), then PROCESSING, then rest
+        result = query.order("created_at", desc=False).limit(limit).execute()
+
+        rows = result.data or []
+
+        # Compute queue wait time: first stage started_at - job created_at
+        job_ids = [r["id"] for r in rows if r.get("started_at")]
+        wait_times: dict[str, float] = {}
+        if job_ids:
+            # Get earliest stage start per job
+            stage_query = (
+                client.table("job_stage_history")
+                .select("job_id, started_at")
+                .in_("job_id", job_ids)
+                .not_.is_("started_at", "null")
+                .order("started_at", desc=False)
+                .execute()
+            )
+            # First started_at per job_id
+            for row in stage_query.data or []:
+                jid = row["job_id"]
+                if jid not in wait_times:
+                    from datetime import datetime, timezone
+
+                    try:
+                        job_created = next(
+                            r["created_at"] for r in rows if r["id"] == jid
+                        )
+                        created_dt = datetime.fromisoformat(
+                            job_created.replace("Z", "+00:00")
+                        )
+                        started_dt = datetime.fromisoformat(
+                            row["started_at"].replace("Z", "+00:00")
+                        )
+                        wait_times[jid] = max(
+                            (started_dt - created_dt).total_seconds(), 0
+                        )
+                    except (StopIteration, ValueError):
+                        pass
+
+        jobs = [
+            JobOverviewItem(
+                job_id=r["id"],
+                matter_id=r["matter_id"],
+                document_id=r.get("document_id"),
+                job_type=r["job_type"],
+                status=r["status"],
+                current_stage=r.get("current_stage"),
+                progress_pct=r.get("progress_pct", 0),
+                retry_count=r.get("retry_count", 0),
+                error_message=r.get("error_message"),
+                queue_wait_seconds=wait_times.get(r["id"]),
+                created_at=r["created_at"],
+                started_at=r.get("started_at"),
+                updated_at=r["updated_at"],
+            )
+            for r in rows
+        ]
+
+        queued = sum(1 for j in jobs if j.status == "QUEUED")
+        processing = sum(1 for j in jobs if j.status == "PROCESSING")
+
+        logger.info(
+            "admin_jobs_overview",
+            admin_id=admin.id,
+            total=len(jobs),
+            queued=queued,
+            processing=processing,
+        )
+
+        return JobsOverviewResponse(
+            jobs=jobs,
+            total_count=len(jobs),
+            queued_count=queued,
+            processing_count=processing,
+        )
+
+    except Exception as e:
+        logger.error("admin_jobs_overview_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "JOBS_OVERVIEW_FAILED",
+                    "message": "Failed to retrieve jobs overview",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.get(
+    "/bottleneck-stats",
+    response_model=BottleneckStatsResponse,
+    summary="Pipeline stage bottleneck analysis",
+    description="Shows avg/max duration per pipeline stage to identify bottlenecks. Admin only.",
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_bottleneck_stats(
+    request: Request,
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Look back period in hours"
+    ),
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> BottleneckStatsResponse:
+    """Get stage duration analytics to identify pipeline bottlenecks."""
+    from datetime import datetime, timedelta, timezone
+
+    client = get_service_client()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    try:
+        # Get completed and failed stages with timing
+        result = (
+            client.table("job_stage_history")
+            .select("stage_name, status, started_at, completed_at")
+            .in_("status", ["COMPLETED", "FAILED"])
+            .not_.is_("started_at", "null")
+            .gte("started_at", cutoff)
+            .execute()
+        )
+
+        rows = result.data or []
+
+        # Aggregate by stage_name
+        stage_stats: dict[str, dict] = {}
+        for row in rows:
+            name = row["stage_name"]
+            if name not in stage_stats:
+                stage_stats[name] = {
+                    "durations": [],
+                    "total": 0,
+                    "failed": 0,
+                }
+
+            stage_stats[name]["total"] += 1
+            if row["status"] == "FAILED":
+                stage_stats[name]["failed"] += 1
+
+            if row.get("completed_at") and row.get("started_at"):
+                try:
+                    started = datetime.fromisoformat(
+                        row["started_at"].replace("Z", "+00:00")
+                    )
+                    completed = datetime.fromisoformat(
+                        row["completed_at"].replace("Z", "+00:00")
+                    )
+                    duration = max((completed - started).total_seconds(), 0)
+                    stage_stats[name]["durations"].append(duration)
+                except ValueError:
+                    pass
+
+        stages = []
+        for name, stats in stage_stats.items():
+            durations = stats["durations"]
+            avg_dur = sum(durations) / len(durations) if durations else 0
+            max_dur = max(durations) if durations else 0
+
+            stages.append(
+                BottleneckStage(
+                    stage_name=name,
+                    avg_duration_seconds=round(avg_dur, 1),
+                    max_duration_seconds=round(max_dur, 1),
+                    total_runs=stats["total"],
+                    failed_runs=stats["failed"],
+                )
+            )
+
+        # Sort by avg duration descending — slowest stage first
+        stages.sort(key=lambda s: s.avg_duration_seconds, reverse=True)
+
+        logger.info(
+            "admin_bottleneck_stats",
+            admin_id=admin.id,
+            hours=hours,
+            stages_found=len(stages),
+        )
+
+        return BottleneckStatsResponse(stages=stages)
+
+    except Exception as e:
+        logger.error("admin_bottleneck_stats_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "BOTTLENECK_STATS_FAILED",
+                    "message": "Failed to retrieve bottleneck stats",
+                    "details": {},
+                }
+            },
+        ) from e
+
+
+@router.get(
+    "/error-patterns",
+    response_model=ErrorPatternsResponse,
+    summary="Aggregated error patterns",
+    description="Group failed stage errors by message to identify recurring issues. Admin only.",
+)
+@limiter.limit(ADMIN_RATE_LIMIT)
+async def get_error_patterns(
+    request: Request,
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Look back period in hours"
+    ),
+    limit: int = Query(default=20, ge=1, le=100, description="Max patterns to return"),
+    admin: AuthenticatedUser = Depends(require_admin_access),
+) -> ErrorPatternsResponse:
+    """Get aggregated error patterns from job stage history."""
+    from datetime import datetime, timedelta, timezone
+
+    client = get_service_client()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    try:
+        result = (
+            client.table("job_stage_history")
+            .select("stage_name, error_message, created_at")
+            .eq("status", "FAILED")
+            .not_.is_("error_message", "null")
+            .gte("created_at", cutoff)
+            .order("created_at", desc=True)
+            .limit(500)  # Cap raw rows to prevent huge responses
+            .execute()
+        )
+
+        rows = result.data or []
+
+        # Group by (truncated error_message, stage_name)
+        pattern_map: dict[tuple[str, str], dict] = {}
+        for row in rows:
+            # Truncate error message to first 200 chars for grouping
+            msg = (row.get("error_message") or "")[:200]
+            stage = row.get("stage_name", "unknown")
+            key = (msg, stage)
+
+            if key not in pattern_map:
+                pattern_map[key] = {
+                    "error_message": msg,
+                    "stage_name": stage,
+                    "count": 0,
+                    "last_occurred": row.get("created_at", ""),
+                }
+            pattern_map[key]["count"] += 1
+
+        # Sort by count descending
+        patterns = sorted(pattern_map.values(), key=lambda p: p["count"], reverse=True)
+        patterns = patterns[:limit]
+
+        return ErrorPatternsResponse(
+            patterns=[
+                ErrorPattern(
+                    error_message=p["error_message"],
+                    count=p["count"],
+                    stage_name=p["stage_name"],
+                    last_occurred=p["last_occurred"],
+                )
+                for p in patterns
+            ],
+            total_errors=len(rows),
+        )
+
+    except Exception as e:
+        logger.error("admin_error_patterns_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": {
+                    "code": "ERROR_PATTERNS_FAILED",
+                    "message": "Failed to retrieve error patterns",
                     "details": {},
                 }
             },

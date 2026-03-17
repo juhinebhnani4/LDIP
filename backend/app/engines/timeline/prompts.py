@@ -199,6 +199,22 @@ DATE_EXTRACTION_USER_PROMPT = """Extract all dates from this legal document text
 Return ONLY valid JSON with the dates array. Extract every date mentioned, including partial dates and approximate dates."""
 
 
+# =============================================================================
+# Batch Extraction Prompt (B3 optimization: 3 chunks per Gemini call)
+# =============================================================================
+
+DATE_EXTRACTION_BATCH_PROMPT = """Extract all dates from these legal document sections.
+Each section has a unique CHUNK_ID. Group your output by chunk_id.
+
+{batch_sections}
+
+Return ONLY valid JSON grouped by chunk_id. Extract every date mentioned, including partial dates and approximate dates.
+Format:
+{{"chunks": {{"chunk_id_1": {{"dates": [...]}}, "chunk_id_2": {{"dates": [...]}}}}}}
+
+Each date object must have the same fields as a single extraction: date_text, extracted_date, date_precision, event_type, event_description, context_before, context_after, event_source, is_ambiguous, ambiguity_reason, confidence."""
+
+
 def format_date_extraction_prompt(text: str) -> str:
     """Format the extraction prompt with XML-wrapped document content.
 

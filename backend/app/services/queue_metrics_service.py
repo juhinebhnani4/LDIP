@@ -7,11 +7,12 @@ Uses direct Redis LLEN queries on Celery queue keys for real-time visibility.
 
 CRITICAL: Celery stores queues in Redis as lists. The queue names in Redis are:
 - "celery" for the default queue (task_default_queue="default" maps to "celery" key)
-- "high" for high priority queue
-- "low" for low priority queue
+- "llm" for LLM-bound tasks (embedding, entity extraction, citations, aliases)
+- "heavy" for O(n^2) tasks (contradiction detection)
+- "low" for maintenance/background tasks
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -23,14 +24,28 @@ logger = structlog.get_logger(__name__)
 
 # Queue configuration
 # Maps logical queue names to Redis key names
+# Must match task_queues in celery.py: default, llm, heavy, low
 QUEUE_REDIS_KEYS = {
     "default": "celery",  # Celery's default queue is named "celery" in Redis
-    "high": "high",
-    "low": "low",
+    "llm": "llm",         # LLM-bound tasks (embedding, entities, citations, aliases)
+    "heavy": "heavy",     # O(n^2) tasks (contradiction detection)
+    "low": "low",         # Maintenance, background tasks
 }
 
 # Default alert threshold (jobs pending before alert triggers)
 DEFAULT_ALERT_THRESHOLD = 100
+
+
+@dataclass
+class ActiveTaskInfo:
+    """Info about a task currently being executed by a worker."""
+
+    task_name: str
+    task_id: str
+    worker_name: str
+    runtime_seconds: float
+    args: list | None = None
+    kwargs: dict | None = None
 
 
 @dataclass
@@ -183,31 +198,63 @@ class QueueMetricsService:
     async def get_active_worker_count(self) -> int:
         """Get count of active Celery workers.
 
-        Uses Celery inspect() to query workers. This is relatively expensive
-        so should be called sparingly.
-
         Returns:
             Number of active workers, or 0 if unable to determine.
         """
         try:
+            info = await self.get_active_worker_info()
+            return info["worker_count"]
+        except Exception as e:
+            logger.warning("celery_worker_count_failed", error=str(e))
+            return 0
+
+    async def get_active_worker_info(self) -> dict:
+        """Get detailed info about active workers and their current tasks.
+
+        Returns dict with:
+            worker_count: int
+            active_tasks: list[ActiveTaskInfo]
+        """
+        import asyncio
+        import time
+
+        try:
             from app.workers.celery import celery_app
 
-            # inspect().active() returns dict of {worker_name: [tasks]}
-            # This is a synchronous call but fast
             inspector = celery_app.control.inspect()
-            active = inspector.active()
+            # inspect().active() is sync and can block — run in thread
+            active = await asyncio.to_thread(inspector.active)
 
             if active is None:
                 logger.warning("celery_inspect_returned_none")
-                return 0
+                return {"worker_count": 0, "active_tasks": []}
 
-            return len(active)
+            now = time.time()
+            tasks: list[ActiveTaskInfo] = []
+
+            for worker_name, task_list in active.items():
+                for task in (task_list or []):
+                    # Celery active() returns time_start as Unix timestamp
+                    time_start = task.get("time_start", 0)
+                    runtime = now - time_start if time_start else 0
+
+                    tasks.append(ActiveTaskInfo(
+                        task_name=task.get("name", "unknown"),
+                        task_id=task.get("id", ""),
+                        worker_name=worker_name,
+                        runtime_seconds=round(runtime, 1),
+                        args=task.get("args"),
+                        kwargs=task.get("kwargs"),
+                    ))
+
+            # Sort by runtime descending — longest running first
+            tasks.sort(key=lambda t: t.runtime_seconds, reverse=True)
+
+            return {"worker_count": len(active), "active_tasks": tasks}
+
         except Exception as e:
-            logger.warning(
-                "celery_worker_count_failed",
-                error=str(e),
-            )
-            return 0
+            logger.warning("celery_active_worker_info_failed", error=str(e))
+            return {"worker_count": 0, "active_tasks": []}
 
     async def check_health(self) -> dict:
         """Check queue system health.

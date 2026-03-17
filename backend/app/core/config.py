@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # Gemini Configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"  # Valid models: gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro
+    gemini_model: str = "gemini-3.1-flash-lite-preview"  # Valid models: gemini-3.1-flash-lite-preview (500 RPD free), gemini-2.5-flash, gemini-2.0-flash
     gemini_generation_timeout: float = 50.0  # Hard timeout for Gemini generation calls (seconds)
 
     # GPT-4 Configuration (Story 5-2: Contradiction Detection)
@@ -333,6 +333,10 @@ class Settings(BaseSettings):
     # B1: Citation mega-batching (3 chunks per Gemini call)
     citation_batch_size: int = 3                       # Chunks per batch Gemini call
     citation_batching_enabled: bool = True             # CITATION_BATCHING_ENABLED=false to disable
+
+    # B3: Date extraction batching (3 chunks per Gemini call)
+    date_extraction_batch_size: int = 3                # Chunks per batch Gemini call
+    date_extraction_batching_enabled: bool = True      # DATE_EXTRACTION_BATCHING_ENABLED=false to disable
 
     # F1: Shared chunk loading (cache chunks in Redis after chunking)
     shared_chunk_cache_enabled: bool = True            # SHARED_CHUNK_CACHE_ENABLED=false to disable

@@ -333,34 +333,75 @@ def extract_dates_from_document(
                 )
             )
 
-        # Extract dates from each chunk individually to preserve page/bbox info
+        # Extract dates — batch mode (B3: 3 chunks per Gemini call) or per-chunk fallback
         from app.models.timeline import ExtractedDate
         all_dates: list[ExtractedDate] = []
         total_chunks = len(chunks_to_process)
 
-        for idx, chunk in enumerate(chunks_to_process):
-            # Run date extraction via Gemini for this chunk
-            chunk_result = date_extractor.extract_dates_sync(
-                text=chunk.content,
-                document_id=document_id,
-                matter_id=matter_id,
-                page_number=chunk.page_number,  # Pass chunk's page number
-                bbox_ids=chunk.bbox_ids or [],  # Pass chunk's bbox_ids
-            )
-            all_dates.extend(chunk_result.dates)
+        batch_size = settings.date_extraction_batch_size
+        use_batching = settings.date_extraction_batching_enabled and batch_size > 1
 
-            # Update progress proportionally
-            if job_id and total_chunks > 1:
-                progress = 30 + int((idx + 1) / total_chunks * 40)  # 30-70%
-                run_async(
-                    job_tracker.update_job_status(
-                        job_id=job_id,
-                        status=JobStatus.PROCESSING,
-                        stage="date_extraction",
-                        progress_pct=progress,
-                        matter_id=matter_id,
-                    )
+        if use_batching:
+            # B3 optimization: batch N chunks per Gemini call
+            chunks_processed = 0
+            for i in range(0, total_chunks, batch_size):
+                batch = chunks_to_process[i : i + batch_size]
+                batch_dicts = [
+                    {
+                        "id": str(getattr(chunk, "id", f"chunk-{i + j}")),
+                        "content": chunk.content,
+                        "page_number": chunk.page_number,
+                        "bbox_ids": chunk.bbox_ids or [],
+                    }
+                    for j, chunk in enumerate(batch)
+                ]
+
+                batch_results = date_extractor.extract_dates_batch_sync(
+                    chunks=batch_dicts,
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
+
+                for result in batch_results.values():
+                    all_dates.extend(result.dates)
+
+                chunks_processed += len(batch)
+
+                # Update progress proportionally
+                if job_id and total_chunks > 1:
+                    progress = 30 + int(chunks_processed / total_chunks * 40)  # 30-70%
+                    run_async(
+                        job_tracker.update_job_status(
+                            job_id=job_id,
+                            status=JobStatus.PROCESSING,
+                            stage="date_extraction",
+                            progress_pct=progress,
+                            matter_id=matter_id,
+                        )
+                    )
+        else:
+            # Legacy per-chunk extraction (fallback when batching disabled)
+            for idx, chunk in enumerate(chunks_to_process):
+                chunk_result = date_extractor.extract_dates_sync(
+                    text=chunk.content,
+                    document_id=document_id,
+                    matter_id=matter_id,
+                    page_number=chunk.page_number,
+                    bbox_ids=chunk.bbox_ids or [],
+                )
+                all_dates.extend(chunk_result.dates)
+
+                if job_id and total_chunks > 1:
+                    progress = 30 + int((idx + 1) / total_chunks * 40)  # 30-70%
+                    run_async(
+                        job_tracker.update_job_status(
+                            job_id=job_id,
+                            status=JobStatus.PROCESSING,
+                            stage="date_extraction",
+                            progress_pct=progress,
+                            matter_id=matter_id,
+                        )
+                    )
 
         # Deduplicate dates that appear in multiple chunks (same date + similar context)
         unique_dates = _deduplicate_extracted_dates(all_dates)

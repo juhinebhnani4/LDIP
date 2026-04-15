@@ -38,7 +38,7 @@ dependencies = [
     "nest-asyncio>=1.6.0",  # Allow nested event loops for gevent+asyncio compatibility
     "tiktoken>=0.12.0",
     "uvicorn[standard]>=0.40.0",
-    "python-multipart>=0.0.21",
+    "python-multipart>=0.0.26",
     "pypdf>=5.1.0",
     "sse-starlette>=2.0.0",
     # India Code Integration (Act Validation feature)

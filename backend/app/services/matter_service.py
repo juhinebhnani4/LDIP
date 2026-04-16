@@ -171,6 +171,7 @@ class MatterService:
             verification_mode=VerificationMode(matter_data.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(matter_data["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(matter_data["updated_at"].replace("Z", "+00:00")),
+            last_opened_at=None,
             role=MatterRole.OWNER,  # Creator is always owner
             member_count=1,  # Just the owner
         )
@@ -221,6 +222,10 @@ class MatterService:
                     user_role = MatterRole(ma["role"])
                     break
 
+            last_opened_at = None
+            if row.get("last_opened_at"):
+                last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+
             matters.append(Matter(
                 id=row["id"],
                 title=row["title"],
@@ -229,6 +234,7 @@ class MatterService:
                 verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
                 created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
                 updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
+                last_opened_at=last_opened_at,
                 role=user_role,
                 member_count=len(row.get("matter_attorneys", [])),
             ))
@@ -309,6 +315,10 @@ class MatterService:
             if ma["user_id"] == user_id:
                 user_role = MatterRole(ma["role"])
 
+        last_opened_at = None
+        if row.get("last_opened_at"):
+            last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+
         return MatterWithMembers(
             id=row["id"],
             title=row["title"],
@@ -317,6 +327,7 @@ class MatterService:
             verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
+            last_opened_at=last_opened_at,
             role=user_role,
             member_count=len(members),
             members=members,
@@ -392,6 +403,7 @@ class MatterService:
                 verification_mode=matter.verification_mode,
                 created_at=matter.created_at,
                 updated_at=matter.updated_at,
+                last_opened_at=matter.last_opened_at,
                 role=matter.role,
                 member_count=matter.member_count,
             )
@@ -409,6 +421,10 @@ class MatterService:
         ).eq("matter_id", matter_id).execute()
         member_count = member_count_result.count or 0
 
+        update_last_opened_at = None
+        if row.get("last_opened_at"):
+            update_last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+
         return Matter(
             id=row["id"],
             title=row["title"],
@@ -417,9 +433,27 @@ class MatterService:
             verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
+            last_opened_at=update_last_opened_at,
             role=role,
             member_count=member_count,
         )
+
+    def touch_matter(self, matter_id: str, user_id: str) -> None:
+        """Record that a user opened this matter (UX-005).
+
+        Any role (VIEWER, EDITOR, OWNER) can touch a matter.
+
+        Args:
+            matter_id: ID of the matter.
+            user_id: ID of the user who opened it.
+        """
+        role = self.get_user_role(matter_id, user_id)
+        if role is None:
+            raise MatterNotFoundError(matter_id)
+
+        self.db.table("matters").update({
+            "last_opened_at": datetime.now(UTC).isoformat(),
+        }).eq("id", matter_id).execute()
 
     def delete_matter(
         self, matter_id: str, user_id: str

@@ -1520,37 +1520,50 @@ def finalize_chunked_document(
         DocumentStatus.OCR_COMPLETE,
         DocumentStatus.COMPLETED,
     ):
-        # Check if document has chunks - if not, downstream may have failed
-        # and we should trigger it again (recovery mechanism)
+        # Check if document has OCR chunks - if not, OCR processing failed silently
+        # and we cannot recover. If OCR chunks exist but RAG chunks don't,
+        # downstream processing failed and we should re-trigger it.
         from app.services.supabase.client import get_service_client
         client = get_service_client()
-        chunk_count_response = (
+
+        # Check RAG chunks (populated by chunk_document task downstream)
+        rag_chunk_response = (
             client.table("chunks")
             .select("id", count="exact")
             .eq("document_id", document_id)
             .execute()
         )
-        chunk_count = chunk_count_response.count or 0
+        rag_chunk_count = rag_chunk_response.count or 0
 
-        if chunk_count == 0:
-            # Can't recover if there's no extracted text to process
-            if not document.extracted_text:
+        if rag_chunk_count == 0:
+            # Also check OCR chunks to distinguish "OCR failed" from "downstream failed"
+            ocr_chunk_response = (
+                client.table("document_ocr_chunks")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .execute()
+            )
+            ocr_chunk_count = ocr_chunk_response.count or 0
+
+            if ocr_chunk_count == 0 and not document.extracted_text:
+                # No OCR chunks AND no extracted text — can't recover
                 logger.info(
                     "finalize_skipping_no_text",
                     document_id=document_id,
                     status=document.status.value,
                     document_type=getattr(document.document_type, 'value', None),
-                    reason="No extracted_text — cannot chunk or embed",
+                    reason="No extracted_text and no OCR chunks — cannot chunk or embed",
                 )
                 return {"status": "skipped", "document_id": document_id, "reason": "no_extracted_text"}
 
-            # Document is OCR_COMPLETE but has 0 chunks - trigger downstream recovery
+            # OCR chunks exist (or extracted_text exists) but 0 RAG chunks — downstream failed
             logger.warning(
                 "finalize_triggering_downstream_recovery",
                 document_id=document_id,
                 status=document.status.value,
-                chunk_count=0,
-                reason="Document has OCR_COMPLETE status but 0 chunks - likely downstream failed",
+                rag_chunk_count=0,
+                ocr_chunk_count=ocr_chunk_count,
+                reason="Document has OCR_COMPLETE status but 0 RAG chunks - downstream failed",
             )
             # Trigger downstream processing to recover
             recovery_result = _trigger_parallel_processing(
@@ -1572,13 +1585,13 @@ def finalize_chunked_document(
             "finalize_chunked_document_already_done",
             document_id=document_id,
             status=document.status.value,
-            chunk_count=chunk_count,
+            rag_chunk_count=rag_chunk_count,
         )
         return {
             "status": "already_complete",
             "document_id": document_id,
             "current_status": document.status.value,
-            "chunk_count": chunk_count,
+            "chunk_count": rag_chunk_count,
         }
 
     # Analyze chunk results if provided (from chord callback)

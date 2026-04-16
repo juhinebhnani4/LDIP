@@ -90,6 +90,14 @@ export async function deleteMatter(matterId: string): Promise<void> {
 }
 
 /**
+ * Record that the user opened this matter (UX-005).
+ * Updates last_opened_at for dashboard display. Fire-and-forget.
+ */
+export async function touchMatter(matterId: string): Promise<void> {
+  await apiClient<void>(`/api/matters/${matterId}/touch`, { method: 'POST' });
+}
+
+/**
  * Bulk delete multiple matters.
  * Requires owner role on each matter.
  * Uses Promise.allSettled to handle partial failures gracefully.
@@ -169,6 +177,7 @@ export const mattersApi = {
   update: updateMatter,
   delete: deleteMatter,
   deleteMany: deleteMatters,
+  touch: touchMatter,
   getMembers,
   inviteMember,
   updateMemberRole,

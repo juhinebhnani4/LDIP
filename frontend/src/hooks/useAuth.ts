@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { cleanupOnLogout } from '@/lib/auth/logout-cleanup';
 import type { User, Session } from '@supabase/supabase-js';
 
 /**
@@ -20,6 +21,8 @@ export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  // Track previous user ID to detect user switches
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -30,13 +33,26 @@ export function useSession() {
         setError(error);
       } else {
         setSession(session);
+        prevUserIdRef.current = session?.user?.id ?? null;
       }
       setLoading(false);
     });
 
     // Listen for auth changes (including refreshes triggered by API client)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        // BUG-001: Clear all caches when user signs out or switches identity
+        if (event === 'SIGNED_OUT') {
+          cleanupOnLogout();
+        } else if (event === 'SIGNED_IN' && session?.user?.id) {
+          const prevUserId = prevUserIdRef.current;
+          if (prevUserId && prevUserId !== session.user.id) {
+            // Different user signed in — clear previous user's data
+            cleanupOnLogout();
+          }
+        }
+
+        prevUserIdRef.current = session?.user?.id ?? null;
         setSession(session);
         setError(null);
       }
@@ -103,6 +119,9 @@ export function useAuthActions() {
       const supabase = createClient();
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+
+      // BUG-001: Clear all caches/localStorage before redirect
+      cleanupOnLogout();
 
       // Redirect to login via the logout route to clear cookies
       if (typeof window !== 'undefined') {

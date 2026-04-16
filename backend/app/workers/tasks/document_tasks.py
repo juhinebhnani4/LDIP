@@ -657,6 +657,25 @@ def _mark_job_failed(
         )
 
 
+def _release_pipeline_lock_safe(document_id: str) -> None:
+    """Release the pipeline deduplication lock on failure.
+
+    Called from terminal failure handlers so that retrying doesn't get
+    blocked by a stale lock. Safe to call even if no lock is held.
+    """
+    if not document_id:
+        return
+    try:
+        from app.services.distributed_lock import PipelineLock
+        PipelineLock(document_id).release()
+    except Exception as e:
+        logger.warning(
+            "pipeline_lock_release_on_failure_error",
+            document_id=document_id,
+            error=str(e),
+        )
+
+
 def _populate_verification_records(matter_id: str, document_id: str) -> None:
     """Create finding_verifications records from engine results.
 
@@ -904,7 +923,32 @@ def _mark_job_completed(
         page_count: Number of pages (for ETA recording, Story 5.7).
         processing_start_time: Unix timestamp when processing started (Story 5.7).
     """
+    # Always update document status, even without a job_id.
+    # Admin retries and orphaned chains can run without a processing_jobs row.
+    if document_id:
+        try:
+            doc_service = get_document_service()
+            doc_service.update_ocr_status(
+                document_id=document_id,
+                status=DocumentStatus.COMPLETED,
+            )
+            logger.info(
+                "document_status_updated_to_completed",
+                document_id=document_id,
+                job_id=job_id,
+            )
+        except Exception as doc_err:
+            logger.warning(
+                "document_status_update_failed",
+                document_id=document_id,
+                job_id=job_id,
+                error=str(doc_err),
+            )
+
     if not job_id:
+        # Release pipeline lock even without a job
+        if document_id:
+            _release_pipeline_lock_safe(document_id)
         return
 
     tracker = job_tracker or get_job_tracking_service()
@@ -917,27 +961,6 @@ def _mark_job_completed(
                 progress_pct=100,
             )
         )
-
-        # Update document status to completed
-        if document_id:
-            try:
-                doc_service = get_document_service()
-                doc_service.update_ocr_status(
-                    document_id=document_id,
-                    status=DocumentStatus.COMPLETED,
-                )
-                logger.info(
-                    "document_status_updated_to_completed",
-                    document_id=document_id,
-                    job_id=job_id,
-                )
-            except Exception as doc_err:
-                logger.warning(
-                    "document_status_update_failed",
-                    document_id=document_id,
-                    job_id=job_id,
-                    error=str(doc_err),
-                )
 
         # Broadcast status change
         if matter_id:
@@ -2528,6 +2551,9 @@ def _handle_validation_failure(
         error_code=error_code,
     )
 
+    # Release pipeline lock so retry is not blocked
+    _release_pipeline_lock_safe(document_id)
+
     # Update status to indicate validation is pending (not failed OCR)
     # The document OCR is still valid, just validation couldn't complete
     _update_validation_status(
@@ -3114,6 +3140,7 @@ def chunk_document(
                 error=str(e),
             )
             _mark_job_failed(job_id, str(e), error_code, matter_id)
+            _release_pipeline_lock_safe(doc_id)
             return {
                 "status": "chunking_failed",
                 "document_id": doc_id,
@@ -3133,6 +3160,7 @@ def chunk_document(
         )
         _update_job_stage_failure(job_id, "chunking", str(e), e.code, None)
         _mark_job_failed(job_id, e.message, e.code, None)
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "chunking_failed",
             "document_id": doc_id,
@@ -3151,6 +3179,7 @@ def chunk_document(
         )
         _update_job_stage_failure(job_id, "chunking", str(e), "UNEXPECTED_ERROR", None)
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "chunking_failed",
             "document_id": doc_id,
@@ -3726,6 +3755,7 @@ def embed_chunks(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "embedding_failed",
             "document_id": doc_id,
@@ -3752,6 +3782,7 @@ def embed_chunks(
                 document_id=doc_id,
                 error=str(e),
             )
+            _release_pipeline_lock_safe(doc_id)
             return {
                 "status": "embedding_failed",
                 "document_id": doc_id,
@@ -3767,6 +3798,7 @@ def embed_chunks(
             document_id=doc_id,
             error=str(e),
         )
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "embedding_failed",
             "document_id": doc_id,
@@ -3781,6 +3813,7 @@ def embed_chunks(
             error=str(e),
             error_type=type(e).__name__,
         )
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "embedding_failed",
             "document_id": doc_id,
@@ -4581,6 +4614,7 @@ def extract_entities(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "entity_extraction_failed",
             "document_id": doc_id,
@@ -4606,6 +4640,7 @@ def extract_entities(
                 document_id=doc_id,
                 error=str(e),
             )
+            _release_pipeline_lock_safe(doc_id)
             return {
                 "status": "entity_extraction_failed",
                 "document_id": doc_id,
@@ -4621,6 +4656,7 @@ def extract_entities(
             document_id=doc_id,
             error=str(e),
         )
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "entity_extraction_failed",
             "document_id": doc_id,
@@ -4635,6 +4671,7 @@ def extract_entities(
             error=str(e),
             error_type=type(e).__name__,
         )
+        _release_pipeline_lock_safe(doc_id)
         return {
             "status": "entity_extraction_failed",
             "document_id": doc_id,
@@ -4973,7 +5010,7 @@ def resolve_aliases(
 
             return resolution_result, aliases_created
 
-        result = _run_async(_resolve_aliases_async(), timeout=540)  # Below soft_time_limit=600
+        result = _run_async(_resolve_aliases_async(), timeout=1740)  # Below soft_time_limit=1800
 
         if result[0] is None:
             # No entities to resolve - mark stage complete but NOT job complete.
@@ -5338,6 +5375,21 @@ def extract_citations(
                 document_id=doc_id,
                 document_type=document_type,
             )
+            # Still dispatch detect_contradictions so the pipeline completes
+            act_job_id = prev_result.get("job_id") if prev_result else None
+            if act_job_id is None:
+                act_job_id = _lookup_job_id_for_document(doc_id)
+            try:
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.detect_contradictions",
+                    kwargs={
+                        "prev_result": {"status": "citations_extracted", "document_id": doc_id, "job_id": act_job_id},
+                        "document_id": doc_id,
+                    },
+                    queue="default",
+                )
+            except Exception:
+                pass
             return {
                 "status": "citation_extraction_skipped",
                 "document_id": doc_id,
@@ -5379,6 +5431,31 @@ def extract_citations(
                 "extract_citations_no_chunks",
                 document_id=doc_id,
             )
+            # Still dispatch detect_contradictions (the terminal task that marks
+            # the job as COMPLETED). Without this, documents with 0 chunks
+            # never transition to 'completed' status.
+            citation_result = {
+                "status": "citations_extracted",
+                "document_id": doc_id,
+                "citations_extracted": 0,
+                "job_id": job_id,
+            }
+            try:
+                celery_app.send_task(
+                    "app.workers.tasks.document_tasks.detect_contradictions",
+                    kwargs={
+                        "prev_result": citation_result,
+                        "document_id": doc_id,
+                    },
+                    queue="default",
+                )
+                logger.debug("detect_contradictions_dispatched_no_chunks", document_id=doc_id)
+            except Exception as dispatch_err:
+                logger.warning(
+                    "detect_contradictions_dispatch_failed_no_chunks",
+                    document_id=doc_id,
+                    error=str(dispatch_err),
+                )
             return {
                 "status": "citation_extraction_complete",
                 "document_id": doc_id,

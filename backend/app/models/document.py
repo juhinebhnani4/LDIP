@@ -67,6 +67,7 @@ class DocumentStatus(str, Enum):
     SEARCHABLE = "searchable"
     COMPLETED = "completed"
     FAILED = "failed"
+    DELETED = "deleted"
 
 
 class DocumentBase(BaseModel):

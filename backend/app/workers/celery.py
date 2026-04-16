@@ -48,18 +48,15 @@ celery_app.conf.update(
     result_expires=3600,  # 1 hour (for tasks that explicitly need results)
     # Worker settings
     # Using gevent pool for I/O-bound tasks (LLM API calls)
-    # Higher concurrency is safe since tasks are mostly waiting on network I/O
-    # NOTE: prefetch_multiplier=4 allows worker to prefetch tasks for concurrent execution
-    # With gevent pool, we need prefetch > 1 to utilize concurrency effectively
-    # Without this, only 1 task executes at a time despite concurrency=50
-    worker_prefetch_multiplier=4,
-    worker_concurrency=50,  # Increased from 4 - gevent handles 50+ concurrent I/O tasks efficiently
+    # prefetch=1: each greenlet fetches one task at a time from Redis.
+    # With gevent, the broker round-trip is sub-ms so prefetch>1 just hoards
+    # tasks in memory and starves other queues (WPS-001 Layer 1).
+    worker_prefetch_multiplier=1,
+    worker_concurrency=50,
+    broker_pool_limit=10,
     # Heartbeat and health settings
-    # broker_heartbeat only matters for AMQP (RabbitMQ), not Redis transport
-    broker_heartbeat=0,  # Disabled — not needed for Redis broker
-    worker_send_task_events=False,  # Disabled — saves 2-5 Redis commands per task execution
-    worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks (prevents memory leaks)
-    worker_max_memory_per_child=400000,  # 400MB in KB - restart if memory exceeds this (Python high watermark protection)
+    broker_heartbeat=0,
+    worker_send_task_events=False,
     task_time_limit=3600,  # Hard timeout: 1 hour per task
     task_soft_time_limit=3300,  # Soft timeout: 55 minutes (gives 5 min cleanup)
     # Stage 2.1: Queue splitting — 4 queues by work type

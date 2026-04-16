@@ -53,8 +53,8 @@ export function MatterFilters({ className }: MatterFiltersProps) {
             value={sortBy}
             onValueChange={(value) => setSortBy(value as MatterSortOption)}
           >
-            <SelectTrigger className="w-[160px]" aria-label="Sort matters by">
-              <SelectValue placeholder="Sort by" />
+            <SelectTrigger className="w-[160px]" suppressHydrationWarning aria-label="Sort matters by">
+              <SelectValue placeholder="Recent" />
             </SelectTrigger>
             <SelectContent>
               {SORT_OPTIONS.map((option) => (
@@ -73,8 +73,8 @@ export function MatterFilters({ className }: MatterFiltersProps) {
             value={filterBy}
             onValueChange={(value) => setFilterBy(value as MatterFilterOption)}
           >
-            <SelectTrigger className="w-[160px]" aria-label="Filter matters by status">
-              <SelectValue placeholder="Filter" />
+            <SelectTrigger className="w-[160px]" suppressHydrationWarning aria-label="Filter matters by status">
+              <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
               {FILTER_OPTIONS.map((option) => (

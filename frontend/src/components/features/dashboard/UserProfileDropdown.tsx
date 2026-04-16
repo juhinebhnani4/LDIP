@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, HelpCircle, LogOut, ChevronDown, Shield, BarChart3 } from 'lucide-react';
+import { cleanupOnLogout } from '@/lib/auth/logout-cleanup';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -88,9 +89,10 @@ export function UserProfileDropdown({ initialUser }: UserProfileDropdownProps) {
     } catch {
       // Ignore; still redirect user to login
     } finally {
-      router.push('/login');
-      router.refresh();
-      setIsLoading(false);
+      // BUG-001: Clear all caches/localStorage before redirect
+      cleanupOnLogout();
+      // Hard redirect to ensure all in-memory stores are re-initialized
+      window.location.href = '/login';
     }
   };
 

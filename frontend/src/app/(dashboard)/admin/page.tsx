@@ -11,6 +11,7 @@ import { ChunkMetricsWidget } from '@/components/features/admin/ChunkMetricsWidg
 import { QualityMetricsWidget } from '@/components/features/admin/QualityMetricsWidget';
 import { CostComparisonDashboard } from '@/components/features/costs/CostComparisonDashboard';
 import { ABTestingWidget } from '@/components/features/admin/ABTestingWidget';
+import { WorkerDiagnosticsWidget } from '@/components/features/admin/WorkerDiagnosticsWidget';
 
 /**
  * Admin Dashboard Page
@@ -86,6 +87,9 @@ export default async function AdminPage() {
             </CardContent>
           </Card>
         </Link>
+
+        {/* Worker Diagnostics — full-width for starvation visibility */}
+        <WorkerDiagnosticsWidget />
 
         {/* A/B Testing: Provider Cost Comparison */}
         <CostComparisonDashboard />

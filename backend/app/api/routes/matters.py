@@ -203,6 +203,26 @@ async def update_matter(
         raise _handle_service_error(e) from e
 
 
+@router.post("/{matter_id}/touch", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(STANDARD_RATE_LIMIT)
+async def touch_matter(
+    request: Request,
+    matter_id: str,
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
+    matter_service: MatterService = Depends(get_matter_service),
+) -> None:
+    """Record that the user opened this matter (UX-005).
+
+    Updates last_opened_at timestamp. Any role can call this.
+    """
+    try:
+        matter_service.touch_matter(matter_id, membership.user_id)
+    except MatterServiceError as e:
+        raise _handle_service_error(e) from e
+
+
 @router.delete("/{matter_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def delete_matter(

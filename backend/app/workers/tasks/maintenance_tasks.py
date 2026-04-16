@@ -876,6 +876,7 @@ def fix_missing_extracted_text(self) -> dict:
             .select("id, filename, status")
             .is_("extracted_text", "null")
             .eq("status", "ocr_complete")
+            .is_("deleted_at", "null")
             .execute()
         )
 
@@ -1154,6 +1155,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
             .select("id, matter_id, filename, status, updated_at, extracted_text")
             .eq("status", "ocr_complete")
             .not_.is_("extracted_text", "null")
+            .is_("deleted_at", "null")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
         )
@@ -1611,12 +1613,13 @@ def sync_act_resolutions_with_documents(self) -> dict:
 
         for matter_id in matter_ids:
             try:
-                # Get all act documents for this matter
+                # Get all act documents for this matter (exclude soft-deleted)
                 docs_response = (
                     client.table("documents")
                     .select("id, filename")
                     .eq("matter_id", matter_id)
                     .eq("document_type", "act")
+                    .is_("deleted_at", "null")
                     .execute()
                 )
 
@@ -2307,11 +2310,12 @@ def recover_stuck_documents(self) -> dict:
 
         # If RPC failed or returned no data, fall back to manual query
         if stuck_docs is None:
-            # Manual approach: get all OCR_COMPLETE documents
+            # Manual approach: get all OCR_COMPLETE documents (exclude soft-deleted)
             docs_response = (
                 client.table("documents")
                 .select("id, matter_id, filename, status, extracted_text, page_count")
                 .in_("status", ["ocr_complete", "completed"])
+                .is_("deleted_at", "null")
                 .execute()
             )
 

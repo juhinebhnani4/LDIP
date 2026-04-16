@@ -14,30 +14,17 @@ interface FeedbackButtonProps {
 }
 
 function buildFeedbackUrl(): string {
-  const baseUrl = 'https://github.com/your-org/ldip/issues/new';
-  const params = new URLSearchParams({
-    template: 'bug_report.md',
-    title: '[Feedback] ',
-  });
+  let subject = '[Feedback] ';
+  let body = 'Please describe your feedback here.\n';
 
   // Add context if in browser
   if (typeof window !== 'undefined') {
-    const body = `
-## Describe the issue
-
-<!-- Please describe your feedback here -->
-
----
-**Context:**
-- Page: ${window.location.pathname}
-- Browser: ${navigator.userAgent}
-- Timestamp: ${new Date().toISOString()}
-`.trim();
-
-    params.set('body', body);
+    subject += `(${window.location.pathname})`;
+    body += `\n---\nPage: ${window.location.pathname}\nTimestamp: ${new Date().toISOString()}`;
   }
 
-  return `${baseUrl}?${params.toString()}`;
+  const params = new URLSearchParams({ subject, body });
+  return `mailto:support@jaanch.ai?${params.toString()}`;
 }
 
 export function FeedbackButton({ variant = 'icon', className }: FeedbackButtonProps) {

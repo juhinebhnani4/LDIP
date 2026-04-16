@@ -7,5 +7,29 @@
       "Bash(npm run:*)",
       "Bash(npx tsc:*)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"E:/Career coaching/100x/LDIP/.claude/hooks/zoom_out_guard.py\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"E:/Career coaching/100x/LDIP/.claude/hooks/zoom_out_guard.py\""
+          }
+        ]
+      }
+    ]
   }
 }

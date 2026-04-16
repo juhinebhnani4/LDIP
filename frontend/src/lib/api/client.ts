@@ -140,11 +140,13 @@ async function getCachedSession(): Promise<CachedSession | null> {
 }
 
 /**
- * Clear the session cache (call on logout or session invalidation)
+ * Clear the session cache (call on logout or session invalidation).
+ * Also resets the cached Supabase client to prevent stale auth state.
  */
 export function clearSessionCache(): void {
   cachedSession = null
   sessionFetchPromise = null
+  cachedSupabaseClient = null
 }
 
 /** Rate limit details from API response */

@@ -187,6 +187,7 @@ class Matter(MatterBase):
     created_at: datetime = Field(..., alias="createdAt", description="When the matter was created")
     updated_at: datetime = Field(..., alias="updatedAt", description="When the matter was last updated")
     deleted_at: datetime | None = Field(None, alias="deletedAt", description="Soft delete timestamp (NULL = not deleted)")
+    last_opened_at: datetime | None = Field(None, alias="lastOpenedAt", description="When the matter was last opened by any user")
     role: MatterRole | None = Field(None, description="Current user's role on this matter")
     member_count: int = Field(default=0, alias="memberCount", description="Number of members on this matter")
 

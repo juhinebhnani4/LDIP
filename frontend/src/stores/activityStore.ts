@@ -80,7 +80,7 @@ export const useActivityStore = create<ActivityStore>()((set, get) => ({
   activities: [],
   stats: null,
   isLoading: false,
-  isStatsLoading: false,
+  isStatsLoading: true,
   error: null,
   statsLastFetched: null,
 

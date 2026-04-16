@@ -464,8 +464,8 @@ def extract_dates_from_document(
                 [d.extracted_date for d in unique_dates if d.extracted_date],
             )
             if sorted_dates:
-                date_range_start = sorted_dates[0]
-                date_range_end = sorted_dates[-1]
+                date_range_start = sorted_dates[0].isoformat() if hasattr(sorted_dates[0], 'isoformat') else str(sorted_dates[0])
+                date_range_end = sorted_dates[-1].isoformat() if hasattr(sorted_dates[-1], 'isoformat') else str(sorted_dates[-1])
 
             broadcast_timeline_discovery(
                 matter_id=matter_id,

@@ -222,6 +222,177 @@ export async function reprocessStuckDocuments(
 }
 
 // =============================================================================
+// Worker Diagnostics Types
+// =============================================================================
+
+export interface ActiveTaskDetail {
+  taskName: string;
+  taskId: string;
+  workerName: string;
+  runtimeSeconds: number;
+}
+
+export interface WorkerInfo {
+  workerCount: number;
+  activeTasks: ActiveTaskDetail[];
+}
+
+export interface JobOverviewItem {
+  jobId: string;
+  matterId: string;
+  documentId: string | null;
+  jobType: string;
+  status: string;
+  currentStage: string | null;
+  progressPct: number;
+  retryCount: number;
+  errorMessage: string | null;
+  queueWaitSeconds: number | null;
+  createdAt: string;
+  startedAt: string | null;
+  updatedAt: string;
+}
+
+export interface JobsOverview {
+  jobs: JobOverviewItem[];
+  totalCount: number;
+  queuedCount: number;
+  processingCount: number;
+}
+
+export interface BottleneckStage {
+  stageName: string;
+  avgDurationSeconds: number;
+  maxDurationSeconds: number;
+  totalRuns: number;
+  failedRuns: number;
+}
+
+export interface BottleneckStats {
+  stages: BottleneckStage[];
+}
+
+export interface ErrorPatternItem {
+  errorMessage: string;
+  count: number;
+  stageName: string;
+  lastOccurred: string;
+}
+
+export interface ErrorPatterns {
+  patterns: ErrorPatternItem[];
+  totalErrors: number;
+}
+
+// =============================================================================
+// Worker Diagnostics API
+// =============================================================================
+
+export async function getWorkerInfo(): Promise<WorkerInfo> {
+  const response = await api.get<Record<string, unknown>>(
+    '/api/admin/pipeline/worker-info'
+  );
+
+  const data = response as Record<string, unknown>;
+  const tasks = ((data.active_tasks ?? data.activeTasks ?? []) as Record<string, unknown>[]).map(
+    (t) => ({
+      taskName: (t.task_name ?? t.taskName) as string,
+      taskId: (t.task_id ?? t.taskId) as string,
+      workerName: (t.worker_name ?? t.workerName) as string,
+      runtimeSeconds: (t.runtime_seconds ?? t.runtimeSeconds ?? 0) as number,
+    })
+  );
+
+  return {
+    workerCount: (data.worker_count ?? data.workerCount ?? 0) as number,
+    activeTasks: tasks,
+  };
+}
+
+export async function getJobsOverview(
+  options?: { statusFilter?: string; limit?: number }
+): Promise<JobsOverview> {
+  const params = new URLSearchParams();
+  if (options?.statusFilter) params.set('status_filter', options.statusFilter);
+  if (options?.limit) params.set('limit', String(options.limit));
+
+  const qs = params.toString();
+  const url = `/api/admin/pipeline/jobs-overview${qs ? `?${qs}` : ''}`;
+  const response = await api.get<Record<string, unknown>>(url);
+
+  const data = response as Record<string, unknown>;
+  const jobs = ((data.jobs ?? []) as Record<string, unknown>[]).map((j) => ({
+    jobId: (j.job_id ?? j.jobId) as string,
+    matterId: (j.matter_id ?? j.matterId) as string,
+    documentId: (j.document_id ?? j.documentId ?? null) as string | null,
+    jobType: (j.job_type ?? j.jobType) as string,
+    status: j.status as string,
+    currentStage: (j.current_stage ?? j.currentStage ?? null) as string | null,
+    progressPct: (j.progress_pct ?? j.progressPct ?? 0) as number,
+    retryCount: (j.retry_count ?? j.retryCount ?? 0) as number,
+    errorMessage: (j.error_message ?? j.errorMessage ?? null) as string | null,
+    queueWaitSeconds: (j.queue_wait_seconds ?? j.queueWaitSeconds ?? null) as number | null,
+    createdAt: (j.created_at ?? j.createdAt) as string,
+    startedAt: (j.started_at ?? j.startedAt ?? null) as string | null,
+    updatedAt: (j.updated_at ?? j.updatedAt) as string,
+  }));
+
+  return {
+    jobs,
+    totalCount: (data.total_count ?? data.totalCount ?? 0) as number,
+    queuedCount: (data.queued_count ?? data.queuedCount ?? 0) as number,
+    processingCount: (data.processing_count ?? data.processingCount ?? 0) as number,
+  };
+}
+
+export async function getBottleneckStats(
+  options?: { hours?: number }
+): Promise<BottleneckStats> {
+  const params = new URLSearchParams();
+  if (options?.hours) params.set('hours', String(options.hours));
+
+  const qs = params.toString();
+  const url = `/api/admin/pipeline/bottleneck-stats${qs ? `?${qs}` : ''}`;
+  const response = await api.get<Record<string, unknown>>(url);
+
+  const data = response as Record<string, unknown>;
+  const stages = ((data.stages ?? []) as Record<string, unknown>[]).map((s) => ({
+    stageName: (s.stage_name ?? s.stageName) as string,
+    avgDurationSeconds: (s.avg_duration_seconds ?? s.avgDurationSeconds ?? 0) as number,
+    maxDurationSeconds: (s.max_duration_seconds ?? s.maxDurationSeconds ?? 0) as number,
+    totalRuns: (s.total_runs ?? s.totalRuns ?? 0) as number,
+    failedRuns: (s.failed_runs ?? s.failedRuns ?? 0) as number,
+  }));
+
+  return { stages };
+}
+
+export async function getErrorPatterns(
+  options?: { hours?: number; limit?: number }
+): Promise<ErrorPatterns> {
+  const params = new URLSearchParams();
+  if (options?.hours) params.set('hours', String(options.hours));
+  if (options?.limit) params.set('limit', String(options.limit));
+
+  const qs = params.toString();
+  const url = `/api/admin/pipeline/error-patterns${qs ? `?${qs}` : ''}`;
+  const response = await api.get<Record<string, unknown>>(url);
+
+  const data = response as Record<string, unknown>;
+  const patterns = ((data.patterns ?? []) as Record<string, unknown>[]).map((p) => ({
+    errorMessage: (p.error_message ?? p.errorMessage) as string,
+    count: (p.count ?? 0) as number,
+    stageName: (p.stage_name ?? p.stageName) as string,
+    lastOccurred: (p.last_occurred ?? p.lastOccurred) as string,
+  }));
+
+  return {
+    patterns,
+    totalErrors: (data.total_errors ?? data.totalErrors ?? 0) as number,
+  };
+}
+
+// =============================================================================
 // Exported API Object
 // =============================================================================
 
@@ -231,4 +402,8 @@ export const adminPipelineApi = {
   resetDocument,
   getStatus,
   reprocessStuckDocuments,
+  getWorkerInfo,
+  getJobsOverview,
+  getBottleneckStats,
+  getErrorPatterns,
 };

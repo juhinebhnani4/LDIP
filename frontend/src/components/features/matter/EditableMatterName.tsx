@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Pencil, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { useMatterStore } from '@/stores/matterStore';
 
@@ -164,6 +165,11 @@ export function EditableMatterName({ matterId }: EditableMatterNameProps) {
       }
     }, 100);
   }, [editState, saveName]);
+
+  // Loading state — show skeleton while matter data is being fetched (UX-006)
+  if (!matter) {
+    return <Skeleton className="h-7 w-48" />;
+  }
 
   // Viewing state
   if (editState === 'viewing') {

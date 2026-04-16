@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { cleanupOnLogout } from '@/lib/auth/logout-cleanup'
 import { LogOut } from 'lucide-react'
 
 interface LogoutButtonProps {
@@ -19,7 +19,6 @@ export function LogoutButton({
   showIcon = true,
   className,
 }: LogoutButtonProps) {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
   const handleLogout = async () => {
@@ -32,9 +31,10 @@ export function LogoutButton({
     } catch {
       // Ignore; still redirect user to login.
     } finally {
-      router.push('/login')
-      router.refresh()
-      setIsLoading(false)
+      // BUG-001: Clear all caches/localStorage before redirect
+      cleanupOnLogout()
+      // Hard redirect to ensure all in-memory stores are re-initialized
+      window.location.href = '/login'
     }
   }
 

@@ -635,10 +635,13 @@ class DocumentService:
 
             matter_id = result.data[0].get("matter_id")
 
-            # Set deleted_at timestamp
+            # Set deleted_at timestamp AND status='deleted' atomically.
+            # status='deleted' is the wall: every recovery task filters on status,
+            # so deleted docs are structurally excluded from recovery loops (INF-009).
             deleted_at = datetime.now(UTC)
             update_result = self.client.table("documents").update({
                 "deleted_at": deleted_at.isoformat(),
+                "status": "deleted",
             }).eq("id", document_id).execute()
 
             if not update_result.data:

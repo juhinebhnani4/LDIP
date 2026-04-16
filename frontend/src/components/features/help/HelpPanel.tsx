@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -100,6 +101,7 @@ export function HelpPanel({ open, onOpenChange }: HelpPanelProps) {
                   : 'Help Center'}
             </SheetTitle>
           </div>
+          <SheetDescription className="sr-only">Browse help topics and documentation</SheetDescription>
         </SheetHeader>
 
         {!selectedEntry && (
@@ -163,9 +165,7 @@ export function HelpPanel({ open, onOpenChange }: HelpPanelProps) {
           <p className="text-xs text-muted-foreground">
             Can&apos;t find what you need?{' '}
             <a
-              href="https://github.com/your-org/ldip/issues/new?template=question.md"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="mailto:support@jaanch.ai"
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
               Contact support

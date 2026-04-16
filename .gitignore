@@ -75,3 +75,69 @@ tmpclaude-*/
 
 .vercel
 .env*.local
+
+# Temp tokens and env backups
+.token_tmp
+backend/.token_tmp
+*.env.*.bak
+backend/.env.prod.bak
+
+# Screenshots and test images (root-level)
+*.png
+*.jpeg
+!frontend/**/*.png
+
+# Temporary test/debug scripts (root-level)
+test_*.py
+test_*.js
+check_*.py
+create_*.py
+update_*.py
+docs_inspect.py
+eval_logs*.txt
+tmp_logs.txt
+api_logs*.txt
+api_utf8.txt
+worker_utf8.txt
+worker_logs*.txt
+prod_api_test.txt
+network-requests.txt
+*_tmp.json
+*_tmp2.json
+after_test.json
+before_test.json
+redis_summary.json
+snapshot-*.md
+index.md
+
+# Backend temp scripts
+backend/build_test.py
+backend/check_*.py
+backend/create_test.py
+backend/e2e_check*.py
+backend/encode_test.py
+backend/gen_test*.py
+backend/railway_db_check.py
+backend/test_*.py
+backend/test_*.js
+backend/write_test.*
+backend/tmp_logs.txt
+backend/requirements.lock.txt
+
+# Frontend temp scripts
+frontend/check_*.js
+frontend/test_*.js
+
+# Test PDFs
+test_pdfs/
+test-doc-*.pdf
+test-table-document.pdf
+
+# Root-level package files (not the frontend ones)
+/package.json
+/package-lock.json
+
+# Bug report archives (keep BUGS.md, skip dated snapshots)
+BUG-REPORT-*.md
+PRODUCTION-BUGS-*.md
+LIVE-TEST-BUGS.md

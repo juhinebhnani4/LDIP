@@ -9,6 +9,7 @@ import {
   selectFailedJobCount,
 } from '@/stores/processingStore';
 import { jobsApi } from '@/lib/api/jobs';
+import { mattersApi } from '@/lib/api/matters';
 import { createClient } from '@/lib/supabase/client';
 import { ActDiscoveryTrigger } from '@/components/features/citation';
 import { useFeatureSubscription } from '@/hooks/useFeatureSubscription';
@@ -87,6 +88,9 @@ export function MatterWorkspaceWrapper({
     };
 
     loadJobs();
+
+    // UX-005: Record that the user opened this matter (fire-and-forget)
+    mattersApi.touch(matterId).catch(() => {});
 
     // Set up Supabase Realtime subscription for job updates (Story 2c-3)
     const supabase = createClient();

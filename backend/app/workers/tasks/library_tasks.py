@@ -612,6 +612,9 @@ def ocr_and_process_library_document(
             )
 
         pipeline = chain(*steps)
+        pipeline.link_error(on_library_chain_error.s(
+            library_document_id=library_document_id,
+        ))
         pipeline.apply_async(queue="default")
 
         logger.info(

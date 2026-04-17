@@ -3774,6 +3774,7 @@ def embed_chunks(
         }
 
     except SoftTimeLimitExceeded:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         # Task timeout - save progress and mark as failed
         logger.error(
             "embed_chunks_task_timeout",
@@ -3784,15 +3785,16 @@ def embed_chunks(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
+        _mark_job_failed(job_id, "Embedding timeout exceeded (10 minutes)", "TIMEOUT", matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "embedding_failed",
-            "document_id": doc_id,
-            "error_code": "TIMEOUT",
-            "error_message": "Embedding timeout exceeded (10 minutes)",
-            "embedded_count": embedded_count,
-            "job_id": job_id,
-        }
+        raise PipelineTaskError(
+            "Embedding timeout exceeded (10 minutes)",
+            error_code="TIMEOUT",
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="embedding",
+        )
 
     except EmbeddingServiceError as e:
         retry_count = self.request.retries

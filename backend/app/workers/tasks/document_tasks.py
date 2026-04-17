@@ -4795,11 +4795,15 @@ def _dispatch_post_entity_tasks(
         logger.debug("extract_citations_dispatched", document_id=document_id)
     except Exception as e:
         failed_tasks.append("extract_citations")
-        logger.warning(
+        logger.error(
             "extract_citations_dispatch_failed",
             document_id=document_id,
             error=str(e),
         )
+        # DPP-014: extract_citations gates job completion (citations → contradictions → _mark_job_completed).
+        # If dispatch fails, mark job failed immediately — don't let it silently orphan.
+        _mark_job_failed(job_id, f"Failed to dispatch extract_citations: {e}", "DISPATCH_FAILED", matter_id)
+        _release_pipeline_lock_safe(document_id)
 
     # Task 2: Date extraction (with auto-classification enabled)
     try:

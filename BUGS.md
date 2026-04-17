@@ -1,8 +1,8 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-16 (fixed INF-009 ghost document recovery loop)
-**Total bugs**: 55 | **Fixed**: 26 | **Open**: 25 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
-**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13)
+**Last updated**: 2026-04-17 (DPP-002 validation + first-principles pipeline audit)
+**Total bugs**: 59 | **Fixed**: 29 | **Open**: 26 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
+**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17)
 
 ### Legend
 | Field | Values |
@@ -164,25 +164,25 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 | Field | Value |
 |-------|-------|
 | **Severity** | P0 (Critical) |
-| **Status** | OPEN |
+| **Status** | PARTIALLY FIXED (2026-04-17) — Layers 1-3 fixed, Layers 4-5 open |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-002) |
 
 **Description**: One large matter's `entity_alias_resolution_batch` blocks ALL other users' document processing. Not a single root cause — five layers compound:
 
-**Layer 1 — Prefetch hoarding (config)**: `prefetch_multiplier=4` × `concurrency=50` = 200 tasks buffered. New user's tasks can't be picked up until buffer drains. Fix: set to 1 (~5 min).
+**Layer 1 — Prefetch hoarding (config)**: `prefetch_multiplier=4` × `concurrency=50` = 200 tasks buffered. New user's tasks can't be picked up until buffer drains. **FIXED** (commit `47ef182`): set `worker_prefetch_multiplier=1`.
 
-**Layer 2 — No physical queue isolation (deployment)**: One process consuming `-Q default,llm,heavy,low`. Four queues, zero isolation. `resolve_aliases` (30 min) competes directly with `process_document` (5 sec). Fix: dual worker (fast: default+llm, slow: heavy+low) (~15 min).
+**Layer 2 — No physical queue isolation (deployment)**: One process consuming `-Q default,llm,heavy,low`. Four queues, zero isolation. `resolve_aliases` (30 min) competes directly with `process_document` (5 sec). **FIXED** (commit `3c07996`): WPS-001 Phase 2 — dual worker deployment. `ldip-worker` handles default+llm (fast pipeline tasks), `ldip-worker-slow` handles heavy+low (O(n^2) tasks + maintenance). Separate Railway services, separate processes, true physical isolation.
 
-**Layer 3 — Gemini bottleneck (the actual ceiling)**: Global rate limit `max_concurrent=1`, `min_delay=6.0s`, `max_rpm=10` (free tier). ALL LLM tasks share this single 10 RPM quota — resolve_aliases, extract_citations, extract_entities, detect_contradictions. Even with perfect queue isolation, two workers both block on the same upstream rate limit. 600 Gemini calls/hour is the system's hard ceiling. Fix: upgrade to paid tier (1000+ RPM) or per-task-type budgeting.
+**Layer 3 — Gemini bottleneck (the actual ceiling)**: Global rate limit `max_concurrent=1`, `min_delay=6.0s`, `max_rpm=10` (free tier). ALL LLM tasks share this single 10 RPM quota. **FIXED** (commit `3581bdd`): upgraded to Gemini Paid Tier 1 (1000 RPM). Rate limiter config updated from 10 RPM → 1000 RPM, min_delay 6.0s → 0.06s, max_concurrent 1 → 10.
 
-**Layer 4 — Monolithic task design**: `resolve_aliases` is a single Celery task holding 1 greenlet for up to 30 minutes. Internally batches (10 pairs, 3-way semaphore) but Celery can't preempt or interleave. Fix: fan-out/fan-in decomposition into 2-min chunks (~3 hours).
+**Layer 4 — Monolithic task design**: `resolve_aliases` is a single Celery task holding 1 greenlet for up to 30 minutes. Internally batches (10 pairs, 3-way semaphore) but Celery can't preempt or interleave. **OPEN**: Fix is fan-out/fan-in decomposition into 2-min chunks.
 
-**Layer 5 — Gevent timeout fiction**: `soft_time_limit` is silently ignored with gevent pool. `worker_max_tasks_per_child` and `worker_max_memory_per_child` are no-ops. Every safety net Celery advertises for bounding task duration does not fire with gevent. The 30-min soft timeout on resolve_aliases is not enforced.
+**Layer 5 — Gevent timeout fiction**: `soft_time_limit` is silently ignored with gevent pool. `worker_max_tasks_per_child` and `worker_max_memory_per_child` are no-ops. Every safety net Celery advertises for bounding task duration does not fire with gevent. **OPEN**: Fix is switching to prefork pool or adding manual timeout enforcement.
 
-**Interaction with INF-009 (now FIXED)**: Ghost document recovery loop was dispatching 14 pipeline tasks every 15 min for already-deleted documents, wasting greenlets and Gemini quota that real users needed.
+**Interaction with INF-009 (FIXED)**: Ghost document recovery loop was dispatching 14 pipeline tasks every 15 min for already-deleted documents, wasting greenlets and Gemini quota that real users needed.
 
-**Detailed engineering plan**: See [BUG-002-WORKER-QUEUE-STARVATION.md](BUG-002-WORKER-QUEUE-STARVATION.md) — covers Phases 1-5 (config tuning, dual worker, per-matter cap, dispatch updates, task decomposition). Plan underweights Layer 3 (Gemini bottleneck) — dual workers help greenlet contention but not the shared 10 RPM upstream limit.
+**Detailed engineering plan**: See [BUG-002-WORKER-QUEUE-STARVATION.md](BUG-002-WORKER-QUEUE-STARVATION.md) — covers Phases 1-5 (config tuning, dual worker, per-matter cap, dispatch updates, task decomposition).
 
 **Files**: `backend/railway.toml`, `backend/start-worker.sh`, `backend/app/workers/celery.py`, `backend/app/services/mig/entity_resolver.py`, `backend/app/core/llm_rate_limiter.py`
 
@@ -248,17 +248,25 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-17) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #2) |
 
-**Description**: When `process_document` fails (e.g., DuplicateChunkError), the Celery chain does NOT short-circuit. All downstream tasks (`validate_ocr`, `calculate_confidence`, `chunk_document`, `embed_chunks`, `extract_entities`) continue to execute, each checking the previous result, seeing failure, and skipping — wasting ~5s of worker time.
+**Description**: When a chained task fails, it returned a dict like `{"status": "chunking_failed", ...}` instead of raising. Celery only understands exceptions as failures — returned dicts are "success." The chain continued running all downstream tasks on bad data.
 
-**Root Cause**: Tasks pass failure status forward rather than raising `Reject()` or using Celery's chain error handling to abort.
+**Root Cause (deep — P7/P8/P9 patterns)**: Three-layer problem: (1) Tasks return dicts instead of raising exceptions (P7 — signaling failure in a language the framework doesn't speak), (2) Downstream tasks manually check and skip (dead code), (3) No chain-level error handling. Blast radius: 16 tasks affected, 28 cleanup call sites, 3 tasks with inconsistent cleanup (P8).
 
-**Fix Needed**: Tasks should raise `Reject()` on upstream failure to abort the chain immediately.
+**Fix Applied** (commits `ef129e2`, `81b3207`):
+1. NEW: `pipeline_errors.py` — `PipelineTaskError` and `LibraryPipelineTaskError` exception classes
+2. All 5 chained tasks (`validate_ocr`, `calculate_confidence`, `chunk_document`, `embed_chunks`, `extract_entities`) now raise `PipelineTaskError` on terminal failure instead of returning dicts
+3. P8 consistency fixes: `calculate_confidence` was missing `_release_pipeline_lock_safe`; `embed_chunks` and `extract_entities` were missing `_mark_job_failed`
+4. `on_chain_error` safety-net callback wired via `link_error` on the chain — centralized cleanup (P8 wall)
+5. Library pipeline: `chunk_library_document` and `embed_library_chunks` raise `LibraryPipelineTaskError`; `on_library_chain_error` callback wired
+6. All chain entry points (`create_post_ocr_chain`, `process_library_document`, `ocr_and_process_library_document`) have `link_error`
 
-**Files**: `backend/app/workers/tasks/document_tasks.py`, `backend/app/api/routes/documents.py`
+**Architectural patterns documented**: P7, P8, P9 added to `ARCH-PATTERNS.md`
+
+**Files**: `backend/app/workers/tasks/pipeline_errors.py` (NEW), `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/library_tasks.py`, `ARCH-PATTERNS.md`
 
 ---
 
@@ -1113,3 +1121,77 @@ See [full post-mortem](../../../.claude/projects/E--Career-coaching-100x-LDIP/me
 6. For API/infra bugs, a single curl/fetch command gives definitive answers in seconds
 7. Don't copy root causes from bug reports — verify them independently
 8. Don't patch a wrong answer 5 times — restart from data after the first challenge
+
+---
+
+## 6. First-Principles Pipeline Audit (2026-04-17)
+
+> Findings from a first-principles review of the pipeline architecture during DPP-002 validation.
+> These are not new regressions — they're pre-existing structural observations, cataloged for future work.
+
+### DPP-013: Chain is sequential where tasks could be parallel
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) |
+| **Status** | OPEN — optimization, not a correctness bug |
+| **Pattern** | Suboptimal orchestration topology |
+
+**Observation**: The post-OCR chain (`validate_ocr → calculate_confidence → chunk_document → extract_tables → embed_chunks → extract_entities`) is fully sequential. But `validate_ocr` and `calculate_confidence` don't produce anything that `chunk_document` needs — all three only read OCR text. Similarly, `embed_chunks` and `extract_entities` both only need chunks and could run in parallel.
+
+**Current cost**: ~2-5 seconds wasted per document from unnecessary serialization.
+
+**Wall fix**: Refactor chain into a DAG:
+```
+group(validate_ocr, calculate_confidence, chunk_document)
+  → extract_tables
+    → group(embed_chunks, extract_entities)
+```
+
+**Why not now**: DPP-002 just made the chain fail-safe. Restructuring into a DAG is a separate story. The chain is correct, just suboptimal.
+
+---
+
+### DPP-014: `extract_citations` dispatch failure silently orphans document
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) |
+| **Status** | FIXED (2026-04-17) |
+| **Pattern** | P1 ("remember to signal") — silent failure in dispatch |
+
+**Root cause**: In `_dispatch_post_entity_tasks()` (document_tasks.py:4786-4802), if `send_task("extract_citations")` throws, the exception is caught and swallowed — appended to a `failed_tasks` list and logged, but no `_mark_job_failed()` and no `_mark_job_completed()`. The document stays stuck in PROCESSING forever.
+
+**Safety net**: `resume_stuck_pipelines` reconciler catches this within 15-30 min. Not immediate.
+
+**Fix applied**: If `extract_citations` dispatch fails, `_mark_job_failed(job_id, ...)` + `_release_pipeline_lock_safe(document_id)` called immediately. Document gets FAILED status instead of stuck PROCESSING.
+
+**Wall fix (big, ARCH-003)**: Database-driven reconciler that derives completion from observed state ("all chunks have embeddings AND entities AND citations") rather than depending on the signal chain.
+
+---
+
+### DPP-015: `extract_citations → detect_contradictions` completion chain is a sticky note
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — already patched in DPP-012, reconciler covers gaps |
+| **Status** | OPEN — structural debt, not an active bug |
+| **Pattern** | P1 ("remember to signal") — ARCH-003 instance |
+
+**Observation**: `extract_citations` MUST dispatch `detect_contradictions` from every exit path because `detect_contradictions` is the terminal task that calls `_mark_job_completed()`. This was fixed in DPP-012 (all known exit paths now dispatch it), but the structure remains P1 — any new exit path added to `extract_citations` must remember to dispatch `detect_contradictions`, or the document gets stuck.
+
+**Current safety nets**: DPP-012 fix + `resume_stuck_pipelines` reconciler (every 15 min).
+
+**Wall fix**: Same as DPP-014 big fix — derive completion from observed database state, not from task signals. This eliminates the entire "remember to signal" category.
+
+**Relationship**: DPP-014 and DPP-015 share the same wall fix (ARCH-003 reconciler). They're listed separately because they have different symptoms and different interim mitigations.
+
+---
+
+### DPP-016: `ocr_and_process_library_document` failure not tracked
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — library documents are low-volume, admin-uploaded |
+| **Status** | OPEN |
+| **Pattern** | Silent failure |
+
+**Observation**: If OCR produces empty text (line 591) or max retries are exceeded (line 654), `ocr_and_process_library_document` returns a failure dict. Since this is the orchestrator task (not in a chain), the failure is correct behavior — but it's not broadcast or tracked anywhere visible to the admin.
+
+**Fix**: Add logging/status update so admin dashboard can surface library document failures. Low priority.

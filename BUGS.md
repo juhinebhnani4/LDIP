@@ -55,7 +55,7 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 1. Minimum two Railway services from day one — a "fast lane" worker on `default,llm` and a "heavy lane" worker on `heavy,low`. Ideally a third "interactive" worker on `default` only, so user-facing operations are never blocked by background sweeps.
 2. A shared-quota partitioner in front of the Gemini client that enforces per-task-class budgets (e.g. citations: 30%, aliases: 20%, dates: 20%, entities: 20%, RAG: 10% — numbers TBD). Or split into multiple GCP projects so each task class has its own quota at the source.
 
-**E2E evidence (2026-04-17)**: (a) Beat process shares worker process — when 4 concurrent documents saturate workers, RedBeat's lock extension gets starved → `LockNotOwnedError` → all 16 periodic tasks die silently (E2E-006, INF-010). Physical isolation of beat is needed alongside queue isolation. (b) OpenAI is a **second unpartitioned upstream** not covered in the original P3b analysis. `detect_contradictions` calls GPT-4o via `AsyncOpenAI` with **no rate limiter** — relies solely on circuit breaker catching 429s. Gemini calls in the same engine ARE rate-limited via `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two LLM providers, asymmetric enforcement. With 4 concurrent docs × 3 entity concurrency × 5 batch size = up to 60 concurrent OpenAI calls, confirmed by transient 429 retries during E2E (E2E-008). P3b's target architecture must cover OpenAI quota partitioning alongside Gemini.
+**E2E evidence (2026-04-17)**: (a) Beat process shares worker process — when 4 concurrent documents saturate workers, RedBeat's lock extension gets starved → `LockNotOwnedError` → all 16 periodic tasks die silently (E2E-006, INF-010). Physical isolation of beat is needed alongside queue isolation. (b) OpenAI is a **second unpartitioned upstream** not covered in the original P3b analysis. `detect_contradictions` calls GPT-4o via `AsyncOpenAI` with **no rate limiter** — relies solely on circuit breaker catching 429s. Gemini calls in the same engine ARE rate-limited via `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two LLM providers, asymmetric enforcement. At 4-doc concurrency only 1 transient OpenAI retry observed (E2E-008) and zero Gemini 429s (paid tier has ample headroom), but the structural gap (asymmetric rate-limiter enforcement) will surface at higher load.
 
 **Files**: `backend/railway.toml`, `backend/start-worker.sh`, `backend/app/workers/celery.py`, `backend/app/services/llm/` (wherever the Gemini client lives — verify before changing), `backend/app/engines/contradiction/comparator.py` (OpenAI bypass)
 
@@ -1343,16 +1343,16 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 
 ---
 
-### E2E-008: OpenAI transient 429 retries during contradiction detection (ARCH-002/P3b + ARCH-004 instance)
+### E2E-008: OpenAI calls in contradiction detection bypass rate limiter (ARCH-004 instance)
 | Field | Value |
 |-------|-------|
-| **Severity** | P2 (Medium) — upgraded: will cascade under higher load |
+| **Severity** | P3 (Low) — structural gap, not yet causing failures at current scale |
 | **Status** | OPEN |
 | **Source** | E2E verification (2026-04-17) |
-| **Arch pattern** | ARCH-002/P3b (shared upstream quota), ARCH-004 (gateway bypass) |
+| **Arch pattern** | ARCH-004 (gateway bypass — asymmetric rate-limiter enforcement) |
 
-**Observation**: During peak contradiction detection (4 docs simultaneously), `Retrying request to /chat/completions` messages appear. 4 docs × 3 entity concurrency × 5 batch size = up to 60 concurrent OpenAI calls. Retries succeed within ~0.4s at this load, but will cascade at higher concurrency.
+**Observation**: During peak contradiction detection (4 docs simultaneously), exactly **1 transient OpenAI retry** observed (`Retrying request to /chat/completions in 0.47s`). Gemini hit **zero 429s** (paid tier 1000 RPM has ample headroom). Railway metrics confirmed: 0% API error rate, worker peaked at 3 vCPU / 3 GB RAM / 500 MB network egress. System handled 4 concurrent docs cleanly.
 
-**Why this is ARCH-002/P3b + ARCH-004**: The rate limiter infrastructure exists at `core/llm_rate_limiter.py`. Gemini calls in the same engine (`comparator.py`) use it via `get_rate_limiter(LLMProvider.GEMINI)`. OpenAI calls do NOT — they rely solely on circuit breaker catching 429s reactively. Same system, two providers, asymmetric enforcement. This is P3b (shared upstream quota with no partitioning) applied to a second provider, and P4 (infrastructure exists but using it is optional).
+**Structural note (ARCH-004)**: OpenAI calls in `comparator.py` use `AsyncOpenAI` directly with no rate limiter — relies on circuit breaker catching 429s reactively. Gemini calls in the same file DO go through `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two providers, asymmetric enforcement. Not a problem at 4-doc concurrency, but the gap will surface at higher load. This is P4 (infrastructure exists but using it is optional).
 
 **Fix (tactical)**: Wire OpenAI calls through `get_rate_limiter(LLMProvider.OPENAI)` in `comparator.py`. **Fix (structural)**: Move all LLM calls into domain classes under `services/llm/` where rate limiting is enforced by construction (ARCH-004 target architecture).

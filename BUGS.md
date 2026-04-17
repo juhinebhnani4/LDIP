@@ -1,6 +1,6 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-17 (E2E verification — 4 docs, 2 matters, both pipeline paths)
+**Last updated**: 2026-04-17 (E2E verification + arch pattern mapping — E2E findings cross-referenced to ARCH-001/002/003/004)
 **Total bugs**: 67 | **Fixed**: 29 | **Open**: 34 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
@@ -55,7 +55,9 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 1. Minimum two Railway services from day one — a "fast lane" worker on `default,llm` and a "heavy lane" worker on `heavy,low`. Ideally a third "interactive" worker on `default` only, so user-facing operations are never blocked by background sweeps.
 2. A shared-quota partitioner in front of the Gemini client that enforces per-task-class budgets (e.g. citations: 30%, aliases: 20%, dates: 20%, entities: 20%, RAG: 10% — numbers TBD). Or split into multiple GCP projects so each task class has its own quota at the source.
 
-**Files**: `backend/railway.toml`, `backend/start-worker.sh`, `backend/app/workers/celery.py`, `backend/app/services/llm/` (wherever the Gemini client lives — verify before changing)
+**E2E evidence (2026-04-17)**: (a) Beat process shares worker process — when 4 concurrent documents saturate workers, RedBeat's lock extension gets starved → `LockNotOwnedError` → all 16 periodic tasks die silently (E2E-006, INF-010). Physical isolation of beat is needed alongside queue isolation. (b) OpenAI is a **second unpartitioned upstream** not covered in the original P3b analysis. `detect_contradictions` calls GPT-4o via `AsyncOpenAI` with **no rate limiter** — relies solely on circuit breaker catching 429s. Gemini calls in the same engine ARE rate-limited via `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two LLM providers, asymmetric enforcement. With 4 concurrent docs × 3 entity concurrency × 5 batch size = up to 60 concurrent OpenAI calls, confirmed by transient 429 retries during E2E (E2E-008). P3b's target architecture must cover OpenAI quota partitioning alongside Gemini.
+
+**Files**: `backend/railway.toml`, `backend/start-worker.sh`, `backend/app/workers/celery.py`, `backend/app/services/llm/` (wherever the Gemini client lives — verify before changing), `backend/app/engines/contradiction/comparator.py` (OpenAI bypass)
 
 ---
 
@@ -73,7 +75,9 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **Target architecture**: a reconciler / watchdog that derives status from observed state — *do chunks exist? embeddings? entities? citations? contradictions?* — and a periodic sweep that promotes documents to COMPLETED or REPROCESS based on what's actually in the database. Tasks become idempotent stage workers; the reconciler is the single source of truth. This is how Airflow, Temporal, and every mature workflow engine handle it. Celery alone was the wrong substrate for a pipeline this branchy.
 
-**Files**: `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/chunked_document_tasks.py`, `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/api/routes/admin/pipeline.py`
+**E2E evidence (2026-04-17) — maintenance task proliferation**: 13 of 16 beat tasks are recovery/reconciliation sweeps: `recover_stale_jobs`, `cleanup_stale_chunks`, `recover_stale_chunks`, `trigger_pending_merges`, `recover_skipped_large_documents`, `recover_stuck_documents`, `fix_missing_extracted_text`, `dispatch_stuck_queued_jobs`, `sync_stale_job_status`, `sync_missing_entity_ids`, `resume_stuck_pipelines`, `sync_act_resolutions_with_documents`, `sync_citation_statuses_with_resolutions`. Each exists because a different task somewhere in the pipeline sometimes fails to transition state correctly. These are compensating mechanisms for ARCH-003 — but they're **non-converging re-dispatchers**, not true reconcilers. Proof: `trigger_pending_merges` (every 5 min) and `recover_stuck_documents` (every 15 min) dispatch `finalize_chunked_document` for ACT documents that are COMPLETED with no `extracted_text`. Finalize detects the condition, logs `finalize_skipping_no_text`, returns. Next sweep: same thing. Forever (E2E-007). The "reconciler" never converges because it re-triggers work instead of deriving correct terminal state. **Operational cost of ARCH-003: 13 sweeps × every 5-30 min × unbounded DB scans with no task timeouts.**
+
+**Files**: `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/chunked_document_tasks.py`, `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/api/routes/admin/pipeline.py`, `backend/app/workers/tasks/maintenance_tasks.py` (13 recovery sweeps), `backend/app/workers/celery.py:144-275` (beat schedule)
 
 ---
 
@@ -91,7 +95,9 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **Target architecture**: `backend/app/services/llm/` becomes a real subdirectory exposing one class per use case — `CitationLLM`, `ContradictionLLM`, `TimelineDateLLM`, `RAGGeneratorLLM`, `AliasResolutionLLM`, etc. Each one takes domain inputs (`extract_citations(text)`, not `generate_content(...)`) and returns domain outputs. Inside each class: model name pinned, prompt template owned, rate-limit bucket declared, cost logged, retries handled. Engines lose `from google.genai import types` entirely. Adding a new LLM-calling task class means writing a new domain method in `services/llm/` — there is nowhere else to put it. Forbidden #2b becomes mechanically enforceable.
 
-**Files**: `backend/app/core/gemini_client.py`, `backend/app/core/llm_rate_limiter.py`, `backend/app/core/cost_tracking.py`, plus all 14 bypass call sites listed above. Also note: `.claude/skills/architecture-guard/SKILL.md` already references `backend/app/services/llm/` as a high-risk path — that path doesn't exist yet, but creating it is exactly the fix.
+**E2E evidence (2026-04-17) — OpenAI as a second unmanaged provider**: `engines/contradiction/comparator.py` calls GPT-4o via `AsyncOpenAI` directly — no gateway, no centralized rate limiter. The same file's Gemini calls DO go through `get_rate_limiter(LLMProvider.GEMINI)`. This asymmetry is ARCH-004 in action: the rate-limiter infrastructure exists, Gemini uses it by convention, OpenAI doesn't because the convention was never applied. The contradiction engine also owns its own model-routing logic (Gemini Flash screening → GPT-4o escalation at confidence threshold 0.65), its own retry behavior, and its own cost tracking — all of which would live inside a `ContradictionLLM` domain class in the target architecture. The escalation threshold (0.65, lowered from 0.80 per BUG-003) is a hardcoded number in the engine with no centralized configuration surface. Contradiction detection consumed 40-70% of total pipeline time in E2E (E2E-004), with up to 50 entities × 25 pairs = 1,250 LLM calls per document.
+
+**Files**: `backend/app/core/gemini_client.py`, `backend/app/core/llm_rate_limiter.py`, `backend/app/core/cost_tracking.py`, plus all 14 bypass call sites listed above, plus `backend/app/engines/contradiction/comparator.py` (OpenAI direct calls, escalation logic). Also note: `.claude/skills/architecture-guard/SKILL.md` already references `backend/app/services/llm/` as a high-risk path — that path doesn't exist yet, but creating it is exactly the fix.
 
 ---
 
@@ -1263,9 +1269,9 @@ group(validate_ocr, calculate_confidence, chunk_document)
 
 **Observation**: ~10 `ocr_and_process_library_document` tasks failed with `storage_missing` errors on worker startup. Affected acts: `arbitration_and_conciliation_act_1996.pdf`, `indian_contract_act_1872.pdf`, `constitution_of_india_1950.pdf`, `provincial_insolvency_act_1920.pdf`, `income_tax_act_1961.pdf`, `companies_act_2013.pdf`. These PDFs are referenced in the `library_documents` table but don't exist in Supabase storage.
 
-**Impact**: These acts can't be used for citation verification. Worker wastes time retrying them on every startup.
+**Impact**: These acts can't be used for citation verification. Note: the task sets status to FAILED with `quality_flags=["storage_missing"]` on first failure, and `resume_stuck_pipelines` only queries `status IN ('pending', 'processing')` — so these do NOT retry indefinitely. This was a one-time burst from documents that were PENDING when the worker started.
 
-**Fix**: Either upload the missing PDFs to storage, or remove the broken library_document records, or add a storage-existence check before dispatching OCR.
+**Fix**: Clean up orphan `library_documents` records (delete rows where storage file doesn't exist), or upload the missing PDFs to storage.
 
 ---
 
@@ -1305,39 +1311,48 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 
 ---
 
-### E2E-006: Redis beat scheduler lock extension warning
+### E2E-006: Redis beat scheduler lock extension warning (ARCH-002 instance)
 | Field | Value |
 |-------|-------|
-| **Severity** | P3 (Low) — noise, no functional impact |
+| **Severity** | P2 (Medium) — upgraded: kills all 16 periodic tasks silently |
 | **Status** | OPEN |
 | **Source** | E2E verification (2026-04-17) |
+| **Arch pattern** | ARCH-002 (P3 — routing without process isolation) |
 
-**Observation**: `Cannot extend a lock that's no longer owned` warning from Celery beat scheduler's Redis lock. Causes Railway to hit 500 logs/sec rate limit and drop messages (43 dropped in one burst).
+**Observation**: `Cannot extend a lock that's no longer owned` warning from RedBeat scheduler's Redis lock (`redbeat_lock_timeout=300`). Causes Railway to hit 500 logs/sec rate limit and drop messages (43 dropped in one burst). Related to INF-010.
 
-**Fix**: Increase beat scheduler lock timeout, or suppress the warning, or switch to file-based beat schedule.
+**Why this is ARCH-002**: Beat runs in the same process as the worker. When heavy tasks (4 concurrent documents during E2E) saturate the worker, beat's lock-extension tick gets starved → lock expires → `LockNotOwnedError` → beat crashes → **all 16 periodic tasks stop firing** → recovery sweeps stop → stuck documents accumulate silently. Additionally, 13 of 16 maintenance tasks have **no timeout decorators** — unbounded DB scans can block the event loop indefinitely.
+
+**Fix (tactical)**: Increase `redbeat_lock_timeout` from 300s, add `soft_time_limit` to all maintenance tasks. **Fix (structural)**: Run beat as its own lightweight Railway service, physically isolated from workers (ARCH-002 target architecture).
 
 ---
 
-### E2E-007: Finalize runs on act documents with no OCR text
+### E2E-007: Finalize runs on act documents with no OCR text (ARCH-003 instance)
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — wasted worker time |
 | **Status** | OPEN |
 | **Source** | E2E verification (2026-04-17) |
+| **Arch pattern** | ARCH-003 (non-converging recovery sweep) |
 
-**Observation**: Multiple `finalize_chunked_document` tasks fire for act-type documents that have `status=completed` but no `extracted_text`. Each logs `finalize_skipping_no_text` and returns. This appears to happen on every deployment or beat cycle.
+**Observation**: Multiple `finalize_chunked_document` tasks fire for act-type documents that have `status=completed` but no `extracted_text`. Each logs `finalize_skipping_no_text` and returns. Three independent dispatchers exist: (1) chord callback (primary path), (2) `trigger_pending_merges` every 5 min, (3) `recover_stuck_documents` every 15 min. The beat tasks find these documents, dispatch finalize, finalize skips, beat finds them again next cycle. Forever.
 
-**Fix**: Don't dispatch finalize for documents that are already `completed` with no OCR text, or that are `act` type with no storage file.
+**Why this is ARCH-003**: The beat tasks observe state (documents with status X) but don't derive correct terminal state — they just re-trigger the same task. A true reconciler would check "does this document have extracted_text AND OCR chunks? If not, transition to a terminal state that stops future dispatches."
+
+**Fix (tactical)**: Add document_type and extracted_text precondition checks in `trigger_pending_merges` and `recover_stuck_documents` before dispatching finalize. **Fix (structural)**: Replace non-converging re-dispatchers with a single reconciler that derives state from observation (ARCH-003 target architecture).
 
 ---
 
-### E2E-008: OpenAI transient 429 retries during contradiction detection
+### E2E-008: OpenAI transient 429 retries during contradiction detection (ARCH-002/P3b + ARCH-004 instance)
 | Field | Value |
 |-------|-------|
-| **Severity** | P3 (Low) — retries succeed, but adds latency |
+| **Severity** | P2 (Medium) — upgraded: will cascade under higher load |
 | **Status** | OPEN |
 | **Source** | E2E verification (2026-04-17) |
+| **Arch pattern** | ARCH-002/P3b (shared upstream quota), ARCH-004 (gateway bypass) |
 
-**Observation**: During peak contradiction detection (4 docs simultaneously), `Retrying request to /chat/completions` messages appear. These are transient OpenAI rate limits. Retries succeed within ~0.4s, but multiple concurrent retries add up.
+**Observation**: During peak contradiction detection (4 docs simultaneously), `Retrying request to /chat/completions` messages appear. 4 docs × 3 entity concurrency × 5 batch size = up to 60 concurrent OpenAI calls. Retries succeed within ~0.4s at this load, but will cascade at higher concurrency.
 
-**Fix**: Consider rate-limiting GPT-4o calls from our side to stay under the rate limit, or batch contradiction comparisons to reduce concurrent calls.
+**Why this is ARCH-002/P3b + ARCH-004**: The rate limiter infrastructure exists at `core/llm_rate_limiter.py`. Gemini calls in the same engine (`comparator.py`) use it via `get_rate_limiter(LLMProvider.GEMINI)`. OpenAI calls do NOT — they rely solely on circuit breaker catching 429s reactively. Same system, two providers, asymmetric enforcement. This is P3b (shared upstream quota with no partitioning) applied to a second provider, and P4 (infrastructure exists but using it is optional).
+
+**Fix (tactical)**: Wire OpenAI calls through `get_rate_limiter(LLMProvider.OPENAI)` in `comparator.py`. **Fix (structural)**: Move all LLM calls into domain classes under `services/llm/` where rate limiting is enforced by construction (ARCH-004 target architecture).

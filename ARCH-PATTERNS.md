@@ -75,7 +75,7 @@ A second test: *if this rule is true, is its existence in our docs a sign that w
 1. **In-process token bucket** in front of the LLM client, partitioned by task class. Citations gets X req/min, aliases gets Y, etc., summing to ≤ the global quota. One task class running hot cannot starve the others.
 2. **Separate GCP projects** for hot task classes, each with its own native quota at the source.
 
-**Concrete instance**: ARCH-002 deeper failure mode (Gemini 429s recurring across all task classes during any heavy alias-resolution run).
+**Concrete instances**: ARCH-002 deeper failure mode (Gemini 429s recurring across all task classes during any heavy alias-resolution run). E2E verification (2026-04-17) confirmed this extends to **OpenAI as a second unpartitioned upstream**: `detect_contradictions` calls GPT-4o with no rate limiter (60 concurrent calls possible), while Gemini calls in the same engine ARE rate-limited — asymmetric enforcement, same system (E2E-008).
 
 ---
 

@@ -1,4 +1,4 @@
-# ARCH-PATTERNS.md — The Six Convention-Where-Structure-Belongs Patterns
+# ARCH-PATTERNS.md — Convention-Where-Structure-Belongs Patterns
 
 > Created 2026-04-13 from a second-pass architectural review.
 >
@@ -121,11 +121,61 @@ A second test: *if this rule is true, is its existence in our docs a sign that w
 
 ---
 
+## P7 — "Signaling failure in a language the framework doesn't speak"
+
+**The smell**: A task returns a status value (`{"status": "chunking_failed"}`) to indicate failure, but the orchestration framework (Celery chains, Promise chains, HTTP middleware pipelines) only recognizes **exceptions/rejections** as failure. The return value is invisible to the framework — it's "success." Every downstream consumer must manually inspect the returned dict and decide to skip.
+
+**Why it's a sticky note**: The framework already has a structural mechanism for failure propagation (exceptions stop Celery chains, rejected Promises skip `.then()`, thrown errors trigger Express error handlers). By returning a value instead, you opt out of the wall and replace it with "every downstream task must remember to check the status field." That's P1 at the framework boundary — and it's invisible because each task appears to work in isolation.
+
+**The wall version**:
+1. **Use the framework's native failure mechanism.** In Celery: raise an exception on terminal failure (chain stops structurally). In Promises: reject (`.catch()` fires). In HTTP middleware: throw (error handler runs). The framework becomes the wall — downstream code never runs on bad input because it structurally can't.
+2. **Attach framework-level error callbacks** (`link_error` in Celery, `.catch()` in Promises) for centralized cleanup, rather than distributing cleanup across every task's catch block.
+
+**The test**: "If I add a new task to this chain and forget to check `prev_result`, does bad data silently flow through?" If yes, you're speaking a language the framework doesn't understand.
+
+**Concrete instance**: DPP-002. All 5 chained document tasks return failure dicts. Celery sees every failure as success. 3 downstream tasks have manual "skip if prev failed" blocks that are structurally unnecessary if exceptions were used.
+
+---
+
+## P8 — "Sibling tasks with inconsistent contracts"
+
+**The smell**: Tasks at the same pipeline level (same chain, same role, same lifecycle) have **different cleanup behavior** on failure. Some call `_mark_job_failed`, others don't. Some release the pipeline lock, others don't. No structural definition of "what every task at this level must do on failure" exists — each author independently decided, and the decisions diverged.
+
+**Why it's a sticky note**: When you add a new task to the chain, nothing tells you what cleanup is required. You copy from the nearest sibling, which may itself be incomplete. The inconsistency is invisible — there's no contract to violate, just a convention that was never fully followed. The missing cleanup doesn't cause a visible error; it causes a silent state leak (orphan locks, jobs stuck in PROCESSING) that only surfaces hours later.
+
+**The wall version**:
+1. **A single error callback** on the chain/pipeline that handles all cleanup centrally. Individual tasks don't need to remember — the framework does it.
+2. **A base class or decorator** that enforces the cleanup contract structurally — every task wrapped by it gets the required cleanup on failure automatically.
+3. **An integration test** that asserts: "for every task in the chain, failure triggers X, Y, Z cleanup." The test IS the contract.
+
+**The test**: "If I look at any two sibling tasks' failure handlers, are they doing the same set of cleanup operations?" If not, one of them has a bug — but nothing in the code tells you which one.
+
+**Concrete instance**: DPP-002 investigation. Of 5 chained tasks: `validate_ocr` and `chunk_document` call both `_mark_job_failed` and `_release_pipeline_lock_safe`. `calculate_confidence` calls `_mark_job_failed` but NOT `_release_pipeline_lock_safe`. `embed_chunks` and `extract_entities` call `_release_pipeline_lock_safe` but NOT `_mark_job_failed`. Three different cleanup behaviors for five siblings in the same chain.
+
+---
+
+## P9 — "Surface audits hide orchestration debt"
+
+**The smell**: A bug at an orchestration boundary (how tasks coordinate, how state is handed off, how pipelines complete) is described by its surface symptom — "wastes ~5 seconds," "status sometimes wrong," "retry doesn't work." The audit accepts the symptom description and sizes the fix accordingly. The actual blast radius is 5-10x larger because orchestration bugs are never local.
+
+**Why it's a sticky note**: Sizing bugs by symptom description is a convention. The assumption "this is about as big as it looks" works for leaf-node bugs (wrong format string, missing null check) but systematically fails for coordination bugs. The same root cause (return-dict-as-failure) produced: 5 tasks with wrong error signaling, 3 tasks with manual skip blocks, 3 tasks with incomplete cleanup, 1 library pipeline with identical issues, 0 error callbacks where there should be 2. A "medium-severity 5-second waste" was actually a 16-task, 28-call-site architectural mismatch.
+
+**The wall version**:
+1. **Mandatory blast-radius trace for coordination bugs.** Any bug that involves task coordination, state handoff, pipeline sequencing, or completion signaling must get a full call-chain trace BEFORE sizing — not after. The trace is the wall; it physically prevents underestimation.
+2. **The trace checklist**: (a) How many tasks/functions participate in this coordination? (b) How many are affected by the root cause? (c) Is the same pattern replicated in other pipelines? (d) What cleanup/state-management is inconsistent across siblings (→ P8)?
+3. **The heuristic**: If a bug touches anything in the "forbidden surface" (pipeline chains, worker queues, status/lock management, task dispatch), assume the blast radius is the entire pipeline until proven otherwise.
+
+**The test**: "Did we trace the full call chain before writing the fix, or did we accept the symptom description as the scope?" If the latter, the fix is probably incomplete.
+
+**Concrete instance**: DPP-002. Listed as "Medium severity, Low complexity — config change." Actual scope: 8 files, 16 tasks, 28 cleanup call sites, 3 missing cleanup bugs, 0 error callbacks. The deep analysis that revealed this took one investigation session; the surface audit that missed it was instantaneous.
+
+---
+
 ## How to use this catalog
 
 When reviewing any proposed change — yours, a teammate's, or one Claude is about to write — ask in this order:
 
-1. **Does the fix match one of these six patterns?** If yes, name which one. Don't ship the local version of the fix; propose the wall version. (The architecture-guard skill formalizes this for the three most dangerous patterns; this file extends it to all six.)
+1. **Does the fix match one of these nine patterns?** If yes, name which one. Don't ship the local version of the fix; propose the wall version. (The architecture-guard skill formalizes this for the three most dangerous patterns; this file extends it to all nine.)
 2. **If you must ship the sticky-note version anyway** (deadline, scope, etc.), mark it explicitly as a debt — log it in `BUGS.md` section 0 as a new entry, and note in the commit message that an architectural waiver was taken. Don't let it slip in unmarked.
 3. **If the fix is to add a new MEMORY.md rule**, ask whether the rule itself is an instance of one of these patterns. *"Remember to call X from all exit paths"* is P1. *"Remember to use the right column name"* is P5. If the rule is itself a sticky note disguised as a fix, you have two debts now: the original bug, and the rule that papers over it.
 
@@ -135,7 +185,7 @@ A rule in MEMORY.md or CLAUDE.md is a sticky note. Sometimes that's the right an
 
 ## Cross-references
 
-- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-006 entries
+- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-006 entries; DPP-002 for P7/P8/P9
 - `.claude/skills/architecture-guard/SKILL.md` — enforcement checklist for the most dangerous patterns
 - `GUARDRAIL-BACKLOG.md` — actionable list of walls and smart sticky notes to build, with promotion paths
 - `CLAUDE.md` — top-level zoom-out rule and architecture-guard reference

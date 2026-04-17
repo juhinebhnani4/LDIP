@@ -2391,7 +2391,7 @@ def validate_ocr(
 
         if retry_count >= MAX_RETRIES:
             _mark_job_failed(job_id, str(e), error_code, matter_id)
-            return _handle_validation_failure(doc_service, doc_id, e)
+            _handle_validation_failure(doc_service, doc_id, e, job_id, matter_id)
 
         raise
 
@@ -2420,7 +2420,7 @@ def validate_ocr(
             error=str(e),
         )
         _mark_job_failed(job_id, e.message, e.code, matter_id)
-        return _handle_validation_failure(doc_service, doc_id, e)
+        _handle_validation_failure(doc_service, doc_id, e, job_id, matter_id)
 
     except Exception as e:
         logger.error(
@@ -2430,7 +2430,7 @@ def validate_ocr(
             error_type=type(e).__name__,
         )
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)
-        return _handle_validation_failure(doc_service, doc_id, e)
+        _handle_validation_failure(doc_service, doc_id, e, job_id, matter_id)
 
 
 def _apply_validation_results(
@@ -2530,17 +2530,26 @@ def _handle_validation_failure(
     doc_service: DocumentService,
     document_id: str,
     error: Exception,
-) -> dict[str, str]:
-    """Handle validation task failure.
+    job_id: str | None = None,
+    matter_id: str | None = None,
+) -> None:
+    """Handle validation task failure — cleanup then raise.
+
+    Performs cleanup (lock release, status update) then raises
+    PipelineTaskError to stop the chain (DPP-002).
 
     Args:
         doc_service: DocumentService instance.
         document_id: Document UUID.
         error: The error that caused the failure.
+        job_id: Processing job UUID (for error callback context).
+        matter_id: Matter UUID (for error callback context).
 
-    Returns:
-        Task result indicating failure.
+    Raises:
+        PipelineTaskError: Always raised after cleanup.
     """
+    from app.workers.tasks.pipeline_errors import PipelineTaskError
+
     error_code = getattr(error, "code", "VALIDATION_FAILED")
     error_message = str(error)
 
@@ -2562,12 +2571,15 @@ def _handle_validation_failure(
         ValidationStatus.PENDING,
     )
 
-    return {
-        "status": "validation_failed",
-        "document_id": document_id,
-        "error_code": error_code,
-        "error_message": error_message,
-    }
+    # DPP-002: Raise instead of return — Celery stops the chain
+    raise PipelineTaskError(
+        error_message,
+        error_code=error_code,
+        document_id=document_id,
+        job_id=job_id,
+        matter_id=matter_id,
+        stage="validation",
+    )
 
 
 @celery_app.task(
@@ -2616,15 +2628,17 @@ def calculate_confidence(
         job_id = _lookup_job_id_for_document(doc_id)
 
     if not doc_id:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error("calculate_confidence_no_document_id")
-        return {
-            "status": "confidence_failed",
-            "error_code": "NO_DOCUMENT_ID",
-            "error_message": "No document_id provided",
-            "job_id": job_id,
-        }
+        raise PipelineTaskError(
+            "No document_id provided",
+            error_code="NO_DOCUMENT_ID",
+            stage="confidence",
+        )
 
-    # Skip if OCR/validation wasn't successful
+    # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
+    # With PipelineTaskError, upstream failures raise and this task never runs.
+    # Kept as defensive safety net during rollout.
     if prev_result:
         prev_status = prev_result.get("status")
         if prev_status not in ("validated", "validated_with_warnings", "validation_skipped"):
@@ -2708,6 +2722,7 @@ def calculate_confidence(
         _update_job_stage_failure(job_id, "confidence", str(e), error_code, matter_id)
 
         if retry_count >= 2:
+            from app.workers.tasks.pipeline_errors import PipelineTaskError
             logger.error(
                 "calculate_confidence_task_failed",
                 document_id=doc_id,
@@ -2715,17 +2730,20 @@ def calculate_confidence(
                 error=str(e),
             )
             _mark_job_failed(job_id, str(e), error_code, matter_id)
-            return {
-                "status": "confidence_failed",
-                "document_id": doc_id,
-                "job_id": job_id,
-                "error_code": error_code,
-                "error_message": str(e),
-            }
+            _release_pipeline_lock_safe(doc_id)  # P8 fix: was missing
+            raise PipelineTaskError(
+                str(e),
+                error_code=error_code,
+                document_id=doc_id,
+                job_id=job_id,
+                matter_id=matter_id,
+                stage="confidence",
+            )
 
         raise
 
     except DocumentServiceError as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "calculate_confidence_document_error",
             document_id=doc_id,
@@ -2734,15 +2752,17 @@ def calculate_confidence(
         )
         _update_job_stage_failure(job_id, "confidence", str(e), e.code, None)
         _mark_job_failed(job_id, e.message, e.code, None)
-        return {
-            "status": "confidence_failed",
-            "document_id": doc_id,
-            "job_id": job_id,
-            "error_code": e.code,
-            "error_message": e.message,
-        }
+        _release_pipeline_lock_safe(doc_id)  # P8 fix: was missing
+        raise PipelineTaskError(
+            e.message,
+            error_code=e.code,
+            document_id=doc_id,
+            job_id=job_id,
+            stage="confidence",
+        )
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "calculate_confidence_unexpected_error",
             document_id=doc_id,
@@ -2752,13 +2772,14 @@ def calculate_confidence(
         )
         _update_job_stage_failure(job_id, "confidence", str(e), "UNEXPECTED_ERROR", None)
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
-        return {
-            "status": "confidence_failed",
-            "document_id": doc_id,
-            "job_id": job_id,
-            "error_code": "UNEXPECTED_ERROR",
-            "error_message": str(e),
-        }
+        _release_pipeline_lock_safe(doc_id)  # P8 fix: was missing
+        raise PipelineTaskError(
+            str(e),
+            error_code="UNEXPECTED_ERROR",
+            document_id=doc_id,
+            job_id=job_id,
+            stage="confidence",
+        )
 
 
 @celery_app.task(
@@ -2847,7 +2868,9 @@ def chunk_document(
             "validation_skipped",
             "ocr_complete",  # Most common status after OCR
         )
-        # Only skip on explicit failure statuses
+        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
+        # With PipelineTaskError, upstream failures raise and this task never runs.
+        # Kept as defensive safety net during rollout.
         failed_statuses = (
             "failed",
             "error",
@@ -3133,6 +3156,7 @@ def chunk_document(
         _update_job_stage_failure(job_id, "chunking", str(e), error_code, matter_id)
 
         if retry_count >= 2:
+            from app.workers.tasks.pipeline_errors import PipelineTaskError
             logger.error(
                 "chunk_document_task_failed",
                 document_id=doc_id,
@@ -3141,17 +3165,19 @@ def chunk_document(
             )
             _mark_job_failed(job_id, str(e), error_code, matter_id)
             _release_pipeline_lock_safe(doc_id)
-            return {
-                "status": "chunking_failed",
-                "document_id": doc_id,
-                "job_id": job_id,
-                "error_code": error_code,
-                "error_message": str(e),
-            }
+            raise PipelineTaskError(
+                str(e),
+                error_code=error_code,
+                document_id=doc_id,
+                job_id=job_id,
+                matter_id=matter_id,
+                stage="chunking",
+            )
 
         raise
 
     except DocumentServiceError as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "chunk_document_document_error",
             document_id=doc_id,
@@ -3161,15 +3187,16 @@ def chunk_document(
         _update_job_stage_failure(job_id, "chunking", str(e), e.code, None)
         _mark_job_failed(job_id, e.message, e.code, None)
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "chunking_failed",
-            "document_id": doc_id,
-            "job_id": job_id,
-            "error_code": e.code,
-            "error_message": e.message,
-        }
+        raise PipelineTaskError(
+            e.message,
+            error_code=e.code,
+            document_id=doc_id,
+            job_id=job_id,
+            stage="chunking",
+        )
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "chunk_document_unexpected_error",
             document_id=doc_id,
@@ -3180,13 +3207,13 @@ def chunk_document(
         _update_job_stage_failure(job_id, "chunking", str(e), "UNEXPECTED_ERROR", None)
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "chunking_failed",
-            "document_id": doc_id,
-            "job_id": job_id,
-            "error_code": "UNEXPECTED_ERROR",
-            "error_message": str(e),
-        }
+        raise PipelineTaskError(
+            str(e),
+            error_code="UNEXPECTED_ERROR",
+            document_id=doc_id,
+            job_id=job_id,
+            stage="chunking",
+        )
 
 
 # =============================================================================
@@ -3423,7 +3450,9 @@ def embed_chunks(
             "table_extraction_skipped",
             "table_extraction_failed",  # Non-critical — still embed text chunks
         )
-        # Only skip on explicit failure statuses
+        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
+        # With PipelineTaskError, upstream failures raise and this task never runs.
+        # Kept as defensive safety net during rollout.
         failed_statuses = (
             "failed",
             "error",
@@ -3777,49 +3806,61 @@ def embed_chunks(
         )
 
         if retry_count >= 3:
+            from app.workers.tasks.pipeline_errors import PipelineTaskError
             logger.error(
                 "embed_chunks_task_failed",
                 document_id=doc_id,
                 error=str(e),
             )
+            _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
             _release_pipeline_lock_safe(doc_id)
-            return {
-                "status": "embedding_failed",
-                "document_id": doc_id,
-                "error_code": e.code,
-                "error_message": e.message,
-            }
+            raise PipelineTaskError(
+                e.message,
+                error_code=e.code,
+                document_id=doc_id,
+                job_id=job_id,
+                matter_id=matter_id,
+                stage="embedding",
+            )
 
         raise
 
     except DocumentServiceError as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "embed_chunks_document_error",
             document_id=doc_id,
             error=str(e),
         )
+        _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "embedding_failed",
-            "document_id": doc_id,
-            "error_code": e.code,
-            "error_message": e.message,
-        }
+        raise PipelineTaskError(
+            e.message,
+            error_code=e.code,
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="embedding",
+        )
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "embed_chunks_unexpected_error",
             document_id=doc_id,
             error=str(e),
             error_type=type(e).__name__,
         )
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "embedding_failed",
-            "document_id": doc_id,
-            "error_code": "UNEXPECTED_ERROR",
-            "error_message": str(e),
-        }
+        raise PipelineTaskError(
+            str(e),
+            error_code="UNEXPECTED_ERROR",
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="embedding",
+        )
 
 
 # =============================================================================
@@ -4031,12 +4072,13 @@ def extract_entities(
         doc_id = prev_result.get("document_id")  # type: ignore[assignment]
 
     if not doc_id:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error("extract_entities_no_document_id")
-        return {
-            "status": "entity_extraction_failed",
-            "error_code": "NO_DOCUMENT_ID",
-            "error_message": "No document_id provided",
-        }
+        raise PipelineTaskError(
+            "No document_id provided",
+            error_code="NO_DOCUMENT_ID",
+            stage="entity_extraction",
+        )
 
     # Log force mode usage for audit trail
     if force:
@@ -4062,7 +4104,9 @@ def extract_entities(
             "confidence_calculated",
             "confidence_skipped",
         )
-        # Only skip on explicit failure statuses
+        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
+        # With PipelineTaskError, upstream failures raise and this task never runs.
+        # Kept as defensive safety net during rollout.
         failed_statuses = (
             "failed",
             "error",
@@ -4605,6 +4649,7 @@ def extract_entities(
         }
 
     except SoftTimeLimitExceeded:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         # Task timeout - mark as failed for retry later
         logger.error(
             "extract_entities_task_timeout",
@@ -4614,14 +4659,16 @@ def extract_entities(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
+        _mark_job_failed(job_id, "Entity extraction timeout exceeded (10 minutes)", "TIMEOUT", matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "entity_extraction_failed",
-            "document_id": doc_id,
-            "error_code": "TIMEOUT",
-            "error_message": "Entity extraction timeout exceeded (10 minutes)",
-            "job_id": job_id,
-        }
+        raise PipelineTaskError(
+            "Entity extraction timeout exceeded (10 minutes)",
+            error_code="TIMEOUT",
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="entity_extraction",
+        )
 
     except MIGExtractorError as e:
         retry_count = self.request.retries
@@ -4635,49 +4682,61 @@ def extract_entities(
         )
 
         if retry_count >= 3:
+            from app.workers.tasks.pipeline_errors import PipelineTaskError
             logger.error(
                 "extract_entities_task_failed",
                 document_id=doc_id,
                 error=str(e),
             )
+            _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
             _release_pipeline_lock_safe(doc_id)
-            return {
-                "status": "entity_extraction_failed",
-                "document_id": doc_id,
-                "error_code": e.code,
-                "error_message": e.message,
-            }
+            raise PipelineTaskError(
+                e.message,
+                error_code=e.code,
+                document_id=doc_id,
+                job_id=job_id,
+                matter_id=matter_id,
+                stage="entity_extraction",
+            )
 
         raise
 
     except DocumentServiceError as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "extract_entities_document_error",
             document_id=doc_id,
             error=str(e),
         )
+        _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "entity_extraction_failed",
-            "document_id": doc_id,
-            "error_code": e.code,
-            "error_message": e.message,
-        }
+        raise PipelineTaskError(
+            e.message,
+            error_code=e.code,
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="entity_extraction",
+        )
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import PipelineTaskError
         logger.error(
             "extract_entities_unexpected_error",
             document_id=doc_id,
             error=str(e),
             error_type=type(e).__name__,
         )
+        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
-        return {
-            "status": "entity_extraction_failed",
-            "document_id": doc_id,
-            "error_code": "UNEXPECTED_ERROR",
-            "error_message": str(e),
-        }
+        raise PipelineTaskError(
+            str(e),
+            error_code="UNEXPECTED_ERROR",
+            document_id=doc_id,
+            job_id=job_id,
+            matter_id=matter_id,
+            stage="entity_extraction",
+        )
 
 
 # =============================================================================

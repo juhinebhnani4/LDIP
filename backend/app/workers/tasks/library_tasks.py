@@ -197,6 +197,7 @@ def chunk_library_document(
         }
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
         logger.error(
             "chunk_library_document_failed",
             library_document_id=library_document_id,
@@ -214,12 +215,12 @@ def chunk_library_document(
         except Exception:
             pass
 
-        return {
-            "status": "chunking_failed",
-            "library_document_id": library_document_id,
-            "error_code": "CHUNKING_FAILED",
-            "error_message": str(e),
-        }
+        # DPP-002: Raise instead of return — Celery stops the chain
+        raise LibraryPipelineTaskError(
+            str(e),
+            error_code="CHUNKING_FAILED",
+            library_document_id=library_document_id,
+        )
 
 
 # =============================================================================
@@ -262,14 +263,14 @@ def embed_library_chunks(
         lib_doc_id = prev_result.get("library_document_id")  # type: ignore[assignment]
 
     if not lib_doc_id:
+        from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
         logger.error("embed_library_chunks_no_document_id")
-        return {
-            "status": "embedding_failed",
-            "error_code": "NO_DOCUMENT_ID",
-            "error_message": "No library_document_id provided",
-        }
+        raise LibraryPipelineTaskError(
+            "No library_document_id provided",
+            error_code="NO_DOCUMENT_ID",
+        )
 
-    # Skip if previous task failed
+    # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
     if prev_result:
         prev_status = prev_result.get("status")
         if prev_status and "failed" in prev_status:
@@ -290,12 +291,12 @@ def embed_library_chunks(
     client = get_service_client()
 
     if client is None:
-        return {
-            "status": "embedding_failed",
-            "library_document_id": lib_doc_id,
-            "error_code": "DATABASE_NOT_CONFIGURED",
-            "error_message": "Database client not configured",
-        }
+        from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
+        raise LibraryPipelineTaskError(
+            "Database client not configured",
+            error_code="DATABASE_NOT_CONFIGURED",
+            library_document_id=lib_doc_id,
+        )
 
     logger.info(
         "embed_library_chunks_started",
@@ -391,6 +392,7 @@ def embed_library_chunks(
         }
 
     except Exception as e:
+        from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
         logger.error(
             "embed_library_chunks_failed",
             library_document_id=lib_doc_id,
@@ -408,12 +410,12 @@ def embed_library_chunks(
         except Exception:
             pass
 
-        return {
-            "status": "embedding_failed",
-            "library_document_id": lib_doc_id,
-            "error_code": "EMBEDDING_FAILED",
-            "error_message": str(e),
-        }
+        # DPP-002: Raise instead of return — Celery stops the chain
+        raise LibraryPipelineTaskError(
+            str(e),
+            error_code="EMBEDDING_FAILED",
+            library_document_id=lib_doc_id,
+        )
 
 
 # =============================================================================
@@ -657,6 +659,49 @@ def ocr_and_process_library_document(
 
 
 # =============================================================================
+# Library Chain Error Callback (DPP-002 — P7/P8 wall)
+# =============================================================================
+
+
+@celery_app.task(
+    name="app.workers.tasks.library_tasks.on_library_chain_error",
+    bind=True,
+    ignore_result=True,
+    queue="default",
+)
+def on_library_chain_error(
+    self,  # type: ignore[no-untyped-def]
+    failed_task_id: str,
+    *,
+    library_document_id: str | None = None,
+) -> None:
+    """Safety-net error callback for the library processing chain.
+
+    Fired by Celery's link_error when any task in the library chain raises.
+    Updates library document status to FAILED idempotently.
+    """
+    logger.error(
+        "library_pipeline_chain_error",
+        failed_task_id=failed_task_id,
+        library_document_id=library_document_id,
+    )
+    if library_document_id:
+        try:
+            lib_service = get_library_service()
+            lib_service.update_status(
+                library_document_id,
+                LibraryDocumentStatus.FAILED,
+                quality_flags=["chain_error"],
+            )
+        except Exception as e:
+            logger.warning(
+                "library_chain_error_cleanup_failed",
+                library_document_id=library_document_id,
+                error=str(e),
+            )
+
+
+# =============================================================================
 # Library Document Processing Pipeline
 # =============================================================================
 
@@ -687,11 +732,14 @@ def process_library_document(
         text_length=len(extracted_text),
     )
 
-    # Create processing chain
+    # Create processing chain with error callback (DPP-002)
     pipeline = chain(
         chunk_library_document.s(library_document_id, extracted_text),
         embed_library_chunks.s(),
     )
+    pipeline.link_error(on_library_chain_error.s(
+        library_document_id=library_document_id,
+    ))
 
     # Execute chain
     result = pipeline.apply_async()

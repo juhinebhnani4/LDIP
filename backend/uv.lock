@@ -1533,7 +1533,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.2.7"
+version = "1.2.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -1545,23 +1545,23 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/0e/664d8d81b3493e09cbab72448d2f9d693d1fa5aa2bcc488602203a9b6da0/langchain_core-1.2.7.tar.gz", hash = "sha256:e1460639f96c352b4a41c375f25aeb8d16ffc1769499fb1c20503aad59305ced", size = 837039, upload-time = "2026-01-09T17:44:25.505Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/5a/7523ff55668a233beef7e909e8e2074a1cc3b620e0bbf0a4ec5f38549b3b/langchain_core-1.2.31.tar.gz", hash = "sha256:aad3ecc9e4dce2dd2bb79526c81b92e5322fd81db7834a031cb80359f2e3ebaa", size = 850756, upload-time = "2026-04-16T13:26:29.241Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6e/6f/34a9fba14d191a67f7e2ee3dbce3e9b86d2fa7310e2c7f2c713583481bd2/langchain_core-1.2.7-py3-none-any.whl", hash = "sha256:452f4fef7a3d883357b22600788d37e3d8854ef29da345b7ac7099f33c31828b", size = 490232, upload-time = "2026-01-09T17:44:24.236Z" },
+    { url = "https://files.pythonhosted.org/packages/52/02/668ddf4f1cf963ad691bdbea672a85244e6271eb0a4acfaf662bbd94a3b1/langchain_core-1.2.31-py3-none-any.whl", hash = "sha256:c407193edb99311cc36ec3e4d3667a065bbc4d7d72fbb6e368538b9b134d4033", size = 513264, upload-time = "2026-04-16T13:26:27.566Z" },
 ]
 
 [[package]]
 name = "langchain-openai"
-version = "1.1.7"
+version = "1.1.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "openai" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/b7/30bfc4d1b658a9ee524bcce3b0b2ec9c45a11c853a13c4f0c9da9882784b/langchain_openai-1.1.7.tar.gz", hash = "sha256:f5ec31961ed24777548b63a5fe313548bc6e0eb9730d6552b8c6418765254c81", size = 1039134, upload-time = "2026-01-07T19:44:59.728Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/f5/b1a56f703fb90952b07ff9fb5507123a39df1267d62a7f2bb821c5dbb628/langchain_openai-1.1.14.tar.gz", hash = "sha256:71b4262932fabe506ce79c175dbc956cc48f24d81e20b27662df493147750643", size = 1115195, upload-time = "2026-04-16T14:55:24.696Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/a1/50e7596aca775d8c3883eceeaf47489fac26c57c1abe243c00174f715a8a/langchain_openai-1.1.7-py3-none-any.whl", hash = "sha256:34e9cd686aac1a120d6472804422792bf8080a2103b5d21ee450c9e42d053815", size = 84753, upload-time = "2026-01-07T19:44:58.629Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/fa/8c33befbc0cf81b21371cc1dab4e7bf94a80b8116194f263a5021ec02529/langchain_openai-1.1.14-py3-none-any.whl", hash = "sha256:cb525d2011f9813fc15a7dcfd4bca5b87badcbcb2c113a7fbe45d1b8a1bbb69c", size = 88705, upload-time = "2026-04-16T14:55:23.159Z" },
 ]
 
 [[package]]
@@ -2367,7 +2367,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "2.14.0"
+version = "2.32.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2379,9 +2379,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/b1/12fe1c196bea326261718eb037307c1c1fe1dedc2d2d4de777df822e6238/openai-2.14.0.tar.gz", hash = "sha256:419357bedde9402d23bf8f2ee372fca1985a73348debba94bddff06f19459952", size = 626938, upload-time = "2025-12-19T03:28:45.742Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/59/bdcc6b759b8c42dd73afaf5bf8f902c04b37987a5514dbc1c64dba390fef/openai-2.32.0.tar.gz", hash = "sha256:c54b27a9e4cb8d51f0dd94972ffd1a04437efeb259a9e60d8922b8bd26fe55e0", size = 693286, upload-time = "2026-04-15T22:28:19.434Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/4b/7c1a00c2c3fbd004253937f7520f692a9650767aa73894d7a34f0d65d3f4/openai-2.14.0-py3-none-any.whl", hash = "sha256:7ea40aca4ffc4c4a776e77679021b47eec1160e341f42ae086ba949c9dcc9183", size = 1067558, upload-time = "2025-12-19T03:28:43.727Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/c1/d6e64ccd0536bf616556f0cad2b6d94a8125f508d25cfd814b1d2db4e2f1/openai-2.32.0-py3-none-any.whl", hash = "sha256:4dcc9badeb4bf54ad0d187453742f290226d30150890b7890711bda4f32f192f", size = 1162570, upload-time = "2026-04-15T22:28:17.714Z" },
 ]
 
 [[package]]
@@ -4086,6 +4086,9 @@ dependencies = [
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/54/a2ba279afcca44bbd320d4e73675b282fcee3d81400ea1b53934efca6462/torch-2.10.0-2-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:13ec4add8c3faaed8d13e0574f5cd4a323c11655546f91fbe6afa77b57423574", size = 79498202, upload-time = "2026-02-10T21:44:52.603Z" },
     { url = "https://files.pythonhosted.org/packages/ec/23/2c9fe0c9c27f7f6cb865abcea8a4568f29f00acaeadfc6a37f6801f84cb4/torch-2.10.0-2-cp313-none-macosx_11_0_arm64.whl", hash = "sha256:e521c9f030a3774ed770a9c011751fb47c4d12029a3d6522116e48431f2ff89e", size = 79498254, upload-time = "2026-02-10T21:44:44.095Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/7a/abada41517ce0011775f0f4eacc79659bc9bc6c361e6bfe6f7052a6b9363/torch-2.10.0-3-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:98c01b8bb5e3240426dcde1446eed6f40c778091c8544767ef1168fc663a05a6", size = 915622781, upload-time = "2026-03-11T14:17:11.354Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/c6/4dfe238342ffdcec5aef1c96c457548762d33c40b45a1ab7033bb26d2ff2/torch-2.10.0-3-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:80b1b5bfe38eb0e9f5ff09f206dcac0a87aadd084230d4a36eea5ec5232c115b", size = 915627275, upload-time = "2026-03-11T14:16:11.325Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/f0/72bf18847f58f877a6a8acf60614b14935e2f156d942483af1ffc081aea0/torch-2.10.0-3-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:46b3574d93a2a8134b3f5475cfb98e2eb46771794c57015f6ad1fb795ec25e49", size = 915523474, upload-time = "2026-03-11T14:17:44.422Z" },
     { url = "https://files.pythonhosted.org/packages/cc/af/758e242e9102e9988969b5e621d41f36b8f258bb4a099109b7a4b4b50ea4/torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:5fd4117d89ffd47e3dcc71e71a22efac24828ad781c7e46aaaf56bf7f2796acf", size = 145996088, upload-time = "2026-01-21T16:24:44.171Z" },
     { url = "https://files.pythonhosted.org/packages/23/8e/3c74db5e53bff7ed9e34c8123e6a8bfef718b2450c35eefab85bb4a7e270/torch-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:787124e7db3b379d4f1ed54dd12ae7c741c16a4d29b49c0226a89bea50923ffb", size = 915711952, upload-time = "2026-01-21T16:23:53.503Z" },
     { url = "https://files.pythonhosted.org/packages/6e/01/624c4324ca01f66ae4c7cd1b74eb16fb52596dce66dbe51eff95ef9e7a4c/torch-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:2c66c61f44c5f903046cc696d088e21062644cbe541c7f1c4eaae88b2ad23547", size = 113757972, upload-time = "2026-01-21T16:24:39.516Z" },

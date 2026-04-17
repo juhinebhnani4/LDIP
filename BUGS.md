@@ -1,8 +1,8 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-17 (DPP-002 validation + first-principles pipeline audit)
-**Total bugs**: 59 | **Fixed**: 29 | **Open**: 26 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
-**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17)
+**Last updated**: 2026-04-17 (E2E verification — 4 docs, 2 matters, both pipeline paths)
+**Total bugs**: 67 | **Fixed**: 29 | **Open**: 34 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
+**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
 ### Legend
 | Field | Values |
@@ -1195,3 +1195,149 @@ group(validate_ocr, calculate_confidence, chunk_document)
 **Observation**: If OCR produces empty text (line 591) or max retries are exceeded (line 654), `ocr_and_process_library_document` returns a failure dict. Since this is the orchestrator task (not in a chain), the failure is correct behavior — but it's not broadcast or tracked anywhere visible to the admin.
 
 **Fix**: Add logging/status update so admin dashboard can surface library document failures. Low priority.
+
+---
+
+## 7. E2E Verification Findings (2026-04-17)
+
+> 4 documents uploaded across 2 matters by 2 users. Both pipeline paths (small-doc chain + chunked chord) tested concurrently. All 4 completed successfully. Zero chain errors.
+
+### E2E Results Summary
+
+| Doc | Pages | Path | Total Time | Chunks | Entities | Dates | Contradictions | Cost (contradictions) |
+|-----|-------|------|-----------|--------|----------|-------|----------------|----------------------|
+| Nirav Respo 2 | 16 | small | 16.2 min | 15 | 59 | 8 | 2 | $0.33 |
+| Nirav Rejoinder | 33 | chunked | 24.5 min | 31 | 98 | 20 | 20 | $0.87 |
+| Rejoinder JHM | 54 | chunked | 22.8 min | 63 | 267 | 51 | 23 | $1.48 |
+| Custodian | 25 | small | 18.6 min | 23 | 101 | 33 | 20 | $1.26 |
+
+### DPP-002 / WPS-001 / DPP-014 Verification: PASSED
+- Zero `pipeline_chain_error` events
+- Zero `PipelineTaskError` raises
+- All pipeline stages fired in correct order for both paths
+- `_mark_job_completed` fired for all 4 docs
+- No queue starvation — concurrent processing worked across 2 matters
+
+---
+
+### E2E-001: Summary generation too slow (UX)
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) — user-facing, affects perceived speed |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: After documents complete processing, navigating to the Summary tab shows "Generating Summary... Waiting in queue... 0% complete" with a spinner. Users expect immediate gratification after waiting 15-25 min for document processing. The summary is generated on-demand via LLM call, adding more wait time on top of an already long pipeline.
+
+**Impact**: User perceives the system as slow even though document processing completed. The summary tab is often the first thing users click after completion.
+
+**Possible fixes**:
+1. **Pre-generate summary** as part of the pipeline (add after `detect_contradictions`) — summary is ready when user arrives
+2. **Stream the summary** so users see partial results immediately instead of a spinner
+3. **Cache summary** after first generation so subsequent views are instant
+4. **Show a preview** with already-extracted data (entities, dates, contradictions count) while full summary generates
+
+---
+
+### E2E-002: Document AI OCR cold start (252s for 16-page doc)
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — intermittent, only affects first doc after deploy |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: Doc 1 (16 pages) took 252s for OCR, while Doc 4 (25 pages) took only 14s. Both use the same Document AI service. The 18x difference suggests a cold start penalty on the first Document AI call after a deploy or idle period.
+
+**Impact**: First document uploaded after deploy appears stuck at OCR for ~4 minutes.
+
+**Possible fix**: Send a health-check/warmup request to Document AI during worker startup or deploy.
+
+---
+
+### E2E-003: Library documents missing from storage
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) — library feature broken for these acts |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: ~10 `ocr_and_process_library_document` tasks failed with `storage_missing` errors on worker startup. Affected acts: `arbitration_and_conciliation_act_1996.pdf`, `indian_contract_act_1872.pdf`, `constitution_of_india_1950.pdf`, `provincial_insolvency_act_1920.pdf`, `income_tax_act_1961.pdf`, `companies_act_2013.pdf`. These PDFs are referenced in the `library_documents` table but don't exist in Supabase storage.
+
+**Impact**: These acts can't be used for citation verification. Worker wastes time retrying them on every startup.
+
+**Fix**: Either upload the missing PDFs to storage, or remove the broken library_document records, or add a storage-existence check before dispatching OCR.
+
+---
+
+### E2E-004: Contradiction detection is the pipeline bottleneck
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) — performance, not correctness |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: Contradiction detection consumed 40-70% of total processing time:
+- Doc 1 (16p, 26 entities): ~5 min of 16 min total
+- Doc 3 (54p, 50 entities): 683s (11.4 min) of 22.8 min total — 317 pairs compared
+- Doc 4 (25p, 44 entities): ~8 min of 18.6 min total — 204 pairs compared
+
+The stage is O(n²) on entity count and makes individual LLM calls for each pair. Most entities with `screening_confidence=0.8-0.9` escalate from Gemini Flash to GPT-4o, adding ~$0.007/pair.
+
+**Possible optimizations**:
+1. **Raise escalation threshold** — currently 0.8-0.9 triggers GPT-4o. Raising to 0.7 would cut expensive calls
+2. **Batch screening calls** — send multiple pairs in one Gemini call instead of one-by-one
+3. **Skip low-mention entities** — entities mentioned in only 1-2 chunks can't meaningfully contradict
+4. **Parallelize entity comparisons** — currently sequential within the task
+5. **Cap pairs per entity** — already capped at 25 but some entities hit this ceiling
+
+---
+
+### E2E-005: Excessive GPT-4o escalation in contradiction screening
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — cost optimization |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: Almost every entity comparison with `screening_confidence=0.8-0.9` from Gemini Flash escalates to GPT-4o for confirmation. Most escalations result in "consistent" or "unrelated" — the GPT-4o call was wasted. Total contradiction detection costs: $0.33 + $0.87 + $1.48 + $1.26 = **$3.94 for 4 documents**.
+
+**Fix**: Analyze escalation outcomes — if >80% of escalated pairs are "consistent/unrelated", raise the threshold or trust Gemini Flash more.
+
+---
+
+### E2E-006: Redis beat scheduler lock extension warning
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — noise, no functional impact |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: `Cannot extend a lock that's no longer owned` warning from Celery beat scheduler's Redis lock. Causes Railway to hit 500 logs/sec rate limit and drop messages (43 dropped in one burst).
+
+**Fix**: Increase beat scheduler lock timeout, or suppress the warning, or switch to file-based beat schedule.
+
+---
+
+### E2E-007: Finalize runs on act documents with no OCR text
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — wasted worker time |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: Multiple `finalize_chunked_document` tasks fire for act-type documents that have `status=completed` but no `extracted_text`. Each logs `finalize_skipping_no_text` and returns. This appears to happen on every deployment or beat cycle.
+
+**Fix**: Don't dispatch finalize for documents that are already `completed` with no OCR text, or that are `act` type with no storage file.
+
+---
+
+### E2E-008: OpenAI transient 429 retries during contradiction detection
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — retries succeed, but adds latency |
+| **Status** | OPEN |
+| **Source** | E2E verification (2026-04-17) |
+
+**Observation**: During peak contradiction detection (4 docs simultaneously), `Retrying request to /chat/completions` messages appear. These are transient OpenAI rate limits. Retries succeed within ~0.4s, but multiple concurrent retries add up.
+
+**Fix**: Consider rate-limiting GPT-4o calls from our side to stay under the rate limit, or batch contradiction comparisons to reduce concurrent calls.

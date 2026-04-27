@@ -251,13 +251,15 @@ class TabStatsService:
 
             count = count_result.count or 0
 
-            # Get issue count - entities with unresolved aliases
-            # An entity has unresolved aliases if it has aliases that haven't been merged
+            # Get issue count - entities with aliases that haven't been merged
+            # has_unresolved_alias column was never migrated; derive from
+            # merged_into_id IS NULL (not yet merged) AND aliases is non-empty
             issue_result = await asyncio.to_thread(
                 lambda: self.supabase.table("identity_nodes")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
-                .eq("has_unresolved_alias", True)
+                .is_("merged_into_id", "null")
+                .neq("aliases", "{}")
                 .execute()
             )
 
@@ -381,7 +383,7 @@ class TabStatsService:
                 lambda: self.supabase.table("finding_verifications")
                 .select("id", count="exact")
                 .eq("matter_id", matter_id)
-                .lt("confidence", 70)
+                .lt("confidence_before", 70)
                 .is_("decision", "null")
                 .execute()
             )

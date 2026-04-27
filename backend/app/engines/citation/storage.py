@@ -620,35 +620,8 @@ class CitationStorageService:
         try:
             normalized = normalize_act_name(act_name)
 
-            # Try using the RPC function first (most atomic)
-            try:
-                def _rpc_upsert():
-                    return self.client.rpc(
-                        "upsert_act_resolution",
-                        {
-                            "p_matter_id": matter_id,
-                            "p_act_name_normalized": normalized,
-                        },
-                    ).execute()
-
-                result = await asyncio.to_thread(_rpc_upsert)
-
-                if result.data:
-                    # Fetch the full record
-                    def _fetch():
-                        return self.client.table("act_resolutions").select(
-                            "*"
-                        ).eq("id", result.data).single().execute()
-
-                    fetch_result = await asyncio.to_thread(_fetch)
-
-                    if fetch_result.data:
-                        return self._row_to_act_resolution(fetch_result.data)
-            except Exception:
-                # Fallback to upsert if RPC function doesn't exist
-                pass
-
-            # Atomic upsert using ON CONFLICT (avoids race condition)
+            # Direct upsert (the upsert_act_resolution RPC fails with
+            # service-role calls because auth.uid() returns NULL inside it)
             def _upsert():
                 return self.client.table("act_resolutions").upsert(
                     {

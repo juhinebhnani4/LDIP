@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-22 (INF-011 updated with real Railway billing data — $34/month at idle, deep research on cost drivers and rejected fixes)
-**Total bugs**: 67 | **Fixed**: 29 | **Open**: 34 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
+**Last updated**: 2026-04-27 (Tier 1 #1 Phase 1 DONE — screening metadata now persists to llm_costs; 3 new API bugs discovered during deploy monitoring)
+**Total bugs**: 70 | **Fixed**: 29 | **Open**: 37 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
 ### Legend
@@ -94,9 +94,11 @@ All items are leaf-node changes — they don't touch the orchestration layer, wo
 
 **REVISED approach — phased, data-driven**:
 
-**Phase 1: Ship immediately (zero risk, ~1 day)**
-- **Skip 1-mention entities** in `_generate_statement_pairs()`. Can't form a pair with 1 statement. `itertools.combinations` already generates 0 pairs, but this skips the function call overhead and pair-generation loop entirely. ~5 lines of code. Zero quality risk.
-- **Persist screening metadata to `llm_costs.metadata`**: Write `{"screening_result": "consistent", "screening_confidence": 0.62, "was_escalated": true}` for every screening call. Currently metadata is empty (`{}`) for all 6,323 screening records. This data is required to tune the confidence threshold — without it we're guessing. Worker logs rotate on Railway and the confidence distribution data is lost.
+**Phase 1: DONE (deployed 2026-04-27)**
+- **Skip 1-mention entities**: Already existed at two layers — `_generate_statement_pairs()` line 875 (`if len(all_statements) < 2: return []`) and service layer line 231 (`if entity_statements.total_statements < 2`). No code needed.
+- **Persist screening metadata to `llm_costs.metadata`**: SHIPPED. Added `metadata` kwarg to `persist_cost()` and `persist_cost_sync()` in `cost_tracking.py`, pass `{"screening_result": result, "screening_confidence": confidence, "quick_reason": reason}` in `_call_gemini_screening()` in `comparator.py`. Verified in production — metadata now flowing. `was_escalated` intentionally NOT persisted: (a) it's derivable (any `operation="contradiction_comparison"` row IS an escalation), (b) the `was_escalated` flag has a bug on the screening failure path where it stays `False` even when GPT-4 is called as fallback.
+- **Files changed**: `backend/app/core/cost_tracking.py` (2 functions), `backend/app/engines/contradiction/comparator.py` (1 call site). ~10 lines total.
+- **First production data (2026-04-27)**: Screening confidence values observed: 0.8, 0.9, 0.95, 1.0. `needs_review` results cluster at 0.8-0.9. `consistent` results at 0.95-1.0. Phase 2 threshold tuning is now unblocked.
 
 **Phase 2: Tune threshold (after Phase 1 data, ~1 day)**
 - **Lower `confidence_threshold`** from 0.5 → TBD (likely 0.35) based on Phase 1 metadata. The `confidence_threshold` (`comparator.py:452-454`, `config.py`) controls when Gemini's "consistent/unrelated" verdict is trusted vs escalated to GPT-4o. At 0.5, we escalate 32% of pairs and 91% of those are wasted. If most wasted escalations are Gemini saying "consistent" at 0.45-0.49, lowering to 0.35 could cut GPT-4o calls by 30-50%. **This is potentially the single biggest lever — a config change that saves ~$5-6 of the $19.21 total.**
@@ -216,15 +218,24 @@ These prevent silent failures that erode trust. Less visible than Tier 1, but cr
 
 ---
 
-#### 8. Escalation threshold audit — NOW BLOCKED on Tier 1 Phase 1 metadata
+#### 8. Escalation threshold audit — UNBLOCKED (Phase 1 metadata now shipping)
 
-**Bug IDs**: E2E-005 | **Effort**: 1 day (after data) | **Files**: `config.py` (one float)
+**Bug IDs**: E2E-005 | **Effort**: 1 day (after data accumulates) | **Files**: `config.py` (one float)
 
-**Current state (verified 2026-04-21)**: `confidence_threshold = 0.5` (`comparator.py:452-454`). Gemini screens 6,323 pairs → escalates 32.1% to GPT-4o → 91.1% of escalated pairs return "not contradiction." But we can't see the confidence distribution because: (a) `statement_comparisons` only stores contradictions (line 5911: "Only store contradictions"), (b) `llm_costs.metadata` is empty `{}` for all screening calls, (c) worker logs rotate on Railway.
+**Current state (updated 2026-04-27)**: `confidence_threshold = 0.5` (`comparator.py:452-454`). Phase 1 metadata is now deployed and verified — screening confidence values are persisting to `llm_costs.metadata` as of 2026-04-27. First production data shows `needs_review` results clustering at confidence 0.8-0.9 and `consistent` results at 0.95-1.0. Need ~50-100 more screening calls to get a full distribution.
 
-**Blocker**: Tier 1 #1 Phase 1 must ship first — it adds screening confidence to `llm_costs.metadata`. After the next batch of documents processes, we'll have the exact confidence distribution to tune the threshold with data instead of guessing. This is potentially the single biggest cost lever (~$5-6 savings per 4 documents, ~30% total cost reduction).
-
-**What to do after data**: Query `SELECT metadata->>'screening_confidence' as conf, metadata->>'was_escalated' as esc, COUNT(*) FROM llm_costs WHERE operation='contradiction_screening' AND metadata != '{}' GROUP BY conf, esc ORDER BY conf`. Find the confidence range where Gemini says "consistent" but we still escalate. If most wasted escalations cluster at 0.40-0.49, lower threshold to 0.35.
+**What to do when data accumulates**: Query:
+```sql
+SELECT metadata->>'screening_confidence' as conf, 
+       metadata->>'screening_result' as result, 
+       COUNT(*) 
+FROM llm_costs 
+WHERE operation = 'contradiction_screening' 
+  AND metadata->>'screening_confidence' IS NOT NULL
+GROUP BY conf, result 
+ORDER BY conf;
+```
+Find the confidence range where Gemini says "consistent" but we still escalate. If most wasted escalations cluster at 0.40-0.49, lower threshold to 0.35. This is potentially the single biggest cost lever (~$5-6 savings per 4 documents, ~30% total cost reduction).
 
 ---
 
@@ -537,7 +548,7 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | FIXED (2026-04-17) |
+| **Status** | FIXED (2026-04-17), VALIDATED (2026-04-27), DEAD CODE REMOVED (2026-04-27) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #2) |
 
@@ -553,9 +564,17 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 5. Library pipeline: `chunk_library_document` and `embed_library_chunks` raise `LibraryPipelineTaskError`; `on_library_chain_error` callback wired
 6. All chain entry points (`create_post_ocr_chain`, `process_library_document`, `ocr_and_process_library_document`) have `link_error`
 
+**Production Validation** (2026-04-27):
+- 6/6 automated tests pass (`tests/workers/test_dpp002_chain_stops_on_error.py`): chain provably stops on PipelineTaskError, downstream tasks never execute
+- All 6 post-deployment DOCUMENT_PROCESSING jobs completed successfully (happy path confirmed)
+- Zero SKIPPED stages in `job_stage_history` (old pattern not firing)
+- `create_post_ocr_chain()` structurally verified: `link_error` callback attached
+- Dead-code skip blocks removed from 5 chained tasks: `calculate_confidence`, `chunk_document`, `embed_chunks`, `extract_entities` (document_tasks.py), `embed_library_chunks` (library_tasks.py)
+- Standalone task skip blocks intentionally KEPT: `extract_citations`, `resolve_aliases`, `detect_contradictions` (dispatched via `.delay()`, not in chains)
+
 **Architectural patterns documented**: P7, P8, P9 added to `ARCH-PATTERNS.md`
 
-**Files**: `backend/app/workers/tasks/pipeline_errors.py` (NEW), `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/library_tasks.py`, `ARCH-PATTERNS.md`
+**Files**: `backend/app/workers/tasks/pipeline_errors.py` (NEW), `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/library_tasks.py`, `ARCH-PATTERNS.md`, `backend/tests/workers/test_dpp002_chain_stops_on_error.py` (NEW)
 
 ---
 
@@ -655,17 +674,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-27) — same bug as API-001 |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #8) |
 
 **Description**: After saving citations, the `upsert_act_resolution` Supabase RPC consistently returns HTTP 400 Bad Request. A fallback path (direct `POST` to `act_resolutions` with `on_conflict`) succeeds, but produces noisy logs on every citation batch.
 
-**Root Cause**: The RPC function has `SECURITY DEFINER` set with an `auth.uid()` check inside it (`supabase/migrations/20260106000007_create_act_resolutions_table.sql:135-167`). When called by the service role (which bypasses RLS), `auth.uid()` returns NULL → the auth check fails → 400 Bad Request. The parameters themselves match correctly (`p_matter_id`, `p_act_name_normalized`).
+**Root Cause**: The RPC function has `SECURITY DEFINER` set with an `auth.uid()` check inside it (`supabase/migrations/20260106000007_create_act_resolutions_table.sql:135-167`). When called by the service role (which bypasses RLS), `auth.uid()` returns NULL → the auth check fails → 400 Bad Request.
 
-**Fix Needed**: Remove the `auth.uid()` check inside the RPC (since service role calls bypass RLS anyway), or remove the RPC and use the direct upsert as the primary method.
+**Fix Applied** (commit `c456312`): Removed the broken RPC call path from `storage.py`. The direct upsert (which was already the fallback) is now the only path. The RPC itself was never needed — service-role calls bypass RLS, so the RPC's `SECURITY DEFINER` + `auth.uid()` check was both unnecessary and broken.
 
-**Files**: `backend/app/engines/citation/storage.py:623-632`, `supabase/migrations/20260106000007_create_act_resolutions_table.sql:135-167`
+**Files**: `backend/app/engines/citation/storage.py`
 
 ---
 
@@ -1680,3 +1699,48 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 **Structural note (ARCH-004)**: OpenAI calls in `comparator.py` use `AsyncOpenAI` directly with no rate limiter — relies on circuit breaker catching 429s reactively. Gemini calls in the same file DO go through `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two providers, asymmetric enforcement. Not a problem at 4-doc concurrency, but the gap will surface at higher load. This is P4 (infrastructure exists but using it is optional).
 
 **Fix (tactical)**: Wire OpenAI calls through `get_rate_limiter(LLMProvider.OPENAI)` in `comparator.py`. **Fix (structural)**: Move all LLM calls into domain classes under `services/llm/` where rate limiting is enforced by construction (ARCH-004 target architecture).
+
+---
+
+### API-001: `upsert_act_resolution` RPC returns 400 Bad Request
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) — citation resolution falls back to non-RPC path, citations still saved |
+| **Status** | FIXED (2026-04-27) — duplicate of DPP-008 |
+| **Source** | Deploy monitoring (2026-04-27) |
+
+**Observation**: During citation extraction, `POST /rest/v1/rpc/upsert_act_resolution` returns `HTTP/1.1 400 Bad Request`. Worker falls back to `PATCH act_resolutions` which succeeds.
+
+**Root Cause**: Same as DPP-008 — the RPC uses `SECURITY DEFINER` with `auth.uid()` check, which returns NULL for service-role calls.
+
+**Fix Applied** (commit `c456312`): Removed the broken RPC call path from `storage.py`. Direct upsert is now the only path. See DPP-008 for details.
+
+---
+
+### API-002: Dashboard queries `has_unresolved_alias` column on `identity_nodes` return 400
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) — dashboard matter stats silently broken for alias counts |
+| **Status** | FIXED (2026-04-27) |
+| **Source** | Deploy monitoring (2026-04-27) |
+
+**Observation**: API service logs show repeated `GET /rest/v1/identity_nodes?...&has_unresolved_alias=eq.True` returning `HTTP/1.1 400 Bad Request` for every matter.
+
+**Root Cause**: The `has_unresolved_alias` column was never migrated to the live database — it existed only in the spec. The tab stats service (`tab_stats_service.py`) queried a phantom column.
+
+**Fix Applied** (commit `c456312`): Replaced phantom column query with derived logic: `merged_into_id IS NULL AND aliases != '{}'`. Verified against live DB: 3751 total identity_nodes, 538 match the "unresolved alias" criteria. Dashboard now shows real issue counts instead of silently returning 0.
+
+---
+
+### API-003: Dashboard queries `finding_verifications` with wrong filter syntax return 400
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium) — dashboard verification stats silently broken |
+| **Status** | FIXED (2026-04-27) |
+| **Source** | Deploy monitoring (2026-04-27) |
+
+**Observation**: API logs show repeated `GET /rest/v1/finding_verifications?...&confidence=lt.70&decision=is.null` returning `HTTP/1.1 400 Bad Request` for every matter.
+
+**Root Cause**: Wrong column name — the actual column is `confidence_before`, not `confidence`. The `confidence` column doesn't exist on `finding_verifications`.
+
+**Fix Applied** (commit `c456312`): Changed `.lt("confidence", 70)` to `.lt("confidence_before", 70)` in `tab_stats_service.py`. One-character fix.

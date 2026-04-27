@@ -2636,24 +2636,6 @@ def calculate_confidence(
             stage="confidence",
         )
 
-    # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
-    # With PipelineTaskError, upstream failures raise and this task never runs.
-    # Kept as defensive safety net during rollout.
-    if prev_result:
-        prev_status = prev_result.get("status")
-        if prev_status not in ("validated", "validated_with_warnings", "validation_skipped"):
-            logger.info(
-                "calculate_confidence_skipped",
-                document_id=doc_id,
-                prev_status=prev_status,
-            )
-            return {
-                "status": "confidence_skipped",
-                "document_id": doc_id,
-                "job_id": job_id,
-                "reason": f"Previous task status: {prev_status}",
-            }
-
     doc_service = document_service or get_document_service()
 
     logger.info(
@@ -2868,28 +2850,6 @@ def chunk_document(
             "validation_skipped",
             "ocr_complete",  # Most common status after OCR
         )
-        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
-        # With PipelineTaskError, upstream failures raise and this task never runs.
-        # Kept as defensive safety net during rollout.
-        failed_statuses = (
-            "failed",
-            "error",
-            "ocr_failed",
-            "validation_failed",
-        )
-        if prev_status in failed_statuses:
-            logger.info(
-                "chunk_document_skipped",
-                document_id=doc_id,
-                prev_status=prev_status,
-                reason="Previous task failed",
-            )
-            return {
-                "status": "chunking_skipped",
-                "document_id": doc_id,
-                "job_id": job_id,
-                "reason": f"Previous task failed with status: {prev_status}",
-            }
         # Log if running with unexpected status (but proceed anyway)
         if prev_status and prev_status not in valid_statuses:
             logger.warning(
@@ -3450,28 +3410,6 @@ def embed_chunks(
             "table_extraction_skipped",
             "table_extraction_failed",  # Non-critical — still embed text chunks
         )
-        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
-        # With PipelineTaskError, upstream failures raise and this task never runs.
-        # Kept as defensive safety net during rollout.
-        failed_statuses = (
-            "failed",
-            "error",
-            "ocr_failed",
-            "chunking_failed",
-            "chunking_skipped",
-        )
-        if prev_status in failed_statuses:
-            logger.info(
-                "embed_chunks_skipped",
-                document_id=doc_id,
-                prev_status=prev_status,
-                reason="Previous task failed",
-            )
-            return {
-                "status": "embedding_skipped",
-                "document_id": doc_id,
-                "reason": f"Previous task failed with status: {prev_status}",
-            }
         # Log if running with unexpected status (but proceed anyway)
         if prev_status and prev_status not in valid_statuses:
             logger.warning(
@@ -4106,32 +4044,6 @@ def extract_entities(
             "confidence_calculated",
             "confidence_skipped",
         )
-        # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
-        # With PipelineTaskError, upstream failures raise and this task never runs.
-        # Kept as defensive safety net during rollout.
-        failed_statuses = (
-            "failed",
-            "error",
-            "ocr_failed",
-            "validation_failed",
-            "chunking_failed",
-            "chunking_skipped",
-            "embedding_failed",
-            "embedding_skipped",
-            "entity_extraction_failed",
-        )
-        if prev_status in failed_statuses:
-            logger.info(
-                "extract_entities_skipped",
-                document_id=doc_id,
-                prev_status=prev_status,
-                reason="Previous task failed",
-            )
-            return {
-                "status": "entity_extraction_skipped",
-                "document_id": doc_id,
-                "reason": f"Previous task failed with status: {prev_status}",
-            }
         # Log if running with unexpected status (but proceed anyway)
         if prev_status and prev_status not in valid_statuses:
             logger.warning(

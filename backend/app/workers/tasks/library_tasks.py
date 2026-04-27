@@ -270,22 +270,6 @@ def embed_library_chunks(
             error_code="NO_DOCUMENT_ID",
         )
 
-    # TODO(DPP-002): Dead code after chain-stops-on-error — remove after validation.
-    if prev_result:
-        prev_status = prev_result.get("status")
-        if prev_status and "failed" in prev_status:
-            logger.info(
-                "embed_library_chunks_skipped",
-                library_document_id=lib_doc_id,
-                prev_status=prev_status,
-                reason="Previous task failed",
-            )
-            return {
-                "status": "embedding_skipped",
-                "library_document_id": lib_doc_id,
-                "reason": f"Previous task failed: {prev_status}",
-            }
-
     lib_service = library_service or get_library_service()
     embedder = embedding_service or get_embedding_service()
     client = get_service_client()

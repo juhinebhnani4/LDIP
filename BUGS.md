@@ -1,6 +1,6 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-17 (E2E verification + arch pattern mapping — E2E findings cross-referenced to ARCH-001/002/003/004)
+**Last updated**: 2026-04-22 (INF-011 updated with real Railway billing data — $34/month at idle, deep research on cost drivers and rejected fixes)
 **Total bugs**: 67 | **Fixed**: 29 | **Open**: 34 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
@@ -10,6 +10,289 @@
 | **Severity** | P0 (Critical), P1 (High), P2 (Medium), P3 (Low) |
 | **Status** | OPEN, FIXED, NOT CURRENTLY REPRODUCIBLE, RESOLVED, NOT A BUG |
 | **Source** | File or session where the bug was first reported |
+
+---
+
+## Priority Roadmap (2026-04-21)
+
+> Sequenced from first principles after E2E verification (4 docs, 2 matters, both pipeline paths) + freemium competitive analysis (DraftBot Pro, Harvey, CaseMine, Indian legal tech market). Full research in [E2E-FINDINGS-2026-04-17.md](E2E-FINDINGS-2026-04-17.md).
+
+### Why this order — the business context
+
+**Goal**: Launch a freemium model — 3 documents/month free (full pipeline), ₹999/mo for 25 docs, ₹1,999/mo for unlimited. DraftBot Pro (102K+ lawyers, ₹999/mo) gives away legal research (zero-cost search) and charges for AI drafting. Jaanch's differentiator is **automated cross-document contradiction detection** — nobody else does this automatically, not Harvey, not CoCounsel. But it's also our most expensive feature.
+
+**The aha moment for conversion**: Lawyer uploads 2-3 documents → Jaanch shows "Found 3 contradictions between Respondent's Affidavit and Rejoinder" → lawyer is hooked → document 4 requires upgrade. This only works if: (a) the pipeline is fast enough that they don't leave, (b) the product looks polished during those 3 docs, (c) the cost per free user is sustainable.
+
+**Current per-document cost (from E2E, 4 real Indian legal documents)**:
+
+| Stage | Cost/doc | % of total | Notes |
+|---|---|---|---|
+| OCR (Document AI) | $0.02-0.08 | ~3% | $1.50/1000 pages |
+| Chunking + validation | ~$0.00 | 0% | CPU only |
+| Embeddings (Voyage) | $0.01-0.03 | ~2% | Per-chunk |
+| Entity extraction (Gemini) | $0.03-0.10 | ~5% | Per-chunk LLM |
+| Citation extraction (Gemini) | $0.05-0.15 | ~7% | Per-chunk LLM |
+| Date extraction (Gemini) | $0.02-0.08 | ~3% | Per-chunk LLM |
+| **Contradiction detection** | **$0.33-1.48** | **60-75%** | O(n^2) pairs, Gemini Flash + GPT-4o |
+| Summary (3x GPT-4o) | $0.05-0.15 | ~5% | 3 parallel calls |
+| **TOTAL** | **$0.50-2.00** | 100% | Dominated by contradictions |
+
+**The math**: 3 free docs/month at current cost = $1.50-6.00/user/month. At 1000 free users = $1,500-6,000/month. **Unsustainable.** After contradiction optimization (Tier 1 item #1): cost drops to $0.15-0.50/doc → 3 free docs = $0.50-1.50/user/month → 1000 users = $500-1,500/month. **Sustainable** if 5-10% convert at ₹999/mo (= ₹50K-100K/month revenue).
+
+**Prerequisite chain**:
+```
+Tier 1 (speed + polish)  ───┐
+Tier 2 (reliability)     ───┤──→ Free tier launch ──→ Revenue
+Free tier gate (~1 day)  ───┘         ↓
+                              ₹999/mo (25 docs)
+                              ₹1,999/mo (unlimited)
+                                      ↓
+Tier 3 (structural)      ──→ Enables safe iteration at scale
+Tier 4 (long-term)       ──→ After free tier is live + generating data
+```
+
+---
+
+### Tier 1 — Speed + Polish (weeks 1-4, prerequisite for free tier)
+
+All items are leaf-node changes — they don't touch the orchestration layer, worker topology, or state management. Safe, contained, highest user-visible impact.
+
+#### 1. Contradiction detection optimization — REVISED after deep-dive (2026-04-21)
+
+**Bug IDs**: E2E-004, E2E-005 | **Effort**: phased (see below) | **Files**: primarily `backend/app/engines/contradiction/comparator.py`, `backend/app/core/llm_rate_limiter.py`, `backend/app/core/config.py`
+
+##### Live data from production (queried 2026-04-21)
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| Gemini screening calls | 6,323 | `llm_costs` table |
+| GPT-4o analysis calls | 1,888 | `llm_costs` table |
+| GPT-4-turbo calls (legacy) | 141 | `llm_costs` table |
+| **Escalation rate** | **32.1%** (2,029 / 6,323) | derived |
+| Contradictions found (stored) | 181 | `statement_comparisons` table |
+| **GPT-4 → contradiction rate** | **8.9%** (181 / 2,029) | derived |
+| **GPT-4 → NOT contradiction** | **91.1%** (1,848 wasted calls) | derived |
+| Gemini screening cost | $3.05 ($0.000483/call) | `llm_costs` |
+| GPT-4o cost | $12.42 ($0.006579/call) | `llm_costs` |
+| GPT-4-turbo cost | $3.73 ($0.026487/call) | `llm_costs` |
+| **Total contradiction cost** | **$19.21** | sum |
+| **Wasted GPT-4 spend** | **~$11.30** (91.1% of $12.42) | derived |
+
+**Key finding**: 65% of total contradiction cost is GPT-4o, and 91% of GPT-4o calls return "not a contradiction." The cost problem is escalation volume, not screening cost. Optimizing Gemini screening speed/cost saves ~$3; reducing wasted GPT-4o escalations saves ~$11.
+
+##### Original plan vs revised plan
+
+**REJECTED approaches** (with reasons from deep-dive analysis):
+
+1. **~~Batch Gemini screening (10 pairs per call)~~** — REJECTED. Contradiction pairs for the same entity share overlapping text (same affidavit paragraphs, same witness statements). Batching causes context bleed: the model confuses statement A from pair 3 with statement B from pair 7. Errors become correlated instead of independent. Research on batched classification assumes independent items — contradiction pairs within the same entity are NOT independent. High-mention entities like "Nirav Jobalia" (15+ mentions = 105 pairs) would dominate batches, starving attention for other entities.
+
+2. **~~Flash → Flash Lite for screening~~** — DEFERRED until shadow testing data exists. Flash Lite is less capable; if it escalates more pairs (confidence < threshold), net cost INCREASES because each escalation costs $0.0066 (GPT-4o). Worse: if Flash Lite says "consistent" at 0.6 confidence where Flash would have said "needs_review" at 0.4, a real contradiction slips through entirely. The product's core value is "we found what you missed" — a false negative kills conversion. No quality data exists for Flash Lite on legal contradiction screening.
+
+3. **~~Embedding pre-filter at >0.98~~** — DEFERRED/HIGH RISK for the high-end filter. "Property valued at 50 lakhs" vs "property valued at 80 lakhs" could have cosine similarity 0.97-0.99 depending on chunk length. This is exactly the contradiction type that matters most in Indian legal documents (amount mismatches in affidavits). Low-end filter (<0.15) is safer but saves fewer pairs.
+
+4. **~~Bump DEFAULT_BATCH_SIZE from 5 → 25~~** — UNSAFE AT SCALE without per-engine rate limiting. The Gemini rate limiter (`llm_rate_limiter.py:62`, `max_concurrent=10`) is a **global singleton** shared by ALL engines (entity extraction, citation extraction, date extraction, contradiction screening). Bumping to 25 concurrent for contradictions starves other engines when multiple documents process simultaneously. At 4 concurrent docs × 25 slots each = 100 greenlets needed, but the worker only has 50 (`--pool=gevent --concurrency=50`). This makes ARCH-002 (single worker) worse, not better. Requires per-engine semaphore partitioning before safe to increase.
+
+**REVISED approach — phased, data-driven**:
+
+**Phase 1: Ship immediately (zero risk, ~1 day)**
+- **Skip 1-mention entities** in `_generate_statement_pairs()`. Can't form a pair with 1 statement. `itertools.combinations` already generates 0 pairs, but this skips the function call overhead and pair-generation loop entirely. ~5 lines of code. Zero quality risk.
+- **Persist screening metadata to `llm_costs.metadata`**: Write `{"screening_result": "consistent", "screening_confidence": 0.62, "was_escalated": true}` for every screening call. Currently metadata is empty (`{}`) for all 6,323 screening records. This data is required to tune the confidence threshold — without it we're guessing. Worker logs rotate on Railway and the confidence distribution data is lost.
+
+**Phase 2: Tune threshold (after Phase 1 data, ~1 day)**
+- **Lower `confidence_threshold`** from 0.5 → TBD (likely 0.35) based on Phase 1 metadata. The `confidence_threshold` (`comparator.py:452-454`, `config.py`) controls when Gemini's "consistent/unrelated" verdict is trusted vs escalated to GPT-4o. At 0.5, we escalate 32% of pairs and 91% of those are wasted. If most wasted escalations are Gemini saying "consistent" at 0.45-0.49, lowering to 0.35 could cut GPT-4o calls by 30-50%. **This is potentially the single biggest lever — a config change that saves ~$5-6 of the $19.21 total.**
+
+**Phase 3: Safe parallelism (after beat isolation, ~1 day)**
+- **Reduce `min_delay_seconds`** from 0.2 → 0.05 in `llm_rate_limiter.py:63`. Mild speedup, no concurrency increase, safe at any scale.
+- **Bump `DEFAULT_BATCH_SIZE`** from 5 → 10-12 (NOT 25). Stay within the global `max_concurrent=10` semaphore. Gets ~2x speed without starving other engines. Only safe AFTER beat process isolation (Tier 2 #5) so increased load can't starve the scheduler.
+
+**Phase 4: Research (parallel, no code changes)**
+- **GPT-4o replacement research**: The actual cost bottleneck is GPT-4o at $0.0066/call for full analysis. At scale (400 docs/month), this is $2,500-5,000/month — more than revenue from 50 paying users at ₹999. Research Claude Haiku ($0.00025/1K input), Gemini Pro, or fine-tuned smaller model as a replacement for the full analysis tier. This is the 10x lever; everything else is 2x at best.
+- **Shadow test Flash Lite**: Run both Flash and Flash Lite on the same pairs, compare results without using Flash Lite results. Collect quality data before switching.
+
+**Expected result (Phase 1+2+3)**: Pipeline time ~20 min → ~12-15 min. Per-doc cost reduction of 30-50% from threshold tuning alone. No quality risk.
+
+##### Scaling analysis (2026-04-21)
+
+At target scale (50 free + 10 paid users, ~400 docs/month, ~15/day):
+
+| Component | Current (4 docs) | At scale (400 docs/mo) | Breaks at |
+|-----------|-----------------|----------------------|-----------|
+| Gemini RPM | ~30 | ~200 | ~4,000 (far away) |
+| GPT-4o monthly cost | ~$5 | $2,500-5,000 | When cost > revenue |
+| Worker greenlets | 5/50 used | 100/50 needed at batch_size=25 | 4 concurrent docs |
+| DB connection pool | ~5 | ~100 concurrent | Pool size (~40) |
+
+**The scaling wall is GPT-4o cost, not Gemini speed.** At 400 docs/month with current escalation rate, GPT-4o costs $2,500-5,000/month. Revenue from 50 paying users at ₹999/mo ≈ $600/month. Unit economics are upside down until either: (a) escalation rate drops significantly, (b) GPT-4o is replaced with a cheaper model, or (c) conversion rate exceeds ~15%.
+
+##### PM perspective (documented 2026-04-21)
+
+John (PM agent) raised: "Why optimize the engine before validating that the funnel works?" The product found 181 contradictions across 4 test documents — the detection capability exists. But we have zero evidence that lawyers convert after seeing contradictions. Suggestion: (a) user interviews with 5 lawyers before spending 1-2 weeks on optimization, (b) consider launching free tier at 1 doc/month instead of 3 (costs $2/user/month at current rates — possibly sustainable without optimization), (c) prioritize loading states and summary pre-generation for conversion impact.
+
+**Architecture note**: All Phase 1-3 changes stay inside `comparator.py`, `config.py`, and `llm_rate_limiter.py`. None touch the pipeline orchestration layer. The per-engine semaphore partitioning needed for safe high-concurrency (Phase 3+) would be a rate limiter refactor — scope TBD.
+
+---
+
+#### 2. UX loading state cluster
+
+**Bug IDs**: UX-003, UX-006, UX-008, UX-009, UX-010 | **Effort**: 3-5 days | **Files**: frontend only
+
+All five bugs share the same shape: component renders with initial state that looks like an error, then data arrives and it corrects itself. During the free user's first 3 documents, they see every one of these flashes.
+
+| Bug | What user sees | Fix |
+|---|---|---|
+| UX-003 | "Ready" badge while processing at 70% | Derive status from `processing_jobs.current_stage` |
+| UX-006 | "Untitled Matter" for 1-2s on load | Show `<Skeleton>` instead of fallback string |
+| UX-008 | "No statistics available" flash | Initialize `isStatsLoading = true` in store |
+| UX-009 | "No Contradictions Found" during processing | Check processing status, show spinner if running |
+| UX-010 | "Generating Summary... 0%" stuck forever | Detect when API returns content, transition state |
+
+**What "done" looks like**: Upload a document, navigate between tabs during processing — no flash of wrong content at any point. Every tab shows either a loading skeleton or accurate state.
+
+---
+
+#### 3. Summary pre-generation
+
+**Bug IDs**: E2E-001, UX-001 | **Effort**: 3-5 days | **Files**: `document_tasks.py` (dispatch), `summary_tasks.py`, `pipeline_chains.py`
+
+**Current state**: Summary is generated on-demand when user clicks the Summary tab. Makes 3 parallel GPT-4o calls. Takes 3-5 min. Cached in Redis with 1-hour TTL (NOT persisted to DB). Every cache eviction = full re-generation.
+
+**The problem**: User waits 15-25 min for pipeline. Pipeline completes. User clicks Summary. Waits 3-5 MORE minutes. This is where we lose them.
+
+**What changes**: Add `generate_summary` as a pipeline stage after `detect_contradictions` (the terminal task). Summary is generated as part of processing, cached, and waiting when user arrives. Persist to DB (not just Redis) so it survives cache eviction.
+
+**Architecture concern**: This adds a new stage to the pipeline chain. `detect_contradictions` currently calls `_mark_job_completed` as the terminal task. Adding summary after it means either: (a) summary becomes the new terminal task and calls `_mark_job_completed`, or (b) `detect_contradictions` still calls `_mark_job_completed` and summary runs in parallel as a fire-and-forget task. Option (b) is safer — summary failure shouldn't block pipeline completion.
+
+**What "done" looks like**: Upload a document, wait for processing to complete, click Summary tab — summary is already there. No spinner, no wait.
+
+---
+
+#### 4. Q&A processing guard
+
+**Bug IDs**: UX-002 | **Effort**: 2-3 days | **Files**: `backend/app/api/routes/chat.py`, frontend chat component
+
+**Current state**: User asks a question while document is at 70% processing. Chat endpoint runs RAG query. No embeddings exist yet → vector search returns 0 results → "I couldn't find relevant information." User thinks the product is broken.
+
+**What changes**: Add processing-status check at top of `stream_chat()`. If any document in the matter has active processing jobs (status IN PROCESSING, PENDING), prepend a warning: "Some documents are still being processed. Results may be incomplete." If NO chunks with embeddings exist yet, block the query entirely and show: "Documents are still being processed. Q&A will be available once processing completes."
+
+**What "done" looks like**: Ask a question during processing → see a clear message about processing status, not a false "no results."
+
+---
+
+### Tier 2 — Reliability (weeks 3-5)
+
+These prevent silent failures that erode trust. Less visible than Tier 1, but critical before exposing the product to free users at scale.
+
+#### 5. Beat process isolation
+
+**Bug IDs**: INF-010, E2E-006 | **Effort**: 2-3 days | **Files**: `railway.toml`, new `start-beat.sh`
+
+**The problem**: RedBeat scheduler runs in the same process as the worker. When 4 concurrent documents saturate the worker (observed in E2E), beat's lock-extension tick gets starved → lock expires → `LockNotOwnedError` → beat crashes → **all 16 periodic tasks stop firing silently**. Recovery sweeps stop, stuck documents accumulate, no alert fires. This happened during E2E (confirmed in logs).
+
+**What changes**: Run beat as its own lightweight Railway service. Tiny container (~100MB, no heavy imports). Consumes no task queues — only runs the scheduler. Independent restart if it crashes. This is the ARCH-002 wall: physical process isolation, not configuration.
+
+**What "done" looks like**: Kill the worker service → beat keeps running. Saturate the worker with 10 concurrent documents → beat still fires all 16 periodic tasks on schedule.
+
+---
+
+#### 6. Non-converging sweep fix (tactical)
+
+**Bug IDs**: E2E-007 | **Effort**: 1 day | **Files**: `backend/app/workers/tasks/maintenance_tasks.py`
+
+**The problem**: `trigger_pending_merges` (every 5 min) and `recover_stuck_documents` (every 15 min) dispatch `finalize_chunked_document` for ACT documents that are COMPLETED with no `extracted_text`. Finalize detects the condition, logs `finalize_skipping_no_text`, returns. Next sweep: same thing. Forever. Infinite loop of wasted work.
+
+**What changes**: Add precondition checks in both sweep tasks: skip documents where `document_type = 'act'` AND `extracted_text IS NULL`. Or more broadly: skip documents that are already in a terminal state (`status IN ('completed', 'failed', 'deleted')`).
+
+**This is a sticky note fix, not a wall.** The wall (Tier 3 #11, ARCH-003 reconciler) replaces all 13 sweeps with a single state-deriving reconciler. This tactical fix stops the immediate waste while the wall is built.
+
+---
+
+#### 7. Library document cleanup
+
+**Bug IDs**: E2E-003 | **Effort**: 1 day | **Files**: data fix (SQL), no code change
+
+**The problem**: ~10 library documents have records in `library_documents` table but their PDFs don't exist in Supabase storage. Tasks fail with `storage_missing` on worker startup. Affected: `arbitration_and_conciliation_act_1996.pdf`, `indian_contract_act_1872.pdf`, `constitution_of_india_1950.pdf`, etc.
+
+**Two options**: (a) Upload the missing PDFs to storage (they're publicly available Indian statutes). (b) Delete the orphan database records. Option (a) is better — these acts are used for citation verification.
+
+---
+
+#### 8. Escalation threshold audit — NOW BLOCKED on Tier 1 Phase 1 metadata
+
+**Bug IDs**: E2E-005 | **Effort**: 1 day (after data) | **Files**: `config.py` (one float)
+
+**Current state (verified 2026-04-21)**: `confidence_threshold = 0.5` (`comparator.py:452-454`). Gemini screens 6,323 pairs → escalates 32.1% to GPT-4o → 91.1% of escalated pairs return "not contradiction." But we can't see the confidence distribution because: (a) `statement_comparisons` only stores contradictions (line 5911: "Only store contradictions"), (b) `llm_costs.metadata` is empty `{}` for all screening calls, (c) worker logs rotate on Railway.
+
+**Blocker**: Tier 1 #1 Phase 1 must ship first — it adds screening confidence to `llm_costs.metadata`. After the next batch of documents processes, we'll have the exact confidence distribution to tune the threshold with data instead of guessing. This is potentially the single biggest cost lever (~$5-6 savings per 4 documents, ~30% total cost reduction).
+
+**What to do after data**: Query `SELECT metadata->>'screening_confidence' as conf, metadata->>'was_escalated' as esc, COUNT(*) FROM llm_costs WHERE operation='contradiction_screening' AND metadata != '{}' GROUP BY conf, esc ORDER BY conf`. Find the confidence range where Gemini says "consistent" but we still escalate. If most wasted escalations cluster at 0.40-0.49, lower threshold to 0.35.
+
+---
+
+### Tier 3 — Structural (weeks 5-10, enables safe iteration at scale)
+
+These don't help users TODAY but make every future change safer and cheaper. They become urgent once the freemium model is live and we're iterating fast on features.
+
+#### 9. LLM domain gateway (ARCH-004)
+
+**Effort**: 3-4 weeks | **Files**: 14+ files that bypass `gemini_client.py`, new `backend/app/services/llm/` directory
+
+**What changes**: Create domain-level LLM classes (`CitationLLM`, `ContradictionLLM`, `TimelineDateLLM`, `RAGGeneratorLLM`, etc.) under `services/llm/`. Each takes domain inputs (`extract_citations(text)`) and returns domain outputs. Inside each: model pinned, prompt owned, rate-limit bucket declared, cost logged, retries handled. Engines lose `from google.genai import types` entirely. 14 files that currently reach past the gateway get migrated.
+
+**Why it matters for freemium**: Need per-user cost tracking (how much has this free user consumed?). Currently cost tracking is scattered across 14 call sites, each remembering to call `cost_tracker.log_cost()`. With the gateway, cost tracking happens in ONE place — every LLM call goes through it, cost is always tracked. No "remember to log cost" convention.
+
+**Blast radius**: 14 files need their LLM calls migrated. Each migration is mechanical (move prompt + model + retry logic into domain class, replace call site with domain method). But 14 files means 14 potential regressions. Should be done incrementally — one engine at a time, tested after each.
+
+---
+
+#### 10. API type codegen (ARCH-006)
+
+**Effort**: 1-2 weeks | **Files**: `frontend/package.json`, new `frontend/src/lib/api/types.generated.ts`, 36 existing `.ts` files in `frontend/src/lib/api/`
+
+**What changes**: Add `openapi-typescript` as frontend dev dependency. Add npm script `gen:api-types` that fetches `/openapi.json` from the backend and generates TypeScript types. Hand-written API client functions keep their function bodies but import types from the generated file. Wire into CI so stale types fail the build.
+
+**Why it matters now**: Every UX bug fix (Tier 1 #2) touches frontend API types. Without codegen, every fix risks introducing type drift — a field renamed in Pydantic produces zero TypeScript errors. With codegen, renaming a field becomes a compile error in seconds.
+
+---
+
+#### 11. Reconciler (ARCH-003)
+
+**Effort**: 4-6 weeks | **Files**: new `backend/app/workers/tasks/reconciler.py`, replaces logic in `maintenance_tasks.py` (13 sweeps)
+
+**What changes**: Replace 13 non-converging recovery sweeps with a single reconciler that derives document state from observed database reality: "do chunks exist? embeddings? entities? citations? contradictions?" → derive correct status. Documents transition to COMPLETED or NEEDS_REPROCESS based on what's actually in the database, not based on which task remembered to signal.
+
+**Why it matters**: Every past pipeline post-mortem (finalize race, lock-not-released, admin retry not chaining, `_mark_job_completed` blowing up on `job_id=None`) is the same class of failure: someone forgot to signal correctly. The reconciler eliminates the entire category. 13 sweeps × every 5-30 min × unbounded DB scans → 1 reconciler × every 5 min × bounded query.
+
+**E2E-007 is proof the current sweeps don't converge**: `trigger_pending_merges` dispatches finalize for ACT documents forever. A true reconciler would check "does this document have everything it needs?" and stop.
+
+---
+
+### Tier 4 — Long-term (after free tier is live and generating data)
+
+| # | What | ARCH | Why deferred | When it becomes urgent |
+|---|---|---|---|---|
+| 12 | **Pipeline unification** | ARCH-001 | Both paths work (E2E proved it). 6,471 + 1,926 lines of code. Largest refactor. | When we need to add a new pipeline stage and have to do it twice. |
+| 13 | **Full worker isolation** | ARCH-002 | Partially fixed (dual worker). Gevent timeout fiction (Layer 5) is low-impact at current scale. | When a single tenant's batch saturates the worker and blocks others. |
+| 14 | **NLI model integration** | — | Needs 10K+ labeled pairs from `statement_comparisons`. LegalWiz showed hybrid (NLI+LLM) beats LLM-only: 89.5% vs 75.3% F1. But no NLI model exists for Indian legal text — mDeBERTa-xnli has 76.9% Hindi NLI accuracy on general text, never seen legal phrasing. | After accumulating training data + validating mDeBERTa on our domain. |
+| 15 | **Postgres RPC versioning** | ARCH-005 | 11 migrations so far, all `CREATE OR REPLACE`, no version bumps. Currently stable — search RPCs haven't changed recently. | Next time we modify a search RPC signature. |
+
+---
+
+### Free tier gate (1 day, after Tier 1 complete)
+
+Per-user usage tracking already exists at `backend/app/api/routes/usage.py` — the `/api/usage/summary` endpoint counts documents, pages, and queries per user, grouped by matter. Frontend has `/usage` page, `useUsageSummary` hook, and `useUsageDashboard` hook.
+
+**What's needed for the gate**: (a) `user_plans` table (plan_type enum: 'free'/'pro'/'unlimited', docs_per_month limit, created_at). (b) Upload-time check in `backend/app/api/routes/documents.py`: count documents uploaded this calendar month by this user; if >= plan limit, return 403 with upgrade message. (c) Frontend: show usage bar ("2 of 3 free documents used this month") and upgrade CTA.
+
+**Estimated effort**: 1 day. Migration + ~10-line check in upload endpoint + frontend usage bar.
+
+---
+
+### Cross-reference
+
+- Full E2E results, cost data, and competitive analysis: [E2E-FINDINGS-2026-04-17.md](E2E-FINDINGS-2026-04-17.md)
+- Architectural patterns catalog: [ARCH-PATTERNS.md](ARCH-PATTERNS.md)
+- DPP-002 fix (Celery chain error handling): already FIXED, verified in E2E
+- WPS-001 (worker queue starvation): Layers 1-3 FIXED, Layers 4-5 in Tier 4
 
 ---
 
@@ -939,19 +1222,60 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 
 ---
 
-### INF-011: Idle Worker Costs ~$4/month With Zero Real Work
+### INF-011: Railway Costs ~$34/month at Idle — RAM Is 99% of Spend
 | Field | Value |
 |-------|-------|
-| **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Severity** | P1 (High) |
+| **Status** | MITIGATED |
 | **Date Found** | 2026-04-16 |
-| **Source** | Railway dashboard metrics review |
+| **Updated** | 2026-04-27 (verified savings after 5 days of worker scale-to-zero) |
+| **Source** | Railway dashboard metrics + usage billing screenshots |
 
-**Description**: The ldip-worker service consumes ~400MB memory at idle (all 14 task modules eagerly imported at startup). With no active document processing for ~1 month, the worker has been running 24/7 doing nothing except the ghost recovery loop (INF-009) and maintenance tasks against empty/deleted data.
+**Description**: Both Railway services run 24/7 consuming significant RAM even with near-zero traffic (~4 req/hour, ~0 documents processed). RAM is 99% of the $5.03 bill accumulated in just 5 days (Apr 16-21). Estimated monthly: **$33.86**.
 
-**Impact**: ~$4/month on Railway hobby plan ($0.000231/GB/min × 0.4GB × 43,200 min/month). Nearly doubles the $5 base plan cost for zero value.
+**Cost breakdown (from Railway billing, Apr 16-21)**:
 
-**Fix Direction**: (a) Immediate: pause or remove the worker service when not in active use. (b) Medium-term: lazy-import heavy modules (Docling, google-cloud-documentai, ragas) so idle baseline drops from ~400MB to ~100MB. (c) Long-term: Railway sleep/scale-to-zero if supported for worker services.
+| Service | RAM (GB-min) | RAM Cost | CPU Cost | Total |
+|---|---|---|---|---|
+| ldip-worker | 14,669.76 | $3.40 (67%) | $0.01 | $3.42 |
+| LDIP (API) | 6,874.98 | $1.59 (32%) | $0.02 | $1.62 |
+| **Total** | **21,544.74** | **$4.99** | **$0.04** | **$5.03** |
+
+**Why the RAM is high** (verified via Phase 1+2 deep research):
+- **ldip-worker runs 3 processes**: Celery beat + fast worker (40 greenlets, default+llm queues) + heavy worker (10 greenlets, heavy+low queues). Both workers eagerly import all 14 task modules (celery.py:292-327) which pull in ~30 service modules. Average ~2 GB.
+- **LDIP API runs 4 uvicorn workers** (Dockerfile CMD `--workers 4`). Each imports route handlers → `documents.py` imports `document_tasks.py` → full service chain. Average ~1 GB.
+- Docling/torch are installed (~900 MB on disk) but lazy-loaded (not imported at startup). RAM is from Python + google-cloud + openai + celery + supabase + pydantic + 30 other packages × multiple processes.
+
+**Why this can't be cheaply fixed**:
+- Celery workers are pull-based (poll Redis). They can't auto-sleep — no platform can detect idle or wake them via HTTP.
+- The two worker processes exist for ARCH-002 compliance (physical queue isolation, WPS-001 Phase 2). Merging them reverts a hard-won fix.
+- Reducing gevent greenlets (40→10) saves ~240 KB — negligible. The cost is per-process, not per-greenlet.
+- Reducing uvicorn workers 4→2 saves ~$4/month — helpful but not transformative.
+- Render/Fly.io don't solve this: Render's Standard tier (2 GB) costs $25/month for the worker alone. Fly.io can't auto-stop a Redis-polling worker either.
+
+**Fix applied (2026-04-22)**:
+1. **Scaled worker to 0 replicas** via `railway scale -s ldip-worker --us-west2 0`. Worker repo disconnected from GitHub to prevent auto-deploy from respawning it.
+2. Uvicorn worker reduction (4→2) not yet applied — savings are modest (~$4/month).
+3. **Long-term**: If/when the product needs always-on processing, the cost is a cost of doing business (~$34/month). The architecture is correct — the pricing model just doesn't suit a dormant app.
+
+**Verified savings (2026-04-27, 5 days after fix)**:
+
+| Metric | Before (Apr 22, day 6) | After (Apr 27, day 11) | Change |
+|---|---|---|---|
+| Current usage | $5.03 | $7.83 | +$2.80 in 5 days (~$0.47/day) |
+| Estimated monthly | $33.86 | **$14.28** | **-58%** |
+| Daily burn rate | ~$1.00/day | ~$0.47/day | **-53%** |
+
+The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month with only the API running should be ~$10-12/month.
+
+**To restore worker**: `railway scale -s ldip-worker --us-west2 1` (and reconnect GitHub repo in Railway dashboard → Settings → Source).
+
+**Rejected approaches (with reasons from deep research)**:
+1. ~~Combine API + worker into one service~~ — Violates ARCH-002 (physical isolation).
+2. ~~Merge fast + heavy workers~~ — Reverts WPS-001 Phase 2.
+3. ~~Railway auto-sleep for worker~~ — Worker doesn't receive HTTP; Railway can't detect idle or wake it.
+4. ~~Break API import chain (send_task instead of direct import)~~ — 15+ call sites, moderate blast radius, and docling/torch are already lazy-loaded so savings are modest.
+5. ~~Migrate to Render free tier~~ — Free tier has no background workers. Paid Render Standard ($25/month for 2 GB worker) is more expensive than Railway.
 
 ---
 

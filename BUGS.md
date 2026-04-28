@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-27 (Tier 1 #1 Phase 1 DONE — screening metadata now persists to llm_costs; 3 new API bugs discovered during deploy monitoring)
-**Total bugs**: 70 | **Fixed**: 29 | **Open**: 37 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
+**Last updated**: 2026-04-28 (Tier 1 #2 DONE — 6 UX loading-state bugs fixed via 2 systemic frontend fixes + 1 backend fix + 1 missing migration)
+**Total bugs**: 70 | **Fixed**: 35 | **Open**: 31 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
 ### Legend
@@ -134,21 +134,18 @@ John (PM agent) raised: "Why optimize the engine before validating that the funn
 
 ---
 
-#### 2. UX loading state cluster
+#### 2. UX loading state cluster — DONE (2026-04-28)
 
-**Bug IDs**: UX-003, UX-006, UX-008, UX-009, UX-010 | **Effort**: 3-5 days | **Files**: frontend only
+**Bug IDs**: UX-003, UX-006, UX-008, UX-009, UX-010 | **Actual effort**: ~4 hours | **Files**: 4 changed (3 frontend, 1 backend)
 
-All five bugs share the same shape: component renders with initial state that looks like an error, then data arrives and it corrects itself. During the free user's first 3 documents, they see every one of these flashes.
+All five bugs shared the same shape: component renders with initial state that looks like an error, then data arrives and it corrects itself. Deep research (2026-04-28) revealed these were NOT 5 independent bugs but symptoms of **2 systemic gaps + 1 backend bug**:
 
-| Bug | What user sees | Fix |
-|---|---|---|
-| UX-003 | "Ready" badge while processing at 70% | Derive status from `processing_jobs.current_stage` |
-| UX-006 | "Untitled Matter" for 1-2s on load | Show `<Skeleton>` instead of fallback string |
-| UX-008 | "No statistics available" flash | Initialize `isStatsLoading = true` in store |
-| UX-009 | "No Contradictions Found" during processing | Check processing status, show spinner if running |
-| UX-010 | "Generating Summary... 0%" stuck forever | Detect when API returns content, transition state |
+1. **`workspaceStore.fetchTabStats()` was orphaned dead code** — defined but never called from any component. Fixed by activating it in `MatterWorkspaceWrapper` on mount + polling during processing. Fixes UX-003 and UX-009.
+2. **`matterStore.enrichMattersWithStats()` ignored `tabProcessingStatus`** from tab-stats API response, hardcoding `processingStatus: 'ready'`. Fixed. Fixes UX-003.
+3. **Summary API missing `COMPLETED` job handler** — backend state machine had no case for completed jobs, fell through to create duplicate jobs. Fixed. Fixes UX-010.
+4. **UX-006 and UX-008 were already fixed** — skeleton guards and `isStatsLoading: true` init already in place from prior sessions.
 
-**What "done" looks like**: Upload a document, navigate between tabs during processing — no flash of wrong content at any point. Every tab shows either a loading skeleton or accurate state.
+**Production-verified** (2026-04-28): Dashboard shows real stats (no flash), matter header shows correct name (no flash), contradictions tab shows data or spinner (no false empty), summary loads from cache on revisit.
 
 ---
 
@@ -891,17 +888,18 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-28) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-005) |
 
 **Description**: Matter card shows green "Ready" badge with 0% Verified while processing is at 70%. Only inside the matter page does it show the processing bar.
 
-**Root Cause (corrected)**: Original report claimed "CITATION_EXTRACTION, CONTRADICTION_DETECTION, VERIFICATION_PROCESSING job types not mapped." **This is wrong** — those job types DON'T EXIST in the DB. Verified: `SELECT DISTINCT job_type FROM processing_jobs` → only ANOMALY_DETECTION, DOCUMENT_PROCESSING, ENTITY_LINKING, EVENT_CLASSIFICATION, SUMMARY_GENERATION. Citations/contradictions run as subtasks within DOCUMENT_PROCESSING, not as separate job types. The proposed fix (add mappings to JOB_TYPE_TO_TAB) would have NO effect.
+**Root Cause (corrected)**: Original report claimed "CITATION_EXTRACTION, CONTRADICTION_DETECTION, VERIFICATION_PROCESSING job types not mapped." **This is wrong** — those job types DON'T EXIST in the DB. The real root cause: `matterStore.enrichMattersWithStats()` fetched tab-stats API (which includes `tabProcessingStatus`) but **only extracted `documentCount` and `issueCount`**, ignoring `tabProcessingStatus` entirely. Then hardcoded `processingStatus: 'ready'` for every matter card.
 
-**Real Fix Needed**: Derive matter processing status from active Celery task state or from `processing_jobs.current_stage`/`progress_pct` rather than expecting separate job types that are never created.
+**Fix Applied (2026-04-28)**: `enrichMattersWithStats()` now extracts `tabProcessingStatus` via `transformTabStatsResponse()` and derives `processingStatus` — if ANY tab is `'processing'`, matter shows as processing. Also activated orphaned `workspaceStore.fetchTabStats()` from `MatterWorkspaceWrapper` on mount + 15s polling during processing.
 
-**Files**: `backend/app/services/tab_stats_service.py:36-54`, `backend/app/workers/tasks/document_tasks.py`
+**Files changed**: `frontend/src/stores/matterStore.ts`, `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`
+**Production verified**: 2026-04-28 — dashboard shows correct status badges, tab counts populated.
 
 ---
 
@@ -927,19 +925,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-28) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-007) |
 
 **Description**: Matter card always shows "Last opened: Never opened" because the `lastOpened` timestamp is never updated anywhere.
 
-**Verified** (2026-03-18): Playwright confirms all 11 matter cards show "Last opened: Never opened".
+**Root Cause**: Migration `20260319000001_add_last_opened_at_to_matters.sql` existed but was never applied to production. The endpoint (`POST /api/matters/{id}/touch`) and frontend caller (`MatterWorkspaceWrapper.tsx:101`) were already implemented, but the column didn't exist, causing a silent 500 error (masked by `.catch(() => {})`).
 
-**Root Cause (corrected)**: The `matters` table has NO `last_opened` or `last_opened_at` column — verified via `SELECT column_name FROM information_schema.columns WHERE table_name='matters' AND column_name LIKE '%open%'` → 0 results. This is deeper than "never updated" — the entire feature is unimplemented: no DB column, no migration, no endpoint, no frontend logic.
+**Fix Applied (2026-04-28)**: Applied `ALTER TABLE matters ADD COLUMN IF NOT EXISTS last_opened_at timestamptz DEFAULT NULL` directly to production. Verified: `/touch` endpoint now returns 204 (was 500), zero console errors on matter page load.
 
-**Fix Needed**: 1) Migration to add `last_opened_at` column to `matters`, 2) PATCH endpoint, 3) Frontend `useEffect` on matter page mount.
-
-**Files**: `supabase/migrations/` (new), `backend/app/api/routes/matters.py`, `frontend/src/components/features/dashboard/MatterCard.tsx:219`
+**Files**: No code changes needed — endpoint and frontend were already correct. Only the migration needed applying.
 
 ---
 
@@ -947,17 +943,18 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-28) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-008) |
 
 **Description**: Briefly flashes "Untitled Matter" for ~1-2s before loading the real name. No loading skeleton.
 
-**Root Cause**: `EditableMatterName.tsx:65` renders `matter?.title ?? 'Untitled Matter'` while `fetchMatter()` is async. Component mounts with `null` matter → shows fallback → fetch completes → real name appears.
+**Root Cause**: Skeleton guard already existed at `EditableMatterName.tsx:170` (`if (!matter) return <Skeleton />`), but `fetchMatter()` was only triggered from the component's own `useEffect`, adding latency.
 
-**Fix Needed**: Show a `<Skeleton>` when `matter` is null instead of the fallback string.
+**Fix Applied (2026-04-28)**: Added `fetchMatter(matterId)` call to `MatterWorkspaceWrapper` `useEffect` — fires earlier in the component tree so by the time `EditableMatterName` mounts, data is either cached or fetch is already in flight.
+**Production verified**: 2026-04-28 — matter header shows "Nirav Jobalia" immediately, no flash.
 
-**Files**: `frontend/src/components/features/matter/EditableMatterName.tsx:65`, `frontend/src/stores/matterStore.ts`
+**Files changed**: `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`
 
 ---
 
@@ -983,17 +980,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (already — verified 2026-04-28) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-010) |
 
 **Description**: Briefly shows "No statistics available" before loading actual stats.
 
-**Root Cause**: Initial store state has `isStatsLoading = false` and `stats = null`, triggering the empty message on first render before `fetchStats()` fires.
+**Root Cause**: Original report said `isStatsLoading = false` initially. Deep research (2026-04-28) found this was **already fixed** — `activityStore.ts:83` initializes `isStatsLoading: true`, which triggers the skeleton path in `QuickStats.tsx:118`. No window exists where `isStatsLoading=false && stats=null` on first render.
 
-**Fix Needed**: Initialize `isStatsLoading = true` in the store, or show skeleton unconditionally before first fetch.
+**Production verified**: 2026-04-28 — Quick Stats shows "13 Active Matters, 0 Verified, 280 Pending" with no flash of "No statistics available".
 
-**Files**: `frontend/src/components/features/dashboard/QuickStats.tsx:157-162`, `frontend/src/stores/activityStore.ts`
+**Files**: No changes needed — fix was already in place from a prior session.
 
 ---
 
@@ -1001,17 +998,19 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-28) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-011) |
 
 **Description**: Shows "No Contradictions Found" with hedging message during processing. Cannot distinguish "truly empty" from "not yet processed."
 
-**Root Cause**: Component has no access to processing status. Doesn't check if contradiction detection tasks are queued/running.
+**Root Cause**: Two issues: (1) `workspaceStore.fetchTabStats()` was never called from any component — `tabProcessingStatus` was always empty. (2) `ContradictionsContent` had no access to processing status — only checked SWR `isLoading` (API fetch state), not backend processing state.
 
-**Fix Needed**: Integrate with processing status. Show spinner if contradiction detection is still running.
+**Fix Applied (2026-04-28)**: (1) Activated `fetchTabStats` from `MatterWorkspaceWrapper` on mount + 15s polling. (2) `ContradictionsContent` now reads `tabProcessingStatus.contradictions` from `workspaceStore`. Shows `<ContradictionsProcessing>` spinner when backend is still processing, and "No Contradictions Found" only when processing is confirmed complete.
 
-**Files**: `frontend/src/components/features/contradiction/ContradictionsContent.tsx:114-125`
+**Production verified**: 2026-04-28 — contradictions tab shows "20 contradictions found" with data (no false empty state).
+
+**Files changed**: `frontend/src/components/features/contradiction/ContradictionsContent.tsx`, `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`
 
 ---
 
@@ -1019,17 +1018,21 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-28) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #14) |
 
 **Description**: Summary tab shows "Generating Summary... Waiting in queue... 0% complete" indefinitely, even though the API returns complete 200 OK summary data. A full page reload resolves the issue.
 
-**Root Cause**: Frontend SSE/polling mechanism does not properly transition from "generating" state to "ready" state when data arrives mid-session.
+**Root Cause (corrected)**: Original report blamed frontend SSE/polling. **Deep research (2026-04-28) found the bug was in the backend API**, not the frontend. The summary endpoint state machine (`summary.py:250-368`) had no handler for `JobStatus.COMPLETED`. When a job completed and Redis cache expired (1-hour TTL), the API found a COMPLETED job but didn't match QUEUED/PROCESSING or FAILED, fell through to the job creation path, and returned `status=GENERATING` — causing the frontend SWR poll to see "generating" forever. The frontend hook (`useMatterSummary.ts`) was working correctly — polling every 3s as designed.
 
-**Fix Needed**: Frontend must detect when summary API returns actual content and transition out of the loading state.
+**Fix Applied (2026-04-28)**: Added `COMPLETED` job handler (step 3) to the API state machine — finds completed jobs, retries cache lookup, returns READY if cached. Also fixed the lock-not-acquired path to check cache before creating duplicate jobs.
 
-**Files**: Frontend summary page component, summary data fetching hook, SSE/polling state management
+**Production verified**: 2026-04-28 — summary generates in ~16s, loads from cache immediately on revisit. No more infinite "Generating... 0%" state.
+
+**Files changed**: `backend/app/api/routes/summary.py`
+
+**Remaining concern**: Summary is still generated on-demand (not pre-generated). First visit to Summary tab triggers a ~16s generation. This is the Tier 1 #3 (Summary pre-generation) item, not this bug.
 
 ---
 

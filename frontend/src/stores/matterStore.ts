@@ -23,7 +23,7 @@ import type {
 } from '@/types/matter';
 import { VIEW_PREFERENCE_KEY } from '@/types/matter';
 import { mattersApi } from '@/lib/api/matters';
-import { fetchTabStats } from '@/lib/api/tabStats';
+import { fetchTabStats, transformTabStatsResponse } from '@/lib/api/tabStats';
 
 /**
  * Transform backend Matter to frontend MatterCardData.
@@ -53,16 +53,21 @@ async function enrichMattersWithStats(
   const results = await Promise.allSettled(
     matters.map(async (matter) => {
       const response = await fetchTabStats(matter.id);
-      const tabCounts = response.data.tabCounts;
+      const { tabCounts, tabProcessingStatus } = transformTabStatsResponse(response);
+      // Derive overall processing status: if ANY tab is processing, matter is processing
+      const isAnyTabProcessing = Object.values(tabProcessingStatus).some(
+        (status) => status === 'processing'
+      );
       return {
         id: matter.id,
-        documentCount: tabCounts.documents.count,
-        issueCount: tabCounts.contradictions.count,
+        documentCount: tabCounts.documents?.count ?? 0,
+        issueCount: tabCounts.contradictions?.count ?? 0,
+        processingStatus: isAnyTabProcessing ? 'processing' as const : 'ready' as const,
       };
     })
   );
 
-  const statsMap = new Map<string, { documentCount: number; issueCount: number }>();
+  const statsMap = new Map<string, { documentCount: number; issueCount: number; processingStatus: 'processing' | 'ready' }>();
   for (const result of results) {
     if (result.status === 'fulfilled') {
       statsMap.set(result.value.id, result.value);

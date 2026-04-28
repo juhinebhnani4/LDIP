@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { AlertTriangle, FileWarning } from 'lucide-react';
+import { AlertTriangle, FileWarning, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,7 @@ import {
   type ContradictionSeverity,
   type ContradictionType,
 } from '@/hooks/useContradictions';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
 import { useBoundingBoxes } from '@/hooks';
 import { fetchDocument } from '@/lib/api/documents';
@@ -109,7 +110,7 @@ function ContradictionsError({ message }: { message?: string }) {
 }
 
 /**
- * Empty state display.
+ * Empty state display — only shown when processing is complete and no contradictions exist.
  */
 function ContradictionsEmpty() {
   return (
@@ -118,7 +119,22 @@ function ContradictionsEmpty() {
       <h3 className="text-lg font-medium mb-2">No Contradictions Found</h3>
       <p className="text-muted-foreground max-w-md">
         No contradictions have been detected in the documents for this matter.
-        This could mean the documents are consistent, or document processing is still in progress.
+        The documents appear to be consistent.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Processing state display — shown when contradiction detection is still running.
+ */
+function ContradictionsProcessing() {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <Loader2 className="h-12 w-12 text-muted-foreground/50 mb-4 animate-spin" />
+      <h3 className="text-lg font-medium mb-2">Analyzing Documents</h3>
+      <p className="text-muted-foreground max-w-md">
+        Contradiction detection is still running. Results will appear here as they are found.
       </p>
     </div>
   );
@@ -156,6 +172,11 @@ export function ContradictionsContent({
   const openPdfSplitView = usePdfSplitViewStore((state) => state.openPdfSplitView);
   const setBoundingBoxes = usePdfSplitViewStore((state) => state.setBoundingBoxes);
   const { fetchByBboxIds } = useBoundingBoxes();
+
+  // Check if contradiction detection is still running on the backend
+  const contradictionsProcessing = useWorkspaceStore(
+    (state) => state.tabProcessingStatus.contradictions === 'processing'
+  );
 
   // Fetch contradictions data - use default perPage=100 from hook for comprehensive view
   const { data, meta, isLoading, error, totalCount, uniqueEntities } = useContradictions(
@@ -305,7 +326,12 @@ export function ContradictionsContent({
     return <ContradictionsError message={error.message} />;
   }
 
-  // Show empty state
+  // Show processing state if backend is still detecting contradictions
+  if (!isLoading && data.length === 0 && !hasActiveFilters && contradictionsProcessing) {
+    return <ContradictionsProcessing />;
+  }
+
+  // Show empty state only when processing is complete and no contradictions exist
   if (!isLoading && data.length === 0 && !hasActiveFilters) {
     return <ContradictionsEmpty />;
   }

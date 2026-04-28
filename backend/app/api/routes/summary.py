@@ -274,7 +274,23 @@ async def get_matter_summary(
                 stage=active_job.current_stage,
             )
 
-        # 3. Check for recent FAILED job (within last 5 minutes)
+        # 3. Check for recent COMPLETED job — cache may have been evicted
+        #    or not yet visible. Re-try cache; if still missing, regenerate.
+        completed_job = next(
+            (j for j in jobs if j.status == JobStatus.COMPLETED),
+            None,
+        )
+        if completed_job is not None and not force_refresh:
+            # Worker should have cached the result — try once more
+            cached = await summary_service.get_cached_summary(matter_id)
+            if cached is not None:
+                return MatterSummaryResponse(
+                    data=cached,
+                    status=SummaryGenerationStatus.READY,
+                )
+            # Cache evicted — fall through to regenerate
+
+        # 4. Check for recent FAILED job (within last 5 minutes)
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
         recent_failed = next(
             (
@@ -292,7 +308,7 @@ async def get_matter_summary(
                 error=recent_failed.error_message or "Summary generation failed",
             )
 
-        # 4. No cache, no active job → dispatch new background job
+        # 5. No cache, no active/completed job → dispatch new background job
         #    Use Redis SETNX to prevent duplicate job creation under concurrent requests
         from app.services.memory.redis_client import get_redis_client
 
@@ -301,7 +317,7 @@ async def get_matter_summary(
         lock_acquired = await redis.set(lock_key, "1", nx=True, ex=600)
 
         if not lock_acquired:
-            # Another request is creating the job — re-check for the active job
+            # Another request is creating the job — re-check state
             jobs = await tracker.list_jobs_for_matter(
                 matter_id=matter_id,
                 job_type_filter=JobType.SUMMARY_GENERATION,
@@ -317,7 +333,14 @@ async def get_matter_summary(
                     progress=active_job.progress_pct,
                     stage=active_job.current_stage,
                 )
-            # Lock exists but no active job (edge case) — fall through to create
+            # Job may have completed while we waited for the lock — check cache
+            cached = await summary_service.get_cached_summary(matter_id)
+            if cached is not None:
+                return MatterSummaryResponse(
+                    data=cached,
+                    status=SummaryGenerationStatus.READY,
+                )
+            # Lock exists but no active job and no cache — fall through to create
 
         if force_refresh:
             await summary_service.invalidate_cache(matter_id)

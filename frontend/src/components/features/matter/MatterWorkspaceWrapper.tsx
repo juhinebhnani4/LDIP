@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, type ReactNode } from 'react';
+import { useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ProcessingStatusBanner } from '@/components/features/processing';
 import {
@@ -8,6 +8,8 @@ import {
   selectActiveJobCount,
   selectFailedJobCount,
 } from '@/stores/processingStore';
+import { useWorkspaceStore, selectIsAnyTabProcessing } from '@/stores/workspaceStore';
+import { useMatterStore } from '@/stores/matterStore';
 import { jobsApi } from '@/lib/api/jobs';
 import { mattersApi } from '@/lib/api/matters';
 import { createClient } from '@/lib/supabase/client';
@@ -66,6 +68,12 @@ export function MatterWorkspaceWrapper({
     [handleStatusChangeEvent]
   );
 
+  // Pre-fetch matter data so children (e.g. EditableMatterName) don't start from null
+  const fetchMatter = useMatterStore((state) => state.fetchMatter);
+  useEffect(() => {
+    fetchMatter(matterId);
+  }, [matterId, fetchMatter]);
+
   // Initialize store with matter ID and load jobs
   useEffect(() => {
     setMatterId(matterId);
@@ -105,6 +113,41 @@ export function MatterWorkspaceWrapper({
       setMatterId(null);
     };
   }, [matterId, setMatterId, setJobs, setStats, setLoading, onProgressEvent, onStatusChangeEvent]);
+
+  // Fetch tab stats (counts + processing status) on mount
+  const fetchTabStats = useWorkspaceStore((state) => state.fetchTabStats);
+  const isAnyTabProcessing = useWorkspaceStore(selectIsAnyTabProcessing);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Initial fetch
+    fetchTabStats(matterId);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [matterId, fetchTabStats]);
+
+  // Poll tab stats while any tab is processing (refresh counts as processing completes)
+  useEffect(() => {
+    if (isAnyTabProcessing) {
+      pollIntervalRef.current = setInterval(() => {
+        fetchTabStats(matterId);
+      }, 15_000); // 15s — balance between freshness and API load
+    } else if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [isAnyTabProcessing, matterId, fetchTabStats]);
 
   // Subscribe to feature availability broadcasts for progressive UI
   // This enables showing features as they become ready during processing

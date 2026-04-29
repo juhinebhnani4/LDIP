@@ -14,8 +14,10 @@ CRITICAL: Requires matter access via validate_matter_access.
 CRITICAL: Response is text/event-stream for SSE protocol.
 """
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -42,6 +44,101 @@ from app.services.summary_service import get_summary_service
 from app.services.timeline_cache import get_timeline_cache_service
 
 logger = structlog.get_logger(__name__)
+
+# Document statuses that indicate active processing (not yet queryable).
+# Full pipeline: pending → processing → ocr_complete → chunking → embedding → searchable → completed
+# Terminal statuses (completed, failed, *_failed) are NOT included.
+# "searchable" is NOT included — it means chunks + embeddings exist, Q&A works.
+_PROCESSING_STATUSES = (
+    "pending",
+    "processing",
+    "ocr_complete",
+    "pending_review",
+    "chunking",
+    "embedding",
+)
+
+
+@dataclass(frozen=True)
+class ProcessingStatus:
+    """Snapshot of a matter's document processing and embedding state."""
+
+    processing_count: int  # docs still in pipeline
+    total_count: int  # all docs in matter
+    total_chunks: int  # chunks created so far
+    embedded_chunks: int  # chunks with embeddings
+
+    @property
+    def all_done(self) -> bool:
+        return self.processing_count == 0
+
+    @property
+    def has_usable_chunks(self) -> bool:
+        return self.embedded_chunks > 0
+
+    @property
+    def embedding_pct(self) -> float:
+        if self.total_chunks == 0:
+            return 0.0
+        return self.embedded_chunks / self.total_chunks * 100
+
+
+async def _check_processing_status(matter_id: str) -> ProcessingStatus:
+    """Check how many documents are still processing and embedding state.
+
+    Single convergence point for the processing guard — called by both
+    stream_chat() and send_message(). Two lightweight COUNT queries.
+    """
+    from app.services.supabase.client import get_supabase_client
+
+    try:
+        supabase = get_supabase_client()
+
+        def _query() -> ProcessingStatus:
+            # Query 1: document processing status
+            all_docs = (
+                supabase.table("documents")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+            processing_docs = (
+                supabase.table("documents")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .in_("status", list(_PROCESSING_STATUSES))
+                .execute()
+            )
+
+            # Query 2: chunk/embedding counts
+            total_chunks_resp = (
+                supabase.table("chunks")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
+            embedded_resp = (
+                supabase.table("chunks")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .not_.is_("embedding", "null")
+                .execute()
+            )
+
+            return ProcessingStatus(
+                processing_count=processing_docs.count or 0,
+                total_count=all_docs.count or 0,
+                total_chunks=total_chunks_resp.count or 0,
+                embedded_chunks=embedded_resp.count or 0,
+            )
+
+        return await asyncio.to_thread(_query)
+
+    except Exception as e:
+        logger.warning("processing_status_check_failed", matter_id=matter_id, error=str(e))
+        # On failure, assume ready — don't block queries due to a check failure
+        return ProcessingStatus(processing_count=0, total_count=0, total_chunks=0, embedded_chunks=0)
+
 
 # =============================================================================
 # Router Setup
@@ -153,8 +250,57 @@ async def stream_chat(
         query_length=len(body.query),
     )
 
+    # --- Processing guard: check before spending LLM resources ---
+    proc_status = await _check_processing_status(matter_id)
+
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         """Generate SSE events from streaming orchestrator."""
+        # Gate 1: All docs processing, zero usable chunks → block entirely
+        if not proc_status.all_done and not proc_status.has_usable_chunks:
+            if proc_status.processing_count == proc_status.total_count:
+                msg = (
+                    "Your documents are still being processed. "
+                    "Q&A will be available once processing completes."
+                )
+            else:
+                msg = (
+                    f"{proc_status.processing_count} of {proc_status.total_count} documents "
+                    "are still being processed and no searchable content is available yet. "
+                    "Please wait for processing to complete."
+                )
+            logger.info(
+                "chat_blocked_documents_processing",
+                matter_id=matter_id,
+                processing_count=proc_status.processing_count,
+                total_count=proc_status.total_count,
+                total_chunks=proc_status.total_chunks,
+                embedded_chunks=proc_status.embedded_chunks,
+            )
+            yield {
+                "event": StreamEventType.ERROR.value,
+                "data": json.dumps({
+                    "error": msg,
+                    "code": "DOCUMENTS_PROCESSING",
+                    "retry_suggested": True,
+                    "retry_after_seconds": 30,
+                }),
+            }
+            return
+
+        # Gate 2: Some docs processing but usable chunks exist → warn via search_notice
+        # (The warning is injected into the streaming orchestrator's result via
+        # the existing search_notice/searchNotice pipeline. We log it here for
+        # observability; the actual notice is set in _extract_search_mode when
+        # hybrid_search detects incomplete embeddings.)
+        if not proc_status.all_done:
+            logger.info(
+                "chat_proceeding_with_processing_warning",
+                matter_id=matter_id,
+                processing_count=proc_status.processing_count,
+                total_count=proc_status.total_count,
+                embedding_pct=round(proc_status.embedding_pct, 1),
+            )
+
         try:
             async for event in streaming_orchestrator.process_streaming(
                 matter_id=matter_id,
@@ -261,6 +407,32 @@ async def send_message(
         user_id=current_user.id,
         query_length=len(body.query),
     )
+
+    # --- Processing guard: same check as stream_chat ---
+    proc_status = await _check_processing_status(matter_id)
+    if not proc_status.all_done and not proc_status.has_usable_chunks:
+        if proc_status.processing_count == proc_status.total_count:
+            msg = (
+                "Your documents are still being processed. "
+                "Q&A will be available once processing completes."
+            )
+        else:
+            msg = (
+                f"{proc_status.processing_count} of {proc_status.total_count} documents "
+                "are still being processed and no searchable content is available yet. "
+                "Please wait for processing to complete."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": {
+                    "code": "DOCUMENTS_PROCESSING",
+                    "message": msg,
+                    "retry_suggested": True,
+                    "retry_after_seconds": 30,
+                }
+            },
+        )
 
     try:
         # Collect all events to build final response

@@ -157,8 +157,9 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
     setIsRetrying(false);
     // Reset streaming state on error
     setTyping(false);
-    // Only show toast for non-retryable errors
-    if (!canRetryError(error)) {
+    // Only show toast for non-retryable errors (skip for processing guard — shown inline)
+    const errorCode = (error as Error & { code?: string }).code;
+    if (!canRetryError(error) && errorCode !== 'DOCUMENTS_PROCESSING') {
       toast.error(error.message);
     }
   }, [setError, setTyping]);
@@ -333,7 +334,8 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
         )}
 
         {/* Story 13.4: Inline error alert for streaming errors */}
-        {streamError && canRetryError(streamError) && (
+        {/* Also show for DOCUMENTS_PROCESSING errors (retryable — docs may finish soon) */}
+        {streamError && (canRetryError(streamError) || (streamError as Error & { code?: string }).code === 'DOCUMENTS_PROCESSING') && (
           <div className="shrink-0 px-4 py-2">
             <ErrorAlert
               error={streamError}

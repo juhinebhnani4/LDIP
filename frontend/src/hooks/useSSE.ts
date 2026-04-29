@@ -371,6 +371,8 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
             suggestedRewrite: (rawData.suggestedRewrite ?? rawData.suggested_rewrite) as string | undefined,
           };
           const err = new Error(errorData.error);
+          // Attach error code so consumers can distinguish error types
+          (err as Error & { code?: string }).code = errorData.code;
           setError(err);
           optionsRef.current.onError?.(err);
           break;
@@ -636,8 +638,8 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
               totalChunks: eventCountRef.current,
               durationMs: streamDurationMs,
             });
-          } else {
-            // No content at all — treat as error
+          } else if (eventCountRef.current === 0) {
+            // No events received at all — genuine disconnect, not a handled error
             const disconnectErr = new Error(
               'Connection lost — no response received. Please try again.'
             );
@@ -653,6 +655,7 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
               durationMs: streamDurationMs,
             });
           }
+          // else: events received (e.g. error event) but no complete — already handled by processEvent
         } else if (receivedComplete) {
           // Story 6.2: Report successful stream completion
           void sseReportingApi.reportStatus({

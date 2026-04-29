@@ -1,6 +1,6 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-28 (Tier 1 #2 DONE — 6 UX loading-state bugs fixed via 2 systemic frontend fixes + 1 backend fix + 1 missing migration)
+**Last updated**: 2026-04-29 (Tier 1 #4 DONE — Q&A processing guard: backend guard + frontend SSE fix + 2 bugs found during testing)
 **Total bugs**: 70 | **Fixed**: 35 | **Open**: 31 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
@@ -202,15 +202,28 @@ DB persistence also verified: 3 matters persisted (5.8–5.9 KB each), `201 Crea
 
 ---
 
-#### 4. Q&A processing guard
+#### 4. Q&A processing guard — DONE (2026-04-29)
 
-**Bug IDs**: UX-002 | **Effort**: 2-3 days | **Files**: `backend/app/api/routes/chat.py`, frontend chat component
+**Bug IDs**: UX-002 | **Actual effort**: ~6 hours | **Files**: 4 changed (1 backend, 2 frontend, 1 skill)
 
-**Current state**: User asks a question while document is at 70% processing. Chat endpoint runs RAG query. No embeddings exist yet → vector search returns 0 results → "I couldn't find relevant information." User thinks the product is broken.
+**What was implemented**:
+1. **Backend guard** (`chat.py`): `_check_processing_status()` queries `documents` table for non-terminal statuses + `chunks` table for embedding counts. Two-tier logic: Gate 1 blocks entirely (zero usable chunks), Gate 2 warns (partial embeddings). Applied to both `stream_chat()` (SSE) and `send_message()` (sync). Single convergence point — no "must remember to" pattern.
+2. **Frontend error display** (`QAPanel.tsx`): `DOCUMENTS_PROCESSING` error code shows inline `ErrorAlert` with "Try Again" button instead of auto-dismissing toast.
+3. **Frontend SSE fix** (`useSSE.ts`): Attached error `code` property to SSE Error objects. Fixed stream-end logic that was overwriting processing guard errors with generic "Connection lost" message.
 
-**What changes**: Add processing-status check at top of `stream_chat()`. If any document in the matter has active processing jobs (status IN PROCESSING, PENDING), prepend a warning: "Some documents are still being processed. Results may be incomplete." If NO chunks with embeddings exist yet, block the query entirely and show: "Documents are still being processed. Q&A will be available once processing completes."
+**Bugs found during testing**:
+- `_PROCESSING_STATUSES` initially missing `ocr_complete` and `pending_review` — document at `ocr_complete` stage slipped past guard. Fixed by verifying against `DocumentStatus` enum.
+- `useSSE.ts` stream-end cleanup (line 620-647) creates a new "Connection lost" error when stream ends without `complete` event, overwriting the `DOCUMENTS_PROCESSING` error. Fixed by checking `eventCountRef.current === 0` before creating disconnect error.
 
-**What "done" looks like**: Ask a question during processing → see a clear message about processing status, not a false "no results."
+**Production verification** (2026-04-29):
+
+| Test | Scenario | Result |
+|------|----------|--------|
+| Completed matter Q&A | Nirav Jobalia — "What is this case about?" | Full response with 7 citations, 7565ms. No guard interference. |
+| Processing matter Q&A | Fresh upload, 0% complete, 0 chunks | Blocked: "Your documents are still being processed. Q&A will be available once processing completes." + Try Again button |
+| Completed matter regression | Nirav Jobalia — second question after guard deployed | Normal response, no regression |
+
+**Known limitation**: Guard currently shows reactive `ErrorAlert` ("Something Went Wrong") after user submits query. Better UX would be a proactive informational banner before user types (see UX-014).
 
 ---
 
@@ -907,17 +920,18 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-29) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-004) |
 
 **Description**: While document is processing (70%), Q&A returns "I couldn't find relevant information" with no indication that processing is still in progress. User thinks the app doesn't work.
 
-**Root Cause**: Chat endpoint at `chat.py:105-219` has zero processing-status checks before querying RAG. At 70%, embeddings aren't computed yet so vector search returns 0 matches.
+**Root Cause**: Chat endpoint at `chat.py:105-219` had zero processing-status checks before querying RAG. At 70%, embeddings aren't computed yet so vector search returns 0 matches.
 
-**Fix Needed**: Add processing-status check at top of `stream_chat()`. If any document has active processing jobs, prepend a warning or disable Q&A until embeddings are ready.
+**Fix Applied (2026-04-29)**: Added `_check_processing_status()` guard at top of both `stream_chat()` and `send_message()`. Queries `documents.status` for non-terminal statuses and `chunks` table for embedding counts. Two-tier response: Gate 1 blocks entirely (zero usable chunks) with `DOCUMENTS_PROCESSING` SSE error event; Gate 2 warns via existing `search_notice` pipeline (partial embeddings). Frontend shows inline `ErrorAlert` with "Try Again" button. Also fixed `useSSE.ts` stream-end logic that was overwriting the guard's error with "Connection lost."
 
-**Files**: `backend/app/api/routes/chat.py:105-219`, `backend/app/services/tab_stats_service.py:437-480`
+**Files changed**: `backend/app/api/routes/chat.py`, `frontend/src/hooks/useSSE.ts`, `frontend/src/components/features/chat/QAPanel.tsx`
+**Production verified**: 2026-04-29 — fresh upload blocked with clear message; completed matter Q&A unaffected.
 
 ---
 
@@ -1102,6 +1116,42 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 **Fix Needed**: Add "Resend verification email" button (calling `supabase.auth.resend()`) with rate limiting (disabled 60s after click). Add helper text.
 
 **Files**: `frontend/src/components/features/auth/SignupForm.tsx:146-166`
+
+---
+
+### UX-014: Q&A Guard Shows Reactive Error Instead of Proactive Banner
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low — UX polish) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 |
+| **Source** | Production testing during Tier 1 #4 |
+
+**Description**: The Q&A processing guard (UX-002 fix) blocks queries during processing, but uses the generic `ErrorAlert` component ("Something Went Wrong" in red) AFTER the user submits a question. Bad UX: user types a question, waits, then gets a scary red error. They wasted effort and feel the app is broken.
+
+**Better UX**: Show a **proactive informational banner** (amber/blue, not red) in the Q&A panel BEFORE the user types. Disable the input field with a tooltip. The banner should say: "Documents are being processed — Q&A will be available once processing completes. You can check progress above." This prevents the user from wasting effort and communicates processing status without alarm.
+
+**Fix Needed**: Check `processing_jobs` or `documents.status` on matter load (already available in `MatterWorkspaceWrapper` processing status). If any docs are processing, show an amber banner in the Q&A panel and disable the input. Remove the banner when processing completes (existing polling detects this).
+
+**Files**: `frontend/src/components/features/chat/QAPanel.tsx`, possibly `frontend/src/stores/chatStore.ts` or `MatterWorkspaceWrapper`
+
+---
+
+### UX-013: Processing Status Bar Counts Jobs as "Documents"
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 |
+| **Source** | Production testing during Tier 1 #4 Q&A guard implementation |
+
+**Description**: When a document is processing, the status bar shows "Processing 2 documents" when only 1 document exists. The count comes from `processing_jobs` rows (1 DOCUMENT_PROCESSING + 1 SUMMARY_GENERATION), not from the `documents` table. Users see a higher document count than they uploaded.
+
+**Root Cause**: The frontend processing status component counts processing jobs and labels them as "documents." SUMMARY_GENERATION jobs are included in the count even though they're not documents.
+
+**Fix Needed**: Either count `documents` with non-terminal status instead of `processing_jobs`, or filter `processing_jobs` to only `job_type = 'DOCUMENT_PROCESSING'`, or change the label from "documents" to "tasks."
+
+**Files**: Frontend component that renders the processing status bar (needs investigation — likely in `MatterWorkspaceWrapper` or a processing status component).
 
 ---
 

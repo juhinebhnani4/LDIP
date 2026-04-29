@@ -92,6 +92,7 @@ export function ContradictionsFilters({
       {/* Severity filter */}
       <Select
         value={severity ?? 'all'}
+        defaultValue="all"
         onValueChange={(value) =>
           onSeverityChange(value === 'all' ? undefined : (value as ContradictionSeverity))
         }
@@ -112,6 +113,7 @@ export function ContradictionsFilters({
       {/* Type filter */}
       <Select
         value={contradictionType ?? 'all'}
+        defaultValue="all"
         onValueChange={(value) =>
           onTypeChange(value === 'all' ? undefined : (value as ContradictionType))
         }
@@ -133,6 +135,7 @@ export function ContradictionsFilters({
       {entities.length > 0 && (
         <Select
           value={entityId ?? 'all'}
+          defaultValue="all"
           onValueChange={(value) =>
             onEntityChange(value === 'all' ? undefined : value)
           }

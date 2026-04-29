@@ -51,9 +51,10 @@ export function MatterFilters({ className }: MatterFiltersProps) {
           <ArrowDownAZ className="size-4 text-muted-foreground" aria-hidden="true" />
           <Select
             value={sortBy}
+            defaultValue="recent"
             onValueChange={(value) => setSortBy(value as MatterSortOption)}
           >
-            <SelectTrigger className="w-[160px]" suppressHydrationWarning aria-label="Sort matters by">
+            <SelectTrigger className="w-[160px]" aria-label="Sort matters by">
               <SelectValue placeholder="Recent" />
             </SelectTrigger>
             <SelectContent>
@@ -71,9 +72,10 @@ export function MatterFilters({ className }: MatterFiltersProps) {
           <Filter className="size-4 text-muted-foreground" aria-hidden="true" />
           <Select
             value={filterBy}
+            defaultValue="all"
             onValueChange={(value) => setFilterBy(value as MatterFilterOption)}
           >
-            <SelectTrigger className="w-[160px]" suppressHydrationWarning aria-label="Filter matters by status">
+            <SelectTrigger className="w-[160px]" aria-label="Filter matters by status">
               <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>

@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   useProcessingStore,
   selectActiveJobCount,
+  selectActiveDocumentCount,
   selectFailedJobCount,
 } from '@/stores/processingStore';
 import type { ProcessingJob } from '@/types/job';
@@ -32,14 +33,23 @@ export function ProcessingStatusBanner({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const activeCount = useProcessingStore(selectActiveJobCount);
+  const activeDocCount = useProcessingStore(selectActiveDocumentCount);
   const failedCount = useProcessingStore(selectFailedJobCount);
   const jobs = useProcessingStore((state) => state.jobs);
-  const stats = useProcessingStore((state) => state.stats);
 
   // Get active jobs for display
   const activeJobs = Array.from(jobs.values()).filter(
     (job) => job.status === 'QUEUED' || job.status === 'PROCESSING'
   );
+
+  // UX-007: Derive completed/queued from jobs Map (single source of truth)
+  // instead of separate stats object that drifts from Realtime updates
+  const completedCount = Array.from(jobs.values()).filter(
+    (job) => job.status === 'COMPLETED'
+  ).length;
+  const queuedCount = Array.from(jobs.values()).filter(
+    (job) => job.status === 'QUEUED'
+  ).length;
 
   // Calculate overall progress
   const overallProgress = calculateOverallProgress(activeJobs);
@@ -75,8 +85,8 @@ export function ProcessingStatusBanner({
             <p className="font-medium">
               {activeCount > 0 ? (
                 <>
-                  Processing {activeCount} document
-                  {activeCount !== 1 ? 's' : ''} - {overallProgress}% complete
+                  Processing {activeDocCount} document
+                  {activeDocCount !== 1 ? 's' : ''} — {overallProgress}% complete
                 </>
               ) : (
                 <>
@@ -85,9 +95,9 @@ export function ProcessingStatusBanner({
                 </>
               )}
             </p>
-            {activeCount > 0 && stats && (
+            {activeCount > 0 && (completedCount > 0 || queuedCount > 0) && (
               <p className="text-sm text-muted-foreground">
-                {stats.completed} completed, {stats.queued} queued
+                {completedCount} completed, {queuedCount} queued
               </p>
             )}
           </div>

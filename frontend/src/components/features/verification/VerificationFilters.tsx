@@ -72,6 +72,7 @@ export function VerificationFilters({
       {/* Finding Type Filter */}
       <Select
         value={filters.findingType ?? 'all'}
+        defaultValue="all"
         onValueChange={(value) =>
           onFiltersChange({ findingType: value === 'all' ? null : value })
         }
@@ -92,6 +93,7 @@ export function VerificationFilters({
       {/* Confidence Tier Filter */}
       <Select
         value={filters.confidenceTier ?? 'all'}
+        defaultValue="all"
         onValueChange={(value) =>
           onFiltersChange({
             confidenceTier: value === 'all' ? null : (value as ConfidenceTier),
@@ -127,6 +129,7 @@ export function VerificationFilters({
       {/* Verification Status Filter (AC #5) */}
       <Select
         value={filters.status ?? 'all'}
+        defaultValue="all"
         onValueChange={(value) =>
           onFiltersChange({
             status: value === 'all' ? null : (value as VerificationDecision),
@@ -170,6 +173,7 @@ export function VerificationFilters({
           History view still to be implemented. */}
       <Select
         value={filters.view}
+        defaultValue="queue"
         onValueChange={(value) =>
           onFiltersChange({ view: value as VerificationView })
         }

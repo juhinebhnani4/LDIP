@@ -337,6 +337,21 @@ export const selectFailedJobCount = (state: ProcessingStore) => {
   return count;
 };
 
+/** Select active document count (unique document_ids from DOCUMENT_PROCESSING jobs) — UX-013 fix */
+export const selectActiveDocumentCount = (state: ProcessingStore) => {
+  const documentIds = new Set<string>();
+  for (const job of state.jobs.values()) {
+    if (
+      (job.status === 'QUEUED' || job.status === 'PROCESSING') &&
+      job.job_type === 'DOCUMENT_PROCESSING' &&
+      job.document_id
+    ) {
+      documentIds.add(job.document_id);
+    }
+  }
+  return documentIds.size;
+};
+
 /** Select whether any jobs are processing */
 export const selectIsProcessing = (state: ProcessingStore) => {
   for (const job of state.jobs.values()) {

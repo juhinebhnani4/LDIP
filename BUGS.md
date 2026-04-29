@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-29 (Tier 1 #4 DONE — Q&A processing guard: backend guard + frontend SSE fix + 2 bugs found during testing)
-**Total bugs**: 70 | **Fixed**: 35 | **Open**: 31 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Resolved**: 1
+**Last updated**: 2026-04-29 (UX polish cluster: UX-007, UX-011, UX-013, UX-014 fixed — deployment pending)
+**Total bugs**: 72 | **Fixed**: 44 | **Open**: 22 | **Partially Fixed**: 2 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
 
 ### Legend
@@ -557,7 +557,7 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (resolved by WPS-001 Layer 3 — Gemini paid tier upgrade) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #10) |
 
@@ -565,7 +565,7 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **Root Cause**: Single Gemini rate limit bucket (`max_concurrent=1`, `min_delay=6.0s`, `max_rpm=10`) shared by all operations. This is intentional for Gemini free tier (10 RPM). Config is at `backend/app/core/llm_rate_limiter.py:60-71` and is configurable via env vars (`GEMINI_MAX_CONCURRENT_REQUESTS`, `GEMINI_MIN_REQUEST_DELAY`, `GEMINI_REQUESTS_PER_MINUTE` in `config.py:134-136`).
 
-**Fix**: Upgrade to paid Gemini tier (1000+ RPM) to remove bottleneck, or split operations across different LLM providers. The infrastructure (distributed rate limiter with Redis coordination for multi-worker) is already in place. **Note**: This is also WPS-001 Layer 3 — the Gemini rate limit is the actual throughput ceiling for the entire system, not just citations+aliases. Dual workers (WPS-001 Phase 2) buy greenlet isolation but not upstream isolation.
+**Fix Applied**: WPS-001 Layer 3 (commit `3581bdd`) upgraded to Gemini Paid Tier 1 (1000 RPM). Rate limiter config updated from 10 RPM → 1000 RPM, min_delay 6.0s → 0.06s, max_concurrent 1 → 10. The 10 RPM bottleneck that caused this bug no longer exists.
 
 **Files**: `backend/app/core/llm_rate_limiter.py:60-71`, `backend/app/core/config.py:134-136`
 
@@ -859,7 +859,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | FIXED (2026-03-19, awaiting runtime verification) |
+| **Status** | FIXED (2026-03-19) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #12) |
 
@@ -1013,17 +1013,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-009) |
 
 **Description**: Shows "Processing 1 document - 70% complete" AND "0 completed, 0 queued" simultaneously — contradictory.
 
-**Root Cause**: Stats and active job counts are fetched in parallel via `Promise.all` but may be out of sync.
+**Root Cause**: Two separate data sources fed the same banner: `stats` object (fetched once on mount via `jobsApi.getStats()`, never re-fetched) and `jobs` Map (updated in real-time via Supabase broadcast events). Progress events updated the jobs Map but not stats. Stats drifted permanently from reality after the first Realtime event.
 
-**Fix Needed**: Fetch stats and jobs atomically, or derive "in progress" count from active jobs.
+**Fix Applied**: `ProcessingStatusBanner` now derives completed/queued counts directly from the `jobs` Map (single source of truth, updated by Realtime). Removed dependency on the separate `stats` object. Both the progress line and the counts line now use the same data source, eliminating the drift.
 
-**Files**: `frontend/src/components/features/processing/ProcessingStatusBanner.tsx`, `frontend/src/hooks/useProcessingStatus.ts`
+**Files**: `frontend/src/components/features/processing/ProcessingStatusBanner.tsx`
 
 ---
 
@@ -1091,15 +1091,18 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-015) |
 
 **Description**: Dropdowns appear empty for ~2-3s before values populate due to SSR/hydration mismatch.
 
-**Fix Needed**: Set `defaultValue` on `<Select>` components matching store defaults.
+**Fix Applied**: Added `defaultValue` to all 9 `<Select>` components across 3 files, matching store/prop defaults. Removed `suppressHydrationWarning` band-aids from `MatterFilters.tsx`.
 
-**Files**: `frontend/src/components/features/dashboard/MatterFilters.tsx:57,77`, `frontend/src/stores/matterStore.ts:170-171`
+**Files changed**:
+- `frontend/src/components/features/dashboard/MatterFilters.tsx` — sort (`defaultValue="recent"`), filter (`defaultValue="all"`)
+- `frontend/src/components/features/contradiction/ContradictionsFilters.tsx` — severity, type, entity (all `defaultValue="all"`)
+- `frontend/src/components/features/verification/VerificationFilters.tsx` — finding type, confidence, status (all `defaultValue="all"`), view mode (`defaultValue="queue"`)
 
 ---
 
@@ -1119,39 +1122,43 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 
 ---
 
-### UX-014: Q&A Guard Shows Reactive Error Instead of Proactive Banner
-| Field | Value |
-|-------|-------|
-| **Severity** | P3 (Low — UX polish) |
-| **Status** | OPEN |
-| **Date Found** | 2026-04-29 |
-| **Source** | Production testing during Tier 1 #4 |
-
-**Description**: The Q&A processing guard (UX-002 fix) blocks queries during processing, but uses the generic `ErrorAlert` component ("Something Went Wrong" in red) AFTER the user submits a question. Bad UX: user types a question, waits, then gets a scary red error. They wasted effort and feel the app is broken.
-
-**Better UX**: Show a **proactive informational banner** (amber/blue, not red) in the Q&A panel BEFORE the user types. Disable the input field with a tooltip. The banner should say: "Documents are being processed — Q&A will be available once processing completes. You can check progress above." This prevents the user from wasting effort and communicates processing status without alarm.
-
-**Fix Needed**: Check `processing_jobs` or `documents.status` on matter load (already available in `MatterWorkspaceWrapper` processing status). If any docs are processing, show an amber banner in the Q&A panel and disable the input. Remove the banner when processing completes (existing polling detects this).
-
-**Files**: `frontend/src/components/features/chat/QAPanel.tsx`, possibly `frontend/src/stores/chatStore.ts` or `MatterWorkspaceWrapper`
-
----
-
 ### UX-013: Processing Status Bar Counts Jobs as "Documents"
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
 | **Date Found** | 2026-04-29 |
 | **Source** | Production testing during Tier 1 #4 Q&A guard implementation |
 
 **Description**: When a document is processing, the status bar shows "Processing 2 documents" when only 1 document exists. The count comes from `processing_jobs` rows (1 DOCUMENT_PROCESSING + 1 SUMMARY_GENERATION), not from the `documents` table. Users see a higher document count than they uploaded.
 
-**Root Cause**: The frontend processing status component counts processing jobs and labels them as "documents." SUMMARY_GENERATION jobs are included in the count even though they're not documents.
+**Root Cause**: `selectActiveJobCount` in `processingStore.ts` counted ALL active jobs regardless of `job_type`. `ProcessingStatusBanner` used this count and labeled it "documents". When 1 document had multiple jobs (DOCUMENT_PROCESSING + SUMMARY_GENERATION), the count inflated.
 
-**Fix Needed**: Either count `documents` with non-terminal status instead of `processing_jobs`, or filter `processing_jobs` to only `job_type = 'DOCUMENT_PROCESSING'`, or change the label from "documents" to "tasks."
+**Fix Applied**: Added `selectActiveDocumentCount` selector that filters to `job_type === 'DOCUMENT_PROCESSING'` and counts unique `document_id` values via Set. Banner now uses `activeDocCount` for the "Processing N documents" label while keeping `activeJobCount` for visibility/spinner logic (banner should still show during any active job).
 
-**Files**: Frontend component that renders the processing status bar (needs investigation — likely in `MatterWorkspaceWrapper` or a processing status component).
+**Files**: `frontend/src/stores/processingStore.ts` (new selector), `frontend/src/components/features/processing/ProcessingStatusBanner.tsx` (uses new selector)
+
+---
+
+### UX-014: Q&A Guard Shows Reactive Error Instead of Proactive Banner
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low — UX polish) |
+| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
+| **Date Found** | 2026-04-29 |
+| **Source** | Production testing during Tier 1 #4 |
+
+**Description**: The Q&A processing guard (UX-002 fix) blocks queries during processing, but uses the generic `ErrorAlert` component ("Something Went Wrong" in red) AFTER the user submits a question. Bad UX: user types a question, waits, then gets a scary red error. They wasted effort and feel the app is broken.
+
+**Fix Applied**: QAPanel now subscribes to `selectActiveJobCount` from processing store (already initialized by parent `MatterWorkspaceWrapper`). When `activeJobCount > 0`:
+1. Amber informational banner shown proactively: "Documents are being processed — Q&A will be available once processing completes."
+2. Chat input disabled with placeholder: "Q&A available after processing completes..."
+3. Red `ErrorAlert` suppressed when banner is active (avoids duplicate messaging)
+4. Banner auto-dismisses when processing completes (Supabase Realtime updates flow through processing store → `selectActiveJobCount` recomputes → banner unmounts)
+
+Backend guard (`_check_processing_status()`) remains as safety net for stale frontend state.
+
+**Files changed**: `frontend/src/components/features/chat/QAPanel.tsx` (1 file — no new components, reused existing `Alert`/`AlertDescription`)
 
 ---
 
@@ -1497,18 +1504,23 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 
 ## Summary Statistics
 
-*Verified against live production data on 2026-03-19 (DB queries + API tests + Playwright)*
+*Last updated: 2026-04-29 (full status audit after Tier 1 completion)*
 
-| Category | Total | Fixed/Resolved | Open | Not Reproducible | Not a Bug |
-|----------|-------|----------------|------|-----------------|-----------|
-| Security | 1 | 1 | 0 | 0 | 0 |
-| Worker & Pipeline Scalability | 3 | 1 | 2 | 0 | 0 |
-| Document Processing Pipeline | 12 | 8 | 2 | 2 | 0 |
-| LLM & AI Services | 6 | 5 | 1 | 0 | 0 |
-| Frontend UX | 12 | 1 | 10 | 0 | 0 |
-| Infrastructure | 11 | 7 | 4 | 0 | 0 |
-| Other | 4 | 3 | 0 | 0 | 1 |
-| **Total** | **49** | **26** | **19** | **2** | **1** |
+| Category | Total | Fixed | Open | Partially Fixed | Not Reproducible | Not a Bug | Resolved | Mitigated |
+|----------|-------|-------|------|----------------|-----------------|-----------|----------|-----------|
+| Architectural Debt | 6 | 0 | 6 | 0 | 0 | 0 | 0 | 0 |
+| Security | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Worker & Pipeline Scalability | 3 | 2 | 0 | 1 | 0 | 0 | 0 | 0 |
+| Document Processing Pipeline | 16 | 11 | 3 | 0 | 2 | 0 | 0 | 0 |
+| LLM & AI Services | 6 | 5 | 1 | 0 | 0 | 0 | 0 | 0 |
+| Frontend UX | 14 | 11 | 2 | 1 | 0 | 0 | 0 | 0 |
+| Infrastructure | 11 | 7 | 3 | 0 | 0 | 0 | 0 | 1 |
+| Other | 4 | 3 | 0 | 0 | 0 | 1 | 0 | 0 |
+| E2E Verification | 8 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
+| API | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **72** | **44** | **22** | **2** | **2** | **1** | **0** | **1** |
+
+*Note: DPP-010 (RESOLVED) counted under DPP Fixed. UX-004 counted as Partially Fixed (core fixed, feature gap open). WPS-001 counted as Partially Fixed (layers 1-3 fixed, 4-5 open). INF-011 (MITIGATED) in its own column.*
 
 ### Corrections from Live Data Verification
 
@@ -1547,6 +1559,26 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 | LLM-005 | OPEN | FIXED | `persist_cost_sync()` added to batch path |
 | INF-007 | OPEN | FIXED | `mailto:support@jaanch.ai` replaces placeholder URL |
 | INF-008 | OPEN | FIXED | `<SheetDescription>` added for accessibility |
+
+**Round 4 corrections** (2026-04-29 — status audit after Tier 1 completion):
+| Bug | Before | After | What changed |
+|-----|--------|-------|-------------|
+| WPS-003 | OPEN | FIXED | Resolved by WPS-001 Layer 3 Gemini paid tier upgrade (1000 RPM) |
+| E2E-001 | OPEN | FIXED | Resolved by Tier 1 #3 summary pre-generation |
+| LLM-005 | FIXED (awaiting verification) | FIXED | Dropped stale qualifier — verified by months of production data |
+| E2E-004 | OPEN | OPEN (Phase 1 note) | Added note that Tier 1 #1 Phase 1 metadata is deployed |
+| E2E-005 | OPEN | OPEN (Phase 1 note) | Added note that screening metadata now persisted |
+| UX-013/014 | Out of order | Reordered | UX-014 appeared before UX-013 in file |
+| Summary table | 49 total, stale since 2026-03-19 | 72 total, accurate | Full recount including ARCH, E2E, API categories |
+| Header | 70 total | 72 total | Corrected miscount (UX-013, UX-014 not counted) |
+
+**Round 5 — UX polish cluster** (2026-04-29 — code complete, deployment & visual verification pending):
+| Bug | Before | After | What changed |
+|-----|--------|-------|-------------|
+| UX-007 | OPEN | FIXED (deploy pending) | Banner derives completed/queued from jobs Map (single source of truth) instead of stale `stats` object fetched once on mount |
+| UX-011 | OPEN | FIXED (deploy pending) | Added `defaultValue` to 9 Select components across 3 files; removed `suppressHydrationWarning` band-aids |
+| UX-013 | OPEN | FIXED (deploy pending) | New `selectActiveDocumentCount` selector counts unique document_ids from DOCUMENT_PROCESSING jobs; banner uses it for "N documents" label |
+| UX-014 | OPEN | FIXED (deploy pending) | QAPanel subscribes to processing store; proactive amber banner + disabled input replaces reactive red error |
 
 ### Process Failures & Lessons Learned
 See [full post-mortem](../../../.claude/projects/E--Career-coaching-100x-LDIP/memory/verification-failures.md)
@@ -1663,18 +1695,12 @@ group(validate_ocr, calculate_confidence, chunk_document)
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) — user-facing, affects perceived speed |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-04-29) — resolved by Tier 1 #3 (summary pre-generation) |
 | **Source** | E2E verification (2026-04-17) |
 
-**Observation**: After documents complete processing, navigating to the Summary tab shows "Generating Summary... Waiting in queue... 0% complete" with a spinner. Users expect immediate gratification after waiting 15-25 min for document processing. The summary is generated on-demand via LLM call, adding more wait time on top of an already long pipeline.
+**Observation**: After documents complete processing, navigating to the Summary tab showed "Generating Summary... Waiting in queue... 0% complete" with a spinner. Users expected immediate gratification after waiting 15-25 min for document processing.
 
-**Impact**: User perceives the system as slow even though document processing completed. The summary tab is often the first thing users click after completion.
-
-**Possible fixes**:
-1. **Pre-generate summary** as part of the pipeline (add after `detect_contradictions`) — summary is ready when user arrives
-2. **Stream the summary** so users see partial results immediately instead of a spinner
-3. **Cache summary** after first generation so subsequent views are instant
-4. **Show a preview** with already-extracted data (entities, dates, contradictions count) while full summary generates
+**Fix Applied (2026-04-29)**: Tier 1 #3 implemented fire-and-forget summary pre-generation from `detect_contradictions`. Summary is now generated as part of the pipeline and persisted to `matter_summaries` table + Redis cache. When user navigates to Summary tab, summary is already there — zero spinner, instant load. See Tier 1 #3 entry for full details.
 
 ---
 
@@ -1712,7 +1738,7 @@ group(validate_ocr, calculate_confidence, chunk_document)
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) — performance, not correctness |
-| **Status** | OPEN |
+| **Status** | OPEN (Tier 1 #1 Phase 1 metadata deployed 2026-04-27; core perf issue remains) |
 | **Source** | E2E verification (2026-04-17) |
 
 **Observation**: Contradiction detection consumed 40-70% of total processing time:
@@ -1735,7 +1761,7 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — cost optimization |
-| **Status** | OPEN |
+| **Status** | OPEN (screening metadata now persisted via Tier 1 #1 Phase 1; threshold tuning blocked — see Phase 2) |
 | **Source** | E2E verification (2026-04-17) |
 
 **Observation**: Almost every entity comparison with `screening_confidence=0.8-0.9` from Gemini Flash escalates to GPT-4o for confirmation. Most escalations result in "consistent" or "unrelated" — the GPT-4o call was wasted. Total contradiction detection costs: $0.33 + $0.87 + $1.48 + $1.26 = **$3.94 for 4 documents**.

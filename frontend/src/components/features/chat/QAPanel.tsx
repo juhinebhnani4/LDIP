@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { QAPanelHeader } from './QAPanelHeader';
 import { ConversationHistory } from './ConversationHistory';
@@ -12,8 +12,10 @@ import { SuggestedQuestions } from './SuggestedQuestions';
 import { ModelSelector } from './ModelSelector';
 import { SearchFilterPanel } from './SearchFilterPanel';
 import { ErrorAlert } from '@/components/ui/error-alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useChatStore, selectIsEmpty } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
+import { useProcessingStore, selectActiveJobCount } from '@/stores/processingStore';
 import { useSSE, type CompleteData, type EngineTraceData, type TokenData, type SSEParseErrorContext } from '@/hooks/useSSE';
 import { useUser } from '@/hooks/useAuth';
 import { canRetryError } from '@/lib/api/client';
@@ -63,6 +65,10 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
 
   // Story 11.4: Empty state detection for suggested questions
   const isEmpty = useChatStore(selectIsEmpty);
+
+  // UX-014: Proactive processing banner — disable Q&A while docs processing
+  const activeJobCount = useProcessingStore(selectActiveJobCount);
+  const isDocumentsProcessing = activeJobCount > 0;
 
   // BUG FIX: Load chat history on mount/navigation (not just when ConversationHistory renders)
   // Previously, history only loaded when isEmpty was false (ConversationHistory rendered),
@@ -333,9 +339,8 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
           </ConversationHistory>
         )}
 
-        {/* Story 13.4: Inline error alert for streaming errors */}
-        {/* Also show for DOCUMENTS_PROCESSING errors (retryable — docs may finish soon) */}
-        {streamError && (canRetryError(streamError) || (streamError as Error & { code?: string }).code === 'DOCUMENTS_PROCESSING') && (
+        {/* Story 13.4: Inline error alert for streaming errors (non-processing errors only) */}
+        {streamError && !isDocumentsProcessing && (canRetryError(streamError) || (streamError as Error & { code?: string }).code === 'DOCUMENTS_PROCESSING') && (
           <div className="shrink-0 px-4 py-2">
             <ErrorAlert
               error={streamError}
@@ -343,6 +348,18 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
               onDismiss={handleDismissError}
               isRetrying={isRetrying}
             />
+          </div>
+        )}
+
+        {/* UX-014: Proactive amber banner when documents are processing */}
+        {isDocumentsProcessing && (
+          <div className="shrink-0 px-4 py-2">
+            <Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 [&>svg]:text-amber-600">
+              <Clock className="h-4 w-4" />
+              <AlertDescription>
+                Documents are being processed — Q&A will be available once processing completes.
+              </AlertDescription>
+            </Alert>
           </div>
         )}
 
@@ -358,8 +375,9 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
         {/* Chat input (always visible at bottom) */}
         <ChatInput
           onSubmit={handleSubmit}
-          disabled={isStreaming}
+          disabled={isStreaming || isDocumentsProcessing}
           isLoading={isStreaming}
+          placeholder={isDocumentsProcessing ? 'Q&A available after processing completes...' : undefined}
           className="shrink-0"
         />
       </>

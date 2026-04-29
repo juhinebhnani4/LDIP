@@ -98,10 +98,27 @@ All items are leaf-node changes — they don't touch the orchestration layer, wo
 - **Skip 1-mention entities**: Already existed at two layers — `_generate_statement_pairs()` line 875 (`if len(all_statements) < 2: return []`) and service layer line 231 (`if entity_statements.total_statements < 2`). No code needed.
 - **Persist screening metadata to `llm_costs.metadata`**: SHIPPED. Added `metadata` kwarg to `persist_cost()` and `persist_cost_sync()` in `cost_tracking.py`, pass `{"screening_result": result, "screening_confidence": confidence, "quick_reason": reason}` in `_call_gemini_screening()` in `comparator.py`. Verified in production — metadata now flowing. `was_escalated` intentionally NOT persisted: (a) it's derivable (any `operation="contradiction_comparison"` row IS an escalation), (b) the `was_escalated` flag has a bug on the screening failure path where it stays `False` even when GPT-4 is called as fallback.
 - **Files changed**: `backend/app/core/cost_tracking.py` (2 functions), `backend/app/engines/contradiction/comparator.py` (1 call site). ~10 lines total.
-- **First production data (2026-04-27)**: Screening confidence values observed: 0.8, 0.9, 0.95, 1.0. `needs_review` results cluster at 0.8-0.9. `consistent` results at 0.95-1.0. Phase 2 threshold tuning is now unblocked.
+- **First production data (2026-04-27)**: Screening confidence values observed: 0.8, 0.9, 0.95, 1.0. `needs_review` results cluster at 0.8-0.9. `consistent` results at 0.95-1.0.
+- **Full data analysis (2026-04-28, 195 rows from 1 document)**:
 
-**Phase 2: Tune threshold (after Phase 1 data, ~1 day)**
-- **Lower `confidence_threshold`** from 0.5 → TBD (likely 0.35) based on Phase 1 metadata. The `confidence_threshold` (`comparator.py:452-454`, `config.py`) controls when Gemini's "consistent/unrelated" verdict is trusted vs escalated to GPT-4o. At 0.5, we escalate 32% of pairs and 91% of those are wasted. If most wasted escalations are Gemini saying "consistent" at 0.45-0.49, lowering to 0.35 could cut GPT-4o calls by 30-50%. **This is potentially the single biggest lever — a config change that saves ~$5-6 of the $19.21 total.**
+  | Confidence | Count | % | Notes |
+  |---|---|---|---|
+  | 0.0 | 10 | 5% | Gemini explicitly returns confidence=0.0 (not a parsing bug — validated 2026-04-28). Low-confidence `consistent`/`unrelated` correctly escalated. |
+  | 0.8 | 32 | 16% | All `needs_review` |
+  | 0.9 | 90 | 46% | Mixed: 72 `needs_review`, 10 `unrelated`, 8 `consistent` |
+  | 0.95 | 9 | 5% | Mixed |
+  | 1.0 | 54 | 28% | Mostly `consistent` (35) + `unrelated` (13) |
+
+  **Escalation breakdown**: 124/195 (63.6%) escalated to GPT-4o. Of 125 GPT-4o calls, only 9 found contradictions (7.2% hit rate, 92.8% wasted). Current `confidence_threshold` is **0.65** (code, `config.py:82`), not 0.5 as previously documented.
+
+  **Critical finding**: Gemini returns **discrete** confidence values `{0.0, 0.8, 0.9, 0.95, 1.0}` — nothing in the 0.3-0.7 range. The Phase 2 hypothesis ("lower threshold from 0.5→0.35 to catch pairs at 0.45-0.49") was **wrong** — that band is empty.
+
+**Phase 2: ~~Tune threshold~~ → HYPOTHESIS INVALIDATED (2026-04-28)**
+- **Original plan**: Lower `confidence_threshold` to reduce escalations. **Dead end** — Gemini's discrete confidence values mean threshold changes between 0.0 and 0.8 catch nothing. Lowering to 0.35 would only save 3 GPT-4o calls (the `consistent`/`unrelated` at 0.0).
+- **Actual cost driver**: The screening prompt (`prompts.py:378-397`) pushes aggressively toward `needs_review` with 5 CRITICAL RULES + "default should be needs_review" + "100x worse to miss." This causes 59% `needs_review` rate (vs 32% historical). ALL `needs_review` → GPT-4o regardless of confidence. **The lever is prompt tuning, not threshold tuning.**
+- **Risk**: Loosening the prompt is the highest-quality-risk change in the system. Making Gemini less aggressive means real contradictions could slip through. The product promise is "we found what you missed" — false negatives kill conversion.
+- **Status**: BLOCKED — needs (a) more data (only 1 document so far), (b) shadow testing infrastructure to compare prompt variants without affecting production quality. Reprioritized below Phase 4 research.
+- **No parsing bug**: confidence=0.0 rows (10/195) are Gemini explicitly returning 0.0 confidence, not a missing field. Validation passes correctly. Low-confidence `consistent`/`unrelated` at 0.0 are correctly escalated to GPT-4o (3 rows). No fix needed.
 
 **Phase 3: Safe parallelism (after beat isolation, ~1 day)**
 - **Reduce `min_delay_seconds`** from 0.2 → 0.05 in `llm_rate_limiter.py:63`. Mild speedup, no concurrency increase, safe at any scale.
@@ -111,7 +128,7 @@ All items are leaf-node changes — they don't touch the orchestration layer, wo
 - **GPT-4o replacement research**: The actual cost bottleneck is GPT-4o at $0.0066/call for full analysis. At scale (400 docs/month), this is $2,500-5,000/month — more than revenue from 50 paying users at ₹999. Research Claude Haiku ($0.00025/1K input), Gemini Pro, or fine-tuned smaller model as a replacement for the full analysis tier. This is the 10x lever; everything else is 2x at best.
 - **Shadow test Flash Lite**: Run both Flash and Flash Lite on the same pairs, compare results without using Flash Lite results. Collect quality data before switching.
 
-**Expected result (Phase 1+2+3)**: Pipeline time ~20 min → ~12-15 min. Per-doc cost reduction of 30-50% from threshold tuning alone. No quality risk.
+**Expected result (Phase 1+3)**: Pipeline time ~20 min → ~15-18 min from parallelism only. Phase 2 (prompt tuning) could yield 30-50% cost reduction but requires shadow testing infrastructure and carries quality risk. Phase 4 (GPT-4o replacement) remains the 10x lever.
 
 ##### Scaling analysis (2026-04-21)
 
@@ -149,19 +166,39 @@ All five bugs shared the same shape: component renders with initial state that l
 
 ---
 
-#### 3. Summary pre-generation
+#### 3. Summary pre-generation — DONE (2026-04-29)
 
-**Bug IDs**: E2E-001, UX-001 | **Effort**: 3-5 days | **Files**: `document_tasks.py` (dispatch), `summary_tasks.py`, `pipeline_chains.py`
+**Bug IDs**: E2E-001, UX-001 | **Actual effort**: ~4 hours | **Files**: 4 changed (3 backend, 1 migration)
 
-**Current state**: Summary is generated on-demand when user clicks the Summary tab. Makes 3 parallel GPT-4o calls. Takes 3-5 min. Cached in Redis with 1-hour TTL (NOT persisted to DB). Every cache eviction = full re-generation.
+**What was built** (deployed 2026-04-28, bugfix 2026-04-29):
 
-**The problem**: User waits 15-25 min for pipeline. Pipeline completes. User clicks Summary. Waits 3-5 MORE minutes. This is where we lose them.
+1. **Fire-and-forget pipeline dispatch**: `_dispatch_summary_pregeneration(matter_id)` called from all 5 exit paths in `detect_contradictions` (success, timeout, ComparisonServiceError, DocumentServiceError, generic Exception) — right before `_mark_job_completed`. Pipeline completion is unchanged; summary failure is silent with on-demand fallback.
 
-**What changes**: Add `generate_summary` as a pipeline stage after `detect_contradictions` (the terminal task). Summary is generated as part of processing, cached, and waiting when user arrives. Persist to DB (not just Redis) so it survives cache eviction.
+2. **DB persistence layer**: New `matter_summaries` table (matter_id UNIQUE, content JSONB, generated_at). Summary service now has a 3-tier lookup chain: **Redis → DB → regenerate**. On generation, summary is cached to both Redis (1-hour TTL) and DB (permanent). On cache miss, DB is checked before triggering GPT-4o regeneration.
 
-**Architecture concern**: This adds a new stage to the pipeline chain. `detect_contradictions` currently calls `_mark_job_completed` as the terminal task. Adding summary after it means either: (a) summary becomes the new terminal task and calls `_mark_job_completed`, or (b) `detect_contradictions` still calls `_mark_job_completed` and summary runs in parallel as a fire-and-forget task. Option (b) is safer — summary failure shouldn't block pipeline completion.
+3. **`generate_summary` task updated**: `job_id` is now optional. Pipeline dispatch sends no job_id; task creates its own job record internally for progress tracking. Existing on-demand flow (from Summary API) unchanged.
 
-**What "done" looks like**: Upload a document, wait for processing to complete, click Summary tab — summary is already there. No spinner, no wait.
+4. **Cache invalidation updated**: `invalidate_cache()` now clears both Redis and DB, so stale summaries aren't served after document re-upload.
+
+**Bugfix (2026-04-29)**: Initial deployment used `self._get_supabase_client()` instead of `self.supabase` (the actual property name) in `summary_service.py`. DB persistence silently failed on 3 matters. Fixed and redeployed — confirmed working.
+
+**Architecture decision**: Option (b) — fire-and-forget. `detect_contradictions` remains terminal task. Summary dispatch is a progressive enhancement (ARCH-003 safe: failure doesn't break pipeline, on-demand path remains as fallback). Acknowledged Forbidden #3 pattern (5 dispatch sites mirror 5 `_mark_job_completed` sites) — acceptable because failure is silent, not pipeline-critical.
+
+**Production-verified (2026-04-29)** — end-to-end test with fresh document upload:
+
+| Step | Timestamp | Result |
+|------|-----------|--------|
+| Document uploaded (Affidavit, 456 KB) | 03:13:15 | Pipeline started |
+| Pipeline completed (OCR → entities → citations → contradictions) | 03:18:01 | 2 contradictions found |
+| `summary_pregeneration_dispatched` fired | 03:18:01 | Fire-and-forget from `detect_contradictions` |
+| `_mark_job_completed` — document COMPLETED | 03:18:01 | Pipeline done, user notified |
+| `generate_summary` task ran (3 GPT-4o calls) | 03:18:02–03:18:20 | 18.8s background generation |
+| `summary_persisted_to_db` | 03:18:20 | 5,885B in `matter_summaries` |
+| User redirected to Summary tab | ~03:18:21 | **Instant load, zero spinner** |
+
+DB persistence also verified: 3 matters persisted (5.8–5.9 KB each), `201 Created` confirmed in worker logs. On-demand fallback still works for pre-existing matters without pre-generated summaries.
+
+**What "done" looks like**: Upload a document, wait for processing to complete, click Summary tab — summary is already there. No spinner, no wait. If Redis evicts (1-hour TTL), DB fallback serves instantly.
 
 ---
 

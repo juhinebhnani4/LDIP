@@ -905,6 +905,29 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
         )
 
 
+def _dispatch_summary_pregeneration(matter_id: str | None) -> None:
+    """Fire-and-forget: dispatch summary pre-generation after pipeline completes.
+
+    Tier 1 #3: Summary is pre-generated so it's ready when the user visits
+    the Summary tab. Failure here is silent — the on-demand path remains
+    as fallback.
+    """
+    if not matter_id:
+        return
+    try:
+        from app.workers.tasks.summary_tasks import generate_summary
+
+        generate_summary.delay(matter_id)
+        logger.info("summary_pregeneration_dispatched", matter_id=matter_id)
+    except Exception as e:
+        # Non-fatal: summary will regenerate on-demand when user visits tab
+        logger.warning(
+            "summary_pregeneration_dispatch_failed",
+            matter_id=matter_id,
+            error=str(e),
+        )
+
+
 def _mark_job_completed(
     job_id: str | None,
     matter_id: str | None = None,
@@ -6318,6 +6341,7 @@ def detect_contradictions(
 
         # Mark the entire job as COMPLETED — contradiction_detection is the final stage
         _populate_verification_records(matter_id, doc_id)
+        _dispatch_summary_pregeneration(matter_id)
         _mark_job_completed(job_id, matter_id, document_id=doc_id)
 
         logger.info(
@@ -6360,6 +6384,7 @@ def detect_contradictions(
         # If contradictions were found before timeout, they're already stored.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
+            _dispatch_summary_pregeneration(matter_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_partial" if total_contradictions > 0 else "contradiction_detection_failed",
@@ -6395,6 +6420,7 @@ def detect_contradictions(
             # frontend doesn't show a false "failed processing" banner.
             if matter_id and doc_id:
                 _populate_verification_records(matter_id, doc_id)
+                _dispatch_summary_pregeneration(matter_id)
                 _mark_job_completed(job_id, matter_id, document_id=doc_id)
             return {
                 "status": "contradiction_detection_failed",
@@ -6416,6 +6442,7 @@ def detect_contradictions(
         # earlier-stage results stay visible.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
+            _dispatch_summary_pregeneration(matter_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",
@@ -6438,6 +6465,7 @@ def detect_contradictions(
         # timeline) already succeeded and their results should stay visible.
         if matter_id and doc_id:
             _populate_verification_records(matter_id, doc_id)
+            _dispatch_summary_pregeneration(matter_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
             "status": "contradiction_detection_failed",

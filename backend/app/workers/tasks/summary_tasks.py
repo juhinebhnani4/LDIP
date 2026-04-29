@@ -54,48 +54,74 @@ def _release_dedup_lock(matter_id: str) -> None:
     soft_time_limit=300,  # 5 min soft limit
     time_limit=360,  # 6 min hard kill
 )
-def generate_summary(self, matter_id: str, job_id: str) -> dict:
+def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
     """Generate matter summary in background.
 
     Args:
         self: Celery task instance (bind=True).
         matter_id: Matter UUID to generate summary for.
-        job_id: Processing job UUID for status tracking.
+        job_id: Processing job UUID for status tracking. When None
+            (pipeline pre-generation), a job record is created internally.
 
     Returns:
         Dict with generation result status.
     """
+    tracker = get_job_tracking_service()
+
+    # Pipeline pre-generation dispatches without a pre-created job record.
+    # Create one here so progress tracking and dedup still work.
+    if not job_id:
+        try:
+            from app.models.job import JobType
+
+            job = run_async(
+                tracker.create_job(
+                    matter_id=matter_id,
+                    job_type=JobType.SUMMARY_GENERATION,
+                    max_retries=2,
+                ),
+                timeout=15,
+            )
+            job_id = job.id
+        except Exception as e:
+            # If job creation fails, still generate — just no progress tracking
+            logger.warning(
+                "summary_pregen_job_creation_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+
     log = logger.bind(matter_id=matter_id, job_id=job_id, task_id=self.request.id)
     log.info("summary_generation_started")
 
-    tracker = get_job_tracking_service()
     summary_service = get_summary_service()
     current_status = JobStatus.QUEUED.value
 
     try:
         # 1. Update job status → PROCESSING
-        run_async(
-            tracker.update_job_status(
+        if job_id:
+            run_async(
+                tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.PROCESSING,
+                    stage="db_queries",
+                    progress_pct=10,
+                    matter_id=matter_id,
+                ),
+                timeout=30,
+            )
+            broadcast_job_progress(
+                matter_id=matter_id,
                 job_id=job_id,
-                status=JobStatus.PROCESSING,
                 stage="db_queries",
                 progress_pct=10,
+            )
+            broadcast_job_status_change(
                 matter_id=matter_id,
-            ),
-            timeout=30,
-        )
-        broadcast_job_progress(
-            matter_id=matter_id,
-            job_id=job_id,
-            stage="db_queries",
-            progress_pct=10,
-        )
-        broadcast_job_status_change(
-            matter_id=matter_id,
-            job_id=job_id,
-            old_status=current_status,
-            new_status=JobStatus.PROCESSING.value,
-        )
+                job_id=job_id,
+                old_status=current_status,
+                new_status=JobStatus.PROCESSING.value,
+            )
         current_status = JobStatus.PROCESSING.value
 
         # 2. Run the full summary pipeline (DB queries + GPT-4 calls)
@@ -105,12 +131,13 @@ def generate_summary(self, matter_id: str, job_id: str) -> dict:
         )
 
         # 3. Broadcast near-completion progress
-        broadcast_job_progress(
-            matter_id=matter_id,
-            job_id=job_id,
-            stage="validation_and_cache",
-            progress_pct=90,
-        )
+        if job_id:
+            broadcast_job_progress(
+                matter_id=matter_id,
+                job_id=job_id,
+                stage="validation_and_cache",
+                progress_pct=90,
+            )
 
         # 4. Validate the generated summary
         #    If invalid, invalidate cache to prevent stale bad data from being served,
@@ -120,28 +147,29 @@ def generate_summary(self, matter_id: str, job_id: str) -> dict:
             raise ValueError("Generated summary failed validation checks")
 
         # 5. Mark job as COMPLETED and release the dedup lock
-        run_async(
-            tracker.update_job_status(
+        if job_id:
+            run_async(
+                tracker.update_job_status(
+                    job_id=job_id,
+                    status=JobStatus.COMPLETED,
+                    stage="completed",
+                    progress_pct=100,
+                    matter_id=matter_id,
+                ),
+                timeout=30,
+            )
+            broadcast_job_progress(
+                matter_id=matter_id,
                 job_id=job_id,
-                status=JobStatus.COMPLETED,
                 stage="completed",
                 progress_pct=100,
+            )
+            broadcast_job_status_change(
                 matter_id=matter_id,
-            ),
-            timeout=30,
-        )
-        broadcast_job_progress(
-            matter_id=matter_id,
-            job_id=job_id,
-            stage="completed",
-            progress_pct=100,
-        )
-        broadcast_job_status_change(
-            matter_id=matter_id,
-            job_id=job_id,
-            old_status=current_status,
-            new_status=JobStatus.COMPLETED.value,
-        )
+                job_id=job_id,
+                old_status=current_status,
+                new_status=JobStatus.COMPLETED.value,
+            )
 
         _release_dedup_lock(matter_id)
         log.info("summary_generation_completed")
@@ -149,10 +177,12 @@ def generate_summary(self, matter_id: str, job_id: str) -> dict:
 
     except SoftTimeLimitExceeded:
         log.error("summary_generation_soft_timeout")
-        _mark_job_failed(
-            tracker, matter_id, job_id, current_status,
-            "Summary generation timed out (5 min limit)",
-        )
+        if job_id:
+            _mark_job_failed(
+                tracker, matter_id, job_id, current_status,
+                "Summary generation timed out (5 min limit)",
+            )
+        _release_dedup_lock(matter_id)
         return {"status": "failed", "matter_id": matter_id, "error": "timeout"}
 
     except Exception as e:
@@ -162,22 +192,25 @@ def generate_summary(self, matter_id: str, job_id: str) -> dict:
         # Retry on transient errors only
         is_transient = isinstance(e, (ConnectionError, TimeoutError, OSError))
         if is_transient and self.request.retries < self.max_retries:
-            run_async(
-                tracker.update_job_status(
-                    job_id=job_id,
-                    status=JobStatus.PROCESSING,
-                    stage="retrying",
-                    error_message=f"Retrying ({self.request.retries + 1}/{self.max_retries}) due to {error_type}",
-                    matter_id=matter_id,
-                ),
-                timeout=30,
-            )
+            if job_id:
+                run_async(
+                    tracker.update_job_status(
+                        job_id=job_id,
+                        status=JobStatus.PROCESSING,
+                        stage="retrying",
+                        error_message=f"Retrying ({self.request.retries + 1}/{self.max_retries}) due to {error_type}",
+                        matter_id=matter_id,
+                    ),
+                    timeout=30,
+                )
             raise self.retry(countdown=30 * (self.request.retries + 1), exc=e)
 
         # Non-retriable or retries exhausted → mark failed
         # Sanitize error message to avoid leaking internal details
         safe_message = f"{error_type}: {str(e)[:200]}" if is_transient else str(e)[:500]
-        _mark_job_failed(tracker, matter_id, job_id, current_status, safe_message)
+        if job_id:
+            _mark_job_failed(tracker, matter_id, job_id, current_status, safe_message)
+        _release_dedup_lock(matter_id)
         return {"status": "failed", "matter_id": matter_id, "error": safe_message}
 
 

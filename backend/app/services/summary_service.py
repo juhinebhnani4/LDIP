@@ -2071,9 +2071,12 @@ class SummaryService:
     # =========================================================================
 
     async def get_cached_summary(self, matter_id: str) -> MatterSummary | None:
-        """Get summary from Redis cache.
+        """Get summary from Redis cache, falling back to DB.
 
         Story 14.1: AC #4 - Summary cached with 1-hour TTL.
+        Tier 1 #3: Falls back to matter_summaries table when Redis evicts.
+
+        Lookup chain: Redis → DB → None (triggers regeneration).
 
         Args:
             matter_id: Matter UUID.
@@ -2091,15 +2094,31 @@ class SummaryService:
                 data = json.loads(cached)
                 return MatterSummary.model_validate(data)
 
-            return None
-
         except Exception as e:
             logger.warning(
                 "summary_cache_get_failed",
                 error=str(e),
                 matter_id=matter_id,
             )
-            return None
+
+        # Redis miss — try DB fallback
+        db_summary = await self.get_db_summary(matter_id)
+        if db_summary:
+            logger.info(
+                "summary_db_fallback_hit",
+                matter_id=matter_id,
+            )
+            # Re-populate Redis cache so next hit is fast
+            try:
+                redis = await get_redis_client()
+                key = summary_cache_key(matter_id)
+                data = db_summary.model_dump_json(by_alias=True)
+                await redis.setex(key, SUMMARY_CACHE_TTL, data)
+            except Exception:
+                pass  # DB hit is sufficient
+            return db_summary
+
+        return None
 
     async def _cache_summary(
         self,
@@ -2134,6 +2153,85 @@ class SummaryService:
                 matter_id=matter_id,
             )
 
+        # Also persist to DB for durability (survives Redis eviction)
+        await self._persist_to_db(matter_id, summary)
+
+    # =========================================================================
+    # DB Persistence (Tier 1 #3: Summary Pre-Generation)
+    # =========================================================================
+
+    async def _persist_to_db(
+        self,
+        matter_id: str,
+        summary: MatterSummary,
+    ) -> None:
+        """Upsert summary content to matter_summaries table.
+
+        Durable fallback for Redis cache eviction. Called after Redis cache
+        is set, so both layers stay in sync.
+        """
+        try:
+            supabase = self.supabase
+            data = summary.model_dump_json(by_alias=True)
+
+            def _upsert():
+                supabase.table("matter_summaries").upsert(
+                    {
+                        "matter_id": matter_id,
+                        "content": json.loads(data),
+                        "generated_at": summary.generated_at,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                    on_conflict="matter_id",
+                ).execute()
+
+            await asyncio.to_thread(_upsert)
+
+            logger.debug(
+                "summary_persisted_to_db",
+                matter_id=matter_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "summary_db_persist_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+
+    async def get_db_summary(self, matter_id: str) -> MatterSummary | None:
+        """Get summary from DB (fallback when Redis cache is evicted).
+
+        Returns:
+            MatterSummary or None if not found.
+        """
+        try:
+            supabase = self.supabase
+
+            def _query():
+                return (
+                    supabase.table("matter_summaries")
+                    .select("content")
+                    .eq("matter_id", matter_id)
+                    .limit(1)
+                    .execute()
+                )
+
+            result = await asyncio.to_thread(_query)
+
+            if result.data:
+                content = result.data[0]["content"]
+                return MatterSummary.model_validate(content)
+
+            return None
+
+        except Exception as e:
+            logger.warning(
+                "summary_db_get_failed",
+                error=str(e),
+                matter_id=matter_id,
+            )
+            return None
+
     async def invalidate_cache(self, matter_id: str) -> bool:
         """Invalidate cached summary for a matter.
 
@@ -2155,6 +2253,23 @@ class SummaryService:
                 matter_id=matter_id,
                 deleted=result > 0,
             )
+
+            # Also delete from DB so stale summary isn't served as fallback
+            try:
+                supabase = self.supabase
+
+                def _delete_db():
+                    supabase.table("matter_summaries").delete().eq(
+                        "matter_id", matter_id
+                    ).execute()
+
+                await asyncio.to_thread(_delete_db)
+            except Exception as db_err:
+                logger.warning(
+                    "summary_db_invalidate_failed",
+                    error=str(db_err),
+                    matter_id=matter_id,
+                )
 
             return result > 0
 

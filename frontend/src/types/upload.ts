@@ -5,6 +5,8 @@
  * Stages: File Selection → Review & Name → Act Discovery → Uploading → Processing
  */
 
+import type { DocumentType } from '@/types/document';
+
 /** Upload wizard stages */
 export type UploadWizardStage =
   | 'FILE_SELECTION'
@@ -193,6 +195,8 @@ export interface UploadWizardState {
   files: File[];
   /** Auto-generated or user-edited matter name */
   matterName: string;
+  /** Document type for all files in this upload (case_file, act, annexure, other) */
+  documentType: DocumentType;
   /** Acts detected during citation scan (mock for MVP) */
   detectedActs: DetectedAct[];
   /** Whether an operation is in progress */
@@ -234,6 +238,8 @@ export interface UploadWizardActions {
   removeFile: (index: number) => void;
   /** Update the matter name */
   setMatterName: (name: string) => void;
+  /** Set document type for this upload */
+  setDocumentType: (type: DocumentType) => void;
   /** Set detected Acts (from scan or mock) */
   setDetectedActs: (acts: DetectedAct[]) => void;
   /** Start the upload process (transitions to Stage 3/UPLOADING) */

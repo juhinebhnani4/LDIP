@@ -672,7 +672,11 @@ class StatementComparator:
             )
             screening_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
             screening_tracker.log_cost()
-            await persist_cost(screening_tracker)
+            await persist_cost(screening_tracker, metadata={
+                "screening_result": result,
+                "screening_confidence": confidence,
+                "quick_reason": quick_reason,
+            })
 
             return result, confidence, quick_reason, input_tokens, output_tokens
 

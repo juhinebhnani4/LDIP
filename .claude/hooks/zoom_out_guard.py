@@ -100,6 +100,13 @@ exactly that sentence and proceed. But say it. Don't skip.
 
 Skipping the zoom-out is the single biggest way past Claude sessions have
 hurt this project (see ARCH-001/002/003 in BUGS.md section 0). Don't.
+
+If you are about to spawn research agents (Agent tool) to investigate a
+problem or verify a change: use the two-phase Deep Research Protocol at
+`.claude/skills/blast-radius-research/SKILL.md`. Phase 1 (explore the
+system) must complete before Phase 2 (verify a specific change). Never
+skip Phase 1 — that's how generic advice that conflicts with existing
+architecture gets proposed (see Railway cost analysis, 2026-04-22).
 """
 
 ARCHITECTURE_GUARD_REMINDER = """\

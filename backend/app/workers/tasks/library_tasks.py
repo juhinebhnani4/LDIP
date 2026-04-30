@@ -131,9 +131,10 @@ def chunk_library_document(
         # Prepare chunks for insertion
         chunk_records = []
 
-        # Add parent chunks
+        # Add parent chunks (use ChunkData.id as DB id, matching main pipeline pattern)
         for chunk in result.parent_chunks:
             chunk_records.append({
+                "id": str(chunk.id),
                 "library_document_id": library_document_id,
                 "chunk_index": chunk.chunk_index,
                 "parent_chunk_id": None,
@@ -146,27 +147,17 @@ def chunk_library_document(
 
         # Create parent chunks first to get IDs
         if chunk_records:
-            parent_result = (
-                client.table("library_chunks")
-                .insert(chunk_records)
-                .execute()
-            )
-
-            # Build parent ID mapping
-            parent_id_map = {}
-            for record in parent_result.data or []:
-                parent_id_map[record["chunk_index"]] = record["id"]
+            client.table("library_chunks").insert(chunk_records).execute()
 
             # Add child chunks with parent references
+            # ChunkData.parent_id is the parent's ChunkData.id (now also the DB id)
             child_records = []
             for chunk in result.child_chunks:
-                parent_idx = chunk.parent_chunk_index
-                parent_id = parent_id_map.get(parent_idx)
-
                 child_records.append({
+                    "id": str(chunk.id),
                     "library_document_id": library_document_id,
                     "chunk_index": chunk.chunk_index,
-                    "parent_chunk_id": parent_id,
+                    "parent_chunk_id": str(chunk.parent_id) if chunk.parent_id else None,
                     "content": chunk.content,
                     "page_number": chunk.page_number,
                     "section_title": None,
@@ -303,11 +294,41 @@ def embed_library_chunks(
         chunks = response.data or []
 
         if not chunks:
-            # All chunks already embedded
+            # No unembedded chunks — but is that because all are embedded,
+            # or because there are 0 chunks total? (GAP-2 fix)
+            total_response = (
+                client.table("library_chunks")
+                .select("id", count="exact")
+                .eq("library_document_id", lib_doc_id)
+                .execute()
+            )
+            total_chunk_count = total_response.count or 0
+
+            if total_chunk_count == 0:
+                # 0 chunks total — this doc was never chunked properly.
+                # Do NOT set completed; mark as failed so it gets retried.
+                logger.error(
+                    "embed_library_chunks_zero_chunks",
+                    library_document_id=lib_doc_id,
+                )
+                lib_service.update_status(
+                    lib_doc_id,
+                    LibraryDocumentStatus.FAILED,
+                    quality_flags=["zero_chunks"],
+                )
+                return {
+                    "status": "failed",
+                    "library_document_id": lib_doc_id,
+                    "embedded_count": 0,
+                    "reason": "Document has 0 chunks — chunking may have failed",
+                }
+
+            # All chunks genuinely already embedded
             lib_service.update_status(lib_doc_id, LibraryDocumentStatus.COMPLETED)
             logger.info(
                 "embed_library_chunks_already_complete",
                 library_document_id=lib_doc_id,
+                total_chunks=total_chunk_count,
             )
             return {
                 "status": "embedding_complete",
@@ -358,7 +379,27 @@ def embed_library_chunks(
                 import time
                 time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
 
-        # Update document status
+        # Update document status — only mark completed if we actually embedded something
+        if embedded_count == 0 and len(chunks) > 0:
+            # All embedding batches failed — don't mark completed
+            logger.error(
+                "embed_library_chunks_all_batches_failed",
+                library_document_id=lib_doc_id,
+                attempted_chunks=len(chunks),
+            )
+            lib_service.update_status(
+                lib_doc_id,
+                LibraryDocumentStatus.FAILED,
+                quality_flags=["embedding_failed"],
+            )
+            return {
+                "status": "failed",
+                "library_document_id": lib_doc_id,
+                "embedded_count": 0,
+                "total_chunks": len(chunks),
+                "reason": "All embedding batches failed",
+            }
+
         lib_service.update_status(lib_doc_id, LibraryDocumentStatus.COMPLETED)
 
         logger.info(

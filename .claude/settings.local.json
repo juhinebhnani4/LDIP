@@ -251,7 +251,19 @@
       "mcp__railway__get-logs",
       "mcp__railway__list-services",
       "mcp__supabase__execute_sql",
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "WebFetch(domain:www.filevine.com)",
+      "WebFetch(domain:www.draftbotpro.com)",
+      "WebFetch(domain:aitoolbuzz.com)",
+      "WebFetch(domain:blog.draftbotpro.com)",
+      "WebFetch(domain:topfreeaitools.com)",
+      "WebFetch(domain:www.rarelabs.co)",
+      "WebFetch(domain:app.draftbotpro.com)",
+      "WebFetch(domain:tracxn.com)",
+      "Bash(awk '{print $2}')",
+      "Bash(grep -n \"PENDING\\\\|PROCESSING\\\\|OCR_COMPLETE\\\\|CHUNKING\\\\|EMBEDDING\\\\|SEARCHABLE\\\\|COMPLETED\\\\|FAILED\" backend/app/models/document.py)",
+      "Bash(grep -n \"PENDING\\\\|PROCESSING\\\\|OCR_COMPLETE\\\\|CHUNKING\\\\|EMBEDDING\\\\|SEARCHABLE\\\\|COMPLETED\\\\|FAILED\" app/models/document.py)",
+      "Bash(start *)"
     ]
   },
   "enableAllProjectMcpServers": true,

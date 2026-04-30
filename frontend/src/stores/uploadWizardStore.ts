@@ -22,16 +22,34 @@ import type {
   UploadProgress,
   LiveDiscoveryType,
 } from '@/types/upload';
+import type { DocumentType } from '@/types/document';
 import {
   PROCESSING_STAGE_LABELS,
   PROCESSING_STAGE_NUMBERS,
 } from '@/types/upload';
+
+/**
+ * Detect document type from filename.
+ * Matches patterns like "X Act, YYYY.pdf", "X Act YYYY.pdf", "X Code, YYYY.pdf"
+ * Returns 'act' if filename looks like a statute, null otherwise.
+ */
+function detectDocumentTypeFromFilename(filename: string): DocumentType | null {
+  // Remove extension
+  const name = filename.replace(/\.[^.]+$/, '');
+  // Match: "Something Act" or "Something Act, YYYY" or "Something Code, YYYY"
+  const actPattern = /\b(act|code|statute|ordinance|regulation|rules|bill)\b/i;
+  if (actPattern.test(name)) {
+    return 'act';
+  }
+  return null;
+}
 
 /** Initial state for the wizard */
 const initialState = {
   currentStage: 'FILE_SELECTION' as UploadWizardStage,
   files: [] as File[],
   matterName: '',
+  documentType: 'case_file' as DocumentType,
   detectedActs: [] as DetectedAct[],
   isLoading: false,
   error: null as string | null,
@@ -70,6 +88,7 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
   addFiles: (newFiles: File[]) => {
     const currentFiles = get().files;
     const currentMatterName = get().matterName;
+    const currentDocType = get().documentType;
     const allFiles = [...currentFiles, ...newFiles];
 
     // Auto-generate matter name from first file if not set
@@ -77,9 +96,19 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
     const matterName =
       currentMatterName || (firstFile ? generateMatterName(firstFile) : '');
 
+    // Auto-detect document type from first file if still default
+    let documentType = currentDocType;
+    if (currentDocType === 'case_file' && firstFile) {
+      const detected = detectDocumentTypeFromFilename(firstFile.name);
+      if (detected) {
+        documentType = detected;
+      }
+    }
+
     set({
       files: allFiles,
       matterName,
+      documentType,
       // Transition to review stage when files are added
       currentStage: allFiles.length > 0 ? 'REVIEW' : 'FILE_SELECTION',
     });
@@ -106,11 +135,23 @@ export const useUploadWizardStore = create<UploadWizardStore>()((set, get) => ({
     // Go back to file selection if no files remain
     const currentStage = newFiles.length === 0 ? 'FILE_SELECTION' : 'REVIEW';
 
-    set({ files: newFiles, matterName, currentStage });
+    // Reset document type when all files removed; re-detect from new first file
+    let documentType = get().documentType;
+    if (newFiles.length === 0) {
+      documentType = 'case_file';
+    } else if (index === 0 && newFirstFile) {
+      documentType = detectDocumentTypeFromFilename(newFirstFile.name) || 'case_file';
+    }
+
+    set({ files: newFiles, matterName, currentStage, documentType });
   },
 
   setMatterName: (name: string) => {
     set({ matterName: name });
+  },
+
+  setDocumentType: (type: DocumentType) => {
+    set({ documentType: type });
   },
 
   setDetectedActs: (acts: DetectedAct[]) => {

@@ -2,7 +2,7 @@
 
 > Created 2026-04-13 from a second-pass architectural review.
 >
-> This file is the **abstract catalog**. The concrete instances live in `BUGS.md` section 0 (ARCH-001 through ARCH-006). The enforcement checklist for the three most-violated patterns lives in `.claude/skills/architecture-guard/SKILL.md`. The actionable backlog of guardrails to ship lives in `GUARDRAIL-BACKLOG.md`.
+> This file is the **abstract catalog**. The concrete instances live in `BUGS.md` section 0 (ARCH-001 through ARCH-007). The enforcement checklist for the three most-violated patterns lives in `.claude/skills/architecture-guard/SKILL.md`. The actionable backlog of guardrails to ship lives in `GUARDRAIL-BACKLOG.md`.
 >
 > The purpose of this file is to make the **shapes** memorable so they can be spotted in code review *before* they become a new ARCH-00X entry.
 
@@ -17,7 +17,7 @@ A useful test for any proposed change: *is this fix a **wall** or a **sticky not
 - **Wall**: a thing the wrong action physically cannot take. A `try/finally` that releases a lock no matter how the function exits. A foreign key constraint that refuses an orphan row. A generated TypeScript type that fails the build if it drifts from the Pydantic source. Walls survive forgetting.
 - **Sticky note**: a thing the right action depends on someone reading. A code comment that says "remember to call X." A MEMORY.md rule. A docstring. An entry in CLAUDE.md. Sticky notes only work if every future author reads them every time. They are reminders, not constraints.
 
-Every one of the six patterns below is **a place where LDIP has a sticky note where a wall belongs**. The fix is always shaped the same way: replace the convention with structure that makes the right thing the only possible thing.
+Every one of the ten patterns below is **a place where LDIP has a sticky note where a wall belongs**. The fix is always shaped the same way: replace the convention with structure that makes the right thing the only possible thing.
 
 A second test: *if this rule is true, is its existence in our docs a sign that we don't yet have a wall?* If yes, the docs entry is itself debt. **A rule that has survived past its wall is debt** — it tells future authors there's vigilance work to do when in fact the wall already exists, and it crowds out the rules that *do* still need vigilance.
 
@@ -171,6 +171,23 @@ A second test: *if this rule is true, is its existence in our docs a sign that w
 
 ---
 
+## P10 — "Fire-and-forget classification with no recovery path"
+
+**The smell**: A decision about an object's type/category/route is made once at creation time, with no intelligence and no ability to correct it later. "The user chose the right document type." "The system will figure it out." The decision is permanent — the object enters a pipeline that produces irreversible side effects based on the classification, and there's no undo.
+
+**Why it's a sticky note**: The classification depends on the user or caller remembering to choose correctly. But: (a) there may be no UI to choose at all, (b) the user may not know the right answer, (c) auto-detection may not exist or may be incomplete, (d) even if the wrong choice is noticed later, there's no reclassification action that undoes the downstream work.
+
+**The wall version**:
+1. **Auto-detection at the gate.** Before the object enters any pipeline, run a classifier (heuristic, rule-based, or LLM). The classifier pre-selects the type; the user confirms or overrides. The gate exists for ALL entry paths — not just the one the most common users see.
+2. **Recovery path.** If classification is wrong, a "reclassify" action exists that: (a) stops or undoes wrong-pipeline work, (b) moves the object to the correct pipeline, (c) cleans up garbage side effects. Without this, every misclassification is permanent damage.
+3. **Post-processing reconciler.** After the first pipeline stage produces data (e.g., OCR text), re-evaluate the classification. Text full of "Section 1", "Be it enacted", "WHEREAS" is a statute, not a case file. Flag for reclassification if the data disagrees with the initial label.
+
+**The test**: "If the user uploads an object with the wrong type, what happens? Can they fix it? Does the system notice? Or does it silently produce garbage and waste compute?" If the answer is "garbage and waste" — you need a gate, a recovery path, or both.
+
+**Concrete instance**: ARCH-007. User uploaded "TORTS Act 1992.pdf" — a statute. System classified it as Case File (the default — no UI to choose otherwise). Full expensive pipeline ran (OCR → entities → citations → contradictions — all nonsensical for a statute). Document AI timed out on 22 pages. The library system has 4 entry paths for Acts but none have auto-detection, and misclassified documents have no recovery path. The backend plumbing for `document_type=act` exists and works — but the frontend never sends it.
+
+---
+
 ## How to use this catalog
 
 When reviewing any proposed change — yours, a teammate's, or one Claude is about to write — ask in this order:
@@ -185,7 +202,7 @@ A rule in MEMORY.md or CLAUDE.md is a sticky note. Sometimes that's the right an
 
 ## Cross-references
 
-- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-006 entries; DPP-002 for P7/P8/P9
+- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-007 entries; DPP-002 for P7/P8/P9; ARCH-007 for P10
 - `.claude/skills/architecture-guard/SKILL.md` — enforcement checklist for the most dangerous patterns
 - `GUARDRAIL-BACKLOG.md` — actionable list of walls and smart sticky notes to build, with promotion paths
 - `CLAUDE.md` — top-level zoom-out rule and architecture-guard reference

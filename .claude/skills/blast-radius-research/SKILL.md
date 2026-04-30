@@ -99,9 +99,72 @@ The surface problem ("RAM is too high") hides constraints that eliminate most ge
 Before proposing any solution: check BUGS.md for approaches that have 
 already been REJECTED for this problem (search for "REJECTED", "DEFERRED", 
 "UNSAFE"). Check if the problem area intersects with any ARCH-001 through 
-ARCH-006 entries. List any constraints that would disqualify generic 
+ARCH-007 entries. List any constraints that would disqualify generic 
 solutions.
 ```
+
+### 1.5 — System-level synthesis (the zoom-out step)
+
+**Purpose**: After tracing individual code paths (1.2) and mapping interactions (1.3), step back and evaluate the **subsystem as a whole**. Individual paths can each look reasonable while the system they form has structural gaps.
+
+**This step catches three failure modes that 1.1–1.4 miss:**
+
+**A. Multiple entry paths, no shared gate**: For any subsystem you're investigating, enumerate ALL entry paths and ALL exit paths. If there are multiple ways to reach the same state (e.g., a document becoming a library_document, a job reaching COMPLETED status), map all of them. Gaps between entry paths reveal classification/routing flaws — one path may have validation that another lacks.
+
+**B. No recovery from wrong decisions**: For any decision point (classification, routing, status transition): what happens if the decision is WRONG? Is there a recovery path? If the user realizes the mistake 10 minutes later, what can they do? If the answer is "nothing" or "delete and start over," that's a structural finding — not a feature request.
+
+**C. Design intent vs. actual architecture**: Looking at all the paths, tables, and decision points you've mapped — does this subsystem have a coherent design, or are there structural gaps (missing paths, orphaned states, parallel implementations that should be unified, dead ends)? Does the architecture match what the system is *supposed* to do?
+
+> **Why this was added (2026-04-29):** Library document classification research traced the upload path correctly but stopped there. The library system actually has 4 entry paths, only 1 of which was exposed in the UI (and that one had no selector). The auto-fetch pipeline was sophisticated but backwards-only (detected Acts in case files, couldn't detect that an uploaded file IS an Act). Misclassified documents had no recovery path. Two parallel chunk tables existed for the same logical work. None of these flaws were visible from tracing a single code path — they only emerged when asking "does this subsystem make sense as a whole?" The user had to prompt this zoom-out twice before the structural analysis happened.
+
+**Prompt fragment:**
+```
+SYNTHESIS (after completing 1.1–1.4): Step back from individual code paths.
+
+A. How many ENTRY PATHS lead into this subsystem? Map all of them. Do they 
+   all pass through the same validation/classification gate, or do some 
+   bypass it? If bypassed — what breaks?
+
+B. For the key DECISION POINTS in this subsystem: what happens when the 
+   decision is WRONG? Can the user or system recover, or is it permanent? 
+   If permanent — that's a structural finding.
+
+C. Looking at the full map: does the subsystem's architecture match its 
+   design intent? Are there parallel implementations that should be unified, 
+   missing paths that should exist, or orphaned states with no transitions 
+   out? Name any ARCH-pattern matches (P1–P6 from ARCH-PATTERNS.md).
+
+D. Query the LIVE DATABASE for the subsystem's tables. Check: status 
+   distribution (does it match what the code predicts?), data completeness 
+   (do terminal-status records actually have their data?), stuck/orphaned 
+   records. If data contradicts code, the data wins.
+
+E. For any PARALLEL TABLES serving the same logical purpose: compare 
+   schemas column by column. Every column in table A missing from table B 
+   is a gap where future improvements to A are silently not applied to B.
+
+D. QUERY THE LIVE DATA. Code tells you what SHOULD happen; the database 
+   tells you what DID happen. For the subsystem you've mapped, run:
+   - Status distribution: SELECT status, COUNT(*) GROUP BY status
+   - Data completeness: Do records in terminal status actually have 
+     the data they should? (e.g., completed docs should have chunks; 
+     chunks should have embeddings)
+   - Orphans and stuck records: Any rows stuck in non-terminal state 
+     for >1 hour? Any link table rows pointing to deleted parents?
+   If the data contradicts the code's claims, the data wins.
+
+E. For PARALLEL TABLES that serve the same logical purpose (e.g., 
+   chunks vs library_chunks, two embedding columns): compare schemas 
+   COLUMN BY COLUMN. List every column in table A that's missing from 
+   table B. For each missing column, ask: does table B's pipeline 
+   populate an equivalent? If not — that's a gap where every future 
+   improvement to A must be manually remembered for B.
+
+If you can't confidently answer these five questions, you haven't 
+explored enough — go back to 1.2.
+```
+
+> **Why D and E were added (2026-04-30):** Full library subsystem audit found 3 P0 gaps that were invisible from code reading alone. (D) Querying `library_chunks` revealed 77% had NULL embeddings and 1 "completed" doc had 0 chunks — the code's completion logic was vacuously true on empty sets. (E) Comparing `chunks` vs `library_chunks` column-by-column revealed `fts`, `embedding_model_version`, `text_start_offset/end_offset` all missing — meaning every search improvement to `chunks` was silently not applied to library search. Both gaps existed for months because prior research read code paths without verifying data reality.
 
 ---
 
@@ -250,8 +313,24 @@ one side goes down?
 
 ## PHASE 1.4 — What constraints eliminate generic solutions?
 Check BUGS.md for REJECTED/DEFERRED/UNSAFE approaches. Check if this 
-intersects ARCH-001 through ARCH-006. List constraints that would 
+intersects ARCH-001 through ARCH-007. List constraints that would 
 disqualify standard advice.
+
+## PHASE 1.5 — System-level synthesis (the zoom-out)
+How many ENTRY PATHS lead into this subsystem? Map all of them. Do they 
+all pass through the same validation/classification gate? For key 
+DECISION POINTS: what happens when the decision is WRONG — can the user 
+recover? Looking at the full map: does the architecture match the design 
+intent, or are there structural gaps?
+
+Query the LIVE DATABASE for the subsystem's tables. Check: status 
+distribution (does it match what the code predicts?), data completeness 
+(do terminal-status records actually have their expected data?), 
+stuck/orphaned records. If data contradicts code, the data wins.
+
+For any PARALLEL TABLES serving the same logical purpose: compare schemas 
+column by column. Every column in table A missing from table B is a gap 
+where future improvements to A won't be applied to B.
 
 Report: what the system actually does, what's already been analyzed, 
 what constraints exist, and what questions remain unanswered.
@@ -298,6 +377,9 @@ Report: every file and function with line numbers. Be specific.
 | Not tracing to user-visible outcome | "Fallback exists" without naming what user sees on screen | Phase 1.2 (trace to screen) |
 | Missing system interactions | Beat dying when worker sleeps | Phase 1.3 |
 | Proposing rejected solutions | "Combine API + worker" against ARCH-002 | Phase 1.4 |
+| Tracing ONE path when MULTIPLE exist | Library has 4 entry paths; research traced only upload path | Phase 1.5A (enumerate all entry paths) |
+| No recovery from wrong decisions | Misclassified Act has no reclassification path — permanent garbage | Phase 1.5B (recovery from wrong decisions) |
+| Individual paths look fine but system is incoherent | 4 library entry paths with no shared classification gate | Phase 1.5C (design intent vs architecture) |
 | Reporting "doesn't exist" when partial exists | Q&A guard "NO" when BM25 fallback + searchNotice already built | Phase 2.1 (PARTIALLY answer) |
 | Building something that exists | Skip-1-mention already implemented | Phase 2.1 |
 | Missing type mismatches | CostTracker vs LLMCostTracker | Phase 2.2 |

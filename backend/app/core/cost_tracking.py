@@ -926,22 +926,27 @@ def get_cost_service(supabase_client: Any | None = None) -> CostPersistenceServi
     return _cost_service
 
 
-async def persist_cost(tracker: CostTracker) -> str | None:
+async def persist_cost(
+    tracker: CostTracker, metadata: dict[str, Any] | None = None
+) -> str | None:
     """Convenience function to persist a cost tracker.
 
     Args:
         tracker: CostTracker instance to persist.
+        metadata: Optional extra metadata to merge into the llm_costs record.
 
     Returns:
         Record ID if saved, None otherwise.
     """
     service = get_cost_service()
     if service:
-        return await service.save_cost(tracker)
+        return await service.save_cost(tracker, metadata=metadata)
     return None
 
 
-def persist_cost_sync(tracker: CostTracker) -> str | None:
+def persist_cost_sync(
+    tracker: CostTracker, metadata: dict[str, Any] | None = None
+) -> str | None:
     """Sync version of persist_cost for Celery worker contexts.
 
     The Supabase client's table().insert().execute() is blocking,
@@ -949,6 +954,7 @@ def persist_cost_sync(tracker: CostTracker) -> str | None:
 
     Args:
         tracker: CostTracker instance to persist.
+        metadata: Optional extra metadata to merge into the llm_costs record.
 
     Returns:
         Record ID if saved, None otherwise.
@@ -980,6 +986,7 @@ def persist_cost_sync(tracker: CostTracker) -> str | None:
                 **({"cached_input_tokens": tracker.cached_input_tokens,
                     "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
                    if tracker.cached_input_tokens > 0 else {}),
+                **(metadata or {}),
             },
         }
         result = service.supabase.table("llm_costs").insert(record).execute()

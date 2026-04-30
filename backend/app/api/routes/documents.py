@@ -404,6 +404,25 @@ def _extract_year_from_filename(filename: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _detect_act_from_filename(filename: str) -> bool:
+    """Detect if a filename looks like a statute/Act.
+
+    Matches patterns like "TORTS Act 1992.pdf", "Indian Contract Act, 1872.pdf",
+    "Code of Criminal Procedure 1973.pdf", etc.
+
+    Returns True if the filename matches a statute pattern.
+    """
+    import re
+    # Remove extension
+    name = re.sub(r'\.[^.]+$', '', filename)
+    # Match common statute keywords as whole words
+    return bool(re.search(
+        r'\b(act|code|statute|ordinance|regulation|rules|bill)\b',
+        name,
+        re.IGNORECASE,
+    ))
+
+
 async def _upload_act_to_library(
     file_content: bytes,
     filename: str,
@@ -515,11 +534,41 @@ async def _upload_act_to_library(
         link_id=link.id,
     )
 
+    # GAP-1 fix: Dispatch OCR immediately for user-uploaded Acts.
+    # Previously, OCR only started 30-45 min later when the maintenance sweep
+    # caught the pending doc. Now we dispatch synchronously from the upload path.
+    # Wrapped in try/except so upload succeeds even if Redis is down —
+    # the maintenance sweep will catch the pending doc within 60 min.
+    ocr_queued = False
+    try:
+        from app.workers.tasks.library_tasks import ocr_and_process_library_document
+        ocr_and_process_library_document.apply_async(
+            kwargs={
+                "library_document_id": library_doc.id,
+                "storage_path": actual_storage_path,
+            },
+            countdown=2,  # Small delay to let DB transaction commit
+        )
+        ocr_queued = True
+        logger.info(
+            "act_ocr_dispatched",
+            library_document_id=library_doc.id,
+            storage_path=actual_storage_path,
+        )
+    except Exception as e:
+        logger.warning(
+            "act_ocr_dispatch_failed",
+            library_document_id=library_doc.id,
+            error=str(e),
+            note="Maintenance sweep will pick up this pending doc within 60 min",
+        )
+
     return {
         "library_document_id": library_doc.id,
         "link_id": link.id,
         "is_new": True,
         "title": library_doc.title,
+        "ocr_queued": ocr_queued,
     }
 
 
@@ -1089,6 +1138,18 @@ async def upload_document(
         document_type=document_type.value,
     )
 
+    # Auto-detect Act from filename when frontend sends default 'case_file'
+    # Safety net: "TORTS Act 1992.pdf" should route to library even if UI didn't classify it
+    if document_type == DocumentType.CASE_FILE and _detect_act_from_filename(file.filename or ""):
+        logger.info(
+            "document_type_auto_detected",
+            filename=file.filename,
+            original_type=document_type.value,
+            detected_type="act",
+            matter_id=matter_id,
+        )
+        document_type = DocumentType.ACT
+
     try:
         if file_type == "zip":
             # Extract ZIP and upload each PDF
@@ -1144,7 +1205,7 @@ async def upload_document(
                         file_size=lib_doc.file_size,
                         document_type=DocumentType.ACT,
                         matter_id=matter_id,
-                        ocr_queued=False,  # Acts from library don't need OCR
+                        ocr_queued=result.get("ocr_queued", False),
                     )
                     return DocumentResponse(data=uploaded_doc)
 

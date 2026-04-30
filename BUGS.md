@@ -1,8 +1,8 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-29 (UX polish cluster: UX-007, UX-011, UX-013, UX-014 fixed — deployment pending)
-**Total bugs**: 72 | **Fixed**: 44 | **Open**: 22 | **Partially Fixed**: 2 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 1
-**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 1 E2E verification (2026-04-17)
+**Last updated**: 2026-04-30 (Cluster 1 executed: 3 P0s fixed, data fixes applied, blast-radius verified)
+**Total bugs**: 87 | **Fixed**: 49 | **Open**: 32 | **Partially Fixed**: 3 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 0
+**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
 | Field | Values |
@@ -13,11 +13,106 @@
 
 ---
 
-## Priority Roadmap (2026-04-21)
+## Priority Roadmap
+
+### Execution Clusters (2026-04-30)
+
+> Updated after full library subsystem audit (16 gaps, 9 new bugs). Groups bugs that share code/deploy paths so they can be fixed together. Supersedes the Tier 1-4 structure below for sequencing — the business context and cost analysis remain valid.
+
+```
+Week 1:  Cluster 1 (library data — 3 P0s) → Cluster 5 (UX quick wins)
+Week 2:  Cluster 2 (library schema parity) → Cluster 6 (infra hardening)
+Week 3:  Cluster 3 (contradiction optimization Phase 2)
+Week 4:  Cluster 4 (worker/beat stability)
+After:   Cluster 7 (architectural debt — ongoing)
+```
+
+#### Cluster 1: Library Subsystem — Fix the Data ✓ DONE (2026-04-30)
+*Completed in ~1 hour. Code deployed to Railway, data fixes applied, blast-radius verified by 3 parallel agents.*
+
+| Bug | Sev | Status |
+|---|---|---|
+| **GAP-1**: User-uploaded Acts never get OCR dispatched | P0 | **FIXED** — OCR dispatch added with try/except + maintenance sweep fallback |
+| **GAP-2**: Completed library doc with 0 chunks | P0 | **FIXED** — Zero-chunk guard + all-batches-failed guard in `embed_library_chunks` |
+| **GAP-3**: 77% library chunks missing embeddings | P0 | **FIXED** — Single doc (BNS), reset to pending, sweep will re-embed 56 chunks |
+| **E2E-003**: Library docs missing from storage | P2 | **OPEN** — 7 docs need India Code re-fetch (PDFs downloaded but storage path mismatch) |
+| **GAP-5**: 9 failed india_code library docs | P1 | **PARTIALLY FIXED** — Root cause found (storage path convention change), BNS fixed, 7 remain |
+| **GAP-6**: 3 act_resolutions stuck 69 days | P1 | **FIXED** — Data fix: moved to `not_on_indiacode` |
+| **DPP-016**: Library doc failure not tracked | P3 | **DEFERRED** — No SSE infra for library docs; status already tracked in DB via quality_flags |
+
+#### Cluster 2: Library Subsystem — Schema Parity (half day)
+*All require a migration + library pipeline code changes. One migration, one deploy.*
+
+| Bug | Sev | Fix |
+|---|---|---|
+| **GAP-4**: Voyage embeddings never populated | P1 | Add Voyage embedding to `embed_library_chunks` — 20 lines |
+| **GAP-7**: No BM25/full-text search for library chunks | P2 | Migration to add `fts` column + update chunking task |
+| **GAP-8**: Schema divergence (chunks vs library_chunks) | P2 | Same migration — add `fts`, `embedding_model_version` |
+| **GAP-11**: Library cost tracking absent | P2 | Add `library_ocr` operation to cost tracking — 15 lines |
+| **GAP-12**: Inconsistent dedup logic | P2 | Standardize all creation paths to use `find_library_duplicates` RPC |
+
+#### Cluster 3: Contradiction Optimization — Phase 2 (2-3 days)
+*Same file (`comparator.py`), same analysis, same deploy. Prerequisite: query `llm_costs.metadata` for screening outcome distribution (Phase 1 metadata flowing since 2026-04-27).*
+
+| Bug | Sev | Fix |
+|---|---|---|
+| **E2E-004**: Contradiction detection is pipeline bottleneck | P2 | Analyze Phase 1 screening metadata, tune escalation threshold |
+| **E2E-005**: Excessive GPT-4o escalation | P3 | Same analysis — raise threshold if data supports it |
+
+#### Cluster 4: Worker/Beat Stability (1-2 days)
+*All require worker topology changes (`railway.toml`, `start-worker.sh`). Deploy together.*
+
+| Bug | Sev | Fix |
+|---|---|---|
+| **INF-010**: RedBeat lock lost — beat crashes | P1 | Run beat as separate Railway service |
+| **E2E-006**: Redis beat lock extension warning | P2 | Same fix — beat isolation resolves both |
+| **WPS-001 L4**: Monolithic `resolve_aliases` task | P2 | Fan-out/fan-in decomposition |
+| **WPS-001 L5**: Gevent timeout fiction | P2 | Manual timeout enforcement or prefork |
+| **E2E-007**: Finalize runs forever on act docs | P3 | Add precondition checks in sweep tasks |
+
+#### Cluster 5: UX Quick Wins (half day)
+*Small, independent frontend fixes. Batch into one Vercel deploy.*
+
+| Bug | Sev | Fix |
+|---|---|---|
+| **UX-001**: Summary validation too strict for small docs | P1 | Relax thresholds for <5 page docs |
+| **UX-004**: Activity feed — only processing events | P2 | Add upload/query/summary activity types |
+| **UX-012**: No resend verification email button | P3 | Add resend button with rate limiting |
+| **E2E-009**: `/api/matters/.../touch` returns 500 | P3 | Fix touch endpoint |
+
+#### Cluster 6: Infra/Network Hardening (2-3 hours)
+*Small backend/infra fixes, all low-effort.*
+
+| Bug | Sev | Fix |
+|---|---|---|
+| **INF-005**: Celery health check reports "No Workers" | P2 | Redis-based heartbeat instead of inspect.ping() |
+| **INF-006**: Network ERR_ABORTED during polling | P2 | Add AbortController to useProcessingStatus |
+| **E2E-010**: CORS missing on `/api/health` | P3 | Ensure health route goes through CORS middleware |
+| **E2E-011**: Summary forceRefresh 401 | P3 | Add token refresh before retry |
+| **E2E-008**: OpenAI calls bypass rate limiter | P3 | Wire through `get_rate_limiter(LLMProvider.OPENAI)` |
+| **LLM-004**: Gemini returns None occasionally | P3 | Add null-check before json.loads — 3 lines |
+
+#### Cluster 7: Architectural Debt — Long-term (weeks, not now)
+*Track but don't fix until clusters 1-6 are done. Enablers for scale, not blockers for launch.*
+
+| Bug | Sev | Notes |
+|---|---|---|
+| **ARCH-001**: Two parallel pipelines | P0 | Unify small/chunked into one path |
+| **ARCH-002**: Single worker all queues | P0 | Multi-worker topology (partially done) |
+| **ARCH-003**: Pipeline completion as convention | P0 | Database-driven reconciler |
+| **ARCH-004**: Gemini gateway bypass | P0 | `services/llm/` domain classes |
+| **ARCH-005**: Unversioned Postgres RPCs | P1 | RPC versioning |
+| **ARCH-006**: No API contract source of truth | P1 | openapi-typescript codegen |
+| **ARCH-007**: Classification fire-and-forget | P1 | Post-OCR classification + reclassification |
+| **DPP-013**: Sequential chain could be parallel | P3 | DAG refactor |
+| **DPP-015**: Citation→contradiction sticky note | P3 | Same as ARCH-003 |
+| **E2E-002**: Document AI cold start | P3 | Warmup request on deploy |
+
+---
+
+### Business Context (2026-04-21)
 
 > Sequenced from first principles after E2E verification (4 docs, 2 matters, both pipeline paths) + freemium competitive analysis (DraftBot Pro, Harvey, CaseMine, Indian legal tech market). Full research in [E2E-FINDINGS-2026-04-17.md](E2E-FINDINGS-2026-04-17.md).
-
-### Why this order — the business context
 
 **Goal**: Launch a freemium model — 3 documents/month free (full pipeline), ₹999/mo for 25 docs, ₹1,999/mo for unlimited. DraftBot Pro (102K+ lawyers, ₹999/mo) gives away legal research (zero-cost search) and charges for AI drafting. Jaanch's differentiator is **automated cross-document contradiction detection** — nobody else does this automatically, not Harvey, not CoCounsel. But it's also our most expensive feature.
 
@@ -38,18 +133,6 @@
 | **TOTAL** | **$0.50-2.00** | 100% | Dominated by contradictions |
 
 **The math**: 3 free docs/month at current cost = $1.50-6.00/user/month. At 1000 free users = $1,500-6,000/month. **Unsustainable.** After contradiction optimization (Tier 1 item #1): cost drops to $0.15-0.50/doc → 3 free docs = $0.50-1.50/user/month → 1000 users = $500-1,500/month. **Sustainable** if 5-10% convert at ₹999/mo (= ₹50K-100K/month revenue).
-
-**Prerequisite chain**:
-```
-Tier 1 (speed + polish)  ───┐
-Tier 2 (reliability)     ───┤──→ Free tier launch ──→ Revenue
-Free tier gate (~1 day)  ───┘         ↓
-                              ₹999/mo (25 docs)
-                              ₹1,999/mo (unlimited)
-                                      ↓
-Tier 3 (structural)      ──→ Enables safe iteration at scale
-Tier 4 (long-term)       ──→ After free tier is live + generating data
-```
 
 ---
 
@@ -478,7 +561,146 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 ---
 
-**Common thread across all six**: implicit coordination through convention instead of explicit coordination through structure. Two pipelines that "should" stay in sync (ARCH-001), four queues that "should" be isolated (ARCH-002), a chain that "should" reach its terminal task (ARCH-003), 14 LLM call sites that "should" honor the rate limiter (ARCH-004), a Postgres function that "should" stay signature-compatible across two repos (ARCH-005), 36 TypeScript files that "should" mirror Pydantic models exactly (ARCH-006). None are enforced by the architecture, all have been violated in production, and each violation has cost a debugging session — sometimes a multi-day one. The fix in every case is the same shape: **make the right thing the only possible thing.** Structure beats vigilance.
+### ARCH-007: Document Classification Is Fire-and-Forget with No Recovery Path
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (Architectural) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 (E2E verification — TORTS Act 1992 uploaded as Case File) |
+| **Source** | E2E visual verification + blast-radius deep research |
+
+**Observed symptom**: User uploaded "TORTS Act 1992.pdf" via the Create New Matter page. The system classified it as "Case File", ran it through the full document pipeline (OCR → chunking → embedding → entity extraction → citation detection → contradiction detection), wasted ~5 minutes of Document AI time, hit a 300s OCR timeout, and will exhaust 3 retries producing zero useful output. The document is a statute — it should have been routed to the `library_documents` table with the simpler library pipeline (OCR → chunk → embed, no entity/citation/contradiction work).
+
+**The system the classification sits inside**: Jaanch has a sophisticated **library document system** with 4 entry paths into `library_documents`:
+
+| Path | How it works | Status |
+|---|---|---|
+| **A. User upload as Act** | Frontend sends `document_type=act` → `_upload_act_to_library()` (documents.py:407-523) → `library_documents` table → `matter_library_links` | **Plumbing works, but frontend has no UI to select Act — always sends `case_file`** |
+| **B. Auto-fetch from India Code** | Citation engine detects Act mentions in case files → `act_validation_tasks.py` validates → `IndiaCodeClient` downloads PDF from indiacode.nic.in → creates `library_documents` + links to matter → `ocr_and_process_library_document` | **Works for central Acts on India Code; fails for state acts, common law, non-Indian sources** |
+| **C. Document promotion** | Admin promotes existing `documents` row to library via `library_service.py:776-933` → copies chunks to `library_chunks` | **Works but requires manual admin action** |
+| **D. Direct library upload** | API route exists (`library.py:126-190`) | **Not implemented — no frontend UI** |
+
+**The auto-fetch pipeline (Path B) is mature but backwards-only**: It detects "Indian Contract Act, 1872" *cited inside a case file* and auto-fetches it from India Code. But if you hand it "Indian Contract Act 1872.pdf" directly, it doesn't recognize it as an Act. The screenshot confirms this works — the "5 & 10 kiarabinwani" matter shows "Arbitration and Conciliation Act, 1996" in the Linked Library section, auto-fetched via Path B. But "TORTS Act 1992.pdf" uploaded directly went to the wrong pipeline.
+
+**Six structural flaws identified**:
+
+**Flaw 1 — No classification at upload**: The upload form (`frontend/src/app/upload/page.tsx`) has no document type selector. `document_type` defaults to `case_file` in both backend (documents.py:1041) and frontend API client (documents.ts:84). The backend plumbing for `document_type=act` exists and works (Path A) — but the frontend never sends it.
+
+**Flaw 2 — No auto-detection from filename or content**: `_extract_year_from_filename()` exists (documents.py:400) but only runs *after* manual Act classification. No regex checks the filename for "Act", "Code", "Statute" patterns. No content-based classification exists. A file literally named "TORTS Act 1992.pdf" gets zero special treatment.
+
+**Flaw 3 — Four entry paths, no shared classification gate**: Each path makes its own classification decision independently. Path A relies on frontend (which has no UI). Path B relies on citation regex in other documents. Path C relies on admin initiative. Path D doesn't exist. There is no single "is this an Act?" gate that all documents flow through. This is the **ARCH-003 pattern** — "remember to signal" coordination applied to classification.
+
+**Flaw 4 — Misclassified documents have no recovery path**: Once "TORTS Act 1992.pdf" enters as `case_file`:
+- Full expensive pipeline runs (entities, citations, contradictions — all nonsensical for a statute)
+- There's no "reclassify" action — `DocumentList.tsx` has a type dropdown (lines 329-411) but changing type post-processing doesn't undo pipeline work, doesn't move the document to `library_documents`, doesn't delete garbage entities/contradictions
+- User would have to: delete document → re-upload → somehow choose "Act" (which has no UI)
+- The system produces garbage data (contradictions within a statute, entity mentions of section numbers) that pollutes the matter's analysis
+
+**Flaw 5 — Two parallel chunk tables, two RAG paths**: Regular documents use `chunks` + `match_chunks()`. Library documents use `library_chunks` + `match_library_chunks_for_matter()`. Q&A must query both and merge. This is **ARCH-001 pattern** — two parallel paths for the same logical work. If one path has bugs or is missing results, the user gets incomplete answers with no indication why.
+
+**Flaw 6 — No feedback loop from processing to classification**: After OCR extracts text full of "Section 1", "Section 2", "WHEREAS", "Be it enacted by Parliament" — nothing in the pipeline says "this looks like a statute, not a case file." Classification is a one-time, one-place decision with zero intelligence and no reconciliation.
+
+**Root pattern**: Classification is a one-time, one-place decision made at upload with zero intelligence, and there's no reconciliation afterward. Convention: "the user will choose the right type" → they can't (no UI). "The auto-fetch will find all Acts" → it won't (India Code gaps). "If misclassified, someone will manually fix it" → there's no fix path. Same "vigilance not structure" anti-pattern as ARCH-001 through ARCH-006.
+
+**Fix options (ranked by value/effort)**:
+
+| Fix | Scope | Value | Effort |
+|---|---|---|---|
+| **1. Upload UI type selector** | Frontend upload page (~1 file) | Users CAN choose Act — but they'll forget | Low |
+| **2. Filename heuristic pre-selection** | Backend documents.py (~10 lines) | Auto-suggests "Act" for `* Act YYYY*` filenames | Low |
+| **3. Post-upload reclassification** | Backend migration endpoint + frontend action button | Recovery path for misclassified docs | Medium |
+| **4. Post-OCR content classification** | New pipeline task with LLM or rule-based detection | Catches Acts regardless of filename | Medium-High |
+| **5. Unified chunk table** | Schema migration + RPC refactor | Eliminates ARCH-001 instance (Flaw 5) | High |
+
+**Recommended sequence**: 1+2 first (quick win, covers most cases), then 3 (recovery path), then 4 (catches edge cases). Flaw 5 is structural debt to track but not address immediately.
+
+**Status update (2026-04-30)**: Fixes 1+2 deployed and verified in production. Document type selector UI added to upload wizard (`UploadWizard.tsx`), filename heuristic auto-detects Acts in both frontend (`uploadWizardStore.ts`) and backend (`documents.py:_detect_act_from_filename`). "TORTS Act 1992.pdf" now correctly auto-selects "Act / Statute" and routes to library pipeline.
+
+**Key files**:
+- Upload endpoint: `backend/app/api/routes/documents.py:407-523, 1041-1149`
+- Library service: `backend/app/services/library_service.py` (986 lines)
+- Library tasks: `backend/app/workers/tasks/library_tasks.py` (904 lines)
+- Act validation: `backend/app/workers/tasks/act_validation_tasks.py` (1143 lines)
+- India Code client: `backend/app/engines/citation/india_code.py`
+- Frontend upload: `frontend/src/app/upload/page.tsx`
+- Frontend API: `frontend/src/lib/api/documents.ts:84`
+- Document list type dropdown: `frontend/src/components/features/documents/DocumentList.tsx:329-411`
+- Library schema: `supabase/migrations/20260126000001_create_library_tables.sql`
+
+#### ARCH-007 Subsystem Audit (2026-04-30) — 16 Gaps Found
+
+Full architectural audit of the library document subsystem. Phase 1 research covered: all 6 migration files, all 5 tables (live schema verified), all entry paths, full processing pipeline, all query paths, maintenance sweeps, and live data queries.
+
+**Live data reality (14 library docs in production)**:
+
+| Status | Source | Total | With Chunks | Without Chunks |
+|---|---|---|---|---|
+| completed | user_upload | 3 | 3 | 0 |
+| completed | india_code | 2 | 1 | **1** |
+| failed | india_code | 9 | 1 | 8 |
+
+##### P0 Gaps — Data Loss / Silent Wrong Results
+
+**GAP-1 (P0): User-uploaded Acts never get OCR dispatched** | Status: FIXED (2026-04-30)
+`_upload_act_to_library()` (documents.py:537-563) now dispatches `ocr_and_process_library_document.apply_async()` immediately after creating a new library doc. Wrapped in try/except so upload succeeds even if Redis is down — maintenance sweep catches it within 60 min. Response `ocr_queued` field now reads from result dict. Blast-radius verified: no duplicate dispatch risk (sweep has 60-min stale threshold), chunking/embedding are idempotent.
+
+**GAP-2 (P0): Completed library doc with 0 chunks** | Status: FIXED (2026-04-30)
+Two guards added to `embed_library_chunks` (library_tasks.py): (1) When no unembedded chunks found, checks total chunk count — if 0, marks FAILED with `quality_flags=["zero_chunks"]` instead of COMPLETED. (2) After embedding loop, if `embedded_count == 0` but chunks existed, marks FAILED with `quality_flags=["embedding_failed"]`. Both return (not raise) so `fire_library_callbacks` can check status and skip — verified that it does. Data fix: `environment_protection_act_1986` moved from completed→failed.
+
+**GAP-3 (P0): 77% of library chunks missing embeddings** | Status: FIXED (2026-04-30)
+Root cause: all 56 missing embeddings belonged to ONE document (Bharatiya Nyaya Sanhita, 2023). Chunking succeeded but embedding failed; `quality_flags` was incorrectly set to `["chunking_failed"]`. All other completed docs had 100% embeddings. Data fix: reset BNS to `status=pending`, `quality_flags=[]`. Maintenance sweep will re-run pipeline — chunking will skip (idempotent, 56 chunks exist), embedding will process the 56 unembedded chunks.
+
+##### P1 Gaps — Significant Functionality Gaps
+
+**GAP-4 (P1): Voyage embeddings never populated for library chunks** | Status: OPEN
+The `embedding_voyage` column exists in `library_chunks` but `embed_library_chunks` only generates OpenAI embeddings. When using Voyage as embedding provider, `match_library_chunks_for_matter_voyage` always returns 0 results. Fix: add Voyage embedding generation to `embed_library_chunks` (20 lines).
+
+**GAP-5 (P1): 9 failed india_code library docs (7 with `storage_missing`)** | Status: PARTIALLY FIXED (2026-04-30)
+Investigation revealed PDFs DID download from India Code and were cached to Supabase Storage — `act_validation_cache` shows `validation_status=valid` with `cached_storage_path` for all 9. Files disappeared from storage between caching and OCR (likely storage path convention change: some docs have `documents/library/central_acts/...` path while cache has `global/acts/...`). 1 doc (BNS) fixed via GAP-3 re-embedding. 7 `storage_missing` docs need re-fetch from India Code (reset cache entries + re-run `fetch_acts_from_india_code`). 1 doc (Presidency Towns) has `validation_status=unknown`.
+
+**GAP-6 (P1): 3 act_resolutions stuck in `auto_fetching` for 69 days** | Status: FIXED (2026-04-30)
+Data fix: 3 act_resolutions moved from `auto_fetching` → `not_on_indiacode`. Two were duplicates for `contempt_of_courts_act_1971`, one was garbage name `said_act`. Frontend now shows "Upload manually" badge. Verified: no beat task queries `auto_fetching`, no RLS filters by status, polling stops sooner (reduces API calls).
+
+**GAP-7 (P1): No BM25/full-text search for library chunks** | Status: OPEN
+`library_chunks` table lacks `fts` tsvector column. Library search is semantic-only. If embedding fails or is missing (GAP-3), library results are simply skipped. The `chunks` table has full-text search; `library_chunks` doesn't.
+
+##### P2 Gaps — Architectural Debt
+
+**GAP-8 (P2): `chunks` vs `library_chunks` schema divergence** | Status: OPEN (tracking)
+`chunks` has: `matter_id`, `entity_ids`, `bbox_ids`, `fts`, `embedding_model_version`, `layout_derived`, `text_start_offset`, `text_end_offset`. None exist in `library_chunks`. Every search improvement, index tuning, or embedding migration must be done twice. This is an instance of ARCH-001 (parallel paths).
+
+**GAP-9 (P2): No shared "is this an Act?" classification gate** | Status: PARTIALLY FIXED
+Path A: filename regex (new, 2026-04-30). Path B: India Code lookup. Path C: manual admin. Path D: trusts `documents.document_type`. Path E: "Add Files" dialog — no type detection at all, hardcodes `case_file`. No post-OCR content-based detection. Partially fixed by adding filename heuristic to wizard path, but "Add Files" dialog bypasses it entirely. Long-term: unify wizard and dialog into one shared upload function with type detection built in.
+
+**GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: OPEN (tracking)
+Schema has the column for section-level search. Chunker never populates it. Missed opportunity for "Section 4 of Indian Contract Act" queries.
+
+**GAP-11 (P2): Library document cost tracking absent** | Status: OPEN
+No `library_ocr` operation type in `llm_costs`. Library processing costs are not distinguishable from regular document costs. Can't measure library processing spend.
+
+**GAP-12 (P2): Deduplication logic inconsistent across entry paths** | Status: OPEN
+Path A: exact title `ilike`. Path B: exact then prefix match. Path C: `ilike` exact then fuzzy prefix. `find_library_duplicates` RPC (trgm similarity) exists but is only used by the check-duplicates API, not by any creation path.
+
+##### P3 Gaps — Nice to Have
+
+**GAP-13 (P3): RLS INSERT policy requires `added_by = auth.uid()`** — India Code auto-fetch sets `added_by: None`. Works only because backend uses `service_role` client. Would fail with authenticated client.
+
+**GAP-14 (P3): No soft-delete for library documents** — No way to remove bad library docs without direct DB access.
+
+**GAP-15 (P3): `quality_flags` format inconsistent** — Some paths set list `["storage_missing"]`, others set string. Schema is jsonb, accepts both, consumers must handle both.
+
+**GAP-16 (P3): No `error_message` column on library_documents** — When processing fails, only info is quality_flag. `documents` table has `ocr_error`; `library_documents` doesn't.
+
+##### Architecture Recommendations (from audit)
+
+1. **Keep separate tables** — `library_chunks` vs `chunks` RLS models and column sets are genuinely different. But enforce schema contract: any change to `chunks` must be evaluated for `library_chunks`.
+2. **Explicit dispatch, not reconciler** — Every entry path dispatches OCR synchronously. Maintenance sweep stays as safety net, not primary dispatcher. Reconciler deferred until beat isolation is stable.
+3. **Completion verification** — Never set status=completed without checking chunk count > 0 AND embedding count > 0.
+4. **Fix order**: GAP-1 (5 lines) → GAP-2 (10 lines) → GAP-3 (investigate) → GAP-5 (data fix) → GAP-4 (20 lines) → GAP-7+8 (migration).
+
+---
+
+**Common thread across all seven**: implicit coordination through convention instead of explicit coordination through structure. Two pipelines that "should" stay in sync (ARCH-001), four queues that "should" be isolated (ARCH-002), a chain that "should" reach its terminal task (ARCH-003), 14 LLM call sites that "should" honor the rate limiter (ARCH-004), a Postgres function that "should" stay signature-compatible across two repos (ARCH-005), 36 TypeScript files that "should" mirror Pydantic models exactly (ARCH-006), a library subsystem with 4 entry paths that "should" all dispatch OCR (ARCH-007). None are enforced by the architecture, all have been violated in production, and each violation has cost a debugging session — sometimes a multi-day one. The fix in every case is the same shape: **make the right thing the only possible thing.** Structure beats vigilance.
 
 ---
 
@@ -1013,7 +1235,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
+| **Status** | FIXED (2026-04-29 — deployed + visually verified on production) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-009) |
 
@@ -1091,7 +1313,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
+| **Status** | FIXED (2026-04-29 — deployed + visually verified on production) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-015) |
 
@@ -1126,7 +1348,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
+| **Status** | FIXED (2026-04-29 — deployed + visually verified on production) |
 | **Date Found** | 2026-04-29 |
 | **Source** | Production testing during Tier 1 #4 Q&A guard implementation |
 
@@ -1144,7 +1366,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low — UX polish) |
-| **Status** | FIXED (2026-04-29 — deployment & visual verification pending) |
+| **Status** | FIXED (2026-04-29 — deployed + visually verified on production) |
 | **Date Found** | 2026-04-29 |
 | **Source** | Production testing during Tier 1 #4 |
 
@@ -1159,6 +1381,33 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 Backend guard (`_check_processing_status()`) remains as safety net for stale frontend state.
 
 **Files changed**: `frontend/src/components/features/chat/QAPanel.tsx` (1 file — no new components, reused existing `Alert`/`AlertDescription`)
+
+---
+
+### UX-015: Processing Page Stuck at 0% After Act Upload (Library Path)
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (High — user sees broken UI after successful upload) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-30 |
+| **Source** | GAP-1 verification testing |
+
+**Description**: When a user uploads an Act PDF that matches an existing library document, the upload succeeds (file linked via `matter_library_links`), but the processing page (`/upload/processing`) stays stuck at "Stage 1 of 5: Uploading files" at 0% forever.
+
+**Root cause**: The library path (branch 1 in `_upload_act_to_library`) links an existing library doc without creating a `documents` row or a `processing_jobs` row. The processing page polls `jobsApi.getStats(matterId)` which queries `processing_jobs` — with 0 jobs, it never sees progress. The `useProcessingStatus` hook never returns `isComplete: true`.
+
+**Affected paths**: Any Act upload that links to an existing completed library doc (branch 1). New library docs (branch 2, GAP-1 fix) also lack processing_jobs — the OCR runs in the library pipeline, not the main pipeline.
+
+**Fix direction**: The processing page needs to detect "Act uploaded to library, no processing needed" and complete immediately. Options: (1) Backend returns a signal (`processing_needed: false`) that the frontend uses to skip polling, (2) Frontend detects 0 jobs after upload complete and auto-completes, (3) Create a lightweight processing_job for library-linked Acts.
+
+**Additional symptoms** (same root cause — 0 documents in matter):
+- Summary page stuck at "Generating Summary — Waiting in queue... 0%" — summary job created but has no documents/chunks to summarize
+- Dashboard matter card shows "0 pages" despite linked library Act having content
+- "0% Verified, 0 Issues" — verification runs against `documents`, finds nothing
+
+**Design question**: Should Acts-only matters even show summary/timeline/contradictions? Acts are reference material, not case files. The summary prompts ("What is this case about?") don't make sense for a statute.
+
+**Workaround**: User can click "Back to Dashboard" — Q&A works against library chunks. But the matter looks empty everywhere else.
 
 ---
 
@@ -1508,7 +1757,7 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 
 | Category | Total | Fixed | Open | Partially Fixed | Not Reproducible | Not a Bug | Resolved | Mitigated |
 |----------|-------|-------|------|----------------|-----------------|-----------|----------|-----------|
-| Architectural Debt | 6 | 0 | 6 | 0 | 0 | 0 | 0 | 0 |
+| Architectural Debt | 7 | 0 | 7 | 0 | 0 | 0 | 0 | 0 |
 | Security | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Worker & Pipeline Scalability | 3 | 2 | 0 | 1 | 0 | 0 | 0 | 0 |
 | Document Processing Pipeline | 16 | 11 | 3 | 0 | 2 | 0 | 0 | 0 |
@@ -1516,9 +1765,9 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 | Frontend UX | 14 | 11 | 2 | 1 | 0 | 0 | 0 | 0 |
 | Infrastructure | 11 | 7 | 3 | 0 | 0 | 0 | 0 | 1 |
 | Other | 4 | 3 | 0 | 0 | 0 | 1 | 0 | 0 |
-| E2E Verification | 8 | 1 | 7 | 0 | 0 | 0 | 0 | 0 |
+| E2E Verification | 11 | 1 | 10 | 0 | 0 | 0 | 0 | 0 |
 | API | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **72** | **44** | **22** | **2** | **2** | **1** | **0** | **1** |
+| **Total** | **76** | **44** | **26** | **2** | **2** | **1** | **0** | **1** |
 
 *Note: DPP-010 (RESOLVED) counted under DPP Fixed. UX-004 counted as Partially Fixed (core fixed, feature gap open). WPS-001 counted as Partially Fixed (layers 1-3 fixed, 4-5 open). INF-011 (MITIGATED) in its own column.*
 
@@ -1572,13 +1821,20 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 | Summary table | 49 total, stale since 2026-03-19 | 72 total, accurate | Full recount including ARCH, E2E, API categories |
 | Header | 70 total | 72 total | Corrected miscount (UX-013, UX-014 not counted) |
 
-**Round 5 — UX polish cluster** (2026-04-29 — code complete, deployment & visual verification pending):
+**Round 5 — UX polish cluster** (2026-04-29 — code complete, deployed + visually verified on production):
 | Bug | Before | After | What changed |
 |-----|--------|-------|-------------|
-| UX-007 | OPEN | FIXED (deploy pending) | Banner derives completed/queued from jobs Map (single source of truth) instead of stale `stats` object fetched once on mount |
-| UX-011 | OPEN | FIXED (deploy pending) | Added `defaultValue` to 9 Select components across 3 files; removed `suppressHydrationWarning` band-aids |
-| UX-013 | OPEN | FIXED (deploy pending) | New `selectActiveDocumentCount` selector counts unique document_ids from DOCUMENT_PROCESSING jobs; banner uses it for "N documents" label |
-| UX-014 | OPEN | FIXED (deploy pending) | QAPanel subscribes to processing store; proactive amber banner + disabled input replaces reactive red error |
+| UX-007 | OPEN | FIXED (verified) | Banner derives completed/queued from jobs Map (single source of truth) instead of stale `stats` object fetched once on mount |
+| UX-011 | OPEN | FIXED (verified) | Added `defaultValue` to 9 Select components across 3 files; removed `suppressHydrationWarning` band-aids |
+| UX-013 | OPEN | FIXED (verified) | New `selectActiveDocumentCount` selector counts unique document_ids from DOCUMENT_PROCESSING jobs; banner shows "Processing 1 document" correctly |
+| UX-014 | OPEN | FIXED (verified) | QAPanel shows amber "Documents are being processed" banner + disabled input during processing; verified with live upload |
+
+**Round 5 — E2E walkthrough new bugs** (2026-04-29):
+| Bug | Status | What found |
+|-----|--------|------------|
+| E2E-009 | OPEN | `/api/matters/.../touch` returns 500 — "Never opened" on dashboard |
+| E2E-010 | OPEN | CORS missing on `/api/health` — health polling fails silently |
+| E2E-011 | OPEN | Summary `forceRefresh=true` returns 401 after token expiry |
 
 ### Process Failures & Lessons Learned
 See [full post-mortem](../../../.claude/projects/E--Career-coaching-100x-LDIP/memory/verification-failures.md)
@@ -1653,6 +1909,24 @@ group(validate_ocr, calculate_confidence, chunk_document)
 **Wall fix**: Same as DPP-014 big fix — derive completion from observed database state, not from task signals. This eliminates the entire "remember to signal" category.
 
 **Relationship**: DPP-014 and DPP-015 share the same wall fix (ARCH-003 reconciler). They're listed separately because they have different symptoms and different interim mitigations.
+
+---
+
+### DPP-017: `chunk_library_document` crashes on child chunks — `parent_chunk_index` attribute error
+| Field | Value |
+|-------|-------|
+| **Severity** | P0 (Critical — ALL library Act uploads with child chunks fail) |
+| **Status** | FIXED (2026-04-30) |
+| **Date Found** | 2026-04-30 |
+| **Source** | GAP-1 verification — live upload of "TORTS Act 1992 - Copy" |
+
+**Description**: `chunk_library_document` (library_tasks.py:163) accessed `chunk.parent_chunk_index` on `ChunkData` objects, but this attribute doesn't exist. `ChunkData` has `parent_id` (UUID of the parent chunk) and `chunk_index`, not `parent_chunk_index`. This caused ALL library document chunking with child chunks to crash with `AttributeError`.
+
+**Impact**: Parent chunks were inserted before the crash, but child chunks were never created. The chain error handler fired, marking the doc as `failed` with `quality_flags=["chain_error"]`. Embedding never ran. Every Act upload since the parent-child chunker was introduced has been silently failing at the chunking stage.
+
+**Root cause**: The library task used an index-based parent mapping strategy (`chunk_index → DB id`) that didn't match the `ChunkData` API. The main pipeline uses `ChunkData.id` directly as the DB primary key and `ChunkData.parent_id` as the foreign key — the library task should have done the same.
+
+**Fix**: Use `ChunkData.id` as DB primary key (matching main pipeline pattern in `chunk_service.save_chunks()`). Use `chunk.parent_id` directly as `parent_chunk_id` foreign key. Removed the broken `parent_id_map` intermediate step.
 
 ---
 
@@ -1860,3 +2134,53 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 **Root Cause**: Wrong column name — the actual column is `confidence_before`, not `confidence`. The `confidence` column doesn't exist on `finding_verifications`.
 
 **Fix Applied** (commit `c456312`): Changed `.lt("confidence", 70)` to `.lt("confidence_before", 70)` in `tab_stats_service.py`. One-character fix.
+
+---
+
+## 8. E2E Verification Findings (2026-04-29)
+
+### E2E-009: `/api/matters/.../touch` returns 500
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 |
+| **Source** | E2E visual verification — browser console errors |
+
+**Description**: Opening a matter triggers `POST /api/matters/{id}/touch` which returns HTTP 500. Seen 3 times across different matters. The `touch` endpoint updates `last_opened_at` for "Last opened" display on dashboard cards.
+
+**Impact**: Low — doesn't block any functionality. Dashboard shows "Never opened" instead of actual last-opened time.
+
+**Files**: `backend/app/api/routes/matters.py` (touch endpoint)
+
+---
+
+### E2E-010: CORS missing on `/api/health` endpoint
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 |
+| **Source** | E2E visual verification — browser console errors |
+
+**Description**: `GET /api/health` from `https://www.jaanch-ai.in` blocked by CORS: "No 'Access-Control-Allow-Origin' header is present". The main API endpoints have CORS configured (INF-003 was fixed), but the health endpoint appears to bypass the CORS middleware.
+
+**Impact**: Low — health check polling from frontend fails silently. May affect the circuit breaker / connectivity status indicator.
+
+**Files**: `backend/app/main.py` (CORS config), `backend/app/api/routes/health.py`
+
+---
+
+### E2E-011: Summary `forceRefresh=true` returns 401 after token expiry
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low) |
+| **Status** | OPEN |
+| **Date Found** | 2026-04-29 |
+| **Source** | E2E visual verification — browser console errors |
+
+**Description**: `GET /api/matters/{id}/summary?forceRefresh=true` returns 401. Seen after navigating between matters. Supabase auth token likely expired mid-session, and the frontend didn't refresh before retrying. Also saw a 404 fallback to Vercel route (`/api/matters/{id}/summary?forceRefresh=true` hitting frontend instead of backend).
+
+**Impact**: Low — summary just doesn't refresh. User can reload page to get new token.
+
+**Files**: `frontend/src/lib/api/client.ts` (auth token refresh logic), API route configuration

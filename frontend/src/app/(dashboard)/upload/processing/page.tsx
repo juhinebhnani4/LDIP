@@ -77,6 +77,7 @@ export default function ProcessingPage() {
   const matterName = useUploadWizardStore((state) => state.matterName);
   const setMatterName = useUploadWizardStore((state) => state.setMatterName);
   const matterId = useUploadWizardStore((state) => state.matterId);
+  const documentType = useUploadWizardStore((state) => state.documentType);
 
   // Background processing store
   const addBackgroundMatter = useBackgroundProcessingStore(
@@ -284,7 +285,8 @@ export default function ProcessingPage() {
                   }
                 },
               },
-              abortController.signal
+              abortController.signal,
+              documentType
             );
 
             // Mark upload phase complete if we have uploads

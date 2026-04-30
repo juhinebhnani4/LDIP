@@ -11,8 +11,8 @@
 
 import { api, ApiError } from '@/lib/api/client';
 import { uploadFile } from '@/lib/api/documents';
-// UploadResponse type used by uploadFile function
 import type { UploadProgress } from '@/types/upload';
+import type { DocumentType } from '@/types/document';
 
 // =============================================================================
 // Types
@@ -92,7 +92,8 @@ export async function createMatterAndUpload(
   matterName: string,
   files: File[],
   callbacks: UploadOrchestrationCallbacks = {},
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  documentType?: DocumentType
 ): Promise<UploadOrchestrationResult> {
   const {
     onMatterCreated,
@@ -168,6 +169,7 @@ export async function createMatterAndUpload(
       // Note: uploadFile uses its own store updates, but we also call our callbacks
       const response = await uploadFile(file, `file-${i}-${Date.now()}`, {
         matterId,
+        documentType,
         onProgress: (pct) => {
           onUploadProgress?.(file.name, {
             fileName: file.name,
@@ -233,7 +235,8 @@ export async function uploadToExistingMatter(
   matterId: string,
   files: File[],
   callbacks: Omit<UploadOrchestrationCallbacks, 'onMatterCreated'> = {},
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  documentType?: DocumentType
 ): Promise<Omit<UploadOrchestrationResult, 'matterId'>> {
   const {
     onUploadProgress,
@@ -277,6 +280,7 @@ export async function uploadToExistingMatter(
 
       const response = await uploadFile(file, `file-${i}-${Date.now()}`, {
         matterId,
+        documentType,
         onProgress: (pct) => {
           onUploadProgress?.(file.name, {
             fileName: file.name,

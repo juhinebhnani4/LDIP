@@ -1261,19 +1261,21 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | FIXED (2026-04-28) |
+| **Status** | FIXED (2026-05-06) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-007) |
 
 **Description**: Matter card always shows "Last opened: Never opened" because the `lastOpened` timestamp is never updated anywhere.
 
-**Root Cause**: Migration `20260319000001_add_last_opened_at_to_matters.sql` existed but was never applied to production. The endpoint (`POST /api/matters/{id}/touch`) and frontend caller (`MatterWorkspaceWrapper.tsx:101`) were already implemented, but the column didn't exist, causing a silent 500 error (masked by `.catch(() => {})`).
+**Root Cause (two-part)**:
+1. **(2026-04-28)** Migration `20260319000001_add_last_opened_at_to_matters.sql` was never applied to production. The column didn't exist, causing a silent 500 error on touch (masked by `.catch(() => {})`). Fixed by applying `ALTER TABLE matters ADD COLUMN IF NOT EXISTS last_opened_at timestamptz DEFAULT NULL`.
+2. **(2026-05-06)** Frontend type gap: Backend Pydantic model serializes as `lastOpenedAt`, but the frontend `Matter` TypeScript interface didn't include the field. `transformMatterToCardData()` in `matterStore.ts` didn't map `lastOpenedAt` → `lastOpened`. Result: `MatterCard` always received `undefined` for `lastOpened`, so `formatRelativeTime()` returned "Never opened."
 
-**Fix Applied (2026-04-28)**: Applied `ALTER TABLE matters ADD COLUMN IF NOT EXISTS last_opened_at timestamptz DEFAULT NULL` directly to production. Verified: `/touch` endpoint now returns 204 (was 500), zero console errors on matter page load.
+**Fix Applied (2026-05-06)**: Added `lastOpenedAt: string | null` to `Matter` interface in `matter.ts`. Added `lastOpened: matter.lastOpenedAt ?? undefined` mapping in `transformMatterToCardData()`.
 
-**Remaining display issue (2026-05-06)**: Touch writes `last_opened_at` to DB correctly and the card sorts to the top position (Recent sort uses the timestamp), but the card text still shows "Last opened: Never opened." The matters list API likely returns `last_opened_at` but the frontend `MatterCard` component doesn't render it — needs investigation of how `enrichMattersWithStats()` maps the field.
+**Production verified (2026-05-06)**: Opened "Shiju K vs Nalini" matter → returned to dashboard → card shows "Last opened: Just now". "8 & 9 juhinebhnani4" shows "Last opened: 2h ago". Never-opened matters correctly show "Never opened."
 
-**Files**: No code changes needed — endpoint and frontend were already correct. Only the migration needed applying.
+**Files changed**: `frontend/src/types/matter.ts`, `frontend/src/stores/matterStore.ts`
 
 ---
 

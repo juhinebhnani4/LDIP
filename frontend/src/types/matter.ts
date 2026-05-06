@@ -106,6 +106,7 @@ export interface Matter extends MatterBase {
   deletedAt: string | null;
   role: MatterRole | null;
   memberCount: number;
+  lastOpenedAt: string | null;
 }
 
 /** Matter model including list of members */

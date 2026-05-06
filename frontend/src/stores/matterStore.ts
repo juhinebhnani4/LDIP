@@ -39,6 +39,7 @@ function transformMatterToCardData(matter: Matter): MatterCardData {
     verificationPercent: 0,
     issueCount: 0,
     processingStatus: 'ready',
+    lastOpened: matter.lastOpenedAt ?? undefined,
   };
 }
 
@@ -288,6 +289,7 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         deletedAt: null,
+        lastOpenedAt: null,
         pageCount: 0,
         documentCount: 0,
         verificationPercent: 0,

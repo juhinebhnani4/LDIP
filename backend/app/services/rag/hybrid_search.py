@@ -1046,6 +1046,67 @@ class HybridSearchService:
 
         return library_results
 
+    async def _bm25_search_library_chunks(
+        self,
+        query: str,
+        matter_id: str,
+        limit: int = 10,
+    ) -> list[SearchResult]:
+        """BM25 keyword search over linked library chunks (GAP-7 fix).
+
+        Uses the bm25_search_library_chunks RPC function.
+        Silently returns empty list on failure (best-effort).
+        """
+        library_results: list[SearchResult] = []
+        supabase = get_supabase_client()
+        if supabase is None:
+            return library_results
+
+        try:
+            response = supabase.rpc(
+                "bm25_search_library_chunks",
+                {
+                    "query_text": query,
+                    "filter_matter_id": matter_id,
+                    "match_count": limit,
+                },
+            ).execute()
+
+            if response.data:
+                for idx, r in enumerate(response.data):
+                    library_results.append(
+                        SearchResult(
+                            id=str(r["id"]),
+                            matter_id=matter_id,
+                            document_id=str(r["library_document_id"]),
+                            content=r["content"],
+                            page_number=r.get("page_number"),
+                            bbox_ids=None,
+                            chunk_type=r["chunk_type"],
+                            token_count=r.get("token_count") or 0,
+                            bm25_rank=idx + 1,
+                            semantic_rank=None,
+                            rrf_score=r["rank"],
+                            is_library=True,
+                            library_document_title=r.get("document_title"),
+                        )
+                    )
+
+                logger.info(
+                    "library_bm25_search_results",
+                    matter_id=matter_id,
+                    count=len(library_results),
+                )
+
+        except Exception as e:
+            logger.warning(
+                "library_bm25_search_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
+
+        return library_results
+
     async def search_with_library(
         self,
         query: str,
@@ -1143,7 +1204,7 @@ class HybridSearchService:
                 filters=filters,
             )
 
-            # Step 3: Search linked library chunks (semantic only for now)
+            # Step 3: Search linked library chunks (semantic + BM25 fallback — GAP-7 fix)
             library_results: list[SearchResult] = []
             if query_embedding is not None:
                 rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
@@ -1153,6 +1214,20 @@ class HybridSearchService:
                     library_limit=library_limit,
                     rpc_function=rpc_func,
                 )
+
+            # GAP-7: BM25 fallback for library when semantic returns too few results
+            if len(library_results) < 3:
+                bm25_library = await self._bm25_search_library_chunks(
+                    query=query,
+                    matter_id=matter_id,
+                    limit=library_limit,
+                )
+                # Merge BM25 results, dedup by chunk id
+                seen_ids = {r.id for r in library_results}
+                for bm25_r in bm25_library:
+                    if bm25_r.id not in seen_ids:
+                        library_results.append(bm25_r)
+                        seen_ids.add(bm25_r.id)
 
             # Step 4: Merge results using RRF
             all_results = list(matter_result.results)
@@ -1251,7 +1326,8 @@ class HybridSearchService:
             filters=filters,
         )
 
-        # Step 3: Library results (best-effort, uses same embedding)
+        # Step 3: Library results (best-effort, uses same embedding + BM25 fallback)
+        library_results: list[SearchResult] = []
         if query_embedding is not None:
             rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
             library_results = await self._search_library_chunks(
@@ -1261,7 +1337,20 @@ class HybridSearchService:
                 rpc_function=rpc_func,
             )
 
-            if library_results:
+        # GAP-7: BM25 fallback for library when semantic returns too few results
+        if len(library_results) < 3:
+            bm25_library = await self._bm25_search_library_chunks(
+                query=query,
+                matter_id=matter_id,
+                limit=library_limit,
+            )
+            seen_ids = {r.id for r in library_results}
+            for bm25_r in bm25_library:
+                if bm25_r.id not in seen_ids:
+                    library_results.append(bm25_r)
+                    seen_ids.add(bm25_r.id)
+
+        if library_results:
                 # Convert library SearchResults to RerankedSearchResultItems
                 for lib in library_results:
                     rerank_result.results.append(

@@ -464,33 +464,30 @@ async def _upload_act_to_library(
     normalized_name = re.sub(r'\s+', '_', normalized_name)
     storage_path = f"global/acts/{normalized_name}.pdf"
 
-    # Check if this Act already exists in the library by title
-    existing_docs, _ = library_service.list_documents(
-        search_query=title,
-        document_type=LibraryDocumentType.ACT,
-        per_page=5,
-    )
-
-    # If exact title match exists, link that instead of creating new
-    for existing in existing_docs:
-        if existing.title.lower() == title.lower():
+    # GAP-12: Standardized dedup using find_library_duplicates RPC
+    try:
+        duplicates = library_service.find_duplicates(title, year=year, similarity_threshold=0.6)
+        if duplicates:
+            existing_id = duplicates[0].id
             logger.info(
                 "act_already_in_library",
-                existing_id=existing.id,
+                existing_id=existing_id,
                 title=title,
+                similarity=duplicates[0].similarity,
             )
-            # Just link the existing library document
             link = library_service.link_to_matter(
                 matter_id=matter_id,
-                library_document_id=existing.id,
+                library_document_id=existing_id,
                 linked_by=user_id,
             )
             return {
-                "library_document_id": existing.id,
+                "library_document_id": existing_id,
                 "link_id": link.id,
                 "is_new": False,
-                "title": existing.title,
+                "title": duplicates[0].title,
             }
+    except Exception as e:
+        logger.warning("act_dedup_rpc_failed", title=title, error=str(e))
 
     # Upload file to global storage
     # Use "global" as pseudo-matter_id to get path: global/acts/{filename}

@@ -135,29 +135,43 @@ def _extract_year_from_name(name: str) -> int | None:
 
 
 def _find_library_document_by_title(client: Any, title: str) -> dict | None:
-    """Find a library document by title (case-insensitive fuzzy match)."""
+    """Find a library document by title using trigram similarity (GAP-12 standardized).
+
+    Uses the find_library_duplicates RPC for consistent dedup across all paths.
+    Falls back to exact ilike match if RPC fails.
+    """
     try:
-        # Try exact match first
-        result = client.table("library_documents").select(
-            "id, title, storage_path"
-        ).ilike("title", title).limit(1).execute()
+        year = _extract_year_from_name(title)
+        result = client.rpc(
+            "find_library_duplicates",
+            {
+                "search_title": title,
+                "search_year": year,
+                "similarity_threshold": 0.6,
+            },
+        ).execute()
 
         if result.data:
-            return result.data[0]
-
-        # Try without year suffix
-        base_title = title.rsplit(",", 1)[0].strip() if "," in title else title
-        result = client.table("library_documents").select(
-            "id, title, storage_path"
-        ).ilike("title", f"{base_title}%").limit(1).execute()
-
-        if result.data:
-            return result.data[0]
+            best = result.data[0]
+            # Fetch storage_path (RPC doesn't return it, but callers need it)
+            doc_result = client.table("library_documents").select(
+                "id, title, storage_path"
+            ).eq("id", best["id"]).limit(1).execute()
+            if doc_result.data:
+                return doc_result.data[0]
+            return {"id": best["id"], "title": best["title"], "storage_path": None}
 
         return None
     except Exception as e:
-        logger.warning("find_library_document_error", title=title, error=str(e))
-        return None
+        logger.warning("find_library_document_rpc_error", title=title, error=str(e))
+        # Fallback: exact ilike match if RPC fails
+        try:
+            result = client.table("library_documents").select(
+                "id, title, storage_path"
+            ).ilike("title", title).limit(1).execute()
+            return result.data[0] if result.data else None
+        except Exception:
+            return None
 
 
 def _link_act_from_library(

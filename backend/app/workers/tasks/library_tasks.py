@@ -351,9 +351,9 @@ def embed_library_chunks(
             batch_texts = [c["content"] for c in batch]
             batch_ids = [c["id"] for c in batch]
 
-            # Generate embeddings
+            # Generate embeddings (GAP-11: pass document_id for cost attribution)
             async def _embed_batch():
-                return await embedder.embed_batch(batch_texts)
+                return await embedder.embed_batch(batch_texts, document_id=lib_doc_id)
 
             embeddings = run_async(_embed_batch())
 
@@ -378,6 +378,53 @@ def embed_library_chunks(
             if i + EMBEDDING_BATCH_SIZE < len(chunks):
                 import time
                 time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
+
+        # GAP-4: Generate Voyage embeddings (best-effort, non-blocking)
+        voyage_count = 0
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if settings.voyage_api_key:
+                from app.services.rag.voyage_embedder import get_voyage_embedding_service
+                voyage_embedder = get_voyage_embedding_service()
+
+                for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
+                    batch = chunks[i:i + EMBEDDING_BATCH_SIZE]
+                    batch_texts = [c["content"] for c in batch]
+                    batch_ids = [c["id"] for c in batch]
+
+                    async def _embed_voyage_batch():
+                        return await voyage_embedder.embed_batch(
+                            batch_texts,
+                            matter_id=None,
+                            input_type="document",
+                        )
+
+                    voyage_embeddings = run_async(_embed_voyage_batch())
+                    if voyage_embeddings:
+                        for chunk_id, v_emb in zip(batch_ids, voyage_embeddings):
+                            if v_emb is not None:
+                                client.table("library_chunks").update(
+                                    {"embedding_voyage": v_emb}
+                                ).eq("id", chunk_id).execute()
+                                voyage_count += 1
+
+                    if i + EMBEDDING_BATCH_SIZE < len(chunks):
+                        import time
+                        time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
+
+                logger.info(
+                    "embed_library_chunks_voyage_complete",
+                    library_document_id=lib_doc_id,
+                    voyage_count=voyage_count,
+                )
+        except Exception as e:
+            logger.warning(
+                "embed_library_chunks_voyage_failed",
+                library_document_id=lib_doc_id,
+                error=str(e),
+                voyage_count=voyage_count,
+            )
 
         # Update document status — only mark completed if we actually embedded something
         if embedded_count == 0 and len(chunks) > 0:

@@ -652,8 +652,8 @@ Root cause: all 56 missing embeddings belonged to ONE document (Bharatiya Nyaya 
 
 ##### P1 Gaps — Significant Functionality Gaps
 
-**GAP-4 (P1): Voyage embeddings never populated for library chunks** | Status: OPEN
-The `embedding_voyage` column exists in `library_chunks` but `embed_library_chunks` only generates OpenAI embeddings. When using Voyage as embedding provider, `match_library_chunks_for_matter_voyage` always returns 0 results. Fix: add Voyage embedding generation to `embed_library_chunks` (20 lines).
+**GAP-4 (P1): Voyage embeddings never populated for library chunks** | Status: FIXED (2026-05-06)
+`embed_library_chunks` now generates both OpenAI and Voyage embeddings in a single pass. Voyage embedding is best-effort (wrapped in try/catch) — if Voyage API key is missing or fails, OpenAI embeddings still work. Existing 89 library chunks have 0 Voyage embeddings (will populate on next library doc processing). Fix in `library_tasks.py`.
 
 **GAP-5 (P1): 9 failed india_code library docs (7 with `storage_missing`)** | Status: PARTIALLY FIXED (2026-04-30)
 Investigation revealed PDFs DID download from India Code and were cached to Supabase Storage — `act_validation_cache` shows `validation_status=valid` with `cached_storage_path` for all 9. Files disappeared from storage between caching and OCR (likely storage path convention change: some docs have `documents/library/central_acts/...` path while cache has `global/acts/...`). 1 doc (BNS) fixed via GAP-3 re-embedding. 7 `storage_missing` docs need re-fetch from India Code (reset cache entries + re-run `fetch_acts_from_india_code`). 1 doc (Presidency Towns) has `validation_status=unknown`.
@@ -661,13 +661,13 @@ Investigation revealed PDFs DID download from India Code and were cached to Supa
 **GAP-6 (P1): 3 act_resolutions stuck in `auto_fetching` for 69 days** | Status: FIXED (2026-04-30)
 Data fix: 3 act_resolutions moved from `auto_fetching` → `not_on_indiacode`. Two were duplicates for `contempt_of_courts_act_1971`, one was garbage name `said_act`. Frontend now shows "Upload manually" badge. Verified: no beat task queries `auto_fetching`, no RLS filters by status, polling stops sooner (reduces API calls).
 
-**GAP-7 (P1): No BM25/full-text search for library chunks** | Status: OPEN
-`library_chunks` table lacks `fts` tsvector column. Library search is semantic-only. If embedding fails or is missing (GAP-3), library results are simply skipped. The `chunks` table has full-text search; `library_chunks` doesn't.
+**GAP-7 (P1): No BM25/full-text search for library chunks** | Status: FIXED (2026-05-06)
+Added `fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED` column to `library_chunks` + GIN index. Created `bm25_search_library_chunks` RPC function. `hybrid_search.py` now has BM25 fallback for library search — fires when semantic returns <3 results. All 89 existing chunks auto-backfilled. Verified: BM25 search returns ranked results for keyword queries.
 
 ##### P2 Gaps — Architectural Debt
 
-**GAP-8 (P2): `chunks` vs `library_chunks` schema divergence** | Status: OPEN (tracking)
-`chunks` has: `matter_id`, `entity_ids`, `bbox_ids`, `fts`, `embedding_model_version`, `layout_derived`, `text_start_offset`, `text_end_offset`. None exist in `library_chunks`. Every search improvement, index tuning, or embedding migration must be done twice. This is an instance of ARCH-001 (parallel paths).
+**GAP-8 (P2): `chunks` vs `library_chunks` schema divergence** | Status: FIXED (2026-05-06)
+Added 5 missing columns to `library_chunks`: `fts` (tsvector), `embedding_model_version` (text), `layout_derived` (boolean), `text_start_offset` (integer), `text_end_offset` (integer). Columns intentionally NOT added: `matter_id` (library is cross-matter), `entity_ids`/`bbox_ids` (matter-scoped). Migration: `20260506000003_add_schema_parity_library_chunks.sql`.
 
 **GAP-9 (P1): Upload path fragmentation — 5 entry points, inconsistent classification** | Status: PARTIALLY FIXED
 
@@ -736,11 +736,11 @@ SharedUploadDropzone (one component, one store)
 **GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: OPEN (tracking)
 Schema has the column for section-level search. Chunker never populates it. Missed opportunity for "Section 4 of Indian Contract Act" queries.
 
-**GAP-11 (P2): Library document cost tracking absent** | Status: OPEN
-No `library_ocr` operation type in `llm_costs`. Library processing costs are not distinguishable from regular document costs. Can't measure library processing spend.
+**GAP-11 (P2): Library document cost tracking absent** | Status: FIXED (2026-05-06)
+`embed_library_chunks` now passes `document_id=library_document_id` through to the embedder, which passes it to `CostTracker`. Library embedding costs are now attributable to specific library documents in `llm_costs` table. Also added `document_id` parameter to `EmbeddingService.embed_batch()` and `_call_openai_batch_embedding()` for general use.
 
-**GAP-12 (P2): Deduplication logic inconsistent across entry paths** | Status: OPEN
-Path A: exact title `ilike`. Path B: exact then prefix match. Path C: `ilike` exact then fuzzy prefix. `find_library_duplicates` RPC (trgm similarity) exists but is only used by the check-duplicates API, not by any creation path.
+**GAP-12 (P2): Deduplication logic inconsistent across entry paths** | Status: FIXED (2026-05-06)
+All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 0.6 threshold) instead of ad-hoc inline `ilike` checks. Updated: `_upload_act_to_library()` (documents.py), `_find_library_document_by_title()` (act_validation_tasks.py), `promote_document_to_library()` (library_service.py). Each path has ilike fallback if RPC fails. Verified: RPC correctly finds duplicates with proper similarity scoring.
 
 ##### P3 Gaps — Nice to Have
 
@@ -757,7 +757,7 @@ Path A: exact title `ilike`. Path B: exact then prefix match. Path C: `ilike` ex
 1. **Keep separate tables** — `library_chunks` vs `chunks` RLS models and column sets are genuinely different. But enforce schema contract: any change to `chunks` must be evaluated for `library_chunks`.
 2. **Explicit dispatch, not reconciler** — Every entry path dispatches OCR synchronously. Maintenance sweep stays as safety net, not primary dispatcher. Reconciler deferred until beat isolation is stable.
 3. **Completion verification** — Never set status=completed without checking chunk count > 0 AND embedding count > 0.
-4. **Fix order**: GAP-1 (5 lines) → GAP-2 (10 lines) → GAP-3 (investigate) → GAP-5 (data fix) → GAP-4 (20 lines) → GAP-7+8 (migration).
+4. **Fix order**: GAP-1 (5 lines) → GAP-2 (10 lines) → GAP-3 (investigate) → GAP-5 (data fix). GAP-4, GAP-7, GAP-8, GAP-11, GAP-12 all FIXED (2026-05-06).
 
 ---
 

@@ -818,44 +818,38 @@ class LibraryService:
             filename = doc["filename"]
             title = filename.rsplit(".", 1)[0] if "." in filename else filename
 
-            # 2. Check if matching library document already exists (dedup by title)
-            existing_result = self.client.table("library_documents").select(
-                "id, title, storage_path, status"
-            ).ilike("title", title).limit(1).execute()
+            # 2. Check if matching library document already exists (GAP-12: use RPC)
+            import re
+            year_match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', title)
+            year = int(year_match.group(1)) if year_match else None
 
             library_doc_id = None
-
-            if existing_result.data:
-                # Found existing — reuse it
-                library_doc_id = existing_result.data[0]["id"]
-                logger.info(
-                    "promote_reusing_existing_library_doc",
-                    document_id=document_id,
-                    library_document_id=library_doc_id,
-                    title=title,
-                )
-            else:
-                # Try fuzzy match: strip year suffix
-                base_title = title.rsplit(",", 1)[0].strip() if "," in title else title
-                fuzzy_result = self.client.table("library_documents").select(
-                    "id, title, storage_path, status"
-                ).ilike("title", f"{base_title}%").limit(1).execute()
-
-                if fuzzy_result.data:
-                    library_doc_id = fuzzy_result.data[0]["id"]
+            try:
+                duplicates = self.find_duplicates(title, year=year, similarity_threshold=0.6)
+                if duplicates:
+                    library_doc_id = duplicates[0].id
                     logger.info(
-                        "promote_reusing_fuzzy_match_library_doc",
+                        "promote_reusing_duplicate_library_doc",
                         document_id=document_id,
                         library_document_id=library_doc_id,
                         title=title,
+                        similarity=duplicates[0].similarity,
                     )
+            except Exception as e:
+                logger.warning(
+                    "promote_dedup_rpc_failed_fallback_to_ilike",
+                    title=title,
+                    error=str(e),
+                )
+                # Fallback: exact ilike match if RPC fails
+                existing_result = self.client.table("library_documents").select(
+                    "id"
+                ).ilike("title", title).limit(1).execute()
+                if existing_result.data:
+                    library_doc_id = existing_result.data[0]["id"]
 
             if library_doc_id is None:
                 # 3. Create new library document
-                import re
-                year_match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', title)
-                year = int(year_match.group(1)) if year_match else None
-
                 create_data = LibraryDocumentCreate(
                     filename=filename,
                     title=title,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle2, Info, Clock, AlertTriangle, XCircle } from 'lucide-react';
+import { CheckCircle2, Info, Clock, AlertTriangle, XCircle, Upload, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/utils/formatRelativeTime';
 import type { Activity, ActivityType } from '@/types/activity';
@@ -45,6 +45,10 @@ export function ActivityIcon({ type, className }: { type: ActivityType; classNam
       return <AlertTriangle className={iconClassName} />;
     case 'XCircle':
       return <XCircle className={iconClassName} />;
+    case 'Upload':
+      return <Upload className={iconClassName} />;
+    case 'FileText':
+      return <FileText className={iconClassName} />;
   }
 }
 

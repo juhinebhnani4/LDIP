@@ -109,10 +109,11 @@ function SummaryGenerating({
  * Error state display
  */
 function SummaryError({ message }: { message?: string }) {
+  const isValidationError = message?.includes("couldn't generate a complete summary");
   return (
-    <Alert variant="destructive">
+    <Alert variant={isValidationError ? 'default' : 'destructive'}>
       <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>Error</AlertTitle>
+      <AlertTitle>{isValidationError ? 'Limited Summary' : 'Error'}</AlertTitle>
       <AlertDescription>
         {message || 'Failed to load summary data. Please try refreshing the page.'}
       </AlertDescription>

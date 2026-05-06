@@ -1258,6 +1258,21 @@ async def upload_document(
                 ocr_queued=True,
             )
 
+            # UX-004: Create activity for document upload
+            try:
+                from app.models.activity import ActivityTypeEnum
+                from app.services.activity_service import get_activity_service
+                activity_service = get_activity_service()
+                await activity_service.create_activity(
+                    user_id=membership.user_id,
+                    type=ActivityTypeEnum.DOCUMENT_UPLOADED,
+                    description=f"Uploaded document: {file.filename or 'document.pdf'}",
+                    matter_id=matter_id,
+                    metadata={"document_id": doc.document_id, "file_size": file_size},
+                )
+            except Exception as activity_err:
+                logger.warning("activity_creation_failed_on_upload", error=str(activity_err))
+
             return DocumentResponse(data=doc)
 
     except HTTPException:

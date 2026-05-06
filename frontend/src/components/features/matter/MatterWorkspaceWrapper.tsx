@@ -98,7 +98,7 @@ export function MatterWorkspaceWrapper({
     loadJobs();
 
     // UX-005: Record that the user opened this matter (fire-and-forget)
-    mattersApi.touch(matterId).catch(() => {});
+    mattersApi.touch(matterId).catch((e) => console.warn('touch failed:', e));
 
     // Set up Supabase Realtime subscription for job updates (Story 2c-3)
     const supabase = createClient();

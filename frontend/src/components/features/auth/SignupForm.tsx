@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -22,6 +22,9 @@ export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState('');
+  const [resendError, setResendError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -143,6 +146,44 @@ export function SignupForm() {
     }
   };
 
+  const handleResendVerification = useCallback(async () => {
+    if (resendCooldown > 0) return;
+    setResendError('');
+    setResendNotice('');
+    setIsLoading(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: formData.email,
+      });
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('rate') || msg.includes('limit')) {
+          setResendError('Too many requests. Please wait a few minutes before trying again.');
+        } else {
+          setResendError(error.message);
+        }
+      } else {
+        setResendNotice('Verification email resent successfully.');
+        setResendCooldown(60);
+      }
+    } catch {
+      setResendError('Failed to resend verification email. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [formData.email, resendCooldown]);
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
   if (showSuccess) {
     return (
       <Card>
@@ -156,9 +197,34 @@ export function SignupForm() {
           <p className="text-sm text-muted-foreground">
             Click the link in your email to verify your account and complete the signup process.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Didn&apos;t receive the email? Check your spam folder, or click below to resend.
+          </p>
+          {resendNotice && (
+            <div className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+              {resendNotice}
+            </div>
+          )}
+          {resendError && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {resendError}
+            </div>
+          )}
         </CardContent>
-        <CardFooter className="justify-center">
-          <Button variant="outline" onClick={() => router.push('/login')}>
+        <CardFooter className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            onClick={handleResendVerification}
+            disabled={isLoading || resendCooldown > 0}
+            className="w-full"
+          >
+            {isLoading
+              ? 'Sending...'
+              : resendCooldown > 0
+                ? `Resend in ${resendCooldown}s`
+                : 'Resend verification email'}
+          </Button>
+          <Button variant="ghost" onClick={() => router.push('/login')} className="w-full">
             Back to Login
           </Button>
         </CardFooter>

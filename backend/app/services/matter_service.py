@@ -442,18 +442,26 @@ class MatterService:
         """Record that a user opened this matter (UX-005).
 
         Any role (VIEWER, EDITOR, OWNER) can touch a matter.
+        Role is already verified by require_matter_role dependency,
+        so we skip the redundant get_user_role() call here (E2E-009 fix).
 
         Args:
             matter_id: ID of the matter.
             user_id: ID of the user who opened it.
         """
-        role = self.get_user_role(matter_id, user_id)
-        if role is None:
-            raise MatterNotFoundError(matter_id)
-
-        self.db.table("matters").update({
-            "last_opened_at": datetime.now(UTC).isoformat(),
-        }).eq("id", matter_id).execute()
+        try:
+            self.db.table("matters").update({
+                "last_opened_at": datetime.now(UTC).isoformat(),
+            }).eq("id", matter_id).execute()
+        except Exception as e:
+            # Touch is non-critical — log and swallow so transient
+            # Supabase errors don't surface as 500s.
+            logger.warning(
+                "touch_matter_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
 
     def delete_matter(
         self, matter_id: str, user_id: str

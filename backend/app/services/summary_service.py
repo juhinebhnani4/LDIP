@@ -2045,16 +2045,25 @@ class SummaryService:
         sections to succeed.  Previously used OR (any-one-ok), which cached
         incomplete summaries missing key sections.
 
+        UX-001 FIX: Relaxed thresholds for small documents (<=5 pages).
+        Small docs legitimately produce short descriptions and may have
+        no key issues or court orders.
+
         Args:
             summary: The generated summary to validate.
 
         Returns:
             True if subject_matter succeeded and at least one other section did.
         """
+        is_small_doc = (summary.stats.total_pages or 0) <= 5
+
+        # For small docs, accept shorter descriptions (>20 chars vs >50)
+        min_desc_length = 20 if is_small_doc else 50
+
         subject_matter_ok = (
             summary.subject_matter.description
             != "Unable to generate summary at this time."
-            and len(summary.subject_matter.description) > 50
+            and len(summary.subject_matter.description) > min_desc_length
         )
         key_issues_ok = len(summary.key_issues) > 0
         current_status_ok = (
@@ -2063,7 +2072,11 @@ class SummaryService:
             or summary.current_status.last_order_date is not None
         )
 
-        # Subject matter is mandatory; at least one other section must also pass
+        # For small docs, subject_matter alone is sufficient
+        if is_small_doc:
+            return subject_matter_ok
+
+        # For larger docs, subject matter + at least one other section
         return subject_matter_ok and (key_issues_ok or current_status_ok)
 
     # =========================================================================

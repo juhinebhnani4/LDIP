@@ -30,6 +30,8 @@ class ActivityTypeEnum(str, Enum):
     CONTRADICTIONS_FOUND = "contradictions_found"
     VERIFICATION_NEEDED = "verification_needed"
     MATTER_OPENED = "matter_opened"
+    DOCUMENT_UPLOADED = "document_uploaded"
+    SUMMARY_GENERATED = "summary_generated"
 
 
 # =============================================================================

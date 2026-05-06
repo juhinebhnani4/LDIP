@@ -144,7 +144,11 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
         #    since get_summary() already cached the result before returning.
         if not summary_service.is_summary_valid(summary):
             run_async(summary_service.invalidate_cache(matter_id), timeout=10)
-            raise ValueError("Generated summary failed validation checks")
+            raise ValueError(
+                "We couldn't generate a complete summary for this matter. "
+                "This can happen with very short documents. Try uploading "
+                "additional documents to provide more context."
+            )
 
         # 5. Mark job as COMPLETED and release the dedup lock
         if job_id:
@@ -170,6 +174,23 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
                 old_status=current_status,
                 new_status=JobStatus.COMPLETED.value,
             )
+
+        # UX-004: Create activity for summary generation
+        try:
+            from app.models.activity import ActivityTypeEnum
+            from app.services.activity_service import get_activity_service
+            activity_service = get_activity_service()
+            run_async(
+                activity_service.create_activity_for_matter_members(
+                    matter_id=matter_id,
+                    type=ActivityTypeEnum.SUMMARY_GENERATED,
+                    description="Matter summary generated",
+                    metadata={"job_id": job_id},
+                ),
+                timeout=10,
+            )
+        except Exception as activity_err:
+            log.warning("activity_creation_failed_on_summary", error=str(activity_err))
 
         _release_dedup_lock(matter_id)
         log.info("summary_generation_completed")

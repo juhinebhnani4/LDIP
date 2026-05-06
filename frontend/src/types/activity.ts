@@ -15,7 +15,9 @@ export type ActivityType =
   | 'processing_started'
   | 'matter_opened'
   | 'contradictions_found'
-  | 'processing_failed';
+  | 'processing_failed'
+  | 'document_uploaded'
+  | 'summary_generated';
 
 /**
  * Activity item for activity feed.
@@ -56,7 +58,7 @@ export interface DashboardStats {
  */
 export interface ActivityIconConfig {
   /** Icon component name from lucide-react */
-  icon: 'CheckCircle2' | 'Info' | 'Clock' | 'AlertTriangle' | 'XCircle';
+  icon: 'CheckCircle2' | 'Info' | 'Clock' | 'AlertTriangle' | 'XCircle' | 'Upload' | 'FileText';
   /** Tailwind CSS color class for the icon */
   colorClass: string;
   /** Tailwind CSS background color class for icon container */
@@ -105,6 +107,18 @@ export const ACTIVITY_ICONS: Record<ActivityType, ActivityIconConfig> = {
     colorClass: 'text-red-500',
     bgColorClass: 'bg-red-100 dark:bg-red-500/20',
     label: 'Error',
+  },
+  document_uploaded: {
+    icon: 'Upload',
+    colorClass: 'text-blue-500',
+    bgColorClass: 'bg-blue-100 dark:bg-blue-500/20',
+    label: 'Upload',
+  },
+  summary_generated: {
+    icon: 'FileText',
+    colorClass: 'text-green-500',
+    bgColorClass: 'bg-green-100 dark:bg-green-500/20',
+    label: 'Summary',
   },
 } as const;
 

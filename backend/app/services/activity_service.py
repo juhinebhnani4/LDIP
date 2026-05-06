@@ -51,6 +51,14 @@ ACTIVITY_TO_NOTIFICATION: dict[
         "Verification Needed",
     ),
     # matter_opened NOT mapped - activity feed only
+    ActivityTypeEnum.DOCUMENT_UPLOADED: (
+        NotificationTypeEnum.SUCCESS,
+        "Document Uploaded",
+    ),
+    ActivityTypeEnum.SUMMARY_GENERATED: (
+        NotificationTypeEnum.SUCCESS,
+        "Summary Generated",
+    ),
 }
 
 # Map activity types to notification priorities
@@ -60,6 +68,8 @@ ACTIVITY_TO_PRIORITY: dict[ActivityTypeEnum, NotificationPriorityEnum] = {
     ActivityTypeEnum.VERIFICATION_NEEDED: NotificationPriorityEnum.MEDIUM,
     ActivityTypeEnum.PROCESSING_COMPLETE: NotificationPriorityEnum.MEDIUM,
     ActivityTypeEnum.PROCESSING_STARTED: NotificationPriorityEnum.LOW,
+    ActivityTypeEnum.DOCUMENT_UPLOADED: NotificationPriorityEnum.LOW,
+    ActivityTypeEnum.SUMMARY_GENERATED: NotificationPriorityEnum.LOW,
 }
 
 

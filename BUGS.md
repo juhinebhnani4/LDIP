@@ -614,7 +614,7 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **Recommended sequence**: 1+2 first (quick win, covers most cases), then 3 (recovery path), then 4 (catches edge cases). Flaw 5 is structural debt to track but not address immediately.
 
-**Status update (2026-04-30)**: Fixes 1+2 deployed and verified in production. Document type selector UI added to upload wizard (`UploadWizard.tsx`), filename heuristic auto-detects Acts in both frontend (`uploadWizardStore.ts`) and backend (`documents.py:_detect_act_from_filename`). "TORTS Act 1992.pdf" now correctly auto-selects "Act / Statute" and routes to library pipeline.
+**Status update (2026-04-30)**: Fixes 1+2 deployed and verified in production. Document type selector UI added to upload wizard (`UploadWizard.tsx`), filename heuristic auto-detects Acts in both frontend (`uploadWizardStore.ts`) and backend (`documents.py:_detect_act_from_filename`). "TORTS Act 1992.pdf" now correctly auto-selects "Act / Statute" and routes to library pipeline. However, blast-radius research revealed the Add Documents dialog (Path 2) has NO type detection and NO selector — fix only covers wizard path. See GAP-9 for full 5-path analysis and unification plan.
 
 **Key files**:
 - Upload endpoint: `backend/app/api/routes/documents.py:407-523, 1041-1149`
@@ -669,8 +669,69 @@ Data fix: 3 act_resolutions moved from `auto_fetching` → `not_on_indiacode`. T
 **GAP-8 (P2): `chunks` vs `library_chunks` schema divergence** | Status: OPEN (tracking)
 `chunks` has: `matter_id`, `entity_ids`, `bbox_ids`, `fts`, `embedding_model_version`, `layout_derived`, `text_start_offset`, `text_end_offset`. None exist in `library_chunks`. Every search improvement, index tuning, or embedding migration must be done twice. This is an instance of ARCH-001 (parallel paths).
 
-**GAP-9 (P2): No shared "is this an Act?" classification gate** | Status: PARTIALLY FIXED
-Path A: filename regex (new, 2026-04-30). Path B: India Code lookup. Path C: manual admin. Path D: trusts `documents.document_type`. Path E: "Add Files" dialog — no type detection at all, hardcodes `case_file`. No post-OCR content-based detection. Partially fixed by adding filename heuristic to wizard path, but "Add Files" dialog bypasses it entirely. Long-term: unify wizard and dialog into one shared upload function with type detection built in.
+**GAP-9 (P1): Upload path fragmentation — 5 entry points, inconsistent classification** | Status: PARTIALLY FIXED
+
+Deep blast-radius research (2026-04-30) revealed the upload system has **5 distinct entry paths** with inconsistent document type handling. This is an instance of both ARCH-003 ("remember to signal" coordination) and ARCH-001 (parallel duplicate paths).
+
+**All 5 entry paths mapped:**
+
+| # | Entry Path | Trigger | Type Detection | User Control | Store | Post-Upload UX |
+|---|---|---|---|---|---|---|
+| 1 | **Upload Wizard** | "New Matter" on dashboard | Auto-detect regex + backend safety net | Dropdown selector (4 types) | `uploadWizardStore` | Processing page with progress, live discoveries, completion screen |
+| 2 | **Add Documents Dialog** | "Add Files" on matter docs tab | **NONE** — hardcodes `case_file` | **NONE** | `uploadStore` (separate) | Toast + dialog close + list refresh |
+| 3 | **Act Upload Dropzone** | Missing act in citations tab | N/A — hardcodes `act` | N/A (purpose-built) | Local state only | Green checkmark + toast |
+| 4 | **"Set as Act" menu** | Three-dot menu on document | Explicit user action | Click to confirm | N/A | Toast + list refresh |
+| 5 | **Bulk type change** | Multi-select + bulk action | Explicit user action | Type dropdown | N/A | Toast |
+
+**7 specific gaps identified:**
+
+1. **Add Documents dialog has no type selector or auto-detection (P1)**: `UploadDropzone.tsx` accepts `documentType` prop but `AddDocumentsDialog.tsx` never passes it — defaults to `case_file`. Backend safety net (`_detect_act_from_filename`) catches obvious filenames but user gets no visibility that their file was reclassified and may be confused when the doc "disappears" from the document list (goes to library). Files that are acts but don't match the regex (e.g., "BNS_2023.pdf") silently enter the wrong pipeline.
+
+2. **ZIP extraction hardcodes all files as `case_file` (P2)**: `_extract_and_upload_zip()` (documents.py:978) uses `DocumentType.CASE_FILE` for every file inside a ZIP. No per-file act detection. The outer auto-detection at line 1143 only affects the ZIP-vs-PDF routing decision, not individual file classification. A ZIP containing "Indian Contract Act 1872.pdf" processes it as a case file.
+
+3. **Two separate Zustand stores for upload state (P2, tech debt)**: `uploadWizardStore` (278 lines, full-featured: processing stages, live discoveries, progress tracking) vs `uploadStore` (simpler: just queue + uploading flag). Same logical operation, two implementations with different capabilities. Every upload improvement must be done twice.
+
+4. **Bulk type change to 'act' doesn't trigger library promotion (P2)**: `PATCH /documents/bulk` (documents.py:1378-1449) sets `document_type` metadata only — does NOT call `promote_document_to_library()`. Document stays in `documents` table without library processing. Contrast with single-doc `PATCH /documents/{id}` which DOES promote. Inconsistent behavior.
+
+5. **No reverse action to un-classify an act (P3)**: "Set as Act" exists in the three-dot menu but there's no "Set as Case File" reverse. Once a document enters `library_documents`, no UI path moves it back. Recovery requires direct DB access.
+
+6. **Backend safety net reclassifies silently — UX confusion (P2)**: When `_detect_act_from_filename` triggers on the Add Documents path, the file goes to `library_documents` and appears in LinkedLibraryPanel, not the documents list. User sees their file "disappear". Backend logs the reclassification but frontend shows no notification.
+
+7. **Recovery mode on processing page loses `documentType` (P3)**: If user refreshes the processing page mid-upload, `documentType` from the wizard store is lost. Subsequent uploads default to `case_file`. Not persisted to URL params or sessionStorage.
+
+**Root cause**: The system was built wizard-first (Path 1), then the Add Documents dialog (Path 2) was added later as a simpler flow without carrying over the type detection/selection capabilities. Each new entry point must independently remember to implement classification logic — classic ARCH-003 "remember to signal" pattern.
+
+**Long-term fix plan (2026-04-30)**:
+
+Unify all upload paths into one shared component. The backend is already unified (single `POST /api/documents/upload` endpoint) — fragmentation is purely frontend.
+
+**Architecture target:**
+```
+SharedUploadDropzone (one component, one store)
+  - File selection (drag/drop/browse)
+  - Document type auto-detection + selector
+  - Validation + progress tracking
+      │ used by:
+      ├── Upload Wizard (+ matter creation, processing page)
+      ├── Add Documents Dialog (existing matter)
+      └── Act Dropzone (pre-set to 'act', no selector)
+```
+
+**4 steps, one deploy, one test pass:**
+
+| Step | What | Where | Effort | Fixes |
+|---|---|---|---|---|
+| 1 | Merge type detection + selector into `UploadDropzone` | `UploadDropzone.tsx` — add `showTypeSelector` prop (default true), `initialDocumentType` prop, reuse `detectDocumentTypeFromFilename()` from wizard store | ~1h | Gaps 1, 6 |
+| 2 | Consolidate to one Zustand store | Keep `uploadWizardStore` for wizard-specific state (matter name, stages, live discoveries), but move upload mechanics (file queue, progress, type) into shared hook or merge stores | ~1-2h | Gap 3 |
+| 3 | ZIP per-file act detection in backend | `_extract_and_upload_zip()` — check each PDF filename with `_detect_act_from_filename()`, route to `_upload_act_to_library()` if Act | ~30m | Gap 2 |
+| 4 | Bulk update promotion for acts | `bulk_update_documents()` — call `promote_document_to_library()` when type changes to 'act' (same logic as single-doc PATCH) | ~30m | Gap 4 |
+
+**What stays separate (correctly):**
+- Upload Wizard keeps multi-step UX orchestration (FILE_SELECTION → REVIEW → UPLOADING → PROCESSING)
+- Act Dropzone keeps single-file specialized UX with `initialDocumentType='act'`, `showTypeSelector=false`
+- "Set as Act" stays as post-hoc reclassification (different concern)
+
+**Estimated total**: ~4-5h including testing all 5 paths. Eliminates gaps 1-4, 6 permanently. Gap 5 (no un-act) is a feature request. Gap 7 (recovery mode) is nice-to-have.
 
 **GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: OPEN (tracking)
 Schema has the column for section-level search. Chunker never populates it. Missed opportunity for "Section 4 of Indian Contract Act" queries.

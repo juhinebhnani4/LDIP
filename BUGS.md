@@ -75,10 +75,10 @@ After:   Cluster 7 (architectural debt — ongoing)
 
 | Bug | Sev | Fix |
 |---|---|---|
-| **UX-001**: Summary validation too strict for small docs | P1 | Relax thresholds for <5 page docs |
-| **UX-004**: Activity feed — only processing events | P2 | Add upload/query/summary activity types |
-| **UX-012**: No resend verification email button | P3 | Add resend button with rate limiting |
-| **E2E-009**: `/api/matters/.../touch` returns 500 | P3 | Fix touch endpoint |
+| **UX-001**: Summary validation too strict for small docs | P1 | ~~Relax thresholds for <5 page docs~~ FIXED (2026-05-06) |
+| **UX-004**: Activity feed — only processing events | P2 | ~~Add upload/query/summary activity types~~ FIXED (2026-05-06) |
+| **UX-012**: No resend verification email button | P3 | ~~Add resend button with rate limiting~~ FIXED (2026-05-06) |
+| **E2E-009**: `/api/matters/.../touch` returns 500 | P3 | ~~Fix touch endpoint~~ FIXED (2026-05-06) |
 
 #### Cluster 6: Infra/Network Hardening (2-3 hours)
 *Small backend/infra fixes, all low-effort.*
@@ -1185,7 +1185,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-06) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-003) |
 
@@ -1193,9 +1193,11 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 
 **Root Cause**: Validation thresholds at `summary_service.py:2041-2067` are too strict for small documents. `subject_matter_ok` requires `len(description) > 50` and `key_issues_ok` requires `len(key_issues) > 0`. Small PDFs may not produce enough content.
 
-**Fix Needed**: Relax validation for small documents (<5 pages), or show partial summary with "limited data" warning.
+**Fix Applied (2026-05-06)**: Relaxed `is_summary_valid()` for small docs (<=5 pages): description threshold lowered from 50→20 chars, `subject_matter_ok` alone is sufficient (no longer requires key_issues OR current_status). User-friendly error message replaces raw ValueError. Frontend shows yellow "Limited Summary" alert instead of red error for validation failures.
 
-**Files**: `backend/app/services/summary_service.py:2041-2067`, `backend/app/workers/tasks/summary_tasks.py:118-120`
+**Production verified**: Unit test confirms small doc (3 pages, 25-char desc, 0 issues) → valid=True; large doc (20 pages, same content) → valid=False.
+
+**Files changed**: `backend/app/services/summary_service.py`, `backend/app/workers/tasks/summary_tasks.py`, `frontend/src/components/features/summary/SummaryContent.tsx`
 
 ---
 
@@ -1241,17 +1243,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | FIXED (core), OPEN (feature gap) |
+| **Status** | FIXED (2026-05-06) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-006) |
 
 **Description**: Dashboard activity feed was originally empty. Now shows processing events but no other activity types.
 
-**Verified** (2026-03-18): Playwright shows activity feed with 10+ real entries grouped by date (Today, Yesterday, Feb 28, Feb 25). DB has 82 activities (53 `processing_complete` + 29 `processing_failed`). The feed is NOT "always empty" — the original bug is FIXED.
+**Fix Applied (2026-05-06)**: Added `document_uploaded` and `summary_generated` activity types. DB migration adds enum values. Backend creates activities on upload completion (`documents.py`) and summary generation (`summary_tasks.py`). Frontend renders blue Upload icon and green FileText icon for new types. Notification mapping and priority added.
 
-**Remaining feature gap**: Only 2 activity types exist (processing_complete/failed). No upload, query, summary, or other events are tracked. `chunked_document_tasks.py` may also be missing `create_activity()` calls.
+**Production verified (2026-05-06)**: Uploaded Shiju_K_vs_Nalini.PDF → dashboard activity feed shows all 3 entries with correct icons: blue upload icon ("Uploaded document"), green checkmark ("Document processing complete"), green file icon ("Matter summary generated"). Screenshot: `e2e-dashboard-all-activities.png`.
 
-**Files**: `backend/app/services/activity_service.py`, `backend/app/workers/tasks/document_tasks.py:622,974`
+**Files changed**: `backend/app/models/activity.py`, `backend/app/services/activity_service.py`, `backend/app/api/routes/documents.py`, `backend/app/workers/tasks/summary_tasks.py`, `frontend/src/types/activity.ts`, `frontend/src/components/features/dashboard/ActivityFeedItem.tsx`, `supabase/migrations/20260506000002_add_activity_types.sql`
 
 ---
 
@@ -1268,6 +1270,8 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 **Root Cause**: Migration `20260319000001_add_last_opened_at_to_matters.sql` existed but was never applied to production. The endpoint (`POST /api/matters/{id}/touch`) and frontend caller (`MatterWorkspaceWrapper.tsx:101`) were already implemented, but the column didn't exist, causing a silent 500 error (masked by `.catch(() => {})`).
 
 **Fix Applied (2026-04-28)**: Applied `ALTER TABLE matters ADD COLUMN IF NOT EXISTS last_opened_at timestamptz DEFAULT NULL` directly to production. Verified: `/touch` endpoint now returns 204 (was 500), zero console errors on matter page load.
+
+**Remaining display issue (2026-05-06)**: Touch writes `last_opened_at` to DB correctly and the card sorts to the top position (Recent sort uses the timestamp), but the card text still shows "Last opened: Never opened." The matters list API likely returns `last_opened_at` but the frontend `MatterCard` component doesn't render it — needs investigation of how `enrichMattersWithStats()` maps the field.
 
 **Files**: No code changes needed — endpoint and frontend were already correct. Only the migration needed applying.
 
@@ -1393,15 +1397,17 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-06) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-016) |
 
 **Description**: After signup, shows "Check your email" with only a "Back to Login" button. No "Resend" option if email doesn't arrive, no "check spam folder" guidance.
 
-**Fix Needed**: Add "Resend verification email" button (calling `supabase.auth.resend()`) with rate limiting (disabled 60s after click). Add helper text.
+**Fix Applied (2026-05-06)**: Added "Resend verification email" button with 60-second cooldown timer, "check spam folder" helper text, and success/error feedback. Uses `supabase.auth.resend({ type: 'signup', email })`. Rate limit errors from Supabase shown as-is (already user-friendly). Follows existing patterns from `ForgotPasswordForm.tsx`.
 
-**Files**: `frontend/src/components/features/auth/SignupForm.tsx:146-166`
+**Production verified (2026-05-06)**: Created test account → confirmation screen shows resend button, spam guidance, and cooldown timer after click.
+
+**Files changed**: `frontend/src/components/features/auth/SignupForm.tsx`
 
 ---
 
@@ -2204,15 +2210,21 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-06) |
 | **Date Found** | 2026-04-29 |
 | **Source** | E2E visual verification — browser console errors |
 
 **Description**: Opening a matter triggers `POST /api/matters/{id}/touch` which returns HTTP 500. Seen 3 times across different matters. The `touch` endpoint updates `last_opened_at` for "Last opened" display on dashboard cards.
 
-**Impact**: Low — doesn't block any functionality. Dashboard shows "Never opened" instead of actual last-opened time.
+**Root Cause**: `touch_matter()` in `matter_service.py` had no error handling around Supabase `.execute()` call. Transient Supabase/httpx exceptions bypassed the `except MatterServiceError` catch and became unhandled 500s. Also had a redundant `get_user_role()` call (role already verified by `require_matter_role` dependency), doubling the transient failure window.
 
-**Files**: `backend/app/api/routes/matters.py` (touch endpoint)
+**Fix Applied (2026-05-06)**: Removed redundant `get_user_role()` call. Wrapped `.execute()` in try/except — logs warning and swallows failures (touch is non-critical). Changed frontend `.catch(() => {})` to `.catch(e => console.warn(...))` for visibility.
+
+**Production verified (2026-05-06)**: Touch returns 204, zero console errors, `last_opened_at` updated in DB.
+
+**Remaining issue**: Dashboard card still shows "Last opened: Never opened" even after touch writes to DB. The card sorts correctly to top (timestamp is used), but the display text doesn't re-render. This is a pre-existing frontend display bug — see UX-005.
+
+**Files changed**: `backend/app/services/matter_service.py`, `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`
 
 ---
 

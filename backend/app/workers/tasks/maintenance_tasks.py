@@ -2441,3 +2441,24 @@ def recover_stuck_documents(self) -> dict:
     except Exception as e:
         logger.error("recover_stuck_documents_failed", error=str(e))
         return {"error": str(e)}
+
+
+# =============================================================================
+# Worker Heartbeat (INF-005)
+# =============================================================================
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.write_worker_heartbeat",
+)
+def write_worker_heartbeat() -> dict:
+    """Write a Redis TTL key to prove the worker is alive.
+
+    The health endpoint reads this key instead of using inspect.ping(),
+    which doesn't work when broker_heartbeat=0 (disabled for Upstash Redis).
+    Runs every 60s via beat; key has 180s TTL (3x interval as safety margin).
+    """
+    from app.services.distributed_lock import get_sync_redis_client
+
+    r = get_sync_redis_client()
+    r.setex("celery:worker:alive", 180, "1")
+    return {"status": "heartbeat_written"}

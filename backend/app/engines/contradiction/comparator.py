@@ -713,18 +713,20 @@ class StatementComparator:
         Returns:
             Tuple of (response_text, input_tokens, output_tokens).
         """
-        response = await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=[
-                # System prompt first - enables OpenAI's automatic prompt caching
-                # When the same system prompt is used repeatedly, OpenAI caches it
-                # and charges 50% less for cached input tokens (automatic for >1024 tokens)
-                {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,  # Low temperature for consistent analysis
-        )
+        openai_limiter = get_rate_limiter(LLMProvider.OPENAI)
+        async with openai_limiter:
+            response = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    # System prompt first - enables OpenAI's automatic prompt caching
+                    # When the same system prompt is used repeatedly, OpenAI caches it
+                    # and charges 50% less for cached input tokens (automatic for >1024 tokens)
+                    {"role": "system", "content": STATEMENT_COMPARISON_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,  # Low temperature for consistent analysis
+            )
 
         response_text = response.choices[0].message.content or ""
         input_tokens = response.usage.prompt_tokens if response.usage else 0

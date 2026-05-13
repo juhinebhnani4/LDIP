@@ -272,6 +272,14 @@ celery_app.conf.update(
             "schedule": crontab(hour=1, minute=0),  # Daily at 1 AM UTC
             "options": {"queue": "low"},
         },
+        # Worker heartbeat — writes a Redis key with TTL so the health endpoint
+        # can verify the worker is alive without using inspect.ping() (which
+        # requires broker_heartbeat > 0, disabled for Upstash Redis).
+        "worker-heartbeat": {
+            "task": "app.workers.tasks.maintenance_tasks.write_worker_heartbeat",
+            "schedule": 60,  # Every 60s
+            "options": {"queue": "low"},
+        },
     },
 )
 

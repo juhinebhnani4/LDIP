@@ -62,9 +62,9 @@ export function useMatterSummary(matterId: string) {
         if (latestData?.status === 'generating') return 3000;
         return 0;
       },
-      // Don't retry on 4xx errors
+      // Don't retry on 4xx errors (except 401 — client handles token refresh)
       shouldRetryOnError: (err) => {
-        if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        if (err instanceof ApiError && err.status !== 401 && err.status >= 400 && err.status < 500) {
           return false;
         }
         return true;

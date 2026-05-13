@@ -232,6 +232,7 @@ export function useProcessingStatus(
   const isMountedRef = useRef(true);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isCompleteRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   /**
    * Fetch jobs and stats from backend
@@ -239,14 +240,19 @@ export function useProcessingStatus(
   const fetchStatus = useCallback(async () => {
     if (!matterId) return;
 
+    // Abort any in-flight request before starting a new one (INF-006)
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
     try {
       // Fetch jobs and stats in parallel
       const [jobsResponse, statsResponse] = await Promise.all([
-        api.get<JobListResponse>(`/api/jobs/matters/${matterId}?limit=200`),
-        api.get<JobQueueStats>(`/api/jobs/matters/${matterId}/stats`),
+        api.get<JobListResponse>(`/api/jobs/matters/${matterId}?limit=200`, { signal: controller.signal }),
+        api.get<JobQueueStats>(`/api/jobs/matters/${matterId}/stats`, { signal: controller.signal }),
       ]);
 
       if (!isMountedRef.current) return;
@@ -294,6 +300,9 @@ export function useProcessingStatus(
       setHasFailed(newStats.failed > 0);
     } catch (err) {
       if (!isMountedRef.current) return;
+
+      // Swallow abort errors — these are intentional (new poll or unmount)
+      if (err instanceof DOMException && err.name === 'AbortError') return;
 
       if (err instanceof ApiError) {
         setError(new Error(err.message));
@@ -366,6 +375,7 @@ export function useProcessingStatus(
     // Cleanup
     return () => {
       isMountedRef.current = false;
+      abortControllerRef.current?.abort();
       if (pollingRef.current) {
         clearTimeout(pollingRef.current);
         pollingRef.current = null;

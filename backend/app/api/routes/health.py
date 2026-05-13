@@ -339,44 +339,38 @@ async def get_celery_status() -> dict[str, Any]:
         }
     """
     try:
-        # Ping workers with a short timeout
-        inspect = celery_app.control.inspect(timeout=5.0)
-        ping_response = inspect.ping()
+        # INF-005 fix: Use Redis TTL heartbeat instead of inspect.ping().
+        # inspect.ping() requires broker_heartbeat > 0, which is disabled
+        # for Upstash Redis (saves ~233K Redis ops/day). The worker writes
+        # a key every 60s via beat task; we read it here.
+        from app.services.distributed_lock import get_sync_redis_client
 
-        if ping_response:
-            worker_count = len(ping_response)
-            workers = ping_response
+        r = get_sync_redis_client()
+        alive = r.get("celery:worker:alive")
 
-            # Get active queues
-            active_queues = inspect.active_queues() or {}
-            queue_names = set()
-            for worker_queues in active_queues.values():
-                for q in worker_queues:
-                    queue_names.add(q.get("name", "unknown"))
-
+        if alive:
+            ttl = r.ttl("celery:worker:alive")
             logger.debug(
                 "celery_health_check",
-                worker_count=worker_count,
-                queues=list(queue_names),
+                worker_alive=True,
+                heartbeat_ttl=ttl,
             )
-
             return {
                 "data": {
                     "status": "healthy",
-                    "workers": workers,
-                    "worker_count": worker_count,
-                    "queues": list(queue_names) if queue_names else ["default"],
+                    "worker_count": 1,
+                    "heartbeat_ttl_seconds": ttl,
+                    "queues": ["default", "llm", "heavy", "low"],
                 }
             }
         else:
-            logger.warning("celery_health_check_no_workers")
+            logger.warning("celery_health_check_no_heartbeat")
             return {
                 "data": {
                     "status": "unhealthy",
-                    "workers": {},
                     "worker_count": 0,
                     "queues": [],
-                    "message": "No Celery workers are responding",
+                    "message": "No worker heartbeat in last 3 minutes",
                 }
             }
 

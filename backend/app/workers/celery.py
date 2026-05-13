@@ -132,15 +132,9 @@ celery_app.conf.update(
     # These settings are required for TLS connections to serverless Redis
     broker_use_ssl=_ssl_config if _uses_tls else None,
     redis_backend_use_ssl=_ssl_config if _uses_tls else None,
-    # --- RedBeat: Redis-backed beat scheduler with distributed locking ---
-    # Only one beat instance fires tasks at a time (even with multiple replicas).
-    # Uses a Redis lock with automatic failover if the leader dies.
-    beat_scheduler="redbeat.RedBeatScheduler",
-    redbeat_redis_url=settings.celery_broker_url,
-    redbeat_redis_use_ssl=_ssl_config if _uses_tls else None,
-    redbeat_key_prefix="redbeat",
-    redbeat_lock_timeout=300,  # 5 min — if beat dies, another takes over within 5 min
     # Celery Beat schedule for periodic tasks
+    # Uses Celery's default PersistentScheduler (local shelve file).
+    # Schedule is static config — file loss on container restart is harmless.
     beat_schedule={
         "recover-stale-jobs": {
             "task": "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
@@ -287,205 +281,186 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks(["app.workers.tasks"])
 
 # =============================================================================
-# Pre-flight Import Validation
+# Pre-flight Import Validation (workers only, skipped by beat)
 # =============================================================================
 # Explicit imports to ensure tasks are registered and catch import errors early.
 # This prevents silent failures where workers start but can't process tasks.
 # (autodiscover can be unreliable on Windows)
+#
+# Beat only needs the beat_schedule dict (task name strings) — it never executes
+# task code. CELERY_BEAT_ONLY=true skips these heavy imports (~1GB RAM savings).
 
+import os
 import structlog
 
 _logger = structlog.get_logger(__name__)
 
-_TASK_MODULES = [
-    "app.workers.tasks.act_validation_tasks",
-    "app.workers.tasks.chunked_document_tasks",
-    "app.workers.tasks.document_tasks",
-    "app.workers.tasks.email_tasks",
-    "app.workers.tasks.engine_tasks",
-    "app.workers.tasks.evaluation_tasks",
-    "app.workers.tasks.library_tasks",
-    "app.workers.tasks.maintenance_tasks",
-    "app.workers.tasks.quota_monitoring_tasks",
-    "app.workers.tasks.reasoning_archive_tasks",
-    "app.workers.tasks.summary_tasks",
-    "app.workers.tasks.table_extraction_tasks",
-    "app.workers.tasks.verification_tasks",
-    "app.workers.tasks.voyage_embedding_tasks",
-]
+_is_beat_only = os.environ.get("CELERY_BEAT_ONLY") == "true"
 
-_import_errors: list[str] = []
+if _is_beat_only:
+    _logger.info("celery_beat_only_mode", hint="Skipping task module imports — beat needs only schedule config")
+else:
 
-try:
-    from app.workers.tasks import (  # noqa: E402, F401
-        act_validation_tasks,
-        chunked_document_tasks,
-        document_tasks,
-        email_tasks,
-        engine_tasks,
-        evaluation_tasks,
-        library_tasks,
-        maintenance_tasks,
-        quota_monitoring_tasks,
-        reasoning_archive_tasks,
-        summary_tasks,
-        table_extraction_tasks,
-        verification_tasks,
-        voyage_embedding_tasks,
-    )
-    _logger.info(
-        "celery_task_modules_imported",
-        module_count=len(_TASK_MODULES),
-        registered_tasks=len(celery_app.tasks),
-    )
-except ImportError as e:
-    _import_errors.append(str(e))
-    _logger.critical(
-        "celery_task_import_failed",
-        error=str(e),
-        hint="Check for missing dependencies or syntax errors in task modules",
-    )
-    # Re-raise to prevent worker from starting with broken imports
-    raise
+    _TASK_MODULES = [
+        "app.workers.tasks.act_validation_tasks",
+        "app.workers.tasks.chunked_document_tasks",
+        "app.workers.tasks.document_tasks",
+        "app.workers.tasks.email_tasks",
+        "app.workers.tasks.engine_tasks",
+        "app.workers.tasks.evaluation_tasks",
+        "app.workers.tasks.library_tasks",
+        "app.workers.tasks.maintenance_tasks",
+        "app.workers.tasks.quota_monitoring_tasks",
+        "app.workers.tasks.reasoning_archive_tasks",
+        "app.workers.tasks.summary_tasks",
+        "app.workers.tasks.table_extraction_tasks",
+        "app.workers.tasks.verification_tasks",
+        "app.workers.tasks.voyage_embedding_tasks",
+    ]
 
-# Validate expected critical tasks are registered
-_CRITICAL_TASKS = [
-    "app.workers.tasks.document_tasks.process_document",
-    "app.workers.tasks.document_tasks.embed_chunks",
-    "app.workers.tasks.document_tasks.extract_entities",
-    "app.workers.tasks.document_tasks.resolve_aliases",
-    "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
-    "app.workers.tasks.maintenance_tasks.dispatch_stuck_queued_jobs",
-    "app.workers.tasks.summary_tasks.generate_summary",
-]
+    _import_errors: list[str] = []
 
-_missing_tasks = [t for t in _CRITICAL_TASKS if t not in celery_app.tasks]
-if _missing_tasks:
-    _logger.warning(
-        "celery_missing_critical_tasks",
-        missing_tasks=_missing_tasks,
-        hint="Some critical tasks are not registered. Check task decorators.",
-    )
-
-
-# =============================================================================
-# Dead Letter Queue (DLQ) Signal Handler
-# =============================================================================
-# Logs permanently failed tasks (after all retries exhausted) for debugging
-# and monitoring. These are tasks that cannot be recovered automatically.
-
-from celery.signals import task_failure, task_retry, worker_ready
-
-
-@worker_ready.connect
-def initialize_cost_service(sender=None, **kwargs):
-    """Initialize cost persistence service when worker starts.
-
-    Story 7.1: Per-Matter Cost Tracking
-    Ensures LLM costs from worker tasks are persisted to the database.
-    """
     try:
-        from app.core.cost_tracking import get_cost_service
-        from app.services.supabase.client import get_service_client
-
-        supabase = get_service_client()
-        get_cost_service(supabase)
-        _logger.info("cost_persistence_service_initialized_in_worker")
-
-        # Initialize DB-backed pricing (P3)
-        from app.core.pricing_loader import initialize_pricing
-        initialize_pricing(supabase)
-    except Exception as e:
-        _logger.warning(
-            "cost_persistence_init_failed_in_worker",
+        from app.workers.tasks import (  # noqa: E402, F401
+            act_validation_tasks,
+            chunked_document_tasks,
+            document_tasks,
+            email_tasks,
+            engine_tasks,
+            evaluation_tasks,
+            library_tasks,
+            maintenance_tasks,
+            quota_monitoring_tasks,
+            reasoning_archive_tasks,
+            summary_tasks,
+            table_extraction_tasks,
+            verification_tasks,
+            voyage_embedding_tasks,
+        )
+        _logger.info(
+            "celery_task_modules_imported",
+            module_count=len(_TASK_MODULES),
+            registered_tasks=len(celery_app.tasks),
+        )
+    except ImportError as e:
+        _import_errors.append(str(e))
+        _logger.critical(
+            "celery_task_import_failed",
             error=str(e),
-            hint="LLM costs will be logged but not persisted to database",
+            hint="Check for missing dependencies or syntax errors in task modules",
+        )
+        # Re-raise to prevent worker from starting with broken imports
+        raise
+
+    # Validate expected critical tasks are registered
+    _CRITICAL_TASKS = [
+        "app.workers.tasks.document_tasks.process_document",
+        "app.workers.tasks.document_tasks.embed_chunks",
+        "app.workers.tasks.document_tasks.extract_entities",
+        "app.workers.tasks.document_tasks.resolve_aliases",
+        "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
+        "app.workers.tasks.maintenance_tasks.dispatch_stuck_queued_jobs",
+        "app.workers.tasks.summary_tasks.generate_summary",
+    ]
+
+    _missing_tasks = [t for t in _CRITICAL_TASKS if t not in celery_app.tasks]
+    if _missing_tasks:
+        _logger.warning(
+            "celery_missing_critical_tasks",
+            missing_tasks=_missing_tasks,
+            hint="Some critical tasks are not registered. Check task decorators.",
         )
 
+    # =========================================================================
+    # Signal Handlers (worker-only — beat doesn't execute tasks)
+    # =========================================================================
+    # DLQ logging for permanently failed tasks, cost service init on startup.
 
-@task_failure.connect
-def handle_task_failure(
-    sender=None,
-    task_id=None,
-    exception=None,
-    args=None,
-    kwargs=None,
-    traceback=None,
-    einfo=None,
-    **kw,
-):
-    """Log permanently failed tasks to DLQ for investigation.
+    from celery.signals import task_failure, task_retry, worker_ready
 
-    This signal fires when a task raises an exception and will NOT be retried.
-    Tasks that exhaust all retries end up here.
+    @worker_ready.connect
+    def initialize_cost_service(sender=None, **kwargs):
+        """Initialize cost persistence service when worker starts."""
+        try:
+            from app.core.cost_tracking import get_cost_service
+            from app.services.supabase.client import get_service_client
 
-    Use this data to:
-    1. Debug recurring failures
-    2. Monitor failure patterns
-    3. Manually retry or fix data issues
-    """
-    # Get retry info from task request if available
-    retries = 0
-    max_retries = 0
-    if sender and hasattr(sender, "request"):
-        retries = getattr(sender.request, "retries", 0)
-    if sender and hasattr(sender, "max_retries"):
-        max_retries = sender.max_retries or 0
+            supabase = get_service_client()
+            get_cost_service(supabase)
+            _logger.info("cost_persistence_service_initialized_in_worker")
 
-    # Determine if this is a permanent failure (exhausted retries)
-    is_permanent = retries >= max_retries if max_retries > 0 else True
+            from app.core.pricing_loader import initialize_pricing
+            initialize_pricing(supabase)
+        except Exception as e:
+            _logger.warning(
+                "cost_persistence_init_failed_in_worker",
+                error=str(e),
+                hint="LLM costs will be logged but not persisted to database",
+            )
 
-    # Sanitize kwargs to avoid logging sensitive data
-    safe_kwargs = {}
-    if kwargs:
-        for key, value in kwargs.items():
-            if "password" in key.lower() or "secret" in key.lower() or "token" in key.lower():
-                safe_kwargs[key] = "[REDACTED]"
-            elif isinstance(value, str) and len(value) > 200:
-                safe_kwargs[key] = f"{value[:200]}...[truncated]"
-            else:
-                safe_kwargs[key] = value
+    @task_failure.connect
+    def handle_task_failure(
+        sender=None,
+        task_id=None,
+        exception=None,
+        args=None,
+        kwargs=None,
+        traceback=None,
+        einfo=None,
+        **kw,
+    ):
+        """Log permanently failed tasks to DLQ for investigation."""
+        retries = 0
+        max_retries = 0
+        if sender and hasattr(sender, "request"):
+            retries = getattr(sender.request, "retries", 0)
+        if sender and hasattr(sender, "max_retries"):
+            max_retries = sender.max_retries or 0
 
-    log_level = "critical" if is_permanent else "error"
-    log_func = _logger.critical if is_permanent else _logger.error
+        is_permanent = retries >= max_retries if max_retries > 0 else True
 
-    log_func(
-        "celery_task_failed_dlq" if is_permanent else "celery_task_failed",
-        task_name=sender.name if sender else "unknown",
-        task_id=task_id,
-        retries=retries,
-        max_retries=max_retries,
-        is_permanent_failure=is_permanent,
-        exception_type=type(exception).__name__ if exception else None,
-        exception_message=str(exception)[:500] if exception else None,
-        args=args[:5] if args and len(args) > 5 else args,  # Limit logged args
-        kwargs=safe_kwargs,
-    )
+        safe_kwargs = {}
+        if kwargs:
+            for key, value in kwargs.items():
+                if "password" in key.lower() or "secret" in key.lower() or "token" in key.lower():
+                    safe_kwargs[key] = "[REDACTED]"
+                elif isinstance(value, str) and len(value) > 200:
+                    safe_kwargs[key] = f"{value[:200]}...[truncated]"
+                else:
+                    safe_kwargs[key] = value
 
+        log_func = _logger.critical if is_permanent else _logger.error
 
-@task_retry.connect
-def handle_task_retry(
-    sender=None,
-    request=None,
-    reason=None,
-    einfo=None,
-    **kw,
-):
-    """Log task retries for monitoring retry patterns.
+        log_func(
+            "celery_task_failed_dlq" if is_permanent else "celery_task_failed",
+            task_name=sender.name if sender else "unknown",
+            task_id=task_id,
+            retries=retries,
+            max_retries=max_retries,
+            is_permanent_failure=is_permanent,
+            exception_type=type(exception).__name__ if exception else None,
+            exception_message=str(exception)[:500] if exception else None,
+            args=args[:5] if args and len(args) > 5 else args,
+            kwargs=safe_kwargs,
+        )
 
-    Helps identify:
-    1. Tasks that frequently need retries (may need optimization)
-    2. Transient failures (network, rate limits, etc.)
-    3. Retry storms that could overwhelm the system
-    """
-    retries = request.retries if request else 0
-    max_retries = sender.max_retries if sender and hasattr(sender, "max_retries") else 0
+    @task_retry.connect
+    def handle_task_retry(
+        sender=None,
+        request=None,
+        reason=None,
+        einfo=None,
+        **kw,
+    ):
+        """Log task retries for monitoring retry patterns."""
+        retries = request.retries if request else 0
+        max_retries = sender.max_retries if sender and hasattr(sender, "max_retries") else 0
 
-    _logger.warning(
-        "celery_task_retrying",
-        task_name=sender.name if sender else "unknown",
-        task_id=request.id if request else None,
-        retry_number=retries + 1,  # Current retry attempt (1-based)
-        max_retries=max_retries,
-        reason=str(reason)[:200] if reason else None,
-    )
+        _logger.warning(
+            "celery_task_retrying",
+            task_name=sender.name if sender else "unknown",
+            task_id=request.id if request else None,
+            retry_number=retries + 1,
+            max_retries=max_retries,
+            reason=str(reason)[:200] if reason else None,
+        )

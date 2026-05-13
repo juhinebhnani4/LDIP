@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-13 (SEC-002 A+B+C fixed: 42 anon-exposed RPCs revoked, 4 search_path fixed, 3 mat views blocked)
-**Total bugs**: 88 | **Fixed**: 54 | **Open**: 26 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 0
+**Last updated**: 2026-05-13 (Cluster 6 done: INF-005, INF-006, E2E-008, E2E-011 fixed; E2E-010 not a bug; LLM-004 fixed; E2E-007 structural fix)
+**Total bugs**: 88 | **Fixed**: 60 | **Open**: 19 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
@@ -20,10 +20,12 @@
 > Updated after full library subsystem audit (16 gaps, 9 new bugs). Groups bugs that share code/deploy paths so they can be fixed together. Supersedes the Tier 1-4 structure below for sequencing — the business context and cost analysis remain valid.
 
 ```
-Week 1:  Cluster 1 (library data — 3 P0s) → Cluster 5 (UX quick wins)
-Week 2:  Cluster 2 (library schema parity) → Cluster 6 (infra hardening)
-Week 3:  Cluster 3 (contradiction optimization Phase 2)
-Week 4:  Cluster 4 (worker/beat stability)
+Week 1:  Cluster 1 (library data — 3 P0s)       ✓ DONE
+         Cluster 5 (UX quick wins)               ✓ DONE
+Week 2:  Cluster 2 (library schema parity)       ✓ DONE
+         Cluster 6 (infra hardening)             ✓ DONE
+Next:    Cluster 4 (worker/beat stability)       ← NEXT
+         Cluster 3 (contradiction optimization Phase 2)
 After:   Cluster 7 (architectural debt — ongoing)
 ```
 
@@ -68,7 +70,7 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **E2E-006**: Redis beat lock extension warning | P2 | Same fix — beat isolation resolves both |
 | **WPS-001 L4**: Monolithic `resolve_aliases` task | P2 | Fan-out/fan-in decomposition |
 | **WPS-001 L5**: Gevent timeout fiction | P2 | Manual timeout enforcement or prefork |
-| **E2E-007**: Finalize runs forever on act docs | P3 | Add precondition checks in sweep tasks |
+| **E2E-007**: Finalize runs forever on act docs | P3 | **FIXED** (2026-05-13) — structural fix via `_is_pipeline_data_complete()` |
 
 #### Cluster 5: UX Quick Wins (half day)
 *Small, independent frontend fixes. Batch into one Vercel deploy.*
@@ -80,17 +82,17 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **UX-012**: No resend verification email button | P3 | ~~Add resend button with rate limiting~~ FIXED (2026-05-06) |
 | **E2E-009**: `/api/matters/.../touch` returns 500 | P3 | ~~Fix touch endpoint~~ FIXED (2026-05-06) |
 
-#### Cluster 6: Infra/Network Hardening (2-3 hours)
-*Small backend/infra fixes, all low-effort.*
+#### Cluster 6: Infra/Network Hardening ✓ DONE (2026-05-13)
+*Completed in ~2 hours. Deployed to Railway + Vercel, live-verified.*
 
-| Bug | Sev | Fix |
+| Bug | Sev | Status |
 |---|---|---|
-| **INF-005**: Celery health check reports "No Workers" | P2 | Redis-based heartbeat instead of inspect.ping() |
-| **INF-006**: Network ERR_ABORTED during polling | P2 | Add AbortController to useProcessingStatus |
-| **E2E-010**: CORS missing on `/api/health` | P3 | Ensure health route goes through CORS middleware |
-| **E2E-011**: Summary forceRefresh 401 | P3 | Add token refresh before retry |
-| **E2E-008**: OpenAI calls bypass rate limiter | P3 | Wire through `get_rate_limiter(LLMProvider.OPENAI)` |
-| **LLM-004**: Gemini returns None occasionally | P3 | Add null-check before json.loads — 3 lines |
+| **INF-005**: Celery health check reports "No Workers" | P2 | **FIXED** — Redis TTL heartbeat replaces inspect.ping() |
+| **INF-006**: Network ERR_ABORTED during polling | P2 | **FIXED** — AbortController in useProcessingStatus + useDocumentStatus |
+| **E2E-010**: CORS missing on `/api/health` | P3 | **NOT A BUG** — CORS works; was a one-time browser cache issue |
+| **E2E-011**: Summary forceRefresh 401 | P3 | **FIXED** — SWR shouldRetryOnError now allows 401 retry for token refresh |
+| **E2E-008**: OpenAI calls bypass rate limiter | P3 | **FIXED** — Wired through `get_rate_limiter(LLMProvider.OPENAI)` |
+| **LLM-004**: Gemini returns None occasionally | P3 | **FIXED** — Null-check before json.loads, returns None to trigger fallback |
 
 #### Cluster 7: Architectural Debt — Long-term (weeks, not now)
 *Track but don't fix until clusters 1-6 are done. Enablers for scale, not blockers for launch.*
@@ -326,15 +328,13 @@ These prevent silent failures that erode trust. Less visible than Tier 1, but cr
 
 ---
 
-#### 6. Non-converging sweep fix (tactical)
+#### 6. Non-converging sweep fix — DONE (2026-05-13)
 
-**Bug IDs**: E2E-007 | **Effort**: 1 day | **Files**: `backend/app/workers/tasks/maintenance_tasks.py`
+**Bug IDs**: E2E-007 | **Actual effort**: ~1 hour | **Files**: `backend/app/workers/tasks/maintenance_tasks.py`
 
-**The problem**: `trigger_pending_merges` (every 5 min) and `recover_stuck_documents` (every 15 min) dispatch `finalize_chunked_document` for ACT documents that are COMPLETED with no `extracted_text`. Finalize detects the condition, logs `finalize_skipping_no_text`, returns. Next sweep: same thing. Forever. Infinite loop of wasted work.
+**What was built**: Structural fix (not the originally planned tactical fix). Upgraded `_is_pipeline_data_complete()` to accept `document_type` parameter with per-type completion criteria. Acts with 0 chunks are legitimately complete (library pipeline). Non-acts require chunks + embeddings + entity_mentions. All 4 callers updated. `recover_stuck_documents` now uses this function instead of raw chunk_count heuristic — documents that ARE complete are skipped, stopping the infinite re-dispatch loop.
 
-**What changes**: Add precondition checks in both sweep tasks: skip documents where `document_type = 'act'` AND `extracted_text IS NULL`. Or more broadly: skip documents that are already in a terminal state (`status IN ('completed', 'failed', 'deleted')`).
-
-**This is a sticky note fix, not a wall.** The wall (Tier 3 #11, ARCH-003 reconciler) replaces all 13 sweeps with a single state-deriving reconciler. This tactical fix stops the immediate waste while the wall is built.
+**This is a step toward the wall, not a sticky note.** `_is_pipeline_data_complete()` is now a single source of truth for document completion — the same function the ARCH-003 reconciler will use. The 13 sweeps still exist, but the convergence logic is centralized.
 
 ---
 
@@ -767,7 +767,7 @@ All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 
 
 ## 1. Security
 
-### SEC-002: Supabase Linter Warnings (2026-05-08) | Status: PARTIALLY FIXED (A+B+C fixed 2026-05-13, D+E open)
+### SEC-002: Supabase Linter Warnings (2026-05-08) | Status: PARTIALLY FIXED (A+B+C fixed 2026-05-13, D migration written, E open)
 
 **Source**: Supabase Dashboard Database Linter. 5 categories of warnings:
 
@@ -784,9 +784,9 @@ Unauthenticated users could call these via PostgREST `/rest/v1/rpc/...`. Researc
 **C. Materialized views exposed via API (3 views)** | Priority: P3 | **FIXED (2026-05-13)**
 `contradiction_savings_report`, `monthly_cogs_by_matter`, `cost_per_document_page` — admin cost views revoked from `PUBLIC`, `anon`, and `authenticated`. `service_role` retains access.
 
-**D. `extension_in_public` — pg_trgm** | Priority: P3 | Status: OPEN
+**D. `extension_in_public` — pg_trgm** | Priority: P3 | Status: MIGRATION WRITTEN (2026-05-13), NOT YET APPLIED
 `pg_trgm` installed in public schema. Supabase recommends moving to `extensions` schema.
-**Fix**: `ALTER EXTENSION pg_trgm SET SCHEMA extensions;` — but verify `find_library_duplicates` RPC still works after move.
+**Migration written**: `20260513000002_sec002d_move_pg_trgm_to_extensions.sql` — moves pg_trgm to extensions schema, recreates `find_library_duplicates` with `SET search_path = public, extensions`, re-applies REVOKE. **Needs `supabase db push` or manual apply via Supabase dashboard.**
 
 **E. Leaked password protection disabled** | Priority: P2 | Status: OPEN
 Supabase Auth HaveIBeenPwned check is off. Enable in Supabase Dashboard > Auth > Settings.
@@ -1148,7 +1148,7 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN (low impact) |
+| **Status** | FIXED (2026-05-13) |
 | **Date Found** | 2026-03-18 |
 | **Source** | Session (Mar 18, Bug #11) |
 
@@ -1158,9 +1158,9 @@ date_range_end = sorted_dates[-1].isoformat() if sorted_dates else None
 
 **Actual impact**: When Gemini returns None, the screening retries on Gemini (not GPT-4). Impact is minor latency, not cost.
 
-**Fix Needed**: Add explicit null-check before `json.loads()` at `comparator.py:644-647` to avoid noisy exception logs.
+**Fix Applied (2026-05-13)**: Added null-check before `json.loads()` in `_call_gemini_screening()`. When `response_text` is empty/None, logs a warning and returns `None` — triggering the existing GPT-4 fallback path cleanly instead of raising a noisy exception.
 
-**Files**: `backend/app/engines/contradiction/comparator.py:644-647`
+**Files**: `backend/app/engines/contradiction/comparator.py`
 
 ---
 
@@ -1578,17 +1578,21 @@ Backend guard (`_check_processing_status()`) remains as safety net for stale fro
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) |
 | **Date Found** | 2026-02-23 |
 | **Source** | BUG-REPORT-2026-02-23.md (BUG-5) |
 
 **Description**: Every Celery health check returns `celery_health_check_no_workers` despite the worker successfully processing tasks (maintenance tasks completing).
 
-**Root Cause**: Health endpoint uses `celery_app.control.inspect(timeout=5.0).ping()` at `health.py:343`. The 5s timeout (previously 2s, already increased) may still be insufficient for Upstash Redis latency through Railway's network, or the API service's Celery app uses a different broker URL than the worker.
+**Root Cause**: `inspect.ping()` requires `broker_heartbeat > 0`, which is disabled for Upstash Redis (saves ~233K Redis ops/day). The API service never gets a pong response.
 
-**Fix Needed**: Verify broker URL consistency between API and worker. Consider an alternative health mechanism (e.g., Redis-based heartbeat written by worker, read by API).
+**Fix Applied (2026-05-13)**: Replaced `inspect.ping()` with Redis TTL heartbeat pattern. Worker writes `celery:worker:alive` key with 180s TTL every 60s via beat task (`write_worker_heartbeat`). Health endpoint reads the key via shared `get_sync_redis_client()` (no new connections). Reports healthy + TTL seconds remaining, or unhealthy if key is missing.
 
-**Files**: `backend/app/api/routes/health.py:343`
+**Live verification**: Health endpoint correctly reports "unhealthy" when beat is crashed (INF-010 — pre-existing). Will report "healthy" once beat isolation is fixed.
+
+**Note**: Uses shared `get_sync_redis_client()` from `distributed_lock.py` (`@lru_cache` singleton) — no connection leak risk.
+
+**Files**: `backend/app/api/routes/health.py`, `backend/app/workers/tasks/maintenance_tasks.py`, `backend/app/workers/celery.py` (beat schedule)
 
 ---
 
@@ -1596,7 +1600,7 @@ Backend guard (`_check_processing_status()`) remains as safety net for stale fro
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-012) |
 
@@ -1604,9 +1608,9 @@ Backend guard (`_check_processing_status()`) remains as safety net for stale fro
 
 **Root Cause**: `useProcessingStatus.ts` uses `setTimeout`-based polling with no abort logic. If a poll response is slow and the next poll fires, the browser aborts the stale request.
 
-**Fix Needed**: Add `AbortController` that cancels previous fetch before starting new one.
+**Fix Applied (2026-05-13)**: Added `AbortController` ref to both `useProcessingStatus.ts` and `useDocumentStatus.ts`. On each poll: abort previous in-flight request → create new controller → pass `signal` to `api.get()`. Catch block swallows `AbortError` (intentional cancellation). Cleanup function aborts on unmount. Blast-radius review caught the second hook (`useDocumentStatus`) which had the same gap.
 
-**Files**: `frontend/src/hooks/useProcessingStatus.ts:339-353`
+**Files**: `frontend/src/hooks/useProcessingStatus.ts`, `frontend/src/hooks/useDocumentStatus.ts`
 
 ---
 
@@ -2159,7 +2163,7 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — wasted worker time |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) — structural fix |
 | **Source** | E2E verification (2026-04-17) |
 | **Arch pattern** | ARCH-003 (non-converging recovery sweep) |
 
@@ -2167,7 +2171,9 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 
 **Why this is ARCH-003**: The beat tasks observe state (documents with status X) but don't derive correct terminal state — they just re-trigger the same task. A true reconciler would check "does this document have extracted_text AND OCR chunks? If not, transition to a terminal state that stops future dispatches."
 
-**Fix (tactical)**: Add document_type and extracted_text precondition checks in `trigger_pending_merges` and `recover_stuck_documents` before dispatching finalize. **Fix (structural)**: Replace non-converging re-dispatchers with a single reconciler that derives state from observation (ARCH-003 target architecture).
+**Fix Applied (2026-05-13)**: **Structural fix** — upgraded `_is_pipeline_data_complete()` in `maintenance_tasks.py` to be the single source of truth for document completion. Added `document_type` parameter with per-type criteria: Acts with 0 chunks are legitimately complete (routed to library pipeline); non-acts require chunks + embeddings + entity_mentions. Updated all 4 callers to pass `document_type`. `recover_stuck_documents` now uses `_is_pipeline_data_complete()` instead of raw chunk_count heuristic — documents that ARE complete (including acts) are skipped, stopping the infinite re-dispatch loop. This is a step toward the ARCH-003 reconciler: one function derives completion from observed DB state, not from "did the right task signal correctly."
+
+**Files**: `backend/app/workers/tasks/maintenance_tasks.py`
 
 ---
 
@@ -2175,15 +2181,17 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — structural gap, not yet causing failures at current scale |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) — tactical fix |
 | **Source** | E2E verification (2026-04-17) |
 | **Arch pattern** | ARCH-004 (gateway bypass — asymmetric rate-limiter enforcement) |
 
 **Observation**: During peak contradiction detection (4 docs simultaneously), exactly **1 transient OpenAI retry** observed (`Retrying request to /chat/completions in 0.47s`). Gemini hit **zero 429s** (paid tier 1000 RPM has ample headroom). Railway metrics confirmed: 0% API error rate, worker peaked at 3 vCPU / 3 GB RAM / 500 MB network egress. System handled 4 concurrent docs cleanly.
 
-**Structural note (ARCH-004)**: OpenAI calls in `comparator.py` use `AsyncOpenAI` directly with no rate limiter — relies on circuit breaker catching 429s reactively. Gemini calls in the same file DO go through `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two providers, asymmetric enforcement. Not a problem at 4-doc concurrency, but the gap will surface at higher load. This is P4 (infrastructure exists but using it is optional).
+**Fix Applied (2026-05-13)**: Wrapped `_call_gpt4_comparison()` OpenAI call with `get_rate_limiter(LLMProvider.OPENAI)` async context manager (max_concurrent=5, min_delay=0.1s). Safe to nest inside existing circuit breaker at current load. Gemini and OpenAI now have symmetric rate-limiter enforcement in `comparator.py`.
 
-**Fix (tactical)**: Wire OpenAI calls through `get_rate_limiter(LLMProvider.OPENAI)` in `comparator.py`. **Fix (structural)**: Move all LLM calls into domain classes under `services/llm/` where rate limiting is enforced by construction (ARCH-004 target architecture).
+**Remaining structural debt (ARCH-004)**: This is a tactical fix — the rate limiter is wired by convention at this one call site. The structural fix (domain classes under `services/llm/` where rate limiting is enforced by construction) remains in ARCH-004.
+
+**Files**: `backend/app/engines/contradiction/comparator.py`
 
 ---
 
@@ -2260,13 +2268,13 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | NOT A BUG (2026-05-13) |
 | **Date Found** | 2026-04-29 |
 | **Source** | E2E visual verification — browser console errors |
 
 **Description**: `GET /api/health` from `https://www.jaanch-ai.in` blocked by CORS: "No 'Access-Control-Allow-Origin' header is present". The main API endpoints have CORS configured (INF-003 was fixed), but the health endpoint appears to bypass the CORS middleware.
 
-**Impact**: Low — health check polling from frontend fails silently. May affect the circuit breaker / connectivity status indicator.
+**Verified NOT A BUG (2026-05-13)**: Live test `curl -H "Origin: https://www.jaanch-ai.in" -v https://jaanch-ai.up.railway.app/api/health` returns correct `Access-Control-Allow-Origin: https://www.jaanch-ai.in` header. Health route goes through FastAPI CORS middleware like all other routes. Original observation was likely a one-time browser cache issue or preflight mismatch.
 
 **Files**: `backend/app/main.py` (CORS config), `backend/app/api/routes/health.py`
 
@@ -2276,12 +2284,12 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) |
 | **Date Found** | 2026-04-29 |
 | **Source** | E2E visual verification — browser console errors |
 
 **Description**: `GET /api/matters/{id}/summary?forceRefresh=true` returns 401. Seen after navigating between matters. Supabase auth token likely expired mid-session, and the frontend didn't refresh before retrying. Also saw a 404 fallback to Vercel route (`/api/matters/{id}/summary?forceRefresh=true` hitting frontend instead of backend).
 
-**Impact**: Low — summary just doesn't refresh. User can reload page to get new token.
+**Fix Applied (2026-05-13)**: Fixed SWR `shouldRetryOnError` in `useMatterSummary.ts`. Changed from `err.status >= 402` (which accidentally blocked 401 retry) to `err.status !== 401 && err.status >= 400 && err.status < 500`. Now 401 triggers SWR retry, giving the API client's token refresh interceptor a chance to refresh the Supabase JWT before the retry fires. All other 4xx errors (400, 403, 404, 422) are still non-retryable.
 
-**Files**: `frontend/src/lib/api/client.ts` (auth token refresh logic), API route configuration
+**Files**: `frontend/src/hooks/useMatterSummary.ts`

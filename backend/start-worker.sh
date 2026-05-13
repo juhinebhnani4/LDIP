@@ -2,6 +2,7 @@
 # Start Celery beat scheduler and TWO worker processes as background tasks.
 # WPS-001 Phase 2: physical isolation of fast vs heavy queues.
 #
+#   beat         — periodic task scheduler (default PersistentScheduler)
 #   fast worker  — default+llm queues, 40 greenlets  (API-facing, latency-sensitive)
 #   heavy worker — heavy+low queues,   10 greenlets  (OCR, embedding, long-running)
 #
@@ -12,9 +13,9 @@
 #   Settings → Deploy → Drain Timeout
 # Celery warm shutdown finishes current tasks before exiting.
 #
-# Beat uses RedBeat (Redis-backed scheduler with distributed locking).
-# Multiple replicas can each start beat — RedBeat's Redis lock ensures
-# only one fires tasks at a time, with automatic failover if the leader dies.
+# Beat runs in a restart loop — if it crashes (e.g., transient Redis disconnect),
+# it auto-recovers after 10 seconds. CELERY_BEAT_ONLY=true skips heavy task
+# module imports (~1GB RAM savings — beat only needs schedule config, not task code).
 
 # --- Graceful shutdown handler ---
 cleanup() {
@@ -37,9 +38,21 @@ cleanup() {
 
 trap cleanup SIGTERM SIGINT
 
-# --- Start beat scheduler (RedBeat handles leader election via Redis lock) ---
-celery -A app.workers.celery:celery_app beat \
-    --loglevel=info &
+# --- Start beat scheduler with auto-restart ---
+# Uses Celery's default PersistentScheduler (local shelve file).
+# Schedule is static config in celery.py — file loss on restart is harmless.
+# CELERY_BEAT_ONLY=true makes celery.py skip heavy task module imports.
+(
+    trap 'exit 0' TERM
+    while true; do
+        CELERY_BEAT_ONLY=true celery -A app.workers.celery:celery_app beat \
+            --loglevel=info \
+            -s /tmp/celerybeat-schedule
+        EXIT_CODE=$?
+        echo "[beat] Beat exited with code $EXIT_CODE, restarting in 10s..."
+        sleep 10
+    done
+) &
 BEAT_PID=$!
 
 # --- Start fast worker (default + llm queues) ---

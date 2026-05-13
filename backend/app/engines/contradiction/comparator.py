@@ -643,6 +643,13 @@ class StatementComparator:
 
             response_text = response.text
 
+            if not response_text:
+                logger.warning(
+                    "gemini_screening_empty_response",
+                    hint="Falling back to GPT-4",
+                )
+                return None
+
             # Parse JSON response
             parsed = json.loads(response_text)
 

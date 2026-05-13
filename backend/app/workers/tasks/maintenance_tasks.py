@@ -47,13 +47,19 @@ def _get_effective_stage_from_job(job: dict) -> str | None:
     return job.get("current_stage")
 
 
-def _is_pipeline_data_complete(client, document_id: str) -> bool:
+def _is_pipeline_data_complete(client, document_id: str, document_type: str = "case_file") -> bool:
     """Check if all pipeline stages produced output for a document.
 
     Stage 1.3: Smarter Recovery — prevents re-dispatching documents that
     already have all their data but whose job row is stuck at PROCESSING.
 
-    Returns True if chunks, embeddings, AND entity mentions all exist.
+    Completion criteria depend on document_type:
+    - case_file / annexure / other: chunks > 0, embeddings > 0, entity_mentions > 0
+    - act: chunks > 0, embeddings > 0 (entity_mentions not required — acts
+      go through a truncated pipeline where 0 entities is valid)
+
+    This is the SINGLE SOURCE OF TRUTH for "is this document done?" — all
+    sweep tasks should call this instead of implementing their own heuristics.
     """
     try:
         # 1. Check chunks exist
@@ -63,7 +69,14 @@ def _is_pipeline_data_complete(client, document_id: str) -> bool:
             .eq("document_id", document_id)
             .execute()
         )
-        if not chunks.count:
+        chunk_count = chunks.count or 0
+
+        # Acts that were routed to library pipeline may have 0 chunks in the
+        # main chunks table — that's their correct terminal state.
+        if document_type == "act" and chunk_count == 0:
+            return True
+
+        if chunk_count == 0:
             return False
 
         # 2. Check embeddings exist (at least some chunks have embeddings)
@@ -77,14 +90,20 @@ def _is_pipeline_data_complete(client, document_id: str) -> bool:
         if not embedded.count:
             return False
 
-        # 3. Check entity mentions exist (pipeline ran through entity extraction)
-        entities = (
-            client.table("entity_mentions")
-            .select("id", count="exact")
-            .eq("document_id", document_id)
-            .execute()
-        )
-        return bool(entities.count and entities.count > 0)
+        # 3. For non-act documents: check entity mentions exist
+        # Acts run a truncated pipeline (citations skipped, contradictions
+        # dispatched directly) so 0 entity_mentions is valid.
+        if document_type != "act":
+            entities = (
+                client.table("entity_mentions")
+                .select("id", count="exact")
+                .eq("document_id", document_id)
+                .execute()
+            )
+            if not (entities.count and entities.count > 0):
+                return False
+
+        return True
 
     except Exception as e:
         logger.warning(
@@ -298,8 +317,9 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
             # Zombie QUEUED jobs for completed documents should be auto-completed, not re-dispatched.
             try:
-                doc_resp = client.table("documents").select("status").eq("id", doc_id).execute()
+                doc_resp = client.table("documents").select("status, document_type").eq("id", doc_id).execute()
                 doc_status = (doc_resp.data[0]["status"] if doc_resp.data else None)
+                doc_type = (doc_resp.data[0].get("document_type", "case_file") if doc_resp.data else "case_file")
                 if doc_status == "completed":
                     logger.info(
                         "stuck_queued_job_auto_completed",
@@ -314,11 +334,11 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                     skipped += 1
                     continue
             except Exception:
-                pass  # If check fails, proceed with normal dispatch logic
+                doc_type = "case_file"  # Safe default if check fails
 
             # Stage 1.3: Check if pipeline data is already complete
             # If so, just mark the job COMPLETED instead of re-dispatching
-            if _is_pipeline_data_complete(client, doc_id):
+            if _is_pipeline_data_complete(client, doc_id, document_type=doc_type):
                 logger.info(
                     "stuck_queued_job_data_complete",
                     job_id=job_id,
@@ -1152,7 +1172,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
         stuck_docs = (
             client.table("documents")
-            .select("id, matter_id, filename, status, updated_at, extracted_text")
+            .select("id, matter_id, filename, status, updated_at, extracted_text, document_type")
             .eq("status", "ocr_complete")
             .not_.is_("extracted_text", "null")
             .is_("deleted_at", "null")
@@ -1173,6 +1193,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
             doc_id = doc["id"]
             matter_id = doc["matter_id"]
             filename = doc.get("filename", "unknown")
+            doc_type = doc.get("document_type", "case_file")
 
             # Stage 1.2: Skip if pipeline is already running
             if PipelineLock(doc_id).is_locked():
@@ -1186,7 +1207,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
             try:
                 # Stage 1.3: Fast path — if all pipeline data exists, mark complete
-                if _is_pipeline_data_complete(client, doc_id):
+                if _is_pipeline_data_complete(client, doc_id, document_type=doc_type):
                     logger.info(
                         "resume_pipeline_data_complete",
                         document_id=doc_id,
@@ -1322,9 +1343,11 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     continue
 
                 # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
+                job_doc_type = "case_file"
                 try:
-                    doc_check = client.table("documents").select("status").eq("id", job_doc_id).execute()
+                    doc_check = client.table("documents").select("status, document_type").eq("id", job_doc_id).execute()
                     doc_st = (doc_check.data[0]["status"] if doc_check.data else None)
+                    job_doc_type = (doc_check.data[0].get("document_type", "case_file") if doc_check.data else "case_file")
                     if doc_st == "completed":
                         logger.info(
                             "stuck_processing_job_auto_completed",
@@ -1342,7 +1365,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     pass  # If check fails, proceed with normal dispatch
 
                 # Stage 1.3: Check if pipeline data is complete — mark done instead of re-dispatching
-                if _is_pipeline_data_complete(client, job_doc_id):
+                if _is_pipeline_data_complete(client, job_doc_id, document_type=job_doc_type):
                     logger.info(
                         "stuck_processing_job_data_complete",
                         job_id=job["id"],
@@ -2310,10 +2333,10 @@ def recover_stuck_documents(self) -> dict:
 
         # If RPC failed or returned no data, fall back to manual query
         if stuck_docs is None:
-            # Manual approach: get all OCR_COMPLETE documents (exclude soft-deleted)
+            # Manual approach: get all OCR_COMPLETE/COMPLETED documents (exclude soft-deleted)
             docs_response = (
                 client.table("documents")
-                .select("id, matter_id, filename, status, extracted_text, page_count")
+                .select("id, matter_id, filename, status, extracted_text, page_count, document_type")
                 .in_("status", ["ocr_complete", "completed"])
                 .is_("deleted_at", "null")
                 .execute()
@@ -2325,20 +2348,16 @@ def recover_stuck_documents(self) -> dict:
 
             stuck_docs = []
             for doc in docs_response.data:
-                # Check chunk count for each document
-                chunk_count_response = (
-                    client.table("chunks")
-                    .select("id", count="exact")
-                    .eq("document_id", doc["id"])
-                    .execute()
-                )
-                chunk_count = chunk_count_response.count or 0
+                doc_type = doc.get("document_type", "case_file")
 
-                if chunk_count == 0:
-                    stuck_docs.append({
-                        **doc,
-                        "chunk_count": chunk_count,
-                    })
+                # Use the single source of truth for completeness check.
+                # If all expected pipeline data exists for this document type,
+                # it's not stuck — skip it. This prevents infinite re-dispatch
+                # of e.g. act documents that legitimately have 0 chunks.
+                if _is_pipeline_data_complete(client, doc["id"], document_type=doc_type):
+                    continue
+
+                stuck_docs.append(doc)
 
         results["checked"] = len(stuck_docs)
 

@@ -280,6 +280,30 @@ already has the capability. What's the smallest change (fewest files,
 fewest callers affected) that achieves the goal?
 ```
 
+### 2.5 — For DB permission/schema changes: query the live database, not migration files
+
+**Three mandatory checks before writing any migration that touches permissions, grants, function signatures, or schema objects:**
+
+1. **Get current state from system catalogs, not migration files.** Migrations are append-only history — functions get DROPped and recreated across multiple migrations, columns get ALTERed, grants get overridden by default privileges. One query to `pg_proc`, `pg_default_acl`, `information_schema.columns`, or `pg_class` gives the exact current answer. Migration files give you a guess that may be wrong.
+
+2. **Understand the full grant chain.** Supabase (and many Postgres setups) use `ALTER DEFAULT PRIVILEGES` to auto-grant permissions on new objects. A `REVOKE FROM anon` is a no-op if `PUBLIC` still has the grant via default privileges. Before writing any REVOKE, check:
+   - `pg_default_acl` — what auto-grants exist?
+   - `proacl` / `relacl` — what's the full ACL on the object? Look for `=X/...` (the PUBLIC grant entry).
+   - If PUBLIC has a grant, you must `REVOKE FROM PUBLIC` — revoking from named roles alone won't help.
+
+3. **Verify the EFFECT after applying, not just the exit code.** `REVOKE` succeeds silently even if another grant path still provides access. Always check `has_function_privilege()` / `has_table_privilege()` immediately after. "0 errors" is not proof that the fix worked.
+
+> **Why this was added (2026-05-13):** SEC-002 fix (revoke anon access to 42 SECURITY DEFINER functions) took 40 minutes instead of 10 because of three compounding failures: (a) Research agents read migration SQL files to determine function signatures — got several wrong (e.g., `find_library_duplicates(text, uuid, integer)` vs actual `(text, integer, double precision)`). (b) Nobody checked Supabase's default privilege model — `REVOKE FROM anon` executed "successfully" on all 43 statements but `has_function_privilege('anon', ...)` still returned true because `PUBLIC` had EXECUTE via default privileges. (c) "43 succeeded, 0 failed" was treated as proof the fix worked without verifying the actual effect. Three iterations of debugging were needed to discover the `=X/postgres` (PUBLIC grant) in the ACL. The correct fix was `REVOKE FROM PUBLIC, anon` + `ALTER DEFAULT PRIVILEGES ... REVOKE FROM PUBLIC`.
+
+**Prompt fragment:**
+```
+For DB permission changes: query the LIVE database before writing the 
+migration. Get function signatures from pg_proc, not migration files. 
+Check pg_default_acl for auto-grants. After applying, verify with 
+has_function_privilege() / has_table_privilege() — exit code 0 is not 
+proof. If PUBLIC has a grant, REVOKE FROM PUBLIC, not just named roles.
+```
+
 ---
 
 ## Composite Prompt Templates

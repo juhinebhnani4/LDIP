@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-04-30 (Cluster 1 executed: 3 P0s fixed, data fixes applied, blast-radius verified)
-**Total bugs**: 87 | **Fixed**: 49 | **Open**: 32 | **Partially Fixed**: 3 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 0
+**Last updated**: 2026-05-13 (SEC-002 A+B+C fixed: 42 anon-exposed RPCs revoked, 4 search_path fixed, 3 mat views blocked)
+**Total bugs**: 88 | **Fixed**: 54 | **Open**: 26 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 1 | **Mitigated**: 0
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
@@ -766,6 +766,32 @@ All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 
 ---
 
 ## 1. Security
+
+### SEC-002: Supabase Linter Warnings (2026-05-08) | Status: PARTIALLY FIXED (A+B+C fixed 2026-05-13, D+E open)
+
+**Source**: Supabase Dashboard Database Linter. 5 categories of warnings:
+
+**A. `anon` can execute SECURITY DEFINER functions (42 functions)** | Priority: P1 | **FIXED (2026-05-13)**
+Unauthenticated users could call these via PostgREST `/rest/v1/rpc/...`. Research confirmed: frontend makes zero `.rpc()` calls, backend uses `service_role` key (bypasses permissions), `handle_new_user` is a trigger (runs as owner), `user_has_matter_access`/`user_has_storage_access` are RLS policy helpers.
+
+**Key finding**: `REVOKE FROM anon` alone is insufficient — Supabase default privileges grant EXECUTE to `PUBLIC` on all functions in `public` schema. Required `REVOKE FROM PUBLIC, anon` to actually block access. Also fixed default privileges for future functions.
+
+**Fix applied**: Migration `20260513000001_sec002_revoke_anon_harden_rpcs.sql`. Verified: 0 SECURITY DEFINER functions callable by anon. `authenticated` and `service_role` retain access.
+
+**B. `function_search_path_mutable` (7 functions, only 4 needed fix)** | Priority: P2 | **FIXED (2026-05-13)**
+3 of 7 already had `SET search_path = public`. Fixed the remaining 4: `get_consistency_issue_counts`, `update_consistency_issues_updated_at`, `count_queries_per_matter`, `adjust_bbox_text_offsets`.
+
+**C. Materialized views exposed via API (3 views)** | Priority: P3 | **FIXED (2026-05-13)**
+`contradiction_savings_report`, `monthly_cogs_by_matter`, `cost_per_document_page` — admin cost views revoked from `PUBLIC`, `anon`, and `authenticated`. `service_role` retains access.
+
+**D. `extension_in_public` — pg_trgm** | Priority: P3 | Status: OPEN
+`pg_trgm` installed in public schema. Supabase recommends moving to `extensions` schema.
+**Fix**: `ALTER EXTENSION pg_trgm SET SCHEMA extensions;` — but verify `find_library_duplicates` RPC still works after move.
+
+**E. Leaked password protection disabled** | Priority: P2 | Status: OPEN
+Supabase Auth HaveIBeenPwned check is off. Enable in Supabase Dashboard > Auth > Settings.
+
+---
 
 ### SEC-001: Cross-User Data Leakage on Login
 | Field | Value |

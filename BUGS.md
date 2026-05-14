@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-14 (GAP-19 FIXED: pypdf-first extraction, inline chunking, idempotency guards. GAP-20 filed: Upstash 100MB record limit. `process_library_document` dead code removed.)
-**Total bugs**: 92 | **Fixed**: 67 | **Open**: 16 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
+**Last updated**: 2026-05-14 (WPS-001 L4+L5 FIXED. Reconciler sweep replaces status-label sweeps — ARCH-003 stepping stone. Timeout alignment for 3 tasks. Forensic hunt: 10/13 doc statuses were invisible to all sweeps.)
+**Total bugs**: 92 | **Fixed**: 70 | **Open**: 13 | **Partially Fixed**: 3 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
@@ -24,7 +24,7 @@ Week 1:  Cluster 1 (library data — 3 P0s)       ✓ DONE
          Cluster 5 (UX quick wins)               ✓ DONE
 Week 2:  Cluster 2 (library schema parity)       ✓ DONE
          Cluster 6 (infra hardening)             ✓ DONE
-Next:    Cluster 4 (worker/beat stability)       ← NEXT
+         Cluster 4 (worker/beat stability)       ✓ DONE
          Cluster 3 (contradiction optimization Phase 2)
 After:   Cluster 7 (architectural debt — ongoing)
 ```
@@ -61,15 +61,15 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **E2E-004**: Contradiction detection is pipeline bottleneck | P2 | Analyze Phase 1 screening metadata, tune escalation threshold |
 | **E2E-005**: Excessive GPT-4o escalation | P3 | Same analysis — raise threshold if data supports it |
 
-#### Cluster 4: Worker/Beat Stability (1-2 days)
-*All require worker topology changes (`railway.toml`, `start-worker.sh`). Deploy together.*
+#### Cluster 4: Worker/Beat Stability ✓ DONE (2026-05-14)
+*Completed in phases: beat stability (2026-05-13), fan-out decomposition + coroutine fix (2026-05-14). Hostile review pre-implementation found 7 bugs, 4 risks — all addressed.*
 
 | Bug | Sev | Fix |
 |---|---|---|
 | **INF-010**: RedBeat lock lost — beat crashes | P1 | **FIXED** (2026-05-13) — removed RedBeat, default scheduler + restart loop |
 | **E2E-006**: Redis beat lock extension warning | P2 | **FIXED** (2026-05-13) — same fix, no more Redis lock |
-| **WPS-001 L4**: Monolithic `resolve_aliases` task | P2 | Fan-out/fan-in decomposition |
-| **WPS-001 L5**: Gevent timeout fiction | P2 | Manual timeout enforcement or prefork |
+| **WPS-001 L4**: Monolithic `resolve_aliases` task | P2 | **FIXED** (2026-05-14) — 3-phase fan-out: Phase 1 (CPU pairs), Phase 2 (LLM batches ×20 pairs), Phase 3 (persist). Redis counter completion tracking. |
+| **WPS-001 L5**: Gevent timeout fiction | P2 | **FIXED** (2026-05-14) — coroutine cancellation in `_run_async` + explicit `TimeoutError` catch. Benefits all ~80 call sites. |
 | **E2E-007**: Finalize runs forever on act docs | P3 | **FIXED** (2026-05-13) — structural fix via `_is_pipeline_data_complete()` |
 
 #### Cluster 5: UX Quick Wins (half day)
@@ -403,6 +403,8 @@ These don't help users TODAY but make every future change safer and cheaper. The
 
 **E2E-007 is proof the current sweeps don't converge**: `trigger_pending_merges` dispatches finalize for ACT documents forever. A true reconciler would check "does this document have everything it needs?" and stop.
 
+**Stepping stone deployed (2026-05-14)**: Forensic hunt revealed 10 of 13 document statuses were invisible to ALL 13 sweeps. Only `ocr_complete` and `completed` were queried. `resume_stuck_pipelines` Part A now queries `status NOT IN ('completed', 'failed', 'deleted')` — catching ALL non-terminal docs. `_is_pipeline_data_complete()` is the decision maker. Live verified: first sweep caught 3 stuck docs (pending, ocr_failed, searchable) that no sweep had ever seen. This is the reconciler's WHERE clause — the remaining Tier 3 work is replacing task-side status signaling with derived state.
+
 ---
 
 ### Tier 4 — Long-term (after free tier is live and generating data)
@@ -410,7 +412,7 @@ These don't help users TODAY but make every future change safer and cheaper. The
 | # | What | ARCH | Why deferred | When it becomes urgent |
 |---|---|---|---|---|
 | 12 | **Pipeline unification** | ARCH-001 | Both paths work (E2E proved it). 6,471 + 1,926 lines of code. Largest refactor. | When we need to add a new pipeline stage and have to do it twice. |
-| 13 | **Full worker isolation** | ARCH-002 | Partially fixed (dual worker). Gevent timeout fiction (Layer 5) is low-impact at current scale. | When a single tenant's batch saturates the worker and blocks others. |
+| 13 | **Full worker isolation** | ARCH-002 | Partially fixed (dual worker + fan-out). Gevent timeout fiction fixed (L5). `resolve_aliases` fan-out fixed (L4). Remaining: per-engine Gemini quota partitioning. | When per-engine quota contention blocks other tenants. |
 | 14 | **NLI model integration** | — | Needs 10K+ labeled pairs from `statement_comparisons`. LegalWiz showed hybrid (NLI+LLM) beats LLM-only: 89.5% vs 75.3% F1. But no NLI model exists for Indian legal text — mDeBERTa-xnli has 76.9% Hindi NLI accuracy on general text, never seen legal phrasing. | After accumulating training data + validating mDeBERTa on our domain. |
 | 15 | **Postgres RPC versioning** | ARCH-005 | 11 migrations so far, all `CREATE OR REPLACE`, no version bumps. Currently stable — search RPCs haven't changed recently. | Next time we modify a search RPC signature. |
 
@@ -431,7 +433,7 @@ Per-user usage tracking already exists at `backend/app/api/routes/usage.py` — 
 - Full E2E results, cost data, and competitive analysis: [E2E-FINDINGS-2026-04-17.md](E2E-FINDINGS-2026-04-17.md)
 - Architectural patterns catalog: [ARCH-PATTERNS.md](ARCH-PATTERNS.md)
 - DPP-002 fix (Celery chain error handling): already FIXED, verified in E2E
-- WPS-001 (worker queue starvation): Layers 1-3 FIXED, Layers 4-5 in Tier 4
+- WPS-001 (worker queue starvation): ALL 5 LAYERS FIXED (L1-3: 2026-04-17, L4-5: 2026-05-14)
 
 ---
 
@@ -842,7 +844,7 @@ Supabase Auth HaveIBeenPwned check is off. Requires Pro plan to enable.
 | Field | Value |
 |-------|-------|
 | **Severity** | P0 (Critical) |
-| **Status** | PARTIALLY FIXED (2026-04-17) — Layers 1-3 fixed, Layers 4-5 open |
+| **Status** | FIXED (2026-05-14) — All 5 layers fixed. L1-3 (2026-04-17), L4-5 (2026-05-14). |
 | **Date Found** | 2026-02-27 |
 | **Source** | PRODUCTION-BUGS-2026-02-27.md (BUG-002) |
 
@@ -854,9 +856,9 @@ Supabase Auth HaveIBeenPwned check is off. Requires Pro plan to enable.
 
 **Layer 3 — Gemini bottleneck (the actual ceiling)**: Global rate limit `max_concurrent=1`, `min_delay=6.0s`, `max_rpm=10` (free tier). ALL LLM tasks share this single 10 RPM quota. **FIXED** (commit `3581bdd`): upgraded to Gemini Paid Tier 1 (1000 RPM). Rate limiter config updated from 10 RPM → 1000 RPM, min_delay 6.0s → 0.06s, max_concurrent 1 → 10.
 
-**Layer 4 — Monolithic task design**: `resolve_aliases` is a single Celery task holding 1 greenlet for up to 30 minutes. Internally batches (10 pairs, 3-way semaphore) but Celery can't preempt or interleave. **OPEN**: Fix is fan-out/fan-in decomposition into 2-min chunks.
+**Layer 4 — Monolithic task design**: `resolve_aliases` is a single Celery task holding 1 greenlet for up to 30 minutes. Internally batches (10 pairs, 3-way semaphore) but Celery can't preempt or interleave. **FIXED** (2026-05-14): 3-phase fan-out decomposition. Phase 1 (CPU, ~10s): fetches entities with pagination (fixes 1000-entity cap), finds high/medium pairs, creates high-confidence edges inline, dispatches Phase 2 batches. Phase 2 (LLM, ~30-120s each): `resolve_aliases_batch` analyzes ~20 pairs via Gemini per task, stores results in Redis, last batch triggers Phase 3 via Redis INCR counter. Phase 3 (CPU, ~30s): `resolve_aliases_finalize` applies transitive closure, persists all edges via UPSERT, updates alias arrays from a single convergence point (fixes read-modify-write race in `add_alias_to_entity`). All 3 phases routed to `low` queue → heavy worker (10 greenlets). Redis dedup lock prevents concurrent runs for same document. Additional fixes: removed `queue="default"` overrides in `_dispatch_post_entity_tasks` (all 3 dispatches), entity context capped at 2000 chars/entity.
 
-**Layer 5 — Gevent timeout fiction**: `soft_time_limit` is silently ignored with gevent pool. `worker_max_tasks_per_child` and `worker_max_memory_per_child` are no-ops. Every safety net Celery advertises for bounding task duration does not fire with gevent. **OPEN**: Fix is switching to prefork pool or adding manual timeout enforcement.
+**Layer 5 — Gevent timeout fiction**: `soft_time_limit` is silently ignored with gevent pool. `worker_max_tasks_per_child` and `worker_max_memory_per_child` are no-ops. Every safety net Celery advertises for bounding task duration does not fire with gevent. **FIXED** (2026-05-14): Added coroutine cancellation in `_run_in_thread()` (`utils.py`). When `future.result(timeout=N)` fires `TimeoutError`, `future.cancel()` is called to cancel the coroutine on the shared event loop, preventing orphaned coroutines from leaking Gemini API calls and rate limiter slots. Added explicit `(TimeoutError, SoftTimeLimitExceeded)` catch in `resolve_aliases` so timeouts are logged as "TIMEOUT" instead of "UNEXPECTED_ERROR". This fix benefits all ~80 `run_async` call sites system-wide, not just alias resolution. **Timeout alignment (same day)**: The coroutine cancellation exposed that `embed_chunks` (soft_time_limit=900s), `extract_entities` (600s), and `extract_citations` (600s) all used the default `_run_async` timeout of 300s — half their soft limit. Previously invisible because leaked coroutines finished the work silently. Fixed: `_run_async` timeout now set to `soft_time_limit - 60s` for each. Live evidence: `extract_entities` on a 326-page doc timed out at 300s on first deploy; succeeded after timeout alignment.
 
 **Interaction with INF-009 (FIXED)**: Ghost document recovery loop was dispatching 14 pipeline tasks every 15 min for already-deleted documents, wasting greenlets and Gemini quota that real users needed.
 
@@ -1895,7 +1897,7 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 | API | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **Total** | **76** | **44** | **26** | **2** | **2** | **1** | **0** | **1** |
 
-*Note: DPP-010 (RESOLVED) counted under DPP Fixed. UX-004 counted as Partially Fixed (core fixed, feature gap open). WPS-001 counted as Partially Fixed (layers 1-3 fixed, 4-5 open). INF-011 (MITIGATED) in its own column.*
+*Note: DPP-010 (RESOLVED) counted under DPP Fixed. UX-004 counted as Partially Fixed (core fixed, feature gap open). WPS-001 counted as Fixed (all 5 layers fixed). INF-011 (MITIGATED) in its own column.*
 
 ### Corrections from Live Data Verification
 

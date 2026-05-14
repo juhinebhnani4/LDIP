@@ -1166,15 +1166,20 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
         if client is None:
             return {"error": "Database client not configured"}
 
-        # Find documents stuck at ocr_complete for longer than the threshold
-        # These should have progressed to 'completed' but didn't
+        # RECONCILER STEP (ARCH-003 stepping stone, 2026-05-14):
+        # Query ALL non-terminal documents past the cutoff, not just "ocr_complete".
+        # This catches documents stuck at ANY status — the forensic hunt (2026-05-14)
+        # found that 10 of 13 statuses were invisible to all sweeps.
+        # The old query: .eq("status", "ocr_complete").not_.is_("extracted_text", "null")
+        # The new query: status NOT IN terminal states. Let _is_pipeline_data_complete()
+        # decide what to do — it's the single source of truth for completion.
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=effective_minutes)
 
+        _TERMINAL_STATUSES = ["completed", "failed", "deleted"]
         stuck_docs = (
             client.table("documents")
             .select("id, matter_id, filename, status, updated_at, extracted_text, document_type")
-            .eq("status", "ocr_complete")
-            .not_.is_("extracted_text", "null")
+            .not_.in_("status", _TERMINAL_STATUSES)
             .is_("deleted_at", "null")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
@@ -1209,9 +1214,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 # Stage 1.3: Fast path — if all pipeline data exists, mark complete
                 if _is_pipeline_data_complete(client, doc_id, document_type=doc_type):
                     logger.info(
-                        "resume_pipeline_data_complete",
+                        "reconciler_data_complete",
                         document_id=doc_id,
                         filename=filename,
+                        doc_status=doc.get("status", ""),
                         reason="all pipeline data exists, marking completed",
                     )
                     client.table("documents").update(
@@ -1231,7 +1237,38 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     results["resumed"] += 1
                     continue
 
-                # Check what stages are missing for this document
+                # Reconciler: derive correct action from observed data, not status label.
+                # Check what stages are missing and dispatch from the right point.
+                doc_status = doc.get("status", "")
+                has_text = doc.get("extracted_text") is not None
+
+                # Pre-OCR statuses: no extracted_text yet — need full pipeline restart
+                if not has_text and doc_status in ("pending", "processing"):
+                    logger.info(
+                        "reconciler_dispatch_full_pipeline",
+                        document_id=doc_id,
+                        filename=filename,
+                        doc_status=doc_status,
+                        reason="no extracted_text, restarting from OCR",
+                    )
+                    from app.workers.tasks.document_tasks import process_document
+                    process_document.apply_async(
+                        kwargs={"document_id": doc_id},
+                        countdown=5,
+                    )
+                    results["resumed"] += 1
+                    continue
+
+                # Also mark FAILED jobs for this doc as QUEUED so Part B can re-dispatch
+                try:
+                    from datetime import datetime as dt_cls2, timezone as tz_cls2
+                    client.table("processing_jobs").update({
+                        "status": "QUEUED",
+                        "updated_at": dt_cls2.now(tz_cls2.utc).isoformat(),
+                    }).eq("document_id", doc_id).eq("status", "FAILED").execute()
+                except Exception:
+                    pass  # Best effort — Part A handles recovery below
+
                 # 1. Check if chunks exist
                 chunks = (
                     client.table("chunks")
@@ -1243,9 +1280,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 if not chunks.count or chunks.count == 0:
                     # No chunks - need to run from chunking stage
                     logger.info(
-                        "resume_pipeline_from_chunking",
+                        "reconciler_dispatch_from_chunking",
                         document_id=doc_id,
                         filename=filename,
+                        doc_status=doc_status,
                     )
                     _dispatch_from_chunking(doc_id, matter_id)
                     results["resumed"] += 1

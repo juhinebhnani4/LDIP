@@ -86,7 +86,9 @@ celery_app.conf.update(
         "app.workers.tasks.document_tasks.embed_chunks": {"queue": "llm"},
         "app.workers.tasks.document_tasks.extract_entities": {"queue": "llm"},
         "app.workers.tasks.document_tasks.extract_citations": {"queue": "llm"},
-        "app.workers.tasks.document_tasks.resolve_aliases": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.resolve_aliases": {"queue": "low"},  # WPS-001 L4: Phase 1 (CPU) on heavy worker
+        "app.workers.tasks.document_tasks.resolve_aliases_batch": {"queue": "low"},  # WPS-001 L4: Phase 2 (LLM) on heavy worker
+        "app.workers.tasks.document_tasks.resolve_aliases_finalize": {"queue": "low"},  # WPS-001 L4: Phase 3 (persist) on heavy worker
         "app.workers.tasks.document_tasks.extract_dates_from_document": {"queue": "llm"},
         "app.workers.tasks.engine_tasks.*": {"queue": "llm"},
         "app.workers.tasks.summary_tasks.*": {"queue": "llm"},
@@ -358,6 +360,8 @@ else:
         "app.workers.tasks.document_tasks.embed_chunks",
         "app.workers.tasks.document_tasks.extract_entities",
         "app.workers.tasks.document_tasks.resolve_aliases",
+        "app.workers.tasks.document_tasks.resolve_aliases_batch",
+        "app.workers.tasks.document_tasks.resolve_aliases_finalize",
         "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
         "app.workers.tasks.maintenance_tasks.dispatch_stuck_queued_jobs",
         "app.workers.tasks.summary_tasks.generate_summary",

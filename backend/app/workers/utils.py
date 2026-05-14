@@ -1,6 +1,7 @@
 """Shared utilities for Celery worker tasks."""
 
 import asyncio
+import concurrent.futures
 import sys
 import threading
 from typing import Any, Coroutine, TypeVar
@@ -183,12 +184,27 @@ def _run_in_thread(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
     run_coroutine_threadsafe (no new event loop, no run_until_complete).
 
     In non-gevent: creates a new thread with its own event loop (original approach).
+
+    IMPORTANT (WPS-001 L5): On timeout, the coroutine is CANCELLED on the shared
+    event loop. Without cancellation, orphaned coroutines continue making API calls
+    (e.g., Gemini) and holding rate limiter slots indefinitely. This was a systemic
+    bug affecting all ~80 call sites.
     """
     # In gevent: dispatch to shared loop (no new event loop, no run_until_complete)
     if _is_gevent_worker():
         loop = _get_or_create_shared_loop()
         future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=timeout)
+        try:
+            return future.result(timeout=timeout)
+        except (TimeoutError, concurrent.futures.TimeoutError):
+            # Cancel the coroutine on the shared event loop to prevent orphaned
+            # coroutines from leaking API calls, DB connections, and rate limiter slots.
+            # future.cancel() requests cancellation; the event loop raises
+            # asyncio.CancelledError inside the coroutine at its next await point.
+            future.cancel()
+            raise TimeoutError(
+                f"Async operation timed out after {timeout}s (coroutine cancelled)"
+            )
 
     # Non-gevent fallback: existing threading.Thread approach (unchanged)
     import threading as _threading

@@ -3633,7 +3633,7 @@ def embed_chunks(
                         raise  # Let Celery retry
 
         try:
-            _run_async(_embed_all_batches())
+            _run_async(_embed_all_batches(), timeout=840)  # Below soft_time_limit=900
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -4529,7 +4529,7 @@ def extract_entities(
                     )
 
         try:
-            _run_async(_extract_entities_async())
+            _run_async(_extract_entities_async(), timeout=540)  # Below soft_time_limit=600
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -4717,6 +4717,7 @@ def _dispatch_post_entity_tasks(
     }
 
     # Task 1: Citation extraction (use send_task to avoid forward reference)
+    # NOTE: no explicit queue= — task_routes in celery.py is the single source of truth
     try:
         celery_app.send_task(
             "app.workers.tasks.document_tasks.extract_citations",
@@ -4724,7 +4725,6 @@ def _dispatch_post_entity_tasks(
                 "prev_result": prev_result,
                 "document_id": document_id,
             },
-            queue="default",
         )
         triggered_tasks.append("extract_citations")
         logger.debug("extract_citations_dispatched", document_id=document_id)
@@ -4741,6 +4741,7 @@ def _dispatch_post_entity_tasks(
         _release_pipeline_lock_safe(document_id)
 
     # Task 2: Date extraction (with auto-classification enabled)
+    # NOTE: no explicit queue= — task_routes in celery.py is the single source of truth
     try:
         extract_dates_from_document.apply_async(
             kwargs={
@@ -4748,7 +4749,6 @@ def _dispatch_post_entity_tasks(
                 "matter_id": matter_id,
                 "auto_classify": True,
             },
-            queue="default",
         )
         triggered_tasks.append("extract_dates_from_document")
         logger.debug("extract_dates_dispatched", document_id=document_id)
@@ -4761,13 +4761,13 @@ def _dispatch_post_entity_tasks(
         )
 
     # Task 3: Alias resolution (runs independently, no longer gates downstream)
+    # NOTE: no explicit queue= — task_routes in celery.py is the single source of truth
     try:
         celery_app.send_task(
             "app.workers.tasks.document_tasks.resolve_aliases",
             kwargs={
                 "document_id": document_id,
             },
-            queue="default",
         )
         triggered_tasks.append("resolve_aliases")
         logger.debug("resolve_aliases_dispatched", document_id=document_id)
@@ -4799,6 +4799,50 @@ def _dispatch_post_entity_tasks(
 # =============================================================================
 
 
+# =============================================================================
+# Alias Resolution — Fan-Out/Fan-In (WPS-001 Layer 4)
+#
+# Three-phase decomposition replaces the monolithic 30-minute resolve_aliases:
+#
+# Phase 1 (resolve_aliases):     CPU-only. Fetches entities, finds pairs,
+#                                 creates high-confidence edges inline,
+#                                 dispatches Phase 2 batches for medium pairs.
+#                                 ~10 seconds, holds greenlet briefly.
+#
+# Phase 2 (resolve_aliases_batch): LLM-bound. Each batch analyzes ~20 pairs
+#                                   via Gemini. ~30-120 seconds per batch.
+#                                   Parallel batches on low queue (heavy worker).
+#                                   Last batch to finish triggers Phase 3.
+#
+# Phase 3 (resolve_aliases_finalize): CPU-only. Applies transitive closure,
+#                                      persists edges, updates alias arrays.
+#                                      Single convergence point — no race on
+#                                      add_alias_to_entity (fixes hostile review G2).
+#
+# Completion tracking: Redis INCR counter. Phase 1 sets total. Each Phase 2
+# INCRs done. When done == total, that batch dispatches Phase 3. No polling,
+# no chord (task_ignore_result=True globally).
+#
+# Key properties preserved:
+# - Aliases are DECOUPLED from pipeline completion (no _mark_job_completed)
+# - All DB writes use UPSERT (idempotent)
+# - Failure in any phase does NOT block document processing
+# =============================================================================
+
+# Redis key helpers for fan-out coordination
+_ALIAS_KEY_PREFIX = "alias_resolve"
+_ALIAS_KEY_TTL = 7200  # 2 hours — enough for largest matters
+
+
+def _alias_redis_key(document_id: str, suffix: str) -> str:
+    """Build a Redis key for alias resolution fan-out coordination."""
+    return f"{_ALIAS_KEY_PREFIX}:{document_id}:{suffix}"
+
+
+# Context cap: max chars per entity to prevent unbounded memory growth (Risk B2)
+_MAX_CONTEXT_CHARS_PER_ENTITY = 2000
+
+
 @celery_app.task(
     name="app.workers.tasks.document_tasks.resolve_aliases",
     bind=True,
@@ -4807,8 +4851,8 @@ def _dispatch_post_entity_tasks(
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=1800,  # 30 minutes - large matters with 8000+ entity mentions
-    time_limit=1860,  # 31 minutes - hard kill
+    soft_time_limit=300,   # 5 minutes — Phase 1 is CPU-only, should be fast
+    time_limit=360,
 )  # type: ignore[misc]
 def resolve_aliases(
     self,  # type: ignore[no-untyped-def]
@@ -4819,35 +4863,19 @@ def resolve_aliases(
     mig_graph_service: MIGGraphService | None = None,
     job_tracker: JobTrackingService | None = None,
 ) -> dict[str, str | int | float | None]:
-    """Resolve entity aliases after extraction.
+    """Phase 1: Find alias pairs and dispatch LLM batches.
 
-    This task runs after extract_entities to find and link name variants
-    (e.g., "N.D. Jobalia" -> "Nirav D. Jobalia") as aliases.
+    WPS-001 Layer 4 fan-out: this task is CPU-only (~10s). It finds high/medium
+    similarity pairs, creates high-confidence edges inline, and dispatches
+    Phase 2 batches (resolve_aliases_batch) for medium-confidence pairs.
 
-    Pipeline: ... -> Extract Entities -> **Resolve Aliases**
-
-    Three-phase resolution:
-    1. High similarity (>0.85): Auto-link as aliases
-    2. Medium similarity (0.60-0.85): Use Gemini context analysis
-    3. Low similarity (<0.60): Skip
-
-    Args:
-        prev_result: Result from previous task in chain (contains document_id).
-        document_id: Document UUID (optional, can be in prev_result).
-        document_service: Optional DocumentService instance (for testing).
-        entity_resolver: Optional EntityResolver instance (for testing).
-        mig_graph_service: Optional MIGGraphService instance (for testing).
-        job_tracker: Optional JobTrackingService instance (for testing).
-
-    Returns:
-        Task result with alias resolution summary.
-
-    Raises:
-        AliasResolutionError: If resolution fails (will trigger retry).
+    Aliases are DECOUPLED from pipeline completion — failure here does NOT
+    block document processing.
     """
+    from app.services.distributed_lock import get_sync_redis_client
     from app.services.supabase.client import get_service_client
 
-    # Get document_id and job_id from prev_result or parameter
+    # --- Parameter extraction (unchanged) ---
     doc_id = document_id
     job_id: str | None = None
     matter_id: str | None = None
@@ -4857,7 +4885,6 @@ def resolve_aliases(
             doc_id = prev_result.get("document_id")  # type: ignore[assignment]
         job_id = prev_result.get("job_id")  # type: ignore[assignment]
 
-    # If job_id not in prev_result, look it up from database
     if job_id is None and doc_id:
         job_id = _lookup_job_id_for_document(doc_id)
 
@@ -4869,110 +4896,561 @@ def resolve_aliases(
             "error_message": "No document_id provided",
         }
 
-    # Skip if previous task wasn't successful
     if prev_result:
         prev_status = prev_result.get("status")
-        valid_statuses = (
-            "entities_extracted",
-        )
-        if prev_status not in valid_statuses:
-            logger.info(
-                "resolve_aliases_skipped",
-                document_id=doc_id,
-                prev_status=prev_status,
-            )
-            return {
-                "status": "alias_resolution_skipped",
-                "document_id": doc_id,
-                "reason": f"Previous task status: {prev_status}",
-                "job_id": job_id,
-            }
+        if prev_status not in ("entities_extracted",):
+            logger.info("resolve_aliases_skipped", document_id=doc_id, prev_status=prev_status)
+            return {"status": "alias_resolution_skipped", "document_id": doc_id, "job_id": job_id}
 
-    # Use injected services or get defaults
+    # --- Dedup guard (hostile review C1): prevent concurrent runs for same doc ---
+    redis_client = get_sync_redis_client()
+    dedup_key = _alias_redis_key(doc_id, "running")
+    # SET NX with 30-min TTL — if key exists, another task is already running
+    if not redis_client.set(dedup_key, "1", nx=True, ex=1800):
+        logger.info("resolve_aliases_dedup_skip", document_id=doc_id)
+        return {"status": "alias_resolution_skipped", "document_id": doc_id,
+                "reason": "Another resolve_aliases is already running", "job_id": job_id}
+
     doc_service = document_service or get_document_service()
     resolver = entity_resolver or get_entity_resolver()
     graph_service = mig_graph_service or get_mig_graph_service()
 
-    logger.info(
-        "resolve_aliases_task_started",
-        document_id=doc_id,
-        retry_count=self.request.retries,
-    )
+    logger.info("resolve_aliases_phase1_started", document_id=doc_id, retry_count=self.request.retries)
 
     try:
-        # Get matter_id for the document
         _, matter_id = doc_service.get_document_for_processing(doc_id)
-
-        # Track alias resolution stage start (Story 2c-3)
         _update_job_stage_start(job_id, "alias_resolution", matter_id)
 
-        # Get database client
         client = get_service_client()
         if client is None:
-            raise AliasResolutionError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED",
-            )
+            raise AliasResolutionError(message="Database client not configured", code="DATABASE_NOT_CONFIGURED")
 
-        # Run async operations in single context
-        async def _resolve_aliases_async():
-            # Get all entities for this matter (returns tuple of entities, total_count)
-            entities, _total = await graph_service.get_entities_by_matter(
-                matter_id=matter_id, per_page=1000  # Get all entities for alias resolution
-            )
+        async def _phase1_async():
+            # --- Fetch ALL entities with pagination (fixes hostile review B3: 1000 cap) ---
+            all_entities = []
+            page = 1
+            per_page = 500
+            while True:
+                batch, total = await graph_service.get_entities_by_matter(
+                    matter_id=matter_id, page=page, per_page=per_page,
+                )
+                all_entities.extend(batch)
+                if len(all_entities) >= total or not batch:
+                    break
+                page += 1
 
-            if not entities:
-                return None, 0  # No entities to resolve
+            if not all_entities:
+                return None
 
-            # Incremental: get entity IDs mentioned in this document only
+            # --- Incremental: get entity IDs from this document only ---
             doc_entity_ids: set[str] | None = None
             if doc_id:
                 doc_mentions_resp = client.table("entity_mentions").select(
                     "entity_id"
                 ).eq("document_id", doc_id).execute()
-
                 if doc_mentions_resp.data:
                     doc_entity_ids = {m["entity_id"] for m in doc_mentions_resp.data}
 
-                logger.info(
-                    "resolve_aliases_incremental",
-                    document_id=doc_id,
-                    document_entities=len(doc_entity_ids) if doc_entity_ids else 0,
-                    total_matter_entities=len(entities),
-                )
+            logger.info(
+                "resolve_aliases_phase1_entities",
+                document_id=doc_id,
+                total_entities=len(all_entities),
+                document_entities=len(doc_entity_ids) if doc_entity_ids else 0,
+            )
 
-            # Build entity contexts from mentions for Gemini analysis
-            # Filter to matter entities only (not entire table)
+            # --- Build entity contexts (with per-entity cap — Risk B2) ---
             entity_contexts: dict[str, str] = {}
-            matter_entity_ids = [e.id for e in entities]
-
-            # Query in batches of 100 to avoid overly large IN clauses
+            matter_entity_ids = [e.id for e in all_entities]
             for batch_start in range(0, len(matter_entity_ids), 100):
                 batch_ids = matter_entity_ids[batch_start:batch_start + 100]
                 mentions_response = client.table("entity_mentions").select(
                     "entity_id, context"
                 ).in_("entity_id", batch_ids).execute()
-
                 if mentions_response.data:
                     for mention in mentions_response.data:
-                        entity_id = mention["entity_id"]
-                        context = mention.get("context") or ""
-                        if entity_id not in entity_contexts:
-                            entity_contexts[entity_id] = context
+                        eid = mention["entity_id"]
+                        ctx = mention.get("context") or ""
+                        if eid not in entity_contexts:
+                            entity_contexts[eid] = ctx[:_MAX_CONTEXT_CHARS_PER_ENTITY]
                         else:
-                            # Append additional context
-                            entity_contexts[entity_id] += f" | {context}"
+                            current = entity_contexts[eid]
+                            if len(current) < _MAX_CONTEXT_CHARS_PER_ENTITY:
+                                entity_contexts[eid] = (current + " | " + ctx)[:_MAX_CONTEXT_CHARS_PER_ENTITY]
 
-            # Run alias resolution (incremental if doc_entity_ids available)
-            resolution_result, edges_to_create = await resolver.resolve_aliases(
-                matter_id=matter_id,
-                entities=entities,
-                entity_contexts=entity_contexts,
-                document_entity_ids=doc_entity_ids,
+            # --- Phase 1: CPU-only pair finding (high + medium) ---
+            # Use resolver's find_potential_aliases for each source entity
+            from app.services.mig.entity_resolver import (
+                MEDIUM_SIMILARITY_THRESHOLD,
+            )
+            from app.models.entity import EntityType
+
+            entities_by_type: dict[EntityType, list] = {}
+            for entity in all_entities:
+                entities_by_type.setdefault(entity.entity_type, []).append(entity)
+
+            high_confidence_edges = []
+            medium_confidence_pairs = []
+            skipped_low = 0
+
+            for _etype, type_entities in entities_by_type.items():
+                if len(type_entities) < 2:
+                    continue
+
+                source_entities = (
+                    [e for e in type_entities if e.id in doc_entity_ids]
+                    if doc_entity_ids else type_entities
+                )
+                seen_pairs: set[tuple[str, str]] = set()
+
+                for entity in source_entities:
+                    candidates = resolver.find_potential_aliases(entity, type_entities)
+                    for candidate in candidates:
+                        pair_key = tuple(sorted([candidate.entity_id, candidate.candidate_entity_id]))
+                        if pair_key in seen_pairs:
+                            continue
+                        seen_pairs.add(pair_key)
+
+                        if candidate.is_auto_linked:
+                            high_confidence_edges.append({
+                                "source_entity_id": candidate.entity_id,
+                                "target_entity_id": candidate.candidate_entity_id,
+                                "confidence": candidate.similarity_score,
+                                "metadata": {
+                                    "auto_linked": True,
+                                    "name_similarity": candidate.name_similarity,
+                                    "component_similarity": candidate.component_similarity,
+                                },
+                            })
+                        elif candidate.similarity_score >= MEDIUM_SIMILARITY_THRESHOLD:
+                            medium_confidence_pairs.append({
+                                "entity_id": candidate.entity_id,
+                                "entity_name": candidate.entity_name,
+                                "candidate_entity_id": candidate.candidate_entity_id,
+                                "candidate_name": candidate.candidate_name,
+                                "similarity_score": candidate.similarity_score,
+                                "name_similarity": candidate.name_similarity,
+                                "context1": entity_contexts.get(candidate.entity_id, ""),
+                                "context2": entity_contexts.get(candidate.candidate_entity_id, ""),
+                            })
+                        else:
+                            skipped_low += 1
+
+            # --- Create high-confidence edges inline (CPU, fast) ---
+            from app.models.entity import RelationshipType
+            for edge_data in high_confidence_edges:
+                await graph_service.create_alias_edge(
+                    matter_id=matter_id,
+                    source_id=edge_data["source_entity_id"],
+                    target_id=edge_data["target_entity_id"],
+                    confidence=edge_data["confidence"],
+                    metadata=edge_data["metadata"],
+                )
+
+            return {
+                "high_confidence_count": len(high_confidence_edges),
+                "medium_pairs": medium_confidence_pairs,
+                "skipped_low": skipped_low,
+                "total_entities": len(all_entities),
+                "high_confidence_edges": high_confidence_edges,
+            }
+
+        result = _run_async(_phase1_async(), timeout=240)
+
+        if result is None:
+            _update_job_stage_complete(job_id, "alias_resolution", matter_id)
+            redis_client.delete(dedup_key)
+            logger.info("resolve_aliases_no_entities", document_id=doc_id, matter_id=matter_id)
+            return {"status": "alias_resolution_complete", "document_id": doc_id,
+                    "aliases_created": 0, "reason": "No entities", "job_id": job_id}
+
+        medium_pairs = result["medium_pairs"]
+        high_count = result["high_confidence_count"]
+
+        # --- Dispatch Phase 2 batches for medium-confidence pairs ---
+        if not medium_pairs:
+            # No medium pairs — skip to finalize with just high-confidence edges
+            _dispatch_alias_finalize(
+                doc_id, matter_id, job_id,
+                high_confidence_edges=result["high_confidence_edges"],
+                batch_results=[],
+                redis_client=redis_client,
+            )
+            logger.info(
+                "resolve_aliases_phase1_complete_no_medium",
+                document_id=doc_id, high_confidence=high_count,
+                skipped_low=result["skipped_low"],
+            )
+            return {"status": "alias_phase1_complete", "document_id": doc_id,
+                    "high_confidence": high_count, "medium_batches": 0, "job_id": job_id}
+
+        # Split medium pairs into batches of 20 (2x CONTEXT_ANALYSIS_BATCH_SIZE for fewer tasks)
+        FANOUT_BATCH_SIZE = 20
+        batches = [
+            medium_pairs[i:i + FANOUT_BATCH_SIZE]
+            for i in range(0, len(medium_pairs), FANOUT_BATCH_SIZE)
+        ]
+
+        # Store high-confidence edges in Redis for Phase 3
+        import json
+        high_edges_key = _alias_redis_key(doc_id, "high_edges")
+        redis_client.set(high_edges_key, json.dumps(result["high_confidence_edges"]), ex=_ALIAS_KEY_TTL)
+
+        # Set total batch count for completion tracking
+        total_key = _alias_redis_key(doc_id, "total")
+        done_key = _alias_redis_key(doc_id, "done")
+        redis_client.set(total_key, str(len(batches)), ex=_ALIAS_KEY_TTL)
+        redis_client.delete(done_key)  # Reset counter
+
+        # Store matter_id and job_id for Phase 3
+        meta_key = _alias_redis_key(doc_id, "meta")
+        redis_client.set(meta_key, json.dumps({"matter_id": matter_id, "job_id": job_id}), ex=_ALIAS_KEY_TTL)
+
+        # Dispatch Phase 2 batches
+        from app.workers.celery import celery_app as _celery_app
+        for batch_idx, batch in enumerate(batches):
+            _celery_app.send_task(
+                "app.workers.tasks.document_tasks.resolve_aliases_batch",
+                kwargs={
+                    "document_id": doc_id,
+                    "matter_id": matter_id,
+                    "batch_index": batch_idx,
+                    "pairs": batch,
+                },
             )
 
-            # Create alias edges in the database
+        logger.info(
+            "resolve_aliases_phase1_complete",
+            document_id=doc_id,
+            matter_id=matter_id,
+            high_confidence=high_count,
+            medium_batches=len(batches),
+            medium_pairs=len(medium_pairs),
+            skipped_low=result["skipped_low"],
+            total_entities=result["total_entities"],
+        )
+
+        return {
+            "status": "alias_phase1_complete",
+            "document_id": doc_id,
+            "high_confidence": high_count,
+            "medium_batches": len(batches),
+            "medium_pairs": len(medium_pairs),
+            "job_id": job_id,
+        }
+
+    except AliasResolutionError as e:
+        retry_count = self.request.retries
+        logger.warning("resolve_aliases_phase1_retry", document_id=doc_id,
+                        retry_count=retry_count, error=str(e))
+        _update_job_stage_failure(job_id, "alias_resolution", str(e), e.code, matter_id)
+        redis_client.delete(dedup_key)
+        if retry_count >= 3:
+            return {"status": "alias_resolution_failed", "document_id": doc_id,
+                    "error_code": e.code, "error_message": e.message, "job_id": job_id}
+        raise
+
+    except (TimeoutError, SoftTimeLimitExceeded):
+        logger.warning("resolve_aliases_phase1_timeout", document_id=doc_id, matter_id=matter_id)
+        _update_job_stage_failure(job_id, "alias_resolution", "Phase 1 timed out", "TIMEOUT", matter_id)
+        redis_client.delete(dedup_key)
+        return {"status": "alias_resolution_failed", "document_id": doc_id,
+                "error_code": "TIMEOUT", "job_id": job_id}
+
+    except DocumentServiceError as e:
+        logger.error("resolve_aliases_document_error", document_id=doc_id, error=str(e))
+        _update_job_stage_failure(job_id, "alias_resolution", e.message, e.code, matter_id)
+        redis_client.delete(dedup_key)
+        return {"status": "alias_resolution_failed", "document_id": doc_id,
+                "error_code": e.code, "error_message": e.message, "job_id": job_id}
+
+    except Exception as e:
+        logger.error("resolve_aliases_phase1_error", document_id=doc_id,
+                     error=str(e), error_type=type(e).__name__)
+        _update_job_stage_failure(job_id, "alias_resolution", str(e), "UNEXPECTED_ERROR", matter_id)
+        redis_client.delete(dedup_key)
+        return {"status": "alias_resolution_failed", "document_id": doc_id,
+                "error_code": "UNEXPECTED_ERROR", "error_message": str(e), "job_id": job_id}
+
+
+def _dispatch_alias_finalize(
+    document_id: str,
+    matter_id: str,
+    job_id: str | None,
+    high_confidence_edges: list[dict],
+    batch_results: list[dict],
+    redis_client=None,
+) -> None:
+    """Dispatch Phase 3 finalization. Called when all Phase 2 batches are done,
+    or immediately when there are no medium-confidence pairs."""
+    import json
+    from app.workers.celery import celery_app as _celery_app
+
+    _celery_app.send_task(
+        "app.workers.tasks.document_tasks.resolve_aliases_finalize",
+        kwargs={
+            "document_id": document_id,
+            "matter_id": matter_id,
+            "job_id": job_id,
+        },
+    )
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.resolve_aliases_batch",
+    bind=True,
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+    retry_jitter=True,
+    soft_time_limit=180,   # 3 minutes per batch — ~20 pairs, 2 Gemini calls
+    time_limit=240,
+)  # type: ignore[misc]
+def resolve_aliases_batch(
+    self,  # type: ignore[no-untyped-def]
+    document_id: str | None = None,
+    matter_id: str | None = None,
+    batch_index: int = 0,
+    pairs: list[dict] | None = None,
+) -> dict:
+    """Phase 2: Analyze medium-confidence pairs via Gemini.
+
+    Each batch handles ~20 pairs. Makes 2 Gemini API calls (10 pairs each).
+    Stores results in Redis. When all batches complete (Redis counter),
+    the last batch dispatches Phase 3 (resolve_aliases_finalize).
+
+    Runs on low queue (heavy worker, 10 greenlets). ~30-120 seconds per batch.
+    """
+    import json
+    from app.services.distributed_lock import get_sync_redis_client
+
+    if not document_id or not pairs:
+        return {"status": "skipped", "reason": "missing args"}
+
+    redis_client = get_sync_redis_client()
+    resolver = get_entity_resolver()
+    batch_failed = False
+    gemini_failures = 0
+
+    logger.info("resolve_aliases_batch_started", document_id=document_id,
+                batch_index=batch_index, pairs_count=len(pairs))
+
+    try:
+        # Build batch_pairs in the format analyze_batch_context expects
+        batch_pairs = []
+        for i, pair in enumerate(pairs):
+            batch_pairs.append({
+                "pair_id": f"batch{batch_index}_pair{i}",
+                "name1": pair["entity_name"],
+                "context1": pair.get("context1", ""),
+                "name2": pair["candidate_name"],
+                "context2": pair.get("context2", ""),
+            })
+
+        # Call Gemini via the entity resolver's batch analysis
+        # Split into sub-batches of CONTEXT_ANALYSIS_BATCH_SIZE (10)
+        from app.services.mig.entity_resolver import CONTEXT_ANALYSIS_BATCH_SIZE
+
+        async def _analyze_batches():
+            nonlocal gemini_failures
+            all_confidences: dict[str, float] = {}
+            sub_batches = [
+                batch_pairs[i:i + CONTEXT_ANALYSIS_BATCH_SIZE]
+                for i in range(0, len(batch_pairs), CONTEXT_ANALYSIS_BATCH_SIZE)
+            ]
+            for sub_batch in sub_batches:
+                try:
+                    result = await resolver.analyze_batch_context(sub_batch, matter_id=matter_id)
+                    all_confidences.update(result)
+                except Exception as e:
+                    gemini_failures += 1
+                    logger.warning("resolve_aliases_batch_gemini_failed",
+                                   batch_index=batch_index, error=str(e))
+                    # Default to 0.5 for failed sub-batches (safe — rejects, not false-positives)
+                    for p in sub_batch:
+                        all_confidences[p["pair_id"]] = 0.5
+            return all_confidences
+
+        confidences = _run_async(_analyze_batches(), timeout=150)
+
+        # Build results: pair data + confidence scores
+        batch_results = []
+        for i, pair in enumerate(pairs):
+            pair_id = f"batch{batch_index}_pair{i}"
+            confidence = confidences.get(pair_id, 0.5)
+            batch_results.append({
+                "entity_id": pair["entity_id"],
+                "candidate_entity_id": pair["candidate_entity_id"],
+                "entity_name": pair["entity_name"],
+                "candidate_name": pair["candidate_name"],
+                "similarity_score": pair["similarity_score"],
+                "name_similarity": pair["name_similarity"],
+                "context_confidence": confidence,
+            })
+
+        # Store results in Redis list
+        results_key = _alias_redis_key(document_id, "results")
+        redis_client.rpush(results_key, json.dumps(batch_results))
+        redis_client.expire(results_key, _ALIAS_KEY_TTL)
+
+    except Exception as e:
+        batch_failed = True
+        logger.error("resolve_aliases_batch_failed", document_id=document_id,
+                     batch_index=batch_index, error=str(e), error_type=type(e).__name__)
+        # Store empty result so counter still advances — partial results are better than stuck
+        results_key = _alias_redis_key(document_id, "results")
+        redis_client.rpush(results_key, json.dumps([]))
+        redis_client.expire(results_key, _ALIAS_KEY_TTL)
+
+    # --- Increment done counter. If done == total, dispatch Phase 3 ---
+    done_key = _alias_redis_key(document_id, "done")
+    total_key = _alias_redis_key(document_id, "total")
+    done_count = redis_client.incr(done_key)
+    redis_client.expire(done_key, _ALIAS_KEY_TTL)
+
+    total_raw = redis_client.get(total_key)
+    total_count = int(total_raw) if total_raw else 0
+
+    logger.info("resolve_aliases_batch_complete", document_id=document_id,
+                batch_index=batch_index, done=done_count, total=total_count,
+                gemini_failures=gemini_failures, batch_failed=batch_failed)
+
+    if done_count >= total_count and total_count > 0:
+        # Last batch — dispatch Phase 3 finalize
+        meta_key = _alias_redis_key(document_id, "meta")
+        meta_raw = redis_client.get(meta_key)
+        meta = json.loads(meta_raw) if meta_raw else {}
+
+        from app.workers.celery import celery_app as _celery_app
+        _celery_app.send_task(
+            "app.workers.tasks.document_tasks.resolve_aliases_finalize",
+            kwargs={
+                "document_id": document_id,
+                "matter_id": meta.get("matter_id", matter_id),
+                "job_id": meta.get("job_id"),
+            },
+        )
+        logger.info("resolve_aliases_finalize_dispatched", document_id=document_id)
+
+    return {"status": "batch_complete", "document_id": document_id,
+            "batch_index": batch_index, "pairs_analyzed": len(pairs)}
+
+
+@celery_app.task(
+    name="app.workers.tasks.document_tasks.resolve_aliases_finalize",
+    bind=True,
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+    retry_jitter=True,
+    soft_time_limit=180,   # 3 minutes — transitive closure + DB writes
+    time_limit=240,
+)  # type: ignore[misc]
+def resolve_aliases_finalize(
+    self,  # type: ignore[no-untyped-def]
+    document_id: str | None = None,
+    matter_id: str | None = None,
+    job_id: str | None = None,
+) -> dict:
+    """Phase 3: Apply transitive closure and persist all edges.
+
+    Single convergence point for all alias writes. This fixes the hostile
+    review G2 race condition: add_alias_to_entity is called from ONE task
+    (this one), never concurrently.
+
+    Reads high-confidence edges and Phase 2 batch results from Redis.
+    Applies transitive closure. Persists edges via UPSERT. Updates alias
+    arrays on canonical entities. Cleans up Redis keys.
+    """
+    import json
+    from app.services.distributed_lock import get_sync_redis_client
+    from app.services.mig.entity_resolver import CONTEXT_CONFIDENCE_THRESHOLD
+
+    if not document_id or not matter_id:
+        return {"status": "skipped", "reason": "missing args"}
+
+    redis_client = get_sync_redis_client()
+    graph_service = get_mig_graph_service()
+
+    logger.info("resolve_aliases_finalize_started", document_id=document_id, matter_id=matter_id)
+
+    try:
+        # --- Read high-confidence edges from Redis ---
+        high_edges_key = _alias_redis_key(document_id, "high_edges")
+        high_edges_raw = redis_client.get(high_edges_key)
+        high_edges = json.loads(high_edges_raw) if high_edges_raw else []
+
+        # --- Read Phase 2 batch results from Redis ---
+        results_key = _alias_redis_key(document_id, "results")
+        all_results_raw = redis_client.lrange(results_key, 0, -1)
+        medium_results = []
+        for raw in all_results_raw:
+            batch = json.loads(raw) if raw else []
+            medium_results.extend(batch)
+
+        # --- Filter medium results by confidence threshold ---
+        from app.models.entity import RelationshipType
+        edges_to_create = []
+
+        # High-confidence edges (already decided in Phase 1)
+        for edge_data in high_edges:
+            edges_to_create.append(EntityEdgeCreate(
+                source_entity_id=edge_data["source_entity_id"],
+                target_entity_id=edge_data["target_entity_id"],
+                relationship_type=RelationshipType.ALIAS_OF,
+                matter_id=matter_id,
+                confidence=edge_data["confidence"],
+                metadata=edge_data.get("metadata", {}),
+            ))
+
+        # Medium-confidence edges (decided by Phase 2 Gemini analysis)
+        medium_links = 0
+        for pair_result in medium_results:
+            context_confidence = pair_result.get("context_confidence", 0.5)
+            similarity = pair_result.get("similarity_score", 0.5)
+            final_score = (similarity + context_confidence) / 2
+            if final_score >= CONTEXT_CONFIDENCE_THRESHOLD:
+                edges_to_create.append(EntityEdgeCreate(
+                    source_entity_id=pair_result["entity_id"],
+                    target_entity_id=pair_result["candidate_entity_id"],
+                    relationship_type=RelationshipType.ALIAS_OF,
+                    matter_id=matter_id,
+                    confidence=final_score,
+                    metadata={
+                        "auto_linked": False,
+                        "context_analyzed": True,
+                        "name_similarity": pair_result.get("name_similarity", 0),
+                        "context_confidence": context_confidence,
+                    },
+                ))
+                medium_links += 1
+
+        # --- Apply transitive closure ---
+        resolver = get_entity_resolver()
+        edges_to_create = resolver._apply_transitive_closure(edges_to_create, matter_id)
+
+        # --- Persist edges and update alias arrays (single convergence point) ---
+        async def _persist_edges():
             aliases_created = 0
+
+            # Fetch entities once for mention_count comparison
+            all_entities = []
+            page = 1
+            while True:
+                batch, total = await graph_service.get_entities_by_matter(
+                    matter_id=matter_id, page=page, per_page=500,
+                )
+                all_entities.extend(batch)
+                if len(all_entities) >= total or not batch:
+                    break
+                page += 1
+
+            entity_map = {e.id: e for e in all_entities}
+
+            # Collect all alias updates to apply in bulk (fixes G2 race)
+            alias_updates: dict[str, list[str]] = {}  # entity_id -> [alias_names]
+
             for edge in edges_to_create:
                 created_edge = await graph_service.create_alias_edge(
                     matter_id=matter_id,
@@ -4984,181 +5462,72 @@ def resolve_aliases(
                 if created_edge:
                     aliases_created += 1
 
-                    # Also update the aliases array on the canonical entity
-                    # (entity with higher mention count gets the alias name)
-                    source_entity = next(
-                        (e for e in entities if e.id == edge.source_entity_id), None
-                    )
-                    target_entity = next(
-                        (e for e in entities if e.id == edge.target_entity_id), None
-                    )
-
-                    if source_entity and target_entity:
-                        # Canonical is the one with more mentions
-                        if source_entity.mention_count >= target_entity.mention_count:
-                            await graph_service.add_alias_to_entity(
-                                entity_id=source_entity.id,
-                                matter_id=matter_id,
-                                alias=target_entity.canonical_name,
-                            )
+                    source = entity_map.get(edge.source_entity_id)
+                    target = entity_map.get(edge.target_entity_id)
+                    if source and target:
+                        if source.mention_count >= target.mention_count:
+                            alias_updates.setdefault(source.id, []).append(target.canonical_name)
                         else:
-                            await graph_service.add_alias_to_entity(
-                                entity_id=target_entity.id,
-                                matter_id=matter_id,
-                                alias=source_entity.canonical_name,
-                            )
+                            alias_updates.setdefault(target.id, []).append(source.canonical_name)
 
-            return resolution_result, aliases_created
+            # Apply alias array updates — one call per entity, no concurrent race
+            for entity_id, new_aliases in alias_updates.items():
+                for alias_name in new_aliases:
+                    await graph_service.add_alias_to_entity(
+                        entity_id=entity_id,
+                        matter_id=matter_id,
+                        alias=alias_name,
+                    )
 
-        result = _run_async(_resolve_aliases_async(), timeout=1740)  # Below soft_time_limit=1800
+            return aliases_created
 
-        if result[0] is None:
-            # No entities to resolve - mark stage complete but NOT job complete.
-            # Job completion is handled by detect_contradictions (final stage).
-            # Previously this marked job COMPLETED, causing premature redirect
-            # while citations/contradictions were still processing.
-            _update_job_stage_complete(job_id, "alias_resolution", matter_id)
-            logger.info(
-                "resolve_aliases_no_entities",
-                document_id=doc_id,
-                matter_id=matter_id,
-            )
-            return {
-                "status": "alias_resolution_complete",
-                "document_id": doc_id,
-                "aliases_created": 0,
-                "reason": "No entities found for alias resolution",
-                "job_id": job_id,
-            }
+        aliases_created = _run_async(_persist_edges(), timeout=150)
 
-        resolution_result, aliases_created = result
-
-        # Broadcast alias resolution completion
+        # --- Broadcast completion + update job stage ---
         broadcast_document_status(
             matter_id=matter_id,
-            document_id=doc_id,
+            document_id=document_id,
             status="aliases_resolved",
             aliases_created=aliases_created,
-            entities_processed=resolution_result.entities_processed,
-            pairs_found=resolution_result.alias_pairs_found,
         )
-
-        # Track alias resolution stage completion (Story 2c-3)
         _update_job_stage_complete(
-            job_id,
-            "alias_resolution",
-            matter_id,
-            metadata={
-                "entities_processed": resolution_result.entities_processed,
-                "aliases_created": aliases_created,
-            },
+            job_id, "alias_resolution", matter_id,
+            metadata={"aliases_created": aliases_created, "medium_links": medium_links,
+                      "high_links": len(high_edges)},
         )
 
         logger.info(
-            "resolve_aliases_task_completed",
-            document_id=doc_id,
-            matter_id=matter_id,
-            entities_processed=resolution_result.entities_processed,
-            pairs_found=resolution_result.alias_pairs_found,
+            "resolve_aliases_finalize_complete",
+            document_id=document_id, matter_id=matter_id,
             aliases_created=aliases_created,
-            high_confidence=resolution_result.high_confidence_links,
-            medium_confidence=resolution_result.medium_confidence_links,
-            skipped=resolution_result.skipped_low_confidence,
+            high_confidence=len(high_edges),
+            medium_links=medium_links,
+            total_edges=len(edges_to_create),
         )
 
         return {
             "status": "aliases_resolved",
-            "document_id": doc_id,
-            "entities_processed": resolution_result.entities_processed,
-            "pairs_found": resolution_result.alias_pairs_found,
+            "document_id": document_id,
             "aliases_created": aliases_created,
-            "high_confidence_links": resolution_result.high_confidence_links,
-            "medium_confidence_links": resolution_result.medium_confidence_links,
-            "skipped_low_confidence": resolution_result.skipped_low_confidence,
-            "job_id": job_id,
-        }
-
-    except AliasResolutionError as e:
-        retry_count = self.request.retries
-
-        logger.warning(
-            "resolve_aliases_task_retry",
-            document_id=doc_id,
-            retry_count=retry_count,
-            max_retries=3,
-            error=str(e),
-        )
-
-        # Track stage failure
-        _update_job_stage_failure(job_id, "alias_resolution", str(e), e.code, matter_id)
-
-        if retry_count >= 3:
-            logger.error(
-                "resolve_aliases_task_failed",
-                document_id=doc_id,
-                error=str(e),
-            )
-            # Aliases are decoupled — stage failure, not job failure
-            return {
-                "status": "alias_resolution_failed",
-                "document_id": doc_id,
-                "error_code": e.code,
-                "error_message": e.message,
-                "job_id": job_id,
-            }
-
-        raise
-
-    except SoftTimeLimitExceeded:
-        # Alias resolution timed out — log but do NOT fail the job.
-        # Aliases are decoupled from the job completion chain (citations → contradictions).
-        logger.warning(
-            "resolve_aliases_task_timeout",
-            document_id=doc_id,
-            matter_id=matter_id,
-            timeout_seconds=600,
-        )
-        _update_job_stage_failure(job_id, "alias_resolution", "Soft time limit exceeded", "TIMEOUT", matter_id)
-        return {
-            "status": "alias_resolution_failed",
-            "document_id": doc_id,
-            "error_code": "TIMEOUT",
-            "error_message": "Alias resolution exceeded soft time limit",
-            "job_id": job_id,
-        }
-
-    except DocumentServiceError as e:
-        logger.error(
-            "resolve_aliases_document_error",
-            document_id=doc_id,
-            error=str(e),
-        )
-        # Aliases are decoupled — stage failure, not job failure
-        _update_job_stage_failure(job_id, "alias_resolution", e.message, e.code, matter_id)
-        return {
-            "status": "alias_resolution_failed",
-            "document_id": doc_id,
-            "error_code": e.code,
-            "error_message": e.message,
+            "high_confidence": len(high_edges),
+            "medium_links": medium_links,
             "job_id": job_id,
         }
 
     except Exception as e:
-        logger.error(
-            "resolve_aliases_unexpected_error",
-            document_id=doc_id,
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-        # Aliases are decoupled — stage failure, not job failure
-        _update_job_stage_failure(job_id, "alias_resolution", str(e), "UNEXPECTED_ERROR", matter_id)
-        return {
-            "status": "alias_resolution_failed",
-            "document_id": doc_id,
-            "error_code": "UNEXPECTED_ERROR",
-            "error_message": str(e),
-            "job_id": job_id,
-        }
+        logger.error("resolve_aliases_finalize_error", document_id=document_id,
+                     error=str(e), error_type=type(e).__name__)
+        _update_job_stage_failure(job_id, "alias_resolution", str(e), "FINALIZE_ERROR", matter_id)
+        return {"status": "alias_resolution_failed", "document_id": document_id,
+                "error_code": "FINALIZE_ERROR", "error_message": str(e), "job_id": job_id}
+
+    finally:
+        # --- Cleanup Redis keys ---
+        try:
+            for suffix in ("running", "total", "done", "results", "high_edges", "meta"):
+                redis_client.delete(_alias_redis_key(document_id, suffix))
+        except Exception:
+            pass  # Best-effort cleanup, TTL ensures eventual cleanup
 
 
 # =============================================================================
@@ -5588,7 +5957,7 @@ def extract_citations(
                 )
 
         try:
-            _run_async(_extract_citations_async())
+            _run_async(_extract_citations_async(), timeout=540)  # Below soft_time_limit=600
         finally:
             # Save final progress
             if progress_tracker and stage_progress:

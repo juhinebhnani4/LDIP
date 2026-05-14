@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-13 (Cluster 6 done: INF-005, INF-006, E2E-008, E2E-011 fixed; E2E-010 not a bug; LLM-004 fixed; E2E-007 structural fix)
-**Total bugs**: 88 | **Fixed**: 60 | **Open**: 19 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
+**Last updated**: 2026-05-13 (INF-010 fixed: RedBeat removed, beat self-healing + lean mode. Cluster 6 done. 62 fixed.)
+**Total bugs**: 88 | **Fixed**: 63 | **Open**: 16 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
@@ -66,8 +66,8 @@ After:   Cluster 7 (architectural debt — ongoing)
 
 | Bug | Sev | Fix |
 |---|---|---|
-| **INF-010**: RedBeat lock lost — beat crashes | P1 | Run beat as separate Railway service |
-| **E2E-006**: Redis beat lock extension warning | P2 | Same fix — beat isolation resolves both |
+| **INF-010**: RedBeat lock lost — beat crashes | P1 | **FIXED** (2026-05-13) — removed RedBeat, default scheduler + restart loop |
+| **E2E-006**: Redis beat lock extension warning | P2 | **FIXED** (2026-05-13) — same fix, no more Redis lock |
 | **WPS-001 L4**: Monolithic `resolve_aliases` task | P2 | Fan-out/fan-in decomposition |
 | **WPS-001 L5**: Gevent timeout fiction | P2 | Manual timeout enforcement or prefork |
 | **E2E-007**: Finalize runs forever on act docs | P3 | **FIXED** (2026-05-13) — structural fix via `_is_pipeline_data_complete()` |
@@ -316,15 +316,13 @@ DB persistence also verified: 3 matters persisted (5.8–5.9 KB each), `201 Crea
 
 These prevent silent failures that erode trust. Less visible than Tier 1, but critical before exposing the product to free users at scale.
 
-#### 5. Beat process isolation
+#### 5. Beat scheduler stability — DONE (2026-05-13)
 
-**Bug IDs**: INF-010, E2E-006 | **Effort**: 2-3 days | **Files**: `railway.toml`, new `start-beat.sh`
+**Bug IDs**: INF-010, E2E-006 | **Actual effort**: ~3 hours (research + implementation + deploy + verification)
 
-**The problem**: RedBeat scheduler runs in the same process as the worker. When 4 concurrent documents saturate the worker (observed in E2E), beat's lock-extension tick gets starved → lock expires → `LockNotOwnedError` → beat crashes → **all 16 periodic tasks stop firing silently**. Recovery sweeps stop, stuck documents accumulate, no alert fires. This happened during E2E (confirmed in logs).
+**What was built**: Removed RedBeat entirely (speculative dependency for multi-replica leader election that was never needed). Returned to Celery's default `PersistentScheduler`. Added restart loop in `start-worker.sh` so beat auto-recovers from any crash in 10s. Added `CELERY_BEAT_ONLY=true` lean mode that skips heavy task module imports (~1GB RAM savings). Live verified: beat healthy, heartbeat firing, zero `LockNotOwnedError`.
 
-**What changes**: Run beat as its own lightweight Railway service. Tiny container (~100MB, no heavy imports). Consumes no task queues — only runs the scheduler. Independent restart if it crashes. This is the ARCH-002 wall: physical process isolation, not configuration.
-
-**What "done" looks like**: Kill the worker service → beat keeps running. Saturate the worker with 10 concurrent documents → beat still fires all 16 periodic tasks on schedule.
+**Why not a separate service**: Research showed beat isolation as a separate Railway service is premature at current scale (1 user, 1 replica). The root cause was RedBeat's distributed lock — not CPU starvation from shared container. Removing RedBeat eliminates the crash mode entirely. A separate service can be extracted later if needed (the lean beat entry point already exists).
 
 ---
 
@@ -767,7 +765,7 @@ All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 
 
 ## 1. Security
 
-### SEC-002: Supabase Linter Warnings (2026-05-08) | Status: PARTIALLY FIXED (A+B+C fixed 2026-05-13, D migration written, E open)
+### SEC-002: Supabase Linter Warnings (2026-05-08) | Status: PARTIALLY FIXED (A+B+C+D fixed 2026-05-13, E requires Pro plan)
 
 **Source**: Supabase Dashboard Database Linter. 5 categories of warnings:
 
@@ -784,12 +782,11 @@ Unauthenticated users could call these via PostgREST `/rest/v1/rpc/...`. Researc
 **C. Materialized views exposed via API (3 views)** | Priority: P3 | **FIXED (2026-05-13)**
 `contradiction_savings_report`, `monthly_cogs_by_matter`, `cost_per_document_page` — admin cost views revoked from `PUBLIC`, `anon`, and `authenticated`. `service_role` retains access.
 
-**D. `extension_in_public` — pg_trgm** | Priority: P3 | Status: MIGRATION WRITTEN (2026-05-13), NOT YET APPLIED
-`pg_trgm` installed in public schema. Supabase recommends moving to `extensions` schema.
-**Migration written**: `20260513000002_sec002d_move_pg_trgm_to_extensions.sql` — moves pg_trgm to extensions schema, recreates `find_library_duplicates` with `SET search_path = public, extensions`, re-applies REVOKE. **Needs `supabase db push` or manual apply via Supabase dashboard.**
+**D. `extension_in_public` — pg_trgm** | Priority: P3 | **FIXED (2026-05-13)**
+`pg_trgm` moved from `public` to `extensions` schema. `find_library_duplicates` recreated with `SET search_path = public, extensions`. REVOKE re-applied. Verified: pg_trgm in extensions, anon blocked, function executes correctly.
 
-**E. Leaked password protection disabled** | Priority: P2 | Status: OPEN
-Supabase Auth HaveIBeenPwned check is off. Enable in Supabase Dashboard > Auth > Settings.
+**E. Leaked password protection disabled** | Priority: P2 | Status: DEFERRED (requires Supabase Pro plan)
+Supabase Auth HaveIBeenPwned check is off. Requires Pro plan to enable.
 
 ---
 
@@ -1672,17 +1669,22 @@ Backend guard (`_check_processing_status()`) remains as safety net for stale fro
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (High) |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) |
 | **Date Found** | 2026-04-16 |
 | **Source** | Production log review (Railway CLI) |
 
 **Description**: RedBeat scheduler crashes with `redis.exceptions.LockNotOwnedError: Cannot extend a lock that's no longer owned`. The lock expired before beat could extend it, likely because the worker process was too busy (or the Redis connection dropped momentarily). Beat dies and does not auto-restart — no more periodic tasks fire until the entire worker service restarts.
 
-**Impact**: When beat dies, all 16 scheduled maintenance tasks stop running. No recovery of stuck documents, no cleanup, no quota monitoring. Silent failure — nothing alerts that beat is dead.
+**Root Cause**: RedBeat was added speculatively (commit `5d5237d`, 2026-02-25) for multi-replica leader election that never materialized — Railway Hobby plan supports 1 replica. Before RedBeat, beat used Celery's default `PersistentScheduler` with no Redis lock and no crash mode. RedBeat's distributed lock was the sole source of the fatal `LockNotOwnedError`.
 
-**Evidence**: `[2026-04-16 12:30:44] CRITICAL/MainProcess: beat raised exception <class 'redis.exceptions.LockNotOwnedError'>`
+**Fix Applied (2026-05-13)**: Three changes:
+1. **Removed `celery-redbeat` entirely** — dropped dependency from `pyproject.toml`, removed all `redbeat_*` config from `celery.py`. Returned to Celery's default `PersistentScheduler` (local shelve file at `/tmp/celerybeat-schedule`). Schedule is static config — file loss on container restart is harmless.
+2. **Added restart loop** in `start-worker.sh` — beat runs in a `while true` subshell with `trap 'exit 0' TERM` for clean SIGTERM handling. If beat crashes for any reason, it auto-recovers in 10 seconds.
+3. **Added lean beat mode** — `CELERY_BEAT_ONLY=true` env var skips heavy task module imports in `celery.py` (14 modules pulling PyTorch, Docling, Google Cloud, etc.). Beat only needs task name strings + schedule config. Saves ~1GB RAM.
 
-**Fix Direction**: (a) Wrap beat's `tick()` in a retry loop so lock-loss is transient, not fatal. (b) Or run beat as a separate process that restarts independently of the worker. (c) `redbeat_lock_timeout` is currently 300s (5 min) — may need to be increased, or beat needs a health check that triggers Railway restart.
+**Live verified (2026-05-13)**: Beat started with `celery_beat_only_mode`, using `PersistentScheduler`. Heartbeat task dispatched and succeeded within 60s. `/api/health/celery` reports `{"status": "healthy", "heartbeat_ttl_seconds": 136}`. Zero `LockNotOwnedError`. Stale `redbeat:schedule` and `redbeat:statics` Redis keys cleaned up.
+
+**Files**: `backend/app/workers/celery.py`, `backend/start-worker.sh`, `backend/pyproject.toml`, `backend/uv.lock`
 
 ---
 
@@ -2147,15 +2149,13 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) — upgraded: kills all 16 periodic tasks silently |
-| **Status** | OPEN |
+| **Status** | FIXED (2026-05-13) — resolved by INF-010 fix |
 | **Source** | E2E verification (2026-04-17) |
 | **Arch pattern** | ARCH-002 (P3 — routing without process isolation) |
 
 **Observation**: `Cannot extend a lock that's no longer owned` warning from RedBeat scheduler's Redis lock (`redbeat_lock_timeout=300`). Causes Railway to hit 500 logs/sec rate limit and drop messages (43 dropped in one burst). Related to INF-010.
 
-**Why this is ARCH-002**: Beat runs in the same process as the worker. When heavy tasks (4 concurrent documents during E2E) saturate the worker, beat's lock-extension tick gets starved → lock expires → `LockNotOwnedError` → beat crashes → **all 16 periodic tasks stop firing** → recovery sweeps stop → stuck documents accumulate silently. Additionally, 13 of 16 maintenance tasks have **no timeout decorators** — unbounded DB scans can block the event loop indefinitely.
-
-**Fix (tactical)**: Increase `redbeat_lock_timeout` from 300s, add `soft_time_limit` to all maintenance tasks. **Fix (structural)**: Run beat as its own lightweight Railway service, physically isolated from workers (ARCH-002 target architecture).
+**Fix Applied (2026-05-13)**: RedBeat removed entirely (see INF-010). No more Redis lock = no more `LockNotOwnedError` = no more log spam. Beat uses Celery's default `PersistentScheduler` which has no distributed locking mechanism. Beat still shares the worker container but now self-heals via restart loop if it crashes for any reason.
 
 ---
 

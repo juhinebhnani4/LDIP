@@ -9,6 +9,8 @@ don't need: bounding boxes, entity extraction, citation detection, etc.
 They just need to be chunked and embedded for RAG search.
 """
 
+import re
+
 import structlog
 
 from app.models.library import LibraryDocumentStatus
@@ -24,6 +26,35 @@ logger = structlog.get_logger(__name__)
 # Batch sizes for processing
 EMBEDDING_BATCH_SIZE = 50
 EMBEDDING_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
+
+# Regex for detecting legal section titles in Indian statutes.
+# Matches patterns like "Section 4.", "Section 137A.", "Article 14",
+# "Rule 5", "Order XXI", "Schedule I", "Chapter III".
+# Only matches at start of line (after optional whitespace) to avoid
+# false positives from mid-sentence references.
+_SECTION_TITLE_RE = re.compile(
+    r"^\s*("
+    r"(?:Section|Sec\.?)\s+\d+[A-Z]?"          # Section 4, Section 137A, Sec. 5
+    r"|Article\s+\d+[A-Z]?"                     # Article 14, Article 370A
+    r"|Rule\s+\d+[A-Z]?"                        # Rule 5, Rule 11A
+    r"|Order\s+[IVXLCDM]+(?:\s+Rule\s+\d+)?"   # Order XXI, Order XXI Rule 1
+    r"|Schedule\s+[IVXLCDM\d]+"                 # Schedule I, Schedule 2
+    r"|Chapter\s+[IVXLCDM\d]+"                  # Chapter III, Chapter 4
+    r")",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _extract_section_title(text: str) -> str | None:
+    """Extract the first legal section title from chunk text.
+
+    Scans the first ~500 characters for patterns like "Section 4",
+    "Article 14", etc. Returns the matched title or None.
+    """
+    match = _SECTION_TITLE_RE.search(text[:500])
+    if match:
+        return match.group(1).strip()
+    return None
 
 
 # =============================================================================
@@ -132,7 +163,11 @@ def chunk_library_document(
         chunk_records = []
 
         # Add parent chunks (use ChunkData.id as DB id, matching main pipeline pattern)
+        # Build parent_id → section_title map so children inherit their parent's section
+        parent_section_map: dict[str, str | None] = {}
         for chunk in result.parent_chunks:
+            section = _extract_section_title(chunk.content)
+            parent_section_map[str(chunk.id)] = section
             chunk_records.append({
                 "id": str(chunk.id),
                 "library_document_id": library_document_id,
@@ -140,7 +175,7 @@ def chunk_library_document(
                 "parent_chunk_id": None,
                 "content": chunk.content,
                 "page_number": chunk.page_number,
-                "section_title": None,  # Could be enhanced to detect section titles
+                "section_title": section,
                 "token_count": chunk.token_count,
                 "chunk_type": "parent",
             })
@@ -153,14 +188,21 @@ def chunk_library_document(
             # ChunkData.parent_id is the parent's ChunkData.id (now also the DB id)
             child_records = []
             for chunk in result.child_chunks:
+                parent_id_str = str(chunk.parent_id) if chunk.parent_id else None
+                # Child inherits parent's section, or extracts its own if parent had none
+                child_section = (
+                    parent_section_map.get(parent_id_str)
+                    if parent_id_str
+                    else None
+                ) or _extract_section_title(chunk.content)
                 child_records.append({
                     "id": str(chunk.id),
                     "library_document_id": library_document_id,
                     "chunk_index": chunk.chunk_index,
-                    "parent_chunk_id": str(chunk.parent_id) if chunk.parent_id else None,
+                    "parent_chunk_id": parent_id_str,
                     "content": chunk.content,
                     "page_number": chunk.page_number,
-                    "section_title": None,
+                    "section_title": child_section,
                     "token_count": chunk.token_count,
                     "chunk_type": "child",
                 })
@@ -617,6 +659,30 @@ def ocr_and_process_library_document(
         }
 
     try:
+        # 0. Idempotency: if chunks already exist, skip OCR entirely
+        existing_chunks = (
+            client.table("library_chunks")
+            .select("id", count="exact")
+            .eq("library_document_id", library_document_id)
+            .execute()
+        )
+        if (existing_chunks.count or 0) > 0:
+            logger.info(
+                "ocr_library_document_skipped_chunks_exist",
+                library_document_id=library_document_id,
+                chunk_count=existing_chunks.count,
+            )
+            # Dispatch embedding only (chunks exist, may need embeddings)
+            embed_library_chunks.apply_async(
+                kwargs={"library_document_id": library_document_id},
+                queue="default",
+            )
+            return {
+                "status": "skipped",
+                "library_document_id": library_document_id,
+                "reason": f"chunks_exist ({existing_chunks.count})",
+            }
+
         # 1. Update status to processing
         lib_service.update_status(library_document_id, LibraryDocumentStatus.PROCESSING)
 
@@ -648,11 +714,52 @@ def ocr_and_process_library_document(
             # Re-raise transient errors (network, timeout) for retry
             raise
 
-        # 3. Run OCR to extract text
-        from app.services.ocr.processor import OCRProcessor
-        processor = OCRProcessor()
-        ocr_result = processor.process_document(pdf_bytes, document_id=library_document_id)
-        extracted_text = ocr_result.full_text
+        # 3. Extract text — try pypdf first (free, fast), fall back to Document AI OCR
+        extracted_text = ""
+        page_count = 0
+        extraction_method = "unknown"
+
+        try:
+            import pypdf
+            from io import BytesIO
+            reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+            page_count = len(reader.pages)
+            page_texts = []
+            for page in reader.pages:
+                page_texts.append(page.extract_text() or "")
+            extracted_text = "\n".join(page_texts)
+            extraction_method = "pypdf"
+            logger.info(
+                "library_text_extraction_pypdf",
+                library_document_id=library_document_id,
+                page_count=page_count,
+                text_length=len(extracted_text),
+                avg_chars_per_page=len(extracted_text) // max(page_count, 1),
+            )
+        except Exception as e:
+            logger.warning(
+                "library_pypdf_extraction_failed",
+                library_document_id=library_document_id,
+                error=str(e),
+            )
+
+        # If pypdf got too little text (<100 chars/page avg), the PDF is likely
+        # a scan — fall back to Document AI OCR
+        avg_chars = len(extracted_text.strip()) // max(page_count, 1)
+        if avg_chars < 100:
+            logger.info(
+                "library_falling_back_to_ocr",
+                library_document_id=library_document_id,
+                pypdf_chars=len(extracted_text),
+                avg_chars_per_page=avg_chars,
+                reason="insufficient text from pypdf",
+            )
+            from app.services.ocr.processor import OCRProcessor
+            processor = OCRProcessor()
+            ocr_result = processor.process_document(pdf_bytes, document_id=library_document_id)
+            extracted_text = ocr_result.full_text
+            page_count = ocr_result.page_count
+            extraction_method = "document_ai"
 
         if not extracted_text or len(extracted_text.strip()) < 50:
             lib_service.update_status(
@@ -664,16 +771,24 @@ def ocr_and_process_library_document(
 
         # 4. Update page_count on the library document
         client.table("library_documents").update({
-            "page_count": ocr_result.page_count,
+            "page_count": page_count,
         }).eq("id", library_document_id).execute()
 
-        # 5. Chain into existing processing pipeline (chunk → embed)
-        # If callbacks are provided, chain a dispatcher task after embed
+        # 5. Chunk inline (text is already in memory — no need to serialize
+        #    through Redis, which hits the 100MB Upstash record limit for
+        #    large Acts like Income Tax Act at 3MB+).
+        chunk_result = chunk_library_document(
+            library_document_id, extracted_text,
+        )
+        logger.info(
+            "library_chunking_inline_complete",
+            library_document_id=library_document_id,
+            chunk_count=chunk_result.get("chunk_count", 0),
+        )
+
+        # 6. Dispatch embedding as a separate task (small message — just the ID)
         from celery import chain
-        steps = [
-            chunk_library_document.s(library_document_id, extracted_text),
-            embed_library_chunks.s(),
-        ]
+        steps = [embed_library_chunks.s(library_document_id=library_document_id)]
 
         if on_complete_callbacks:
             steps.append(
@@ -683,17 +798,21 @@ def ocr_and_process_library_document(
                 )
             )
 
-        pipeline = chain(*steps)
-        pipeline.link_error(on_library_chain_error.s(
-            library_document_id=library_document_id,
-        ))
-        pipeline.apply_async(queue="default")
+        if len(steps) == 1:
+            steps[0].apply_async(queue="default")
+        else:
+            pipeline = chain(*steps)
+            pipeline.link_error(on_library_chain_error.s(
+                library_document_id=library_document_id,
+            ))
+            pipeline.apply_async(queue="default")
 
         logger.info(
             "ocr_library_document_complete",
             library_document_id=library_document_id,
             text_length=len(extracted_text),
-            page_count=ocr_result.page_count,
+            page_count=page_count,
+            extraction_method=extraction_method,
             has_callbacks=bool(on_complete_callbacks),
         )
 
@@ -701,7 +820,8 @@ def ocr_and_process_library_document(
             "status": "ocr_complete",
             "library_document_id": library_document_id,
             "text_length": len(extracted_text),
-            "page_count": ocr_result.page_count,
+            "page_count": page_count,
+            "extraction_method": extraction_method,
         }
 
     except Exception as e:
@@ -776,54 +896,10 @@ def on_library_chain_error(
             )
 
 
-# =============================================================================
-# Library Document Processing Pipeline
-# =============================================================================
-
-
-@celery_app.task(
-    name="app.workers.tasks.library_tasks.process_library_document",
-)  # type: ignore[misc]
-def process_library_document(
-    library_document_id: str,
-    extracted_text: str,
-) -> dict[str, str | int | None]:
-    """Process a library document through the full pipeline.
-
-    Chains: chunk_library_document -> embed_library_chunks
-
-    Args:
-        library_document_id: Library document UUID.
-        extracted_text: OCR/extracted text content.
-
-    Returns:
-        Task chain signature.
-    """
-    from celery import chain
-
-    logger.info(
-        "process_library_document_started",
-        library_document_id=library_document_id,
-        text_length=len(extracted_text),
-    )
-
-    # Create processing chain with error callback (DPP-002)
-    pipeline = chain(
-        chunk_library_document.s(library_document_id, extracted_text),
-        embed_library_chunks.s(),
-    )
-    pipeline.link_error(on_library_chain_error.s(
-        library_document_id=library_document_id,
-    ))
-
-    # Execute chain
-    result = pipeline.apply_async()
-
-    return {
-        "status": "processing_started",
-        "library_document_id": library_document_id,
-        "task_id": result.id,
-    }
+# NOTE: process_library_document was removed — it was a parallel path to
+# ocr_and_process_library_document that passed extracted_text through Redis
+# (hitting the 100MB Upstash limit). All callers now use
+# ocr_and_process_library_document which extracts text inline via pypdf.
 
 
 # =============================================================================

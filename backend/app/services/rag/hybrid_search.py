@@ -88,6 +88,7 @@ class SearchResult:
         rrf_score: Combined RRF fusion score.
         is_library: True if result is from shared library (not matter documents).
         library_document_title: Title of library document (only for library results).
+        section_title: Section heading from library chunk (e.g. "Section 4").
     """
     id: str
     matter_id: str
@@ -102,6 +103,7 @@ class SearchResult:
     rrf_score: float
     is_library: bool = False
     library_document_title: str | None = None
+    section_title: str | None = None
     parent_chunk_id: str | None = None
 
 
@@ -165,6 +167,7 @@ class RerankedSearchResultItem:
     relevance_score: float | None
     is_library: bool = False
     library_document_title: str | None = None
+    section_title: str | None = None
     parent_chunk_id: str | None = None
     original_content: str | None = None  # Preserved child content when parent-expanded
 
@@ -911,6 +914,7 @@ class HybridSearchService:
                         relevance_score=item.relevance_score,
                         is_library=original.is_library,
                         library_document_title=original.library_document_title,
+                        section_title=original.section_title,
                         parent_chunk_id=original.parent_chunk_id,
                     )
                 )
@@ -964,6 +968,7 @@ class HybridSearchService:
                     relevance_score=None,  # No Cohere score
                     is_library=r.is_library,
                     library_document_title=r.library_document_title,
+                    section_title=r.section_title,
                     parent_chunk_id=r.parent_chunk_id,
                 )
                 for r in hybrid_result.results[:rerank_top_n]
@@ -1028,6 +1033,7 @@ class HybridSearchService:
                             rrf_score=r["similarity"],
                             is_library=True,
                             library_document_title=r.get("document_title"),
+                            section_title=r.get("section_title"),
                         )
                     )
 
@@ -1089,6 +1095,7 @@ class HybridSearchService:
                             rrf_score=r["rank"],
                             is_library=True,
                             library_document_title=r.get("document_title"),
+                            section_title=r.get("section_title"),
                         )
                     )
 
@@ -1612,6 +1619,7 @@ class HybridSearchService:
                     relevance_score=None,
                     is_library=r.is_library,
                     library_document_title=r.library_document_title,
+                    section_title=r.section_title,
                     parent_chunk_id=r.parent_chunk_id,
                 )
                 for r in merged[:rerank_top_n]

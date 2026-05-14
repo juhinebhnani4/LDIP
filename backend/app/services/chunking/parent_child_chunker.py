@@ -55,6 +55,7 @@ class ChunkData:
     parent_id: UUID | None
     token_count: int
     page_number: int | None = None
+    section_title: str | None = None  # e.g. "Section 4" — extracted from legal document headings
     bbox_ids: list[UUID] = field(default_factory=list)
     block_types: list[str] = field(default_factory=list)
     text_start_offset: int | None = None

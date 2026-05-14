@@ -725,15 +725,16 @@ class LibraryService:
     def trigger_processing(
         self,
         library_document_id: str,
-        extracted_text: str,
+        storage_path: str,
     ) -> str:
         """Trigger the processing pipeline for a library document.
 
-        Enqueues the Celery task chain: chunk -> embed.
+        Dispatches ocr_and_process_library_document which handles text
+        extraction (pypdf or Document AI), chunking, and embedding.
 
         Args:
             library_document_id: Library document UUID.
-            extracted_text: OCR/extracted text content.
+            storage_path: Supabase storage path to the PDF.
 
         Returns:
             Celery task ID for tracking.
@@ -742,18 +743,20 @@ class LibraryService:
             LibraryServiceError: If triggering fails.
         """
         try:
-            from app.workers.tasks.library_tasks import process_library_document
+            from app.workers.tasks.library_tasks import ocr_and_process_library_document
 
-            result = process_library_document.delay(
-                library_document_id=library_document_id,
-                extracted_text=extracted_text,
+            result = ocr_and_process_library_document.apply_async(
+                kwargs={
+                    "library_document_id": library_document_id,
+                    "storage_path": storage_path,
+                },
+                queue="default",
             )
 
             logger.info(
                 "library_processing_triggered",
                 library_document_id=library_document_id,
                 task_id=result.id,
-                text_length=len(extracted_text),
             )
 
             return result.id

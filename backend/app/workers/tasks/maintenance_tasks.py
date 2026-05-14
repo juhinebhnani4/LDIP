@@ -1182,14 +1182,14 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
         if not stuck_docs.data:
             logger.info("resume_stuck_pipelines_none_found")
-            return results
+            # Don't return early — still need to check library_documents below
 
-        results["checked"] = len(stuck_docs.data)
+        results["checked"] = len(stuck_docs.data or [])
 
         # Stage 1.2: Import PipelineLock for dedup checks
         from app.services.distributed_lock import PipelineLock
 
-        for doc in stuck_docs.data:
+        for doc in (stuck_docs.data or []):
             doc_id = doc["id"]
             matter_id = doc["matter_id"]
             filename = doc.get("filename", "unknown")
@@ -1469,16 +1469,42 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 .execute()
             )
             for lib_doc in (stuck_lib_docs.data or []):
-                if lib_doc.get("storage_path"):
+                lib_doc_id = lib_doc["id"]
+
+                # Check if chunks already exist — if so, skip OCR and just embed
+                chunk_check = (
+                    client.table("library_chunks")
+                    .select("id", count="exact")
+                    .eq("library_document_id", lib_doc_id)
+                    .execute()
+                )
+                chunk_count = chunk_check.count or 0
+
+                if chunk_count > 0:
+                    # Chunks exist — dispatch embedding only (not full OCR)
+                    from app.workers.tasks.library_tasks import embed_library_chunks
+                    embed_library_chunks.apply_async(
+                        kwargs={"library_document_id": lib_doc_id},
+                        queue="default",
+                    )
+                    results["resumed"] += 1
+                    logger.info(
+                        "resume_stuck_library_document_embed_only",
+                        library_document_id=lib_doc_id,
+                        chunk_count=chunk_count,
+                        status=lib_doc["status"],
+                    )
+                elif lib_doc.get("storage_path"):
+                    # No chunks — need full OCR + chunk + embed
                     from app.workers.tasks.library_tasks import ocr_and_process_library_document
                     ocr_and_process_library_document.apply_async(
-                        kwargs={"library_document_id": lib_doc["id"], "storage_path": lib_doc["storage_path"]},
+                        kwargs={"library_document_id": lib_doc_id, "storage_path": lib_doc["storage_path"]},
                         queue="default",
                     )
                     results["resumed"] += 1
                     logger.info(
                         "resume_stuck_library_document",
-                        library_document_id=lib_doc["id"],
+                        library_document_id=lib_doc_id,
                         status=lib_doc["status"],
                     )
         except Exception as e:

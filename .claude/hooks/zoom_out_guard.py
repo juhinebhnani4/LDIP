@@ -144,6 +144,32 @@ It is not optional and not a formality. Past Claude sessions silenced this
 voice and we paid for it three times.
 """
 
+DEPLOY_REVIEW_REMINDER = """\
+[DEPLOY GUARD — hostile review required before deploy]
+
+You are about to deploy to production. Before this deploy proceeds:
+
+1. Have you run the hostile-review skill (`/hostile-review`) on the
+   changes being deployed?
+
+2. If YES — state which BUG FOUND items were fixed and which RISK items
+   were accepted. Confirm all BUG FOUND items are resolved.
+
+3. If NO — you MUST run it now. Invoke the `hostile-review` skill at
+   `.claude/skills/hostile-review/SKILL.md`. Spawn an Agent with the
+   checklist applied to all changed files. Fix any BUG FOUND items
+   before deploying.
+
+Why: On 2026-05-14, a deploy shipped code that hit Upstash's 100MB Redis
+record limit — a failure mode invisible in code but caught by hostile
+review. The blast-radius skill missed it because it runs pre-implementation.
+The hostile review catches post-implementation bugs that only exist in
+actual code: runtime decorator behavior, serialization limits, concurrent
+execution races, missing wiring.
+
+Skipping this step is how infrastructure bugs reach production.
+"""
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -206,9 +232,17 @@ def main() -> int:
 
     if event_name == "PreToolUse":
         tool_name = event.get("tool_name", "")
+        tool_input = event.get("tool_input") or {}
+
+        # Deploy guard: detect `railway up` commands
+        if tool_name == "Bash":
+            command = tool_input.get("command", "")
+            if "railway up" in command:
+                emit_additional_context("PreToolUse", DEPLOY_REVIEW_REMINDER)
+                return 0
+
         if tool_name not in ("Edit", "Write", "NotebookEdit"):
             return 0
-        tool_input = event.get("tool_input") or {}
         file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
         risky = is_high_risk_path(file_path) or edit_mentions_high_risk_symbol(tool_input)
         if risky:

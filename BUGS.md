@@ -1,7 +1,7 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-13 (INF-010 fixed: RedBeat removed, beat self-healing + lean mode. Cluster 6 done. 62 fixed.)
-**Total bugs**: 88 | **Fixed**: 63 | **Open**: 16 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
+**Last updated**: 2026-05-14 (GAP-19 FIXED: pypdf-first extraction, inline chunking, idempotency guards. GAP-20 filed: Upstash 100MB record limit. `process_library_document` dead code removed.)
+**Total bugs**: 92 | **Fixed**: 67 | **Open**: 16 | **Partially Fixed**: 4 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
 **Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
 
 ### Legend
@@ -37,7 +37,7 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **GAP-1**: User-uploaded Acts never get OCR dispatched | P0 | **FIXED** — OCR dispatch added with try/except + maintenance sweep fallback |
 | **GAP-2**: Completed library doc with 0 chunks | P0 | **FIXED** — Zero-chunk guard + all-batches-failed guard in `embed_library_chunks` |
 | **GAP-3**: 77% library chunks missing embeddings | P0 | **FIXED** — Single doc (BNS), reset to pending, sweep will re-embed 56 chunks |
-| **E2E-003**: Library docs missing from storage | P2 | **OPEN** — 7 docs need India Code re-fetch (PDFs downloaded but storage path mismatch) |
+| **E2E-003**: Library docs missing from storage | P2 | **FIXED** (2026-05-14) — GAP-19+20 fixed. 8 acts processed: 5,031 chunks, 466 section titles, embeddings flowing. 4/8 completed, 4 embedding in progress. BNS embedded (56/56). |
 | **GAP-5**: 9 failed india_code library docs | P1 | **PARTIALLY FIXED** — Root cause found (storage path convention change), BNS fixed, 7 remain |
 | **GAP-6**: 3 act_resolutions stuck 69 days | P1 | **FIXED** — Data fix: moved to `not_on_indiacode` |
 | **DPP-016**: Library doc failure not tracked | P3 | **DEFERRED** — No SSE infra for library docs; status already tracked in DB via quality_flags |
@@ -731,11 +731,11 @@ SharedUploadDropzone (one component, one store)
 
 **Estimated total**: ~4-5h including testing all 5 paths. Eliminates gaps 1-4, 6 permanently. Gap 5 (no un-act) is a feature request. Gap 7 (recovery mode) is nice-to-have.
 
-**GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: OPEN (tracking)
-Schema has the column for section-level search. Chunker never populates it. Missed opportunity for "Section 4 of Indian Contract Act" queries.
+**GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: FIXED + VERIFIED (2026-05-14) — 466 section titles populated across 5,031 chunks
+Regex-based section title extraction added to `chunk_library_document` (`library_tasks.py`). Detects patterns: Section/Sec./Article/Rule/Order/Schedule/Chapter at start of line. Parent chunks extract section title; children inherit parent's section or extract their own. `SearchResult` and `RerankedSearchResultItem` in `hybrid_search.py` now carry `section_title` through all 5 mapping paths (semantic, BM25, Cohere rerank, 2 fallback-to-RRF). Schema column already existed; RPCs already SELECT it. No migration needed. 12/12 regex unit tests passed. Live verification blocked by GAP-19 (OCR tasks dying before chunks are created).
 
-**GAP-11 (P2): Library document cost tracking absent** | Status: FIXED (2026-05-06)
-`embed_library_chunks` now passes `document_id=library_document_id` through to the embedder, which passes it to `CostTracker`. Library embedding costs are now attributable to specific library documents in `llm_costs` table. Also added `document_id` parameter to `EmbeddingService.embed_batch()` and `_call_openai_batch_embedding()` for general use.
+**GAP-11 (P2): Library document cost tracking absent** | Status: PARTIALLY FIXED (2026-05-06)
+Embedding costs fixed: `embed_library_chunks` passes `document_id=library_document_id` to `CostTracker`. **But OCR costs still lost**: `ocr_and_process_library_document` logs OCR costs with `document_id=library_document_id`, which fails the `llm_costs.document_id` FK constraint (points to `documents` table, not `library_documents`). Error: `cost_persistence_sync_failed: insert or update on table "llm_costs" violates foreign key constraint "llm_costs_document_id_fkey"`. Observed in production 2026-05-14 during E2E-003 re-fetch. **Fix**: either make `llm_costs.document_id` nullable/remove FK, or add a separate `library_document_id` column.
 
 **GAP-12 (P2): Deduplication logic inconsistent across entry paths** | Status: FIXED (2026-05-06)
 All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 0.6 threshold) instead of ad-hoc inline `ilike` checks. Updated: `_upload_act_to_library()` (documents.py), `_find_library_document_by_title()` (act_validation_tasks.py), `promote_document_to_library()` (library_service.py). Each path has ilike fallback if RPC fails. Verified: RPC correctly finds duplicates with proper similarity scoring.
@@ -749,6 +749,31 @@ All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 
 **GAP-15 (P3): `quality_flags` format inconsistent** — Some paths set list `["storage_missing"]`, others set string. Schema is jsonb, accepts both, consumers must handle both.
 
 **GAP-16 (P3): No `error_message` column on library_documents** — When processing fails, only info is quality_flag. `documents` table has `ocr_error`; `library_documents` doesn't.
+
+**GAP-17 (P2): Library doc status-update-on-failure silently swallowed** | Status: OPEN
+Discovered 2026-05-14 during E2E-003 re-fetch. When `ocr_and_process_library_document` exhausts max retries (2), it tries to set status=FAILED (`library_tasks.py:722`). But that `update_status()` call goes to Supabase — if Supabase is still down (the same outage that caused the retries), the update raises and is **silently swallowed** (`except Exception: pass` at line 727). Document stays at `processing` with 0 chunks indefinitely. Same pattern exists in `chunk_library_document` (line 207) and `embed_library_chunks` (line 482). The `resume_stuck_pipelines` sweep (every 15 min, 30-min cutoff) is the only recovery — but during a sustained outage it also fails. **This is ARCH-PATTERNS P1 ("remember to signal from all exit paths")**: the code remembers to call `update_status`, but doesn't verify the call succeeded. Related: DPP-016, GAP-16. **Structural fix**: the sweep should be the primary authority (reconciler pattern — observe reality, derive status) rather than relying on task-side signaling as primary + sweep as fallback.
+
+**GAP-18 (P1): `resume_stuck_pipelines` early return skips library recovery** | Status: FIXED (2026-05-14)
+`maintenance_tasks.py:1185` had `return results` when no regular `documents` were stuck — this returned BEFORE reaching the library_documents recovery at line 1462. Library recovery was **dead code** whenever no regular docs were stuck (the common case). This is why E2E-003 docs were never auto-recovered. **Fix**: removed early return, added `or []` guards on `stuck_docs.data`. The sweep now correctly falls through to the library check. Verified in production: sweep at 08:25 found and dispatched 4 library docs (`resumed=4`). Related: GAP-17, E2E-003.
+
+**GAP-19 (P1): Library OCR tasks silently die on large PDFs — no timeout, gevent blocking IO** | Status: FIXED (2026-05-14)
+Discovered 2026-05-14. `ocr_and_process_library_document` has no `soft_time_limit`/`time_limit` — inherits global 55min/60min from `celery.py`. For large statutes (Constitution of India = 400+ pages → 27 Document AI chunks; Income Tax Act = 900+ pages → 60 chunks), OCR takes 27-60+ minutes of blocking gRPC calls. Three compounding issues:
+1. **No per-request timeout on Document AI**: `processor.py:_call_document_ai()` calls `self.client.process_document(request=request)` with no timeout. gRPC call blocks the gevent greenlet indefinitely.
+2. **Gevent + blocking IO**: synchronous gRPC call doesn't yield to gevent hub. SIGTERM (soft timeout) can't interrupt a blocked syscall — greenlet never processes it. At 60min, SIGKILL fires and greenlet dies with no error logged.
+3. **Memory pressure**: 6 concurrent large PDFs × ~50MB each = 300MB+ raw content, on 10-greenlet heavy worker with no explicit memory limit. OOM kills silently.
+Evidence: 6 tasks dispatched at 08:10-08:12, logged `ocr_library_document_started`, then zero output for 30+ min. No error, no completion, no retry. Indian Contract Act (~200 pages) should finish in <10 min but didn't.
+**Root cause**: India Code PDFs are digitally generated with embedded text — they don't need OCR at all. pypdf extracts 880 pages in 39 seconds for $0, vs Document AI at ~59 minutes for ~$8.80 (guaranteed timeout kill).
+**Fix (2026-05-14)**: 4-part change in `library_tasks.py` + `maintenance_tasks.py`:
+1. **pypdf-first extraction**: `ocr_and_process_library_document` tries `pypdf.extract_text()` first (free, fast). Falls back to Document AI only if avg chars/page < 100 (scanned PDFs). Tested: Constitution (256pg/10s), Income Tax Act (880pg/39s), Arbitration Act (60pg/1s).
+2. **Inline chunking**: Chunking called directly instead of via Celery chain. The chain serialized 1-3MB text through Redis — hit Upstash's 100MB per-key limit (GAP-20). Inline chunking keeps text in memory.
+3. **Idempotency guard**: If `library_chunks` already exist, skip OCR entirely, dispatch `embed_library_chunks` directly. Prevents the duplicate-OCR storm observed during initial deploy.
+4. **Smart recovery sweep**: Checks chunk count before dispatching. Chunks exist → `embed_library_chunks` only. No chunks → full `ocr_and_process_library_document`.
+Also removed `process_library_document` task (dead code, parallel path) and updated `library_service.trigger_processing` to use `ocr_and_process_library_document`.
+**Hostile review findings (accepted risks)**: (a) `autoretry_for=(ConnectionError,)` broken when chunking called inline — parent task retries whole flow, wasteful but functional. (b) No pypdf text quality check beyond char count — garbage Unicode from bad font encoding could slip through. (c) pdf_bytes held in memory during chunking (~15MB peak per large doc). (d) Duplicate embed dispatches from idempotency guard + normal flow — embed is idempotent, wastes API cost but no corruption.
+Related: GAP-17, GAP-18, GAP-20.
+
+**GAP-20 (P1): Upstash Redis 100MB per-key record limit breaks Celery chains with large payloads** | Status: FIXED (2026-05-14)
+Discovered when `ocr_and_process_library_document` dispatched `chunk_library_document.s(id, extracted_text)` via Celery chain. The extracted text for large Acts (Companies Act=1.28MB, Income Tax Act=3MB) was serialized into Redis as a task argument. When duplicate OCR tasks accumulated (from the recovery sweep storm), the `default` queue key exceeded Upstash's 100MB single-record limit: `OperationalError: max single record size exceeded. Key: 'default', Limit: 104857600 bytes, Usage: 104878741 bytes`. All chunking tasks silently failed — OCR succeeded but chunks were never created. **Fix**: inline chunking (call `chunk_library_document()` directly, keep text in memory) and dispatch only `embed_library_chunks` via Celery (small message — just the UUID). Also removed `process_library_document` task which had the same vulnerability. Related: GAP-19.
 
 ##### Architecture Recommendations (from audit)
 
@@ -2040,7 +2065,7 @@ group(validate_ocr, calculate_confidence, chunk_document)
 
 **Observation**: If OCR produces empty text (line 591) or max retries are exceeded (line 654), `ocr_and_process_library_document` returns a failure dict. Since this is the orchestrator task (not in a chain), the failure is correct behavior — but it's not broadcast or tracked anywhere visible to the admin.
 
-**Fix**: Add logging/status update so admin dashboard can surface library document failures. Low priority.
+**Fix**: Add logging/status update so admin dashboard can surface library document failures. Low priority. Related: GAP-17 (status-update-on-failure silently swallowed when DB is down).
 
 ---
 
@@ -2098,14 +2123,24 @@ group(validate_ocr, calculate_confidence, chunk_document)
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) — library feature broken for these acts |
-| **Status** | OPEN |
+| **Status** | IN PROGRESS — re-fetch triggered, 6/8 acts processing (2026-05-14) |
 | **Source** | E2E verification (2026-04-17) |
 
-**Observation**: ~10 `ocr_and_process_library_document` tasks failed with `storage_missing` errors on worker startup. Affected acts: `arbitration_and_conciliation_act_1996.pdf`, `indian_contract_act_1872.pdf`, `constitution_of_india_1950.pdf`, `provincial_insolvency_act_1920.pdf`, `income_tax_act_1961.pdf`, `companies_act_2013.pdf`. These PDFs are referenced in the `library_documents` table but don't exist in Supabase storage.
+**Root cause** (identified 2026-05-14): The Jan 23 batch was bulk-seeded data (7 rows at identical microsecond timestamp, `added_by=NULL`), not pipeline-created. Storage paths pointed to files that were never durably stored. Not a pipeline bug — later pipeline-created docs work fine (proved by `TORTS Act 1992` and `Special Court` completions).
 
-**Impact**: These acts can't be used for citation verification. Note: the task sets status to FAILED with `quality_flags=["storage_missing"]` on first failure, and `resume_stuck_pipelines` only queries `status IN ('pending', 'processing')` — so these do NOT retry indefinitely. This was a one-time burst from documents that were PENDING when the worker started.
+**Data cleanup** (2026-05-14): 12 failed `library_documents` deleted, 9 `act_validation_cache` entries reset (`cached_storage_path=NULL`). Beat task `process_pending_validations` re-fetched 6 acts from India Code at 06:00 UTC: Code of Civil Procedure 1908, Constitution of India 1950, Companies Act 2013, Indian Contract Act 1872, Income Tax Act 1961, Arbitration and Conciliation Act 1996. All set to `processing` status.
 
-**Fix**: Clean up orphan `library_documents` records (delete rows where storage file doesn't exist), or upload the missing PDFs to storage.
+**Complication 1 — Supabase outage** (06:00-06:45 UTC): Re-fetch coincided with Supabase ap-southeast-1 scheduled maintenance (522 errors). OCR tasks hit `Server disconnected` errors, exhausted max retries (2), status-update-to-FAILED also failed silently (GAP-17). All 6 stuck at `processing`.
+
+**Complication 2 — recovery sweep dead code** (GAP-18): `resume_stuck_pipelines` had an early return at line 1185 that skipped the library_documents check. Library recovery was dead code. **Fixed 2026-05-14** — removed early return. Verified: sweep at 08:25 UTC found and dispatched 4 library docs.
+
+**Complication 3 — OCR tasks silently dying** (GAP-19): After the sweep fix, 6 OCR tasks dispatched but all silently died. Root cause: large PDFs (Constitution = 400+ pages, Income Tax = 900+ pages) hit the global 60-min Celery task_time_limit. Document AI gRPC calls block the gevent greenlet — SIGTERM can't interrupt, SIGKILL fires with no error logged. Tasks vanish.
+
+**Complication 4 — Upstash Redis 100MB limit** (GAP-20): After GAP-19 fix deployed, pypdf extraction succeeded (all page counts populated) but chunking tasks never executed. Root cause: the Celery chain serialized 1-3MB extracted text through Redis, exceeding Upstash's 100MB per-key limit. Fix: inline chunking (keep text in memory, don't serialize through Redis).
+
+**RESOLVED** (2026-05-14 12:23 UTC): All fixes deployed and verified. Recovery sweep fired at 12:22 UTC, pypdf extracted text for all 8 docs, inline chunking produced 5,031 chunks with 466 section titles (GAP-10 verified). Embedding in progress — 4/8 docs already completed (Indian Contract Act 134ch, Arbitration Act 129ch, BNS 56ch, TORTS Copy 17ch). Remaining 4 (Income Tax 2422ch, Companies 879ch, CPC 739ch, Constitution 622ch) embedding at ~50 chunks/min. Total: 89→5,031 chunks, 33→1,686+ embeddings, 0→466 section titles.
+
+**Remaining**: 2 acts still `pending`. 1 act (`presidency_towns_insolvency_act_1909`) has `validation_status=unknown`, won't auto-fetch.
 
 ---
 

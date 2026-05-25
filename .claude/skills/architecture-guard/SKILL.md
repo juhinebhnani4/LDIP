@@ -9,6 +9,8 @@ This skill exists because LDIP has accumulated three foundational architectural 
 
 The job of this skill is to make sure the next change does not add a fourth.
 
+**As of 2026-05-25**, the skill also covers four **frontend** architectural debts — `FE-ARCH-01..04` in `BUGS.md` §0 (matter workspace convergence, responsive layout system, skeleton drift, presentation/format layer). See "The Four Frontend Forbidden Patterns" and "The Mandatory Checklist — Frontend" sections below. **One skill, two halves**: the backend and frontend catalogs are intentionally distinct because the dangerous surfaces differ, but the underlying disease (convention where structure belongs) is the same.
+
 ## When this skill MUST be invoked
 
 Invoke before writing any code that:
@@ -23,7 +25,16 @@ Invoke before writing any code that:
 8. Adds a new background reconciler, sweeper, or maintenance task that mutates job/document state
 9. Introduces a new "the X task must remember to call Y" rule
 
-If the user's request is purely UI, frontend-only, copy changes, isolated bug fixes outside the pipeline, or migrations that only add columns without changing flow — **skip this skill**.
+**Frontend triggers (added 2026-05-25, covering FE-ARCH-01..04):**
+
+10. Adds a new feature panel to the matter workspace (a new `*Content.tsx` with its own SWR/fetch hooks under `frontend/src/components/features/`)
+11. Touches `frontend/src/stores/matterStore.ts` (especially `fetchMatter` or the placeholder-fabrication path) or `frontend/src/types/matter.ts` (`MatterProcessingStatus`)
+12. Adds, removes, or modifies a two-pane / multi-column / `ResizablePanelGroup` layout
+13. Authors a new `*Skeleton` component or an inline `animate-pulse` placeholder
+14. Calls `toLocaleDateString` / `toLocaleTimeString` / `Intl.DateTimeFormat`, or builds an inline count-string template (`` `${n} documents` ``), in a component outside `frontend/src/lib/format/`
+15. Edits `frontend/src/components/ui/api-error-boundary.tsx`, `frontend/src/components/ui/skeleton.tsx`, or `frontend/src/lib/utils.ts`
+
+If the user's request is purely UI copy changes, content-only edits, color/spacing tweaks that don't touch any of the surfaces above, isolated bug fixes outside both the pipeline and the frontend high-risk surfaces, or migrations that only add columns without changing flow — **skip this skill**.
 
 ## The Three Forbidden Patterns
 
@@ -60,6 +71,38 @@ If the change adds Gemini calls without specifying which budget bucket they cons
 **Why forbidden**: this is exactly how ARCH-003 happened. Lock release already has 14 call sites. Every "must dispatch from ALL exit paths" rule is a future P0.
 
 **Allowed alternative**: state must be **derived from observed reality**, not signaled by convention. Ask "can a reconciler determine this status by querying the database?" If yes, prefer that. If you must signal, the signal site must be **exactly one** place that all paths necessarily flow through (a `finally:` block, a context manager, a decorator, or a wrapping orchestrator) — not "every author must remember."
+
+## The Four Frontend Forbidden Patterns
+
+Frontend changes are checked against a *separate* catalog of four debt shapes — `FE-ARCH-01..04` in `BUGS.md` §0. They are not the same as Forbidden #1/#2/#2b/#3 (those describe backend pipeline patterns). They apply when the touched file is in the frontend high-risk surface (triggers 10–15 above).
+
+### FE-ARCH-01 — Per-panel-handles-its-own (no convergence point)
+**Smell**: "I'll add a new feature panel and have it fetch its own data and render its own error state." "I'll catch the 404 and return a default object so the UI doesn't crash." "I'll add an inline `ErrorAlert` for this case." Adding the Nth independent fetch hook to the matter workspace.
+
+**Why forbidden**: this is exactly how FE-ARCH-01 happened. Today the matter workspace has 29 independent fetch hooks across 7 panels with no shared existence/authorization gate, and `matterStore.fetchMatter()` *fabricates* an `'Untitled Matter'` placeholder on 404 (FE-003 = 18 console errors). The matter status type has no `'failed'` state (FE-007 = wrong "Ready" badge on the dashboard). `ApiErrorBoundary` is built but has zero usages.
+
+**Allowed alternative**: one matter-existence/authorization gate at the layout level that resolves *once* before panels render — new panels render only behind it. Use the shared `ApiErrorBoundary` (or wire it if not yet wired) — do not add a per-panel error renderer. Add `'failed'` to `MatterProcessingStatus` if you touch that type; do not preserve the placeholder fabrication.
+
+### FE-ARCH-02 — Responsive-by-component (no layout system)
+**Smell**: "I'll add a two-pane / split / `ResizablePanelGroup` layout." "It works on desktop." "I'll add `sm:`/`md:`/`lg:` classes to make it responsive."
+
+**Why forbidden**: this is exactly how FE-ARCH-02 happened. 68 files hand-add raw breakpoint classes; the matter Q&A panel never collapses by viewport because nothing structurally selects its position from width; no `useBreakpoint` / `useMediaQuery` primitive exists in the codebase. FE-001/002/005/006 are the symptoms — matter workspace unusable on mobile.
+
+**Allowed alternative**: build a `useBreakpoint` hook (or equivalent) first if it doesn't exist. New multi-pane layouts must collapse to a single column / drawer / sheet below the tablet breakpoint *structurally* — not by hoping the user remembers to set the Q&A panel position to `'hidden'`. Add `scrollbar-gutter: stable` to globals.css if you're touching layout width.
+
+### FE-ARCH-03 — Skeleton-as-parallel-copy
+**Smell**: "I'll add a `SomethingSkeleton` component with `h-5 w-48` sized to roughly match the real component." Authoring a new `*Skeleton` as a separate file with hardcoded dimensions.
+
+**Why forbidden**: this is exactly how FE-ARCH-03 happened. ~47 skeleton definitions hand-author dimensions that must stay in sync with the real component by vigilance alone. When the real component changes, the skeleton silently drifts → content jumps when real data arrives (contributes to FE-022's CLS 0.1138).
+
+**Allowed alternative**: the skeleton IS the real component rendered in a "skeleton" mode (same DOM, same dimensions, shimmer instead of content). One source of truth — no parallel hand-tuning. If the project doesn't yet have a skeleton-mode primitive, build it *before* authoring more skeletons.
+
+### FE-ARCH-04 — Format-at-call-site (no presentation layer)
+**Smell**: "I'll call `date.toLocaleDateString({...})` right here in the component." "I'll write `` `${n} documents` `` inline." "I'll define my own `formatDate` function in this file."
+
+**Why forbidden**: this is exactly how FE-ARCH-04 happened. 8 separate `formatDate` impls, 55 ad-hoc `Intl` call sites, 16 `date-fns` calls, 87 count strings, **4 actually-shipping plural bugs** ("1 documents", "1 pages"). `frontend/src/lib/utils.ts` has only `cn()`; no shared formatter.
+
+**Allowed alternative**: `frontend/src/lib/format/` is the single source. Build it (`formatDate`, `formatDateTime`, `formatRelative`, `pluralize`, `formatCount` on one date library) if it doesn't exist yet — that's part of the FE-ARCH-04 wall (B4.3 in `GUARDRAIL-BACKLOG.md`). New formatting in components must import from there. The ESLint rule (when B4.3 ships) will eventually enforce this at PR time.
 
 ## The Mandatory Checklist
 
@@ -118,14 +161,66 @@ Change summary: <one sentence>
    - What's the rollback plan if it breaks production?
 ```
 
+## The Mandatory Checklist — Frontend (added 2026-05-25)
+
+If the change touches the frontend high-risk surface (triggers 10–15), answer the relevant subset of this checklist in writing, *alongside* sections 6–8 from the backend Mandatory Checklist above (Verification, Deployment, Test Plan — those apply to all code regardless of half).
+
+```
+FRONTEND ARCHITECTURE GUARD CHECKLIST — <date>
+Change summary: <one sentence>
+
+F1. CONVERGENCE (FE-ARCH-01) — answer if you touched the matter workspace
+   - Does this add a new feature panel, fetch hook, or matter-workspace child? [Y/N]
+   - If Y: which existence/authorization gate does it sit behind? Cite file:line.
+   - If "the matter layout renders me unconditionally and I fetch my own data" — reject.
+     That's the pattern that produced FE-003.
+   - Does it use ApiErrorBoundary or render its own error UI? If its own: justify
+     why the shared boundary isn't appropriate. ("I forgot it exists" is not a
+     justification.)
+   - If touching matterStore.fetchMatter on the catch path: are you preserving the
+     placeholder fabrication? If yes, reject — that IS the bug.
+   - If touching MatterProcessingStatus: have you added a 'failed' state, or are you
+     preserving the 3-value type with one dead value?
+
+F2. RESPONSIVE / LAYOUT (FE-ARCH-02) — answer if you touched layout
+   - Does this add a multi-column / two-pane / ResizablePanelGroup / sidebar layout? [Y/N]
+   - If Y: how does it collapse below the tablet breakpoint? Cite the breakpoint and
+     the collapsed shape (drawer? stacked? tabs?).
+   - Does the project have a useBreakpoint / useMediaQuery primitive yet? If no,
+     building it is part of the fix — propose that first.
+   - Are you adding LAYOUT STRUCTURE (not just spacing) via per-component sm:/md:/lg:
+     classes? If yes, propose the structural alternative.
+
+F3. SKELETONS (FE-ARCH-03) — answer if you authored a Skeleton or animate-pulse placeholder
+   - Why is the skeleton not the real component in skeleton-mode? Justify.
+   - List the hardcoded h-/w- dimensions you are introducing. Explain why they
+     cannot drift from the real component as the real component evolves.
+   - If the project has no skeleton-mode primitive yet, building it is part of the
+     fix — propose that before adding another hand-tuned skeleton.
+
+F4. FORMATTING (FE-ARCH-04) — answer if you formatted a date or count
+   - Does this call toLocaleDateString / toLocaleTimeString / Intl.DateTimeFormat
+     in a component? [Y/N]
+   - If Y: is it inside frontend/src/lib/format/? If no, reject — move to the
+     format layer (build the layer if it doesn't exist).
+   - Does this add a count-string template? Are you pluralizing with an inline
+     ternary? If yes, use pluralize() (build it in lib/format/ if it doesn't exist)
+     — don't add the 84th ternary.
+   - Does this define a new formatDate function? Reject — there are already 8.
+
+F5+. EXIT PATHS / FAILURE MODES / VERIFICATION / DEPLOYMENT / TEST PLAN
+   - Use sections 4–8 from the backend Mandatory Checklist above. They apply to
+     all code, not just pipeline code.
+```
+
 ## How to use this skill in a conversation
 
 When invoked:
 
-1. Print the checklist filled in for the user's specific request. Be honest — if you can't answer a question, say so and ask the user.
-2. If any forbidden pattern is matched, **stop and propose the allowed alternative**. Do not write the forbidden version even if the user asks for "just a quick fix."
+1. Decide which half (or both) the change touches — backend pipeline surface, frontend high-risk surface, or both. Print the relevant checklist(s) filled in for the user's specific request. Be honest — if you can't answer a question, say so and ask the user.
+2. If any backend forbidden pattern (#1 / #2 / #2b / #3) OR any frontend forbidden pattern (FE-ARCH-01..04) is matched, **stop and propose the allowed alternative**. Do not write the forbidden version even if the user asks for "just a quick fix."
 3. Once the checklist is complete and all answers are clean, proceed to implementation.
-4. After implementation, re-print items 4, 5, 6 to confirm the actual diff matches what was promised.
+4. After implementation, re-print items 4, 5, 6 from the backend checklist (or F1–F4 from the frontend checklist, whichever applied) to confirm the actual diff matches what was promised.
 
 ## Escape hatch
 

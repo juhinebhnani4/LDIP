@@ -202,7 +202,9 @@ A rule in MEMORY.md or CLAUDE.md is a sticky note. Sometimes that's the right an
 
 ## Cross-references
 
-- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-007 entries; DPP-002 for P7/P8/P9; ARCH-007 for P10
+- `BUGS.md` section 0 — concrete ARCH-001..007 (backend) + FE-ARCH-01..04 (frontend) entries; DPP-002 for P7/P8/P9; ARCH-007 for P10
+- `BUGS.md` §10 — frontend audit findings FE-001..022 (2026-05-20)
+- `FRONTEND-AUDIT-2026-05-20.md` — evidence snapshot (screenshots, repro, console captures) for FE-### items
 - `.claude/skills/architecture-guard/SKILL.md` — enforcement checklist for the most dangerous patterns
 - `GUARDRAIL-BACKLOG.md` — actionable list of walls and smart sticky notes to build, with promotion paths
 - `CLAUDE.md` — top-level zoom-out rule and architecture-guard reference

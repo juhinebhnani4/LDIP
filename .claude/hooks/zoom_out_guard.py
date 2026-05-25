@@ -34,9 +34,19 @@ from pathlib import Path
 # Configuration: which files trigger the architecture-guard reminder
 # --------------------------------------------------------------------------- #
 
+# The hook covers TWO architectural surfaces with distinct forbidden-pattern
+# catalogs:
+#   - BACKEND_* tuples cover the Celery pipeline / worker fleet / state
+#     machine (source of ARCH-001..007 in BUGS.md §0).
+#   - FRONTEND_* tuples cover the matter workspace shell, responsive layout
+#     system, skeleton layer, and presentation/format layer (source of
+#     FE-ARCH-01..04 in BUGS.md §0).
+# Both halves fire their own reminder text (BACKEND_ vs FRONTEND_
+# ARCHITECTURE_GUARD_REMINDER). main() emits both when both apply.
+
 # Substring matches against the absolute file_path (lowercased, forward slashes).
-# A file is "high-risk" if any of these substrings appears in its path.
-HIGH_RISK_PATH_FRAGMENTS = (
+# A file is "backend high-risk" if any of these substrings appears in its path.
+BACKEND_HIGH_RISK_PATH_FRAGMENTS = (
     # Document pipeline + worker tasks
     "backend/app/workers/tasks/document_tasks.py",
     "backend/app/workers/tasks/chunked_document_tasks.py",
@@ -58,9 +68,9 @@ HIGH_RISK_PATH_FRAGMENTS = (
 )
 
 # Substring matches against the file content / proposed edit. Even outside the
-# high-risk path set, an edit that mentions any of these symbols is touching
-# the dangerous state machine and gets the architecture-guard reminder.
-HIGH_RISK_SYMBOLS = (
+# backend path set, an edit that mentions any of these symbols is touching the
+# dangerous backend state machine and gets the backend architecture-guard reminder.
+BACKEND_HIGH_RISK_SYMBOLS = (
     "_mark_job_completed",
     "create_post_ocr_chain",
     "_dispatch_post_entity_tasks",
@@ -72,6 +82,58 @@ HIGH_RISK_SYMBOLS = (
     "processing_jobs",
     "job_stage_history",
 )
+
+# Frontend high-risk path fragments — touching these means a change to one
+# of the four FE-ARCH-NN debt surfaces. Mirrors BACKEND_HIGH_RISK_PATH_FRAGMENTS.
+# Fragments are lowercased to match normalize()'s output.
+FRONTEND_HIGH_RISK_PATH_FRAGMENTS = (
+    # FE-ARCH-01 — matter workspace convergence
+    "frontend/src/stores/matterstore.ts",
+    "frontend/src/types/matter.ts",
+    "frontend/src/app/matter/",                                  # all matter/[matterId]/* routes
+    "frontend/src/components/features/matter/",
+    "frontend/src/components/ui/api-error-boundary.tsx",
+    # FE-ARCH-02 — responsive/layout system
+    "frontend/src/stores/qapanelstore.ts",
+    "frontend/src/app/globals.css",
+    "frontend/tailwind.config.ts",
+    "frontend/src/components/features/pdf/pdfsplitview.tsx",
+    "frontend/src/components/features/export/exportbuilder.tsx",
+    # FE-ARCH-03 — skeletons
+    "frontend/src/components/ui/skeleton.tsx",
+    "frontend/src/components/features/processing/processingskeleton.tsx",
+    # FE-ARCH-04 — presentation/format layer
+    "frontend/src/lib/utils.ts",
+    "frontend/src/lib/format/",
+    "frontend/src/utils/formatrelativetime.ts",
+)
+
+# Frontend high-risk symbols. Edits mentioning these — even outside the
+# frontend path set — get the frontend architecture-guard reminder.
+# Symbol matches are case-sensitive substring matches against edit content.
+FRONTEND_HIGH_RISK_SYMBOLS = (
+    # FE-ARCH-01
+    "MatterProcessingStatus",
+    "ApiErrorBoundary",
+    "Untitled Matter",
+    "fetchMatter",
+    # FE-ARCH-02
+    "ResizablePanelGroup",
+    "scrollbar-gutter",
+    # FE-ARCH-04
+    "toLocaleDateString",
+    "toLocaleTimeString",
+    "Intl.DateTimeFormat",
+)
+
+# File suffixes whose content legitimately discusses high-risk symbols as
+# prose (BUGS.md, ARCH-PATTERNS.md, GUARDRAIL-BACKLOG.md, FRONTEND-AUDIT-*.md,
+# READMEs, docs). B1.8 fix: suppress the symbol-mention check on these so
+# the hook does not cry wolf on documentation edits. The path-based check
+# in is_high_risk_path() still fires correctly on actual code files, so
+# the architecture-guard reminder still triggers when dangerous code is
+# being edited.
+DOC_FILE_SUFFIXES = (".md", ".markdown", ".mdx", ".rst", ".txt")
 
 # --------------------------------------------------------------------------- #
 # Reminder text
@@ -109,7 +171,7 @@ skip Phase 1 — that's how generic advice that conflicts with existing
 architecture gets proposed (see Railway cost analysis, 2026-04-22).
 """
 
-ARCHITECTURE_GUARD_REMINDER = """\
+BACKEND_ARCHITECTURE_GUARD_REMINDER = """\
 [ARCHITECTURE GUARD — HIGH-RISK FILE DETECTED]
 
 The file you are about to edit sits inside the LDIP document pipeline / worker
@@ -142,6 +204,64 @@ out loud that they accept the debt.
 This reminder is injected automatically by .claude/hooks/zoom_out_guard.py.
 It is not optional and not a formality. Past Claude sessions silenced this
 voice and we paid for it three times.
+"""
+
+FRONTEND_ARCHITECTURE_GUARD_REMINDER = """\
+[ARCHITECTURE GUARD — FRONTEND HIGH-RISK FILE DETECTED]
+
+The file you are about to edit sits inside the LDIP frontend's high-risk
+surface — the matter workspace shell, the responsive/layout system, the
+skeleton layer, or the presentation/format layer. This is the surface that
+produced FE-ARCH-01..04 in BUGS.md section 0.
+
+STOP. Walk through whichever of the four debts the touched file belongs to,
+and answer the relevant questions IN WRITING in your reply.
+
+FE-ARCH-01 (matter workspace convergence):
+  - Adding a new feature panel? Every panel today fetches its own data with
+    no shared existence/auth gate; the shell fabricates a placeholder on
+    404 instead of propagating the error. Are you routing through a single
+    existence gate, or extending the per-panel-handles-its-own pattern that
+    produced FE-003?
+  - Touching matterStore on the fetch-catch path? Preserving the placeholder
+    fabrication is preserving the bug.
+  - Touching the matter status type? Does it have a 'failed' state yet?
+    (Today it has only processing | ready | unused 'needs_attention' — that
+    is why FE-007 misreports failed matters as 'Ready'.)
+  - Touching api-error-boundary.tsx? It is currently built but zero usages —
+    wiring it around the panel region is part of the fix; do not weaken it.
+
+FE-ARCH-02 (responsive/layout):
+  - Adding a fixed two-pane / multi-column / resizable-panel layout? Where
+    does it auto-collapse by viewport? There is currently no useBreakpoint
+    / useMediaQuery primitive in the codebase — if you need one, that
+    primitive is what you should build first.
+  - Adding raw sm:/md:/lg: Tailwind classes? Acknowledged — but the goal is
+    to reduce reliance on per-component breakpoint convention. Don't extend
+    that path without a plan to retire it.
+
+FE-ARCH-03 (skeletons):
+  - Authoring a new Skeleton? Why is it not the real component in a
+    skeleton-mode? List the hardcoded h-/w- dimensions you are introducing
+    and explain why they cannot drift from the real component as the real
+    component evolves.
+
+FE-ARCH-04 (presentation/format layer):
+  - Calling toLocaleDateString / toLocaleTimeString / Intl.DateTimeFormat in
+    a component? frontend/src/lib/format/ is the intended single source
+    (build it if it does not exist yet). Do not add a 9th formatDate impl.
+  - Building a count-string template? Use a pluralize() helper (build it in
+    lib/format/ if it does not exist) — not an inline ternary. Four
+    currently-shipping bugs in FE-015 ("1 documents", "1 pages") come from
+    skipping this check.
+
+If the change extends any of these debt shapes without closing them,
+propose the structural alternative. Full SKILL at
+`.claude/skills/architecture-guard/SKILL.md`.
+
+This reminder is injected automatically by .claude/hooks/zoom_out_guard.py.
+The frontend was unobserved by this hook until 2026-05-25. Don't let the
+next debt accrete unobserved.
 """
 
 DEPLOY_REVIEW_REMINDER = """\
@@ -179,22 +299,63 @@ def normalize(path: str) -> str:
     return path.replace("\\", "/").lower()
 
 
-def is_high_risk_path(file_path: str) -> bool:
-    if not file_path:
-        return False
-    norm = normalize(file_path)
-    return any(frag in norm for frag in HIGH_RISK_PATH_FRAGMENTS)
-
-
-def edit_mentions_high_risk_symbol(tool_input: dict) -> bool:
-    """Check the proposed edit content for high-risk symbols."""
+def _content_blobs(tool_input: dict) -> str:
+    """Join all content fields of a tool_input into one searchable string."""
     blobs = []
     for key in ("content", "new_string", "old_string"):
         val = tool_input.get(key)
         if isinstance(val, str):
             blobs.append(val)
-    haystack = "\n".join(blobs)
-    return any(sym in haystack for sym in HIGH_RISK_SYMBOLS)
+    return "\n".join(blobs)
+
+
+def _is_doc_file(file_path: str) -> bool:
+    """B1.8: documentation files legitimately discuss high-risk symbols as prose."""
+    return bool(file_path) and normalize(file_path).endswith(DOC_FILE_SUFFIXES)
+
+
+def is_backend_high_risk_path(file_path: str) -> bool:
+    if not file_path:
+        return False
+    norm = normalize(file_path)
+    return any(frag in norm for frag in BACKEND_HIGH_RISK_PATH_FRAGMENTS)
+
+
+def edit_mentions_backend_high_risk_symbol(tool_input: dict) -> bool:
+    """Check the proposed edit content for backend high-risk symbols.
+
+    Skips documentation files (B1.8): a file ending in any DOC_FILE_SUFFIXES
+    can legitimately reference backend high-risk symbols as prose (BUGS.md,
+    ARCH-PATTERNS.md, GUARDRAIL-BACKLOG.md, FRONTEND-AUDIT-*.md) without
+    calling them. The path-based check in is_backend_high_risk_path() still
+    fires correctly on actual code files, so protection on the real
+    dangerous surface is intact.
+    """
+    file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    if _is_doc_file(file_path):
+        return False
+    haystack = _content_blobs(tool_input)
+    return any(sym in haystack for sym in BACKEND_HIGH_RISK_SYMBOLS)
+
+
+def is_frontend_high_risk_path(file_path: str) -> bool:
+    if not file_path:
+        return False
+    norm = normalize(file_path)
+    return any(frag in norm for frag in FRONTEND_HIGH_RISK_PATH_FRAGMENTS)
+
+
+def edit_mentions_frontend_high_risk_symbol(tool_input: dict) -> bool:
+    """Check the proposed edit content for frontend high-risk symbols.
+
+    Mirrors edit_mentions_backend_high_risk_symbol — same B1.8 doc-file
+    exclusion. Fires on FE-ARCH-01..04-relevant symbol mentions in code files.
+    """
+    file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    if _is_doc_file(file_path):
+        return False
+    haystack = _content_blobs(tool_input)
+    return any(sym in haystack for sym in FRONTEND_HIGH_RISK_SYMBOLS)
 
 
 def emit_additional_context(event_name: str, text: str) -> None:
@@ -244,9 +405,21 @@ def main() -> int:
         if tool_name not in ("Edit", "Write", "NotebookEdit"):
             return 0
         file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        risky = is_high_risk_path(file_path) or edit_mentions_high_risk_symbol(tool_input)
-        if risky:
-            emit_additional_context("PreToolUse", ARCHITECTURE_GUARD_REMINDER)
+        backend_risky = (
+            is_backend_high_risk_path(file_path)
+            or edit_mentions_backend_high_risk_symbol(tool_input)
+        )
+        frontend_risky = (
+            is_frontend_high_risk_path(file_path)
+            or edit_mentions_frontend_high_risk_symbol(tool_input)
+        )
+        reminders = []
+        if backend_risky:
+            reminders.append(BACKEND_ARCHITECTURE_GUARD_REMINDER)
+        if frontend_risky:
+            reminders.append(FRONTEND_ARCHITECTURE_GUARD_REMINDER)
+        if reminders:
+            emit_additional_context("PreToolUse", "\n\n".join(reminders))
         return 0
 
     return 0

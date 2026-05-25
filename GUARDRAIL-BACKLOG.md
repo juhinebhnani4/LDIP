@@ -187,6 +187,8 @@ A more precise version uses Python's `ast` module to check that the `.get()` cal
 
 ### B1.8 — Hook fix: skip symbol check on documentation files
 
+**STATUS (2026-05-25)**: ✅ **LANDED** in working tree (`zoom_out_guard.py`). Added `DOC_FILE_SUFFIXES = (".md", ".markdown", ".mdx", ".rst", ".txt")` and an early `return False` in `edit_mentions_high_risk_symbol()` for documentation files. The path-based check (`is_high_risk_path`) is unchanged, so code-file protection is intact. **PR-bundling note**: this entry's own "Action on landing" said to bundle with the next hook change rather than ship standalone. It is currently sitting in the working tree alongside the BUGS.md / GUARDRAIL-BACKLOG.md merge; bundle with **B4.2** (frontend hook extension) when that lands. Do not commit B1.8 alone as a standalone PR.
+
 **Currently lives**: `.claude/hooks/zoom_out_guard.py:edit_mentions_high_risk_symbol()`.
 
 **The known failure**: discovered while writing this very file. The hook fires the architecture-guard reminder when a `.md` documentation file mentions any symbol in `HIGH_RISK_SYMBOLS`. A doc file that *describes* `_release_pipeline_lock_safe` looks identical to a Python file that *adds a new call site* of it. False positives are guaranteed for any file in this backlog or in `ARCH-PATTERNS.md`.
@@ -236,6 +238,106 @@ This is the most important observation from the whole audit, and it doesn't fit 
 
 ---
 
+## Bucket 4 — Frontend architecture guard extension (added 2026-05-25)
+
+**Why this bucket exists**: the frontend was never under the `architecture-guard` lens, so it accumulated four parallel architectural debts unobserved — **FE-ARCH-01..04** in `BUGS.md` §0. They share the disease of Bucket 1 (sticky notes where walls belong) but at frontend boundaries: matter workspace shell, layout/responsive system, loading skeletons, and the presentation/format layer.
+
+**Design principle — do NOT skip**: this is an **extension of the existing `architecture-guard` skill**, not a parallel `frontend-arch-guard` skill. A separate skill would be exactly the P2 / parallel-duplicate-paths failure mode this project keeps warning against — two skills doing the same job, drifting over time, with a new "remember which one to invoke" sticky note in MEMORY.md. The wall is **one skill, two halves** + auto-firing hook extension + targeted CI lints. The same shape as the merge that consolidated FE-ARCH-01..04 into `BUGS.md` §0 today.
+
+---
+
+### B4.1 — Extend `architecture-guard/SKILL.md` to cover frontend FE-ARCH-01..04
+
+**STATUS (2026-05-25)**: ✅ **LANDED** in working tree alongside B1.8 and B4.2 (same PR bundle). Added: (a) intro paragraph naming the frontend half, (b) frontend trigger items 10–15 in "When MUST be invoked" + updated "skip this skill" exception, (c) full "## The Four Frontend Forbidden Patterns" section covering FE-ARCH-01..04 in the same Smell / Why forbidden / Allowed alternative shape as the existing backend forbidden patterns, (d) "## The Mandatory Checklist — Frontend" with F1–F4 question blocks (verification/deployment/test plan reuses backend §§6–8 to avoid duplication), (e) updated "How to use" to reference both halves. The skill body now matches what the B4.2 hook reminder text directs readers to.
+
+**Currently lives**: nowhere. `architecture-guard/SKILL.md` already includes `frontend/` path fragments but carries no frontend-specific checklist content.
+
+**Current form**: not even a sticky note for the frontend half.
+
+**Promotion → smart sticky note**: append four checklist sections to `architecture-guard/SKILL.md`, one per FE-ARCH-NN, that the skill must answer in writing before code is written:
+- **FE-ARCH-01 (matter convergence)**: "Are you adding a new feature panel to the matter workspace? Then you are adding a new independent fetch site. Has this been routed through the existence/auth gate? Does it use `ApiErrorBoundary` or implement its own error UI?"
+- **FE-ARCH-02 (responsive)**: "Are you adding a fixed two-pane / resizable / multi-column layout? Where is its viewport-collapse breakpoint? Is there a shared `useBreakpoint` primitive (currently there isn't — adding one is part of the fix)?"
+- **FE-ARCH-03 (skeletons)**: "Are you authoring a new skeleton? Why isn't it the real component in skeleton-mode? List the dimensions you're hand-coding and explain why they cannot drift."
+- **FE-ARCH-04 (format layer)**: "Are you formatting a date/count inline? `lib/format/` is the only allowed source. If it doesn't have what you need, add it there — do not roll your own at the call site."
+
+**Effort**: ~30 min.
+
+**Value**: makes the FE-ARCH frame discoverable the moment a frontend high-risk file is edited. Same shape as the existing backend checklist sections of `architecture-guard/SKILL.md` — one skill, two halves.
+
+**Action on landing**: add a one-line cross-link in each of BUGS.md FE-ARCH-NN's "Target architecture" sections pointing to the new checklist section.
+
+---
+
+### B4.2 — Extend `zoom_out_guard.py` hook with frontend high-risk paths and symbols
+
+**STATUS (2026-05-25)**: ✅ **LANDED** in working tree alongside B1.8. Renamed `HIGH_RISK_PATH_FRAGMENTS` / `HIGH_RISK_SYMBOLS` / `ARCHITECTURE_GUARD_REMINDER` to `BACKEND_*`, added symmetric `FRONTEND_HIGH_RISK_PATH_FRAGMENTS`, `FRONTEND_HIGH_RISK_SYMBOLS`, `FRONTEND_ARCHITECTURE_GUARD_REMINDER` (the FE-ARCH-01..04 checklist). Factored out shared helpers (`_content_blobs`, `_is_doc_file`) so the B1.8 doc-file exclusion applies to both halves. `main()` emits both reminders when both halves match. Verified via 7 subprocess test cases — backend-only, frontend-only, dual-fire, doc-file suppression, and no-match all behave correctly. **One PR bundles B1.8 + B4.2** (zoom_out_guard.py changes), satisfying B1.8's "do not ship standalone" rule.
+
+**Currently lives**: `.claude/hooks/zoom_out_guard.py`. Today: detects backend high-risk paths (Celery tasks, pipeline files) and symbols (`_release_pipeline_lock_safe` etc.) on Edit/Write and injects backend architecture-guard reminders.
+
+**Current form**: backend-only — zero frontend detection.
+
+**Promotion → smart sticky note**: add frontend `HIGH_RISK_PATH_FRAGMENTS` and `HIGH_RISK_SYMBOLS` (mirroring the existing backend pattern):
+- **Paths**: `frontend/src/stores/matterStore.ts`, `frontend/src/app/matter/[matterId]/layout.tsx`, `frontend/src/components/features/matter/WorkspaceContentArea.tsx`, `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`, `frontend/src/lib/utils.ts`, `frontend/src/app/globals.css`, and anything matching `frontend/src/components/features/*/*Content.tsx` or `*Skeleton*.tsx`.
+- **Symbols**: `MatterProcessingStatus`, `fetchMatter`, `ApiErrorBoundary`, `Untitled Matter`, `toLocaleDateString`, `formatDate`, `ResizablePanelGroup`, `useMatterSummary`.
+
+On match, inject the relevant FE-ARCH-NN guard text (one paragraph per debt, mirroring the existing backend reminder text in this hook).
+
+**Promotion → real wall**: not possible at the hook layer — same as the backend equivalent. The wall versions are B4.3 (ESLint) and B4.4 (markdown lint).
+
+**Effort**: ~30 min (mostly mirroring existing backend stanzas in this file).
+
+**Value**: **highest leverage in Bucket 4** — auto-fires the FE-ARCH checklist at edit time, the moment someone touches a frontend high-risk file. Equivalent of B1.4 for the frontend half.
+
+**Action on landing**: requires the `.md`-file-exclusion fix from **B1.8** to already be in place, otherwise every edit to `BUGS.md` / `FRONTEND-AUDIT-2026-05-20.md` mentioning these symbols will false-positive.
+
+---
+
+### B4.3 — ESLint rule + `lib/format/` layer (the real wall for FE-ARCH-04)
+
+**Currently lives**: nowhere. FE-ARCH-04 in `BUGS.md` §0 documents the pattern; nothing enforces it.
+
+**The known failure**: 8 reimplementations of `formatDate`, 55 ad-hoc `toLocaleDateString` calls, 4 hardcoded plural bugs ("1 documents", "1 pages") rendered to actual users.
+
+**Current form**: pure convention.
+
+**Promotion → real wall**:
+1. Build `frontend/src/lib/format/` (the structural fix from FE-ARCH-04's "Target architecture"): `formatDate`, `formatDateTime`, `formatRelative`, `pluralize`, `formatCount`. One date library. `utils/formatRelativeTime.ts` migrates into it.
+2. Add a custom ESLint rule that fails the build if any `.tsx` outside `lib/format/` calls `toLocaleDateString` / `toLocaleString` / `toLocaleTimeString` / `new Intl.DateTimeFormat`, or builds a count-string template `` `${...} <word>s` `` without going through `pluralize`.
+3. Ratchet — commit a baseline of current violations; the count can only go down.
+
+**Effort**: ~half day for `lib/format/` setup + initial ESLint rule + baseline ratchet. Full migration of the 71 date sites + 87 count strings is incremental and parallelizable.
+
+**Value**: deletes the FE-ARCH-04 category of bug at the build boundary. Equivalent of B1.6 (frontend codegen for ARCH-006) at a different boundary inside the same repo.
+
+**Action on landing**: when the rule + lib land and the four acute plural bugs in FE-015 (`MatterCard.tsx:169`, `:217`, `OCRQualityDetail.tsx:141`, `citationGrouping.ts:158`) are fixed, mark FE-015 FIXED in BUGS.md. Mark FE-ARCH-04 FIXED only after the baseline ratchet reaches zero violations and the rule blocks regressions.
+
+---
+
+### B4.4 — Markdown lint: every `### (FE-)ARCH-NN` entry in `BUGS.md` must carry a `**Detector:**` field
+
+**Currently lives**: nowhere. The detector-driven census discipline lives in the four FE-ARCH-01..04 entries by convention; ARCH-001..007 don't have it.
+
+**The known failure**: without this lint, the next FE-ARCH-05 (or ARCH-008) will be authored without a regenerable detector, and the census will rot back into a hand-list — exactly the shape `FRONTEND-ARCH-DEBT.md` was deleted to escape (today, 2026-05-25). The detector mechanism is the only thing keeping the instance counts in FE-ARCH-NN entries honest.
+
+**Current form**: pure convention. The four FE-ARCH entries authored today carry detectors; nothing makes that mandatory for the next entry.
+
+**Promotion → real wall**: a ~10-line markdown lint that scans `BUGS.md` for `^### (ARCH|FE-ARCH)-\w+:` headers and asserts each one's body contains a `**Detector:**` field. CI fails on missing.
+
+**Effort**: ~30 min for the lint.
+
+**Value**: locks in the regenerable-detector discipline. New ARCH-style entries cannot ship without one. Modest effort for a wall that prevents the rot pattern from recurring.
+
+**Action on landing**: retrofit detectors onto ARCH-001..007 in the same PR. Most have natural detectors (ARCH-001: line counts of the two pipeline files; ARCH-002: `numReplicas` in `railway.toml` + `task_routes` grep; ARCH-004: `rg "from google.genai import types" backend/app/engines backend/app/services | wc -l`; ARCH-005: count of `CREATE OR REPLACE FUNCTION search_` migrations; ARCH-006: count of hand-written `interface` in `frontend/src/lib/api/`). ARCH-003 / ARCH-007 are pattern-matches and need careful detector wording.
+
+---
+
+### Items NOT in this bucket (named explicitly)
+
+- **A separate `frontend-arch-guard` skill.** Rejected on principle — would be a parallel duplicate path (P2) of the existing `architecture-guard`. The four B4 items above are the principled alternative: extend the one skill, extend the one hook, add targeted lints.
+- **The four FE-ARCH-NN refactors themselves** (the matter convergence gate, the `useBreakpoint` primitive, skeleton-as-mode, `lib/format/`). Those are not enforcement work — they are the actual architectural fixes. They live in BUGS.md §0 as the "Target architecture" sections of each FE-ARCH entry and get prioritized via clusters, not this backlog.
+
+---
+
 ## Recommended ship order
 
 If you actually want to start retiring sticky notes, the cheapest-first / highest-value-first order is:
@@ -249,17 +351,26 @@ If you actually want to start retiring sticky notes, the cheapest-first / highes
 7. **B1.6** — frontend codegen for ARCH-006 (~half day, real wall, highest single-item value)
 8. **B1.7** — Python↔Postgres codegen for the column-name rule (~half day, real wall, deletes 2 MEMORY.md entries)
 
-Items 1–5 are roughly **two hours total**. Items 6–7 are each **half a day** and each delete a category of bug.
+**Frontend additions (Bucket 4, added 2026-05-25):**
 
-After items 1–5 land, MEMORY.md should shrink by ~3 entries (B1.2, B1.4 partial, plus deletions noted in the "Action on landing" notes above). After items 6–7 land, MEMORY.md should shrink by ~2 more entries. The shrink is the metric. **A growing MEMORY.md is the symptom; a shrinking one is the fix.**
+9. **B4.2** — `zoom_out_guard.py` hook extension for frontend high-risk paths/symbols (~30 min, smart sticky note, highest leverage in Bucket 4). Requires **B1.8** landed first or it false-positives on every doc edit.
+10. **B4.1** — extend `architecture-guard/SKILL.md` with FE-ARCH-01..04 checklists (~30 min, smart sticky note)
+11. **B4.4** — markdown lint enforcing `**Detector:**` on every `### (FE-)ARCH-NN` entry in BUGS.md (~30 min, real wall — locks in the detector discipline; retrofit ARCH-001..007 in same PR)
+12. **B4.3** — build `frontend/src/lib/format/` + ESLint rule banning raw `toLocaleDateString` (~half day, real wall, kills FE-ARCH-04 category + the 4 acute plural bugs in FE-015)
+
+Items 1–5 are roughly **two hours total**. Items 9–11 add **another ~90 min** of smart-sticky-note + markdown-lint work. Items 6, 7, 12 are each **half a day** and each delete a category of bug.
+
+After items 1–5 land, MEMORY.md should shrink by ~3 entries (B1.2, B1.4 partial, plus deletions noted in the "Action on landing" notes above). After items 6–7 land, MEMORY.md should shrink by ~2 more entries. After B4.3 lands, FE-015 in BUGS.md §10 should be marked FIXED and the 4 hardcoded-plural bug rows can be retired. The shrink is the metric. **A growing MEMORY.md (or growing BUGS.md OPEN count) is the symptom; a shrinking one is the fix.**
 
 ---
 
 ## Cross-references
 
-- `ARCH-PATTERNS.md` — the six abstract patterns this backlog enforces against
-- `BUGS.md` section 0 — concrete ARCH-001 through ARCH-006 entries
-- `.claude/skills/architecture-guard/SKILL.md` — current enforcement skill (covers 3 of the 6 patterns)
+- `ARCH-PATTERNS.md` — the ten abstract patterns this backlog enforces against
+- `BUGS.md` section 0 — concrete ARCH-001..007 (backend) + FE-ARCH-01..04 (frontend) entries
+- `BUGS.md` §10 — Frontend audit findings FE-001..022 (2026-05-20)
+- `FRONTEND-AUDIT-2026-05-20.md` — evidence snapshot for the FE-### items
+- `.claude/skills/architecture-guard/SKILL.md` — current enforcement skill (covers backend; Bucket 4 extends it to frontend)
 - `.claude/hooks/zoom_out_guard.py` — current smart-sticky-note layer (universal zoom-out + architecture-guard injection)
 - `MEMORY.md` — the file being audited; the deletion-on-landing actions in Bucket 1 specify what to remove from it
 - `CLAUDE.md` — top-level rules; Deployment section is the source of B1.3

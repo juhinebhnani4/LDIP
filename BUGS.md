@@ -1,8 +1,10 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-14 (WPS-001 L4+L5 FIXED. Reconciler sweep replaces status-label sweeps — ARCH-003 stepping stone. Timeout alignment for 3 tasks. Forensic hunt: 10/13 doc statuses were invisible to all sweeps.)
-**Total bugs**: 92 | **Fixed**: 70 | **Open**: 13 | **Partially Fixed**: 3 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 1
-**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29)
+**Last updated**: 2026-05-25 (UX-015 FIXED, GAP-11 FIXED, GAP-17 MITIGATED, GAP-9 Gap 5 UI added but unreachable PROD-003. 3 new production findings. Hostile review caught P0 migration bomb + P1 recursive arg bug before deploy.)
+**Total bugs**: 117 | **Fixed**: 73 | **Open**: 35 | **Partially Fixed**: 2 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 2
+**Architectural debts (§0)**: 11 OPEN (ARCH-001..007 backend + FE-ARCH-01..04 frontend)
+**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29) + 1 frontend audit + 4-agent code census (2026-05-20)
+**Frontend audit (2026-05-20)**: architectural debts FE-ARCH-01..04 in §0 below; symptoms FE-001..022 in §10 below; evidence (screenshots, repro, console captures) in [`FRONTEND-AUDIT-2026-05-20.md`](FRONTEND-AUDIT-2026-05-20.md).
 
 ### Legend
 | Field | Values |
@@ -25,8 +27,9 @@ Week 1:  Cluster 1 (library data — 3 P0s)       ✓ DONE
 Week 2:  Cluster 2 (library schema parity)       ✓ DONE
          Cluster 6 (infra hardening)             ✓ DONE
          Cluster 4 (worker/beat stability)       ✓ DONE
-         Cluster 3 (contradiction optimization Phase 2)
+         Cluster 3 (contradiction optimization Phase 2+3)  ← Phase 3 DEPLOYED, Phase 2 decision deferred
 After:   Cluster 7 (architectural debt — ongoing)
+         Cluster 8 (frontend audit 2026-05-20: FE-ARCH-01..04 + 22 symptoms FE-001..022)
 ```
 
 #### Cluster 1: Library Subsystem — Fix the Data ✓ DONE (2026-04-30)
@@ -38,7 +41,7 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **GAP-2**: Completed library doc with 0 chunks | P0 | **FIXED** — Zero-chunk guard + all-batches-failed guard in `embed_library_chunks` |
 | **GAP-3**: 77% library chunks missing embeddings | P0 | **FIXED** — Single doc (BNS), reset to pending, sweep will re-embed 56 chunks |
 | **E2E-003**: Library docs missing from storage | P2 | **FIXED** (2026-05-14) — GAP-19+20 fixed. 8 acts processed: 5,031 chunks, 466 section titles, embeddings flowing. 4/8 completed, 4 embedding in progress. BNS embedded (56/56). |
-| **GAP-5**: 9 failed india_code library docs | P1 | **PARTIALLY FIXED** — Root cause found (storage path convention change), BNS fixed, 7 remain |
+| **GAP-5**: 9 failed india_code library docs | P1 | **FIXED** (2026-05-20) — Previous cleanup fixed 8/9. Last 1 (`environment_protection_act_1986`) reset + OCR re-triggered. 3 stale resolutions cleaned. |
 | **GAP-6**: 3 act_resolutions stuck 69 days | P1 | **FIXED** — Data fix: moved to `not_on_indiacode` |
 | **DPP-016**: Library doc failure not tracked | P3 | **DEFERRED** — No SSE infra for library docs; status already tracked in DB via quality_flags |
 
@@ -53,13 +56,62 @@ After:   Cluster 7 (architectural debt — ongoing)
 | **GAP-11**: Library cost tracking absent | P2 | Add `library_ocr` operation to cost tracking — 15 lines |
 | **GAP-12**: Inconsistent dedup logic | P2 | Standardize all creation paths to use `find_library_duplicates` RPC |
 
-#### Cluster 3: Contradiction Optimization — Phase 2 (2-3 days)
-*Same file (`comparator.py`), same analysis, same deploy. Prerequisite: query `llm_costs.metadata` for screening outcome distribution (Phase 1 metadata flowing since 2026-04-27).*
+#### Cluster 3: Contradiction Optimization — Phase 2+3 (Phase 3 DEPLOYED 2026-05-20, Phase 2 decision deferred)
+*Phase 3 (safe parallelism) deployed 2026-05-20: ~2.5x screening speedup. Phase 2 (prompt tuning) investigated 2026-05-14: hit model capability ceiling, decision deferred pending more data.*
 
-| Bug | Sev | Fix |
+| Bug | Sev | Status |
 |---|---|---|
-| **E2E-004**: Contradiction detection is pipeline bottleneck | P2 | Analyze Phase 1 screening metadata, tune escalation threshold |
-| **E2E-005**: Excessive GPT-4o escalation | P3 | Same analysis — raise threshold if data supports it |
+| **E2E-004**: Contradiction detection is pipeline bottleneck | P2 | INVESTIGATED — prompt tuning saves 30% GPT-4o but loses subtle contradictions. No safe prompt found yet. |
+| **E2E-005**: Excessive GPT-4o escalation | P3 | INVESTIGATED — 94% of GPT-4o calls are wasted. Metadata change deployed to collect ground truth (2026-05-14). |
+
+**Investigation summary (2026-05-14)**:
+
+Queried production data (804 screened pairs since Phase 1 deploy). Full funnel:
+```
+804 pairs screened (Gemini Flash)        — $0.38
+ ↓ 61% marked "needs_review"
+473 escalated to GPT-4o                  — $2.96
+ ↓ only 6.1% are actual contradictions
+ 29 real contradictions stored
+444 false positives (93.9%)              — $2.78 WASTED
+```
+
+**Shadow tested 3 prompt variants** against 181 pairs (29 known contradictions + 152 sampled non-contradictions). Results:
+
+| Metric | V1 (current) | V2 (aggressive) | V3 (balanced) |
+|---|---|---|---|
+| Contradictions caught | 28/31 (90%) | 23/31 (74%) | 24/31 (77%) |
+| Non-contradictions escalated | 97/150 (65%) | 24/150 (16%) | 68/150 (45%) |
+| Projected GPT-4o calls/batch | ~519 | ~128 | ~364 |
+| Projected savings vs V1 | — | ~$2.45/batch | ~$0.97/batch |
+| Safe to deploy? | (baseline) | **NO** (26% miss) | **NO** (23% miss) |
+
+**Root cause of misses**: 5 of the 7 V3 misses are pairs ALL 3 prompts miss — Gemini Flash sees "same facts, complementary details" but GPT-4o finds subtle legal conflicts (e.g., one statement draws a different conclusion from agreed facts, or a witness's deposition differs from what another witness claims they said). This is a **model capability ceiling**, not a prompt issue.
+
+**The 7 missed pairs are all**:
+- `severity: medium`, `contradiction_type: semantic_contradiction`
+- Legal interpretation differences, not factual conflicts (no date/amount mismatches)
+- Entities: PW1 (3), Nalini (1), K. Parameshwar (1), PW-2 (1), High Court (1)
+
+**The 24 caught pairs include ALL high-value contradictions**:
+- Address mismatches (Nirav Jobalia — different addresses across documents)
+- Witness testimony conflicts (PW-2 says didn't see crime vs prosecution claims PW-2 reported it)
+- Age discrepancies (PW-2: 7 vs 10 years old)
+
+**What was deployed (2026-05-14)**:
+- GPT-4o comparison result metadata now persisted to `llm_costs.metadata` (`comparison_result`, `confidence`, `reasoning_preview`). This gives ongoing ground truth for any future optimization.
+- Code change: moved cost persistence from `_call_gpt4_comparison` to `_compare_statements` (after parsing) so parsed result is available for metadata.
+
+**Decision deferred — options on the table**:
+1. **Keep V1** — $6.40/month at current volume, not urgent. Wait for more metadata.
+2. **Deploy V3** — save ~$1.70/month, accept 4 more missed interpretive contradictions as known debt.
+3. **Phase 4 (model swap)** — replace GPT-4o with cheaper model. The 10x lever but unproven: no data on whether Haiku/Gemini Pro can match GPT-4o quality on Indian legal contradiction analysis. Not currently in the system (would require new SDK + API key).
+
+**REJECTED during this investigation**:
+- Threshold tuning (Phase 2 original plan) — confirmed dead: Gemini returns discrete values, threshold between 0.0 and 0.8 catches nothing.
+- Inline shadow testing — hostile review found it doubles screening latency and starves rate limiter. Offline script created instead.
+
+**Files created**: `backend/shadow_test_screening.py` (reusable), `backend/shadow_test_results.json` (V1+V2 raw data), `backend/shadow_test_results_v3.json` (V3 raw data), `backend/shadow_test_report_v2.txt`, `backend/shadow_test_report_v3.txt`.
 
 #### Cluster 4: Worker/Beat Stability ✓ DONE (2026-05-14)
 *Completed in phases: beat stability (2026-05-13), fan-out decomposition + coroutine fix (2026-05-14). Hostile review pre-implementation found 7 bugs, 4 risks — all addressed.*
@@ -198,22 +250,32 @@ All items are leaf-node changes — they don't touch the orchestration layer, wo
 
   **Critical finding**: Gemini returns **discrete** confidence values `{0.0, 0.8, 0.9, 0.95, 1.0}` — nothing in the 0.3-0.7 range. The Phase 2 hypothesis ("lower threshold from 0.5→0.35 to catch pairs at 0.45-0.49") was **wrong** — that band is empty.
 
-**Phase 2: ~~Tune threshold~~ → HYPOTHESIS INVALIDATED (2026-04-28)**
-- **Original plan**: Lower `confidence_threshold` to reduce escalations. **Dead end** — Gemini's discrete confidence values mean threshold changes between 0.0 and 0.8 catch nothing. Lowering to 0.35 would only save 3 GPT-4o calls (the `consistent`/`unrelated` at 0.0).
-- **Actual cost driver**: The screening prompt (`prompts.py:378-397`) pushes aggressively toward `needs_review` with 5 CRITICAL RULES + "default should be needs_review" + "100x worse to miss." This causes 59% `needs_review` rate (vs 32% historical). ALL `needs_review` → GPT-4o regardless of confidence. **The lever is prompt tuning, not threshold tuning.**
-- **Risk**: Loosening the prompt is the highest-quality-risk change in the system. Making Gemini less aggressive means real contradictions could slip through. The product promise is "we found what you missed" — false negatives kill conversion.
-- **Status**: BLOCKED — needs (a) more data (only 1 document so far), (b) shadow testing infrastructure to compare prompt variants without affecting production quality. Reprioritized below Phase 4 research.
-- **No parsing bug**: confidence=0.0 rows (10/195) are Gemini explicitly returning 0.0 confidence, not a missing field. Validation passes correctly. Low-confidence `consistent`/`unrelated` at 0.0 are correctly escalated to GPT-4o (3 rows). No fix needed.
+**Phase 2: Prompt tuning → INVESTIGATED, HIT MODEL CEILING (2026-05-14)**
+- **Original plan**: Lower `confidence_threshold` to reduce escalations. **Dead end** — Gemini's discrete confidence values mean threshold changes between 0.0 and 0.8 catch nothing.
+- **Actual cost driver**: The screening prompt (`prompts.py:378-397`) pushes aggressively toward `needs_review` with 5 CRITICAL RULES + "default should be needs_review" + "100x worse to miss." This causes 61% `needs_review` rate. ALL `needs_review` → GPT-4o regardless of confidence. **The lever is prompt tuning, not threshold tuning.**
+- **Shadow testing (2026-05-14)**: Built offline shadow test infrastructure (`shadow_test_screening.py`). Tested 3 prompt variants against 181 pairs (31 known contradictions + 150 non-contradictions):
+  - **V1 (current)**: 90% catch, 65% false escalation — baseline
+  - **V2 (aggressive)**: 74% catch, 16% false escalation — too many misses
+  - **V3 (balanced)**: 77% catch, 45% false escalation — still too many misses
+- **Finding**: 5 of 7 V3 misses are pairs ALL prompts miss — Gemini Flash cannot distinguish "complementary legal details" from "subtly conflicting legal analysis." This is a model capability ceiling, not a prompt problem. The missed pairs are all medium-severity semantic contradictions (legal interpretation, not factual mismatches). All high-value contradictions (address mismatches, witness testimony conflicts, age discrepancies) are caught by all 3 variants.
+- **Deployed**: GPT-4o comparison outcome metadata — every comparison now stores result/confidence/reasoning in `llm_costs.metadata`. Builds ground truth for future optimization.
+- **Status**: DECISION DEFERRED — no prompt change is both safe (>90% catch) and effective (<40% escalation). Options: accept status quo, accept V3 debt, or pursue Phase 4 model swap (unproven).
+- **No parsing bug**: confidence=0.0 rows are Gemini explicitly returning 0.0 confidence, not a missing field. Low-confidence `consistent`/`unrelated` at 0.0 are correctly escalated to GPT-4o.
 
-**Phase 3: Safe parallelism (after beat isolation, ~1 day)**
-- **Reduce `min_delay_seconds`** from 0.2 → 0.05 in `llm_rate_limiter.py:63`. Mild speedup, no concurrency increase, safe at any scale.
-- **Bump `DEFAULT_BATCH_SIZE`** from 5 → 10-12 (NOT 25). Stay within the global `max_concurrent=10` semaphore. Gets ~2x speed without starving other engines. Only safe AFTER beat process isolation (Tier 2 #5) so increased load can't starve the scheduler.
+**Phase 3: Safe parallelism — DEPLOYED (2026-05-20)**
+- **`gemini_min_request_delay`** 0.2 → 0.05 (`config.py:136`, `llm_rate_limiter.py:63` DEFAULT_CONFIGS fallback aligned). Tighter burst stagger, well within 1000 RPM target. InProcessRateLimiter (1000 RPM sliding window) is the binding constraint.
+- **`DEFAULT_BATCH_SIZE`** 5 → 10 (`comparator.py:62`). Doubles per-entity throughput. 3 batches of 10 instead of 5 batches of 5 for a 25-pair entity. Stays within `max_concurrent=10` Gemini semaphore.
+- **`CONTRADICTION_CONCURRENCY_LIMIT`** 3 → 5 (`document_tasks.py:6187`). Allows 5 entities to process in parallel instead of 3. The Gemini semaphore(10) is the real throttle — entity-level parallelism just reduces idle time between batches.
+- **Prerequisites verified**: Beat isolation DONE (2026-05-13), OpenAI rate limiter wired (E2E-008).
+- **Hostile review**: 0 bugs found. 3 risks (all pre-existing): RPM burst theoretical ~1200 RPM but capped by InProcessRateLimiter at 1000; SIGTERM during 50 pairs (pre-existing, timeout handler marks job complete); stale comment fixed.
+- **Expected speedup**: ~2.5x on screening phase. Pipeline time ~20 min → ~12-15 min. Pending live verification on next document upload.
+- **Files changed**: `config.py` (1 line), `llm_rate_limiter.py` (1 line), `comparator.py` (1 line), `document_tasks.py` (2 lines), `test_document_tasks.py` (1 line).
 
 **Phase 4: Research (parallel, no code changes)**
 - **GPT-4o replacement research**: The actual cost bottleneck is GPT-4o at $0.0066/call for full analysis. At scale (400 docs/month), this is $2,500-5,000/month — more than revenue from 50 paying users at ₹999. Research Claude Haiku ($0.00025/1K input), Gemini Pro, or fine-tuned smaller model as a replacement for the full analysis tier. This is the 10x lever; everything else is 2x at best.
 - **Shadow test Flash Lite**: Run both Flash and Flash Lite on the same pairs, compare results without using Flash Lite results. Collect quality data before switching.
 
-**Expected result (Phase 1+3)**: Pipeline time ~20 min → ~15-18 min from parallelism only. Phase 2 (prompt tuning) could yield 30-50% cost reduction but requires shadow testing infrastructure and carries quality risk. Phase 4 (GPT-4o replacement) remains the 10x lever.
+**Expected result (Phase 1+3, both deployed)**: Pipeline time ~20 min → ~12-15 min from parallelism (Phase 3) + skip-1-mention (Phase 1). Phase 2 (prompt tuning) hit model ceiling — decision deferred. Phase 4 (GPT-4o replacement) remains the 10x cost lever.
 
 ##### Scaling analysis (2026-04-21)
 
@@ -346,11 +408,15 @@ These prevent silent failures that erode trust. Less visible than Tier 1, but cr
 
 ---
 
-#### 8. Escalation threshold audit — UNBLOCKED (Phase 1 metadata now shipping)
+#### 8. Escalation threshold audit — COMPLETED, threshold is irrelevant (2026-05-14)
 
-**Bug IDs**: E2E-005 | **Effort**: 1 day (after data accumulates) | **Files**: `config.py` (one float)
+**Bug IDs**: E2E-005 | **Status**: INVESTIGATED — threshold tuning is a dead end
 
-**Current state (updated 2026-04-27)**: `confidence_threshold = 0.5` (`comparator.py:452-454`). Phase 1 metadata is now deployed and verified — screening confidence values are persisting to `llm_costs.metadata` as of 2026-04-27. First production data shows `needs_review` results clustering at confidence 0.8-0.9 and `consistent` results at 0.95-1.0. Need ~50-100 more screening calls to get a full distribution.
+**Finding (2026-05-14)**: With 804 screened pairs of metadata, the escalation threshold (0.65) is irrelevant because:
+1. Gemini returns only discrete confidence values: {0.0, 0.7, 0.8, 0.9, 0.95, 1.0}
+2. `needs_review` (61% of all pairs) always escalates regardless of confidence
+3. Only 6 pairs across all data were `consistent`/`unrelated` with conf < 0.65 (at 0.0)
+4. The lever is the screening PROMPT, not the threshold — but prompt tuning hit a model ceiling (see Phase 2 above)
 
 **What to do when data accumulates**: Query:
 ```sql
@@ -655,8 +721,8 @@ Root cause: all 56 missing embeddings belonged to ONE document (Bharatiya Nyaya 
 **GAP-4 (P1): Voyage embeddings never populated for library chunks** | Status: FIXED (2026-05-06)
 `embed_library_chunks` now generates both OpenAI and Voyage embeddings in a single pass. Voyage embedding is best-effort (wrapped in try/catch) — if Voyage API key is missing or fails, OpenAI embeddings still work. Existing 89 library chunks have 0 Voyage embeddings (will populate on next library doc processing). Fix in `library_tasks.py`.
 
-**GAP-5 (P1): 9 failed india_code library docs (7 with `storage_missing`)** | Status: PARTIALLY FIXED (2026-04-30)
-Investigation revealed PDFs DID download from India Code and were cached to Supabase Storage — `act_validation_cache` shows `validation_status=valid` with `cached_storage_path` for all 9. Files disappeared from storage between caching and OCR (likely storage path convention change: some docs have `documents/library/central_acts/...` path while cache has `global/acts/...`). 1 doc (BNS) fixed via GAP-3 re-embedding. 7 `storage_missing` docs need re-fetch from India Code (reset cache entries + re-run `fetch_acts_from_india_code`). 1 doc (Presidency Towns) has `validation_status=unknown`.
+**GAP-5 (P1): 9 failed india_code library docs (7 with `storage_missing`)** | Status: FIXED (2026-05-20)
+Investigation revealed PDFs DID download from India Code and were cached to Supabase Storage — `act_validation_cache` shows `validation_status=valid` with `cached_storage_path` for all 9. Files disappeared from storage between caching and OCR (likely storage path convention change: some docs have `documents/library/central_acts/...` path while cache has `global/acts/...`). 1 doc (BNS) fixed via GAP-3 re-embedding. 2026-05-14 cleanup deleted old rows and re-fetched 8 acts successfully (13/14 library docs completed). **Final fix (2026-05-20)**: 1 remaining failed doc (`environment_protection_act_1986`, `quality_flags=["zero_chunks"]`) — PDF was in storage but OCR produced 0 chunks. Reset to `pending`, OCR re-triggered via Upstash Redis LPUSH to `low` queue. **Verified**: status=`completed`, 19 chunks, all 19 with embeddings, resolution moved to `auto_fetched`. **14/14 library documents now completed.** Also cleaned 3 stale `auto_fetching` resolutions: `presidency_towns_insolvency_act_1909` → `not_on_indiacode`, `spatialmappertest` + `testtabledocument` (test artifacts) → `not_on_indiacode`. 3 orphan cache entries (`sale_of_goods_act_1930`, `specific_relief_act_1963`, `transfer_of_property_act_1882`) have cached PDFs but no matching `act_resolutions` — no action needed unless matters reference them.
 
 **GAP-6 (P1): 3 act_resolutions stuck in `auto_fetching` for 69 days** | Status: FIXED (2026-04-30)
 Data fix: 3 act_resolutions moved from `auto_fetching` → `not_on_indiacode`. Two were duplicates for `contempt_of_courts_act_1971`, one was garbage name `said_act`. Frontend now shows "Upload manually" badge. Verified: no beat task queries `auto_fetching`, no RLS filters by status, polling stops sooner (reduces API calls).
@@ -669,7 +735,7 @@ Added `fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
 **GAP-8 (P2): `chunks` vs `library_chunks` schema divergence** | Status: FIXED (2026-05-06)
 Added 5 missing columns to `library_chunks`: `fts` (tsvector), `embedding_model_version` (text), `layout_derived` (boolean), `text_start_offset` (integer), `text_end_offset` (integer). Columns intentionally NOT added: `matter_id` (library is cross-matter), `entity_ids`/`bbox_ids` (matter-scoped). Migration: `20260506000003_add_schema_parity_library_chunks.sql`.
 
-**GAP-9 (P1): Upload path fragmentation — 5 entry points, inconsistent classification** | Status: PARTIALLY FIXED
+**GAP-9 (P1): Upload path fragmentation — 5 entry points, inconsistent classification** | Status: MOSTLY FIXED (Gaps 1-6 fixed 2026-05-20; live-tested 2026-05-25; Gaps 5 UI + 7 remain)
 
 Deep blast-radius research (2026-04-30) revealed the upload system has **5 distinct entry paths** with inconsistent document type handling. This is an instance of both ARCH-003 ("remember to signal" coordination) and ARCH-001 (parallel duplicate paths).
 
@@ -685,15 +751,15 @@ Deep blast-radius research (2026-04-30) revealed the upload system has **5 disti
 
 **7 specific gaps identified:**
 
-1. **Add Documents dialog has no type selector or auto-detection (P1)**: `UploadDropzone.tsx` accepts `documentType` prop but `AddDocumentsDialog.tsx` never passes it — defaults to `case_file`. Backend safety net (`_detect_act_from_filename`) catches obvious filenames but user gets no visibility that their file was reclassified and may be confused when the doc "disappears" from the document list (goes to library). Files that are acts but don't match the regex (e.g., "BNS_2023.pdf") silently enter the wrong pipeline.
+1. **~~Add Documents dialog has no type selector or auto-detection (P1)~~**: **FIXED (2026-05-20)** — Added document type selector (4 options: Case File, Act/Statute, Annexure, Other) to `AddDocumentsDialog.tsx` above the dropzone, matching the Upload Wizard's pattern. Passes selected type to `UploadDropzone` via existing `documentType` prop. Shows "Acts are stored in the shared library" hint when act is selected. Option B chosen over Option A (modifying UploadDropzone) after 6-criteria blast-radius evaluation — avoids creating a third selector pattern and touching shared components. Also partially fixes Gap 6 (user now explicitly chooses type, reducing silent reclassification surprise).
 
-2. **ZIP extraction hardcodes all files as `case_file` (P2)**: `_extract_and_upload_zip()` (documents.py:978) uses `DocumentType.CASE_FILE` for every file inside a ZIP. No per-file act detection. The outer auto-detection at line 1143 only affects the ZIP-vs-PDF routing decision, not individual file classification. A ZIP containing "Indian Contract Act 1872.pdf" processes it as a case file.
+2. **~~ZIP extraction hardcodes all files as `case_file` (P2)~~**: **FIXED (2026-05-20)** — `_extract_and_upload_zip()` now accepts `library_service` and `document_type` params. Per-file act detection via `_detect_act_from_filename()` routes statute PDFs to `_upload_act_to_library()`. If user explicitly selected "Act / Statute", all ZIP contents go to library. Falls through to normal case_file upload on act-upload failure (continue-on-failure for rollback safety). Call site passes `get_library_service()` and the outer `document_type`.
 
-3. **Two separate Zustand stores for upload state (P2, tech debt)**: `uploadWizardStore` (278 lines, full-featured: processing stages, live discoveries, progress tracking) vs `uploadStore` (simpler: just queue + uploading flag). Same logical operation, two implementations with different capabilities. Every upload improvement must be done twice.
+3. **~~Two separate Zustand stores for upload state (P2, tech debt)~~**: **PARTIALLY FIXED (2026-05-20)** — Root cause was `documents.ts::uploadFile()` importing `uploadStore` directly via `getState()` at 7+ sites, coupling transport to UI state. Fixed by adding `UploadCallbacks` interface: `onProgress`, `onStatus`, `onCompression`, `onUploading`. When callbacks are provided, store is not updated. Both stores remain (correctly — they serve different UX flows), but the transport layer is now decoupled. Future callers (e.g. wizard path) can pass different callbacks without touching the store.
 
-4. **Bulk type change to 'act' doesn't trigger library promotion (P2)**: `PATCH /documents/bulk` (documents.py:1378-1449) sets `document_type` metadata only — does NOT call `promote_document_to_library()`. Document stays in `documents` table without library processing. Contrast with single-doc `PATCH /documents/{id}` which DOES promote. Inconsistent behavior.
+4. **~~Bulk type change to 'act' doesn't trigger library promotion (P2)~~**: **FIXED (2026-05-20)** — `bulk_update_documents` now collects doc objects in `docs_by_id` dict during validation loop, then post-write iterates: calls `promote_document_to_library()` + dispatches `promote_chunks_to_library` for each doc transitioning to act (per-doc try/except, log-but-don't-fail). Also handles the reverse: bulk demotion from act clears `migrated_to_library`/`library_document_id` and unlinks from `matter_library_links`. Write order: clear fields first, unlink second (hostile-review D2 fix — prevents invisible-document state on partial failure).
 
-5. **No reverse action to un-classify an act (P3)**: "Set as Act" exists in the three-dot menu but there's no "Set as Case File" reverse. Once a document enters `library_documents`, no UI path moves it back. Recovery requires direct DB access.
+5. **~~No reverse action to un-classify an act (P3)~~**: **BACKEND FIXED (2026-05-25), UI PARTIALLY FIXED (2026-05-25) — "Set as Case File" menu item added but UNREACHABLE in normal UI flow.** Backend demotion works: `PATCH /documents/{id}` and bulk `PATCH /documents/bulk` handle ACT→non-ACT transitions symmetrically. Bug fix 2026-05-25: `document_service._client` → `document_service.client`. **Frontend "Set as Case File" added to `DocumentActionMenu.tsx`** — menu item shows when `canEdit && isAct`, mirrors "Set as Act" pattern exactly (same handler shape, no confirmation dialog). **But live testing (2026-05-25) revealed a design gap**: when a doc is promoted to Act, `migrated_to_library=True` causes it to be filtered OUT of the document list (`document_service.py:311`). The document vanishes from the table, so the three-dot menu (and the new "Set as Case File" item) is unreachable. The inline type dropdown has the same problem — the row doesn't exist to click on. **The only working demotion paths are**: (a) inline dropdown change in the brief window between API response and list refresh (race condition), (b) bulk select if you catch the doc before refresh. **Actual fix needed (P2)**: Either show promoted acts in the document list with a visual "Promoted to Library" indicator (change the filter), or add a "Remove from Library" / "Demote" action in the `LinkedLibraryPanel` where promoted docs DO appear. The current `DocumentActionMenu` approach is architecturally correct but the document list filter makes it dead UX.
 
 6. **Backend safety net reclassifies silently — UX confusion (P2)**: When `_detect_act_from_filename` triggers on the Add Documents path, the file goes to `library_documents` and appears in LinkedLibraryPanel, not the documents list. User sees their file "disappear". Backend logs the reclassification but frontend shows no notification.
 
@@ -733,11 +799,20 @@ SharedUploadDropzone (one component, one store)
 
 **Estimated total**: ~4-5h including testing all 5 paths. Eliminates gaps 1-4, 6 permanently. Gap 5 (no un-act) is a feature request. Gap 7 (recovery mode) is nice-to-have.
 
+**Hostile-review tracked risks (2026-05-20):**
+
+| ID | Risk | Severity | Mitigation |
+|---|---|---|---|
+| HR-A2 | No `link_error` on `promote_chunks_to_library.apply_async` in bulk or single PATCH. Worker crash leaves `migrated_to_library=True` with zero library chunks — library doc permanently incomplete. | P3 (ARCH-003 shape) | Pre-existing pattern (single-doc PATCH has same). Proper fix: reconciler that checks `library_documents.status != 'completed'` with zero `library_chunks` and re-dispatches. |
+| HR-A3 | `_upload_act_to_library` in ZIP: if `create_document` succeeds but `link_to_matter` fails, orphaned `library_documents` row persists. | P4 (low probability) | Continue-on-failure design means file falls through to case_file upload. Orphan is harmless (global, no FK violations). Future maintenance sweep could clean library docs with zero `matter_library_links` and `source='user_upload'`. |
+| HR-C3 | Two acts with same title in one bulk request can race past `find_duplicates` TOCTOU window and both insert into `library_documents`. No DB unique constraint on title. | P4 (pre-existing) | Pre-existing in `promote_document_to_library`. Fix: add unique constraint on `library_documents(normalized_title)` or similar. Low priority — duplicate library docs are annoying but not data-corrupting. |
+
 **GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: FIXED + VERIFIED (2026-05-14) — 466 section titles populated across 5,031 chunks
 Regex-based section title extraction added to `chunk_library_document` (`library_tasks.py`). Detects patterns: Section/Sec./Article/Rule/Order/Schedule/Chapter at start of line. Parent chunks extract section title; children inherit parent's section or extract their own. `SearchResult` and `RerankedSearchResultItem` in `hybrid_search.py` now carry `section_title` through all 5 mapping paths (semantic, BM25, Cohere rerank, 2 fallback-to-RRF). Schema column already existed; RPCs already SELECT it. No migration needed. 12/12 regex unit tests passed. Live verification blocked by GAP-19 (OCR tasks dying before chunks are created).
 
-**GAP-11 (P2): Library document cost tracking absent** | Status: PARTIALLY FIXED (2026-05-06)
-Embedding costs fixed: `embed_library_chunks` passes `document_id=library_document_id` to `CostTracker`. **But OCR costs still lost**: `ocr_and_process_library_document` logs OCR costs with `document_id=library_document_id`, which fails the `llm_costs.document_id` FK constraint (points to `documents` table, not `library_documents`). Error: `cost_persistence_sync_failed: insert or update on table "llm_costs" violates foreign key constraint "llm_costs_document_id_fkey"`. Observed in production 2026-05-14 during E2E-003 re-fetch. **Fix**: either make `llm_costs.document_id` nullable/remove FK, or add a separate `library_document_id` column.
+**GAP-11 (P2): Library document cost tracking absent** | Status: FIXED (2026-05-25) — deployed, not yet exercised in production (needs scanned PDF to trigger Document AI path)
+Previous "fix" (2026-05-06) was broken — passed `library_document_id` as `document_id`, which violated the FK constraint on `llm_costs.document_id → documents(id)`. Both OCR AND embedding costs were silently lost (the `persist_cost` catch swallowed the FK error).
+**Fix (2026-05-25)**: Added `library_document_id UUID REFERENCES library_documents(id)` column to `llm_costs` (migration `20260525000001`). Added `library_document_id` field to `CostTracker` dataclass. Both `persist_cost()` and `persist_cost_sync()` conditionally include it (only when non-None — deploy-order-safe per hostile review P0 finding). Updated `processor.py` (OCR) and `embedder.py` (embedding) to accept and pass `library_document_id`. Updated `library_tasks.py` to pass `library_document_id=` instead of the incorrect `document_id=` at 2 call sites. **Hostile review caught P1 bug**: recursive `process_document()` call in `processor.py:324` used positional args, passing `enable_image_quality_scores` (bool) as `library_document_id` (UUID) — fixed to keyword args. **Not yet exercised**: Test uploads used pypdf (free, no cost row) and produced 0 chunks (no embedding). The `library_document_id` write path fires only for scanned PDFs (Document AI) or docs with enough content to chunk+embed. Code verified by hostile review + 40+ existing `CostTracker` callers confirmed backward-compatible.
 
 **GAP-12 (P2): Deduplication logic inconsistent across entry paths** | Status: FIXED (2026-05-06)
 All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 0.6 threshold) instead of ad-hoc inline `ilike` checks. Updated: `_upload_act_to_library()` (documents.py), `_find_library_document_by_title()` (act_validation_tasks.py), `promote_document_to_library()` (library_service.py). Each path has ilike fallback if RPC fails. Verified: RPC correctly finds duplicates with proper similarity scoring.
@@ -752,8 +827,11 @@ All 3 creation paths now use `find_library_duplicates` RPC (trigram similarity, 
 
 **GAP-16 (P3): No `error_message` column on library_documents** — When processing fails, only info is quality_flag. `documents` table has `ocr_error`; `library_documents` doesn't.
 
-**GAP-17 (P2): Library doc status-update-on-failure silently swallowed** | Status: OPEN
-Discovered 2026-05-14 during E2E-003 re-fetch. When `ocr_and_process_library_document` exhausts max retries (2), it tries to set status=FAILED (`library_tasks.py:722`). But that `update_status()` call goes to Supabase — if Supabase is still down (the same outage that caused the retries), the update raises and is **silently swallowed** (`except Exception: pass` at line 727). Document stays at `processing` with 0 chunks indefinitely. Same pattern exists in `chunk_library_document` (line 207) and `embed_library_chunks` (line 482). The `resume_stuck_pipelines` sweep (every 15 min, 30-min cutoff) is the only recovery — but during a sustained outage it also fails. **This is ARCH-PATTERNS P1 ("remember to signal from all exit paths")**: the code remembers to call `update_status`, but doesn't verify the call succeeded. Related: DPP-016, GAP-16. **Structural fix**: the sweep should be the primary authority (reconciler pattern — observe reality, derive status) rather than relying on task-side signaling as primary + sweep as fallback.
+**GAP-17 (P2): Library doc status-update-on-failure silently swallowed** | Status: MITIGATED (2026-05-25) — observability added, sweep is primary recovery
+**Original issue**: 3 `except Exception: pass` blocks in `library_tasks.py` silently swallowed failures when setting status=FAILED during error handling. If Supabase was down, documents stayed at `processing` indefinitely with zero log evidence.
+**Fix (2026-05-25)**: Replaced 4 bare `except Exception: pass` blocks with `except Exception as e: logger.error(...)` at lines ~248 (chunk failure), ~524 (embed failure), ~847 (OCR max retries), ~1062 (promote OCR fallback dispatch). Phase 2 research found a 4th block (line 1062) that Phase 1 missed — swallows failed OCR fallback dispatch, not a status update. Each log includes structured event name (`status_update_on_failure_swallowed` or `ocr_fallback_dispatch_swallowed`), the original error, and the library_document_id. **Control flow unchanged** — the `pass` behavior is the same, only observability is added.
+**Recovery**: `resume_stuck_pipelines` sweep (GAP-18 fix, 2026-05-14) catches all 4 scenarios within 15-75 minutes. The sweep is effectively the primary authority (ARCH-003 reconciler stepping stone). Task-side status writes are belt-and-suspenders.
+**Not triggered in production** (2026-05-25) — requires Supabase outage during library task failure. Worker logs show clean task execution with the new code deployed. Related: DPP-016, GAP-16.
 
 **GAP-18 (P1): `resume_stuck_pipelines` early return skips library recovery** | Status: FIXED (2026-05-14)
 `maintenance_tasks.py:1185` had `return results` when no regular `documents` were stuck — this returned BEFORE reaching the library_documents recovery at line 1462. Library recovery was **dead code** whenever no regular docs were stuck (the common case). This is why E2E-003 docs were never auto-recovered. **Fix**: removed early return, added `or []` guards on `stuck_docs.data`. The sweep now correctly falls through to the library check. Verified in production: sweep at 08:25 found and dispatched 4 library docs (`resumed=4`). Related: GAP-17, E2E-003.
@@ -786,7 +864,125 @@ Discovered when `ocr_and_process_library_document` dispatched `chunk_library_doc
 
 ---
 
-**Common thread across all seven**: implicit coordination through convention instead of explicit coordination through structure. Two pipelines that "should" stay in sync (ARCH-001), four queues that "should" be isolated (ARCH-002), a chain that "should" reach its terminal task (ARCH-003), 14 LLM call sites that "should" honor the rate limiter (ARCH-004), a Postgres function that "should" stay signature-compatible across two repos (ARCH-005), 36 TypeScript files that "should" mirror Pydantic models exactly (ARCH-006), a library subsystem with 4 entry paths that "should" all dispatch OCR (ARCH-007). None are enforced by the architecture, all have been violated in production, and each violation has cost a debugging session — sometimes a multi-day one. The fix in every case is the same shape: **make the right thing the only possible thing.** Structure beats vigilance.
+### FE-ARCH-01: Matter Workspace Has No Convergence Point — 7 Feature Panels Each Fetch, Judge, and Fail Alone
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (Architectural — frontend) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-20 |
+| **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
+
+**Description**: Opening a matter renders the workspace shell unconditionally, then **~29 API calls fan out** from **7 feature panels** (Summary 1, Documents 1, Timeline 7, Citations 6, Contradictions 2, Entities 9, Verification 3 independent fetch hooks). Nothing decides "does this matter exist / may this user see it" *once, before* the panels render. On a 404, `matterStore.fetchMatter()` catches the error and fabricates a `{ title: 'Untitled Matter' }` placeholder — swallowing the failure so the shell renders happily while every panel independently 404s (18 console errors observed in audit). `MatterProcessingStatus` (`types/matter.ts:197`) is typed `'processing' | 'ready' | 'needs_attention'` but `'needs_attention'` is never set; there is no `'failed'` state, so a matter whose only document failed processing renders as "Ready" on the dashboard. `ApiErrorBoundary` (`components/ui/api-error-boundary.tsx`) is fully implemented but has **zero usages**.
+
+**Why it's bad**: distributed not-found / authorization / error handling with no central authority — every panel must *remember* to handle 404/empty/auth, and they each implement their own error UI (5 explicit `*Error` components + 2 inline, inconsistent contracts). The placeholder fabrication actively hides the failure from the shell, which is why FE-003 surfaces as 18 console errors instead of a clean "matter not found" page. Same root cause across FE-003, FE-007 (wrong "Ready" badge), FE-011 (stuck spinner) — and amplifies FE-022's 503 storm because every retry re-runs 29 independent fetches.
+
+**Target architecture**: one matter-existence/authorization gate in `matter/[matterId]/layout.tsx` (or server check + `not-found.tsx`) that resolves *once*; panels render only behind it. Add `'failed'` to `MatterProcessingStatus`. Delete the placeholder-fabrication path (let the error propagate). Wire `ApiErrorBoundary` around the panel region.
+
+**ARCH-PATTERNS map**: P1 (every panel must remember to handle 404/empty/auth — no convergence point), P4 (`ApiErrorBoundary` built but not required), P7 (placeholder fabrication is signaling failure in a language the framework doesn't speak), P8 (7 sibling panels with inconsistent error contracts).
+
+**Detector** (run from repo root):
+```
+rg -n "Untitled Matter" frontend/src/stores/matterStore.ts
+rg -n "MatterProcessingStatus" frontend/src/types/matter.ts
+rg -n "ApiErrorBoundary|withApiErrorBoundary" frontend/src
+find frontend/src/app -name "error.tsx" -o -name "not-found.tsx" -o -name "loading.tsx"
+```
+
+**Census (2026-05-20)**: 29 independent fetch hooks · 0/29 route segments with `not-found.tsx` · 3/29 with `error.tsx` · `ApiErrorBoundary` 0 uses.
+
+**Files**: `frontend/src/stores/matterStore.ts:276-300`, `frontend/src/types/matter.ts:197`, `frontend/src/components/ui/api-error-boundary.tsx:41-103`, `frontend/src/app/matter/[matterId]/layout.tsx`, `frontend/src/components/features/matter/MatterWorkspaceWrapper.tsx`, plus 7 feature panels under `frontend/src/components/features/{summary,document,timeline,citation,contradiction,entities,verification}/*Content.tsx`.
+
+---
+
+### FE-ARCH-02: No Layout/Responsive System — Responsiveness Is a Per-Component Convention
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (Architectural — frontend) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-20 |
+| **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
+
+**Description**: There is **no `useMediaQuery` / `useBreakpoint` / `useViewport` primitive** anywhere in `frontend/src` (verified: zero matches). Responsiveness is **68 files hand-adding raw Tailwind `sm:`/`md:`/`lg:` classes**, 140 total occurrences. The matter two-pane layout (`WorkspaceContentArea.tsx` + `qaPanelStore.ts`) supports four panel positions (right/bottom/float/hidden) but **none is selected by viewport** — the position is hardcoded and only the user can change it, so on mobile the "Ask jaanch" panel stays side-by-side. No `scrollbar-gutter` anywhere — causes the content re-centering observed in FE-022.
+
+**Why it's bad**: "be responsive" is an instruction every component is trusted to follow individually. Nothing *owns* the question "what does the layout do below 768px?" — so the matter shell simply never got an answer, and no structure or test catches that it didn't. Generates the entire mobile-broken cluster (FE-001, FE-002, FE-005, FE-006) and contributes to FE-022.
+
+**Target architecture**: a `useBreakpoint` hook + a workspace layout component that *structurally* collapses the Q&A panel to a drawer below the tablet breakpoint. "Mobile" then becomes one decision in one place, not 68. Add `scrollbar-gutter: stable` to globals.
+
+**ARCH-PATTERNS map**: P4-shaped (the structural primitive that should exist and be mandatory simply doesn't; no exact catalog match — this is a new frontend variant of the wall-vs-sticky-note frame).
+
+**Detector** (run from repo root):
+```
+rg -n "useMediaQuery|useBreakpoint|useViewport|matchMedia" frontend/src   # expect ~0
+rg -l "(sm|md|lg|xl|2xl):" -g "*.tsx" frontend/src                       # 68 files
+rg -ln "ResizablePanelGroup" -g "*.tsx" frontend/src                      # 4 non-collapsing splits
+rg -n "scrollbar-gutter" frontend/src                                     # expect 0
+```
+
+**Census (2026-05-20)**: 0 responsive primitives · 68 files / 140 raw breakpoint usages · 4 non-collapsing split layouts · 0 `scrollbar-gutter`.
+
+**Files**: `frontend/src/components/features/matter/WorkspaceContentArea.tsx`, `frontend/src/stores/qaPanelStore.ts`, `frontend/src/components/features/export/ExportBuilder.tsx:320`, `frontend/src/components/features/pdf/PDFSplitView.tsx:133`, `frontend/src/app/globals.css`, `frontend/tailwind.config.ts`, plus 68 files with raw breakpoint classes (regenerable via detector).
+
+---
+
+### FE-ARCH-03: Loading Skeletons Are a Parallel Hand-Synced Copy of the Real UI
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Architectural — frontend) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-20 |
+| **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
+
+**Description**: `components/ui/skeleton.tsx` is a generic pulsing `<div>` accepting arbitrary `className`. Every feature skeleton (**~47 definitions**, **335 `<Skeleton>` uses**) is a separate, hand-authored component with hardcoded `h-`/`w-` dimensions that do not derive from the real component. Two implementations of the same UI, kept dimensionally in sync by hand. When a real component's layout changes, its skeleton silently drifts → content jumps when real data replaces the skeleton (contributes to FE-022's CLS 0.1138).
+
+**Why it's bad**: same disease as ARCH-006 (hand-mirrored types across boundaries), at the skeleton↔real-component boundary. Drift is invisible — no compile error when skeleton and real component disagree about dimensions, only a visible layout shift at runtime.
+
+**Target architecture**: a skeleton should be the *real* component rendered in a "skeleton" mode (same DOM, same dimensions, shimmer instead of content) — one source of truth, so the skeleton cannot drift. One architectural change retires all ~47 instances.
+
+**ARCH-PATTERNS map**: P5 (hand-mirrored representations, drift invisible — the wall is codegen / derive-one-from-the-other; same shape as ARCH-006 at a different boundary), P2 (two implementations of the same logical UI).
+
+**Detector** (run from repo root):
+```
+rg -n "(function|const|export)\s+\w*Skeleton" -g "*.tsx" -g "!*.test.tsx" frontend/src
+rg -c "<Skeleton" -g "*.tsx" frontend/src
+```
+
+**Census (2026-05-20)**: ~47 skeleton definitions across ~42 files · 335 `<Skeleton>` uses · 0 codegen / shared skeleton-mode mechanism.
+
+**Files**: `frontend/src/components/ui/skeleton.tsx` (primitive), `frontend/src/components/features/processing/ProcessingSkeleton.tsx` (8 hand-authored skeletons at lines 15,40,59,91,119,154,197,220), plus ~40 additional files (regenerable via detector).
+
+---
+
+### FE-ARCH-04: No Presentation/Format Layer — Dates, Counts, and Status Formatted Ad Hoc at Every Call Site
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Architectural — frontend) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-20 |
+| **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
+
+**Description**: `frontend/src/lib/utils.ts` contains exactly one helper (`cn()`). There is no shared formatter. Census: **8 separate `formatDate()` implementations** across 8 files (each producing a different output), **55 `toLocaleDateString` / `toLocaleString` / `toLocaleTimeString` call sites** (varying locale/options), **16 `date-fns` `format()` calls** isolated to the timeline module (a second date library), **0 `pluralize()` helper**, **87 ad-hoc count strings** (83 hand-written `=== 1 ?` ternaries + **4 hardcoded plurals** that render "1 documents" / "1 pages"). The same logical operation reimplemented N times; representations drift. The one partial exception — `utils/formatRelativeTime.ts`, used in 4 places — proves the model works when a shared util exists.
+
+**Why it's bad**: ARCH-006 again, this time inside the frontend repo. Eight reimplementations of date-formatting drift; pluralization-by-convention guarantees "1 documents" / "1 citations" bugs reappear. Generates FE-013 / FE-014 / FE-015 / FE-016 / FE-017 / FE-018.
+
+**Target architecture**: a `frontend/src/lib/format/` layer — `formatDate` / `formatDateTime` / `formatRelative`, `pluralize` / `formatCount` — built on one date library, plus an ESLint rule banning raw `toLocaleDateString` in components (the helper becomes the only way). Migrate the ~71 date call sites and 87 count strings incrementally.
+
+**ARCH-PATTERNS map**: P4 (helper-that-should-be-only-API simply doesn't exist; the wall is the layer + ESLint ban), P2 (8 reimplementations of `formatDate`).
+
+**Detector** (run from repo root):
+```
+rg -n "(function|const)\s+(formatDate|formatDateTime|formatDateRange)" -g "!*.test.*" frontend/src
+rg -nc "toLocaleDateString|toLocaleString|toLocaleTimeString|Intl\.DateTimeFormat" -g "!*.test.*" frontend/src
+rg -n "\bformat\(" -g "!*.test.*" frontend/src        # filter to date-fns
+rg -n "(=== 1 \?|!== 1 \?)" -g "!*.test.*" frontend/src
+```
+
+**Census (2026-05-20)**: 8 `formatDate` impls · 55 `Intl` call sites · 16 `date-fns` calls · 87 count strings · 4 hardcoded plural bugs.
+
+**Files**: `frontend/src/lib/utils.ts` (the gap); 8 `formatDate` definitions in `StatementSection.tsx:43`, `DocumentList.tsx:115`, `TimelineRenderer.tsx:32`, `CurrentStatusSection.tsx:51`, `VerificationBadge.tsx:36`, `TimelineHeader.tsx:47`, `LiveDiscoveriesPanel.tsx:90`, `formatRelativeTime.ts:108`; the 4 acute plural bugs: `MatterCard.tsx:169`, `MatterCard.tsx:217`, `OCRQualityDetail.tsx:141`, `lib/utils/citationGrouping.ts:158`.
+
+---
+
+**Common thread across all eleven**: implicit coordination through convention instead of explicit coordination through structure. Backend: two pipelines that "should" stay in sync (ARCH-001), four queues that "should" be isolated (ARCH-002), a chain that "should" reach its terminal task (ARCH-003), 14 LLM call sites that "should" honor the rate limiter (ARCH-004), a Postgres function that "should" stay signature-compatible across two repos (ARCH-005), 36 TypeScript files that "should" mirror Pydantic models exactly (ARCH-006), a library subsystem with 4 entry paths that "should" all dispatch OCR (ARCH-007). Frontend: 7 matter panels that "should" each handle 404/empty/auth (FE-ARCH-01), 68 files that "should" each remember their own breakpoints (FE-ARCH-02), ~47 skeletons that "should" stay dimensionally in sync with their real components by hand (FE-ARCH-03), and 87 count-strings + 8 `formatDate` impls that "should" agree on format (FE-ARCH-04). None are enforced by the architecture, all have been violated in production, and each violation has cost a debugging session — sometimes a multi-day one. The fix in every case is the same shape: **make the right thing the only possible thing.** Structure beats vigilance.
 
 ---
 
@@ -1506,27 +1702,27 @@ Backend guard (`_check_processing_status()`) remains as safety net for stale fro
 ### UX-015: Processing Page Stuck at 0% After Act Upload (Library Path)
 | Field | Value |
 |-------|-------|
-| **Severity** | P1 (High — user sees broken UI after successful upload) |
-| **Status** | OPEN |
+| **Severity** | P2 (Medium — downgraded from P1: summary job unsticks page in ~5-10s without fix) |
+| **Status** | FIXED (2026-05-25) |
 | **Date Found** | 2026-04-30 |
 | **Source** | GAP-1 verification testing |
 
-**Description**: When a user uploads an Act PDF that matches an existing library document, the upload succeeds (file linked via `matter_library_links`), but the processing page (`/upload/processing`) stays stuck at "Stage 1 of 5: Uploading files" at 0% forever.
+**Description**: When a user uploads an Act PDF via the Upload Wizard, the processing page (`/upload/processing`) showed slow progress because the library path creates no `processing_jobs` for document pipeline stages. Originally documented as "stuck at 0% forever" — but live testing (2026-05-25) revealed the summary pre-generation job creates a `processing_jobs` row, so the page would unstick in ~5-10s without the fix. Severity downgraded from P1 to P2.
 
-**Root cause**: The library path (branch 1 in `_upload_act_to_library`) links an existing library doc without creating a `documents` row or a `processing_jobs` row. The processing page polls `jobsApi.getStats(matterId)` which queries `processing_jobs` — with 0 jobs, it never sees progress. The `useProcessingStatus` hook never returns `isComplete: true`.
+**Root cause**: The library path (both branches of `_upload_act_to_library`) creates no `documents` row and no document-pipeline `processing_jobs`. The processing page polls `jobsApi.getStats(matterId)` and checks `total > 0`. The summary job provides `total=1`, but only after ~5-10s of the user staring at "Stage 1 of 5: Uploading files" at 0%.
 
-**Affected paths**: Any Act upload that links to an existing completed library doc (branch 1). New library docs (branch 2, GAP-1 fix) also lack processing_jobs — the OCR runs in the library pipeline, not the main pipeline.
+**Fix Applied (2026-05-25)**: Frontend-only (Option C from blast-radius research). When `documentType === 'act'` and all uploads complete, the processing page sets `actUploadComplete = true`, which short-circuits `isProcessingComplete` to `true`. The page shows the completion screen immediately and redirects to the matter workspace. No backend changes, no polling changes, no timer heuristics. The `uploadWizardStore` already had `documentType` from the user's type selector.
 
-**Fix direction**: The processing page needs to detect "Act uploaded to library, no processing needed" and complete immediately. Options: (1) Backend returns a signal (`processing_needed: false`) that the frontend uses to skip polling, (2) Frontend detects 0 jobs after upload complete and auto-completes, (3) Create a lightweight processing_job for library-linked Acts.
+**Live-tested (2026-05-25)**: Uploaded `test-doc-1.pdf` as Act → processing page auto-completed instantly → redirected to `/matter/.../summary`. Confirmed the page no longer waits for the summary job.
 
-**Additional symptoms** (same root cause — 0 documents in matter):
-- Summary page stuck at "Generating Summary — Waiting in queue... 0%" — summary job created but has no documents/chunks to summarize
+**Additional symptoms** (still present for act-only matters — separate from UX-015):
 - Dashboard matter card shows "0 pages" despite linked library Act having content
 - "0% Verified, 0 Issues" — verification runs against `documents`, finds nothing
+- These are display issues for act-only matters, not processing page bugs.
 
-**Design question**: Should Acts-only matters even show summary/timeline/contradictions? Acts are reference material, not case files. The summary prompts ("What is this case about?") don't make sense for a statute.
+**Design question** (unchanged): Should Acts-only matters even show summary/timeline/contradictions? Acts are reference material, not case files.
 
-**Workaround**: User can click "Back to Dashboard" — Q&A works against library chunks. But the matter looks empty everywhere else.
+**Files changed**: `frontend/src/app/(dashboard)/upload/processing/page.tsx`
 
 ---
 
@@ -1943,8 +2139,8 @@ New user lands on empty dashboard with no guidance. "Restart Product Tour" exist
 | WPS-003 | OPEN | FIXED | Resolved by WPS-001 Layer 3 Gemini paid tier upgrade (1000 RPM) |
 | E2E-001 | OPEN | FIXED | Resolved by Tier 1 #3 summary pre-generation |
 | LLM-005 | FIXED (awaiting verification) | FIXED | Dropped stale qualifier — verified by months of production data |
-| E2E-004 | OPEN | OPEN (Phase 1 note) | Added note that Tier 1 #1 Phase 1 metadata is deployed |
-| E2E-005 | OPEN | OPEN (Phase 1 note) | Added note that screening metadata now persisted |
+| E2E-004 | OPEN | INVESTIGATED (2026-05-14) | Shadow tested 3 prompts. Model ceiling found. Metadata deployed. Decision deferred. |
+| E2E-005 | OPEN | INVESTIGATED (2026-05-14) | 93.9% GPT-4o waste confirmed. Prompt tuning saves 30% but loses 23% contradictions. Decision deferred. |
 | UX-013/014 | Out of order | Reordered | UX-014 appeared before UX-013 in file |
 | Summary table | 49 total, stale since 2026-03-19 | 72 total, accurate | Full recount including ARCH, E2E, API categories |
 | Header | 70 total | 72 total | Corrected miscount (UX-013, UX-014 not counted) |
@@ -2150,7 +2346,7 @@ group(validate_ocr, calculate_confidence, chunk_document)
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (Medium) — performance, not correctness |
-| **Status** | OPEN (Tier 1 #1 Phase 1 metadata deployed 2026-04-27; core perf issue remains) |
+| **Status** | INVESTIGATED (2026-05-14) — prompt tuning hit model ceiling; metadata deployed for ongoing ground truth |
 | **Source** | E2E verification (2026-04-17) |
 
 **Observation**: Contradiction detection consumed 40-70% of total processing time:
@@ -2160,12 +2356,16 @@ group(validate_ocr, calculate_confidence, chunk_document)
 
 The stage is O(n²) on entity count and makes individual LLM calls for each pair. Most entities with `screening_confidence=0.8-0.9` escalate from Gemini Flash to GPT-4o, adding ~$0.007/pair.
 
-**Possible optimizations**:
-1. **Raise escalation threshold** — currently 0.8-0.9 triggers GPT-4o. Raising to 0.7 would cut expensive calls
-2. **Batch screening calls** — send multiple pairs in one Gemini call instead of one-by-one
-3. **Skip low-mention entities** — entities mentioned in only 1-2 chunks can't meaningfully contradict
+**Investigation results (2026-05-14)**: Shadow tested 3 prompt variants against 181 pairs. No prompt achieves both >90% catch rate AND <40% escalation rate. The bottleneck is Gemini Flash's inability to distinguish subtle legal contradictions from complementary legal reasoning — a model capability limit, not a prompt issue. See Cluster 3 entry for full data.
+
+**Possible optimizations** (updated 2026-05-14):
+1. ~~**Raise escalation threshold**~~ — DEAD END. Gemini returns discrete values {0.0, 0.8, 0.9, 0.95, 1.0}. Threshold between 0.0 and 0.8 catches nothing.
+2. ~~**Batch screening calls**~~ — REJECTED. Context bleed on same-entity pairs.
+3. **Skip low-mention entities** — already exists at two layers (no code needed)
 4. **Parallelize entity comparisons** — currently sequential within the task
 5. **Cap pairs per entity** — already capped at 25 but some entities hit this ceiling
+6. **Prompt tuning** — INVESTIGATED, hit model ceiling. Best candidate (V3) saves 30% calls but misses 23% of contradictions. All misses are medium-severity semantic contradictions, not factual ones. Decision deferred.
+7. **Model swap (Phase 4)** — replace GPT-4o with cheaper model. Unproven, needs shadow test with new model. The 10x cost lever if quality holds.
 
 ---
 
@@ -2173,12 +2373,22 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — cost optimization |
-| **Status** | OPEN (screening metadata now persisted via Tier 1 #1 Phase 1; threshold tuning blocked — see Phase 2) |
+| **Status** | INVESTIGATED (2026-05-14) — 93.9% GPT-4o waste confirmed with data. Metadata deployed. Prompt tuning hit ceiling. |
 | **Source** | E2E verification (2026-04-17) |
 
 **Observation**: Almost every entity comparison with `screening_confidence=0.8-0.9` from Gemini Flash escalates to GPT-4o for confirmation. Most escalations result in "consistent" or "unrelated" — the GPT-4o call was wasted. Total contradiction detection costs: $0.33 + $0.87 + $1.48 + $1.26 = **$3.94 for 4 documents**.
 
-**Fix**: Analyze escalation outcomes — if >80% of escalated pairs are "consistent/unrelated", raise the threshold or trust Gemini Flash more.
+**Production data (2026-05-14, 804 pairs with metadata)**:
+- 93.9% of GPT-4o calls return non-contradiction (444/473 wasted)
+- Only 29 real contradictions found from 804 screenings (3.6% yield)
+- Monthly cost at current volume: ~$6.40/month ($2.96 screening + $3.34 comparison)
+- Wasted GPT-4o spend: ~$2.78/batch
+
+**What was tried**: 3 prompt variants shadow-tested. Best candidate (V3) reduces escalation from 65% to 45% but misses 7 of 31 known contradictions. None of the 3 are safe to deploy — see Cluster 3 for full data.
+
+**What was deployed**: GPT-4o comparison outcomes now persisted in `llm_costs.metadata` (2026-05-14). Every new comparison stores `{comparison_result, confidence, reasoning_preview}`. This builds the ground truth needed for any future optimization.
+
+**Fix**: Decision deferred. Options: (a) accept V1 status quo at $6.40/month, (b) deploy V3 with known debt (4 missed interpretive contradictions), (c) Phase 4 model swap (unproven). See Cluster 3 for full analysis.
 
 ---
 
@@ -2330,3 +2540,79 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 **Fix Applied (2026-05-13)**: Fixed SWR `shouldRetryOnError` in `useMatterSummary.ts`. Changed from `err.status >= 402` (which accidentally blocked 401 retry) to `err.status !== 401 && err.status >= 400 && err.status < 500`. Now 401 triggers SWR retry, giving the API client's token refresh interceptor a chance to refresh the Supabase JWT before the retry fires. All other 4xx errors (400, 403, 404, 422) are still non-retryable.
 
 **Files**: `frontend/src/hooks/useMatterSummary.ts`
+
+---
+
+## 10. Frontend Audit Findings (2026-05-20)
+
+> Symptoms surfaced by a Playwright-driven frontend audit on 2026-05-20. Evidence (screenshots, viewport measurements, console captures, repro steps, suggested fixes) lives in `FRONTEND-AUDIT-2026-05-20.md`. Architectural root causes are tracked as **FE-ARCH-01..04** in §0 above. Each row's **Parent** column points at the FE-ARCH-NN debt the symptom is generated by — closing that debt is the durable fix.
+
+| ID | Sev | Status | Title | Parent |
+|----|-----|--------|-------|--------|
+| **FE-001** | P1 | OPEN | "Ask jaanch" panel never collapses on mobile (matter workspace unusable on phones) | FE-ARCH-02 |
+| **FE-002** | P1 | OPEN | Matter header buttons (Export, More) clipped off-screen at 390 | FE-ARCH-02 |
+| **FE-003** | P1 | OPEN | Invalid matter URL renders broken "Untitled Matter" shell with 18 console errors | FE-ARCH-01 |
+| **FE-004** | P2 | OPEN | Dashboard horizontal scroll at 320 + truncated stat labels ("Active Ma…", "Veri…") | FE-ARCH-02 |
+| **FE-005** | P2 | OPEN | Matter "Documents" tab label cut off on mobile | FE-ARCH-02 |
+| **FE-006** | P2 | OPEN | Verification table 1470px wide inside a squeezed mobile column | FE-ARCH-02 (compounds with FE-001) |
+| **FE-007** | P2 | OPEN | Dashboard shows "Ready" for a matter whose only document failed processing | FE-ARCH-01 |
+| **FE-008** | P2 | OPEN | Search snippets polluted with matter name repeated 2–3× | — |
+| **FE-009** | P2 | OPEN | Search returns the same document page multiple times (no dedup) | — |
+| **FE-010** | P2 | OPEN | No custom 404 page — bare Next.js default | FE-ARCH-01 |
+| **FE-011** | P2 | OPEN | "Generating Summary / Waiting in queue" spinner stuck for 20+ days | FE-ARCH-01 |
+| **FE-022** | P2 | OPEN | Page content shifts/re-centers during load (CLS 0.1138, intermittent — 503+retry triggered) | FE-ARCH-02, FE-ARCH-03 |
+| **FE-012** | P3 | OPEN | `touch` endpoint console warning on every matter open (`.json()` on empty body) | — |
+| **FE-013** | P3 | OPEN | Search result duplicates matter name (title = subtitle) | FE-ARCH-04 |
+| **FE-014** | P3 | OPEN | Generic "Document (Page N)" search labels (no filename in title) | — |
+| **FE-015** | P3 | OPEN | Pluralization not handled ("1 documents", "1 citations", "1 pages") | FE-ARCH-04 |
+| **FE-016** | P3 | OPEN | Inconsistent date formats — 7 distinct formats live simultaneously | FE-ARCH-04 |
+| **FE-017** | P3 | OPEN | Inconsistent matter-card metric ("3 documents" vs "0 pages") | FE-ARCH-04 |
+| **FE-018** | P3 | OPEN | "items need attention" count differs across views (23 vs 22) | FE-ARCH-04 |
+| **FE-019** | P3 | OPEN | Internal/technical controls exposed to end users (Embedding model dropdown, "1 worker") | — |
+| **FE-020** | P3 | OPEN | `href="#"` on source/citation links (middle-click produces dead tabs) | — |
+| **FE-021** | P3 | OPEN | Redundant filename shown twice in document viewer toolbar | — |
+
+**Coverage gaps from this audit** (also in `FRONTEND-AUDIT-2026-05-20.md` §8): logged-out landing page not audited (would have required logging out); upload end-to-end not exercised (no file submitted, avoided throwaway matter); auth flows, settings/usage, dark mode, Firefox/Safari/iOS, real devices, network throttling all uncovered.
+
+---
+
+## 10. Production Findings (2026-05-25 live testing session)
+
+> Found during live testing of GAP-9/11/17/UX-015 fixes. These are pre-existing issues, not regressions from this session's changes.
+
+### PROD-001: `identity_nodes.document_id` column does not exist
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low — logged warning, doesn't block operation) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-25 |
+| **Source** | Railway API logs during "Set as Act" promotion |
+
+**Error**: `document_features_check_failed: column identity_nodes.document_id does not exist` (code 42703). Fires during `PATCH /documents/{id}` when changing type to act. The feature-check query references `identity_nodes.document_id` which doesn't exist in the live schema.
+**Impact**: Warning logged, promotion completes successfully. The feature check fails silently — document still promoted, library linked.
+**Fix**: Find the query in `documents.py` that references `identity_nodes.document_id` and update to the correct column name (likely `entity_mentions.document_id` or similar).
+
+### PROD-002: `act_resolutions.act_document_id` FK orphan
+| Field | Value |
+|-------|-------|
+| **Severity** | P3 (Low — maintenance task handles it, logs warning) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-25 |
+| **Source** | Railway worker logs, `sync_act_resolutions_with_documents` task |
+
+**Error**: `insert or update on table "act_resolutions" violates foreign key constraint "act_resolutions_act_document_id_fkey"`. Key `(act_document_id)=(c01a7910-67c9-463a-99b2-cfe1354baa11)` is not present in `library_documents`. Fires in matter `91a4a4db-bc3d-40df-8dcc-49179ac49108`.
+**Root cause**: An `act_resolutions` row references a `library_documents` row that was deleted (likely during the 2026-05-14 cleanup of failed library docs). The sync task tries to update the resolution but the FK prevents it.
+**Fix**: Data fix — delete the orphaned `act_resolutions` row, or set `act_document_id=NULL`.
+
+### PROD-003: "Set as Case File" menu item unreachable — promoted acts filtered from document list
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (Medium — demotion UI is dead code) |
+| **Status** | OPEN |
+| **Date Found** | 2026-05-25 |
+| **Source** | Live testing of GAP-9 Gap 5 fix |
+
+**Description**: "Set as Case File" was added to `DocumentActionMenu.tsx` (2026-05-25) to enable act→case_file demotion via the three-dot menu. The code is correct and deployed. **But the menu item is unreachable**: when a doc is promoted to Act, `migrated_to_library=True` causes the document list query to filter it out (`document_service.py:311`). The row disappears from the table, so the three-dot menu can never be opened on an act document.
+**Root cause**: The `migrated_to_library` filter is correct for normal document list behavior — promoted acts should appear in the Linked Library panel, not the document list. But this makes ALL document-list actions (including type change, rename, delete, and the new "Set as Case File") unreachable for promoted docs.
+**Fix options**: (1) Add a "Show promoted" toggle/filter to the document list. (2) Add demotion action to `LinkedLibraryPanel` where promoted docs DO appear. (3) Show promoted acts in document list with a visual badge but keep them in both panels. Option 2 is simplest — the panel already shows each linked doc with an unlink button.
+**Workaround**: The inline type dropdown can catch the doc in the brief window between API response and list refresh. Bulk select can also work if the user is fast enough. Neither is a real UX path.

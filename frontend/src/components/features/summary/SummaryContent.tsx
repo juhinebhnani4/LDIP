@@ -8,20 +8,14 @@ import { Progress } from '@/components/ui/progress';
 import { useMatterSummary } from '@/hooks/useMatterSummary';
 import { usePdfSplitViewStore } from '@/stores/pdfSplitViewStore';
 import { resolveDocumentByName } from '@/lib/utils/openDocument';
-import {
-  AttentionBanner,
-  AttentionBannerSkeleton,
-  PartiesSection,
-  PartiesSectionSkeleton,
-  SubjectMatterSection,
-  SubjectMatterSectionSkeleton,
-  CurrentStatusSection,
-  CurrentStatusSectionSkeleton,
-  KeyIssuesSection,
-  KeyIssuesSectionSkeleton,
-  MatterStatistics,
-  MatterStatisticsSkeleton,
-} from './index';
+// Import siblings directly (not via './index') to avoid a barrel self-import
+// cycle: index.ts re-exports SummaryContent, so importing through it loops.
+import { AttentionBanner, AttentionBannerSkeleton } from './AttentionBanner';
+import { PartiesSection, PartiesSectionSkeleton } from './PartiesSection';
+import { SubjectMatterSection, SubjectMatterSectionSkeleton } from './SubjectMatterSection';
+import { CurrentStatusSection, CurrentStatusSectionSkeleton } from './CurrentStatusSection';
+import { KeyIssuesSection, KeyIssuesSectionSkeleton } from './KeyIssuesSection';
+import { MatterStatistics, MatterStatisticsSkeleton } from './MatterStatistics';
 
 /**
  * Summary Content Component

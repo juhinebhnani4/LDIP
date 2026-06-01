@@ -1,9 +1,9 @@
 # BUGS.md — Consolidated Bug Tracker
 
-**Last updated**: 2026-05-25 (UX-015 FIXED, GAP-11 FIXED, GAP-17 MITIGATED, GAP-9 Gap 5 UI added but unreachable PROD-003. 3 new production findings. Hostile review caught P0 migration bomb + P1 recursive arg bug before deploy.)
-**Total bugs**: 117 | **Fixed**: 73 | **Open**: 35 | **Partially Fixed**: 2 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 2
+**Last updated**: 2026-06-01 (Static×Live cross-validation audit: GAP-21/GAP-22/FE-023 new; ARCH-003/DPP-015, ARCH-007, GAP-4, GAP-11 live-corroborated. See "Static×Live Cross-Validation Audit (2026-06-01)" in §0.)
+**Total bugs**: 121 | **Fixed**: 74 | **Open**: 38 | **Partially Fixed**: 2 | **Not Reproducible**: 2 | **Not a Bug**: 2 | **Mitigated**: 2
 **Architectural debts (§0)**: 11 OPEN (ARCH-001..007 backend + FE-ARCH-01..04 frontend)
-**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29) + 1 frontend audit + 4-agent code census (2026-05-20)
+**Sources**: 4 bug report files + 2 debugging sessions + 2 architectural reviews (2026-04-13) + 1 pipeline audit (2026-04-17) + 2 E2E verifications (2026-04-17, 2026-04-29) + 1 frontend audit + 4-agent code census (2026-05-20) + 1 static×live cross-validation audit (2026-06-01)
 **Frontend audit (2026-05-20)**: architectural debts FE-ARCH-01..04 in §0 below; symptoms FE-001..022 in §10 below; evidence (screenshots, repro, console captures) in [`FRONTEND-AUDIT-2026-05-20.md`](FRONTEND-AUDIT-2026-05-20.md).
 
 ### Legend
@@ -521,6 +521,13 @@ Per-user usage tracking already exists at `backend/app/api/routes/usage.py` — 
 
 **Target architecture**: one pipeline that always chunks (chunk size = 1 for small docs is fine), or a fan-out/fan-in chord that's identical regardless of size. The page-count optimization belongs *inside* a stage, not as a top-level branch in the orchestration layer.
 
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+test -f backend/app/workers/tasks/document_tasks.py && test -f backend/app/workers/tasks/chunked_document_tasks.py && echo "BOTH PIPELINES EXIST = debt OPEN"
+wc -l backend/app/workers/tasks/document_tasks.py backend/app/workers/tasks/chunked_document_tasks.py
+```
+Current: ~6,471 + ~1,926 = ~8,397 lines split across two pipelines. Wall arrives when one file is deleted (or the two merge into one parameterized path) — the optimization for small docs lives *inside* a stage, not as a top-level fork.
+
 **Files**: `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/chunked_document_tasks.py`, `backend/app/workers/tasks/pipeline_chains.py`
 
 ---
@@ -547,6 +554,12 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **E2E evidence (2026-04-17)**: (a) Beat process shares worker process — when 4 concurrent documents saturate workers, RedBeat's lock extension gets starved → `LockNotOwnedError` → all 16 periodic tasks die silently (E2E-006, INF-010). Physical isolation of beat is needed alongside queue isolation. (b) OpenAI is a **second unpartitioned upstream** not covered in the original P3b analysis. `detect_contradictions` calls GPT-4o via `AsyncOpenAI` with **no rate limiter** — relies solely on circuit breaker catching 429s. Gemini calls in the same engine ARE rate-limited via `get_rate_limiter(LLMProvider.GEMINI)`. Same system, two LLM providers, asymmetric enforcement. At 4-doc concurrency only 1 transient OpenAI retry observed (E2E-008) and zero Gemini 429s (paid tier has ample headroom), but the structural gap (asymmetric rate-limiter enforcement) will surface at higher load.
 
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+rg -n "numReplicas|--pool|--concurrency|-Q " backend/railway.toml backend/start-worker.sh
+```
+Current: `numReplicas = 1` and one process draining `-Q default,llm,heavy,low` with `--pool=gevent --concurrency=50`. Wall arrives when ≥2 worker services consume disjoint queue sets in `railway.toml`. Sub-detector for the deeper ARCH-002b (shared Gemini quota): `rg -n "get_rate_limiter|TokenBucket" backend/app/services backend/app/engines` should show per-task-class bucket usage uniformly, not asymmetric coverage.
+
 **Files**: `backend/railway.toml`, `backend/start-worker.sh`, `backend/app/workers/celery.py`, `backend/app/services/llm/` (wherever the Gemini client lives — verify before changing), `backend/app/engines/contradiction/comparator.py` (OpenAI bypass)
 
 ---
@@ -566,6 +579,13 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 **Target architecture**: a reconciler / watchdog that derives status from observed state — *do chunks exist? embeddings? entities? citations? contradictions?* — and a periodic sweep that promotes documents to COMPLETED or REPROCESS based on what's actually in the database. Tasks become idempotent stage workers; the reconciler is the single source of truth. This is how Airflow, Temporal, and every mature workflow engine handle it. Celery alone was the wrong substrate for a pipeline this branchy.
 
 **E2E evidence (2026-04-17) — maintenance task proliferation**: 13 of 16 beat tasks are recovery/reconciliation sweeps: `recover_stale_jobs`, `cleanup_stale_chunks`, `recover_stale_chunks`, `trigger_pending_merges`, `recover_skipped_large_documents`, `recover_stuck_documents`, `fix_missing_extracted_text`, `dispatch_stuck_queued_jobs`, `sync_stale_job_status`, `sync_missing_entity_ids`, `resume_stuck_pipelines`, `sync_act_resolutions_with_documents`, `sync_citation_statuses_with_resolutions`. Each exists because a different task somewhere in the pipeline sometimes fails to transition state correctly. These are compensating mechanisms for ARCH-003 — but they're **non-converging re-dispatchers**, not true reconcilers. Proof: `trigger_pending_merges` (every 5 min) and `recover_stuck_documents` (every 15 min) dispatch `finalize_chunked_document` for ACT documents that are COMPLETED with no `extracted_text`. Finalize detects the condition, logs `finalize_skipping_no_text`, returns. Next sweep: same thing. Forever (E2E-007). The "reconciler" never converges because it re-triggers work instead of deriving correct terminal state. **Operational cost of ARCH-003: 13 sweeps × every 5-30 min × unbounded DB scans with no task timeouts.**
+
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+rg -c "_release_pipeline_lock_safe|_mark_job_completed|_dispatch_post_entity_tasks" backend/app/workers backend/app/api
+rg -c "^def (recover_|cleanup_|sync_|trigger_|fix_|dispatch_|resume_)" backend/app/workers/tasks/maintenance_tasks.py
+```
+Current: 14 call sites of `_release_pipeline_lock_safe` + 13 recovery/reconciliation sweeps compensating for the missing convergence point. Wall arrives when state is derived from observed DB by a single reconciler — and the lock-release / mark-completed call-site count drops to ≤1 (a single `try/finally` or decorator).
 
 **Files**: `backend/app/workers/tasks/document_tasks.py`, `backend/app/workers/tasks/chunked_document_tasks.py`, `backend/app/workers/tasks/pipeline_chains.py`, `backend/app/api/routes/admin/pipeline.py`, `backend/app/workers/tasks/maintenance_tasks.py` (13 recovery sweeps), `backend/app/workers/celery.py:144-275` (beat schedule)
 
@@ -587,6 +607,13 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **E2E evidence (2026-04-17) — OpenAI as a second unmanaged provider**: `engines/contradiction/comparator.py` calls GPT-4o via `AsyncOpenAI` directly — no gateway, no centralized rate limiter. The same file's Gemini calls DO go through `get_rate_limiter(LLMProvider.GEMINI)`. This asymmetry is ARCH-004 in action: the rate-limiter infrastructure exists, Gemini uses it by convention, OpenAI doesn't because the convention was never applied. The contradiction engine also owns its own model-routing logic (Gemini Flash screening → GPT-4o escalation at confidence threshold 0.65), its own retry behavior, and its own cost tracking — all of which would live inside a `ContradictionLLM` domain class in the target architecture. The escalation threshold (0.65, lowered from 0.80 per BUG-003) is a hardcoded number in the engine with no centralized configuration surface. Contradiction detection consumed 40-70% of total pipeline time in E2E (E2E-004), with up to 50 entities × 25 pairs = 1,250 LLM calls per document.
 
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+rg -l "from google.genai import types" backend/app/engines backend/app/services 2>/dev/null | grep -v "core/gemini_client" | wc -l
+rg -l "AsyncOpenAI|from openai" backend/app/engines backend/app/services 2>/dev/null | grep -v "core/" | wc -l
+```
+Current: 14 files reach past `gemini_client.py` with raw `from google.genai import types` (mostly engines/ and services/); plus `engines/contradiction/comparator.py` uses `AsyncOpenAI` directly. Wall arrives at **0** for both — all LLM calls go through `backend/app/services/llm/` domain classes (`CitationLLM`, `ContradictionLLM`, etc.) that own model selection, rate limiting, cost logging, and retry behavior internally.
+
 **Files**: `backend/app/core/gemini_client.py`, `backend/app/core/llm_rate_limiter.py`, `backend/app/core/cost_tracking.py`, plus all 14 bypass call sites listed above, plus `backend/app/engines/contradiction/comparator.py` (OpenAI direct calls, escalation logic). Also note: `.claude/skills/architecture-guard/SKILL.md` already references `backend/app/services/llm/` as a high-risk path — that path doesn't exist yet, but creating it is exactly the fix.
 
 ---
@@ -605,6 +632,13 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 
 **Target architecture**: version the RPCs explicitly. New signatures land as `search_chunks_v3` alongside the existing `search_chunks_v2`; both functions exist simultaneously; the Python client picks the version it expects via a config constant. Once the API has been deployed using `_v3` for some safe window, `_v2` is dropped in a separate, isolated migration. Migration deploy and API deploy fully decouple. This is the standard pattern for any RPC contract evolution (gRPC field deprecation, protobuf, Stripe API versioning, AWS API versioning). Costs: extra disk for duplicate function definitions during transitions; extra discipline to drop the old version.
 
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+grep -l "CREATE OR REPLACE FUNCTION \(search_\|hybrid_search\)" supabase/migrations/*.sql 2>/dev/null | wc -l
+grep -lE "CREATE OR REPLACE FUNCTION (search_|hybrid_)[a-z_]+_v[0-9]+" supabase/migrations/*.sql 2>/dev/null | wc -l
+```
+Current: 11 unversioned `CREATE OR REPLACE FUNCTION` mutations of `search_chunks` / `search_documents` / `hybrid_search`; **0** versioned. Wall arrives when (a) any new migration introducing a new signature uses `_v[0-9]+` suffix, (b) old versions are dropped only in separate migrations after the API has cut over. (GUARDRAIL-BACKLOG.md B1.5 is the smart-sticky-note that fences new instances.)
+
 **Files**: `supabase/migrations/*search*.sql` (11 files listed above), `backend/app/services/rag/pipeline_service.py`, `backend/app/services/global_search_service.py`, plus any other callers — grep for `.rpc('search_` and `.rpc('hybrid_` to enumerate
 
 ---
@@ -622,6 +656,13 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 **Why it's bad**: same "vigilance not structure" anti-pattern as ARCH-003, but at the API contract layer. A field renamed in a Pydantic model produces zero TypeScript errors — the frontend silently keeps reading the old field name, gets `undefined`, and a UI bug appears days later. A new field added to the backend never reaches the frontend until someone notices and updates the matching `.ts` file by hand. Per-incident blast radius is smaller than ARCH-001/002/003 (a broken UI, not a stuck document) — but the *frequency* is high because every single PR that touches a route runs this risk, and "the frontend is showing wrong data" is exactly the kind of bug users see immediately. A non-trivial fraction of the open UX bugs in BUGS.md sections 4–9 likely have type drift somewhere upstream of them. This is the architectural reason "small frontend fixes" keep needing follow-ups.
 
 **Target architecture**: add `openapi-typescript` as a frontend dev dependency (one package, generates pure types — does not generate clients, does not impose a framework). Add an npm script `gen:api-types` that fetches `https://jaanch-ai.up.railway.app/openapi.json` (or a local backend) and writes `frontend/src/lib/api/types.generated.ts`. Wire it into the frontend build so the file is regenerated on every CI run and stale types fail the build. Hand-written API client functions in `lib/api/*.ts` keep their *function bodies* (the request shape, error handling, etc.) but import their *types* from the generated file. Renaming a Pydantic field becomes a TypeScript compile error in seconds, not a UI bug in days.
+
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+find frontend/src/lib/api -name "*.ts" -not -name "*.test.ts" -not -name "*.generated.ts" 2>/dev/null | wc -l
+ls frontend/src/lib/api/*.generated.ts 2>/dev/null && echo "codegen present" || echo "codegen ABSENT"
+```
+Current: 36 hand-written `.ts` files mirroring FastAPI Pydantic models; **0** generated files. Wall arrives when `types.generated.ts` (produced by `openapi-typescript` against `/openapi.json`) is the source of truth and the 36 hand-written files become thin wrappers that import generated types — see GUARDRAIL-BACKLOG.md B1.6.
 
 **Files**: 36 files in `frontend/src/lib/api/`, `frontend/package.json`, `backend/app/main.py` (FastAPI app — already emits OpenAPI, just needs to be consumed)
 
@@ -681,6 +722,14 @@ This means the real fix has TWO parts: (a) physical worker isolation per queue, 
 **Recommended sequence**: 1+2 first (quick win, covers most cases), then 3 (recovery path), then 4 (catches edge cases). Flaw 5 is structural debt to track but not address immediately.
 
 **Status update (2026-04-30)**: Fixes 1+2 deployed and verified in production. Document type selector UI added to upload wizard (`UploadWizard.tsx`), filename heuristic auto-detects Acts in both frontend (`uploadWizardStore.ts`) and backend (`documents.py:_detect_act_from_filename`). "TORTS Act 1992.pdf" now correctly auto-selects "Act / Statute" and routes to library pipeline. However, blast-radius research revealed the Add Documents dialog (Path 2) has NO type detection and NO selector — fix only covers wizard path. See GAP-9 for full 5-path analysis and unification plan.
+
+**Detector** (run from repo root, retrofitted 2026-05-26 per B4.4):
+```
+rg -ln "document_type\s*[=:]\s*['\"]?(act|case_file|statute)" backend/app/services backend/app/workers backend/app/api
+ls backend/app/services/classification/ 2>/dev/null && echo "classification dir exists" || echo "no shared classifier"
+rg -n "_detect_act_from_filename|classify_document" backend/app/api/routes/documents.py
+```
+Current: 4–5 entry paths each make their own classification decision; no shared `classify_document()` gate; filename heuristic (`_detect_act_from_filename`) exists for the upload wizard path only. Wall arrives when (a) ONE function fronts all entry paths, (b) post-OCR reconciliation can flip a misclassified document to the correct pipeline AND clean up wasted entities/contradictions, (c) the Add Documents dialog (Path 2 per the 2026-04-30 audit) gains the same selector + heuristic.
 
 **Key files**:
 - Upload endpoint: `backend/app/api/routes/documents.py:407-523, 1041-1149`
@@ -810,7 +859,7 @@ SharedUploadDropzone (one component, one store)
 **GAP-10 (P2): `section_title` always NULL in library_chunks** | Status: FIXED + VERIFIED (2026-05-14) — 466 section titles populated across 5,031 chunks
 Regex-based section title extraction added to `chunk_library_document` (`library_tasks.py`). Detects patterns: Section/Sec./Article/Rule/Order/Schedule/Chapter at start of line. Parent chunks extract section title; children inherit parent's section or extract their own. `SearchResult` and `RerankedSearchResultItem` in `hybrid_search.py` now carry `section_title` through all 5 mapping paths (semantic, BM25, Cohere rerank, 2 fallback-to-RRF). Schema column already existed; RPCs already SELECT it. No migration needed. 12/12 regex unit tests passed. Live verification blocked by GAP-19 (OCR tasks dying before chunks are created).
 
-**GAP-11 (P2): Library document cost tracking absent** | Status: FIXED (2026-05-25) — deployed, not yet exercised in production (needs scanned PDF to trigger Document AI path)
+**GAP-11 (P2): Library document cost tracking absent** | Status: FIXED (2026-05-25) — deployed, not yet exercised in production (needs scanned PDF to trigger Document AI path) — **2026-06-01 re-check: `llm_costs.library_document_id` still NULL on all ~50k rows, no `library_*` operation; confirm on next library ingest before trusting attribution (see §0 Static×Live audit).**
 Previous "fix" (2026-05-06) was broken — passed `library_document_id` as `document_id`, which violated the FK constraint on `llm_costs.document_id → documents(id)`. Both OCR AND embedding costs were silently lost (the `persist_cost` catch swallowed the FK error).
 **Fix (2026-05-25)**: Added `library_document_id UUID REFERENCES library_documents(id)` column to `llm_costs` (migration `20260525000001`). Added `library_document_id` field to `CostTracker` dataclass. Both `persist_cost()` and `persist_cost_sync()` conditionally include it (only when non-None — deploy-order-safe per hostile review P0 finding). Updated `processor.py` (OCR) and `embedder.py` (embedding) to accept and pass `library_document_id`. Updated `library_tasks.py` to pass `library_document_id=` instead of the incorrect `document_id=` at 2 call sites. **Hostile review caught P1 bug**: recursive `process_document()` call in `processor.py:324` used positional args, passing `enable_image_quality_scores` (bool) as `library_document_id` (UUID) — fixed to keyword args. **Not yet exercised**: Test uploads used pypdf (free, no cost row) and produced 0 chunks (no embedding). The `library_document_id` write path fires only for scanned PDFs (Document AI) or docs with enough content to chunk+embed. Code verified by hostile review + 40+ existing `CostTracker` callers confirmed backward-compatible.
 
@@ -861,6 +910,36 @@ Discovered when `ocr_and_process_library_document` dispatched `chunk_library_doc
 2. **Explicit dispatch, not reconciler** — Every entry path dispatches OCR synchronously. Maintenance sweep stays as safety net, not primary dispatcher. Reconciler deferred until beat isolation is stable.
 3. **Completion verification** — Never set status=completed without checking chunk count > 0 AND embedding count > 0.
 4. **Fix order**: GAP-1 (5 lines) → GAP-2 (10 lines) → GAP-3 (investigate) → GAP-5 (data fix). GAP-4, GAP-7, GAP-8, GAP-11, GAP-12 all FIXED (2026-05-06).
+
+---
+
+#### Static×Live Cross-Validation Audit (2026-06-01) — AST graph × live DB, 3 new findings + 3 live corroborations
+
+> Method: two-lens sweep — static structure (`ldip-arch-map/GRAPH_REPORT.md`, 11k nodes, 36% inferred edges treated as hypotheses) cross-validated against **live prod DB** (Supabase MCP) and **Redis** (Upstash MCP). DB was quiescent at audit time (0 stuck docs, 0 active jobs, 0 orphan rows, 0 orphan locks), so this surfaces *latent/structural* and *masked-by-status* faults, not load-time races. **Every finding is [verified-in-code/DB]; none rests on an inferred-only edge.** Scope did NOT cover: logic/correctness quality, security/RLS, performance/scale, frontend runtime behavior, RAG retrieval quality — those need separate audits.
+
+**GAP-21 (P1): Library doc marked `completed` with PARTIAL embeddings — completion guard only catches all-or-nothing** | Status: OPEN
+- **Both lenses.** `embed_library_chunks` ([library_tasks.py:471-492](backend/app/workers/tasks/library_tasks.py#L471)) blocks completion only when `embedded_count == 0` (ALL batches failed). A **partial** failure (some batches embed, some don't) still sets `status=COMPLETED`, leaving NULL-embedding chunks behind. The re-embed query at [library_tasks.py:325](backend/app/workers/tasks/library_tasks.py#L325) (`.is_("embedding","null")`) *would* fix it on re-run — but `resume_stuck_pipelines` keys off `status`, and `status='completed'` is now invisible to recovery. **Classic ARCH-003: completion-by-convention masks the doc from the reconciler.**
+- **Live evidence (2026-06-01):** `library_documents` "Income Tax Act 1961" = `completed`, 2422 chunks, **1422 (59%) with `embedding IS NULL`** → 59% of the statute silently unsearchable in RAG. (id `9f60ba8b-…`, embedded 2026-05-14.)
+- This directly refutes Architecture Recommendation #3 above ("checking … embedding count > 0") — `> 0` is satisfied by 1000/2422. The correct guard is `embedded_count == chunk_count` OR a derived-state reconciler that re-dispatches any `completed` library doc with `library_chunks WHERE embedding IS NULL`. Related: GAP-2, GAP-3, HR-A2, ARCH-003.
+
+**GAP-22 (P2): Voyage dual-embedding is a dead parallel retrieval path — `embedding_voyage` ~empty system-wide, but twin RPCs + provider switch remain (GAP-4 regression)** | Status: OPEN
+- **Both lenses.** `embedding_voyage` is **NULL on 100% of `library_chunks` (5178/5178)** and **99% of `chunks` (3386/3424)** [verified-in-DB 2026-06-01]. The library Voyage writer is best-effort and swallowed in try/except ([library_tasks.py:424-454](backend/app/workers/tasks/library_tasks.py#L424)). Yet retrieval keeps **twin RPCs** (`match_library_chunks_for_matter` vs `…_voyage`) gated on `embedding_provider` ([hybrid_search.py:1217/1339/1632](backend/app/services/rag/hybrid_search.py#L1217)) plus a whole subsystem (`voyage_embedding_tasks.py`, `embedding_migration.py`). **Flipping `embedding_provider="voyage"` → near-empty retrieval with no error.** Latent config-bomb + ARCH-001 (parallel duplicate path) + ARCH-005 (RPC/schema divergence).
+- **GAP-4** ("Voyage embeddings never populated") was marked FIXED (2026-05-06) — this is a **regression / never-actually-populated**; GAP-4 should be reopened or superseded by GAP-22.
+
+**FE-023 (P3): Real import cycle `tabStats.ts ↔ workspaceStore.ts`** | Status: FIXED (2026-06-01)
+- **Lens A** ([GRAPH_REPORT.md:801]). The other 3 two-file cycles are benign barrel re-exports (`page → index.ts → page`); this one is a genuine API-layer↔store circular dependency (`frontend/src/lib/api/tabStats.ts` ↔ `frontend/src/stores/workspaceStore.ts`). Works today via hoisting; a load-order/refactor change can surface `undefined`-at-import. Related: FE-ARCH cluster.
+- **Fix (2026-06-01)**: Extracted the three shared tab types (`TabId`, `TabStats`, `TabProcessingStatus`) into a dependency-free leaf module `frontend/src/stores/workspaceStore.types.ts`; `tabStats.ts` now imports them from there (severing the back-edge) and `workspaceStore.ts` re-exports them so `@/stores/workspaceStore` consumers are unchanged. **Root-cause fix, not a suppression.** Also enabled `import/no-cycle` (`error`) in `frontend/eslint.config.mjs` so any new cycle fails lint — turning this one-time graph finding into a continuous structural guard (wall, not sticky-note). Doing so surfaced a **second, previously-"benign"-labelled cycle**: `summary/SummaryContent.tsx` imported its siblings through its own barrel (`./index`), which re-exports `SummaryContent`; fixed by importing the 6 siblings directly. Verified: `tsc --noEmit` clean, `import/no-cycle` reports **0 cycles** across `src` (was 2).
+
+**FE-024 (P3): `npm run lint` is not green — 2 errors + 52 warnings, pre-existing** | Status: OPEN
+- Surfaced 2026-06-01 while wiring the FE-023 `no-cycle` guard (full `eslint src` run). **Independent of that work** — these predate it. Recorded because if/when lint is made a blocking CI gate, the **2 errors** will fail the build.
+- **2 errors** (`react-hooks/set-state-in-effect` — synchronous `setState` in an effect body → cascading re-renders, React 19): `frontend/src/components/features/entities/EntitiesContent.tsx:83` and `frontend/src/components/features/pdf/PdfViewerModal.tsx:73`.
+- **52 warnings**: 43 × `@typescript-eslint/no-unused-vars`, 5 × `react-hooks/exhaustive-deps` (can hide stale-closure bugs — worth a look, not just noise), 3 × stale `eslint-disable` directives (now no-ops, e.g. `OnboardingWizard.tsx:156`), 1 × `jsx-a11y/role-supports-aria-props`. 3 are `--fix`-able automatically.
+- **Not fixed in this pass** (out of scope — the task was the cycle guard). Decision needed: fix the 2 errors before making lint a blocking gate, or gate on cycles only.
+
+**Live corroborations of existing debts (no new ID — evidence attached here):**
+- **ARCH-003 / DPP-015** (doc `completed` while terminal contradiction task FAILED): **Live — `9. Affidavit … Nirav D Jobalia … pdf`** (case_file, id `6dfbf73d-…`) marked `completed` 2026-02-17 21:07 (16 chunks, 334 entities) but its DOCUMENT_PROCESSING job FAILED 23:16 with `error_code=CONTRADICTION_FAILED`. Two contradictory truths, no reconciliation. Notable: this is the very doc cited as the contradiction-detection "aha-moment" demo (§Business Context) — its contradictions may be missing while the UI reads "done."
+- **ARCH-007** (classification fire-and-forget, no recovery): **Live — `2. APPLICATION IN MA NO 10 OF 2023 … VOL-ll.pdf`** (id `967d5a0d-…`) is typed `document_type='act'` — a litigation application mislabelled as a statute/reference, liable to be excluded from contradiction detection and mis-routed in RAG. Same doc also shows the ARCH-003 two-truths (job FAILED `UNEXPECTED_ERROR`, doc `completed`).
+- **GAP-11** (library cost tracking): code now passes `library_document_id` ([library_tasks.py:396](backend/app/workers/tasks/library_tasks.py#L396)), but **`llm_costs.library_document_id` is NULL on all ~50k rows and there is no `library_*` operation type** [verified-in-DB 2026-06-01]. Most likely *fixed-but-unexercised* (no library ingest since the 2026-05-25 column-add). **Verify on next library ingest before trusting cost attribution.**
 
 ---
 
@@ -2220,6 +2299,7 @@ group(validate_ocr, calculate_confidence, chunk_document)
 ---
 
 ### DPP-015: `extract_citations → detect_contradictions` completion chain is a sticky note
+> **Live instance (2026-06-01):** Nirav Jobalia affidavit `completed` while contradiction job FAILED (`CONTRADICTION_FAILED`) — see "Static×Live Cross-Validation Audit (2026-06-01)" in §0.
 | Field | Value |
 |-------|-------|
 | **Severity** | P3 (Low) — already patched in DPP-012, reconciler covers gaps |

@@ -20,32 +20,12 @@ import { create } from 'zustand';
 
 import { fetchTabStats as fetchTabStatsApi, transformTabStatsResponse } from '@/lib/api/tabStats';
 
-/**
- * Tab ID type - must match route segments
- */
-export type TabId =
-  | 'summary'
-  | 'timeline'
-  | 'entities'
-  | 'citations'
-  | 'contradictions'
-  | 'verification'
-  | 'documents';
+import type { TabId, TabStats, TabProcessingStatus } from './workspaceStore.types';
 
-/**
- * Tab statistics for displaying counts and issues
- */
-export interface TabStats {
-  /** Number of items in this tab */
-  count: number;
-  /** Number of issues requiring attention */
-  issueCount: number;
-}
-
-/**
- * Processing status for each tab
- */
-export type TabProcessingStatus = 'ready' | 'processing';
+// Re-exported so existing `@/stores/workspaceStore` type imports keep working.
+// The definitions live in workspaceStore.types.ts to avoid an import cycle with
+// lib/api/tabStats.ts (see FE-023 in BUGS.md).
+export type { TabId, TabStats, TabProcessingStatus };
 
 interface WorkspaceState {
   /** Current matter ID for the workspace */

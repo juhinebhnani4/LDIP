@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Guard against circular imports re-entering the codebase (FE-023).
+  // The `import` plugin + TS resolver are already provided by
+  // eslint-config-next, so this only adds the rule. Type-only import cycles
+  // are flagged too — break them by extracting shared types to a leaf module.
+  {
+    rules: {
+      "import/no-cycle": ["error", { maxDepth: Infinity, ignoreExternal: true }],
+    },
+  },
 ])
 
 export default eslintConfig

@@ -8,7 +8,7 @@
 
 import { api } from './client'
 
-import type { TabStats, TabProcessingStatus, TabId } from '@/stores/workspaceStore'
+import type { TabStats, TabProcessingStatus, TabId } from '@/stores/workspaceStore.types'
 
 /**
  * Tab counts response structure from API.

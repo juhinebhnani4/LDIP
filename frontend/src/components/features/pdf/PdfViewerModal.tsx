@@ -67,9 +67,14 @@ export function PdfViewerModal({
   // BUG-LT3-I fix: Fetch bounding boxes for current page
   const { boundingBoxes, bboxPageNumber, fetchByPage, clearBboxes } = useBoundingBoxes();
 
-  // Reset state when document changes
+  // Reset viewer state when a (possibly different) document is opened. Resetting
+  // on the documentUrl/initialPage change is intentional — same prop-sync pattern
+  // as countdown-timer. (Could become a key-remount/render-phase reset if we ever
+  // migrate the whole reset-on-prop family; not worth forking the convention for
+  // one site — see FE-024.)
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentPage(initialPage);
       setScale(1.0);
       setTotalPages(0);

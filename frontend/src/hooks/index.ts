@@ -5,6 +5,9 @@
  * - Hooks: camelCase with `use` prefix (e.g., useMatter, useDocuments)
  */
 
+// Generic UI hooks
+export { useTransientValue } from './useTransientValue';
+
 // Auth hooks
 export { useSession, useUser, useAuthActions, useAuth } from './useAuth';
 

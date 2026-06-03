@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { useTransientValue } from '@/hooks/useTransientValue';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function getInitials(name: string | null, email: string): string {
@@ -38,7 +39,7 @@ export function ProfileSection() {
   const { profile, isLoading, updateProfile, isUpdating, updateError } = useUserProfile();
   const [fullName, setFullName] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccess, flashSaveSuccess] = useTransientValue(false, 3000);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +52,9 @@ export function ProfileSection() {
   const handleNameChange = (value: string) => {
     setFullName(value);
     setHasChanges(value !== (profile?.fullName ?? ''));
-    setSaveSuccess(false);
+    // Clear any showing "Saved!" immediately when the user edits again
+    // (also cancels a pending auto-reset timer).
+    flashSaveSuccess(false);
   };
 
   const handleAvatarClick = () => {
@@ -93,8 +96,7 @@ export function ProfileSection() {
       });
 
       await updateProfile({ avatarUrl: dataUrl });
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      flashSaveSuccess(true);
     } catch {
       setAvatarPreview(null);
     } finally {
@@ -106,8 +108,7 @@ export function ProfileSection() {
     try {
       await updateProfile({ fullName: fullName || undefined });
       setHasChanges(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      flashSaveSuccess(true);
     } catch {
       // Error handled by hook
     }

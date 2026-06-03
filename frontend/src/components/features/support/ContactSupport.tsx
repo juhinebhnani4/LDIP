@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { Copy, Mail, Check, AlertCircle, X } from 'lucide-react'
+import { useTransientValue } from '@/hooks/useTransientValue'
 
 import {
   Dialog,
@@ -149,14 +149,13 @@ export function ContactSupport({
   onClose,
   supportEmail = 'support@jaanch.ai',
 }: ContactSupportProps) {
-  const [copied, setCopied] = useState(false)
+  const [copied, flashCopied] = useTransientValue(false, 2000)
 
   const handleCopy = async () => {
     const text = formatErrorContextForCopy(errorContext)
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      flashCopied(true)
     } catch {
       // Fallback for browsers without clipboard API
       const textarea = document.createElement('textarea')
@@ -165,8 +164,7 @@ export function ContactSupport({
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      flashCopied(true)
     }
   }
 

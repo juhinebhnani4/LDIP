@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { jobsApi } from '@/lib/api/jobs';
+import { useTransientValue } from '@/hooks/useTransientValue';
 import type { ProcessingJob } from '@/types/job';
 import { canRetryJob, canSkipJob, STAGE_LABELS } from '@/types/job';
 import { useProcessingStore } from '@/stores/processingStore';
@@ -42,7 +43,7 @@ export function FailedJobCard({
   const [isRetrying, setIsRetrying] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientValue(false, 2000);
 
   const updateJob = useProcessingStore((state) => state.updateJob);
 
@@ -73,8 +74,7 @@ export function FailedJobCard({
 
     try {
       await navigator.clipboard.writeText(errorDetails);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      flashCopied(true);
       toast.success('Error details copied to clipboard');
     } catch {
       toast.error('Failed to copy to clipboard');

@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ActionableError } from '@/components/ui/actionable-error';
 import { ApiError } from '@/lib/api/client';
 import { useUser } from '@/hooks';
+import { useTransientValue } from '@/hooks/useTransientValue';
 import { EntitiesHeader } from './EntitiesHeader';
 import { EntitiesGraph } from './EntitiesGraph';
 import { EntitiesDetailPanel } from './EntitiesDetailPanel';
@@ -72,19 +73,26 @@ export function EntitiesContent({
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(() => {
     return searchParams.get('entity') || searchParams.get('entityId') || null;
   });
-  const [focusNodeId, setFocusNodeId] = useState<string | null>(() => {
-    return searchParams.get('entity') || searchParams.get('entityId') || null;
-  });
+  // focusNodeId is a transient "fly-to" pulse for the graph (distinct from the
+  // persistent selectedEntityId). A deep-linked ?entity= seeds the initial value
+  // (persists until the first pulse); every pulseFocus() auto-clears after the
+  // 600ms animation, with timer cleanup owned by the hook (FE-024).
+  const [focusNodeId, pulseFocus] = useTransientValue<string | null>(
+    null,
+    600,
+    searchParams.get('entity') || searchParams.get('entityId') || null,
+  );
 
   // Cross-tab navigation: auto-select entity from URL query param (?entity=...)
   useEffect(() => {
     const entityParam = searchParams.get('entity') || searchParams.get('entityId');
     if (entityParam && entityParam !== selectedEntityId) {
+      // Syncing local selection with the URL (an external navigation source) is
+      // intentional here — same pattern as useCrossTabNavigation. The focus pulse
+      // goes through useTransientValue, which owns its own timer cleanup.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedEntityId(entityParam);
-      setFocusNodeId(entityParam);
-      // Clear focus after animation
-      const timer = setTimeout(() => setFocusNodeId(null), 600);
-      return () => clearTimeout(timer);
+      pulseFocus(entityParam);
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -232,10 +240,9 @@ export function EntitiesContent({
   const handleFocusInGraph = useCallback(() => {
     if (selectedEntityId) {
       setViewMode('graph');
-      setFocusNodeId(selectedEntityId);
-      setTimeout(() => setFocusNodeId(null), 600);
+      pulseFocus(selectedEntityId);
     }
-  }, [selectedEntityId]);
+  }, [selectedEntityId, pulseFocus]);
 
   const handleMultiSelectModeChange = useCallback((enabled: boolean) => {
     setIsMultiSelectMode(enabled);

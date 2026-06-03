@@ -12,6 +12,7 @@ They just need to be chunked and embedded for RAG search.
 import re
 
 import structlog
+from celery.exceptions import Retry
 
 from app.models.library import LibraryDocumentStatus
 from app.services.chunking.parent_child_chunker import ParentChildChunker
@@ -321,19 +322,54 @@ def embed_library_chunks(
         retry_count=self.request.retries,
     )
 
-    try:
-        # Get chunks without embeddings
-        response = (
-            client.table("library_chunks")
-            .select("id, content")
-            .eq("library_document_id", lib_doc_id)
-            .is_("embedding", "null")
-            .order("page_number", desc=False, nullsfirst=False)
-            .order("chunk_index", desc=False)
-            .execute()
+    # RISK-2: prevent concurrent embed of the SAME library doc. A chain-dispatched
+    # embed (ocr_and_process_library_document) and a reconciler-dispatched embed
+    # (resume_stuck_pipelines) can otherwise run together for one doc → duplicate
+    # OpenAI calls + duplicate llm_costs rows (idempotent for correctness, wasteful
+    # on the OpenAI text-embedding-3-small bucket). Reuse the main pipeline's
+    # PipelineLock (Redis SET NX, 30-min TTL, fail-open) keyed by library_document_id.
+    # The embed TASK is the single convergence point both dispatch sources flow
+    # through — the lock lives here, not at each dispatch site (avoids the
+    # ARCH-003 "release at N call sites" smell; one finally releases it).
+    from app.services.distributed_lock import PipelineLock
+    _lock = PipelineLock(lib_doc_id)
+    if not _lock.acquire():
+        logger.info(
+            "embed_library_chunks_already_running",
+            library_document_id=lib_doc_id,
         )
+        return {
+            "status": "skipped_locked",
+            "library_document_id": lib_doc_id,
+            "reason": "Another embed is already running for this document",
+        }
 
-        chunks = response.data or []
+    try:
+        # Get ALL chunks without embeddings. GAP-21: PostgREST caps a single
+        # response at ~1000 rows, so a large Act (e.g. Income Tax Act, 2422
+        # chunks) silently fetched only the first 1000, embedded those, and the
+        # old guard marked the doc COMPLETED with the rest left NULL. Paginate
+        # with .range() (same pattern as library_service.list) so one run
+        # actually sees every unembedded chunk.
+        chunks: list[dict] = []
+        _page_size = 1000
+        _offset = 0
+        while True:
+            _page = (
+                client.table("library_chunks")
+                .select("id, content")
+                .eq("library_document_id", lib_doc_id)
+                .is_("embedding", "null")
+                .order("page_number", desc=False, nullsfirst=False)
+                .order("chunk_index", desc=False)
+                .range(_offset, _offset + _page_size - 1)
+                .execute()
+            )
+            _batch = _page.data or []
+            chunks.extend(_batch)
+            if len(_batch) < _page_size:
+                break
+            _offset += _page_size
 
         if not chunks:
             # No unembedded chunks — but is that because all are embedded,
@@ -388,6 +424,15 @@ def embed_library_chunks(
 
         # Process in batches
         embedded_count = 0
+        # RISK-3: track whether any zero-result batch was a TRANSIENT throttle
+        # (circuit-open / rate-limit) rather than genuine-empty content. embed_batch
+        # returns an all-None list for BOTH cases, but we hold the inputs: if a
+        # batch had non-empty content yet came back all-None, the all-empty path is
+        # impossible, so the cause is necessarily a transient OpenAI throttle. This
+        # distinction (made without changing embed_batch's shared contract) lets the
+        # completion guard bounded-retry throttles instead of marking FAILED on the
+        # first blip — while a genuinely empty/garbage doc still fails fast.
+        had_transient_failure = False
         for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
             batch = chunks[i:i + EMBEDDING_BATCH_SIZE]
             batch_texts = [c["content"] for c in batch]
@@ -399,12 +444,24 @@ def embed_library_chunks(
 
             embeddings = run_async(_embed_batch())
 
-            if embeddings is None:
+            # embed_batch returns None only on a hard error; on circuit-open /
+            # rate-limit it returns a list of all-None. Treat both as a failed
+            # batch so the warning actually fires (the bare `is None` check never
+            # tripped because the return is a list). embedded_count stays 0 for
+            # this batch either way; the completion guard below derives the real
+            # outcome from the remaining-NULL count.
+            if embeddings is None or all(e is None for e in embeddings):
+                # If this batch had real content, an all-None result can only be a
+                # transient throttle (the all-empty path can't apply). Flag it.
+                batch_has_content = any(t and t.strip() for t in batch_texts)
+                if batch_has_content:
+                    had_transient_failure = True
                 logger.warning(
                     "embed_library_chunks_batch_failed",
                     library_document_id=lib_doc_id,
                     batch_index=i // EMBEDDING_BATCH_SIZE,
                     batch_size=len(batch),
+                    transient_throttle=batch_has_content,
                 )
                 continue
 
@@ -468,13 +525,107 @@ def embed_library_chunks(
                 voyage_count=voyage_count,
             )
 
-        # Update document status — only mark completed if we actually embedded something
-        if embedded_count == 0 and len(chunks) > 0:
-            # All embedding batches failed — don't mark completed
+        # GAP-21: Derive completion from OBSERVED reality, not this run's counter.
+        # The old guard marked COMPLETED whenever embedded_count > 0, so any
+        # partial embed (some batches failed, OR the fetch was truncated at 1000)
+        # left NULL-embedding chunks behind on a "completed" doc — silently absent
+        # from semantic search and invisible to status-keyed recovery. Re-query the
+        # true remaining-NULL count (count="exact" is accurate beyond 1000 rows)
+        # and only mark COMPLETED when zero remain.
+        remaining_null = (
+            client.table("library_chunks")
+            .select("id", count="exact")
+            .eq("library_document_id", lib_doc_id)
+            .is_("embedding", "null")
+            .execute()
+        ).count or 0
+
+        if remaining_null == 0:
+            lib_service.update_status(lib_doc_id, LibraryDocumentStatus.COMPLETED)
+            logger.info(
+                "embed_library_chunks_completed",
+                library_document_id=lib_doc_id,
+                embedded_count=embedded_count,
+                total_chunks=len(chunks),
+            )
+            return {
+                "status": "embedding_complete",
+                "library_document_id": lib_doc_id,
+                "embedded_count": embedded_count,
+                "total_chunks": len(chunks),
+            }
+
+        if embedded_count == 0:
+            # No progress this run. RISK-3: distinguish a TRANSIENT throttle (a
+            # retry seconds later would succeed) from a GENUINE failure (empty /
+            # garbage content — retrying is useless). The old guard marked FAILED
+            # on either, so one transient OpenAI blip on the first batch stranded
+            # the doc (FAILED is excluded from the reconciler → manual reset).
+            if had_transient_failure:
+                # Bounded-retry via Celery's NATIVE retry counter — the worker is
+                # freed between attempts (not an in-task sleep loop), and the
+                # maintenance reconciler remains the outer safety net. Keep the doc
+                # PROCESSING (non-terminal) across retries so state reflects
+                # in-flight, not failed.
+                if self.request.retries < self.max_retries:
+                    logger.warning(
+                        "embed_library_chunks_transient_throttle_retry",
+                        library_document_id=lib_doc_id,
+                        attempted_chunks=len(chunks),
+                        remaining_null=remaining_null,
+                        retry=self.request.retries + 1,
+                        max_retries=self.max_retries,
+                    )
+                    try:
+                        lib_service.update_status(
+                            lib_doc_id,
+                            LibraryDocumentStatus.PROCESSING,
+                            quality_flags=["embedding_throttled"],
+                        )
+                    except Exception as status_err:
+                        logger.warning(
+                            "embed_throttle_status_update_swallowed",
+                            error=str(status_err),
+                            library_document_id=lib_doc_id,
+                        )
+                    # exponential-ish countdown bounded at 120s; self.retry raises
+                    # celery Retry (re-raised past the generic handler below).
+                    raise self.retry(
+                        countdown=min(120, 15 * (2 ** self.request.retries)),
+                    )
+                # Bounded retries exhausted — terminal, but LABELED as a throttle so
+                # ops can tell "OpenAI quota problem" from "bad document". FAILED
+                # stays reachable (E2E-007: no infinite recovery loop).
+                logger.error(
+                    "embed_library_chunks_throttle_exhausted",
+                    library_document_id=lib_doc_id,
+                    attempted_chunks=len(chunks),
+                    remaining_null=remaining_null,
+                    retries=self.request.retries,
+                )
+                lib_service.update_status(
+                    lib_doc_id,
+                    LibraryDocumentStatus.FAILED,
+                    quality_flags=["embedding_throttle_exhausted"],
+                )
+                return {
+                    "status": "failed",
+                    "library_document_id": lib_doc_id,
+                    "embedded_count": 0,
+                    "total_chunks": len(chunks),
+                    "remaining_null": remaining_null,
+                    "reason": "Embedding throttled; bounded retries exhausted",
+                }
+
+            # Genuine zero-progress: every attempted batch was empty/garbage content
+            # (no transient throttle seen). Retrying is useless — mark FAILED so it
+            # surfaces and stops being re-dispatched (convergence: terminal state,
+            # never an infinite recovery loop). This is also the anti-thrash backstop.
             logger.error(
                 "embed_library_chunks_all_batches_failed",
                 library_document_id=lib_doc_id,
                 attempted_chunks=len(chunks),
+                remaining_null=remaining_null,
             )
             lib_service.update_status(
                 lib_doc_id,
@@ -486,24 +637,39 @@ def embed_library_chunks(
                 "library_document_id": lib_doc_id,
                 "embedded_count": 0,
                 "total_chunks": len(chunks),
+                "remaining_null": remaining_null,
                 "reason": "All embedding batches failed",
             }
 
-        lib_service.update_status(lib_doc_id, LibraryDocumentStatus.COMPLETED)
-
-        logger.info(
-            "embed_library_chunks_completed",
+        # Partial progress: embedded some this run, but NULL chunks remain. Leave
+        # NON-terminal (processing) — do NOT mark COMPLETED. The library recovery
+        # reconciler re-dispatches embed-only for the still-NULL chunks until they
+        # converge to COMPLETED (or the all-failed branch above marks FAILED).
+        logger.warning(
+            "embed_library_chunks_partial",
             library_document_id=lib_doc_id,
             embedded_count=embedded_count,
+            remaining_null=remaining_null,
             total_chunks=len(chunks),
         )
-
+        lib_service.update_status(
+            lib_doc_id,
+            LibraryDocumentStatus.PROCESSING,
+            quality_flags=["embedding_partial"],
+        )
         return {
-            "status": "embedding_complete",
+            "status": "embedding_partial",
             "library_document_id": lib_doc_id,
             "embedded_count": embedded_count,
+            "remaining_null": remaining_null,
             "total_chunks": len(chunks),
         }
+
+    except Retry:
+        # RISK-3: self.retry() (transient-throttle bounded retry) raises celery's
+        # Retry. It MUST propagate so Celery re-queues the task — the generic
+        # handler below would otherwise swallow it into a FAILED status.
+        raise
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
@@ -530,6 +696,11 @@ def embed_library_chunks(
             error_code="EMBEDDING_FAILED",
             library_document_id=lib_doc_id,
         )
+
+    finally:
+        # RISK-2: single release point for the embed lock — runs on success,
+        # FAILED, and retry (released here, re-acquired on the next run).
+        _lock.release()
 
 
 # =============================================================================
@@ -561,19 +732,29 @@ def fire_library_callbacks(
     if not callbacks:
         return {"status": "no_callbacks", "library_document_id": library_document_id}
 
-    # Check if previous step succeeded
-    if prev_result:
-        prev_status = prev_result.get("status", "")
-        if "failed" in str(prev_status):
-            logger.warning(
-                "fire_library_callbacks_skipped_prev_failed",
+    # Only fire callbacks (e.g. citation verification) when the embed step
+    # GENUINELY completed. This gate previously fired on anything NOT containing
+    # "failed", which let verification run on:
+    #   - "embedding_partial" → verification against partial embeddings produces
+    #     false section-not-found (RISK-1(b)); and
+    #   - "skipped_locked" → after the RISK-2 lock, this task embedded nothing
+    #     (another run owns the doc), so its result says nothing about completeness.
+    # Deferring verification is strictly safer than verifying on incomplete data:
+    # the RISK-1 derived-state reconciler will fire verification exactly once the
+    # doc is truly fully embedded. (RISK-1 will replace this gate with that
+    # reconciler; until then, "only on embedding_complete" is the safe interim.)
+    if prev_result is not None:
+        prev_status = str(prev_result.get("status", ""))
+        if prev_status != "embedding_complete":
+            logger.info(
+                "fire_library_callbacks_skipped_not_complete",
                 library_document_id=library_document_id,
                 prev_status=prev_status,
             )
             return {
                 "status": "skipped",
                 "library_document_id": library_document_id,
-                "reason": f"Previous step failed: {prev_status}",
+                "reason": f"Embed not complete: {prev_status}",
             }
 
     dispatched = 0

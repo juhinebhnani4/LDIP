@@ -1498,6 +1498,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
             logger.warning("resume_stuck_processing_jobs_scan_failed", error=str(e))
 
         # Also recover stuck library documents (pending/processing for too long)
+        handled_lib_ids = set()
         try:
             stuck_lib_docs = (
                 client.table("library_documents")
@@ -1508,6 +1509,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
             )
             for lib_doc in (stuck_lib_docs.data or []):
                 lib_doc_id = lib_doc["id"]
+                handled_lib_ids.add(lib_doc_id)
 
                 # Check if chunks already exist — if so, skip OCR and just embed
                 chunk_check = (
@@ -1547,6 +1549,49 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     )
         except Exception as e:
             logger.warning("resume_stuck_library_documents_failed", error=str(e))
+
+        # GAP-21: derive "needs embedding" from OBSERVED chunk state, not status.
+        # The status-keyed query above cannot see a library doc wrongly marked
+        # COMPLETED while NULL-embedding chunks remain (the GAP-21 bug — e.g. the
+        # Income Tax Act, fetch-truncated at 1000 of 2422 chunks). Find any doc
+        # with NULL-embedding chunks and re-dispatch embed-only. Excludes 'failed'
+        # docs (we gave up — avoids re-dispatch thrash) and docs already handled
+        # above. Convergence is guaranteed by embed_library_chunks itself: every
+        # re-run reaches COMPLETED (0 NULL remain) or FAILED (no progress) —
+        # never an infinite loop (cf. E2E-007 non-converging sweeps).
+        try:
+            null_emb_rows = (
+                client.table("library_chunks")
+                .select("library_document_id")
+                .is_("embedding", "null")
+                .limit(5000)  # distinct doc-ids only; N=1 scale, far above need
+                .execute()
+            )
+            candidate_ids = {
+                r["library_document_id"] for r in (null_emb_rows.data or [])
+            } - handled_lib_ids
+            if candidate_ids:
+                reconcile_docs = (
+                    client.table("library_documents")
+                    .select("id, status")
+                    .in_("id", list(candidate_ids))
+                    .neq("status", "failed")
+                    .execute()
+                )
+                from app.workers.tasks.library_tasks import embed_library_chunks
+                for rec_doc in (reconcile_docs.data or []):
+                    embed_library_chunks.apply_async(
+                        kwargs={"library_document_id": rec_doc["id"]},
+                        queue="default",
+                    )
+                    results["resumed"] += 1
+                    logger.info(
+                        "reconcile_library_doc_null_embeddings",
+                        library_document_id=rec_doc["id"],
+                        status=rec_doc["status"],
+                    )
+        except Exception as e:
+            logger.warning("reconcile_library_null_embeddings_failed", error=str(e))
 
         logger.info(
             "resume_stuck_pipelines_completed",

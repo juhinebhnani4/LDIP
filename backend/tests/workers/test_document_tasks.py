@@ -621,7 +621,7 @@ class TestContradictionTimeoutConstants:
         """Verify the concurrency limit is defined and conservative."""
         from app.workers.tasks.document_tasks import CONTRADICTION_CONCURRENCY_LIMIT
 
-        assert CONTRADICTION_CONCURRENCY_LIMIT == 3
+        assert CONTRADICTION_CONCURRENCY_LIMIT == 5
         # Must be between 1 and 10 (resource safety)
         assert 1 <= CONTRADICTION_CONCURRENCY_LIMIT <= 10
 

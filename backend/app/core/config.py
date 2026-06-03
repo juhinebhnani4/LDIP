@@ -133,7 +133,7 @@ class Settings(BaseSettings):
     # Gemini rate limits (Paid Tier 1: 4K RPM for 3.1 Flash Lite, 1K for 2.5 Flash)
     # Using 1000 RPM as conservative target — well under 4K ceiling, safe for any model
     gemini_max_concurrent_requests: int = 10        # Max parallel Gemini API calls
-    gemini_min_request_delay: float = 0.2           # Min seconds between requests (burst dampener)
+    gemini_min_request_delay: float = 0.05          # Min seconds between requests (burst dampener, Phase 3: 0.2→0.05)
     gemini_requests_per_minute: int = 1000          # Target RPM (Paid Tier 1, conservative vs 4K limit)
     gemini_requests_per_day: int = 150000           # Daily quota (Paid Tier 1: 150K RPD for 3.1 Flash Lite)
     # OpenAI rate limits (tier 1 ~500 RPM)

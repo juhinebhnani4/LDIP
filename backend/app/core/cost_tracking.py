@@ -231,6 +231,7 @@ class CostTracker:
     operation: str
     matter_id: str | None = None
     document_id: str | None = None
+    library_document_id: str | None = None
     entity_id: str | None = None
     user_id: str | None = None
     input_tokens: int = 0
@@ -343,6 +344,8 @@ class CostTracker:
             log_data["matter_id"] = self.matter_id
         if self.document_id:
             log_data["document_id"] = self.document_id
+        if self.library_document_id:
+            log_data["library_document_id"] = self.library_document_id
         if self.entity_id:
             log_data["entity_id"] = self.entity_id
 
@@ -363,6 +366,7 @@ class CostTracker:
             "operation": self.operation,
             "matter_id": self.matter_id,
             "document_id": self.document_id,
+            "library_document_id": self.library_document_id,
             "entity_id": self.entity_id,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
@@ -716,6 +720,9 @@ class CostPersistenceService:
                        if (cid := get_correlation_id()) else {}),
                 },
             }
+            # GAP-11: only include when set — avoids PostgREST 400 if migration not yet applied
+            if tracker.library_document_id:
+                record["library_document_id"] = tracker.library_document_id
 
             result = self.supabase.table("llm_costs").insert(record).execute()
 
@@ -989,6 +996,9 @@ def persist_cost_sync(
                 **(metadata or {}),
             },
         }
+        # GAP-11: only include when set — avoids PostgREST 400 if migration not yet applied
+        if tracker.library_document_id:
+            record["library_document_id"] = tracker.library_document_id
         result = service.supabase.table("llm_costs").insert(record).execute()
         return result.data[0].get("id") if result.data else None
     except Exception as e:

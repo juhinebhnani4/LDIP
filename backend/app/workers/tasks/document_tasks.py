@@ -6183,8 +6183,8 @@ def extract_citations(
 # Configuration
 CONTRADICTION_MAX_ENTITIES_PER_RUN = 50  # Max entities to process per task run
 CONTRADICTION_MAX_PAIRS_PER_ENTITY = 25  # Max pairs per entity (cost control)
-CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS = 300  # 5 min per entity (25 pairs × 5 batch × ~10s GPT-4)
-CONTRADICTION_CONCURRENCY_LIMIT = 3  # Concurrent entity LLM streams (Railway resource safe)
+CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS = 300  # 5 min per entity (25 pairs × 3 batches of 10 × ~10s GPT-4)
+CONTRADICTION_CONCURRENCY_LIMIT = 5  # Concurrent entity LLM streams (Phase 3: 3→5, Gemini semaphore(10) is the real throttle)
 
 
 def _store_comparison_results(

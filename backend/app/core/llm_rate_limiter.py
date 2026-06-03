@@ -60,7 +60,7 @@ class RateLimiterConfig:
 DEFAULT_CONFIGS: dict[LLMProvider, RateLimiterConfig] = {
     LLMProvider.GEMINI: RateLimiterConfig(
         max_concurrent=10,  # Paid Tier 1: 4K RPM supports high concurrency
-        min_delay_seconds=0.2,  # Burst dampener, not a throttle
+        min_delay_seconds=0.05,  # Burst dampener, not a throttle (matches config.py)
         requests_per_minute=1000,  # Conservative vs 4K ceiling
     ),
     LLMProvider.OPENAI: RateLimiterConfig(

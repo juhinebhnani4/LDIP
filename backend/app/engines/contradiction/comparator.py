@@ -59,7 +59,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Rate limiting
-DEFAULT_BATCH_SIZE = 5  # Process 5 pairs in parallel (rate limit safe)
+DEFAULT_BATCH_SIZE = 10  # Process 10 pairs in parallel (Phase 3: 5→10, within max_concurrent=10 semaphore)
 
 
 # =============================================================================
@@ -539,7 +539,7 @@ class StatementComparator:
                 page_b=statement_b.page_number,
             )
 
-            response_text, input_tokens, output_tokens = await self._call_gpt4_comparison(
+            response_text, input_tokens, output_tokens, cached_tokens = await self._call_gpt4_comparison(
                 user_prompt, document_id=statement_a.document_id, matter_id=matter_id,
             )
 
@@ -557,6 +557,26 @@ class StatementComparator:
                 statement_a=statement_a,
                 statement_b=statement_b,
             )
+
+            # Persist GPT-4o cost with comparison outcome metadata
+            # (moved from _call_gpt4_comparison so parsed result is available)
+            gpt4_tracker = CostTracker(
+                provider=CostLLMProvider.OPENAI_GPT4O,
+                operation="contradiction_comparison",
+                document_id=statement_a.document_id,
+                matter_id=matter_id,
+            )
+            gpt4_tracker.add_tokens(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_tokens,
+            )
+            gpt4_tracker.log_cost()
+            await persist_cost(gpt4_tracker, metadata={
+                "comparison_result": comparison.result.value,
+                "confidence": comparison.confidence,
+                "reasoning_preview": comparison.reasoning[:200] if comparison.reasoning else "",
+            })
 
             processing_time = int((time.time() - start_time) * 1000)
 
@@ -735,18 +755,7 @@ class StatementComparator:
         if response.usage and response.usage.prompt_tokens_details:
             cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
-        # Persist cost to DB
-        tracker = CostTracker(
-            provider=CostLLMProvider.OPENAI_GPT4O,
-            operation="contradiction_comparison",
-            document_id=document_id,
-            matter_id=matter_id,
-        )
-        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
-        tracker.log_cost()
-        await persist_cost(tracker)
-
-        return response_text, input_tokens, output_tokens
+        return response_text, input_tokens, output_tokens, cached_tokens
 
     async def compare_all_entity_statements(
         self,

@@ -245,8 +245,8 @@ def chunk_library_document(
                 LibraryDocumentStatus.FAILED,
                 quality_flags=["chunking_failed"],
             )
-        except Exception:
-            pass
+        except Exception as status_err:
+            logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=library_document_id, target_status="failed", original_error=str(e))
 
         # DPP-002: Raise instead of return — Celery stops the chain
         raise LibraryPipelineTaskError(
@@ -393,9 +393,9 @@ def embed_library_chunks(
             batch_texts = [c["content"] for c in batch]
             batch_ids = [c["id"] for c in batch]
 
-            # Generate embeddings (GAP-11: pass document_id for cost attribution)
+            # Generate embeddings (GAP-11: pass library_document_id for cost attribution)
             async def _embed_batch():
-                return await embedder.embed_batch(batch_texts, document_id=lib_doc_id)
+                return await embedder.embed_batch(batch_texts, library_document_id=lib_doc_id)
 
             embeddings = run_async(_embed_batch())
 
@@ -521,8 +521,8 @@ def embed_library_chunks(
                 LibraryDocumentStatus.FAILED,
                 quality_flags=["embedding_failed"],
             )
-        except Exception:
-            pass
+        except Exception as status_err:
+            logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=lib_doc_id, target_status="failed", original_error=str(e))
 
         # DPP-002: Raise instead of return — Celery stops the chain
         raise LibraryPipelineTaskError(
@@ -756,7 +756,7 @@ def ocr_and_process_library_document(
             )
             from app.services.ocr.processor import OCRProcessor
             processor = OCRProcessor()
-            ocr_result = processor.process_document(pdf_bytes, document_id=library_document_id)
+            ocr_result = processor.process_document(pdf_bytes, library_document_id=library_document_id)
             extracted_text = ocr_result.full_text
             page_count = ocr_result.page_count
             extraction_method = "document_ai"
@@ -844,8 +844,8 @@ def ocr_and_process_library_document(
                     LibraryDocumentStatus.FAILED,
                     quality_flags=["ocr_failed"],
                 )
-            except Exception:
-                pass
+            except Exception as status_err:
+                logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=library_document_id, target_status="failed", original_error=str(e))
             return {
                 "status": "failed",
                 "library_document_id": library_document_id,
@@ -1058,8 +1058,8 @@ def promote_chunks_to_library(
                     },
                     queue="default",
                 )
-            except Exception:
-                pass
+            except Exception as dispatch_err:
+                logger.error("ocr_fallback_dispatch_swallowed", error=str(dispatch_err), library_document_id=library_document_id, storage_path=storage_path)
             return {
                 "status": "failed",
                 "library_document_id": library_document_id,

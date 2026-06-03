@@ -269,6 +269,7 @@ class OCRProcessor:
         self,
         pdf_content: bytes,
         document_id: str | None = None,
+        library_document_id: str | None = None,
         enable_image_quality_scores: bool = True,
         matter_id: str | None = None,
     ) -> OCRResult:
@@ -322,8 +323,9 @@ class OCRProcessor:
                     # Recursive call for each chunk
                     results.append(self.process_document(
                         chunk,
-                        document_id,
-                        enable_image_quality_scores,
+                        document_id=document_id,
+                        library_document_id=library_document_id,
+                        enable_image_quality_scores=enable_image_quality_scores,
                         matter_id=matter_id,
                     ))
                 
@@ -390,6 +392,7 @@ class OCRProcessor:
                 provider=CostProvider.GOOGLE_DOCUMENT_AI,
                 operation="ocr_document_ai",
                 document_id=document_id,
+                library_document_id=library_document_id,
                 matter_id=matter_id,
             )
             ocr_tracker.add_units(len(pages))

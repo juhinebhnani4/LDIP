@@ -883,10 +883,13 @@ async def _extract_and_upload_zip(
     user_id: str,
     storage_service: StorageService,
     document_service: DocumentService,
+    library_service: "LibraryService | None" = None,
+    document_type: DocumentType = DocumentType.CASE_FILE,
 ) -> list[UploadedDocument]:
     """Extract ZIP and upload each PDF individually.
 
     Includes ZIP bomb protection to prevent DoS attacks via malicious archives.
+    Per-file act detection routes statute PDFs to the shared library (GAP-9 Gap 2).
 
     Args:
         zip_content: ZIP file content as bytes.
@@ -894,6 +897,8 @@ async def _extract_and_upload_zip(
         user_id: User UUID who uploaded.
         storage_service: Storage service instance.
         document_service: Document service instance.
+        library_service: Library service for act routing (optional).
+        document_type: Outer document type from user selection (default CASE_FILE).
 
     Returns:
         List of uploaded documents.
@@ -956,7 +961,55 @@ async def _extract_and_upload_zip(
                     )
                     continue
 
-                # Upload to storage
+                # Per-file act detection (GAP-9 Gap 2):
+                # If user explicitly selected 'act', all files go to library.
+                # If user selected 'case_file', auto-detect per filename.
+                file_is_act = (
+                    document_type == DocumentType.ACT
+                    or (document_type == DocumentType.CASE_FILE and _detect_act_from_filename(filename))
+                )
+
+                if file_is_act and library_service:
+                    # Route to shared library — continue on failure
+                    try:
+                        result = await _upload_act_to_library(
+                            file_content=pdf_content,
+                            filename=filename,
+                            file_size=len(pdf_content),
+                            matter_id=matter_id,
+                            user_id=user_id,
+                            storage_service=storage_service,
+                            library_service=library_service,
+                        )
+                        lib_doc = library_service.get_document(result["library_document_id"])
+                        doc = UploadedDocument(
+                            document_id=lib_doc.id,
+                            filename=lib_doc.filename,
+                            storage_path=lib_doc.storage_path,
+                            file_size=lib_doc.file_size,
+                            document_type=DocumentType.ACT,
+                            matter_id=matter_id,
+                            ocr_queued=result.get("ocr_queued", False),
+                        )
+                        documents.append(doc)
+                        logger.info(
+                            "zip_file_routed_to_library",
+                            filename=filename,
+                            library_document_id=result["library_document_id"],
+                            is_new=result["is_new"],
+                            matter_id=matter_id,
+                        )
+                        continue  # Skip normal upload path
+                    except Exception as act_err:
+                        logger.warning(
+                            "zip_act_upload_failed_continuing_as_case_file",
+                            filename=filename,
+                            matter_id=matter_id,
+                            error=str(act_err),
+                        )
+                        # Fall through to normal upload as case_file
+
+                # Normal document upload path
                 storage_path, _ = storage_service.upload_file(
                     matter_id=matter_id,
                     subfolder="uploads",
@@ -1149,13 +1202,15 @@ async def upload_document(
 
     try:
         if file_type == "zip":
-            # Extract ZIP and upload each PDF
+            # Extract ZIP and upload each PDF (GAP-9 Gap 2: per-file act detection)
             documents = await _extract_and_upload_zip(
                 zip_content=file_content,
                 matter_id=matter_id,
                 user_id=membership.user_id,
                 storage_service=storage_service,
                 document_service=document_service,
+                library_service=get_library_service(),
+                document_type=document_type,
             )
 
             return BulkUploadResponse(
@@ -1407,12 +1462,16 @@ async def bulk_update_documents(
     Validates access for ALL documents before performing any updates.
     """
     try:
+        # Collect doc objects from validation loop for post-write promotion/demotion (GAP-9 Gap 4)
+        docs_by_id: dict[str, object] = {}
+
         # Verify user has EDITOR/OWNER access to all documents' matters
         # by checking each document's matter_id
         matter_ids_checked: set[str] = set()
         for doc_id in update.document_ids:
             try:
                 doc = document_service.get_document(doc_id)
+                docs_by_id[doc_id] = doc
                 # Only check each matter once
                 if doc.matter_id not in matter_ids_checked:
                     _verify_matter_access(
@@ -1430,6 +1489,81 @@ async def bulk_update_documents(
             document_ids=update.document_ids,
             document_type=update.document_type,
         )
+
+        # Promote to library for documents transitioning to Act (GAP-9 Gap 4)
+        # Same pattern as single-doc PATCH — per-doc try/except, log-but-don't-fail
+        if update.document_type == DocumentType.ACT:
+            library_service = get_library_service()
+            from app.workers.tasks.library_tasks import promote_chunks_to_library
+
+            for doc_id, doc in docs_by_id.items():
+                if doc.document_type == "act":
+                    continue  # Already an act — skip
+                try:
+                    library_doc_id = library_service.promote_document_to_library(
+                        document_id=str(doc_id),
+                        matter_id=str(doc.matter_id),
+                        user_id=current_user.id,
+                    )
+                    promote_chunks_to_library.apply_async(
+                        kwargs={
+                            "library_document_id": library_doc_id,
+                            "source_document_id": str(doc_id),
+                            "storage_path": doc.storage_path,
+                        },
+                        queue="default",
+                    )
+                    logger.info(
+                        "bulk_document_promoted_to_library",
+                        document_id=str(doc_id),
+                        library_document_id=library_doc_id,
+                    )
+                except Exception as promo_err:
+                    logger.error(
+                        "bulk_promote_to_library_failed",
+                        document_id=str(doc_id),
+                        error=str(promo_err),
+                    )
+
+        # Demote from library for documents transitioning FROM Act (GAP-9 Gap 5 parity)
+        elif update.document_type != DocumentType.ACT:
+            for doc_id, doc in docs_by_id.items():
+                if doc.document_type != "act":
+                    continue  # Wasn't an act — skip
+                try:
+                    raw_row = document_service.client.table("documents").select(
+                        "migrated_to_library, library_document_id"
+                    ).eq("id", str(doc_id)).execute()
+
+                    if raw_row.data:
+                        row = raw_row.data[0]
+                        lib_doc_id = row.get("library_document_id")
+                        was_migrated = row.get("migrated_to_library", False)
+
+                        if was_migrated or lib_doc_id:
+                            # Clear promotion fields FIRST (hostile-review D2 fix)
+                            document_service.client.table("documents").update({
+                                "migrated_to_library": False,
+                                "library_document_id": None,
+                            }).eq("id", str(doc_id)).execute()
+
+                        if was_migrated and lib_doc_id:
+                            library_svc = get_library_service()
+                            library_svc.unlink_from_matter(
+                                matter_id=str(doc.matter_id),
+                                library_document_id=lib_doc_id,
+                            )
+
+                    logger.info(
+                        "bulk_document_demoted_from_library",
+                        document_id=str(doc_id),
+                    )
+                except Exception as demote_err:
+                    logger.error(
+                        "bulk_demote_from_library_failed",
+                        document_id=str(doc_id),
+                        error=str(demote_err),
+                    )
 
         return BulkUpdateResponse(
             data={
@@ -1718,6 +1852,56 @@ async def update_document(
                     "promote_to_library_on_type_change_failed",
                     document_id=str(document_id),
                     error=str(promo_err),
+                )
+
+        # Detect transition FROM Act → demote from shared library (GAP-9 Gap 5)
+        # Without this, changing type back to case_file leaves migrated_to_library=true,
+        # making the document invisible in the documents list (document_service.py:311 filter)
+        elif (
+            update.document_type is not None
+            and update.document_type != DocumentType.ACT
+            and doc.document_type == "act"
+        ):
+            try:
+                # Query raw row for library fields not in Document model
+                raw_row = document_service.client.table("documents").select(
+                    "migrated_to_library, library_document_id"
+                ).eq("id", str(document_id)).execute()
+
+                if raw_row.data:
+                    row = raw_row.data[0]
+                    lib_doc_id = row.get("library_document_id")
+                    was_migrated = row.get("migrated_to_library", False)
+
+                    if was_migrated or lib_doc_id:
+                        # Clear promotion fields FIRST so document reappears in list
+                        # even if the subsequent unlink fails (hostile-review D2 fix)
+                        document_service.client.table("documents").update({
+                            "migrated_to_library": False,
+                            "library_document_id": None,
+                        }).eq("id", str(document_id)).execute()
+
+                    if was_migrated and lib_doc_id:
+                        # Unlink from matter's library panel (safe if this fails —
+                        # document is already visible again in the documents list)
+                        library_service = get_library_service()
+                        library_service.unlink_from_matter(
+                            matter_id=str(doc.matter_id),
+                            library_document_id=lib_doc_id,
+                        )
+
+                    logger.info(
+                        "document_demoted_from_library",
+                        document_id=str(document_id),
+                        library_document_id=lib_doc_id,
+                        matter_id=str(doc.matter_id),
+                    )
+            except Exception as demote_err:
+                # Log but don't fail the PATCH — the type change itself succeeded
+                logger.error(
+                    "demote_from_library_failed",
+                    document_id=str(document_id),
+                    error=str(demote_err),
                 )
 
         # Query feature availability (Story 7.2)

@@ -265,6 +265,7 @@ class EmbeddingService:
         skip_empty: bool = True,
         matter_id: str | None = None,
         document_id: str | None = None,
+        library_document_id: str | None = None,
     ) -> list[list[float] | None]:
         """Generate embeddings for batch of texts with circuit breaker protection.
 
@@ -312,7 +313,7 @@ class EmbeddingService:
 
         try:
             # Generate embeddings in batch with circuit breaker
-            embeddings = await self._call_openai_batch_embedding(valid_texts, matter_id=matter_id, document_id=document_id)
+            embeddings = await self._call_openai_batch_embedding(valid_texts, matter_id=matter_id, document_id=document_id, library_document_id=library_document_id)
 
             # Map back to original indices
             results: list[list[float] | None] = [None] * len(texts)
@@ -364,14 +365,15 @@ class EmbeddingService:
 
     @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
     async def _call_openai_batch_embedding(
-        self, texts: list[str], matter_id: str | None = None, document_id: str | None = None,
+        self, texts: list[str], matter_id: str | None = None, document_id: str | None = None, library_document_id: str | None = None,
     ) -> list[list[float]]:
         """Call OpenAI batch API with circuit breaker protection.
 
         Args:
             texts: Texts to embed.
             matter_id: Optional matter UUID for cost attribution.
-            document_id: Optional document UUID for cost attribution (GAP-11).
+            document_id: Optional document UUID for cost attribution.
+            library_document_id: Optional library document UUID for cost attribution (GAP-11).
 
         Returns:
             List of embedding vectors.
@@ -381,6 +383,7 @@ class EmbeddingService:
             operation="embedding_batch",
             matter_id=matter_id,
             document_id=document_id,
+            library_document_id=library_document_id,
         )
         response = await self.client.embeddings.create(
             model=EMBEDDING_MODEL,

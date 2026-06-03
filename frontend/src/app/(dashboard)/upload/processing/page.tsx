@@ -45,6 +45,8 @@ export default function ProcessingPage() {
   const [uploadPhaseComplete, setUploadPhaseComplete] = useState(false);
   // Recovery mode: when we have matterId from URL but no files (page refresh)
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  // Act uploads skip processing — library pipeline runs separately, no processing_jobs created
+  const [actUploadComplete, setActUploadComplete] = useState(false);
 
   // Use selector pattern for store access
   const files = useUploadWizardStore((state) => state.files);
@@ -203,12 +205,13 @@ export default function ProcessingPage() {
   const hasPartialFailures = !USE_MOCK_PROCESSING && realIsComplete && realHasFailed;
 
   // Compute completion state
-  const isProcessingComplete = USE_MOCK_PROCESSING
+  // Act uploads skip processing — library pipeline has no processing_jobs (UX-015)
+  const isProcessingComplete = actUploadComplete || (USE_MOCK_PROCESSING
     ? selectIsProcessingComplete({
         processingStage,
         overallProgressPct,
       } as Parameters<typeof selectIsProcessingComplete>[0])
-    : realIsComplete;
+    : realIsComplete);
 
   // Redirect if no files AND not in recovery mode - use useLayoutEffect to redirect before paint
   useLayoutEffect(() => {
@@ -273,9 +276,18 @@ export default function ProcessingPage() {
                 },
                 onAllUploadsComplete: (successCount, failedCount) => {
                   if (successCount > 0) {
-                    // Transition to processing phase - polling will take over
-                    setUploadPhaseComplete(true);
-                    setProcessingStage('OCR');
+                    // Act uploads go to library pipeline — no processing_jobs created,
+                    // so skip the polling phase entirely (UX-015 fix)
+                    if (documentType === 'act') {
+                      setActUploadComplete(true);
+                      setUploadPhaseComplete(true);
+                      setProcessingStage('INDEXING');
+                      setOverallProgress(100);
+                    } else {
+                      // Transition to processing phase - polling will take over
+                      setUploadPhaseComplete(true);
+                      setProcessingStage('OCR');
+                    }
                     // Clear single-file error if some uploads succeeded
                     if (failedCount > 0) {
                       setUploadError(`${failedCount} file(s) failed to upload`);

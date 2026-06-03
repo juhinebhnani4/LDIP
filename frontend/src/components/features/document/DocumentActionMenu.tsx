@@ -24,6 +24,7 @@ export interface DocumentActionMenuProps {
   onView: () => void;
   onRename: () => void;
   onSetAsAct: () => void;
+  onSetAsCaseFile?: () => void;
   onDelete: () => void;
   onRetry?: () => void;
   userRole?: MatterRole;
@@ -42,6 +43,7 @@ export function DocumentActionMenu({
   onView,
   onRename,
   onSetAsAct,
+  onSetAsCaseFile,
   onDelete,
   onRetry,
   userRole = 'editor',
@@ -83,6 +85,12 @@ export function DocumentActionMenu({
           <DropdownMenuItem onClick={onSetAsAct}>
             <FileText className="mr-2 h-4 w-4" />
             Set as Act
+          </DropdownMenuItem>
+        )}
+        {canEdit && isAct && onSetAsCaseFile && (
+          <DropdownMenuItem onClick={onSetAsCaseFile}>
+            <FileText className="mr-2 h-4 w-4" />
+            Set as Case File
           </DropdownMenuItem>
         )}
         {canRetry && (

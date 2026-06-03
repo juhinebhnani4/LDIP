@@ -417,6 +417,17 @@ export function DocumentList({
     }
   };
 
+  const handleSetAsCaseFile = async (doc: DocumentListItem) => {
+    try {
+      await updateDocument(doc.id, { documentType: 'case_file' });
+      toast.success('Document set as Case File');
+      loadDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set document as Case File';
+      toast.error(message);
+    }
+  };
+
   const handleDeleteDocument = async () => {
     if (!selectedDocument) return;
     try {
@@ -674,6 +685,7 @@ export function DocumentList({
                         setRenameDialogOpen(true);
                       }}
                       onSetAsAct={() => handleSetAsAct(doc)}
+                      onSetAsCaseFile={() => handleSetAsCaseFile(doc)}
                       onDelete={() => {
                         setSelectedDocument(doc);
                         setDeleteDialogOpen(true);

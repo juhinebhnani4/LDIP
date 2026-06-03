@@ -11,7 +11,7 @@
  * Task 4: Create AddDocumentsDialog for in-matter uploads (AC #3)
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Info } from 'lucide-react';
 import {
   Dialog,
@@ -21,8 +21,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { UploadDropzone } from './UploadDropzone';
-import type { UploadFile } from '@/types/document';
+import type { DocumentType, UploadFile } from '@/types/document';
 
 interface AddDocumentsDialogProps {
   /** Whether the dialog is open */
@@ -58,6 +66,8 @@ export function AddDocumentsDialog({
   matterId,
   onComplete,
 }: AddDocumentsDialogProps) {
+  const [documentType, setDocumentType] = useState<DocumentType>('case_file');
+
   // Handle upload complete - close dialog and notify parent
   const handleUploadComplete = useCallback(
     (uploadedFiles: UploadFile[]) => {
@@ -79,9 +89,34 @@ export function AddDocumentsDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Document type selector */}
+          <div className="space-y-2">
+            <Label htmlFor="add-doc-type">Document Type</Label>
+            <Select
+              value={documentType}
+              onValueChange={(value: string) => setDocumentType(value as DocumentType)}
+            >
+              <SelectTrigger id="add-doc-type" className="w-full">
+                <SelectValue placeholder="Select document type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="case_file">Case File</SelectItem>
+                <SelectItem value="act">Act / Statute</SelectItem>
+                <SelectItem value="annexure">Annexure</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            {documentType === 'act' && (
+              <p className="text-xs text-muted-foreground">
+                Acts are stored in the shared library and linked to this matter.
+              </p>
+            )}
+          </div>
+
           {/* Upload dropzone */}
           <UploadDropzone
             matterId={matterId}
+            documentType={documentType}
             onUploadComplete={handleUploadComplete}
           />
 

@@ -108,10 +108,6 @@ function ProviderQuotaItem({
   const tokenUsagePct = quota.dailyTokenLimit && quota.dailyTokenLimit > 0
     ? (quota.dailyTokensUsed / quota.dailyTokenLimit) * 100
     : 0;
-  const costUsagePct = quota.dailyCostLimitInr && quota.dailyCostLimitInr > 0
-    ? (quota.dailyCostInr / quota.dailyCostLimitInr) * 100
-    : 0;
-  const displayPct = Math.max(tokenUsagePct, costUsagePct);
 
   return (
     <div className="space-y-2">

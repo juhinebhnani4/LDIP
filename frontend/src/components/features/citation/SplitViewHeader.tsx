@@ -9,7 +9,7 @@
  * Story 3-4: Split-View Citation Highlighting (AC: #1, #3)
  */
 
-import { useState, type FC } from 'react';
+import { type FC } from 'react';
 import {
   X,
   Maximize2,

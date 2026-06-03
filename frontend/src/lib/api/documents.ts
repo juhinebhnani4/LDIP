@@ -27,7 +27,6 @@ import {
   compressPdfLossy,
   needsCompression,
   getCompressionStats,
-  compressionExceedsLimit,
   COMPRESSION_THRESHOLD_BYTES,
   SUPABASE_FILE_LIMIT_BYTES,
 } from '@/lib/utils/pdf-compression';
@@ -47,11 +46,25 @@ const UPLOAD_ENDPOINT = `${API_BASE_URL}/api/documents/upload`;
 /** Maximum concurrent uploads to prevent browser/network saturation */
 const MAX_CONCURRENT_UPLOADS = 3;
 
+/**
+ * Callbacks for upload progress/status tracking.
+ * When provided, these are called INSTEAD of the default uploadStore updates.
+ * This decouples the transport layer from UI state (GAP-9 Gap 3).
+ */
+export interface UploadCallbacks {
+  onProgress?: (fileId: string, progress: number) => void;
+  onStatus?: (fileId: string, status: string, error?: string) => void;
+  onCompression?: (fileId: string, file: File, originalSize: number, info: string) => void;
+  onUploading?: (isUploading: boolean) => void;
+}
+
 interface UploadOptions {
   matterId: string;
   documentType?: DocumentType;
   onProgress?: (progress: number) => void;
   abortSignal?: AbortSignal;
+  /** Optional callbacks to decouple from uploadStore. When provided, store is not updated. */
+  callbacks?: UploadCallbacks;
 }
 
 /**
@@ -81,13 +94,30 @@ export async function uploadFile(
   fileId: string,
   options: UploadOptions
 ): Promise<UploadResponse> {
-  const { matterId, documentType = 'case_file', onProgress, abortSignal } = options;
+  const { matterId, documentType = 'case_file', onProgress, abortSignal, callbacks } = options;
+
+  // Helper: update status via callbacks or fall back to store
+  const updateStatus = (status: string, error?: string) => {
+    if (callbacks?.onStatus) {
+      callbacks.onStatus(fileId, status, error);
+    } else {
+      useUploadStore.getState().updateStatus(fileId, status as 'error' | 'completed' | 'pending' | 'compressing' | 'uploading', error);
+    }
+  };
+
+  const updateProgress = (progress: number) => {
+    if (callbacks?.onProgress) {
+      callbacks.onProgress(fileId, progress);
+    } else {
+      useUploadStore.getState().updateProgress(fileId, progress);
+    }
+  };
 
   // Get auth token before starting upload
   const token = await getAuthToken();
   if (!token) {
     const error = new Error('Not authenticated');
-    useUploadStore.getState().updateStatus(fileId, 'error', error.message);
+    updateStatus('error', error.message);
     throw error;
   }
 
@@ -111,11 +141,7 @@ export async function uploadFile(
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         const progress = Math.round((event.loaded / event.total) * 100);
-
-        // Update store
-        useUploadStore.getState().updateProgress(fileId, progress);
-
-        // Call optional callback
+        updateProgress(progress);
         onProgress?.(progress);
       }
     };
@@ -124,11 +150,11 @@ export async function uploadFile(
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const response = JSON.parse(xhr.responseText) as UploadResponse;
-          useUploadStore.getState().updateStatus(fileId, 'completed');
+          updateStatus('completed');
           resolve(response);
         } catch {
           const error = new Error('Invalid response format');
-          useUploadStore.getState().updateStatus(fileId, 'error', error.message);
+          updateStatus('error', error.message);
           reject(error);
         }
       } else {
@@ -139,19 +165,19 @@ export async function uploadFile(
         } catch {
           // Use default error message
         }
-        useUploadStore.getState().updateStatus(fileId, 'error', errorMessage);
+        updateStatus('error', errorMessage);
         reject(new Error(errorMessage));
       }
     };
 
     xhr.onerror = () => {
       const error = new Error('Network error during upload');
-      useUploadStore.getState().updateStatus(fileId, 'error', error.message);
+      updateStatus('error', error.message);
       reject(error);
     };
 
     xhr.onabort = () => {
-      useUploadStore.getState().updateStatus(fileId, 'error', 'Upload cancelled');
+      updateStatus('error', 'Upload cancelled');
       reject(new Error('Upload cancelled'));
     };
 
@@ -197,15 +223,29 @@ export class FileTooLargeError extends Error {
  * @returns The file (compressed or original)
  * @throws FileTooLargeError if file exceeds 50MB limit after all compression
  */
-async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
+async function compressFileIfNeeded(fileId: string, file: File, callbacks?: UploadCallbacks): Promise<File> {
   if (!needsCompression(file)) {
     return file;
   }
 
-  const store = useUploadStore.getState();
+  // Helper: use callbacks or fall back to store
+  const updateStatus = (status: string, error?: string) => {
+    if (callbacks?.onStatus) {
+      callbacks.onStatus(fileId, status, error);
+    } else {
+      useUploadStore.getState().updateStatus(fileId, status as 'error' | 'completed' | 'pending' | 'compressing' | 'uploading', error);
+    }
+  };
+  const updateCompression = (f: File, origSize: number, info: string) => {
+    if (callbacks?.onCompression) {
+      callbacks.onCompression(fileId, f, origSize, info);
+    } else {
+      useUploadStore.getState().updateFileAfterCompression(fileId, f, origSize, info);
+    }
+  };
 
   // Update status to compressing
-  store.updateStatus(fileId, 'compressing');
+  updateStatus('compressing');
 
   try {
     // Step 1: Lossless compression (metadata removal + object streams)
@@ -218,12 +258,7 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
 
     if (losslessResult.wasCompressed) {
       const compressionInfo = getCompressionStats(losslessResult);
-      store.updateFileAfterCompression(
-        fileId,
-        losslessResult.file,
-        losslessResult.originalSize,
-        compressionInfo
-      );
+      updateCompression(losslessResult.file, losslessResult.originalSize, compressionInfo);
       console.log(`[Compression:lossless] ${file.name}: ${compressionInfo}`);
     }
 
@@ -232,13 +267,9 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
       console.log(`[Compression:lossy] ${file.name}: ${(currentSize / (1024 * 1024)).toFixed(1)}MB still exceeds 50MB, starting lossy compression...`);
 
       const lossyResult = await compressPdfLossy(currentFile, (progress) => {
-        // Update store with page-level progress for UI display
+        // Update with page-level progress for UI display
         if (progress.currentPage && progress.totalPages) {
-          store.updateStatus(
-            fileId,
-            'compressing',
-            `Compressing page ${progress.currentPage} of ${progress.totalPages}...`
-          );
+          updateStatus('compressing', `Compressing page ${progress.currentPage} of ${progress.totalPages}...`);
         }
         console.log(`[Compression:lossy] ${file.name}: ${progress.message}`);
       });
@@ -248,12 +279,7 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
           ...lossyResult,
           originalSize: file.size, // Show reduction from original, not from lossless
         });
-        store.updateFileAfterCompression(
-          fileId,
-          lossyResult.file,
-          file.size,
-          compressionInfo
-        );
+        updateCompression(lossyResult.file, file.size, compressionInfo);
         console.log(`[Compression:lossy] ${file.name}: ${compressionInfo}`);
       }
 
@@ -263,16 +289,12 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
 
     // Final check: still over Supabase limit?
     if (currentSize > SUPABASE_FILE_LIMIT_BYTES) {
-      store.updateStatus(
-        fileId,
-        'error',
-        `File exceeds 50MB limit after compression (${(currentSize / (1024 * 1024)).toFixed(1)}MB). Please split this document.`
-      );
+      updateStatus('error', `File exceeds 50MB limit after compression (${(currentSize / (1024 * 1024)).toFixed(1)}MB). Please split this document.`);
       throw new FileTooLargeError(file.name, currentSize);
     }
 
     // Reset status from compressing to pending (ready for upload)
-    store.updateStatus(fileId, 'pending');
+    updateStatus('pending');
 
     return currentFile;
   } catch (error) {
@@ -283,15 +305,11 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
 
     console.error(`[Compression] Failed for ${file.name}:`, error);
     // Continue with original file if compression fails
-    store.updateStatus(fileId, 'pending');
+    updateStatus('pending');
 
     // But still check if original file exceeds Supabase limit
     if (file.size > SUPABASE_FILE_LIMIT_BYTES) {
-      store.updateStatus(
-        fileId,
-        'error',
-        `File exceeds 50MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Compression failed — please split this document.`
-      );
+      updateStatus('error', `File exceeds 50MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Compression failed — please split this document.`);
       throw new FileTooLargeError(file.name, file.size);
     }
 
@@ -316,16 +334,21 @@ async function compressFileIfNeeded(fileId: string, file: File): Promise<File> {
 export async function uploadFiles(
   files: { id: string; file: File }[],
   matterId: string,
-  documentType: DocumentType = 'case_file'
+  documentType: DocumentType = 'case_file',
+  callbacks?: UploadCallbacks
 ): Promise<PromiseSettledResult<UploadResponse>[]> {
-  useUploadStore.getState().setUploading(true);
+  if (callbacks?.onUploading) {
+    callbacks.onUploading(true);
+  } else {
+    useUploadStore.getState().setUploading(true);
+  }
 
   try {
     // First, compress any large files
     const filesToUpload: { id: string; file: File }[] = [];
 
     for (const { id, file } of files) {
-      const processedFile = await compressFileIfNeeded(id, file);
+      const processedFile = await compressFileIfNeeded(id, file, callbacks);
       filesToUpload.push({ id, file: processedFile });
     }
 
@@ -336,7 +359,7 @@ export async function uploadFiles(
       const batch = filesToUpload.slice(i, i + MAX_CONCURRENT_UPLOADS);
       const batchResults = await Promise.allSettled(
         batch.map(({ id, file }) =>
-          uploadFile(file, id, { matterId, documentType })
+          uploadFile(file, id, { matterId, documentType, callbacks })
         )
       );
       results.push(...batchResults);
@@ -344,7 +367,11 @@ export async function uploadFiles(
 
     return results;
   } finally {
-    useUploadStore.getState().setUploading(false);
+    if (callbacks?.onUploading) {
+      callbacks.onUploading(false);
+    } else {
+      useUploadStore.getState().setUploading(false);
+    }
   }
 }
 

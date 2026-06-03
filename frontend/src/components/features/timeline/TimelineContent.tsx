@@ -140,7 +140,6 @@ export function TimelineContent({ className }: TimelineContentProps) {
   const {
     stats,
     isLoading: statsLoading,
-    isError: statsError,
     mutate: refreshStats,
   } = useTimelineStats(matterId);
 

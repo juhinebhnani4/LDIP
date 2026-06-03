@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { WorkspaceTabBar, TAB_CONFIG, DEFAULT_TAB, TAB_LABELS, PRIMARY_TABS, OVERFLOW_TABS } from './WorkspaceTabBar';
+import { WorkspaceTabBar, TAB_CONFIG, DEFAULT_TAB, TAB_LABELS, PRIMARY_TABS } from './WorkspaceTabBar';
 
 // Mock next/navigation
 const mockPathname = vi.fn();

@@ -32,10 +32,7 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import type { VerificationQueueItem } from '@/types';
-import {
-  formatFindingType,
-  getFindingTypeIcon,
-} from '@/stores/verificationStore';
+import { formatFindingType } from '@/stores/verificationStore';
 
 interface FindingDetailPanelProps {
   /** Whether the panel is open */

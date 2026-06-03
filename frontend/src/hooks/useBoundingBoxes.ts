@@ -13,7 +13,7 @@
  * Story 11.7: Implement Bounding Box Overlays (AC: #1, #3)
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { SplitViewBoundingBox } from '@/types/citation';
 import type { BoundingBox } from '@/types/document';
 import {

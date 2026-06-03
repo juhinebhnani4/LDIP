@@ -67,7 +67,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { CitationListItem, GroupedCitation, VerificationStatus, PaginationMeta } from '@/types/citation';
+import type { CitationListItem, VerificationStatus, PaginationMeta } from '@/types/citation';
 import { groupCitations, groupHasIssues, getGroupDocumentSummary } from '@/lib/utils/citationGrouping';
 
 export interface CitationsListProps {

@@ -50,7 +50,7 @@ const createMatterAwareStorage = (): StateStorage => {
   let currentMatterId: string | null = null;
 
   return {
-    getItem: (name: string): string | null => {
+    getItem: (_name: string): string | null => {
       if (typeof window === 'undefined') return null;
 
       // If we have a current matter, try its specific key first
@@ -100,7 +100,7 @@ const createMatterAwareStorage = (): StateStorage => {
       }
     },
 
-    removeItem: (name: string): void => {
+    removeItem: (_name: string): void => {
       if (typeof window === 'undefined') return;
 
       if (currentMatterId) {

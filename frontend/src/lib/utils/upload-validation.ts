@@ -15,7 +15,6 @@ import type {
 } from '@/types/document';
 import {
   COMPRESSION_THRESHOLD_BYTES,
-  SUPABASE_FILE_LIMIT_BYTES,
   MAX_BROWSER_FILE_SIZE_BYTES,
 } from '@/lib/utils/pdf-compression';
 

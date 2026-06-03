@@ -9,7 +9,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';

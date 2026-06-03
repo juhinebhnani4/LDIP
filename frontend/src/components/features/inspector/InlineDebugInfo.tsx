@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Clock, Zap, Search, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronUp, Clock, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SearchDebugInfo, ChunkDebugInfo } from '@/types/inspector';
 

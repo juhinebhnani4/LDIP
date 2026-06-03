@@ -107,7 +107,7 @@ export function AccountSection() {
       const supabase = createClient();
       await supabase.auth.signOut();
       router.push('/login?deleted=true');
-    } catch (error) {
+    } catch {
       setDeleteError('Failed to delete account. Please contact support.');
       setIsDeleting(false);
     }

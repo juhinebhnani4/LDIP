@@ -40,13 +40,6 @@ interface ChatErrorMessageProps {
   className?: string;
 }
 
-const ERROR_ICONS: Record<string, string> = {
-  RATE_LIMITED: 'clock',
-  QUOTA_EXCEEDED: 'alert',
-  TIMEOUT: 'clock',
-  default: 'alert',
-};
-
 const ERROR_VARIANTS: Record<string, 'destructive' | 'default'> = {
   RATE_LIMITED: 'default',
   TIMEOUT: 'default',

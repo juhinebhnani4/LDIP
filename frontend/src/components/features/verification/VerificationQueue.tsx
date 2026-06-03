@@ -25,7 +25,6 @@ import { Check, X, Flag, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, AlertCir
 import { Badge } from '@/components/ui/badge';
 import type { VerificationQueueItem } from '@/types';
 import {
-  getConfidenceColorClass,
   formatFindingType,
   getFindingTypeIcon,
 } from '@/stores/verificationStore';
@@ -189,7 +188,7 @@ export function VerificationQueue({
 
   // Story 3.6: Get focused item and its index (from sortedData)
   // Code Review Fix: Derive index from ID to handle data changes safely
-  const { focusedItem, focusedIndex } = useMemo(() => {
+  const { focusedItem } = useMemo(() => {
     if (!focusedId) return { focusedItem: null, focusedIndex: -1 };
     const index = sortedData.findIndex(item => item.id === focusedId);
     return {
@@ -435,12 +434,11 @@ export function VerificationQueue({
         </TableHeader>
         <TableBody>
           {sortedData.length > 0 ? (
-            sortedData.map((item, index) => {
+            sortedData.map((item) => {
               const isProcessing = processingIds.includes(item.id);
               const isSelected = selectedIds.includes(item.id);
               // Code Review Fix: Compare by ID for reliable focus tracking
               const isFocused = item.id === focusedId;
-              const colorClass = getConfidenceColorClass(item.confidence);
 
               return (
                 <TableRow

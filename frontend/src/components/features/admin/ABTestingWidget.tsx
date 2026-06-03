@@ -16,7 +16,7 @@
 import { useABTesting } from '@/hooks/useABTesting';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FlaskConical, Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Minus } from 'lucide-react';
-import type { ABTestRun, ABTestScores } from '@/lib/api/ab-testing';
+import type { ABTestRun } from '@/lib/api/ab-testing';
 
 // =============================================================================
 // Score Bar Component

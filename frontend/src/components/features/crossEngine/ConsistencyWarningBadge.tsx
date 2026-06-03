@@ -56,7 +56,7 @@ export function ConsistencyWarningBadge({
   onClick,
   className,
 }: ConsistencyWarningBadgeProps) {
-  const { summary, openCount, warningCount, errorCount, isLoading } =
+  const { summary, openCount, warningCount, errorCount } =
     useConsistencyIssueSummary(matterId);
 
   // Don't render if no open issues
@@ -172,7 +172,7 @@ export function ConsistencyStatusIndicator({
   matterId,
   className,
 }: ConsistencyStatusIndicatorProps) {
-  const { openCount, errorCount, warningCount, isLoading } =
+  const { openCount, errorCount, isLoading } =
     useConsistencyIssueSummary(matterId);
 
   if (isLoading) {

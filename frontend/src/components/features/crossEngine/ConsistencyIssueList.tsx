@@ -52,7 +52,6 @@ import {
 } from '@/hooks/useCrossEngine';
 import {
   ISSUE_TYPE_LABELS,
-  SEVERITY_LABELS,
   STATUS_LABELS,
   type ConsistencyIssue,
   type ConsistencyIssueStatus,

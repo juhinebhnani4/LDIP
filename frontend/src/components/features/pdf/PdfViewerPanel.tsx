@@ -287,7 +287,6 @@ export const PdfViewerPanel: FC<PdfViewerPanelProps> = ({
     setRenderVersion((v) => v + 1);
     const timer = setTimeout(() => renderVisiblePagesRef.current(), 150);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, numPages, scale]);
 
   // Page tracking callback ref (avoids stale onPageChange in scroll handler)

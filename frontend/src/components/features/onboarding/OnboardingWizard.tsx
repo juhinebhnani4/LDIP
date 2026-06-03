@@ -153,7 +153,6 @@ export function OnboardingWizard({ forceShow = false, onComplete }: OnboardingWi
     if (forceShow) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Opening wizard on forceShow is intentional
       setIsOpen(true);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting step on forceShow is intentional
       setCurrentStep(0);
       return;
     }

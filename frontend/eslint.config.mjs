@@ -20,6 +20,15 @@ const eslintConfig = defineConfig([
   {
     rules: {
       "import/no-cycle": ["error", { maxDepth: Infinity, ignoreExternal: true }],
+      // Honor the `_`-prefix convention for intentionally-unused bindings
+      // (destructure-to-omit props, deliberately-retained helpers, ignored
+      // catch errors). Only silences UNUSED `_`-prefixed names — it can never
+      // hide a name that is actually referenced.
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
     },
   },
 ])

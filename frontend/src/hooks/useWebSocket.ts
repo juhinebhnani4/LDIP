@@ -198,7 +198,6 @@ export function useWebSocket(
     }
 
     // Connect to new matter with a short delay to let the page settle
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clearing error before connect is intentional
     setError((prev) => (prev !== null ? null : prev));
     const connectTimer = setTimeout(() => {
       void wsClient.connect(matterId);

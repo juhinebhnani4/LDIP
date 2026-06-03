@@ -9,6 +9,46 @@
 
 ---
 
+## Phase 0: Prior Fix Audit (Only when touching previously-fixed code)
+
+> **Why this exists (2026-05-25)**: GAP-11 was "FIXED" in 2026-05-06 but
+> the fix was broken — `library_document_id` was passed as `document_id`,
+> violating an FK constraint. The error was swallowed by `persist_cost`'s
+> catch block. Three weeks of library OCR ran with zero cost tracking. The
+> summary service had the same shape (2026-04-29): `self._get_supabase_client()`
+> deployed instead of `self.supabase`, silently failed on 3 matters.
+> GAP-19: `chunk.parent_chunk_index` doesn't exist — every act upload
+> silently failing at chunking since parent-child chunker was introduced.
+
+**Trigger**: When BUGS.md shows a bug as FIXED in the subsystem you're
+changing, OR when you're building on top of a previous fix.
+
+For each FIXED bug in the affected subsystem:
+
+- **Read the fix description in BUGS.md.** What was the claimed fix?
+- **Read the actual code.** Does it match the description?
+- **Was the fix verified in production?** Look for "production-verified",
+  "live verified", or "live-tested" in the BUGS.md entry. If absent:
+  treat as UNVERIFIED.
+- **For UNVERIFIED fixes: trace the code path to the DB write / API call /
+  state mutation.** Does the value survive to persistence? Check FK
+  constraints, NOT NULL constraints, type mismatches, attribute names.
+- **Can the fix be exercised with available test data?** If the code path
+  requires specific input (scanned PDF, >30 page doc, specific document
+  type, external service failure): say so. If you can't trigger it, mark
+  as "DEPLOYED BUT UNEXERCISED" in BUGS.md, not "FIXED."
+
+**Prompt fragment:**
+```
+PHASE 0: Check BUGS.md for any bug marked FIXED in the subsystem I'm 
+changing. For each: read the claimed fix, read the actual code, check if 
+it was production-verified. If not verified: trace the code path to the 
+DB write and check for FK/type/attribute mismatches. If the fix requires 
+specific input to trigger: can I provide that input? If not, flag it.
+```
+
+---
+
 ## Phase 1: Open Exploration (Inductive — What Don't I Know?)
 
 **Purpose**: Understand the actual system before proposing anything. This phase prevents recommending solutions that conflict with existing architecture or ignore prior analysis.
@@ -67,7 +107,27 @@ Walk through the exact code path step by step. At every branch condition,
 check what happens when the value is 0, None, or empty. Follow the path
 all the way to what the user sees on screen — name the component and the
 text. If you can't, you haven't finished.
+
+THEN: After tracing the PRIMARY code path, ask: "What OTHER processes 
+write to the same state this path reads?" Specifically:
+- If the problem involves a UI that polls/watches a DB table or API: 
+  enumerate ALL writers to that table/endpoint, not just the one 
+  triggered by the user action under investigation.
+- If the problem involves "stuck" or "missing" state: check whether any 
+  BACKGROUND process (beat task, sweep, pre-generation, webhook) writes 
+  to the same state on a different trigger.
+- State the effective severity: is the user stuck PERMANENTLY, or does 
+  a background process unstick them within N seconds? Name the process.
 ```
+
+> **Why "all writers" was added (2026-05-25):** UX-015 was documented as
+> "stuck at 0% forever." Phase 1 traced the act upload path and correctly
+> found zero `processing_jobs`. But the summary pre-generation job (fired by
+> `detect_contradictions` for ANY document in the matter) creates a
+> `processing_jobs` row, which unsticks the page in ~5-10s. The severity was
+> wrong because only one writer was traced. Same pattern: E2E-007 (traced
+> finalize but not the sweep that re-triggers it), UX-003 (traced one status
+> source but missed `tabProcessingStatus` from a different fetch).
 
 ### 1.3 — What systems interact that aren't in the codebase?
 

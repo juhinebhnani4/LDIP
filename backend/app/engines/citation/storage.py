@@ -1086,10 +1086,22 @@ class CitationStorageService:
                 )
 
                 if exclude_verified:
-                    # Exclude verified and mismatch (already processed)
+                    # Exclude ALL terminal verification states (already processed).
+                    # On a fully-embedded Act, section_not_found is terminal too:
+                    # the Act content is static, so re-verifying cannot change the
+                    # result. Excluding it here is what makes verify_citations_for_act
+                    # converge to a genuine no-op (0 Gemini calls) once every citation
+                    # is terminal — required so the RISK-1 derived-state reconciler can
+                    # re-dispatch on a schedule without re-verifying section_not_found
+                    # citations forever (LLM thrash). Fresh-upload fast path is
+                    # unaffected: no citation is section_not_found before its first run.
                     query = query.not_.in_(
                         "verification_status",
-                        [VerificationStatus.VERIFIED.value, VerificationStatus.MISMATCH.value],
+                        [
+                            VerificationStatus.VERIFIED.value,
+                            VerificationStatus.MISMATCH.value,
+                            VerificationStatus.SECTION_NOT_FOUND.value,
+                        ],
                     )
 
                 return query.order("source_page").execute()

@@ -2013,8 +2013,75 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
         "matters_checked": 0,
         "citations_updated": 0,
         "act_unavailable_to_pending": 0,
+        "verifications_dispatched": 0,
         "errors": [],
     }
+
+    # RISK-1 (2026-06-03): derived-state authority for citation verification.
+    # Verification for auto-fetched Acts used to fire ONLY from a transient Celery
+    # chain callback (act_validation_tasks -> fire_library_callbacks). That callback
+    # is persisted nowhere, so any Act healed by the embed reconciler
+    # (resume_stuck_pipelines, which re-dispatches embed-only with no callbacks) got
+    # embedded but never verified — its citations were flipped act_unavailable->pending
+    # below and then stranded forever. We now DERIVE "verification owed" from DB state
+    # (auto_fetched/available resolution + fully-embedded Act doc + >=1 non-terminal
+    # citation) and fire the SAME convergence task the callback uses
+    # (trigger_verification_on_act_upload). Convergence is guaranteed by
+    # get_citations_for_act(exclude_verified=True), which now excludes the full terminal
+    # set {verified, mismatch, section_not_found} — once every citation is terminal the
+    # verify task is a 0-Gemini no-op and this sweep stops selecting the Act.
+    # Budget bucket: GEMINI_FLASH (operation="citation_verification"), behind the
+    # existing get_rate_limiter(LLMProvider.GEMINI). No new queue/worker/quota.
+    from app.workers.tasks.verification_tasks import trigger_verification_on_act_upload
+
+    _NON_TERMINAL = ["act_unavailable", "pending"]
+    _embed_cache: dict[str, bool] = {}
+
+    def _act_doc_fully_embedded(lib_doc_id: str | None) -> bool:
+        """True iff the library Act doc is COMPLETED with >=1 chunk and 0 NULL
+        embeddings — the GAP-21 derived-state definition of 'fully embedded'.
+        Verifying against partial embeddings yields false section_not_found
+        (RISK-1(b)), so this gate must pass before dispatch."""
+        if not lib_doc_id:
+            return False
+        if lib_doc_id in _embed_cache:
+            return _embed_cache[lib_doc_id]
+        ok = False
+        try:
+            doc = (
+                client.table("library_documents")
+                .select("status")
+                .eq("id", lib_doc_id)
+                .limit(1)
+                .execute()
+            )
+            if doc.data and doc.data[0].get("status") == "completed":
+                total = (
+                    client.table("library_chunks")
+                    .select("id", count="exact")
+                    .eq("library_document_id", lib_doc_id)
+                    .limit(1)
+                    .execute()
+                )
+                if (total.count or 0) > 0:
+                    null_emb = (
+                        client.table("library_chunks")
+                        .select("id", count="exact")
+                        .eq("library_document_id", lib_doc_id)
+                        .is_("embedding", "null")
+                        .limit(1)
+                        .execute()
+                    )
+                    ok = (null_emb.count or 0) == 0
+        except Exception as e:
+            logger.warning(
+                "act_doc_embed_gate_check_failed",
+                library_document_id=lib_doc_id,
+                error=str(e),
+            )
+            ok = False
+        _embed_cache[lib_doc_id] = ok
+        return ok
 
     try:
         client = get_service_client()
@@ -2024,7 +2091,7 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
         # Get all act_resolutions that have act_document_id (i.e., available)
         available_resolutions = (
             client.table("act_resolutions")
-            .select("matter_id, act_name_normalized, act_document_id")
+            .select("matter_id, act_name_normalized, act_name_display, act_document_id")
             .not_.is_("act_document_id", "null")
             .in_("resolution_status", ["available", "auto_fetched"])
             .execute()
@@ -2046,23 +2113,27 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
 
         for matter_id, resolutions in matters_map.items():
             try:
-                # Build set of normalized names that have available Acts
-                available_normalized_names = {
-                    res["act_name_normalized"] for res in resolutions
-                }
+                # Map normalized name -> resolution (for dispatch lookup). Multiple
+                # resolutions may share a normalized name; any maps to the same Act doc.
+                res_by_norm = {res["act_name_normalized"]: res for res in resolutions}
+                available_normalized_names = set(res_by_norm.keys())
 
-                # Get all citations for this matter with act_unavailable status
-                # Handle pagination (Supabase returns max 1000 rows per request)
+                # Get all NON-TERMINAL citations for this matter (act_unavailable +
+                # pending). Two uses: (a) flip act_unavailable->pending where the Act is
+                # now available (existing behaviour); (b) RISK-1: discover which Acts
+                # still have non-terminal citations so we can derive verification owed.
+                # Handle pagination (Supabase returns max 1000 rows per request).
                 citations_to_update = []
+                non_terminal_norms: set[str] = set()
                 offset = 0
                 page_size = 1000
 
                 while True:
                     citations_response = (
                         client.table("citations")
-                        .select("id, act_name")
+                        .select("id, act_name, verification_status")
                         .eq("matter_id", matter_id)
-                        .eq("verification_status", "act_unavailable")
+                        .in_("verification_status", _NON_TERMINAL)
                         .range(offset, offset + page_size - 1)
                         .execute()
                     )
@@ -2071,42 +2142,82 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
                     if not citations:
                         break
 
-                    # Find citations where Act is actually available
                     for citation in citations:
                         citation_normalized = normalize_act_name(citation.get("act_name", ""))
+                        # Track every non-terminal citation whose Act is resolved here —
+                        # this is the per-Act "still needs verification" signal (RISK-1).
                         if citation_normalized in available_normalized_names:
-                            citations_to_update.append(citation["id"])
+                            non_terminal_norms.add(citation_normalized)
+                            # Flip only the act_unavailable ones to pending.
+                            if citation.get("verification_status") == "act_unavailable":
+                                citations_to_update.append(citation["id"])
 
                     # If we got fewer than page_size, we've reached the end
                     if len(citations) < page_size:
                         break
                     offset += page_size
 
-                if not citations_to_update:
-                    continue
-
                 # Batch update citation statuses (max 100 per request to avoid JSON errors)
-                from datetime import UTC, datetime
+                if citations_to_update:
+                    from datetime import UTC, datetime
 
-                UPDATE_BATCH_SIZE = 100
-                matter_updated = 0
+                    UPDATE_BATCH_SIZE = 100
+                    matter_updated = 0
 
-                for i in range(0, len(citations_to_update), UPDATE_BATCH_SIZE):
-                    batch = citations_to_update[i:i + UPDATE_BATCH_SIZE]
-                    update_result = client.table("citations").update({
-                        "verification_status": "pending",
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    }).in_("id", batch).execute()
-                    matter_updated += len(update_result.data) if update_result.data else 0
+                    for i in range(0, len(citations_to_update), UPDATE_BATCH_SIZE):
+                        batch = citations_to_update[i:i + UPDATE_BATCH_SIZE]
+                        update_result = client.table("citations").update({
+                            "verification_status": "pending",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }).in_("id", batch).execute()
+                        matter_updated += len(update_result.data) if update_result.data else 0
 
-                results["citations_updated"] += matter_updated
-                results["act_unavailable_to_pending"] += matter_updated
+                    results["citations_updated"] += matter_updated
+                    results["act_unavailable_to_pending"] += matter_updated
 
-                logger.info(
-                    "citation_statuses_synced",
-                    matter_id=matter_id,
-                    citations_updated=matter_updated,
-                )
+                    logger.info(
+                        "citation_statuses_synced",
+                        matter_id=matter_id,
+                        citations_updated=matter_updated,
+                    )
+
+                # RISK-1: derive verification owed. For each Act in this matter that
+                # (a) still has >=1 non-terminal citation and (b) is FULLY embedded,
+                # dispatch the same convergence task the upload callback uses. This is
+                # idempotent and self-converging: trigger_verification_on_act_upload ->
+                # verify_citations_for_act -> get_citations_for_act(exclude_verified=True),
+                # which excludes the full terminal set, so once every citation is terminal
+                # this becomes a 0-Gemini no-op and non_terminal_norms drops the Act.
+                for norm in non_terminal_norms:
+                    res = res_by_norm.get(norm)
+                    if not res:
+                        continue
+                    act_doc_id = res.get("act_document_id")
+                    if not _act_doc_fully_embedded(act_doc_id):
+                        continue
+                    try:
+                        trigger_verification_on_act_upload.apply_async(
+                            kwargs={
+                                "matter_id": matter_id,
+                                "act_name": res.get("act_name_display") or norm,
+                                "act_document_id": act_doc_id,
+                            },
+                            queue="default",
+                        )
+                        results["verifications_dispatched"] += 1
+                        logger.info(
+                            "citation_verification_dispatched_by_reconciler",
+                            matter_id=matter_id,
+                            act_document_id=act_doc_id,
+                            act_name=res.get("act_name_display") or norm,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "citation_verification_dispatch_failed",
+                            matter_id=matter_id,
+                            act_document_id=act_doc_id,
+                            error=str(e),
+                        )
 
             except Exception as e:
                 logger.warning(

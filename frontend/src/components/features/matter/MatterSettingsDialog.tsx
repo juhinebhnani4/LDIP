@@ -22,7 +22,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import type { VerificationMode, DataResidency, AnalysisMode } from '@/types/matter';
+import type { VerificationMode, AnalysisMode } from '@/types/matter';
 import { DATA_RESIDENCY_OPTIONS, ANALYSIS_MODE_OPTIONS } from '@/types/matter';
 import { Input } from '@/components/ui/input';
 import { updateMatter } from '@/lib/api/matters';
@@ -141,7 +141,7 @@ export function MatterSettingsDialog({
     } finally {
       setIsSaving(false);
     }
-  }, [matterId, verificationMode, practiceGroup, analysisMode, canEdit, updateStoreMatter]);
+  }, [matterId, verificationMode, practiceGroup, analysisMode, canEdit, updateStoreMatter, setIsOpen]);
 
   // Check if there are unsaved changes
   const hasChanges =

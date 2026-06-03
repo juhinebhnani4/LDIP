@@ -172,8 +172,10 @@ export function useTimeline(matterId: string, options: UseTimelineOptionsWithFil
     }
   );
 
-  // All events from the API
-  const events = data?.data ?? [];
+  // All events from the API. Wrapped in useMemo so the array identity is
+  // stable across renders (a bare `data?.data ?? []` makes a fresh [] every
+  // render, forcing the dependent useMemos below to recompute each time).
+  const events = useMemo(() => data?.data ?? [], [data?.data]);
 
   // Apply filters if provided (client-side filtering for MVP)
   const filteredEvents = useMemo(() => {

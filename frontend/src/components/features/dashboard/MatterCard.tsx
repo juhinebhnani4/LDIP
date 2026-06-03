@@ -292,7 +292,6 @@ export function MatterCard({
       )}
       role="article"
       aria-label={`Matter: ${matter.title}`}
-      aria-selected={selectionMode ? isSelected : undefined}
       data-testid={`matter-card-${matter.id}`}
     >
       {/* Selection checkbox - visible in selection mode */}

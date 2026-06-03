@@ -41,7 +41,7 @@ import {
 } from '@/hooks/useCitations';
 import { useSplitView } from '@/hooks/useSplitView';
 import { updateCitationStatus, bulkUpdateCitationStatus } from '@/lib/api/citations';
-import type { SplitViewData, VerificationStatus } from '@/types/citation';
+import type { VerificationStatus } from '@/types/citation';
 
 export interface CitationsContentProps {
   matterId: string;
@@ -227,7 +227,7 @@ export function CitationsContent({
     if (!currentCitationInList) {
       closeSplitViewRef.current();
     }
-  }, [citations, isSplitViewOpen, splitViewData]);
+  }, [filteredCitations, isSplitViewOpen, splitViewData]);
 
   // Handle view mode change with localStorage persistence
   const handleViewModeChange = useCallback((mode: CitationsViewMode) => {

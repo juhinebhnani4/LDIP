@@ -61,8 +61,9 @@ export function useMatterCosts(matterId: string, days: number = 30) {
     fetchCosts();
 
     // Cleanup: increment request ID on unmount or dependency change
-    // to invalidate any in-flight requests
+    // to invalidate any in-flight requests.
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally bumps the LATEST requestId to invalidate in-flight requests; snapshotting .current into a variable (the rule's suggestion) would defeat the staleness guard.
       requestIdRef.current++;
     };
   }, [fetchCosts]);

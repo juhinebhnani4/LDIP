@@ -9,7 +9,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Request Models
 # =============================================================================
@@ -20,7 +19,9 @@ class EvaluateRequest(BaseModel):
 
     question: str = Field(..., min_length=1, description="User's question")
     answer: str = Field(..., min_length=1, description="Generated answer")
-    contexts: list[str] = Field(..., min_length=1, description="Retrieved context chunks")
+    contexts: list[str] = Field(
+        ..., min_length=1, description="Retrieved context chunks"
+    )
     ground_truth: str | None = Field(
         None, description="Expected answer (optional, enables context_recall)"
     )
@@ -54,7 +55,9 @@ class UpdateGoldenItemRequest(BaseModel):
     """Request to update a golden dataset item."""
 
     question: str | None = Field(None, min_length=1, description="Updated question")
-    expected_answer: str | None = Field(None, min_length=1, description="Updated answer")
+    expected_answer: str | None = Field(
+        None, min_length=1, description="Updated answer"
+    )
     relevant_chunk_ids: list[str] | None = Field(None, description="Updated chunk IDs")
     tags: list[str] | None = Field(None, description="Updated tags")
 
@@ -125,4 +128,6 @@ class GoldenItemResponse(BaseModel):
 class PromoteBaselineRequest(BaseModel):
     """Request to promote a batch evaluation run to active baseline."""
 
-    job_id: str = Field(..., min_length=1, description="Celery task ID of the batch run to promote")
+    job_id: str = Field(
+        ..., min_length=1, description="Celery task ID of the batch run to promote"
+    )

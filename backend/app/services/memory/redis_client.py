@@ -68,7 +68,7 @@ async def get_redis_client() -> Any:
                 "Upstash Redis is configured (UPSTASH_REDIS_REST_URL set) but "
                 "upstash-redis package is not installed. Install it with: "
                 "pip install upstash-redis"
-            )
+            ) from None
 
     # Fallback to standard redis-py for local development
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -90,7 +90,7 @@ async def get_redis_client() -> Any:
         )
         raise RuntimeError(
             "No Redis client available. Install redis or upstash-redis."
-        )
+        ) from None
 
 
 def reset_redis_client() -> None:

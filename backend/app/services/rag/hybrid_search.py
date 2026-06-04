@@ -27,7 +27,9 @@ from app.services.rag.embedder import (
     get_current_embedding_model_version,
     get_embedding_service,
 )
-from app.services.rag.embedder_factory import EmbeddingProvider, get_embedding_service as get_embedding_service_by_provider
+from app.services.rag.embedder_factory import (
+    get_embedding_service as get_embedding_service_by_provider,
+)
 from app.services.rag.namespace import validate_namespace, validate_search_results
 from app.services.supabase.client import get_supabase_client
 
@@ -46,6 +48,7 @@ DEFAULT_RERANK_TOP_N = 5
 # Data Classes
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class SearchWeights:
     """Weights for hybrid search components.
@@ -59,6 +62,7 @@ class SearchWeights:
         >>> weights.bm25
         1.0
     """
+
     bm25: float = 1.0
     semantic: float = 1.0
 
@@ -90,6 +94,7 @@ class SearchResult:
         library_document_title: Title of library document (only for library results).
         section_title: Section heading from library chunk (e.g. "Section 4").
     """
+
     id: str
     matter_id: str
     document_id: str
@@ -121,6 +126,7 @@ class HybridSearchResult:
         embedding_completion_pct: Percentage of chunks with embeddings (0-100).
         fallback_reason: Human-readable reason if fallback was used.
     """
+
     results: list[SearchResult]
     query: str
     matter_id: str
@@ -153,6 +159,7 @@ class RerankedSearchResultItem:
         is_library: True if result is from shared library.
         library_document_title: Title of library document (only for library results).
     """
+
     id: str
     matter_id: str
     document_id: str
@@ -187,6 +194,7 @@ class RerankedSearchResult:
         search_mode: Search mode used - "hybrid", "bm25_only", or "bm25_fallback".
         embedding_completion_pct: Percentage of chunks with embeddings (0-100).
     """
+
     results: list[RerankedSearchResultItem]
     query: str
     matter_id: str
@@ -217,6 +225,7 @@ class HybridSearchServiceError(Exception):
 # =============================================================================
 # Hybrid Search Service
 # =============================================================================
+
 
 class HybridSearchService:
     """Service for hybrid BM25 + semantic search with RRF fusion.
@@ -292,7 +301,9 @@ class HybridSearchService:
             )
             embedded_count = embedded_resp.count or 0
 
-            completion_pct = (embedded_count / total_count * 100) if total_count > 0 else 0.0
+            completion_pct = (
+                (embedded_count / total_count * 100) if total_count > 0 else 0.0
+            )
 
             logger.debug(
                 "embedding_status_checked",
@@ -345,7 +356,7 @@ class HybridSearchService:
         rrf_k: int = 60,
         query_embedding: list[float] | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute hybrid search with RRF fusion.
 
@@ -395,7 +406,9 @@ class HybridSearchService:
             bm25_weight=weights.bm25,
             semantic_weight=weights.semantic,
             rrf_k=rrf_k,
-            has_filters=filters is not None and not filters.is_empty if filters else False,
+            has_filters=filters is not None and not filters.is_empty
+            if filters
+            else False,
         )
 
         # Resolve embedding provider
@@ -406,9 +419,13 @@ class HybridSearchService:
             if query_embedding is None:
                 if use_voyage:
                     embedder = get_embedding_service_by_provider("voyage")
-                    query_embedding = await embedder.embed_text(query, matter_id=matter_id)
+                    query_embedding = await embedder.embed_text(
+                        query, matter_id=matter_id
+                    )
                 else:
-                    query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
+                    query_embedding = await self.embedder.embed_text(
+                        query, matter_id=matter_id
+                    )
 
             # Handle embedding service failure (returns None when circuit is open or API fails)
             if query_embedding is None:
@@ -419,7 +436,9 @@ class HybridSearchService:
                     embedding_provider=embedding_provider or "openai",
                 )
                 # Fall back to BM25-only search when embeddings unavailable
-                bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit, filters=filters)
+                bm25_results = await self._bm25_search_internal(
+                    query, matter_id, limit=limit, filters=filters
+                )
                 return HybridSearchResult(
                     results=bm25_results,
                     query=query,
@@ -441,7 +460,9 @@ class HybridSearchService:
                 )
 
             # Gap 4: Convert filters to RPC params (empty dict if no filters)
-            filter_params = filters.to_rpc_params() if filters and not filters.is_empty else {}
+            filter_params = (
+                filters.to_rpc_params() if filters and not filters.is_empty else {}
+            )
 
             # Use Voyage-specific RPC when Voyage embeddings are selected
             if use_voyage:
@@ -474,7 +495,11 @@ class HybridSearchService:
 
             if response.data is None or len(response.data) == 0:
                 # Check if embeddings are incomplete (optimistic RAG)
-                total_chunks, embedded_chunks, completion_pct = await self._check_embedding_status(matter_id)
+                (
+                    total_chunks,
+                    embedded_chunks,
+                    completion_pct,
+                ) = await self._check_embedding_status(matter_id)
 
                 if total_chunks > 0 and embedded_chunks < total_chunks:
                     # Embeddings incomplete - fall back to BM25-only for optimistic search
@@ -486,7 +511,9 @@ class HybridSearchService:
                         embedded_chunks=embedded_chunks,
                         completion_pct=round(completion_pct, 1),
                     )
-                    bm25_results = await self._bm25_search_internal(query, matter_id, limit=limit, filters=filters)
+                    bm25_results = await self._bm25_search_internal(
+                        query, matter_id, limit=limit, filters=filters
+                    )
                     return HybridSearchResult(
                         results=bm25_results,
                         query=query,
@@ -529,7 +556,9 @@ class HybridSearchService:
                     bm25_rank=r.get("bm25_rank"),
                     semantic_rank=r.get("semantic_rank"),
                     rrf_score=r["rrf_score"],
-                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
+                    parent_chunk_id=str(r["parent_chunk_id"])
+                    if r.get("parent_chunk_id")
+                    else None,
                 )
                 for r in validated
             ]
@@ -576,7 +605,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> list[SearchResult]:
         """Internal BM25 search returning raw results.
 
@@ -601,7 +630,9 @@ class HybridSearchService:
                 )
 
             # Gap 4: Merge filter params into RPC call
-            filter_params = filters.to_rpc_params() if filters and not filters.is_empty else {}
+            filter_params = (
+                filters.to_rpc_params() if filters and not filters.is_empty else {}
+            )
 
             response = supabase.rpc(
                 "bm25_search_chunks",
@@ -610,7 +641,7 @@ class HybridSearchService:
                     "filter_matter_id": matter_id,
                     "match_count": limit,
                     **filter_params,
-                }
+                },
             ).execute()
 
             if not response.data:
@@ -632,7 +663,9 @@ class HybridSearchService:
                     bm25_rank=r.get("row_num"),
                     semantic_rank=None,
                     rrf_score=r.get("rank") or 0,
-                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
+                    parent_chunk_id=str(r["parent_chunk_id"])
+                    if r.get("parent_chunk_id")
+                    else None,
                 )
                 for r in validated
             ]
@@ -656,7 +689,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute BM25-only keyword search.
 
@@ -683,7 +716,9 @@ class HybridSearchService:
             limit=limit,
         )
 
-        results = await self._bm25_search_internal(query, matter_id, limit, filters=filters)
+        results = await self._bm25_search_internal(
+            query, matter_id, limit, filters=filters
+        )
 
         return HybridSearchResult(
             results=results,
@@ -757,7 +792,7 @@ class HybridSearchService:
                     "query_embedding": query_embedding,
                     "filter_matter_id": matter_id,
                     "match_count": limit,
-                }
+                },
             ).execute()
 
             if not response.data:
@@ -779,7 +814,9 @@ class HybridSearchService:
                     bm25_rank=None,
                     semantic_rank=r.get("row_num"),
                     rrf_score=r.get("similarity") or 0,
-                    parent_chunk_id=str(r["parent_chunk_id"]) if r.get("parent_chunk_id") else None,
+                    parent_chunk_id=str(r["parent_chunk_id"])
+                    if r.get("parent_chunk_id")
+                    else None,
                 )
                 for r in validated
             ]
@@ -808,7 +845,7 @@ class HybridSearchService:
         query_embedding: list[float] | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking.
 
@@ -925,7 +962,9 @@ class HybridSearchService:
                 query_len=len(query),
                 candidates=len(hybrid_result.results),
                 reranked=len(reranked_results),
-                top_relevance=reranked_results[0].relevance_score if reranked_results else 0,
+                top_relevance=reranked_results[0].relevance_score
+                if reranked_results
+                else 0,
             )
 
             return RerankedSearchResult(
@@ -987,7 +1026,6 @@ class HybridSearchService:
                 rerank_provider=rerank_provider or "cohere",
             )
 
-
     async def _search_library_chunks(
         self,
         query_embedding: list[float],
@@ -1013,7 +1051,7 @@ class HybridSearchService:
                     "filter_matter_id": matter_id,
                     "match_count": library_limit,
                     "similarity_threshold": 0.5,
-                }
+                },
             ).execute()
 
             if response.data:
@@ -1123,7 +1161,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rrf_k: int = 60,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute hybrid search on both matter chunks and linked library chunks.
 
@@ -1177,7 +1215,9 @@ class HybridSearchService:
                 embedder = get_embedding_service_by_provider("voyage")
                 query_embedding = await embedder.embed_text(query, matter_id=matter_id)
             else:
-                query_embedding = await self.embedder.embed_text(query, matter_id=matter_id)
+                query_embedding = await self.embedder.embed_text(
+                    query, matter_id=matter_id
+                )
 
             # C4: If embedding fails, fall back to matter-only BM25 search
             # instead of passing None to search() which would try embedding again
@@ -1214,7 +1254,11 @@ class HybridSearchService:
             # Step 3: Search linked library chunks (semantic + BM25 fallback — GAP-7 fix)
             library_results: list[SearchResult] = []
             if query_embedding is not None:
-                rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
+                rpc_func = (
+                    "match_library_chunks_for_matter_voyage"
+                    if use_voyage
+                    else "match_library_chunks_for_matter"
+                )
                 library_results = await self._search_library_chunks(
                     query_embedding=query_embedding,
                     matter_id=matter_id,
@@ -1294,7 +1338,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking AND library results.
 
@@ -1336,7 +1380,11 @@ class HybridSearchService:
         # Step 3: Library results (best-effort, uses same embedding + BM25 fallback)
         library_results: list[SearchResult] = []
         if query_embedding is not None:
-            rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
+            rpc_func = (
+                "match_library_chunks_for_matter_voyage"
+                if use_voyage
+                else "match_library_chunks_for_matter"
+            )
             library_results = await self._search_library_chunks(
                 query_embedding=query_embedding,
                 matter_id=matter_id,
@@ -1358,38 +1406,37 @@ class HybridSearchService:
                     seen_ids.add(bm25_r.id)
 
         if library_results:
-                # Convert library SearchResults to RerankedSearchResultItems
-                for lib in library_results:
-                    rerank_result.results.append(
-                        RerankedSearchResultItem(
-                            id=lib.id,
-                            matter_id=lib.matter_id,
-                            document_id=lib.document_id,
-                            content=lib.content,
-                            page_number=lib.page_number,
-                            bbox_ids=lib.bbox_ids,
-                            chunk_type=lib.chunk_type,
-                            token_count=lib.token_count,
-                            bm25_rank=lib.bm25_rank,
-                            semantic_rank=lib.semantic_rank,
-                            rrf_score=lib.rrf_score,
-                            relevance_score=lib.rrf_score,  # Use similarity as relevance
-                            is_library=True,
-                            library_document_title=lib.library_document_title,
-                            parent_chunk_id=None,  # Library chunks don't use parent expansion
-                        )
+            # Convert library SearchResults to RerankedSearchResultItems
+            for lib in library_results:
+                rerank_result.results.append(
+                    RerankedSearchResultItem(
+                        id=lib.id,
+                        matter_id=lib.matter_id,
+                        document_id=lib.document_id,
+                        content=lib.content,
+                        page_number=lib.page_number,
+                        bbox_ids=lib.bbox_ids,
+                        chunk_type=lib.chunk_type,
+                        token_count=lib.token_count,
+                        bm25_rank=lib.bm25_rank,
+                        semantic_rank=lib.semantic_rank,
+                        rrf_score=lib.rrf_score,
+                        relevance_score=lib.rrf_score,  # Use similarity as relevance
+                        is_library=True,
+                        library_document_title=lib.library_document_title,
+                        parent_chunk_id=None,  # Library chunks don't use parent expansion
                     )
-                rerank_result.total_candidates += len(library_results)
-
-                logger.info(
-                    "search_with_rerank_and_library_complete",
-                    matter_id=matter_id,
-                    reranked_count=len(rerank_result.results) - len(library_results),
-                    library_count=len(library_results),
                 )
+            rerank_result.total_candidates += len(library_results)
+
+            logger.info(
+                "search_with_rerank_and_library_complete",
+                matter_id=matter_id,
+                reranked_count=len(rerank_result.results) - len(library_results),
+                library_count=len(library_results),
+            )
 
         return rerank_result
-
 
     async def search_with_entity_boost(
         self,
@@ -1462,6 +1509,7 @@ class HybridSearchService:
 
         # Build entity-filtered filters for Pool A
         from app.models.search import SearchFilters as _SearchFilters
+
         base_filter_dict = filters.model_dump(exclude_none=True) if filters else {}
         entity_filters = _SearchFilters(**base_filter_dict, entity_ids=entity_ids)
 
@@ -1494,7 +1542,9 @@ class HybridSearchService:
         )
 
         pool_a_result, pool_b_result = await asyncio.gather(
-            pool_a_coro, pool_b_coro, return_exceptions=True,
+            pool_a_coro,
+            pool_b_coro,
+            return_exceptions=True,
         )
 
         # Handle pool failures gracefully
@@ -1629,7 +1679,11 @@ class HybridSearchService:
 
         # Append library results (best-effort, uses same embedding)
         if query_embedding is not None:
-            rpc_func = "match_library_chunks_for_matter_voyage" if use_voyage else "match_library_chunks_for_matter"
+            rpc_func = (
+                "match_library_chunks_for_matter_voyage"
+                if use_voyage
+                else "match_library_chunks_for_matter"
+            )
             library_results = await self._search_library_chunks(
                 query_embedding=query_embedding,
                 matter_id=matter_id,

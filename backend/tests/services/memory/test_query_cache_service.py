@@ -47,7 +47,9 @@ def mock_normalizer() -> MagicMock:
 
 
 @pytest.fixture
-def service(mock_repository: AsyncMock, mock_normalizer: MagicMock) -> QueryCacheService:
+def service(
+    mock_repository: AsyncMock, mock_normalizer: MagicMock
+) -> QueryCacheService:
     """Create a QueryCacheService with mocks."""
     reset_query_cache_service()
     return QueryCacheService(mock_repository, mock_normalizer)

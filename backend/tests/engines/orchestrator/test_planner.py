@@ -135,20 +135,20 @@ class TestParallelDetection:
         engines = list(EngineType)
 
         for i, engine_a in enumerate(engines):
-            for engine_b in engines[i + 1:]:
+            for engine_b in engines[i + 1 :]:
                 assert planner._can_run_parallel(engine_a, engine_b) is True
 
     def test_can_run_parallel_citation_timeline(self, planner):
         """Citation and Timeline can run in parallel."""
-        assert planner._can_run_parallel(
-            EngineType.CITATION, EngineType.TIMELINE
-        ) is True
+        assert (
+            planner._can_run_parallel(EngineType.CITATION, EngineType.TIMELINE) is True
+        )
 
     def test_can_run_parallel_contradiction_rag(self, planner):
         """Contradiction and RAG can run in parallel."""
-        assert planner._can_run_parallel(
-            EngineType.CONTRADICTION, EngineType.RAG
-        ) is True
+        assert (
+            planner._can_run_parallel(EngineType.CONTRADICTION, EngineType.RAG) is True
+        )
 
 
 # =============================================================================

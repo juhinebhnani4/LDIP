@@ -17,9 +17,13 @@ from app.models.ocr_chunk import ChunkSpec
 logger = structlog.get_logger(__name__)
 
 # Routing thresholds
-PAGE_COUNT_THRESHOLD = 15  # Documents > 15 pages use chunked processing (Document AI limit)
+PAGE_COUNT_THRESHOLD = (
+    15  # Documents > 15 pages use chunked processing (Document AI limit)
+)
 MAX_PAGE_COUNT = 10000  # Security limit
-CHUNK_SIZE = 15  # Pages per chunk (Document AI limit: 15 for non-imageless, 30 for imageless)
+CHUNK_SIZE = (
+    15  # Pages per chunk (Document AI limit: 15 for non-imageless, 30 for imageless)
+)
 
 
 class PDFRouterError(Exception):

@@ -22,9 +22,8 @@ import math
 from datetime import UTC, datetime
 from typing import Any
 
-from scipy import stats as scipy_stats
-
 import structlog
+from scipy import stats as scipy_stats
 
 from app.core.config import get_settings
 from app.services.supabase.client import get_service_client as _get_service_raw
@@ -37,7 +36,9 @@ def get_supabase():
     """Get Supabase client with null guard (for reads — respects RLS)."""
     client = _get_supabase_raw()
     if client is None:
-        raise RuntimeError("Supabase client not configured — A/B testing requires database access")
+        raise RuntimeError(
+            "Supabase client not configured — A/B testing requires database access"
+        )
     return client
 
 
@@ -49,7 +50,9 @@ def _get_service_supabase():
     """
     client = _get_service_raw()
     if client is None:
-        raise RuntimeError("Supabase service client not configured — A/B testing requires service-role access")
+        raise RuntimeError(
+            "Supabase service client not configured — A/B testing requires service-role access"
+        )
     return client
 
 
@@ -347,7 +350,9 @@ class ABTestAnalyzer:
                 "ab_test_faithfulness_gate_skipped",
                 reason="insufficient_faithfulness_data",
                 control_count=len(control_faithfulness) if control_faithfulness else 0,
-                treatment_count=len(treatment_faithfulness) if treatment_faithfulness else 0,
+                treatment_count=len(treatment_faithfulness)
+                if treatment_faithfulness
+                else 0,
             )
         if has_faithfulness_data:
             avg_t_faith = sum(treatment_faithfulness) / len(treatment_faithfulness)
@@ -539,7 +544,9 @@ class ABTestRunner:
             lambda: supabase.table("ab_test_runs").insert(row).execute()
         )
         if not result.data:
-            raise RuntimeError("Failed to create A/B test run — insert returned no data")
+            raise RuntimeError(
+                "Failed to create A/B test run — insert returned no data"
+            )
         return result.data[0]
 
     # Valid status transitions for optimistic locking
@@ -645,7 +652,9 @@ class ABTestRunner:
 
         try:
             result = await asyncio.to_thread(
-                lambda: supabase.rpc("get_ab_test_scores", {"p_job_id": job_id}).execute()
+                lambda: supabase.rpc(
+                    "get_ab_test_scores", {"p_job_id": job_id}
+                ).execute()
             )
             if result.data:
                 return result.data
@@ -679,15 +688,11 @@ class ABTestRunner:
             "context_recall": round(
                 sum(r.get("context_recall") or 0 for r in rows) / n, 4
             ),
-            "faithfulness": round(
-                sum(r.get("faithfulness") or 0 for r in rows) / n, 4
-            ),
+            "faithfulness": round(sum(r.get("faithfulness") or 0 for r in rows) / n, 4),
             "answer_relevancy": round(
                 sum(r.get("answer_relevancy") or 0 for r in rows) / n, 4
             ),
-            "overall": round(
-                sum(r.get("overall_score") or 0 for r in rows) / n, 4
-            ),
+            "overall": round(sum(r.get("overall_score") or 0 for r in rows) / n, 4),
             "scores": rows,
         }
 
@@ -722,11 +727,15 @@ class ABTestRunner:
             treatment_agg = await runner.aggregate_scores(treatment_job_id)
 
             if not control_agg or not treatment_agg:
-                await runner.update_run(run_id, {
-                    "status": "failed",
-                    "error_message": "Failed to aggregate scores for one or both arms",
-                    "completed_at": datetime.now(UTC).isoformat(),
-                }, expected_status="comparing")
+                await runner.update_run(
+                    run_id,
+                    {
+                        "status": "failed",
+                        "error_message": "Failed to aggregate scores for one or both arms",
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    },
+                    expected_status="comparing",
+                )
                 return {"status": "failed"}
 
             # Extract individual overall scores for statistical test
@@ -742,16 +751,20 @@ class ABTestRunner:
             ]
 
             # Extract latency percentiles
-            control_latencies = sorted([
-                s["search_latency_ms"]
-                for s in (control_agg.get("scores") or [])
-                if s.get("search_latency_ms") is not None
-            ])
-            treatment_latencies = sorted([
-                s["search_latency_ms"]
-                for s in (treatment_agg.get("scores") or [])
-                if s.get("search_latency_ms") is not None
-            ])
+            control_latencies = sorted(
+                [
+                    s["search_latency_ms"]
+                    for s in (control_agg.get("scores") or [])
+                    if s.get("search_latency_ms") is not None
+                ]
+            )
+            treatment_latencies = sorted(
+                [
+                    s["search_latency_ms"]
+                    for s in (treatment_agg.get("scores") or [])
+                    if s.get("search_latency_ms") is not None
+                ]
+            )
 
             def _percentile(arr: list[int], p: float) -> int | None:
                 if not arr:
@@ -840,12 +853,16 @@ class ABTestRunner:
             )
             # Guard: only overwrite to "failed" if still in "comparing" state.
             # If already cancelled or completed, don't clobber.
-            try:
-                await runner.update_run(run_id, {
-                    "status": "failed",
-                    "error_message": str(e),
-                    "completed_at": datetime.now(UTC).isoformat(),
-                }, expected_status="comparing")
+            try:  # noqa: SIM105
+                await runner.update_run(
+                    run_id,
+                    {
+                        "status": "failed",
+                        "error_message": str(e),
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    },
+                    expected_status="comparing",
+                )
             except (RuntimeError, ValueError):
                 pass  # Already transitioned — safe to ignore
             raise
@@ -874,7 +891,10 @@ class ABTestRunner:
             running_result = (
                 supabase.table("ab_test_runs")
                 .select("id, status, created_at, matter_id")
-                .in_("status", ["pending", "running_control", "running_treatment", "comparing"])
+                .in_(
+                    "status",
+                    ["pending", "running_control", "running_treatment", "comparing"],
+                )
                 .limit(1)
                 .execute()
             )

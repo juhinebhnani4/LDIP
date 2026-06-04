@@ -34,7 +34,10 @@ def get_headers() -> dict[str, str]:
     """Get request headers with authentication."""
     if not ADMIN_TOKEN:
         click.echo("Error: LDIP_ADMIN_TOKEN environment variable not set", err=True)
-        click.echo("Export your admin JWT token: export LDIP_ADMIN_TOKEN='your-token'", err=True)
+        click.echo(
+            "Export your admin JWT token: export LDIP_ADMIN_TOKEN='your-token'",
+            err=True,
+        )
         sys.exit(1)
     return {
         "Authorization": f"Bearer {ADMIN_TOKEN}",
@@ -79,9 +82,9 @@ def list_failed(matter_id: str | None, limit: int):
             click.echo("No failed jobs found.")
             return
 
-        click.echo(f"\n{'='*80}")
+        click.echo(f"\n{'=' * 80}")
         click.echo(f"FAILED JOBS ({len(jobs)} total)")
-        click.echo(f"{'='*80}\n")
+        click.echo(f"{'=' * 80}\n")
 
         for job in jobs:
             click.echo(f"Job ID: {job.get('id')}")
@@ -114,21 +117,23 @@ def list_stale():
         stale_jobs = data.get("stale_jobs", [])
         config = data.get("configuration", {})
 
-        click.echo(f"\n{'='*80}")
+        click.echo(f"\n{'=' * 80}")
         click.echo("STALE JOB STATISTICS")
-        click.echo(f"{'='*80}\n")
+        click.echo(f"{'=' * 80}\n")
 
         click.echo(f"Stale job count: {data.get('stale_jobs_count', 0)}")
         click.echo(f"Recovered last hour: {data.get('recovered_last_hour', 0)}")
-        click.echo(f"\nConfiguration:")
-        click.echo(f"  Stale timeout: {config.get('stale_timeout_minutes', 30)} minutes")
+        click.echo("\nConfiguration:")
+        click.echo(
+            f"  Stale timeout: {config.get('stale_timeout_minutes', 30)} minutes"
+        )
         click.echo(f"  Max retries: {config.get('max_recovery_retries', 3)}")
         click.echo(f"  Recovery enabled: {config.get('recovery_enabled', True)}")
 
         if stale_jobs:
-            click.echo(f"\n{'='*80}")
+            click.echo(f"\n{'=' * 80}")
             click.echo("STALE JOBS")
-            click.echo(f"{'='*80}\n")
+            click.echo(f"{'=' * 80}\n")
 
             for job in stale_jobs:
                 click.echo(f"Job ID: {job.get('job_id')}")
@@ -173,7 +178,10 @@ def retry_job(job_id: str, reset_count: bool):
         click.echo(f"✗ Failed to retry job: {e.response.status_code}", err=True)
         try:
             error_data = e.response.json()
-            click.echo(f"  Error: {error_data.get('error', {}).get('message', e.response.text)}", err=True)
+            click.echo(
+                f"  Error: {error_data.get('error', {}).get('message', e.response.text)}",
+                err=True,
+            )
         except Exception:
             click.echo(f"  Response: {e.response.text}", err=True)
         sys.exit(1)
@@ -183,7 +191,9 @@ def retry_job(job_id: str, reset_count: bool):
 
 
 @cli.command("recover-stuck")
-@click.option("--dry-run", is_flag=True, help="Show what would be recovered without doing it")
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be recovered without doing it"
+)
 def recover_stuck(dry_run: bool):
     """Recover all stale/stuck jobs."""
     if dry_run:
@@ -198,7 +208,9 @@ def recover_stuck(dry_run: bool):
             click.echo(f"\n[DRY RUN] Would recover {stale_count} stale job(s)")
 
             for job in data.get("stale_jobs", []):
-                click.echo(f"  - {job.get('job_id')} (stuck since {format_datetime(job.get('stuck_since'))})")
+                click.echo(
+                    f"  - {job.get('job_id')} (stuck since {format_datetime(job.get('stuck_since'))})"
+                )
 
             return
         except Exception as e:
@@ -215,9 +227,9 @@ def recover_stuck(dry_run: bool):
         recovered = data.get("recovered", 0)
         failed = data.get("failed", 0)
 
-        click.echo(f"\n{'='*80}")
+        click.echo(f"\n{'=' * 80}")
         click.echo("RECOVERY RESULTS")
-        click.echo(f"{'='*80}\n")
+        click.echo(f"{'=' * 80}\n")
 
         click.echo(f"Recovered: {recovered}")
         click.echo(f"Failed: {failed}")
@@ -261,7 +273,10 @@ def recover_job(job_id: str):
         click.echo(f"✗ Failed to recover job: {e.response.status_code}", err=True)
         try:
             error_data = e.response.json()
-            click.echo(f"  Error: {error_data.get('error', {}).get('message', e.response.text)}", err=True)
+            click.echo(
+                f"  Error: {error_data.get('error', {}).get('message', e.response.text)}",
+                err=True,
+            )
         except Exception:
             click.echo(f"  Response: {e.response.text}", err=True)
         sys.exit(1)
@@ -285,7 +300,7 @@ def skip_job(job_id: str, reason: str):
             timeout=30.0,
         )
         response.raise_for_status()
-        data = response.json()
+        response.json()
 
         click.echo(f"\n✓ Job {job_id} marked as skipped")
         click.echo(f"  Reason: {reason}")
@@ -294,7 +309,10 @@ def skip_job(job_id: str, reason: str):
         click.echo(f"✗ Failed to skip job: {e.response.status_code}", err=True)
         try:
             error_data = e.response.json()
-            click.echo(f"  Error: {error_data.get('error', {}).get('message', e.response.text)}", err=True)
+            click.echo(
+                f"  Error: {error_data.get('error', {}).get('message', e.response.text)}",
+                err=True,
+            )
         except Exception:
             click.echo(f"  Response: {e.response.text}", err=True)
         sys.exit(1)
@@ -321,7 +339,10 @@ def cancel_job(job_id: str):
         click.echo(f"✗ Failed to cancel job: {e.response.status_code}", err=True)
         try:
             error_data = e.response.json()
-            click.echo(f"  Error: {error_data.get('error', {}).get('message', e.response.text)}", err=True)
+            click.echo(
+                f"  Error: {error_data.get('error', {}).get('message', e.response.text)}",
+                err=True,
+            )
         except Exception:
             click.echo(f"  Response: {e.response.text}", err=True)
         sys.exit(1)

@@ -4,18 +4,15 @@ Tests the loading of known_acts.json including aliases support.
 """
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from app.core.data_loader import (
-    _get_known_acts_mapping,
     clear_data_cache,
     get_known_act_info,
     get_known_acts,
-    load_json_data,
 )
 
 
@@ -160,9 +157,7 @@ class TestKnownActsLoading:
 
             assert info == ("999", "test.pdf")
 
-    def test_get_known_act_info_returns_none_for_unknown(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_known_act_info_returns_none_for_unknown(self, tmp_path: Path) -> None:
         """get_known_act_info should return None for unknown act."""
         test_data = {"acts": []}
 

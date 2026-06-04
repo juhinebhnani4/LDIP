@@ -21,7 +21,9 @@ logger = structlog.get_logger(__name__)
 class CleanupResponse(BaseModel):
     """Response model for cleanup operations."""
 
-    success: bool = Field(..., description="Whether the task was triggered successfully")
+    success: bool = Field(
+        ..., description="Whether the task was triggered successfully"
+    )
     task_id: str | None = Field(None, description="Celery task ID for tracking")
     message: str = Field(..., description="Human-readable status message")
 

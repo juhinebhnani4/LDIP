@@ -24,7 +24,7 @@ from app.engines.orchestrator.orchestrator import (
     QueryOrchestrator,
     get_query_orchestrator,
 )
-from app.models.orchestrator import EngineType, OrchestratorResult
+from app.models.orchestrator import OrchestratorResult
 from app.services.rag.embedder import EMBEDDING_MODEL
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +64,8 @@ class RAGPipelineResult(BaseModel):
         description="Snapshot of pipeline configuration for traceability",
     )
     search_latency_ms: int | None = Field(
-        default=None, description="Search+rerank latency in ms (from RAG adapter)",
+        default=None,
+        description="Search+rerank latency in ms (from RAG adapter)",
     )
     blocked: bool = Field(
         default=False, description="True if query was blocked by safety checks"
@@ -193,13 +194,11 @@ class RAGPipelineService:
                         actual_rerank_provider = er.data["rerank_provider"]
 
             # Use actual providers from engine results, then context, then defaults
-            embed_prov = (
-                actual_embedding_provider
-                or (context or {}).get("embedding_provider")
+            embed_prov = actual_embedding_provider or (context or {}).get(
+                "embedding_provider"
             )
-            rerank_prov = (
-                actual_rerank_provider
-                or (context or {}).get("rerank_provider")
+            rerank_prov = actual_rerank_provider or (context or {}).get(
+                "rerank_provider"
             )
 
             return RAGPipelineResult(
@@ -237,7 +236,9 @@ class RAGPipelineService:
         for engine_result in result.engine_results:
             if not engine_result.data:
                 continue
-            chunks = engine_result.data.get("chunks", []) or engine_result.data.get("results", [])
+            chunks = engine_result.data.get("chunks", []) or engine_result.data.get(
+                "results", []
+            )
             for chunk in chunks:
                 if isinstance(chunk, dict) and "content" in chunk:
                     contexts.append(chunk["content"])

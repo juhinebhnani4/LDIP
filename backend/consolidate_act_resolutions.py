@@ -26,12 +26,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.engines.citation.abbreviations import (
+from app.engines.citation.abbreviations import (  # noqa: E402
     clean_act_name,
     get_canonical_name,
     normalize_act_name,
 )
-from app.services.supabase.client import get_service_client
+from app.services.supabase.client import get_service_client  # noqa: E402
 
 
 def is_garbage_act_name(act_name: str) -> bool:
@@ -93,11 +93,15 @@ async def update_citations_act_name(
 ):
     """Update citations to use the canonical act name."""
     if dry_run:
-        print(f"  [DRY RUN] Would update {len(citation_ids)} citations to '{new_act_name}'")
+        print(
+            f"  [DRY RUN] Would update {len(citation_ids)} citations to '{new_act_name}'"
+        )
         return
 
     for cid in citation_ids:
-        client.table("citations").update({"act_name": new_act_name}).eq("id", cid).execute()
+        client.table("citations").update({"act_name": new_act_name}).eq(
+            "id", cid
+        ).execute()
 
     print(f"  Updated {len(citation_ids)} citations to '{new_act_name}'")
 
@@ -141,7 +145,6 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
     for res in resolutions:
         matter = res["matter_id"]
         display_name = res.get("act_name_display") or ""
-        normalized = res.get("act_name_normalized") or ""
 
         # Clean the display name
         cleaned = clean_act_name(display_name)
@@ -150,7 +153,9 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
         canonical = get_canonical_name(cleaned)
         if canonical:
             canonical_name, year = canonical
-            target_normalized = normalize_act_name(canonical_name + (f", {year}" if year else ""))
+            target_normalized = normalize_act_name(
+                canonical_name + (f", {year}" if year else "")
+            )
         else:
             target_normalized = normalize_act_name(cleaned)
 
@@ -169,19 +174,26 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
         print(f"Found {len(group_resolutions)} duplicates:")
 
         # Find the best resolution to keep (highest citation count, or first available)
-        best = max(group_resolutions, key=lambda r: (
-            r.get("resolution_status") == "available",  # Prefer available
-            r.get("citation_count", 0),  # Then highest count
-        ))
+        best = max(
+            group_resolutions,
+            key=lambda r: (
+                r.get("resolution_status") == "available",  # Prefer available
+                r.get("citation_count", 0),  # Then highest count
+            ),
+        )
 
         # Get canonical display name
         canonical = get_canonical_name(clean_act_name(best.get("act_name_display", "")))
         if canonical:
-            canonical_display = f"{canonical[0]}, {canonical[1]}" if canonical[1] else canonical[0]
+            canonical_display = (
+                f"{canonical[0]}, {canonical[1]}" if canonical[1] else canonical[0]
+            )
         else:
             canonical_display = clean_act_name(best.get("act_name_display", ""))
 
-        print(f"  Keeping: {best['id'][:8]}... ({best.get('act_name_display', '')[:50]})")
+        print(
+            f"  Keeping: {best['id'][:8]}... ({best.get('act_name_display', '')[:50]})"
+        )
         print(f"  Canonical display name: {canonical_display}")
 
         # Process duplicates to delete
@@ -190,13 +202,17 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
                 continue
 
             display = res.get("act_name_display", "")
-            print(f"  Merging: {res['id'][:8]}... ({display[:60]}{'...' if len(display) > 60 else ''})")
+            print(
+                f"  Merging: {res['id'][:8]}... ({display[:60]}{'...' if len(display) > 60 else ''})"
+            )
 
             # Update citations from this resolution to use canonical name
             citations = await get_citations_for_act(client, matter, display)
             if citations:
                 citation_ids = [c["id"] for c in citations]
-                await update_citations_act_name(client, citation_ids, canonical_display, dry_run)
+                await update_citations_act_name(
+                    client, citation_ids, canonical_display, dry_run
+                )
                 total_to_update += len(citation_ids)
 
             # Delete the duplicate resolution
@@ -216,7 +232,9 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Consolidate duplicate act resolutions")
+    parser = argparse.ArgumentParser(
+        description="Consolidate duplicate act resolutions"
+    )
     parser.add_argument(
         "--live",
         action="store_true",

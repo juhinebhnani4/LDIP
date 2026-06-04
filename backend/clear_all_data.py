@@ -3,13 +3,15 @@
 This script deletes all data from all tables while preserving the schema.
 Tables are deleted in reverse dependency order to respect foreign key constraints.
 """
+
 import os
 import sys
+
 from dotenv import load_dotenv
 from supabase import create_client
 
 # Fix Windows encoding
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
 load_dotenv()
 
@@ -23,9 +25,9 @@ if not url or not key:
 client = create_client(url, key)
 
 print(f"Connected to: {url}")
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("WARNING: This will DELETE ALL DATA from your Supabase database!")
-print("="*60 + "\n")
+print("=" * 60 + "\n")
 
 confirm = input("Type 'DELETE ALL' to confirm: ")
 if confirm != "DELETE ALL":
@@ -82,7 +84,12 @@ errors = []
 for table in tables_to_clear:
     try:
         # Delete all rows from the table
-        result = client.table(table).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+        result = (
+            client.table(table)
+            .delete()
+            .neq("id", "00000000-0000-0000-0000-000000000000")
+            .execute()
+        )
         count = len(result.data) if result.data else 0
         if count > 0:
             print(f"  [OK] {table}: deleted {count} rows")
@@ -91,19 +98,23 @@ for table in tables_to_clear:
             print(f"  [--] {table}: empty")
     except Exception as e:
         error_msg = str(e)
-        if "could not find" in error_msg.lower() or "does not exist" in error_msg.lower() or "PGRST205" in error_msg:
+        if (
+            "could not find" in error_msg.lower()
+            or "does not exist" in error_msg.lower()
+            or "PGRST205" in error_msg
+        ):
             print(f"  [--] {table}: table doesn't exist (skipped)")
         else:
             print(f"  [ERR] {table}: {error_msg[:80]}")
             errors.append((table, error_msg))
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print(f"Total rows deleted: {cleared}")
 if errors:
     print(f"Errors: {len(errors)}")
     for table, err in errors:
         print(f"  - {table}: {err[:100]}")
-print("="*60)
+print("=" * 60)
 
 # Also clear storage buckets
 print("\nClearing storage buckets...")
@@ -121,10 +132,16 @@ if clear_storage == "YES":
                         # List files in folder
                         folder_files = client.storage.from_(bucket).list(folder["name"])
                         if folder_files:
-                            paths = [f"{folder['name']}/{f['name']}" for f in folder_files if f.get("name")]
+                            paths = [
+                                f"{folder['name']}/{f['name']}"
+                                for f in folder_files
+                                if f.get("name")
+                            ]
                             if paths:
                                 client.storage.from_(bucket).remove(paths)
-                                print(f"  ✓ {bucket}/{folder['name']}: deleted {len(paths)} files")
+                                print(
+                                    f"  ✓ {bucket}/{folder['name']}: deleted {len(paths)} files"
+                                )
             print(f"  [OK] {bucket}: cleared")
         except Exception as e:
             print(f"  - {bucket}: {str(e)[:80]}")

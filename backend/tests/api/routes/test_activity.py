@@ -277,9 +277,7 @@ class TestMarkActivityRead:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.patch(
-                    f"/api/activity-feed/{activity_id}/read"
-                )
+                response = await client.patch(f"/api/activity-feed/{activity_id}/read")
 
             assert response.status_code == 401
         finally:

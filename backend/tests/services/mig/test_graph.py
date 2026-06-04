@@ -245,9 +245,7 @@ class TestMIGGraphServiceSaveEntities:
         # Mock: no existing entity found
         mock_select = MagicMock()
         mock_select.execute.return_value = MagicMock(data=[])
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.ilike.return_value.limit.return_value = (
-            mock_select
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.ilike.return_value.limit.return_value = mock_select
 
         # Mock: insert returns new entity
         mock_insert = MagicMock()
@@ -304,9 +302,7 @@ class TestMIGGraphServiceGetEntity:
                 "updated_at": "2024-01-15T10:30:00+00:00",
             }
         ]
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
 
         service = MIGGraphService()
 
@@ -318,16 +314,16 @@ class TestMIGGraphServiceGetEntity:
 
     @patch("app.services.mig.graph.get_supabase_client")
     @pytest.mark.asyncio
-    async def test_returns_none_when_not_found(self, mock_get_client: MagicMock) -> None:
+    async def test_returns_none_when_not_found(
+        self, mock_get_client: MagicMock
+    ) -> None:
         """Should return None when entity not found."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
 
         mock_response = MagicMock()
         mock_response.data = []
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_response
 
         service = MIGGraphService()
 

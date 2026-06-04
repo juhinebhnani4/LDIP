@@ -9,15 +9,17 @@ Simulates various failure scenarios in the chunked document processing pipeline:
 - No partial/corrupt data saved to database
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
 from app.services.ocr_chunk_service import OCRChunkService
-from app.services.ocr_result_merger import ChunkOCRResult, MergeValidationError, OCRResultMerger
-
+from app.services.ocr_result_merger import (
+    ChunkOCRResult,
+    MergeValidationError,
+    OCRResultMerger,
+)
 
 # =============================================================================
 # Fixtures
@@ -99,7 +101,6 @@ class TestWorkerKilledMidProcessing:
         # Simulates the idempotency feature: already-processed chunks are skipped
 
         completed_chunk_ids = [f"chunk_{i}" for i in range(4)]
-        failed_chunk_index = 4
 
         # Simulate retry: check which chunks need processing
         chunks_to_process = []
@@ -240,7 +241,9 @@ class TestRecoveryScenarios:
         assert len(pending_chunks) == 4
 
         # Complete the pending chunks
-        completed_chunks = [c for c in sample_chunks if c.chunk_index in completed_indices]
+        completed_chunks = [
+            c for c in sample_chunks if c.chunk_index in completed_indices
+        ]
         all_chunks = completed_chunks + pending_chunks
 
         # Full merge should now succeed
@@ -253,7 +256,6 @@ class TestRecoveryScenarios:
     def test_duplicate_chunk_handling(self, sample_chunks):
         """Duplicate chunks don't cause corruption."""
         # Simulate: chunk 3 was processed twice due to retry
-        chunks_with_duplicate = sample_chunks.copy()
 
         # In the actual system, the database unique constraint would prevent
         # duplicate storage. Here we verify the merge handles duplicates gracefully.
@@ -272,7 +274,9 @@ class TestAtomicOperations:
     def test_streaming_atomic_writes(self, tmp_path):
         """Streaming split uses atomic writes for chunk files."""
         from io import BytesIO
+
         from pypdf import PdfWriter
+
         from app.services.pdf_chunker import PDFChunker
 
         # Create test PDF
@@ -288,7 +292,9 @@ class TestAtomicOperations:
         with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
             # Verify no .tmp files exist (atomic write completed)
             tmp_files = list(result.temp_dir.glob("*.tmp"))
-            assert len(tmp_files) == 0, "Temporary files should not exist after atomic write"
+            assert len(tmp_files) == 0, (
+                "Temporary files should not exist after atomic write"
+            )
 
             # All chunk files should be complete PDFs
             for chunk_path, _, _ in result.chunks:
@@ -308,8 +314,28 @@ class TestAtomicOperations:
         # Verify all bboxes are present (transaction committed)
         pages = {b["page"] for b in result.bounding_boxes}
         # Should have pages from all chunks
-        expected_pages = {1, 25, 26, 50, 51, 75, 76, 100, 101, 125,
-                         126, 150, 151, 175, 176, 200, 201, 225, 226, 250}
+        expected_pages = {
+            1,
+            25,
+            26,
+            50,
+            51,
+            75,
+            76,
+            100,
+            101,
+            125,
+            126,
+            150,
+            151,
+            175,
+            176,
+            200,
+            201,
+            225,
+            226,
+            250,
+        }
         assert pages == expected_pages
 
 
@@ -356,12 +382,15 @@ class TestChaosSimulation:
         assert result.chunk_count == 10
 
         # Verify page ordering is correct in result
-        for i, chunk in enumerate(sample_chunks):
+        for _i, chunk in enumerate(sample_chunks):
             expected_first_page = chunk.page_start
             expected_last_page = chunk.page_end
             # Find corresponding bboxes
-            chunk_bboxes = [b for b in result.bounding_boxes
-                           if expected_first_page <= b["page"] <= expected_last_page]
+            chunk_bboxes = [
+                b
+                for b in result.bounding_boxes
+                if expected_first_page <= b["page"] <= expected_last_page
+            ]
             assert len(chunk_bboxes) == 2
 
 

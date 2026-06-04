@@ -18,8 +18,8 @@ Usage:
     --delete:     Delete duplicate entities after merging (default: soft merge only)
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,8 +31,8 @@ from collections import defaultdict
 import structlog
 from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 
-from app.services.supabase.client import get_service_client
 from app.models.entity import EntityNode, EntityType
+from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 
@@ -116,7 +116,9 @@ def load_entities(matter_id: str, batch_size: int = 500) -> list[EntityNode]:
                 id=row["id"],
                 matter_id=row["matter_id"],
                 canonical_name=row["canonical_name"],
-                entity_type=EntityType(row["entity_type"]) if row.get("entity_type") else EntityType.PERSON,
+                entity_type=EntityType(row["entity_type"])
+                if row.get("entity_type")
+                else EntityType.PERSON,
                 aliases=row.get("aliases") or [],
                 mention_count=row.get("mention_count", 0),
                 metadata=row.get("metadata") or {},
@@ -141,9 +143,22 @@ def normalize_name(name: str) -> str:
     if not name:
         return ""
     title_words = (
-        "shri", "smt", "kumari", "dr", "adv", "advocate",
-        "hon", "hon'ble", "honourable", "justice",
-        "mr", "mrs", "ms", "miss", "prof", "professor",
+        "shri",
+        "smt",
+        "kumari",
+        "dr",
+        "adv",
+        "advocate",
+        "hon",
+        "hon'ble",
+        "honourable",
+        "justice",
+        "mr",
+        "mrs",
+        "ms",
+        "miss",
+        "prof",
+        "professor",
     )
     pattern = r"^(?:" + "|".join(re.escape(t) for t in title_words) + r")\.?\s+"
     cleaned = re.sub(pattern, "", name.strip(), flags=re.IGNORECASE)
@@ -229,9 +244,10 @@ def calculate_similarity(
         return 1.0
 
     # For very short org cores, require exact match
-    if entity_type != EntityType.PERSON:
-        if len(core1) < MIN_ORG_CORE_LENGTH or len(core2) < MIN_ORG_CORE_LENGTH:
-            return 1.0 if core1 == core2 else 0.0
+    if entity_type != EntityType.PERSON and (
+        len(core1) < MIN_ORG_CORE_LENGTH or len(core2) < MIN_ORG_CORE_LENGTH
+    ):
+        return 1.0 if core1 == core2 else 0.0
 
     return JaroWinklerModule.normalized_similarity(core1, core2)
 
@@ -282,20 +298,20 @@ def find_merge_groups(
             # Build merge clusters using Union-Find
             parent: dict[str, str] = {e.id: e.id for e in group}
 
-            def find(x: str) -> str:
+            def find(x: str, parent=parent) -> str:
                 while parent[x] != x:
                     parent[x] = parent[parent[x]]
                     x = parent[x]
                 return x
 
-            def union(x: str, y: str) -> None:
+            def union(x: str, y: str, parent=parent) -> None:
                 px, py = find(x), find(y)
                 if px != py:
                     parent[px] = py
 
             # Compare all pairs
             for i, e1 in enumerate(group):
-                for e2 in group[i + 1:]:
+                for e2 in group[i + 1 :]:
                     sim = calculate_similarity(
                         e1.canonical_name, e2.canonical_name, entity_type
                     )
@@ -354,7 +370,7 @@ def execute_merge(
 
         for dupe in duplicates:
             all_aliases.add(dupe.canonical_name)
-            for alias in (dupe.aliases or []):
+            for alias in dupe.aliases or []:
                 all_aliases.add(alias)
             total_mentions += dupe.mention_count or 0
 
@@ -362,13 +378,17 @@ def execute_merge(
         all_aliases.discard(canonical.canonical_name)
 
         # Update canonical entity
-        client.table("identity_nodes").update({
-            "aliases": list(all_aliases),
-            "mention_count": total_mentions,
-        }).eq("id", canonical.id).execute()
+        client.table("identity_nodes").update(
+            {
+                "aliases": list(all_aliases),
+                "mention_count": total_mentions,
+            }
+        ).eq("id", canonical.id).execute()
 
         print(f"  Updated canonical '{canonical.canonical_name}' ({canonical.id})")
-        print(f"    Merged aliases: {list(all_aliases)[:5]}{'...' if len(all_aliases) > 5 else ''}")
+        print(
+            f"    Merged aliases: {list(all_aliases)[:5]}{'...' if len(all_aliases) > 5 else ''}"
+        )
         print(f"    Total mentions: {total_mentions}")
 
         # Update events.entities_involved — replace duplicate IDs with canonical
@@ -386,13 +406,17 @@ def execute_merge(
                 for event_row in events_response.data:
                     old_entities = event_row["entities_involved"] or []
                     # Replace dupe ID with canonical ID
-                    new_entities = list(set(
-                        canonical.id if eid == dupe.id else eid
-                        for eid in old_entities
-                    ))
-                    client.table("events").update({
-                        "entities_involved": new_entities,
-                    }).eq("id", event_row["id"]).execute()
+                    new_entities = list(
+                        set(
+                            canonical.id if eid == dupe.id else eid
+                            for eid in old_entities
+                        )
+                    )
+                    client.table("events").update(
+                        {
+                            "entities_involved": new_entities,
+                        }
+                    ).eq("id", event_row["id"]).execute()
                     total_events_updated += 1
 
             # Update statement_comparisons.entity_id
@@ -405,9 +429,11 @@ def execute_merge(
 
             if comparisons_response.data:
                 for comp_row in comparisons_response.data:
-                    client.table("statement_comparisons").update({
-                        "entity_id": canonical.id,
-                    }).eq("id", comp_row["id"]).execute()
+                    client.table("statement_comparisons").update(
+                        {
+                            "entity_id": canonical.id,
+                        }
+                    ).eq("id", comp_row["id"]).execute()
                     total_contradictions_updated += 1
 
             # Delete or mark duplicate
@@ -416,13 +442,15 @@ def execute_merge(
                 print(f"    Deleted duplicate '{dupe.canonical_name}' ({dupe.id})")
             else:
                 # Soft merge: add metadata indicating merged
-                client.table("identity_nodes").update({
-                    "metadata": {
-                        **(dupe.metadata or {}),
-                        "merged_into": canonical.id,
-                        "merged_canonical_name": canonical.canonical_name,
-                    },
-                }).eq("id", dupe.id).execute()
+                client.table("identity_nodes").update(
+                    {
+                        "metadata": {
+                            **(dupe.metadata or {}),
+                            "merged_into": canonical.id,
+                            "merged_canonical_name": canonical.canonical_name,
+                        },
+                    }
+                ).eq("id", dupe.id).execute()
                 print(f"    Soft-merged duplicate '{dupe.canonical_name}' ({dupe.id})")
 
             total_merged += 1
@@ -459,12 +487,12 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Entity Deduplication for matter: {args.matter_id}")
     print(f"Threshold: {args.threshold}")
     print(f"Mode: {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"Delete duplicates: {args.delete}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Load all entities
     entities = load_entities(args.matter_id)
@@ -485,16 +513,22 @@ def main():
     for i, group in enumerate(merge_groups, 1):
         canonical = group[0]
         duplicates = group[1:]
-        core_canonical = extract_core_name(canonical.canonical_name, canonical.entity_type)
-        print(f"  Group {i}: Canonical = '{canonical.canonical_name}' "
-              f"(mentions: {canonical.mention_count}, core: '{core_canonical}')")
+        core_canonical = extract_core_name(
+            canonical.canonical_name, canonical.entity_type
+        )
+        print(
+            f"  Group {i}: Canonical = '{canonical.canonical_name}' "
+            f"(mentions: {canonical.mention_count}, core: '{core_canonical}')"
+        )
         for dupe in duplicates:
             sim = calculate_similarity(
                 canonical.canonical_name, dupe.canonical_name, canonical.entity_type
             )
             core_dupe = extract_core_name(dupe.canonical_name, dupe.entity_type)
-            print(f"    -> Merge '{dupe.canonical_name}' "
-                  f"(mentions: {dupe.mention_count}, sim: {sim:.2f}, core: '{core_dupe}')")
+            print(
+                f"    -> Merge '{dupe.canonical_name}' "
+                f"(mentions: {dupe.mention_count}, sim: {sim:.2f}, core: '{core_dupe}')"
+            )
 
     total_to_merge = sum(len(g) - 1 for g in merge_groups)
     print(f"\nTotal entities to merge: {total_to_merge}")
@@ -507,13 +541,13 @@ def main():
     print("\nExecuting merge...\n")
     result = execute_merge(args.matter_id, merge_groups, delete_dupes=args.delete)
 
-    print(f"\n{'='*60}")
-    print(f"MERGE COMPLETED")
+    print(f"\n{'=' * 60}")
+    print("MERGE COMPLETED")
     print(f"  Groups processed: {result['groups_processed']}")
     print(f"  Entities merged: {result['entities_merged']}")
     print(f"  Events updated: {result['events_updated']}")
     print(f"  Contradictions updated: {result['contradictions_updated']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return 0
 

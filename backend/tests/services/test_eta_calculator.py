@@ -15,12 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.eta_calculator import (
-    ETACalculator,
-    ETAResult,
     FALLBACK_SECONDS_PER_PAGE,
-    MINIMUM_SAMPLES_FOR_CONFIDENCE,
-    REDIS_PROCESSING_TIMES_KEY,
     REDIS_AVG_TIME_KEY,
+    REDIS_PROCESSING_TIMES_KEY,
+    ETACalculator,
 )
 
 
@@ -100,7 +98,7 @@ class TestGetProcessingEta:
             return_value=[
                 "10:20000",  # 10 pages, 20s = 2s/page
                 "20:40000",  # 20 pages, 40s = 2s/page
-                "5:10000",   # 5 pages, 10s = 2s/page
+                "5:10000",  # 5 pages, 10s = 2s/page
             ]
         )
 
@@ -142,11 +140,11 @@ class TestGetProcessingEta:
         assert result.factors["sample_count"] == 7
 
     @pytest.mark.asyncio
-    async def test_uses_cached_average(
-        self, eta_calculator, mock_redis_client
-    ) -> None:
+    async def test_uses_cached_average(self, eta_calculator, mock_redis_client) -> None:
         """Should use cached average when available."""
-        mock_redis_client.get = AsyncMock(return_value="2.5:20")  # 2.5s/page, 20 samples
+        mock_redis_client.get = AsyncMock(
+            return_value="2.5:20"
+        )  # 2.5s/page, 20 samples
 
         pending_docs = [{"page_count": 10}]
         result = await eta_calculator.get_processing_eta("matter-123", pending_docs)
@@ -156,11 +154,16 @@ class TestGetProcessingEta:
         assert result.confidence == "high"
 
     @pytest.mark.asyncio
-    async def test_handles_missing_page_count(self, eta_calculator, mock_redis_client) -> None:
+    async def test_handles_missing_page_count(
+        self, eta_calculator, mock_redis_client
+    ) -> None:
         """Should default to 1 page when page_count missing."""
         mock_redis_client.lrange = AsyncMock(return_value=[])
 
-        pending_docs = [{"name": "doc1"}, {"page_count": 10}]  # First doc missing page_count
+        pending_docs = [
+            {"name": "doc1"},
+            {"page_count": 10},
+        ]  # First doc missing page_count
         result = await eta_calculator.get_processing_eta("matter-123", pending_docs)
 
         # 11 pages total (1 default + 10)
@@ -201,7 +204,9 @@ class TestGetActiveWorkerCount:
     async def test_fallback_on_service_error(self, mock_redis_client) -> None:
         """Should fall back to Celery inspect on service error."""
         failing_service = MagicMock()
-        failing_service.get_active_worker_count = AsyncMock(side_effect=Exception("Error"))
+        failing_service.get_active_worker_count = AsyncMock(
+            side_effect=Exception("Error")
+        )
 
         calc = ETACalculator(
             redis_client=mock_redis_client,
@@ -282,9 +287,7 @@ class TestRecordCompletion:
         mock_redis_client.lpush.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handles_redis_error(
-        self, eta_calculator, mock_redis_client
-    ) -> None:
+    async def test_handles_redis_error(self, eta_calculator, mock_redis_client) -> None:
         """Should handle Redis errors gracefully."""
         mock_redis_client.lpush = AsyncMock(side_effect=Exception("Redis error"))
 
@@ -391,7 +394,9 @@ class TestEdgeCases:
         assert result.factors["worker_count"] >= 1
 
     @pytest.mark.asyncio
-    async def test_handles_redis_connection_error(self, mock_queue_metrics_service) -> None:
+    async def test_handles_redis_connection_error(
+        self, mock_queue_metrics_service
+    ) -> None:
         """Should handle Redis connection errors."""
         failing_redis = MagicMock()
         failing_redis.get = AsyncMock(side_effect=Exception("Connection refused"))

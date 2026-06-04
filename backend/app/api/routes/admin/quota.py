@@ -12,7 +12,7 @@ All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -36,18 +36,18 @@ from app.models.cost import (
     ProviderUsage,
     UsageDashboardResponse,
 )
-from app.models.quota import LLMQuotaData, LLMQuotaResponse, ProviderQuota
 from app.models.queue_status import (
     QueueHealthResponse,
     QueueMetrics,
     QueueStatusData,
     QueueStatusResponse,
 )
+from app.models.quota import LLMQuotaData, LLMQuotaResponse, ProviderQuota
+from app.services.matter_cost_service import normalize_operation
 from app.services.queue_metrics_service import (
     DEFAULT_ALERT_THRESHOLD,
     get_queue_metrics_service,
 )
-from app.services.matter_cost_service import normalize_operation
 from app.services.supabase.client import get_service_client
 
 router = APIRouter(prefix="/admin", tags=["admin-quota"])
@@ -79,9 +79,7 @@ async def check_admin_status(
     """
     settings = get_settings()
     admin_emails = [
-        e.strip().lower()
-        for e in (settings.admin_emails or "").split(",")
-        if e.strip()
+        e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()
     ]
     user_email = (current_user.email or "").lower()
     is_admin = user_email in admin_emails
@@ -229,7 +227,7 @@ async def get_llm_quota(
 
         data = LLMQuotaData(
             providers=providers,
-            lastUpdated=datetime.now(timezone.utc).isoformat(),
+            lastUpdated=datetime.now(UTC).isoformat(),
             alertThresholdPct=80,
             usdToInrRate=USD_TO_INR_RATE,
         )
@@ -391,7 +389,7 @@ async def get_queue_status(
             totalPending=total_pending,
             totalActive=total_active,
             activeWorkers=active_workers,
-            lastCheckedAt=datetime.now(timezone.utc).isoformat(),
+            lastCheckedAt=datetime.now(UTC).isoformat(),
             alertThreshold=DEFAULT_ALERT_THRESHOLD,
             isHealthy=is_healthy,
         )
@@ -475,7 +473,7 @@ async def get_queue_health(
                 "status": "unhealthy",
                 "redisConnected": False,
                 "workerCount": 0,
-                "lastCheckedAt": datetime.now(timezone.utc).isoformat(),
+                "lastCheckedAt": datetime.now(UTC).isoformat(),
                 "error": str(e),
             }
         )
@@ -535,7 +533,9 @@ async def get_queue_health(
 async def get_monthly_cost_report(
     request: Request,
     year: int | None = Query(default=None, ge=2020, le=2100, description="Report year"),
-    month: int | None = Query(default=None, ge=1, le=12, description="Report month (1-12)"),
+    month: int | None = Query(
+        default=None, ge=1, le=12, description="Report month (1-12)"
+    ),
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> MonthlyCostReportResponse:
     """Get monthly cost report by practice group.
@@ -557,7 +557,7 @@ async def get_monthly_cost_report(
         MonthlyCostReportResponse with practice group breakdown.
     """
     # Default to current month
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     report_year = year if year else now.year
     report_month = month if month else now.month
 
@@ -602,7 +602,7 @@ async def get_monthly_cost_report(
 
         report = MonthlyCostReport(
             report_month=f"{report_year}-{report_month:02d}",
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             total_cost_inr=round(total_cost_inr, 2),
             total_cost_usd=round(total_cost_usd, 6),
             practice_groups=practice_groups,
@@ -688,7 +688,7 @@ async def get_usage_dashboard(
 
     Queries llm_costs table and aggregates by day, provider, operation, matter.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     q_year = year if year else now.year
     q_month = month if month else now.month
 
@@ -704,11 +704,11 @@ async def get_usage_dashboard(
         settings = get_settings()
 
         # Build date range for the month
-        month_start = datetime(q_year, q_month, 1, tzinfo=timezone.utc)
+        month_start = datetime(q_year, q_month, 1, tzinfo=UTC)
         if q_month == 12:
-            month_end = datetime(q_year + 1, 1, 1, tzinfo=timezone.utc)
+            month_end = datetime(q_year + 1, 1, 1, tzinfo=UTC)
         else:
-            month_end = datetime(q_year, q_month + 1, 1, tzinfo=timezone.utc)
+            month_end = datetime(q_year, q_month + 1, 1, tzinfo=UTC)
 
         # Fetch all cost records for the month (paginate past Supabase 1000-row default)
         rows: list[dict] = []
@@ -763,7 +763,12 @@ async def get_usage_dashboard(
             created = row.get("created_at", "")
             day_key = created[:10] if created else "unknown"
             if day_key not in daily_map:
-                daily_map[day_key] = {"usd": 0.0, "inr": 0.0, "requests": 0, "tokens": 0}
+                daily_map[day_key] = {
+                    "usd": 0.0,
+                    "inr": 0.0,
+                    "requests": 0,
+                    "tokens": 0,
+                }
             daily_map[day_key]["usd"] += cost_usd
             daily_map[day_key]["inr"] += cost_inr
             daily_map[day_key]["requests"] += 1
@@ -772,7 +777,13 @@ async def get_usage_dashboard(
             # Provider
             provider = row.get("provider", "unknown")
             if provider not in provider_map:
-                provider_map[provider] = {"usd": 0.0, "inr": 0.0, "requests": 0, "inp": 0, "out": 0}
+                provider_map[provider] = {
+                    "usd": 0.0,
+                    "inr": 0.0,
+                    "requests": 0,
+                    "inp": 0,
+                    "out": 0,
+                }
             provider_map[provider]["usd"] += cost_usd
             provider_map[provider]["inr"] += cost_inr
             provider_map[provider]["requests"] += 1
@@ -782,7 +793,13 @@ async def get_usage_dashboard(
             # Operation (normalize to grouped categories)
             operation = normalize_operation(row.get("operation", "unknown"))
             if operation not in operation_map:
-                operation_map[operation] = {"usd": 0.0, "inr": 0.0, "requests": 0, "inp": 0, "out": 0}
+                operation_map[operation] = {
+                    "usd": 0.0,
+                    "inr": 0.0,
+                    "requests": 0,
+                    "inp": 0,
+                    "out": 0,
+                }
             operation_map[operation]["usd"] += cost_usd
             operation_map[operation]["inr"] += cost_inr
             operation_map[operation]["requests"] += 1
@@ -940,19 +957,28 @@ async def get_contradiction_savings(
             month = row.get("month", "unknown")
             if month not in month_agg:
                 month_agg[month] = {
-                    "actual": 0.0, "hypothetical": 0.0,
-                    "screening": 0, "escalated": 0, "total": 0,
+                    "actual": 0.0,
+                    "hypothetical": 0.0,
+                    "screening": 0,
+                    "escalated": 0,
+                    "total": 0,
                 }
             month_agg[month]["actual"] += float(row.get("actual_total_cost_usd") or 0)
-            month_agg[month]["hypothetical"] += float(row.get("hypothetical_screening_as_gpt4o_usd") or 0) + float(row.get("escalated_cost_usd") or 0)
+            month_agg[month]["hypothetical"] += float(
+                row.get("hypothetical_screening_as_gpt4o_usd") or 0
+            ) + float(row.get("escalated_cost_usd") or 0)
             month_agg[month]["screening"] += int(row.get("screening_calls") or 0)
             month_agg[month]["escalated"] += int(row.get("escalated_calls") or 0)
             month_agg[month]["total"] += int(row.get("total_calls") or 0)
 
         for month, agg in sorted(month_agg.items(), reverse=True):
             savings = agg["hypothetical"] - agg["actual"]
-            savings_pct = (savings / agg["hypothetical"] * 100) if agg["hypothetical"] > 0 else 0
-            escalation_rate = (agg["escalated"] / agg["screening"]) if agg["screening"] > 0 else 0
+            savings_pct = (
+                (savings / agg["hypothetical"] * 100) if agg["hypothetical"] > 0 else 0
+            )
+            escalation_rate = (
+                (agg["escalated"] / agg["screening"]) if agg["screening"] > 0 else 0
+            )
 
             total_actual += agg["actual"]
             total_hypothetical += agg["hypothetical"]
@@ -960,21 +986,29 @@ async def get_contradiction_savings(
             total_escalated_calls += agg["escalated"]
             total_calls += agg["total"]
 
-            monthly_data.append({
-                "month": month,
-                "actualCostUsd": round(agg["actual"], 6),
-                "hypotheticalCostUsd": round(agg["hypothetical"], 6),
-                "savingsUsd": round(savings, 6),
-                "savingsPct": round(savings_pct, 1),
-                "screeningCalls": agg["screening"],
-                "escalatedCalls": agg["escalated"],
-                "escalationRate": round(escalation_rate, 4),
-                "totalCalls": agg["total"],
-            })
+            monthly_data.append(
+                {
+                    "month": month,
+                    "actualCostUsd": round(agg["actual"], 6),
+                    "hypotheticalCostUsd": round(agg["hypothetical"], 6),
+                    "savingsUsd": round(savings, 6),
+                    "savingsPct": round(savings_pct, 1),
+                    "screeningCalls": agg["screening"],
+                    "escalatedCalls": agg["escalated"],
+                    "escalationRate": round(escalation_rate, 4),
+                    "totalCalls": agg["total"],
+                }
+            )
 
         total_savings = total_hypothetical - total_actual
-        total_savings_pct = (total_savings / total_hypothetical * 100) if total_hypothetical > 0 else 0
-        overall_escalation_rate = (total_escalated_calls / total_screening_calls) if total_screening_calls > 0 else 0
+        total_savings_pct = (
+            (total_savings / total_hypothetical * 100) if total_hypothetical > 0 else 0
+        )
+        overall_escalation_rate = (
+            (total_escalated_calls / total_screening_calls)
+            if total_screening_calls > 0
+            else 0
+        )
 
         return {
             "summary": {

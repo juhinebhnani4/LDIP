@@ -107,7 +107,9 @@ class TestGetCurrentUser:
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail["error"]["code"] == "UNAUTHORIZED"
-        assert "Missing authentication token" in exc_info.value.detail["error"]["message"]
+        assert (
+            "Missing authentication token" in exc_info.value.detail["error"]["message"]
+        )
 
     async def test_expired_token_raises_401(
         self, expired_token: str, test_settings: Settings

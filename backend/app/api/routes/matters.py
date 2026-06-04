@@ -17,9 +17,8 @@ from app.api.deps import (
     get_tab_stats_service_dep,
     require_matter_role,
 )
-from app.models.cost import MatterCostResponse, MatterCostSummary
-from app.services.matter_cost_service import MatterCostService, get_matter_cost_service
 from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
+from app.models.cost import MatterCostResponse
 from app.models.matter import (
     MatterCreate,
     MatterInvite,
@@ -34,6 +33,7 @@ from app.models.matter import (
     MemberResponse,
 )
 from app.models.tab_stats import TabStatsResponse
+from app.services.matter_cost_service import MatterCostService, get_matter_cost_service
 from app.services.matter_service import (
     CannotRemoveOwnerError,
     MatterNotFoundError,
@@ -104,7 +104,9 @@ async def list_matters(
     request: Request,  # Required for rate limiter
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
-    status_filter: MatterStatus | None = Query(None, alias="status", description="Filter by status"),
+    status_filter: MatterStatus | None = Query(
+        None, alias="status", description="Filter by status"
+    ),
     user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> MatterListResponse:
@@ -195,9 +197,7 @@ async def update_matter(
         Updated matter.
     """
     try:
-        matter = matter_service.update_matter(
-            matter_id, membership.user_id, data
-        )
+        matter = matter_service.update_matter(matter_id, membership.user_id, data)
         return MatterResponse(data=matter)
     except MatterServiceError as e:
         raise _handle_service_error(e) from e
@@ -228,9 +228,7 @@ async def touch_matter(
 async def delete_matter(
     request: Request,  # Required for rate limiter
     matter_id: str,
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER])
-    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER])),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> None:
     """Soft-delete a matter.
@@ -320,7 +318,9 @@ async def get_tab_stats(
 async def get_matter_costs(
     request: Request,
     matter_id: str,
-    days: int = Query(default=30, ge=1, le=365, description="Number of days to include"),
+    days: int = Query(
+        default=30, ge=1, le=365, description="Number of days to include"
+    ),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -438,9 +438,7 @@ async def invite_member(
     request: Request,  # Required for rate limiter
     matter_id: str,
     data: MatterInvite,
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER])
-    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER])),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> MemberResponse:
     """Invite a new member to a matter.
@@ -483,9 +481,7 @@ async def update_member_role(
     matter_id: str,
     user_id: str,
     data: MatterMemberUpdate,
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER])
-    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER])),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> MemberResponse:
     """Update a member's role.
@@ -520,9 +516,7 @@ async def remove_member(
     request: Request,  # Required for rate limiter
     matter_id: str,
     user_id: str,
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER])
-    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER])),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> None:
     """Remove a member from a matter.

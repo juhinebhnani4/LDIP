@@ -215,6 +215,7 @@ class SubtleViolationDetector:
         if self._redis is None:
             try:
                 from app.services.memory.redis_client import get_redis_client
+
                 self._redis = await get_redis_client()
             except Exception as e:
                 logger.debug("safety_cache_redis_init_failed", error=str(e))
@@ -236,7 +237,9 @@ class SubtleViolationDetector:
             data = await redis.get(self._cache_key(query))
             if data is None:
                 return None
-            payload = json.loads(data if isinstance(data, str) else data.decode("utf-8"))
+            payload = json.loads(
+                data if isinstance(data, str) else data.decode("utf-8")
+            )
             result = SubtleViolationCheck(**payload)
             logger.info("safety_cache_hit", query_length=len(query))
             return result
@@ -244,7 +247,9 @@ class SubtleViolationDetector:
             logger.debug("safety_cache_get_failed", error=str(e))
             return None
 
-    async def _set_cached_result(self, query: str, result: SubtleViolationCheck) -> None:
+    async def _set_cached_result(
+        self, query: str, result: SubtleViolationCheck
+    ) -> None:
         """Store safety check result in Redis with short TTL."""
         try:
             redis = await self._ensure_redis()
@@ -260,12 +265,16 @@ class SubtleViolationDetector:
                 "llm_cost_usd": result.llm_cost_usd,
                 "check_time_ms": result.check_time_ms,
             }
-            await redis.set(self._cache_key(query), json.dumps(payload), ex=self.SAFETY_CACHE_TTL)
+            await redis.set(
+                self._cache_key(query), json.dumps(payload), ex=self.SAFETY_CACHE_TTL
+            )
             logger.debug("safety_cache_set", query_length=len(query))
         except Exception as e:
             logger.debug("safety_cache_set_failed", error=str(e))
 
-    async def detect_violation(self, query: str, matter_id: str | None = None) -> SubtleViolationCheck:
+    async def detect_violation(
+        self, query: str, matter_id: str | None = None
+    ) -> SubtleViolationCheck:
         """Detect subtle legal conclusion requests using GPT-4o-mini.
 
         Story 8-2: AC #1-2 - LLM-based detection.
@@ -296,7 +305,9 @@ class SubtleViolationDetector:
 
         try:
             # Call GPT-4o-mini with retry (using sanitized query)
-            result, input_tokens, output_tokens = await self._call_llm_with_retry(sanitized_query, matter_id=matter_id)
+            result, input_tokens, output_tokens = await self._call_llm_with_retry(
+                sanitized_query, matter_id=matter_id
+            )
 
             check_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -363,7 +374,9 @@ class SubtleViolationDetector:
             ) from e
 
     async def _call_llm_with_retry(
-        self, query: str, matter_id: str | None = None,
+        self,
+        query: str,
+        matter_id: str | None = None,
     ) -> tuple[dict, int, int]:
         """Call GPT-4o-mini with retry logic.
 
@@ -388,7 +401,10 @@ class SubtleViolationDetector:
                     self.client.chat.completions.create(
                         model=self.model_name,
                         messages=[
-                            {"role": "system", "content": SUBTLE_DETECTION_SYSTEM_PROMPT},
+                            {
+                                "role": "system",
+                                "content": SUBTLE_DETECTION_SYSTEM_PROMPT,
+                            },
                             {"role": "user", "content": user_prompt},
                         ],
                         response_format={"type": "json_object"},
@@ -399,10 +415,14 @@ class SubtleViolationDetector:
 
                 # Extract token counts
                 input_tokens = response.usage.prompt_tokens if response.usage else 0
-                output_tokens = response.usage.completion_tokens if response.usage else 0
+                output_tokens = (
+                    response.usage.completion_tokens if response.usage else 0
+                )
                 cached_tokens = 0
                 if response.usage and response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
 
                 # Parse response
                 response_text = response.choices[0].message.content
@@ -414,7 +434,11 @@ class SubtleViolationDetector:
                     operation="safety_subtle_detection",
                     matter_id=matter_id,
                 )
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+                tracker.add_tokens(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_input_tokens=cached_tokens,
+                )
                 tracker.log_cost()
                 await persist_cost(tracker)
 
@@ -450,8 +474,16 @@ class SubtleViolationDetector:
                 is_retryable = any(
                     indicator in error_str
                     for indicator in [
-                        "429", "rate", "quota", "500", "502", "503", "504",
-                        "timeout", "connection", "temporary"
+                        "429",
+                        "rate",
+                        "quota",
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+                        "timeout",
+                        "connection",
+                        "temporary",
                     ]
                 )
 

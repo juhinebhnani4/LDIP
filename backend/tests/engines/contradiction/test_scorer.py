@@ -509,7 +509,7 @@ class TestExplanationGeneration:
 
         explanation = result.scored_contradiction.explanation
         assert "page N/A" in explanation  # Missing page_a
-        assert "page 15" in explanation   # Has page_b
+        assert "page 15" in explanation  # Has page_b
 
     def test_explanation_includes_statement_excerpts(
         self,
@@ -725,9 +725,9 @@ class TestBatchScoring:
         )
 
         assert result.total_scored == 3
-        assert result.high_count == 1   # date_mismatch with 0.92 confidence
+        assert result.high_count == 1  # date_mismatch with 0.92 confidence
         assert result.medium_count == 1  # semantic with 0.75 confidence
-        assert result.low_count == 1    # low_confidence with 0.55 confidence
+        assert result.low_count == 1  # low_confidence with 0.55 confidence
 
     @pytest.mark.asyncio
     async def test_score_all_with_document_names(
@@ -1143,8 +1143,12 @@ class TestClassifierIntegration:
                 statement_b_id="chunk-uuid-2",
                 contradiction_type=ContradictionType.DATE_MISMATCH,
                 extracted_values=ExtractedValues(
-                    value_a=ExtractedValue(original="15/01/2024", normalized="2024-01-15"),
-                    value_b=ExtractedValue(original="15/06/2024", normalized="2024-06-15"),
+                    value_a=ExtractedValue(
+                        original="15/01/2024", normalized="2024-01-15"
+                    ),
+                    value_b=ExtractedValue(
+                        original="15/06/2024", normalized="2024-06-15"
+                    ),
                 ),
                 explanation="Date conflict: 15/01/2024 vs 15/06/2024",
                 classification_method="rule_based",

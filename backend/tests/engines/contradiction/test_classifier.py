@@ -60,8 +60,11 @@ class TestClassificationCostTracker:
     def test_cost_calculated_when_llm_used(self, mock_pricing) -> None:
         """Should calculate cost when LLM fallback is used."""
         from app.core.cost_tracking import ProviderPricing
+
         mock_pricing.return_value = {
-            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+            "gpt-4o": ProviderPricing(
+                input_cost_per_1k=0.0025, output_cost_per_1k=0.01
+            ),
         }
         tracker = ClassificationCostTracker(
             input_tokens=1000,
@@ -170,7 +173,9 @@ class TestNormalizeIndianDate:
         # Valid boundary dates
         assert normalize_indian_date("31/01/2024") == "2024-01-31"  # Jan has 31 days
         assert normalize_indian_date("28/02/2024") == "2024-02-28"  # Feb 28 valid
-        assert normalize_indian_date("29/02/2024") == "2024-02-29"  # Feb 29 (leap year allowed)
+        assert (
+            normalize_indian_date("29/02/2024") == "2024-02-29"
+        )  # Feb 29 (leap year allowed)
         assert normalize_indian_date("30/04/2024") == "2024-04-30"  # Apr has 30 days
 
 
@@ -276,7 +281,10 @@ class TestClassificationPromptFormatting:
         }
         errors = validate_classification_response(parsed)
         assert len(errors) > 0
-        assert "invalid_type" in errors[0].lower() or "contradiction_type" in errors[0].lower()
+        assert (
+            "invalid_type" in errors[0].lower()
+            or "contradiction_type" in errors[0].lower()
+        )
 
     def test_validate_classification_response_missing_field(self) -> None:
         """Should fail for missing required fields."""
@@ -299,7 +307,9 @@ class TestContradictionClassifierRuleBased:
     @pytest.fixture
     def classifier(self) -> ContradictionClassifier:
         """Create classifier instance."""
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -396,16 +406,31 @@ class TestContradictionClassifierRuleBased:
         result = await classifier.classify_contradiction(date_mismatch_comparison)
 
         # Verify classification type
-        assert result.classified_contradiction.contradiction_type == ContradictionType.DATE_MISMATCH
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.DATE_MISMATCH
+        )
 
         # Verify extracted values (AC #2: both dates extracted and displayed)
         assert result.classified_contradiction.extracted_values is not None
         assert result.classified_contradiction.extracted_values.value_a is not None
-        assert result.classified_contradiction.extracted_values.value_a.original == "15/01/2024"
-        assert result.classified_contradiction.extracted_values.value_a.normalized == "2024-01-15"
+        assert (
+            result.classified_contradiction.extracted_values.value_a.original
+            == "15/01/2024"
+        )
+        assert (
+            result.classified_contradiction.extracted_values.value_a.normalized
+            == "2024-01-15"
+        )
         assert result.classified_contradiction.extracted_values.value_b is not None
-        assert result.classified_contradiction.extracted_values.value_b.original == "15/06/2024"
-        assert result.classified_contradiction.extracted_values.value_b.normalized == "2024-06-15"
+        assert (
+            result.classified_contradiction.extracted_values.value_b.original
+            == "15/06/2024"
+        )
+        assert (
+            result.classified_contradiction.extracted_values.value_b.normalized
+            == "2024-06-15"
+        )
 
         # Verify rule-based (no LLM cost)
         assert result.llm_cost_usd == 0.0
@@ -421,16 +446,31 @@ class TestContradictionClassifierRuleBased:
         result = await classifier.classify_contradiction(amount_mismatch_comparison)
 
         # Verify classification type
-        assert result.classified_contradiction.contradiction_type == ContradictionType.AMOUNT_MISMATCH
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.AMOUNT_MISMATCH
+        )
 
         # Verify extracted values (AC #3: both amounts extracted and displayed)
         assert result.classified_contradiction.extracted_values is not None
         assert result.classified_contradiction.extracted_values.value_a is not None
-        assert result.classified_contradiction.extracted_values.value_a.original == "5 lakhs"
-        assert result.classified_contradiction.extracted_values.value_a.normalized == "500000"
+        assert (
+            result.classified_contradiction.extracted_values.value_a.original
+            == "5 lakhs"
+        )
+        assert (
+            result.classified_contradiction.extracted_values.value_a.normalized
+            == "500000"
+        )
         assert result.classified_contradiction.extracted_values.value_b is not None
-        assert result.classified_contradiction.extracted_values.value_b.original == "8 lakhs"
-        assert result.classified_contradiction.extracted_values.value_b.normalized == "800000"
+        assert (
+            result.classified_contradiction.extracted_values.value_b.original
+            == "8 lakhs"
+        )
+        assert (
+            result.classified_contradiction.extracted_values.value_b.normalized
+            == "800000"
+        )
 
         # Verify rule-based
         assert result.llm_cost_usd == 0.0
@@ -446,7 +486,10 @@ class TestContradictionClassifierRuleBased:
         result = await classifier.classify_contradiction(semantic_comparison)
 
         # Verify classification type
-        assert result.classified_contradiction.contradiction_type == ContradictionType.SEMANTIC_CONTRADICTION
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.SEMANTIC_CONTRADICTION
+        )
 
         # Verify explanation highlights semantic conflict (AC #4)
         assert "semantic" in result.classified_contradiction.explanation.lower()
@@ -465,7 +508,10 @@ class TestContradictionClassifierRuleBased:
         result = await classifier.classify_contradiction(factual_comparison)
 
         # Verify classification type
-        assert result.classified_contradiction.contradiction_type == ContradictionType.FACTUAL_CONTRADICTION
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.FACTUAL_CONTRADICTION
+        )
 
         # Verify rule-based
         assert result.llm_cost_usd == 0.0
@@ -506,7 +552,9 @@ class TestContradictionClassifierLLMFallback:
     @pytest.fixture
     def classifier(self) -> ContradictionClassifier:
         """Create classifier instance."""
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -544,11 +592,13 @@ class TestContradictionClassifierLLMFallback:
         mock_client = AsyncMock()
         mock_completion = MagicMock()
         mock_completion.choices = [MagicMock()]
-        mock_completion.choices[0].message.content = json.dumps({
-            "contradiction_type": "factual_contradiction",
-            "explanation": "Statements directly conflict on whether the agreement was signed.",
-            "confidence": 0.9,
-        })
+        mock_completion.choices[0].message.content = json.dumps(
+            {
+                "contradiction_type": "factual_contradiction",
+                "explanation": "Statements directly conflict on whether the agreement was signed.",
+                "confidence": 0.9,
+            }
+        )
         mock_completion.usage = MagicMock()
         mock_completion.usage.prompt_tokens = 300
         mock_completion.usage.completion_tokens = 100
@@ -563,7 +613,10 @@ class TestContradictionClassifierLLMFallback:
         assert result.llm_cost_usd > 0
 
         # Verify classification
-        assert result.classified_contradiction.contradiction_type == ContradictionType.FACTUAL_CONTRADICTION
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.FACTUAL_CONTRADICTION
+        )
         assert "signed" in result.classified_contradiction.explanation.lower()
 
     @pytest.mark.asyncio
@@ -584,8 +637,14 @@ class TestContradictionClassifierLLMFallback:
             result = await classifier.classify_contradiction(none_evidence_comparison)
 
         # Should default to semantic_contradiction on error
-        assert result.classified_contradiction.contradiction_type == ContradictionType.SEMANTIC_CONTRADICTION
-        assert "llm_fallback_error" in result.classified_contradiction.classification_method
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.SEMANTIC_CONTRADICTION
+        )
+        assert (
+            "llm_fallback_error"
+            in result.classified_contradiction.classification_method
+        )
 
 
 # =============================================================================
@@ -599,7 +658,9 @@ class TestBatchClassification:
     @pytest.fixture
     def classifier(self) -> ContradictionClassifier:
         """Create classifier instance."""
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -621,7 +682,11 @@ class TestBatchClassification:
                 result=ComparisonResult.CONTRADICTION,
                 reasoning="Conflict",
                 confidence=0.9,
-                evidence=ContradictionEvidence(type=EvidenceType.DATE_MISMATCH, value_a="15/01/2024", value_b="15/06/2024"),
+                evidence=ContradictionEvidence(
+                    type=EvidenceType.DATE_MISMATCH,
+                    value_a="15/01/2024",
+                    value_b="15/06/2024",
+                ),
                 document_a_id="d1",
                 document_b_id="d2",
             ),
@@ -645,7 +710,11 @@ class TestBatchClassification:
                 result=ComparisonResult.CONTRADICTION,
                 reasoning="Amount conflict",
                 confidence=0.85,
-                evidence=ContradictionEvidence(type=EvidenceType.AMOUNT_MISMATCH, value_a="5 lakhs", value_b="8 lakhs"),
+                evidence=ContradictionEvidence(
+                    type=EvidenceType.AMOUNT_MISMATCH,
+                    value_a="5 lakhs",
+                    value_b="8 lakhs",
+                ),
                 document_a_id="d2",
                 document_b_id="d3",
             ),
@@ -687,7 +756,9 @@ class TestMatterIsolation:
         should already be matter-scoped. This test verifies the classifier
         doesn't introduce new data access that could bypass RLS.
         """
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -721,8 +792,11 @@ class TestMatterIsolation:
 
             # Classifier should not access database or external data
             # All data comes from the input comparison
-            assert "Matter A" in result.classified_contradiction.explanation or \
-                   "Value from Matter A" in str(result.classified_contradiction.extracted_values)
+            assert (
+                "Matter A" in result.classified_contradiction.explanation
+                or "Value from Matter A"
+                in str(result.classified_contradiction.extracted_values)
+            )
 
 
 # =============================================================================
@@ -737,7 +811,9 @@ class TestClassifierFactory:
         """Should return singleton instance."""
         get_contradiction_classifier.cache_clear()
 
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -762,7 +838,9 @@ class TestEdgeCases:
     @pytest.fixture
     def classifier(self) -> ContradictionClassifier:
         """Create classifier instance."""
-        with patch("app.engines.contradiction.classifier.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.classifier.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -776,7 +854,9 @@ class TestEdgeCases:
         # All evidence types except NONE should have mappings
         for evidence_type in EvidenceType:
             if evidence_type != EvidenceType.NONE:
-                assert evidence_type in CLASSIFICATION_MAP, f"Missing mapping for {evidence_type}"
+                assert evidence_type in CLASSIFICATION_MAP, (
+                    f"Missing mapping for {evidence_type}"
+                )
 
     @pytest.mark.asyncio
     async def test_handle_empty_values(
@@ -803,7 +883,10 @@ class TestEdgeCases:
 
         result = await classifier.classify_contradiction(comparison)
 
-        assert result.classified_contradiction.contradiction_type == ContradictionType.SEMANTIC_CONTRADICTION
+        assert (
+            result.classified_contradiction.contradiction_type
+            == ContradictionType.SEMANTIC_CONTRADICTION
+        )
         # Extracted values should be None for semantic conflicts without values
         # (This is acceptable - semantic conflicts don't have extractable values)
 
@@ -833,5 +916,11 @@ class TestEdgeCases:
         result = await classifier.classify_contradiction(comparison)
 
         assert result.classified_contradiction.extracted_values is not None
-        assert result.classified_contradiction.extracted_values.value_a.normalized == "20000000"
-        assert result.classified_contradiction.extracted_values.value_b.normalized == "30000000"
+        assert (
+            result.classified_contradiction.extracted_values.value_a.normalized
+            == "20000000"
+        )
+        assert (
+            result.classified_contradiction.extracted_values.value_b.normalized
+            == "30000000"
+        )

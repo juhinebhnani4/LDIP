@@ -71,8 +71,7 @@ class ChunkBBoxLinker:
         """
         if self.client is None:
             raise ChunkBBoxLinkerError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -111,7 +110,7 @@ class ChunkBBoxLinker:
             )
             raise ChunkBBoxLinkerError(
                 message=f"Failed to link chunk to bounding boxes: {e!s}",
-                code="LINK_FAILED"
+                code="LINK_FAILED",
             ) from e
 
     def add_bboxes_to_chunk(
@@ -135,8 +134,7 @@ class ChunkBBoxLinker:
         """
         if self.client is None:
             raise ChunkBBoxLinkerError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -153,8 +151,7 @@ class ChunkBBoxLinker:
 
             if not result.data:
                 raise ChunkBBoxLinkerError(
-                    message="Chunk not found",
-                    code="CHUNK_NOT_FOUND"
+                    message="Chunk not found", code="CHUNK_NOT_FOUND"
                 )
 
             existing_ids = result.data[0].get("bbox_ids") or []
@@ -175,7 +172,7 @@ class ChunkBBoxLinker:
             )
             raise ChunkBBoxLinkerError(
                 message=f"Failed to add bounding boxes to chunk: {e!s}",
-                code="ADD_FAILED"
+                code="ADD_FAILED",
             ) from e
 
     def get_bboxes_for_chunk(
@@ -197,8 +194,7 @@ class ChunkBBoxLinker:
         """
         if self.client is None:
             raise ChunkBBoxLinkerError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -212,8 +208,7 @@ class ChunkBBoxLinker:
 
             if not result.data:
                 raise ChunkBBoxLinkerError(
-                    message="Chunk not found",
-                    code="CHUNK_NOT_FOUND"
+                    message="Chunk not found", code="CHUNK_NOT_FOUND"
                 )
 
             bbox_ids = result.data[0].get("bbox_ids") or []
@@ -234,7 +229,7 @@ class ChunkBBoxLinker:
             )
             raise ChunkBBoxLinkerError(
                 message=f"Failed to get bounding boxes for chunk: {e!s}",
-                code="GET_FAILED"
+                code="GET_FAILED",
             ) from e
 
     def clear_chunk_bboxes(
@@ -256,8 +251,7 @@ class ChunkBBoxLinker:
         """
         if self.client is None:
             raise ChunkBBoxLinkerError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -286,7 +280,7 @@ class ChunkBBoxLinker:
             )
             raise ChunkBBoxLinkerError(
                 message=f"Failed to clear chunk bounding boxes: {e!s}",
-                code="CLEAR_FAILED"
+                code="CLEAR_FAILED",
             ) from e
 
 

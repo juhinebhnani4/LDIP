@@ -179,7 +179,7 @@ async def close_with_error(
         code: WebSocket close code (4000-4999 for application errors).
         reason: Human-readable close reason.
     """
-    try:
+    try:  # noqa: SIM105
         await websocket.close(code=code, reason=reason)
     except Exception:
         pass  # Connection may already be closed

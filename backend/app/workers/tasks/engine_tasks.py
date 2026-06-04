@@ -14,8 +14,6 @@ Job Tracking Integration:
 - Records completion and failure states
 """
 
-import asyncio
-
 import structlog
 
 from app.engines.timeline import (
@@ -60,7 +58,9 @@ def run_engine(matter_id: str, engine: str) -> dict[str, str]:
     Returns:
         Task result payload.
     """
-    logger.info("engine_task_placeholder", task="run_engine", matter_id=matter_id, engine=engine)
+    logger.info(
+        "engine_task_placeholder", task="run_engine", matter_id=matter_id, engine=engine
+    )
     return {"status": "not_implemented", "matter_id": matter_id, "engine": engine}
 
 
@@ -114,7 +114,7 @@ def _deduplicate_extracted_dates(dates: list) -> list:
 
     # For each group, pick the best one (highest confidence, has page/bbox)
     unique_dates = []
-    for date_key, group in date_groups.items():
+    for _date_key, group in date_groups.items():
         if len(group) == 1:
             unique_dates.append(group[0])
         else:
@@ -125,6 +125,7 @@ def _deduplicate_extracted_dates(dates: list) -> list:
                     len(d.bbox_ids) if d.bbox_ids else 0,
                     d.confidence or 0,
                 )
+
             group.sort(key=score, reverse=True)
             unique_dates.append(group[0])
 
@@ -234,11 +235,13 @@ def extract_dates_from_document(
 
         # F1: Try shared chunk cache first (avoids Supabase read)
         from app.services.chunk_service import get_cached_chunks
+
         cached = get_cached_chunks(document_id, chunk_type_filter=chunk_type_str)
 
         if cached is not None:
             # Convert cache dicts to simple objects with .content attribute
             from types import SimpleNamespace
+
             chunks = [SimpleNamespace(**c) for c in cached]
             parent_count = sum(1 for c in chunks if c.chunk_type == "parent")
             child_count = sum(1 for c in chunks if c.chunk_type == "child")
@@ -285,7 +288,7 @@ def extract_dates_from_document(
         # Pre-cache bounding boxes for accurate page number detection
         # Same pattern used by citation engine — load all bboxes once,
         # then per-date bbox filtering happens inside date_extractor._parse_single_date
-        from app.core.bbox_filter import set_document_bboxes, clear_document_bboxes
+        from app.core.bbox_filter import clear_document_bboxes, set_document_bboxes
 
         try:
             from app.services.bounding_box_service import get_bounding_box_service
@@ -335,6 +338,7 @@ def extract_dates_from_document(
 
         # Extract dates — batch mode (B3: 3 chunks per Gemini call) or per-chunk fallback
         from app.models.timeline import ExtractedDate
+
         all_dates: list[ExtractedDate] = []
         total_chunks = len(chunks_to_process)
 
@@ -464,8 +468,16 @@ def extract_dates_from_document(
                 [d.extracted_date for d in unique_dates if d.extracted_date],
             )
             if sorted_dates:
-                date_range_start = sorted_dates[0].isoformat() if hasattr(sorted_dates[0], 'isoformat') else str(sorted_dates[0])
-                date_range_end = sorted_dates[-1].isoformat() if hasattr(sorted_dates[-1], 'isoformat') else str(sorted_dates[-1])
+                date_range_start = (
+                    sorted_dates[0].isoformat()
+                    if hasattr(sorted_dates[0], "isoformat")
+                    else str(sorted_dates[0])
+                )
+                date_range_end = (
+                    sorted_dates[-1].isoformat()
+                    if hasattr(sorted_dates[-1], "isoformat")
+                    else str(sorted_dates[-1])
+                )
 
             broadcast_timeline_discovery(
                 matter_id=matter_id,
@@ -610,7 +622,8 @@ def extract_dates_from_matter(
 
             # Filter to case files only (not Acts)
             docs_to_process = [
-                doc.id for doc in documents
+                doc.id
+                for doc in documents
                 if doc.document_type == "case_file" and doc.status == "completed"
             ]
 
@@ -1628,7 +1641,10 @@ def detect_timeline_anomalies(
                     matter_id=matter_id,
                     job_type=JobType.ANOMALY_DETECTION,
                     celery_task_id=self.request.id,
-                    metadata={"triggered_by": "pipeline", "force_redetect": force_redetect},
+                    metadata={
+                        "triggered_by": "pipeline",
+                        "force_redetect": force_redetect,
+                    },
                 )
             )
             job_id = master_job.id

@@ -147,14 +147,14 @@ class TestQuotePreservation:
         """Legal conclusions outside quotes should be replaced."""
         text = (
             'The witness said "defendant was present" and '
-            'the defendant violated Section 138.'
+            "the defendant violated Section 138."
         )
         result = policing_service.sanitize_text(text)
 
         # Quote preserved, but unquoted violation replaced
         assert '"defendant was present"' in result.sanitized_text
         assert "affected by Section 138" in result.sanitized_text
-        assert 'defendant violated Section 138' not in result.sanitized_text
+        assert "defendant violated Section 138" not in result.sanitized_text
 
     def test_mixed_quotes_and_violations(
         self, policing_service: LanguagePolicingService
@@ -162,7 +162,7 @@ class TestQuotePreservation:
         """Mixed content should preserve quotes, replace others."""
         text = (
             'Document states "defendant breached contract" but also '
-            'the evidence proves that more violations occurred.'
+            "the evidence proves that more violations occurred."
         )
         result = policing_service.sanitize_text(text)
 
@@ -235,7 +235,10 @@ class TestQuotePreservationMetadata:
         assert len(citations) == 1
 
         # AC #6: Verify attribution note format
-        assert citations[0].attribution_note == "Direct quote from [Contract Agreement, p. 12]"
+        assert (
+            citations[0].attribution_note
+            == "Direct quote from [Contract Agreement, p. 12]"
+        )
 
     def test_attribution_note_for_plain_quote(
         self, policing_service: LanguagePolicingService
@@ -249,7 +252,10 @@ class TestQuotePreservationMetadata:
 
         assert len(result.quotes_preserved) == 1
         # Plain quote has default attribution
-        assert result.quotes_preserved[0].attribution_note == "Direct quote preserved verbatim"
+        assert (
+            result.quotes_preserved[0].attribution_note
+            == "Direct quote preserved verbatim"
+        )
 
 
 class TestEdgeCases:
@@ -277,27 +283,21 @@ class TestEdgeCases:
         assert '""' in result.sanitized_text
         assert "affected by Section 138" in result.sanitized_text
 
-    def test_quote_at_start(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_quote_at_start(self, policing_service: LanguagePolicingService) -> None:
         """Quote at start of text should be preserved."""
         text = '"Defendant violated the contract" was the finding.'
         result = policing_service.sanitize_text(text)
 
         assert '"Defendant violated the contract"' in result.sanitized_text
 
-    def test_quote_at_end(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_quote_at_end(self, policing_service: LanguagePolicingService) -> None:
         """Quote at end of text should be preserved."""
         text = 'The judge said "defendant is guilty"'
         result = policing_service.sanitize_text(text)
 
         assert '"defendant is guilty"' in result.sanitized_text
 
-    def test_long_quoted_text(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_long_quoted_text(self, policing_service: LanguagePolicingService) -> None:
         """Long quoted text should be fully preserved."""
         quote_content = "the defendant violated Section 138 and is guilty of breach and must pay damages"
         text = f'The ruling states "{quote_content}" according to the documents.'

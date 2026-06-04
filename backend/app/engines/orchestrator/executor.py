@@ -35,12 +35,12 @@ logger = structlog.get_logger(__name__)
 # Timeline/Citation are DB-heavy, RAG includes embedding + rerank + LLM generation
 ENGINE_TIMEOUT_DEFAULT = 30.0
 ENGINE_TIMEOUTS: dict[str, float] = {
-    "timeline": 10.0,        # Pure DB queries, ~600ms typical
-    "citation": 30.0,        # DB + some LLM verification
-    "contradiction": 30.0,   # LLM comparison calls
-    "rag": 75.0,             # Embedding + search + rerank + Gemini generation (cold start can take 26s+ for embeddings)
+    "timeline": 10.0,  # Pure DB queries, ~600ms typical
+    "citation": 30.0,  # DB + some LLM verification
+    "contradiction": 30.0,  # LLM comparison calls
+    "rag": 75.0,  # Embedding + search + rerank + Gemini generation (cold start can take 26s+ for embeddings)
     "document_discovery": 10.0,  # Pure DB metadata queries
-    "entity_lookup": 15.0,   # DB lookups with some aggregation
+    "entity_lookup": 15.0,  # DB lookups with some aggregation
 }
 
 

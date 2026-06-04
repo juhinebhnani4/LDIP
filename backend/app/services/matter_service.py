@@ -100,7 +100,9 @@ class MatterService:
         """
         self.db = db
 
-    def _batch_fetch_user_info(self, user_ids: list[str]) -> dict[str, dict[str, str | None]]:
+    def _batch_fetch_user_info(
+        self, user_ids: list[str]
+    ) -> dict[str, dict[str, str | None]]:
         """Batch fetch user info for multiple user IDs.
 
         Args:
@@ -113,16 +115,19 @@ class MatterService:
             return {}
 
         # Fetch all users in a single query
-        result = self.db.table("users").select("id, email, full_name").in_("id", user_ids).execute()
+        result = (
+            self.db.table("users")
+            .select("id, email, full_name")
+            .in_("id", user_ids)
+            .execute()
+        )
 
         return {
             user["id"]: {"email": user.get("email"), "full_name": user.get("full_name")}
             for user in result.data
         }
 
-    def create_matter(
-        self, user_id: str, data: MatterCreate
-    ) -> Matter:
+    def create_matter(self, user_id: str, data: MatterCreate) -> Matter:
         """Create a new matter.
 
         The creating user is automatically assigned as owner via database trigger.
@@ -137,10 +142,16 @@ class MatterService:
         logger.info("creating_matter", user_id=user_id, title=data.title)
 
         # Insert matter
-        result = self.db.table("matters").insert({
-            "title": data.title,
-            "description": data.description,
-        }).execute()
+        result = (
+            self.db.table("matters")
+            .insert(
+                {
+                    "title": data.title,
+                    "description": data.description,
+                }
+            )
+            .execute()
+        )
 
         if not result.data:
             logger.error("matter_creation_failed", user_id=user_id)
@@ -155,11 +166,13 @@ class MatterService:
 
         # Explicitly create matter_attorney record for owner
         # (We do this explicitly because auth.uid() is null with service role key)
-        self.db.table("matter_attorneys").insert({
-            "matter_id": matter_id,
-            "user_id": user_id,
-            "role": "owner",
-        }).execute()
+        self.db.table("matter_attorneys").insert(
+            {
+                "matter_id": matter_id,
+                "user_id": user_id,
+                "role": "owner",
+            }
+        ).execute()
 
         logger.info("matter_created", matter_id=matter_id, user_id=user_id)
 
@@ -168,9 +181,15 @@ class MatterService:
             title=matter_data["title"],
             description=matter_data.get("description"),
             status=MatterStatus(matter_data.get("status", "active")),
-            verification_mode=VerificationMode(matter_data.get("verification_mode", "advisory")),
-            created_at=datetime.fromisoformat(matter_data["created_at"].replace("Z", "+00:00")),
-            updated_at=datetime.fromisoformat(matter_data["updated_at"].replace("Z", "+00:00")),
+            verification_mode=VerificationMode(
+                matter_data.get("verification_mode", "advisory")
+            ),
+            created_at=datetime.fromisoformat(
+                matter_data["created_at"].replace("Z", "+00:00")
+            ),
+            updated_at=datetime.fromisoformat(
+                matter_data["updated_at"].replace("Z", "+00:00")
+            ),
             last_opened_at=None,
             role=MatterRole.OWNER,  # Creator is always owner
             member_count=1,  # Just the owner
@@ -199,17 +218,23 @@ class MatterService:
         # SECURITY FIX: Must explicitly filter by user_id since we use service role key
         # which bypasses RLS. The !inner join with eq filter ensures only matters
         # where this user has membership are returned.
-        query = self.db.table("matters").select(
-            "*, matter_attorneys!inner(role, user_id)",
-            count="exact"
-        ).eq("matter_attorneys.user_id", user_id).is_("deleted_at", "null")
+        query = (
+            self.db.table("matters")
+            .select("*, matter_attorneys!inner(role, user_id)", count="exact")
+            .eq("matter_attorneys.user_id", user_id)
+            .is_("deleted_at", "null")
+        )
 
         if status_filter:
             query = query.eq("status", status_filter.value)
 
         # Add pagination
         offset = (page - 1) * per_page
-        result = query.range(offset, offset + per_page - 1).order("created_at", desc=True).execute()
+        result = (
+            query.range(offset, offset + per_page - 1)
+            .order("created_at", desc=True)
+            .execute()
+        )
 
         total = result.count or 0
         matters = []
@@ -224,26 +249,34 @@ class MatterService:
 
             last_opened_at = None
             if row.get("last_opened_at"):
-                last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+                last_opened_at = datetime.fromisoformat(
+                    row["last_opened_at"].replace("Z", "+00:00")
+                )
 
-            matters.append(Matter(
-                id=row["id"],
-                title=row["title"],
-                description=row.get("description"),
-                status=MatterStatus(row.get("status", "active")),
-                verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
-                created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
-                updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
-                last_opened_at=last_opened_at,
-                role=user_role,
-                member_count=len(row.get("matter_attorneys", [])),
-            ))
+            matters.append(
+                Matter(
+                    id=row["id"],
+                    title=row["title"],
+                    description=row.get("description"),
+                    status=MatterStatus(row.get("status", "active")),
+                    verification_mode=VerificationMode(
+                        row.get("verification_mode", "advisory")
+                    ),
+                    created_at=datetime.fromisoformat(
+                        row["created_at"].replace("Z", "+00:00")
+                    ),
+                    updated_at=datetime.fromisoformat(
+                        row["updated_at"].replace("Z", "+00:00")
+                    ),
+                    last_opened_at=last_opened_at,
+                    role=user_role,
+                    member_count=len(row.get("matter_attorneys", [])),
+                )
+            )
 
         return matters, total
 
-    def get_matter(
-        self, matter_id: str, user_id: str
-    ) -> MatterWithMembers:
+    def get_matter(self, matter_id: str, user_id: str) -> MatterWithMembers:
         """Get a single matter with members.
 
         Args:
@@ -261,18 +294,29 @@ class MatterService:
         try:
             # SECURITY FIX: First verify user has access to this matter
             # Since we use service role key (bypasses RLS), we must explicitly check membership
-            membership_check = self.db.table("matter_attorneys").select(
-                "role"
-            ).eq("matter_id", matter_id).eq("user_id", user_id).execute()
+            membership_check = (
+                self.db.table("matter_attorneys")
+                .select("role")
+                .eq("matter_id", matter_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
 
             if not membership_check.data:
                 # User is not a member of this matter - deny access
-                logger.warning("access_denied_no_membership", matter_id=matter_id, user_id=user_id)
+                logger.warning(
+                    "access_denied_no_membership", matter_id=matter_id, user_id=user_id
+                )
                 raise MatterNotFoundError(matter_id)
         except MatterNotFoundError:
             raise
         except Exception as e:
-            logger.error("membership_check_failed", matter_id=matter_id, user_id=user_id, error=str(e))
+            logger.error(
+                "membership_check_failed",
+                matter_id=matter_id,
+                user_id=user_id,
+                error=str(e),
+            )
             raise MatterServiceError(
                 code="DATABASE_ERROR",
                 message="Failed to verify matter access",
@@ -280,9 +324,13 @@ class MatterService:
             ) from e
 
         # User is a member, now fetch the full matter with all members
-        result = self.db.table("matters").select(
-            "*, matter_attorneys(id, user_id, role, invited_by, invited_at)"
-        ).eq("id", matter_id).is_("deleted_at", "null").execute()
+        result = (
+            self.db.table("matters")
+            .select("*, matter_attorneys(id, user_id, role, invited_by, invited_at)")
+            .eq("id", matter_id)
+            .is_("deleted_at", "null")
+            .execute()
+        )
 
         if not result.data:
             raise MatterNotFoundError(matter_id)
@@ -308,7 +356,11 @@ class MatterService:
                 full_name=user_info.get("full_name"),
                 role=MatterRole(ma["role"]),
                 invited_by=ma.get("invited_by"),
-                invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00")) if ma.get("invited_at") else None,
+                invited_at=datetime.fromisoformat(
+                    ma["invited_at"].replace("Z", "+00:00")
+                )
+                if ma.get("invited_at")
+                else None,
             )
             members.append(member)
 
@@ -317,14 +369,18 @@ class MatterService:
 
         last_opened_at = None
         if row.get("last_opened_at"):
-            last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+            last_opened_at = datetime.fromisoformat(
+                row["last_opened_at"].replace("Z", "+00:00")
+            )
 
         return MatterWithMembers(
             id=row["id"],
             title=row["title"],
             description=row.get("description"),
             status=MatterStatus(row.get("status", "active")),
-            verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
+            verification_mode=VerificationMode(
+                row.get("verification_mode", "advisory")
+            ),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             last_opened_at=last_opened_at,
@@ -333,9 +389,7 @@ class MatterService:
             members=members,
         )
 
-    def get_user_role(
-        self, matter_id: str, user_id: str
-    ) -> MatterRole | None:
+    def get_user_role(self, matter_id: str, user_id: str) -> MatterRole | None:
         """Get user's role on a specific matter.
 
         Args:
@@ -345,18 +399,20 @@ class MatterService:
         Returns:
             User's role or None if no membership.
         """
-        result = self.db.table("matter_attorneys").select("role").eq(
-            "matter_id", matter_id
-        ).eq("user_id", user_id).execute()
+        result = (
+            self.db.table("matter_attorneys")
+            .select("role")
+            .eq("matter_id", matter_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
 
         if not result.data:
             return None
 
         return MatterRole(result.data[0]["role"])
 
-    def update_matter(
-        self, matter_id: str, user_id: str, data: MatterUpdate
-    ) -> Matter:
+    def update_matter(self, matter_id: str, user_id: str, data: MatterUpdate) -> Matter:
         """Update matter details.
 
         Requires editor or owner role.
@@ -378,7 +434,9 @@ class MatterService:
         if role is None:
             raise MatterNotFoundError(matter_id)
         if role == MatterRole.VIEWER:
-            raise InsufficientPermissionsError("owner or editor", "update matter details")
+            raise InsufficientPermissionsError(
+                "owner or editor", "update matter details"
+            )
 
         logger.info("updating_matter", matter_id=matter_id, user_id=user_id)
 
@@ -408,7 +466,9 @@ class MatterService:
                 member_count=matter.member_count,
             )
 
-        result = self.db.table("matters").update(update_data).eq("id", matter_id).execute()
+        result = (
+            self.db.table("matters").update(update_data).eq("id", matter_id).execute()
+        )
 
         if not result.data:
             raise MatterNotFoundError(matter_id)
@@ -416,21 +476,28 @@ class MatterService:
         row = result.data[0]
 
         # Get actual member count
-        member_count_result = self.db.table("matter_attorneys").select(
-            "id", count="exact"
-        ).eq("matter_id", matter_id).execute()
+        member_count_result = (
+            self.db.table("matter_attorneys")
+            .select("id", count="exact")
+            .eq("matter_id", matter_id)
+            .execute()
+        )
         member_count = member_count_result.count or 0
 
         update_last_opened_at = None
         if row.get("last_opened_at"):
-            update_last_opened_at = datetime.fromisoformat(row["last_opened_at"].replace("Z", "+00:00"))
+            update_last_opened_at = datetime.fromisoformat(
+                row["last_opened_at"].replace("Z", "+00:00")
+            )
 
         return Matter(
             id=row["id"],
             title=row["title"],
             description=row.get("description"),
             status=MatterStatus(row.get("status", "active")),
-            verification_mode=VerificationMode(row.get("verification_mode", "advisory")),
+            verification_mode=VerificationMode(
+                row.get("verification_mode", "advisory")
+            ),
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             last_opened_at=update_last_opened_at,
@@ -450,9 +517,11 @@ class MatterService:
             user_id: ID of the user who opened it.
         """
         try:
-            self.db.table("matters").update({
-                "last_opened_at": datetime.now(UTC).isoformat(),
-            }).eq("id", matter_id).execute()
+            self.db.table("matters").update(
+                {
+                    "last_opened_at": datetime.now(UTC).isoformat(),
+                }
+            ).eq("id", matter_id).execute()
         except Exception as e:
             # Touch is non-critical — log and swallow so transient
             # Supabase errors don't surface as 500s.
@@ -463,9 +532,7 @@ class MatterService:
                 error=str(e),
             )
 
-    def delete_matter(
-        self, matter_id: str, user_id: str
-    ) -> None:
+    def delete_matter(self, matter_id: str, user_id: str) -> None:
         """Soft-delete a matter.
 
         Requires owner role.
@@ -487,9 +554,16 @@ class MatterService:
         logger.info("deleting_matter", matter_id=matter_id, user_id=user_id)
 
         # Soft delete
-        result = self.db.table("matters").update({
-            "deleted_at": datetime.now(UTC).isoformat(),
-        }).eq("id", matter_id).execute()
+        result = (
+            self.db.table("matters")
+            .update(
+                {
+                    "deleted_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("id", matter_id)
+            .execute()
+        )
 
         if not result.data:
             raise MatterNotFoundError(matter_id)
@@ -527,7 +601,12 @@ class MatterService:
             raise InsufficientPermissionsError("owner", "invite members")
 
         # Find user by email
-        user_result = self.db.table("users").select("id, email, full_name").eq("email", email).execute()
+        user_result = (
+            self.db.table("users")
+            .select("id, email, full_name")
+            .eq("email", email)
+            .execute()
+        )
         if not user_result.data:
             raise UserNotFoundError(email)
 
@@ -535,9 +614,13 @@ class MatterService:
         user_id = user["id"]
 
         # Check if already a member
-        existing = self.db.table("matter_attorneys").select("id").eq(
-            "matter_id", matter_id
-        ).eq("user_id", user_id).execute()
+        existing = (
+            self.db.table("matter_attorneys")
+            .select("id")
+            .eq("matter_id", matter_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
 
         if existing.data:
             raise MemberAlreadyExistsError(email)
@@ -551,12 +634,18 @@ class MatterService:
         )
 
         # Create membership
-        result = self.db.table("matter_attorneys").insert({
-            "matter_id": matter_id,
-            "user_id": user_id,
-            "role": role.value,
-            "invited_by": inviter_id,
-        }).execute()
+        result = (
+            self.db.table("matter_attorneys")
+            .insert(
+                {
+                    "matter_id": matter_id,
+                    "user_id": user_id,
+                    "role": role.value,
+                    "invited_by": inviter_id,
+                }
+            )
+            .execute()
+        )
 
         if not result.data:
             raise MatterServiceError(
@@ -573,12 +662,12 @@ class MatterService:
             full_name=user.get("full_name"),
             role=MatterRole(ma["role"]),
             invited_by=ma.get("invited_by"),
-            invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00")) if ma.get("invited_at") else None,
+            invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00"))
+            if ma.get("invited_at")
+            else None,
         )
 
-    def get_members(
-        self, matter_id: str, user_id: str
-    ) -> list[MatterMember]:
+    def get_members(self, matter_id: str, user_id: str) -> list[MatterMember]:
         """Get all members of a matter.
 
         Args:
@@ -596,9 +685,12 @@ class MatterService:
         if role is None:
             raise MatterNotFoundError(matter_id)
 
-        result = self.db.table("matter_attorneys").select(
-            "id, user_id, role, invited_by, invited_at"
-        ).eq("matter_id", matter_id).execute()
+        result = (
+            self.db.table("matter_attorneys")
+            .select("id, user_id, role, invited_by, invited_at")
+            .eq("matter_id", matter_id)
+            .execute()
+        )
 
         # Batch fetch all user info in a single query (fixes N+1)
         user_ids = [ma["user_id"] for ma in result.data]
@@ -608,15 +700,21 @@ class MatterService:
         for ma in result.data:
             user_info = user_info_map.get(ma["user_id"], {})
 
-            members.append(MatterMember(
-                id=ma["id"],
-                user_id=ma["user_id"],
-                email=user_info.get("email"),
-                full_name=user_info.get("full_name"),
-                role=MatterRole(ma["role"]),
-                invited_by=ma.get("invited_by"),
-                invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00")) if ma.get("invited_at") else None,
-            ))
+            members.append(
+                MatterMember(
+                    id=ma["id"],
+                    user_id=ma["user_id"],
+                    email=user_info.get("email"),
+                    full_name=user_info.get("full_name"),
+                    role=MatterRole(ma["role"]),
+                    invited_by=ma.get("invited_by"),
+                    invited_at=datetime.fromisoformat(
+                        ma["invited_at"].replace("Z", "+00:00")
+                    )
+                    if ma.get("invited_at")
+                    else None,
+                )
+            )
 
         return members
 
@@ -663,9 +761,17 @@ class MatterService:
             new_role=new_role.value,
         )
 
-        result = self.db.table("matter_attorneys").update({
-            "role": new_role.value,
-        }).eq("matter_id", matter_id).eq("user_id", member_user_id).execute()
+        result = (
+            self.db.table("matter_attorneys")
+            .update(
+                {
+                    "role": new_role.value,
+                }
+            )
+            .eq("matter_id", matter_id)
+            .eq("user_id", member_user_id)
+            .execute()
+        )
 
         if not result.data:
             raise MatterNotFoundError(matter_id)
@@ -683,7 +789,9 @@ class MatterService:
             full_name=user_info.get("full_name"),
             role=MatterRole(ma["role"]),
             invited_by=ma.get("invited_by"),
-            invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00")) if ma.get("invited_at") else None,
+            invited_at=datetime.fromisoformat(ma["invited_at"].replace("Z", "+00:00"))
+            if ma.get("invited_at")
+            else None,
         )
 
     def remove_member(
@@ -723,9 +831,13 @@ class MatterService:
             member_user_id=member_user_id,
         )
 
-        result = self.db.table("matter_attorneys").delete().eq(
-            "matter_id", matter_id
-        ).eq("user_id", member_user_id).execute()
+        result = (
+            self.db.table("matter_attorneys")
+            .delete()
+            .eq("matter_id", matter_id)
+            .eq("user_id", member_user_id)
+            .execute()
+        )
 
         if not result.data:
             raise MatterNotFoundError(matter_id)

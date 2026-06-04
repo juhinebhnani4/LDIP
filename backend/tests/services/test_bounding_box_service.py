@@ -188,8 +188,8 @@ class TestBoundingBoxService:
         mock_client: MagicMock,
     ) -> None:
         """Should delete bounding boxes by document ID."""
-        mock_client.table.return_value.delete.return_value.eq.return_value.execute.return_value = (
-            MagicMock(data=[{"id": "bbox-1"}, {"id": "bbox-2"}])
+        mock_client.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": "bbox-1"}, {"id": "bbox-2"}]
         )
 
         result = service.delete_bounding_boxes("doc-123")
@@ -206,8 +206,8 @@ class TestBoundingBoxService:
         mock_client: MagicMock,
     ) -> None:
         """Should raise BoundingBoxServiceError on delete error."""
-        mock_client.table.return_value.delete.return_value.eq.return_value.execute.side_effect = (
-            Exception("Delete failed")
+        mock_client.table.return_value.delete.return_value.eq.return_value.execute.side_effect = Exception(
+            "Delete failed"
         )
 
         with pytest.raises(BoundingBoxServiceError) as exc_info:

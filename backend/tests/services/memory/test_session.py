@@ -1053,9 +1053,7 @@ class TestMaxLifetimeTTL:
         from datetime import timedelta
 
         # Create session with created_at 30 days ago
-        old_created_at = (
-            datetime.now(UTC) - timedelta(days=30)
-        ).isoformat()
+        old_created_at = (datetime.now(UTC) - timedelta(days=30)).isoformat()
 
         existing_context = SessionContext(
             session_id="old-session",
@@ -1088,9 +1086,7 @@ class TestMaxLifetimeTTL:
         from datetime import timedelta
 
         # Create session with created_at 30 days ago (just hit max)
-        old_created_at = (
-            datetime.now(UTC) - timedelta(days=30)
-        ).isoformat()
+        old_created_at = (datetime.now(UTC) - timedelta(days=30)).isoformat()
 
         existing_context = SessionContext(
             session_id="old-session",
@@ -1130,9 +1126,7 @@ class TestMaxLifetimeTTL:
         from datetime import timedelta
 
         # Create session with created_at 7 days ago
-        recent_created_at = (
-            datetime.now(UTC) - timedelta(days=7)
-        ).isoformat()
+        recent_created_at = (datetime.now(UTC) - timedelta(days=7)).isoformat()
 
         existing_context = SessionContext(
             session_id="recent-session",
@@ -1191,9 +1185,7 @@ class TestMaxLifetimeTTL:
         from datetime import timedelta
 
         # Session created 10 days ago
-        created_at = (
-            datetime.now(UTC) - timedelta(days=10)
-        ).isoformat()
+        created_at = (datetime.now(UTC) - timedelta(days=10)).isoformat()
 
         existing_context = SessionContext(
             session_id="aged-session",

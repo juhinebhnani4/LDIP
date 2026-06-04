@@ -21,12 +21,12 @@ def run_migration():
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "supabase",
         "migrations",
-        "20260126100001_migrate_acts_to_library.sql"
+        "20260126100001_migrate_acts_to_library.sql",
     )
 
     print(f"Reading migration from: {migration_path}")
 
-    with open(migration_path, "r") as f:
+    with open(migration_path) as f:
         migration_sql = f.read()
 
     print("Running migration...")
@@ -60,12 +60,14 @@ def run_migration():
                     project_ref = supabase_url.replace("https://", "").split(".")[0]
                     db_host = f"db.{project_ref}.supabase.co"
                     db_password = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-                    db_url = f"postgresql://postgres:{db_password}@{db_host}:5432/postgres"
+                    db_url = (
+                        f"postgresql://postgres:{db_password}@{db_host}:5432/postgres"
+                    )
                 else:
                     # Local development
                     db_url = "postgresql://postgres:postgres@localhost:54322/postgres"
 
-            print(f"Connecting to database...")
+            print("Connecting to database...")
             conn = psycopg2.connect(db_url)
             conn.autocommit = True
 
@@ -89,6 +91,7 @@ def run_migration():
 if __name__ == "__main__":
     # Load environment variables
     from dotenv import load_dotenv
+
     load_dotenv()
 
     run_migration()

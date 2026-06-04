@@ -62,13 +62,8 @@ def delete_citations(client, citation_ids: list[str]) -> int:
     # Delete in batches to avoid query size limits
     batch_size = 100
     for i in range(0, len(citation_ids), batch_size):
-        batch = citation_ids[i:i + batch_size]
-        result = (
-            client.table("citations")
-            .delete()
-            .in_("id", batch)
-            .execute()
-        )
+        batch = citation_ids[i : i + batch_size]
+        result = client.table("citations").delete().in_("id", batch).execute()
         deleted_count += len(result.data) if result.data else len(batch)
 
     return deleted_count

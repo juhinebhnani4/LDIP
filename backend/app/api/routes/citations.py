@@ -109,11 +109,21 @@ class CitationStatsResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    total_citations: int = Field(..., alias="totalCitations", description="Total citation count")
-    unique_acts: int = Field(..., alias="uniqueActs", description="Number of unique Acts")
-    verified_count: int = Field(..., alias="verifiedCount", description="Verified citations")
-    pending_count: int = Field(..., alias="pendingCount", description="Pending verification")
-    missing_acts_count: int = Field(..., alias="missingActsCount", description="Missing Acts")
+    total_citations: int = Field(
+        ..., alias="totalCitations", description="Total citation count"
+    )
+    unique_acts: int = Field(
+        ..., alias="uniqueActs", description="Number of unique Acts"
+    )
+    verified_count: int = Field(
+        ..., alias="verifiedCount", description="Verified citations"
+    )
+    pending_count: int = Field(
+        ..., alias="pendingCount", description="Pending verification"
+    )
+    missing_acts_count: int = Field(
+        ..., alias="missingActsCount", description="Missing Acts"
+    )
 
 
 router = APIRouter(prefix="/matters/{matter_id}/citations", tags=["citations"])
@@ -259,7 +269,9 @@ async def list_citations(
 # =============================================================================
 
 
-@router.get("/stats", response_model=CitationStatsResponse, response_model_by_alias=True)
+@router.get(
+    "/stats", response_model=CitationStatsResponse, response_model_by_alias=True
+)
 async def get_citation_stats(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -311,7 +323,8 @@ async def get_citation_stats(
             unique_acts=discovery_stats["total_acts"],
             verified_count=verified_count,
             pending_count=pending_count,
-            missing_acts_count=discovery_stats["missing_count"] + discovery_stats.get("not_on_indiacode_count", 0),
+            missing_acts_count=discovery_stats["missing_count"]
+            + discovery_stats.get("not_on_indiacode_count", 0),
         )
 
     except Exception as e:
@@ -365,7 +378,9 @@ class BulkUpdateStatusResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     success: bool = Field(..., description="Whether update was successful")
-    updated_count: int = Field(..., alias="updatedCount", description="Number of citations updated")
+    updated_count: int = Field(
+        ..., alias="updatedCount", description="Number of citations updated"
+    )
     verification_status: VerificationStatus = Field(
         ..., alias="verificationStatus", description="New verification status"
     )
@@ -455,7 +470,9 @@ async def bulk_update_citation_status(
 # =============================================================================
 
 
-@router.get("/{citation_id}", response_model=CitationResponse, response_model_by_alias=True)
+@router.get(
+    "/{citation_id}", response_model=CitationResponse, response_model_by_alias=True
+)
 async def get_citation(
     matter_id: str = Path(..., description="Matter UUID"),
     citation_id: str = Path(..., description="Citation UUID"),
@@ -631,7 +648,9 @@ async def update_citation_status(
             matter_id=matter_id,
             verification_status=request.verification_status,
             # For manual verification, set confidence to 100% to indicate human review
-            confidence=100.0 if request.verification_status == VerificationStatus.VERIFIED else None,
+            confidence=100.0
+            if request.verification_status == VerificationStatus.VERIFIED
+            else None,
         )
 
         if updated is None:
@@ -688,7 +707,11 @@ async def update_citation_status(
 # =============================================================================
 
 
-@router.get("/summary/by-act", response_model=CitationSummaryResponse, response_model_by_alias=True)
+@router.get(
+    "/summary/by-act",
+    response_model=CitationSummaryResponse,
+    response_model_by_alias=True,
+)
 async def get_citation_summary(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -760,7 +783,9 @@ async def get_citation_summary(
 # =============================================================================
 
 
-@router.get("/acts/discovery", response_model=ActDiscoveryResponse, response_model_by_alias=True)
+@router.get(
+    "/acts/discovery", response_model=ActDiscoveryResponse, response_model_by_alias=True
+)
 async def get_act_discovery_report(
     matter_id: str = Path(..., description="Matter UUID"),
     include_available: bool = Query(
@@ -799,6 +824,7 @@ async def get_act_discovery_report(
         # This fixes the issue where Acts uploaded via India Code or manually
         # still show as "missing" because act_resolutions wasn't updated
         from app.services.document_service import get_document_service
+
         doc_service = get_document_service()
         synced_count = doc_service.sync_act_resolutions_for_matter(matter_id)
         if synced_count > 0:
@@ -845,7 +871,11 @@ async def get_act_discovery_report(
 # =============================================================================
 
 
-@router.post("/acts/mark-uploaded", response_model=ActResolutionResponse, response_model_by_alias=True)
+@router.post(
+    "/acts/mark-uploaded",
+    response_model=ActResolutionResponse,
+    response_model_by_alias=True,
+)
 async def mark_act_uploaded(
     request: MarkActUploadedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -929,7 +959,11 @@ async def mark_act_uploaded(
         ) from e
 
 
-@router.post("/acts/mark-skipped", response_model=ActResolutionResponse, response_model_by_alias=True)
+@router.post(
+    "/acts/mark-skipped",
+    response_model=ActResolutionResponse,
+    response_model_by_alias=True,
+)
 async def mark_act_skipped(
     request: MarkActSkippedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1045,7 +1079,9 @@ class VerifyCitationRequest(BaseModel):
     )
 
 
-@router.post("/verify", response_model=BatchVerificationResponse, response_model_by_alias=True)
+@router.post(
+    "/verify", response_model=BatchVerificationResponse, response_model_by_alias=True
+)
 async def verify_citations_batch(
     request: VerifyActRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1127,7 +1163,11 @@ async def verify_citations_batch(
         ) from e
 
 
-@router.post("/{citation_id}/verify", response_model=BatchVerificationResponse, response_model_by_alias=True)
+@router.post(
+    "/{citation_id}/verify",
+    response_model=BatchVerificationResponse,
+    response_model_by_alias=True,
+)
 async def verify_single_citation_endpoint(
     request: VerifyCitationRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1326,7 +1366,11 @@ async def get_verification_details(
 # =============================================================================
 
 
-@router.post("/acts/mark-uploaded-verify", response_model=ActResolutionResponse, response_model_by_alias=True)
+@router.post(
+    "/acts/mark-uploaded-verify",
+    response_model=ActResolutionResponse,
+    response_model_by_alias=True,
+)
 async def mark_act_uploaded_and_verify(
     request: MarkActUploadedRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1442,9 +1486,17 @@ class DocumentViewDataModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     document_id: str = Field(..., alias="documentId", description="Document UUID")
-    document_url: str = Field(..., alias="documentUrl", description="Signed URL for PDF")
-    document_type: str = Field(..., alias="documentType", description="Document type (case_file, act, annexure, other)")
-    page_number: int = Field(..., alias="pageNumber", description="Page to display (1-indexed)")
+    document_url: str = Field(
+        ..., alias="documentUrl", description="Signed URL for PDF"
+    )
+    document_type: str = Field(
+        ...,
+        alias="documentType",
+        description="Document type (case_file, act, annexure, other)",
+    )
+    page_number: int = Field(
+        ..., alias="pageNumber", description="Page to display (1-indexed)"
+    )
     page_number_confident: bool = Field(
         default=True,
         alias="pageNumberConfident",
@@ -1460,11 +1512,21 @@ class CitationContextModel(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    citation_text: str = Field(..., alias="citationText", description="The citation text from the source document")
+    citation_text: str = Field(
+        ...,
+        alias="citationText",
+        description="The citation text from the source document",
+    )
     act_name: str = Field(..., alias="actName", description="The Act being cited")
     section: str = Field(..., description="The section being cited (e.g., '206A')")
-    instruction: str = Field(..., description="Human-readable instruction for what to verify")
-    section_found_in_act: bool = Field(..., alias="sectionFoundInAct", description="Whether the section was found in the Act index")
+    instruction: str = Field(
+        ..., description="Human-readable instruction for what to verify"
+    )
+    section_found_in_act: bool = Field(
+        ...,
+        alias="sectionFoundInAct",
+        description="Whether the section was found in the Act index",
+    )
 
 
 class SplitViewDataModel(BaseModel):
@@ -1476,7 +1538,11 @@ class SplitViewDataModel(BaseModel):
     source_document: DocumentViewDataModel = Field(..., alias="sourceDocument")
     target_document: DocumentViewDataModel | None = Field(None, alias="targetDocument")
     verification: VerificationResult | None = None
-    citation_context: CitationContextModel | None = Field(None, alias="citationContext", description="Context to help users verify the citation")
+    citation_context: CitationContextModel | None = Field(
+        None,
+        alias="citationContext",
+        description="Context to help users verify the citation",
+    )
 
 
 class SplitViewResponseModel(BaseModel):
@@ -1487,7 +1553,11 @@ class SplitViewResponseModel(BaseModel):
 
 def _build_verification_instruction(citation: Citation, section_found: bool) -> str:
     """Build a human-readable instruction for verifying the citation."""
-    section_display = f"Section {citation.section_number}" if citation.section_number else "the cited section"
+    section_display = (
+        f"Section {citation.section_number}"
+        if citation.section_number
+        else "the cited section"
+    )
     act_display = citation.act_name
 
     if citation.verification_status == VerificationStatus.PENDING:
@@ -1507,7 +1577,11 @@ def _build_verification_instruction(citation: Citation, section_found: bool) -> 
         return f"Review the citation of {section_display} from {act_display}."
 
 
-@router.get("/{citation_id}/split-view", response_model=SplitViewResponseModel, response_model_by_alias=True)
+@router.get(
+    "/{citation_id}/split-view",
+    response_model=SplitViewResponseModel,
+    response_model_by_alias=True,
+)
 async def get_citation_split_view(
     matter_id: str = Path(..., description="Matter UUID"),
     citation_id: str = Path(..., description="Citation UUID"),
@@ -1561,6 +1635,7 @@ async def get_citation_split_view(
             )
 
         import asyncio
+
         # Get storage service for signed URLs
         file_storage = get_storage_service()
         bbox_service = get_bounding_box_service()
@@ -1568,13 +1643,19 @@ async def get_citation_split_view(
         # Build source document data (case file where citation was found)
         source_document_id = citation.document_id
         # Track page confidence - don't silently default to 1
-        source_page_confident = citation.source_page is not None and citation.source_page > 0
+        source_page_confident = (
+            citation.source_page is not None and citation.source_page > 0
+        )
         source_page = citation.source_page if source_page_confident else 1
 
         # Get source document storage path and type
         client = get_service_client()
         doc_result = await asyncio.to_thread(
-            lambda: client.table("documents").select("storage_path, filename, document_type").eq("id", source_document_id).single().execute()
+            lambda: client.table("documents")
+            .select("storage_path, filename, document_type")
+            .eq("id", source_document_id)
+            .single()
+            .execute()
         )
 
         if not doc_result.data:
@@ -1666,12 +1747,18 @@ async def get_citation_split_view(
             if act_resolution and act_resolution.act_document_id:
                 # Get target document storage path
                 target_doc_result = await asyncio.to_thread(
-                    lambda: client.table("documents").select("storage_path, filename").eq("id", act_resolution.act_document_id).single().execute()
+                    lambda: client.table("documents")
+                    .select("storage_path, filename")
+                    .eq("id", act_resolution.act_document_id)
+                    .single()
+                    .execute()
                 )
 
                 if target_doc_result.data:
                     target_storage_path = target_doc_result.data["storage_path"]
-                    target_url = file_storage.get_signed_url(target_storage_path, expires_in=3600)
+                    target_url = file_storage.get_signed_url(
+                        target_storage_path, expires_in=3600
+                    )
 
                     # Use stored target_page if available, otherwise use section index lookup
                     # Track confidence to indicate if page is accurate or fallback
@@ -1684,11 +1771,15 @@ async def get_citation_split_view(
                         # This handles both PENDING citations and verified citations
                         # where target_page wasn't properly saved during verification
                         target_page = 1  # Default fallback
-                        target_page_confident = False  # Not confident until we find section
+                        target_page_confident = (
+                            False  # Not confident until we find section
+                        )
                         section_str = citation.section_number or ""
 
                         try:
-                            from app.services.section_index_service import get_section_index_service
+                            from app.services.section_index_service import (
+                                get_section_index_service,
+                            )
 
                             section_service = get_section_index_service()
                             section_location = await asyncio.to_thread(
@@ -1730,11 +1821,16 @@ async def get_citation_split_view(
                     target_bboxes: list[SplitViewBoundingBox] = []
                     if citation.target_bbox_ids:
                         target_bbox_data = await asyncio.to_thread(
-                            bbox_service.get_bounding_boxes_by_ids, citation.target_bbox_ids
+                            bbox_service.get_bounding_boxes_by_ids,
+                            citation.target_bbox_ids,
                         )
 
                         # For target (Act), filter to bboxes mentioning section number
-                        section_str = citation.section_number.lower() if citation.section_number else ""
+                        section_str = (
+                            citation.section_number.lower()
+                            if citation.section_number
+                            else ""
+                        )
 
                         for bbox in target_bbox_data:
                             bbox_text = bbox.get("text", "").lower()
@@ -1785,6 +1881,7 @@ async def get_citation_split_view(
             diff_details = None
             if diff_details_raw and isinstance(diff_details_raw, dict):
                 from app.models.citation import DiffDetail
+
                 diff_details = DiffDetail(
                     citation_text=diff_details_raw.get("citation_text", ""),
                     act_text=diff_details_raw.get("act_text", ""),
@@ -1799,7 +1896,9 @@ async def get_citation_split_view(
                 target_page=citation.target_page,
                 target_bbox_ids=citation.target_bbox_ids or [],
                 similarity_score=citation.confidence,
-                explanation=citation.extraction_metadata.get("verification_explanation", ""),
+                explanation=citation.extraction_metadata.get(
+                    "verification_explanation", ""
+                ),
                 diff_details=diff_details,
             )
 

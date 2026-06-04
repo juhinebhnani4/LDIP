@@ -40,7 +40,7 @@ async def _async_release_lock(matter_id: str) -> None:
 
 def _release_dedup_lock(matter_id: str) -> None:
     """Release the Redis dedup lock (sync wrapper for Celery context)."""
-    try:
+    try:  # noqa: SIM105
         run_async(_async_release_lock(matter_id), timeout=5)
     except Exception:
         # Lock has a 600s TTL anyway — safe to ignore cleanup failure
@@ -179,6 +179,7 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
         try:
             from app.models.activity import ActivityTypeEnum
             from app.services.activity_service import get_activity_service
+
             activity_service = get_activity_service()
             run_async(
                 activity_service.create_activity_for_matter_members(
@@ -200,7 +201,10 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
         log.error("summary_generation_soft_timeout")
         if job_id:
             _mark_job_failed(
-                tracker, matter_id, job_id, current_status,
+                tracker,
+                matter_id,
+                job_id,
+                current_status,
                 "Summary generation timed out (5 min limit)",
             )
         _release_dedup_lock(matter_id)
@@ -224,7 +228,7 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
                     ),
                     timeout=30,
                 )
-            raise self.retry(countdown=30 * (self.request.retries + 1), exc=e)
+            raise self.retry(countdown=30 * (self.request.retries + 1), exc=e) from e
 
         # Non-retriable or retries exhausted → mark failed
         # Sanitize error message to avoid leaking internal details

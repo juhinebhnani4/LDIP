@@ -224,7 +224,13 @@ class TestUploadDocument:
 
         response = await client.post(
             "/api/documents/upload",
-            files={"file": ("indian_contract_act.pdf", sample_pdf_content, "application/pdf")},
+            files={
+                "file": (
+                    "indian_contract_act.pdf",
+                    sample_pdf_content,
+                    "application/pdf",
+                )
+            },
             data={"matter_id": "test-matter-id", "document_type": "act"},
             headers={"Authorization": f"Bearer {valid_token}"},
         )
@@ -307,7 +313,13 @@ class TestUploadDocument:
 
         response = await client.post(
             "/api/documents/upload",
-            files={"file": ("document.docx", b"fake content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            files={
+                "file": (
+                    "document.docx",
+                    b"fake content",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
             data={"matter_id": "test-matter-id"},
             headers={"Authorization": f"Bearer {valid_token}"},
         )
@@ -641,7 +653,9 @@ class TestGetDocument:
     ) -> None:
         """Test that get document returns 200 with signed URL."""
         mock_document_service.get_document.return_value = sample_document
-        mock_storage_service.get_signed_url.return_value = "https://example.com/signed-url"
+        mock_storage_service.get_signed_url.return_value = (
+            "https://example.com/signed-url"
+        )
 
         response = await client.get(
             "/api/documents/doc-12345",
@@ -673,7 +687,10 @@ class TestGetDocument:
     ) -> None:
         """Test that getting a nonexistent document returns 404."""
         from app.services.document_service import DocumentNotFoundError
-        mock_document_service.get_document.side_effect = DocumentNotFoundError("doc-999")
+
+        mock_document_service.get_document.side_effect = DocumentNotFoundError(
+            "doc-999"
+        )
 
         response = await client.get(
             "/api/documents/doc-999",
@@ -737,7 +754,10 @@ class TestUpdateDocument:
     ) -> None:
         """Test that updating a nonexistent document returns 404."""
         from app.services.document_service import DocumentNotFoundError
-        mock_document_service.get_document.side_effect = DocumentNotFoundError("doc-999")
+
+        mock_document_service.get_document.side_effect = DocumentNotFoundError(
+            "doc-999"
+        )
 
         response = await client.patch(
             "/api/documents/doc-999",

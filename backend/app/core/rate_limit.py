@@ -100,6 +100,7 @@ def _get_limiter_with_fallback() -> tuple[Limiter, str]:
     # Try Redis first
     try:
         import redis
+
         # Test Redis connectivity
         r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
         r.ping()
@@ -142,6 +143,7 @@ def switch_to_memory_limiter() -> None:
 # Rate Limit Tier Constants (from config with fallbacks)
 # =============================================================================
 
+
 def _get_rate_limit_str(value: int) -> str:
     """Convert rate limit integer to slowapi format string."""
     return f"{value}/minute"
@@ -176,6 +178,7 @@ READ_RATE_LIMIT = READONLY_RATE_LIMIT  # 120/minute
 # =============================================================================
 # Custom 429 Response Handler
 # =============================================================================
+
 
 def _parse_retry_after(exception: RateLimitExceeded) -> int:
     """Parse retry-after seconds from rate limit exception.
@@ -212,7 +215,9 @@ def _parse_retry_after(exception: RateLimitExceeded) -> int:
     return 60
 
 
-def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+def rate_limit_exceeded_handler(
+    request: Request, exc: RateLimitExceeded
+) -> JSONResponse:
     """Custom handler for rate limit exceeded errors.
 
     Returns a structured error response following project API conventions
@@ -292,6 +297,7 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSO
 # =============================================================================
 # Rate Limit Status Helpers
 # =============================================================================
+
 
 def get_rate_limit_status(request: Request) -> dict:
     """Get current rate limit status for the requesting user.

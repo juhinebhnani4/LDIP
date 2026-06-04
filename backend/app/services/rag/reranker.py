@@ -49,6 +49,7 @@ RERANK_TIMEOUT_SECONDS = 10
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class RerankResultItem:
     """Single reranked document result.
@@ -57,6 +58,7 @@ class RerankResultItem:
         index: Original document index in the input list.
         relevance_score: Cohere relevance score (0.0-1.0).
     """
+
     index: int
     relevance_score: float
 
@@ -72,6 +74,7 @@ class RerankResult:
         rerank_used: True if Cohere was successfully used, False if fallback.
         fallback_reason: Reason for fallback if rerank_used is False.
     """
+
     results: list[RerankResultItem]
     query: str
     model: str
@@ -82,6 +85,7 @@ class RerankResult:
 # =============================================================================
 # Exceptions
 # =============================================================================
+
 
 class CohereRerankServiceError(Exception):
     """Exception for Cohere rerank service errors.
@@ -107,6 +111,7 @@ class CohereRerankServiceError(Exception):
 # =============================================================================
 # Service Implementation
 # =============================================================================
+
 
 class CohereRerankService:
     """Service for reranking search results using Cohere Rerank v3.5.
@@ -265,7 +270,10 @@ class CohereRerankService:
         try:
             # Call Cohere with circuit breaker protection
             response = await self._call_cohere_rerank(
-                query, list(documents), effective_top_n, matter_id=matter_id,
+                query,
+                list(documents),
+                effective_top_n,
+                matter_id=matter_id,
             )
 
             # Map response to our dataclass
@@ -311,8 +319,12 @@ class CohereRerankService:
                 circuit_name=e.circuit_name,
                 cooldown_remaining=e.cooldown_remaining,
             )
-            return self._fallback_result(query, len(documents), effective_top_n,
-                                         reason=f"Circuit open, retry after {e.cooldown_remaining:.0f}s")
+            return self._fallback_result(
+                query,
+                len(documents),
+                effective_top_n,
+                reason=f"Circuit open, retry after {e.cooldown_remaining:.0f}s",
+            )
 
         except TimeoutError:
             logger.warning(
@@ -320,8 +332,12 @@ class CohereRerankService:
                 query_len=len(query),
                 timeout=RERANK_TIMEOUT_SECONDS,
             )
-            return self._fallback_result(query, len(documents), effective_top_n,
-                                         reason=f"Timeout after {RERANK_TIMEOUT_SECONDS}s")
+            return self._fallback_result(
+                query,
+                len(documents),
+                effective_top_n,
+                reason=f"Timeout after {RERANK_TIMEOUT_SECONDS}s",
+            )
 
         except CohereApiError as e:
             logger.warning(
@@ -329,8 +345,9 @@ class CohereRerankService:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            return self._fallback_result(query, len(documents), effective_top_n,
-                                         reason=f"API error: {e}")
+            return self._fallback_result(
+                query, len(documents), effective_top_n, reason=f"API error: {e}"
+            )
 
         except Exception as e:
             logger.error(
@@ -338,10 +355,13 @@ class CohereRerankService:
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            return self._fallback_result(query, len(documents), effective_top_n,
-                                         reason=f"Unexpected error: {e}")
+            return self._fallback_result(
+                query, len(documents), effective_top_n, reason=f"Unexpected error: {e}"
+            )
 
-    @with_circuit_breaker(CircuitService.COHERE_RERANK, timeout_override=RERANK_TIMEOUT_SECONDS)
+    @with_circuit_breaker(
+        CircuitService.COHERE_RERANK, timeout_override=RERANK_TIMEOUT_SECONDS
+    )
     async def _call_cohere_rerank(
         self,
         query: str,

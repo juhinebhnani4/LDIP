@@ -20,7 +20,6 @@ from app.services.email_service import (
     get_email_service,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -63,7 +62,9 @@ class TestEmailServiceConfiguration:
         mock_settings.resend_api_key = ""
         mock_settings.is_email_configured = False
 
-        with patch("app.services.email_service.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.email_service.get_settings", return_value=mock_settings
+        ):
             service = EmailService()
             assert service.is_configured() is False
 
@@ -72,7 +73,9 @@ class TestEmailServiceConfiguration:
         mock_settings.email_notifications_enabled = False
         mock_settings.is_email_configured = False
 
-        with patch("app.services.email_service.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.email_service.get_settings", return_value=mock_settings
+        ):
             service = EmailService()
             assert service.is_configured() is False
 
@@ -80,7 +83,9 @@ class TestEmailServiceConfiguration:
         """Test client property raises EmailConfigurationError when not configured."""
         mock_settings.resend_api_key = ""
 
-        with patch("app.services.email_service.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.email_service.get_settings", return_value=mock_settings
+        ):
             service = EmailService()
             with pytest.raises(EmailConfigurationError) as exc_info:
                 _ = service.client
@@ -99,13 +104,15 @@ class TestSendProcessingCompleteEmail:
     async def test_send_email_success(self, email_service):
         """Test successful email send."""
         # Mock the template rendering
-        with patch(
-            "app.services.email_service.get_settings"
-        ) as mock_get_settings, patch(
-            "app.services.email.templates.processing_complete.render_processing_complete_email"
-        ) as mock_render, patch.object(
-            email_service, "_send_email_with_retry", new_callable=AsyncMock
-        ) as mock_send:
+        with (
+            patch("app.services.email_service.get_settings") as mock_get_settings,
+            patch(
+                "app.services.email.templates.processing_complete.render_processing_complete_email"
+            ) as mock_render,
+            patch.object(
+                email_service, "_send_email_with_retry", new_callable=AsyncMock
+            ) as mock_send,
+        ):
             mock_get_settings.return_value = email_service._settings
             mock_render.return_value = (
                 "Subject",
@@ -131,7 +138,9 @@ class TestSendProcessingCompleteEmail:
         """Test email not sent when feature is disabled."""
         mock_settings.is_email_configured = False
 
-        with patch("app.services.email_service.get_settings", return_value=mock_settings):
+        with patch(
+            "app.services.email_service.get_settings", return_value=mock_settings
+        ):
             service = EmailService()
             result = await service.send_processing_complete_email(
                 user_email="user@test.com",

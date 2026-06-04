@@ -149,7 +149,9 @@ class TestGetEntityStatements:
 
         # Mock statement query service
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(return_value=mock_service_response)
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            return_value=mock_service_response
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -187,9 +189,9 @@ class TestGetEntityStatements:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(side_effect=EntityNotFoundError(
-            "entity-123", "matter-123"
-        ))
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            side_effect=EntityNotFoundError("entity-123", "matter-123")
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -226,7 +228,9 @@ class TestGetEntityStatements:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(return_value=mock_service_response)
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            return_value=mock_service_response
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -362,7 +366,9 @@ class TestGetEntityStatementsValueExtraction:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_dates)
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            return_value=response_with_dates
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -436,7 +442,9 @@ class TestGetEntityStatementsValueExtraction:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_amounts)
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            return_value=response_with_amounts
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -489,7 +497,9 @@ class TestGetEntityStatementsAliasResolution:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_stmt_service = MagicMock()
-        mock_stmt_service.get_entity_statements = AsyncMock(return_value=response_with_aliases)
+        mock_stmt_service.get_entity_statements = AsyncMock(
+            return_value=response_with_aliases
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -524,7 +534,9 @@ class TestGetEntityStatementsAliasResolution:
 class TestCompareEntityStatementsAuth:
     """Tests for comparison endpoint authentication."""
 
-    def test_compare_entity_statements_requires_auth(self, sync_client: TestClient) -> None:
+    def test_compare_entity_statements_requires_auth(
+        self, sync_client: TestClient
+    ) -> None:
         """Should require authentication."""
         response = sync_client.post(
             "/api/matters/matter-123/contradictions/entities/entity-123/compare"
@@ -598,7 +610,9 @@ class TestCompareEntityStatements:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_comp_service = MagicMock()
-        mock_comp_service.compare_entity_statements = AsyncMock(return_value=mock_comparison_response)
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            return_value=mock_comparison_response
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -713,7 +727,9 @@ class TestCompareEntityStatements:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_comp_service = MagicMock()
-        mock_comp_service.compare_entity_statements = AsyncMock(return_value=mock_comparison_response)
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            return_value=mock_comparison_response
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service
@@ -802,7 +818,9 @@ class TestCompareEntityStatementsChainOfThought:
         mock_matter_service.get_user_role.return_value = MatterRole.EDITOR
 
         mock_comp_service = MagicMock()
-        mock_comp_service.compare_entity_statements = AsyncMock(return_value=response_with_reasoning)
+        mock_comp_service.compare_entity_statements = AsyncMock(
+            return_value=response_with_reasoning
+        )
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service

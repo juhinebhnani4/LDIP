@@ -73,7 +73,9 @@ class TestSaveExtractedDates:
             {"id": "event-1"},
             {"id": "event-2"},
         ]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_response
+        )
         service._client = mock_client
 
         dates = [
@@ -115,7 +117,9 @@ class TestSaveExtractedDates:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": "event-1"}]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_response
+        )
         service._client = mock_client
 
         dates = [
@@ -356,7 +360,9 @@ class TestDescriptionGeneration:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": "event-1"}]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_response
+        )
         service._client = mock_client
 
         dates = [
@@ -397,7 +403,9 @@ class TestAmbiguityPersistence:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": "event-1"}]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_response
+        )
         service._client = mock_client
 
         dates = [
@@ -436,7 +444,9 @@ class TestAmbiguityPersistence:
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.data = [{"id": "event-1"}]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_response
+        )
         service._client = mock_client
 
         dates = [
@@ -468,7 +478,9 @@ class TestAmbiguityPersistence:
 
         description = "[AMBIGUOUS: DD/MM vs MM/DD uncertain] Notice dated [01/02/2024] was issued."
 
-        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(description)
+        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(
+            description
+        )
 
         assert is_ambiguous is True
         assert reason == "DD/MM vs MM/DD uncertain"
@@ -480,7 +492,9 @@ class TestAmbiguityPersistence:
 
         description = "[AMBIGUOUS] Notice dated [01/02/2024] was issued."
 
-        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(description)
+        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(
+            description
+        )
 
         assert is_ambiguous is True
         assert reason is None
@@ -492,7 +506,9 @@ class TestAmbiguityPersistence:
 
         description = "Notice dated [01/02/2024] was issued."
 
-        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(description)
+        is_ambiguous, reason, clean = service._parse_ambiguity_from_description(
+            description
+        )
 
         assert is_ambiguous is False
         assert reason is None

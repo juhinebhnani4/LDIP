@@ -71,7 +71,9 @@ def create_mock_search_result(
     )
 
 
-def create_mock_matter_service(role: MatterRole | None = MatterRole.VIEWER) -> MagicMock:
+def create_mock_matter_service(
+    role: MatterRole | None = MatterRole.VIEWER,
+) -> MagicMock:
     """Create a mock matter service for testing."""
     mock_service = MagicMock()
     mock_service.get_user_role.return_value = role
@@ -100,7 +102,9 @@ class TestHybridSearchEndpoint:
 
         # Set up dependency overrides for FastAPI deps
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             # Patch the search service factory (uses lru_cache, not FastAPI Depends)
@@ -140,7 +144,9 @@ class TestHybridSearchEndpoint:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             token = create_test_token()
@@ -167,7 +173,9 @@ class TestHybridSearchEndpoint:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             token = create_test_token()
@@ -194,7 +202,9 @@ class TestHybridSearchEndpoint:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             token = create_test_token()
@@ -242,11 +252,15 @@ class TestBM25SearchEndpoint:
 
         # Mock search service
         mock_search_service = MagicMock()
-        mock_results = [create_mock_search_result(matter_id, bm25_rank=1, semantic_rank=None)]
+        mock_results = [
+            create_mock_search_result(matter_id, bm25_rank=1, semantic_rank=None)
+        ]
         mock_search_service.bm25_search = AsyncMock(return_value=mock_results)
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             with patch(
@@ -285,11 +299,15 @@ class TestSemanticSearchEndpoint:
 
         # Mock search service
         mock_search_service = MagicMock()
-        mock_results = [create_mock_search_result(matter_id, bm25_rank=None, semantic_rank=1)]
+        mock_results = [
+            create_mock_search_result(matter_id, bm25_rank=None, semantic_rank=1)
+        ]
         mock_search_service.semantic_search = AsyncMock(return_value=mock_results)
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             with patch(
@@ -335,7 +353,9 @@ class TestSearchErrorHandling:
         )
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             with patch(
@@ -373,7 +393,9 @@ class TestSearchErrorHandling:
         )
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             with patch(
@@ -410,7 +432,9 @@ class TestSearchMatterIsolation:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(None)  # No role = no access
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(None)
+        )  # No role = no access
 
         try:
             token = create_test_token()
@@ -438,7 +462,9 @@ class TestSearchMatterIsolation:
 
         app.dependency_overrides[get_settings] = get_test_settings
         # Even with valid role, invalid UUID should be rejected
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
 
         try:
             token = create_test_token()

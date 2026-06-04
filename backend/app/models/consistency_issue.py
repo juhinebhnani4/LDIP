@@ -8,7 +8,6 @@ between different analysis engines (timeline, entity, citation, etc.).
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -100,7 +99,9 @@ class ConsistencyIssue(BaseModel):
     )
 
     # Resolution
-    status: IssueStatus = Field(default=IssueStatus.OPEN, description="Resolution status")
+    status: IssueStatus = Field(
+        default=IssueStatus.OPEN, description="Resolution status"
+    )
     resolved_by: str | None = Field(
         None, alias="resolvedBy", description="User who resolved"
     )
@@ -113,8 +114,12 @@ class ConsistencyIssue(BaseModel):
 
     # Timestamps
     detected_at: datetime = Field(..., alias="detectedAt", description="When detected")
-    created_at: datetime = Field(..., alias="createdAt", description="Created timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Updated timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Created timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Updated timestamp"
+    )
 
     # Metadata
     metadata: dict = Field(default_factory=dict, description="Additional metadata")
@@ -156,7 +161,9 @@ class ConsistencyIssueSummary(BaseModel):
 
     total_count: int = Field(..., alias="totalCount", description="Total issues")
     open_count: int = Field(..., alias="openCount", description="Open issues")
-    warning_count: int = Field(..., alias="warningCount", description="Warning-level open")
+    warning_count: int = Field(
+        ..., alias="warningCount", description="Warning-level open"
+    )
     error_count: int = Field(..., alias="errorCount", description="Error-level open")
 
 

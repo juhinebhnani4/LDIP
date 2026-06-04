@@ -23,13 +23,13 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 import httpx
 from dotenv import load_dotenv
 
 # Load .env
 load_dotenv()
+
 
 # ANSI colors for terminal output
 class Colors:
@@ -40,6 +40,7 @@ class Colors:
     CYAN = "\033[96m"
     RESET = "\033[0m"
     BOLD = "\033[1m"
+
 
 # Use simple ASCII for Windows compatibility
 CHECK = "[OK]"
@@ -79,14 +80,18 @@ class TestReport:
 
     def print_summary(self):
         duration = time.time() - self.start_time
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"{Colors.BOLD}API ENDPOINT TEST RESULTS{Colors.RESET}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"\nDuration: {duration:.2f}s")
         print(f"Total:    {self.total}")
         print(f"Passed:   {Colors.GREEN}{self.passed}{Colors.RESET}")
         print(f"Failed:   {Colors.RED}{self.failed}{Colors.RESET}")
-        print(f"\nPass Rate: {(self.passed/self.total*100):.1f}%" if self.total > 0 else "")
+        print(
+            f"\nPass Rate: {(self.passed / self.total * 100):.1f}%"
+            if self.total > 0
+            else ""
+        )
 
         if self.failed > 0:
             print(f"\n{Colors.RED}FAILED ENDPOINTS:{Colors.RESET}")
@@ -94,7 +99,9 @@ class TestReport:
             for r in self.results:
                 if not r.success:
                     print(f"  {r.method:6} {r.endpoint}")
-                    print(f"         Status: {r.status_code} | Error: {r.error or 'N/A'}")
+                    print(
+                        f"         Status: {r.status_code} | Error: {r.error or 'N/A'}"
+                    )
 
 
 class APITester:
@@ -117,13 +124,15 @@ class APITester:
                 f"{self.supabase_url}/auth/v1/token?grant_type=password",
                 headers={
                     "apikey": self.supabase_key,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
-                json={"email": email, "password": password}
+                json={"email": email, "password": password},
             )
 
             if response.status_code != 200:
-                print(f"{Colors.RED}Authentication failed: {response.status_code}{Colors.RESET}")
+                print(
+                    f"{Colors.RED}Authentication failed: {response.status_code}{Colors.RESET}"
+                )
                 print(f"Response: {response.text[:200]}")
                 return False
 
@@ -144,9 +153,16 @@ class APITester:
             headers["Authorization"] = f"Bearer {self.access_token}"
         return headers
 
-    def test(self, method: str, path: str, category: str,
-             authenticated: bool = True, json_data: dict | None = None,
-             params: dict | None = None, expected_codes: list[int] | None = None) -> TestResult:
+    def test(
+        self,
+        method: str,
+        path: str,
+        category: str,
+        authenticated: bool = True,
+        json_data: dict | None = None,
+        params: dict | None = None,
+        expected_codes: list[int] | None = None,
+    ) -> TestResult:
         """Execute a single endpoint test."""
         url = f"{self.base_url}{path}"
         expected = expected_codes or [200, 201]
@@ -158,12 +174,14 @@ class APITester:
                 url,
                 headers=self._headers(authenticated),
                 json=json_data,
-                params=params
+                params=params,
             )
             elapsed_ms = (time.time() - start) * 1000
 
             success = response.status_code in expected
-            error = None if success else f"Expected {expected}, got {response.status_code}"
+            error = (
+                None if success else f"Expected {expected}, got {response.status_code}"
+            )
 
             result = TestResult(
                 endpoint=path,
@@ -172,7 +190,7 @@ class APITester:
                 success=success,
                 response_time_ms=elapsed_ms,
                 error=error,
-                category=category
+                category=category,
             )
 
         except Exception as e:
@@ -184,12 +202,18 @@ class APITester:
                 success=False,
                 response_time_ms=elapsed_ms,
                 error=str(e),
-                category=category
+                category=category,
             )
 
         # Print result
-        status = f"{Colors.GREEN}{CHECK}{Colors.RESET}" if result.success else f"{Colors.RED}{CROSS}{Colors.RESET}"
-        print(f"  {status} {method:6} {path:50} [{result.status_code}] {result.response_time_ms:.0f}ms")
+        status = (
+            f"{Colors.GREEN}{CHECK}{Colors.RESET}"
+            if result.success
+            else f"{Colors.RED}{CROSS}{Colors.RESET}"
+        )
+        print(
+            f"  {status} {method:6} {path:50} [{result.status_code}] {result.response_time_ms:.0f}ms"
+        )
 
         self.report.add(result)
         return result
@@ -204,17 +228,21 @@ class APITester:
                 headers=self._headers(),
                 json={
                     "title": f"API Test Matter - {datetime.now().isoformat()}",
-                    "description": "Automated API testing"
-                }
+                    "description": "Automated API testing",
+                },
             )
 
             if response.status_code in [200, 201]:
                 data = response.json()
                 self.test_matter_id = data.get("data", {}).get("id")
-                print(f"{Colors.GREEN}{CHECK} Created test matter: {self.test_matter_id}{Colors.RESET}")
+                print(
+                    f"{Colors.GREEN}{CHECK} Created test matter: {self.test_matter_id}{Colors.RESET}"
+                )
                 return True
             else:
-                print(f"{Colors.RED}Failed to create test matter: {response.status_code}{Colors.RESET}")
+                print(
+                    f"{Colors.RED}Failed to create test matter: {response.status_code}{Colors.RESET}"
+                )
                 return False
 
         except Exception as e:
@@ -228,11 +256,13 @@ class APITester:
             try:
                 self.client.delete(
                     f"{self.base_url}/api/matters/{self.test_matter_id}",
-                    headers=self._headers()
+                    headers=self._headers(),
                 )
                 print(f"{Colors.GREEN}{CHECK} Deleted test matter{Colors.RESET}")
             except Exception as e:
-                print(f"{Colors.YELLOW}Warning: Could not delete test matter: {e}{Colors.RESET}")
+                print(
+                    f"{Colors.YELLOW}Warning: Could not delete test matter: {e}{Colors.RESET}"
+                )
 
     def run_all_tests(self):
         """Run all endpoint tests."""
@@ -261,42 +291,79 @@ class APITester:
         self.test("GET", f"/api/matters/{m}", "matters")
         self.test("GET", f"/api/matters/{m}/tab-stats", "matters")
         self.test("GET", f"/api/matters/{m}/members", "matters")
-        self.test("PATCH", f"/api/matters/{m}", "matters",
-                  json_data={"description": f"Updated {datetime.now().isoformat()}"})
+        self.test(
+            "PATCH",
+            f"/api/matters/{m}",
+            "matters",
+            json_data={"description": f"Updated {datetime.now().isoformat()}"},
+        )
 
         # ====================================================================
         # DOCUMENTS ENDPOINTS
         # ====================================================================
         print(f"\n{Colors.BOLD}[DOCUMENTS ENDPOINTS]{Colors.RESET}")
         self.test("GET", f"/api/matters/{m}/documents", "documents")
-        self.test("GET", f"/api/matters/{m}/documents", "documents",
-                  params={"page": 1, "per_page": 10})
+        self.test(
+            "GET",
+            f"/api/matters/{m}/documents",
+            "documents",
+            params={"page": 1, "per_page": 10},
+        )
 
         # ====================================================================
         # SEARCH ENDPOINTS
         # ====================================================================
         print(f"\n{Colors.BOLD}[SEARCH ENDPOINTS]{Colors.RESET}")
         search_body = {"query": "test", "limit": 5}
-        self.test("POST", f"/api/matters/{m}/search", "search",
-                  json_data=search_body, expected_codes=[200, 404])
-        self.test("POST", f"/api/matters/{m}/search/bm25", "search",
-                  json_data=search_body, expected_codes=[200, 404])
-        self.test("POST", f"/api/matters/{m}/search/semantic", "search",
-                  json_data=search_body, expected_codes=[200, 404])
-        self.test("POST", f"/api/matters/{m}/search/rerank", "search",
-                  json_data=search_body, expected_codes=[200, 404])
+        self.test(
+            "POST",
+            f"/api/matters/{m}/search",
+            "search",
+            json_data=search_body,
+            expected_codes=[200, 404],
+        )
+        self.test(
+            "POST",
+            f"/api/matters/{m}/search/bm25",
+            "search",
+            json_data=search_body,
+            expected_codes=[200, 404],
+        )
+        self.test(
+            "POST",
+            f"/api/matters/{m}/search/semantic",
+            "search",
+            json_data=search_body,
+            expected_codes=[200, 404],
+        )
+        self.test(
+            "POST",
+            f"/api/matters/{m}/search/rerank",
+            "search",
+            json_data=search_body,
+            expected_codes=[200, 404],
+        )
 
         # ORPHANED: alias-expanded search
-        self.test("POST", f"/api/matters/{m}/search/alias-expanded", "search-orphaned",
-                  json_data=search_body, expected_codes=[200, 404, 500])
+        self.test(
+            "POST",
+            f"/api/matters/{m}/search/alias-expanded",
+            "search-orphaned",
+            json_data=search_body,
+            expected_codes=[200, 404, 500],
+        )
 
         # ====================================================================
         # ENTITIES ENDPOINTS
         # ====================================================================
         print(f"\n{Colors.BOLD}[ENTITIES ENDPOINTS]{Colors.RESET}")
         self.test("GET", f"/api/matters/{m}/entities", "entities")
-        self.test("GET", f"/api/matters/{m}/entities", "entities",
-                  params={"page": 1, "per_page": 20})
+        self.test(
+            "GET",
+            f"/api/matters/{m}/entities",
+            "entities",
+            params={"page": 1, "per_page": 20},
+        )
 
         # ====================================================================
         # CITATIONS ENDPOINTS
@@ -323,8 +390,15 @@ class APITester:
         # SUMMARY ENDPOINTS
         # ====================================================================
         print(f"\n{Colors.BOLD}[SUMMARY ENDPOINTS]{Colors.RESET}")
-        self.test("GET", f"/api/matters/{m}/summary", "summary", expected_codes=[200, 404])
-        self.test("GET", f"/api/matters/{m}/summary/verifications", "summary", expected_codes=[200, 404])
+        self.test(
+            "GET", f"/api/matters/{m}/summary", "summary", expected_codes=[200, 404]
+        )
+        self.test(
+            "GET",
+            f"/api/matters/{m}/summary/verifications",
+            "summary",
+            expected_codes=[200, 404],
+        )
 
         # ====================================================================
         # VERIFICATIONS ENDPOINTS
@@ -333,14 +407,18 @@ class APITester:
         self.test("GET", f"/api/matters/{m}/verifications/stats", "verifications")
         self.test("GET", f"/api/matters/{m}/verifications/pending", "verifications")
         self.test("GET", f"/api/matters/{m}/verifications", "verifications")
-        self.test("GET", f"/api/matters/{m}/verifications/export-eligibility", "verifications")
+        self.test(
+            "GET", f"/api/matters/{m}/verifications/export-eligibility", "verifications"
+        )
 
         # ====================================================================
         # JOBS ENDPOINTS
         # ====================================================================
         print(f"\n{Colors.BOLD}[JOBS ENDPOINTS]{Colors.RESET}")
         self.test("GET", f"/api/jobs/matters/{m}", "jobs")
-        self.test("GET", f"/api/jobs/matters/{m}/stats", "jobs", expected_codes=[200, 404])
+        self.test(
+            "GET", f"/api/jobs/matters/{m}/stats", "jobs", expected_codes=[200, 404]
+        )
 
         # ====================================================================
         # ACTIVITY & DASHBOARD ENDPOINTS
@@ -365,17 +443,29 @@ class APITester:
         # CONTRADICTIONS ENDPOINTS (ORPHANED)
         # ====================================================================
         print(f"\n{Colors.BOLD}[CONTRADICTIONS ENDPOINTS - ORPHANED]{Colors.RESET}")
-        self.test("GET", f"/api/matters/{m}/contradictions", "contradictions-orphaned",
-                  expected_codes=[200, 404, 500])
+        self.test(
+            "GET",
+            f"/api/matters/{m}/contradictions",
+            "contradictions-orphaned",
+            expected_codes=[200, 404, 500],
+        )
 
         # ====================================================================
         # ANOMALIES ENDPOINTS (ORPHANED)
         # ====================================================================
         print(f"\n{Colors.BOLD}[ANOMALIES ENDPOINTS - ORPHANED]{Colors.RESET}")
-        self.test("GET", f"/api/matters/{m}/anomalies", "anomalies-orphaned",
-                  expected_codes=[200, 404, 500])
-        self.test("GET", f"/api/matters/{m}/anomalies/summary", "anomalies-orphaned",
-                  expected_codes=[200, 404, 500])
+        self.test(
+            "GET",
+            f"/api/matters/{m}/anomalies",
+            "anomalies-orphaned",
+            expected_codes=[200, 404, 500],
+        )
+        self.test(
+            "GET",
+            f"/api/matters/{m}/anomalies/summary",
+            "anomalies-orphaned",
+            expected_codes=[200, 404, 500],
+        )
 
         # ====================================================================
         # AUTHORIZATION TESTS
@@ -401,10 +491,12 @@ class APITester:
                 "total": self.report.total,
                 "passed": self.report.passed,
                 "failed": self.report.failed,
-                "pass_rate": f"{(self.report.passed/self.report.total*100):.1f}%" if self.report.total > 0 else "0%"
+                "pass_rate": f"{(self.report.passed / self.report.total * 100):.1f}%"
+                if self.report.total > 0
+                else "0%",
             },
             "by_category": {},
-            "results": []
+            "results": [],
         }
 
         # Group by category
@@ -416,15 +508,17 @@ class APITester:
             else:
                 report_data["by_category"][r.category]["failed"] += 1
 
-            report_data["results"].append({
-                "endpoint": r.endpoint,
-                "method": r.method,
-                "category": r.category,
-                "status_code": r.status_code,
-                "success": r.success,
-                "response_time_ms": round(r.response_time_ms, 2),
-                "error": r.error
-            })
+            report_data["results"].append(
+                {
+                    "endpoint": r.endpoint,
+                    "method": r.method,
+                    "category": r.category,
+                    "status_code": r.status_code,
+                    "success": r.success,
+                    "response_time_ms": round(r.response_time_ms, 2),
+                    "error": r.error,
+                }
+            )
 
         with open(filename, "w") as f:
             json.dump(report_data, f, indent=2)
@@ -433,11 +527,23 @@ class APITester:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test all API endpoints with real authentication")
-    parser.add_argument("--email", help="Test user email", default=os.getenv("TEST_USER_EMAIL"))
-    parser.add_argument("--password", help="Test user password", default=os.getenv("TEST_USER_PASSWORD"))
-    parser.add_argument("--base-url", help="API base URL", default=os.getenv("API_BASE_URL", "http://localhost:8000"))
-    parser.add_argument("--no-cleanup", action="store_true", help="Don't delete test matter after tests")
+    parser = argparse.ArgumentParser(
+        description="Test all API endpoints with real authentication"
+    )
+    parser.add_argument(
+        "--email", help="Test user email", default=os.getenv("TEST_USER_EMAIL")
+    )
+    parser.add_argument(
+        "--password", help="Test user password", default=os.getenv("TEST_USER_PASSWORD")
+    )
+    parser.add_argument(
+        "--base-url",
+        help="API base URL",
+        default=os.getenv("API_BASE_URL", "http://localhost:8000"),
+    )
+    parser.add_argument(
+        "--no-cleanup", action="store_true", help="Don't delete test matter after tests"
+    )
     args = parser.parse_args()
 
     # Get Supabase config
@@ -445,17 +551,21 @@ def main():
     supabase_key = os.getenv("SUPABASE_KEY")
 
     if not all([supabase_url, supabase_key]):
-        print(f"{Colors.RED}Error: Missing SUPABASE_URL or SUPABASE_KEY in environment{Colors.RESET}")
+        print(
+            f"{Colors.RED}Error: Missing SUPABASE_URL or SUPABASE_KEY in environment{Colors.RESET}"
+        )
         sys.exit(1)
 
     if not all([args.email, args.password]):
         print(f"{Colors.RED}Error: Missing test user credentials{Colors.RESET}")
-        print("Set TEST_USER_EMAIL and TEST_USER_PASSWORD or use --email and --password flags")
+        print(
+            "Set TEST_USER_EMAIL and TEST_USER_PASSWORD or use --email and --password flags"
+        )
         sys.exit(1)
 
-    print(f"{Colors.BOLD}{'='*70}{Colors.RESET}")
+    print(f"{Colors.BOLD}{'=' * 70}{Colors.RESET}")
     print(f"{Colors.BOLD}LDIP API ENDPOINT TESTER{Colors.RESET}")
-    print(f"{Colors.BOLD}{'='*70}{Colors.RESET}")
+    print(f"{Colors.BOLD}{'=' * 70}{Colors.RESET}")
     print(f"Base URL: {args.base_url}")
     print(f"User: {args.email}")
 
@@ -468,7 +578,9 @@ def main():
 
     # Create test matter
     if not tester.create_test_matter():
-        print(f"{Colors.YELLOW}Warning: Could not create test matter. Some tests will fail.{Colors.RESET}")
+        print(
+            f"{Colors.YELLOW}Warning: Could not create test matter. Some tests will fail.{Colors.RESET}"
+        )
 
     try:
         # Run all tests

@@ -74,20 +74,30 @@ def mock_supabase_client():
                 inserted_data.extend(data)
                 # Add id and timestamps to each record for proper return
                 return_data = [
-                    {**d, "id": str(uuid4()), "created_at": datetime.now(UTC).isoformat(), "updated_at": datetime.now(UTC).isoformat()}
-                    if isinstance(d, dict) else {"id": str(uuid4())}
+                    {
+                        **d,
+                        "id": str(uuid4()),
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                    if isinstance(d, dict)
+                    else {"id": str(uuid4())}
                     for d in data
                 ]
                 result.execute.return_value.data = return_data
             else:
                 inserted_data.append(data)
                 # Return the data as a list with ID and timestamps added
-                return_data = {
-                    **data,
-                    "id": str(uuid4()),
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "updated_at": datetime.now(UTC).isoformat(),
-                } if isinstance(data, dict) else {"id": str(uuid4())}
+                return_data = (
+                    {
+                        **data,
+                        "id": str(uuid4()),
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                    if isinstance(data, dict)
+                    else {"id": str(uuid4())}
+                )
                 result.execute.return_value.data = [return_data]
             return result
 
@@ -162,13 +172,15 @@ class TestCitationExtractionFlow:
         """
 
         # Extract with regex only (mocking Gemini to fail)
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=text,
-                    document_id="test-doc",
-                    matter_id="test-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=text,
+                document_id="test-doc",
+                matter_id="test-matter",
+            )
 
         # Should still extract citations via regex
         assert len(result.citations) >= 2, "Regex should extract at least 2 citations"
@@ -217,7 +229,9 @@ class TestMatterIsolation:
             )
 
             # Verify matter_id is in all inserted records
-            citation_records = [r for r in mock_supabase_client._inserted_data if "act_name" in r]
+            citation_records = [
+                r for r in mock_supabase_client._inserted_data if "act_name" in r
+            ]
             assert len(citation_records) > 0, "Expected citation records to be inserted"
             for record in citation_records:
                 assert record.get("matter_id") == matter_id
@@ -273,7 +287,9 @@ class TestActResolutionTracking:
             )
 
             # Verify act_resolutions table was accessed
-            table_calls = [call[0][0] for call in mock_supabase_client.table.call_args_list]
+            table_calls = [
+                call[0][0] for call in mock_supabase_client.table.call_args_list
+            ]
             assert "citations" in table_calls
 
     def test_act_name_normalization_consistency(self) -> None:
@@ -290,7 +306,9 @@ class TestActResolutionTracking:
         normalized = set(normalize_act_name(v) for v in variations)
 
         # All should normalize to the same value
-        assert len(normalized) == 1, f"Expected 1 unique normalization, got: {normalized}"
+        assert len(normalized) == 1, (
+            f"Expected 1 unique normalization, got: {normalized}"
+        )
         assert "negotiable_instruments_act" in list(normalized)[0]
 
 
@@ -344,19 +362,23 @@ class TestCitationExtractionPerformance:
         extractor = CitationExtractor()
 
         # Generate a long text with many citations
-        citations_text = "\n".join([
-            f"Section {i} of the Test Act {2000 + i % 20} applies."
-            for i in range(1, 51)
-        ])
+        citations_text = "\n".join(
+            [
+                f"Section {i} of the Test Act {2000 + i % 20} applies."
+                for i in range(1, 51)
+            ]
+        )
 
         # This should not timeout or run out of memory
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=citations_text,
-                    document_id="perf-test-doc",
-                    matter_id="perf-test-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=citations_text,
+                document_id="perf-test-doc",
+                matter_id="perf-test-matter",
+            )
 
         # Regex should find some pattern matches
         # Exact count depends on pattern matching specifics
@@ -373,18 +395,22 @@ class TestCitationExtractionPerformance:
         Section 138 NI Act, 1881 applies here.
         """
 
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=text,
-                    document_id="dedup-test",
-                    matter_id="dedup-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=text,
+                document_id="dedup-test",
+                matter_id="dedup-matter",
+            )
 
         # Should have merged duplicates
         section_138_count = sum(
-            1 for c in result.citations
-            if c.section == "138" and "negotiable" in normalize_act_name(c.act_name).lower()
+            1
+            for c in result.citations
+            if c.section == "138"
+            and "negotiable" in normalize_act_name(c.act_name).lower()
         )
 
         # Depending on dedup logic, should be <= 3 (ideally 1)

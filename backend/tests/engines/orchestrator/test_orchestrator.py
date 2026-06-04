@@ -280,6 +280,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_handle_engine_failure(self, mock_intent_analyzer):
         """Orchestrator should handle engine failures gracefully."""
+
         async def failing_execute(matter_id, query, engines, context=None):
             return [
                 EngineExecutionResult(
@@ -305,11 +306,15 @@ class TestErrorHandling:
         )
 
         assert len(result.failed_engines) > 0
-        assert "error" in result.unified_response.lower() or "unable" in result.unified_response.lower()
+        assert (
+            "error" in result.unified_response.lower()
+            or "unable" in result.unified_response.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_handle_partial_failure(self, mock_intent_analyzer):
         """Orchestrator should handle partial failures."""
+
         async def partial_execute(matter_id, query, engines, context=None):
             results = []
             for i, engine in enumerate(engines):
@@ -401,10 +406,12 @@ class TestOrchestratorFactory:
         """Factory should return QueryOrchestrator instance."""
         get_query_orchestrator.cache_clear()
 
-        with patch("app.engines.orchestrator.orchestrator.get_intent_analyzer"), \
-             patch("app.engines.orchestrator.orchestrator.get_execution_planner"), \
-             patch("app.engines.orchestrator.orchestrator.get_engine_executor"), \
-             patch("app.engines.orchestrator.orchestrator.get_result_aggregator"):
+        with (
+            patch("app.engines.orchestrator.orchestrator.get_intent_analyzer"),
+            patch("app.engines.orchestrator.orchestrator.get_execution_planner"),
+            patch("app.engines.orchestrator.orchestrator.get_engine_executor"),
+            patch("app.engines.orchestrator.orchestrator.get_result_aggregator"),
+        ):
             orchestrator = get_query_orchestrator()
 
         assert isinstance(orchestrator, QueryOrchestrator)
@@ -413,10 +420,12 @@ class TestOrchestratorFactory:
         """Factory should return the same instance (cached)."""
         get_query_orchestrator.cache_clear()
 
-        with patch("app.engines.orchestrator.orchestrator.get_intent_analyzer"), \
-             patch("app.engines.orchestrator.orchestrator.get_execution_planner"), \
-             patch("app.engines.orchestrator.orchestrator.get_engine_executor"), \
-             patch("app.engines.orchestrator.orchestrator.get_result_aggregator"):
+        with (
+            patch("app.engines.orchestrator.orchestrator.get_intent_analyzer"),
+            patch("app.engines.orchestrator.orchestrator.get_execution_planner"),
+            patch("app.engines.orchestrator.orchestrator.get_engine_executor"),
+            patch("app.engines.orchestrator.orchestrator.get_result_aggregator"),
+        ):
             orchestrator1 = get_query_orchestrator()
             orchestrator2 = get_query_orchestrator()
 
@@ -470,7 +479,12 @@ class TestAuditLoggingIntegration:
 
     @pytest.fixture
     def orchestrator_with_audit(
-        self, mock_intent_analyzer, mock_executor, mock_aggregator, mock_audit_logger, mock_history_store
+        self,
+        mock_intent_analyzer,
+        mock_executor,
+        mock_aggregator,
+        mock_audit_logger,
+        mock_history_store,
     ):
         """Create orchestrator with mocked audit components."""
         get_query_orchestrator.cache_clear()

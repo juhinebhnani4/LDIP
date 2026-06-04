@@ -249,7 +249,9 @@ class TestSafeQueryProceeds:
             total_execution_time_ms=100,
             wall_clock_time_ms=100,
         )
-        mock_aggregator.aggregate_results_async = AsyncMock(return_value=mock_aggregated_result)
+        mock_aggregator.aggregate_results_async = AsyncMock(
+            return_value=mock_aggregated_result
+        )
 
         with patch("app.engines.orchestrator.orchestrator.get_execution_planner"):
             orchestrator = QueryOrchestrator(

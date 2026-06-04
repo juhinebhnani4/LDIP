@@ -20,7 +20,6 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from app.api.ws.auth import (
     WS_CLOSE_ACCESS_DENIED,
-    WS_CLOSE_AUTH_FAILED,
     WS_CLOSE_SERVER_ERROR,
     WebSocketAuthError,
     authenticate_websocket,
@@ -113,7 +112,9 @@ async def websocket_endpoint(
             code=WS_CLOSE_SERVER_ERROR,
         )
         await websocket.accept()
-        await close_with_error(websocket, WS_CLOSE_SERVER_ERROR, "Server timeout validating access")
+        await close_with_error(
+            websocket, WS_CLOSE_SERVER_ERROR, "Server timeout validating access"
+        )
         return
 
     if not has_access:
@@ -127,7 +128,9 @@ async def websocket_endpoint(
         )
         # Must accept before closing with custom code
         await websocket.accept()
-        await close_with_error(websocket, WS_CLOSE_ACCESS_DENIED, "Access denied to matter")
+        await close_with_error(
+            websocket, WS_CLOSE_ACCESS_DENIED, "Access denied to matter"
+        )
         return
 
     # Bind logging context
@@ -151,11 +154,13 @@ async def websocket_endpoint(
 
     # Send connection confirmation
     try:
-        await websocket.send_json({
-            "type": "connected",
-            "matter_id": matter_id,
-            "user_id": user.id,
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "matter_id": matter_id,
+                "user_id": user.id,
+            }
+        )
         logger.info(
             "websocket_connected_message_sent",
             user_id=user.id,
@@ -220,12 +225,14 @@ async def websocket_endpoint(
                         except json.JSONDecodeError:
                             pass  # Ignore invalid JSON
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No message received - send server ping to keep connection alive
                 try:
                     await websocket.send_json({"type": "ping"})
                 except Exception:
-                    logger.debug("websocket_ping_failed", user_id=user.id, matter_id=matter_id)
+                    logger.debug(
+                        "websocket_ping_failed", user_id=user.id, matter_id=matter_id
+                    )
                     # Story 6.3: Log heartbeat timeout
                     log_websocket_event(
                         user_id=user.id,

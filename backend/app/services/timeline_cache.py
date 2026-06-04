@@ -316,9 +316,7 @@ class TimelineCacheService:
 
                 redis_url = self._settings.redis_url
                 if redis_url:
-                    self._redis = redis.from_url(
-                        redis_url, decode_responses=True
-                    )
+                    self._redis = redis.from_url(redis_url, decode_responses=True)
                     # Test connection
                     self._redis.ping()
                     logger.debug("timeline_cache_redis_connected")
@@ -578,7 +576,9 @@ class TimelineCacheService:
         try:
             version = self._get_timeline_version(matter_id)
             key = f"{matter_key(matter_id, 'timeline')}:v{version}:entity:{entity_id}"
-            serialized = json.dumps(_entity_view_to_dict(view), cls=TimelineCacheEncoder)
+            serialized = json.dumps(
+                _entity_view_to_dict(view), cls=TimelineCacheEncoder
+            )
             self.redis.setex(key, ttl, serialized)
 
             logger.debug(

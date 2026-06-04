@@ -186,7 +186,9 @@ class RAGASEvaluator:
             # is ~200 tokens; 15+ statements → 3000+ output tokens).
             llm = llm_factory(self._llm_model, client=client, max_tokens=4096)
             embeddings = embedding_factory(
-                "openai", model="text-embedding-3-small", client=client,
+                "openai",
+                model="text-embedding-3-small",
+                client=client,
             )
 
             # Score each metric individually with await — no evaluate(),
@@ -216,7 +218,8 @@ class RAGASEvaluator:
                 faithfulness_score = _safe_score(faith_result.value)
             except Exception as e:
                 logger.warning(
-                    "metric_faithfulness_failed", error=str(e),
+                    "metric_faithfulness_failed",
+                    error=str(e),
                     error_type=type(e).__name__,
                     answer_length=len(faith_answer),
                 )
@@ -224,7 +227,8 @@ class RAGASEvaluator:
             # --- Answer Relevancy ---
             try:
                 relevancy_metric = AnswerRelevancy(
-                    llm=llm, embeddings=embeddings,
+                    llm=llm,
+                    embeddings=embeddings,
                 )
                 relevancy_result = await relevancy_metric.ascore(
                     user_input=question,
@@ -233,7 +237,8 @@ class RAGASEvaluator:
                 answer_relevancy_score = _safe_score(relevancy_result.value)
             except Exception as e:
                 logger.warning(
-                    "metric_answer_relevancy_failed", error=str(e),
+                    "metric_answer_relevancy_failed",
+                    error=str(e),
                     error_type=type(e).__name__,
                 )
 
@@ -249,7 +254,8 @@ class RAGASEvaluator:
                     context_recall_score = _safe_score(recall_result.value)
                 except Exception as e:
                     logger.warning(
-                        "metric_context_recall_failed", error=str(e),
+                        "metric_context_recall_failed",
+                        error=str(e),
                         error_type=type(e).__name__,
                     )
 

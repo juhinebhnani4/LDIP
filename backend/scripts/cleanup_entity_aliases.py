@@ -22,22 +22,21 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.config import get_settings
 from app.services.supabase.client import get_supabase_client
 
 # Numbered role pattern (same as entity_resolver.py)
 NUMBERED_ROLE_PATTERN = re.compile(
-    r'^(respondent|applicant|petitioner|defendant|plaintiff|appellant|'
-    r'opposite\s*party|o\.?p\.?|op|opp|claimant|complainant|witness|accused)'
-    r'\s*(?:no\.?|number)?\s*\.?\s*(\d+)$',
-    re.IGNORECASE
+    r"^(respondent|applicant|petitioner|defendant|plaintiff|appellant|"
+    r"opposite\s*party|o\.?p\.?|op|opp|claimant|complainant|witness|accused)"
+    r"\s*(?:no\.?|number)?\s*\.?\s*(\d+)$",
+    re.IGNORECASE,
 )
 
 NUMBERED_ROLE_PATTERN_PLURAL = re.compile(
-    r'^(respondents?|applicants?|petitioners?|defendants?|plaintiffs?|appellants?|'
-    r'opposite\s*parties|o\.?p\.?s?|ops?|claimants?|complainants?|witnesses|accused)'
-    r'\s*(?:nos?\.?|numbers?)?\s*\.?\s*(\d+)$',
-    re.IGNORECASE
+    r"^(respondents?|applicants?|petitioners?|defendants?|plaintiffs?|appellants?|"
+    r"opposite\s*parties|o\.?p\.?s?|ops?|claimants?|complainants?|witnesses|accused)"
+    r"\s*(?:nos?\.?|numbers?)?\s*\.?\s*(\d+)$",
+    re.IGNORECASE,
 )
 
 
@@ -50,13 +49,13 @@ def extract_numbered_role(name: str) -> tuple[str, int] | None:
 
     match = NUMBERED_ROLE_PATTERN.match(normalized)
     if match:
-        role = match.group(1).lower().strip().rstrip('s')
+        role = match.group(1).lower().strip().rstrip("s")
         number = int(match.group(2))
         return (role, number)
 
     match = NUMBERED_ROLE_PATTERN_PLURAL.match(normalized)
     if match:
-        role = match.group(1).lower().strip().rstrip('s')
+        role = match.group(1).lower().strip().rstrip("s")
         number = int(match.group(2))
         return (role, number)
 
@@ -120,7 +119,9 @@ async def cleanup_aliases(dry_run: bool = True, matter_id: str | None = None):
     print("=" * 60)
     print("Entity Alias Cleanup Script")
     print("=" * 60)
-    print(f"Mode: {'DRY RUN (no changes)' if dry_run else 'LIVE (will modify database)'}")
+    print(
+        f"Mode: {'DRY RUN (no changes)' if dry_run else 'LIVE (will modify database)'}"
+    )
     if matter_id:
         print(f"Scope: Matter {matter_id}")
     else:
@@ -177,11 +178,11 @@ async def cleanup_aliases(dry_run: bool = True, matter_id: str | None = None):
         print(f"\nEntity: {entity['canonical_name']}")
         print(f"  ID: {entity['id']}")
         print(f"  Type: {entity['entity_type']}")
-        print(f"  BAD aliases to REMOVE:")
+        print("  BAD aliases to REMOVE:")
         for bad in entity["bad_aliases"]:
             print(f"    - {bad}")
         if entity["good_aliases"]:
-            print(f"  GOOD aliases to KEEP:")
+            print("  GOOD aliases to KEEP:")
             for good in entity["good_aliases"]:
                 print(f"    + {good}")
 
@@ -205,10 +206,12 @@ async def cleanup_aliases(dry_run: bool = True, matter_id: str | None = None):
             # Update entity with only good aliases
             result = (
                 client.table("identity_nodes")
-                .update({
-                    "aliases": entity["good_aliases"],
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "aliases": entity["good_aliases"],
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", entity["id"])
                 .execute()
             )

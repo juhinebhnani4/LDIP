@@ -18,13 +18,13 @@ import asyncio
 import re
 from dataclasses import dataclass
 from typing import Final
-from urllib.parse import quote, urljoin
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import get_settings
-from app.core.data_loader import get_known_acts, get_known_act_info
+from app.core.data_loader import get_known_acts
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -111,7 +111,11 @@ class IndiaCodeClient:
                           If None, uses value from settings.
         """
         settings = get_settings()
-        self.request_delay = request_delay if request_delay is not None else settings.india_code_request_delay
+        self.request_delay = (
+            request_delay
+            if request_delay is not None
+            else settings.india_code_request_delay
+        )
         self.request_timeout = settings.india_code_request_timeout
         self.enabled = settings.india_code_enabled
         self._client: httpx.AsyncClient | None = None
@@ -224,9 +228,6 @@ class IndiaCodeClient:
         search_term = re.sub(r",?\s*\d{4}\s*$", "", search_term).strip()
         if year:
             search_term = f"{search_term} {year}"
-
-        # URL encode the search term
-        encoded_term = quote(search_term)
 
         # Search URL - using simple search on Central Acts handle
         search_url = f"{BASE_URL}/handle/{CENTRAL_ACTS_HANDLE}/simple-search"
@@ -368,16 +369,13 @@ class IndiaCodeClient:
                 # Generate possible filename patterns
                 year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", title)
                 if year_match:
-                    year = year_match.group(1)
-                    # Try common patterns
-                    patterns = [
-                        f"a{year}*.pdf",
-                        f"{year}*.pdf",
-                    ]
+                    year = year_match.group(1)  # noqa: F841  # stub: filename-pattern discovery TODO
                     # For now, return the base pattern
                     # The actual filename would need to be discovered
 
-            logger.warning("india_code_bitstream_not_found", doc_id=doc_id, url=handle_url)
+            logger.warning(
+                "india_code_bitstream_not_found", doc_id=doc_id, url=handle_url
+            )
             return None
 
         except httpx.HTTPStatusError as e:
@@ -470,8 +468,9 @@ class IndiaCodeClient:
         except httpx.HTTPStatusError as e:
             error_msg = (
                 f"HTTP {e.response.status_code} from {e.request.url}"
-                f" — {e.response.text[:200]}" if e.response.text else
-                f"HTTP {e.response.status_code} from {e.request.url} (empty response body)"
+                f" — {e.response.text[:200]}"
+                if e.response.text
+                else f"HTTP {e.response.status_code} from {e.request.url} (empty response body)"
             )
             logger.error(
                 "india_code_download_http_error",
@@ -490,7 +489,11 @@ class IndiaCodeClient:
                 file_size=0,
             )
         except httpx.HTTPError as e:
-            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            error_msg = (
+                f"{type(e).__name__}: {str(e)}"
+                if str(e)
+                else f"{type(e).__name__} (no message)"
+            )
             logger.error(
                 "india_code_download_error",
                 doc_id=doc_id,
@@ -507,7 +510,11 @@ class IndiaCodeClient:
                 file_size=0,
             )
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            error_msg = (
+                f"{type(e).__name__}: {str(e)}"
+                if str(e)
+                else f"{type(e).__name__} (no message)"
+            )
             logger.error(
                 "india_code_download_unexpected_error",
                 doc_id=doc_id,

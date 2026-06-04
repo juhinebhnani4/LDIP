@@ -8,12 +8,9 @@ Tests cover:
 - HTML and plain text content
 """
 
-import pytest
-
 from app.services.email.templates.processing_complete import (
     render_processing_complete_email,
 )
-
 
 # =============================================================================
 # Template Rendering Tests
@@ -161,7 +158,9 @@ class TestRenderProcessingCompleteEmail:
         )
 
         # Should use singular "document" not "documents"
-        assert "1 document" in text_content or "document processed" in text_content.lower()
+        assert (
+            "1 document" in text_content or "document processed" in text_content.lower()
+        )
 
     def test_html_is_valid_structure(self):
         """Test HTML has proper structure."""

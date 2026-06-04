@@ -36,7 +36,9 @@ EMBEDDING_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 # =============================================================================
 
 SessionKeyType = Literal["messages", "entities", "context", "metadata"]
-MatterKeyType = Literal["timeline", "entity_graph", "findings", "stats", "timeline_version"]
+MatterKeyType = Literal[
+    "timeline", "entity_graph", "findings", "stats", "timeline_version"
+]
 
 # =============================================================================
 # UUID Validation
@@ -44,8 +46,7 @@ MatterKeyType = Literal["timeline", "entity_graph", "findings", "stats", "timeli
 
 # UUID v4 pattern for validation
 UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 
 
@@ -95,7 +96,9 @@ def _sanitize_key_component(value: str, name: str, max_length: int = 64) -> str:
             parameter=name,
             value=value[:50],
         )
-        raise ValueError(f"Invalid characters in {name}: only alphanumeric, hyphens, and underscores allowed")
+        raise ValueError(
+            f"Invalid characters in {name}: only alphanumeric, hyphens, and underscores allowed"
+        )
 
     return value
 
@@ -104,10 +107,9 @@ def _sanitize_key_component(value: str, name: str, max_length: int = 64) -> str:
 # Session Key Functions
 # =============================================================================
 
+
 def session_key(
-    matter_id: str,
-    user_id: str,
-    key_type: SessionKeyType = "messages"
+    matter_id: str, user_id: str, key_type: SessionKeyType = "messages"
 ) -> str:
     """Generate a session memory Redis key with matter isolation.
 
@@ -140,6 +142,7 @@ def session_key(
 # =============================================================================
 # Cache Key Functions
 # =============================================================================
+
 
 def cache_key(matter_id: str, query_hash: str) -> str:
     """Generate a query cache Redis key with matter isolation.
@@ -175,6 +178,7 @@ def cache_key(matter_id: str, query_hash: str) -> str:
 # Matter Key Functions
 # =============================================================================
 
+
 def matter_key(matter_id: str, key_type: MatterKeyType) -> str:
     """Generate a matter-level Redis key with isolation.
 
@@ -205,6 +209,7 @@ def matter_key(matter_id: str, key_type: MatterKeyType) -> str:
 # =============================================================================
 # Key Validation Functions
 # =============================================================================
+
 
 def validate_key_access(key: str, authorized_matter_id: str) -> bool:
     """Validate that a Redis key belongs to the authorized matter.
@@ -289,6 +294,7 @@ def extract_matter_id_from_key(key: str) -> str | None:
 # Bulk Key Pattern Functions (for invalidation)
 # =============================================================================
 
+
 def session_pattern(matter_id: str, user_id: str | None = None) -> str:
     """Generate a Redis SCAN pattern for session keys.
 
@@ -355,6 +361,7 @@ def matter_pattern(matter_id: str) -> str:
 # Embedding Cache Key Functions
 # =============================================================================
 
+
 def embedding_cache_key(text_hash: str) -> str:
     """Generate a Redis key for cached embeddings.
 
@@ -386,6 +393,7 @@ def embedding_cache_key(text_hash: str) -> str:
 # =============================================================================
 # Version-Based Cache Invalidation Keys (A5 optimization)
 # =============================================================================
+
 
 def timeline_version_key(matter_id: str) -> str:
     """Generate a Redis key for timeline cache version counter.

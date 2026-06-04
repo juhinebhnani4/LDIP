@@ -31,7 +31,11 @@ VALID_STATUS_TRANSITIONS: dict[ChunkStatus, set[ChunkStatus]] = {
     # PENDING can go to PROCESSING or FAILED (if task fails during initialization)
     ChunkStatus.PENDING: {ChunkStatus.PROCESSING, ChunkStatus.FAILED},
     # PROCESSING can go to COMPLETED, FAILED, or PENDING (for recovery when worker crashes)
-    ChunkStatus.PROCESSING: {ChunkStatus.COMPLETED, ChunkStatus.FAILED, ChunkStatus.PENDING},
+    ChunkStatus.PROCESSING: {
+        ChunkStatus.COMPLETED,
+        ChunkStatus.FAILED,
+        ChunkStatus.PENDING,
+    },
     ChunkStatus.FAILED: {ChunkStatus.PENDING},  # Retry resets to pending
     ChunkStatus.COMPLETED: set(),  # Terminal state
 }
@@ -56,7 +60,9 @@ class DocumentOCRChunk(BaseModel):
     result_checksum: str | None = Field(None, alias="resultChecksum")
     ocr_full_text: str | None = Field(None, alias="ocrFullText")
     processing_started_at: datetime | None = Field(None, alias="processingStartedAt")
-    processing_completed_at: datetime | None = Field(None, alias="processingCompletedAt")
+    processing_completed_at: datetime | None = Field(
+        None, alias="processingCompletedAt"
+    )
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
 

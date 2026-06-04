@@ -38,7 +38,9 @@ def setup_storage_bucket() -> bool:
     key = os.environ.get("SUPABASE_SERVICE_KEY")
 
     if not url or not key:
-        print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables required")
+        print(
+            "ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables required"
+        )
         print("  Set these in your .env file or CI/CD secrets")
         return False
 
@@ -68,8 +70,12 @@ def setup_storage_bucket() -> bool:
             options={
                 "public": False,  # Private bucket - requires auth
                 "file_size_limit": 500 * 1024 * 1024,  # 500MB
-                "allowed_mime_types": ["application/pdf", "application/zip", "application/x-zip-compressed"],
-            }
+                "allowed_mime_types": [
+                    "application/pdf",
+                    "application/zip",
+                    "application/x-zip-compressed",
+                ],
+            },
         )
         print(f"✓ Bucket '{bucket_name}' created successfully")
         return True
@@ -92,6 +98,7 @@ def main() -> int:
     # Try to load .env file if python-dotenv is available
     try:
         from dotenv import load_dotenv
+
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         if os.path.exists(env_path):
             load_dotenv(env_path)

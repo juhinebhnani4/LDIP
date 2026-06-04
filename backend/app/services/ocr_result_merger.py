@@ -134,10 +134,14 @@ class OCRResultMerger:
         text_offset = 0
 
         for chunk in sorted_results:
-            transformed = self._transform_bboxes(chunk.bounding_boxes, page_offset, text_offset)
+            transformed = self._transform_bboxes(
+                chunk.bounding_boxes, page_offset, text_offset
+            )
             merged_bboxes.extend(transformed)
             page_offset += chunk.page_count
-            text_offset += len(chunk.full_text) + 2  # +2 for "\n\n" separator in _merge_text
+            text_offset += (
+                len(chunk.full_text) + 2
+            )  # +2 for "\n\n" separator in _merge_text
 
         # Merge full text
         merged_text = self._merge_text(sorted_results)
@@ -145,7 +149,8 @@ class OCRResultMerger:
         # Calculate weighted average confidence
         total_pages = sum(c.page_count for c in sorted_results)
         weighted_confidence = (
-            sum(c.overall_confidence * c.page_count for c in sorted_results) / total_pages
+            sum(c.overall_confidence * c.page_count for c in sorted_results)
+            / total_pages
             if total_pages > 0
             else 0.0
         )

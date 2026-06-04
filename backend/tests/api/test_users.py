@@ -4,16 +4,15 @@ Tests for user management API routes.
 Story 14.14: Settings Page Implementation
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.auth import AuthenticatedUser
-
 
 # =============================================================================
 # Fixtures
@@ -45,9 +44,11 @@ def client(mock_user, mock_supabase):
     # Override dependencies
     app.dependency_overrides[users.get_supabase_client] = lambda: mock_supabase
 
-    with patch("app.core.security.get_current_user", return_value=mock_user):
-        with TestClient(app) as test_client:
-            yield test_client
+    with (
+        patch("app.core.security.get_current_user", return_value=mock_user),
+        TestClient(app) as test_client,
+    ):
+        yield test_client
 
     # Clean up
     app.dependency_overrides.clear()
@@ -64,7 +65,9 @@ class TestGetUserPreferences:
     def test_get_preferences_success(self, client, mock_supabase):
         """Should return user preferences."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = MagicMock()
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            MagicMock()
+        )
         mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
             "user_id": "test-user-id",
             "email_notifications_processing": True,
@@ -88,7 +91,9 @@ class TestGetUserPreferences:
         """Should create default preferences if they don't exist."""
         # First call returns empty (no preferences)
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = MagicMock()
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            MagicMock()
+        )
 
         # Second call returns the created preferences
         mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {

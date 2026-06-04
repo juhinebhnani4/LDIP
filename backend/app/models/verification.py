@@ -135,8 +135,12 @@ class FindingVerification(BaseModel):
         alias="findingId",
         description="Finding UUID (nullable if finding was deleted)",
     )
-    finding_type: str = Field(..., alias="findingType", description="Finding type snapshot")
-    finding_summary: str = Field(..., alias="findingSummary", description="Finding summary snapshot")
+    finding_type: str = Field(
+        ..., alias="findingType", description="Finding type snapshot"
+    )
+    finding_summary: str = Field(
+        ..., alias="findingSummary", description="Finding summary snapshot"
+    )
     confidence_before: float = Field(
         ...,
         ge=0,
@@ -144,9 +148,15 @@ class FindingVerification(BaseModel):
         alias="confidenceBefore",
         description="Original confidence at finding creation",
     )
-    decision: VerificationDecision = Field(..., description="Current verification decision")
-    verified_by: str | None = Field(None, alias="verifiedBy", description="Verifier user UUID")
-    verified_at: datetime | None = Field(None, alias="verifiedAt", description="Verification timestamp")
+    decision: VerificationDecision = Field(
+        ..., description="Current verification decision"
+    )
+    verified_by: str | None = Field(
+        None, alias="verifiedBy", description="Verifier user UUID"
+    )
+    verified_at: datetime | None = Field(
+        None, alias="verifiedAt", description="Verification timestamp"
+    )
     confidence_after: float | None = Field(
         None,
         ge=0,
@@ -155,8 +165,12 @@ class FindingVerification(BaseModel):
         description="Attorney-adjusted confidence",
     )
     notes: str | None = Field(None, description="Attorney notes")
-    created_at: datetime = Field(..., alias="createdAt", description="Record creation timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Record creation timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Last update timestamp"
+    )
 
     # Computed field - set by service based on confidence_before
     verification_requirement: VerificationRequirement = Field(
@@ -182,8 +196,12 @@ class VerificationQueueItem(BaseModel):
 
     id: str = Field(..., description="Verification UUID")
     finding_id: str | None = Field(None, alias="findingId", description="Finding UUID")
-    finding_type: str = Field(..., alias="findingType", description="Finding type for filtering")
-    finding_summary: str = Field(..., alias="findingSummary", description="Summary for queue display")
+    finding_type: str = Field(
+        ..., alias="findingType", description="Finding type for filtering"
+    )
+    finding_summary: str = Field(
+        ..., alias="findingSummary", description="Summary for queue display"
+    )
     confidence: float = Field(
         ...,
         ge=0,
@@ -195,7 +213,9 @@ class VerificationQueueItem(BaseModel):
         description="Verification requirement tier",
     )
     decision: VerificationDecision = Field(..., description="Current decision status")
-    created_at: datetime = Field(..., alias="createdAt", description="When finding was created")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="When finding was created"
+    )
 
     # Context for queue prioritization
     source_document: str | None = Field(
@@ -218,11 +238,21 @@ class VerificationStats(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    total_verifications: int = Field(0, ge=0, alias="totalVerifications", description="Total verification records")
-    pending_count: int = Field(0, ge=0, alias="pendingCount", description="Awaiting review")
-    approved_count: int = Field(0, ge=0, alias="approvedCount", description="Approved by attorney")
-    rejected_count: int = Field(0, ge=0, alias="rejectedCount", description="Rejected by attorney")
-    flagged_count: int = Field(0, ge=0, alias="flaggedCount", description="Flagged for further review")
+    total_verifications: int = Field(
+        0, ge=0, alias="totalVerifications", description="Total verification records"
+    )
+    pending_count: int = Field(
+        0, ge=0, alias="pendingCount", description="Awaiting review"
+    )
+    approved_count: int = Field(
+        0, ge=0, alias="approvedCount", description="Approved by attorney"
+    )
+    rejected_count: int = Field(
+        0, ge=0, alias="rejectedCount", description="Rejected by attorney"
+    )
+    flagged_count: int = Field(
+        0, ge=0, alias="flaggedCount", description="Flagged for further review"
+    )
 
     # By requirement tier (pending only)
     required_pending: int = Field(
@@ -402,7 +432,9 @@ class BulkVerificationResponse(BaseModel):
         default_factory=dict,
         description="Bulk operation results",
     )
-    updated_count: int = Field(0, ge=0, alias="updatedCount", description="Number of records updated")
+    updated_count: int = Field(
+        0, ge=0, alias="updatedCount", description="Number of records updated"
+    )
     failed_ids: list[str] = Field(
         default_factory=list,
         alias="failedIds",
@@ -423,10 +455,14 @@ class ExportBlockingFinding(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    verification_id: str = Field(..., alias="verificationId", description="Verification UUID")
+    verification_id: str = Field(
+        ..., alias="verificationId", description="Verification UUID"
+    )
     finding_id: str | None = Field(None, alias="findingId", description="Finding UUID")
     finding_type: str = Field(..., alias="findingType", description="Finding type")
-    finding_summary: str = Field(..., alias="findingSummary", description="Finding summary")
+    finding_summary: str = Field(
+        ..., alias="findingSummary", description="Finding summary"
+    )
     confidence: float = Field(..., ge=0, le=100, description="Confidence score")
 
 
@@ -438,10 +474,14 @@ class ExportWarningFinding(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    verification_id: str = Field(..., alias="verificationId", description="Verification UUID")
+    verification_id: str = Field(
+        ..., alias="verificationId", description="Verification UUID"
+    )
     finding_id: str | None = Field(None, alias="findingId", description="Finding UUID")
     finding_type: str = Field(..., alias="findingType", description="Finding type")
-    finding_summary: str = Field(..., alias="findingSummary", description="Finding summary")
+    finding_summary: str = Field(
+        ..., alias="findingSummary", description="Finding summary"
+    )
     confidence: float = Field(..., ge=0, le=100, description="Confidence score")
 
 
@@ -466,13 +506,17 @@ class ExportEligibilityResult(BaseModel):
         alias="blockingFindings",
         description="Findings blocking export (< 70% confidence, unverified in advisory; all pending in required)",
     )
-    blocking_count: int = Field(0, ge=0, alias="blockingCount", description="Number of blocking findings")
+    blocking_count: int = Field(
+        0, ge=0, alias="blockingCount", description="Number of blocking findings"
+    )
     warning_findings: list[ExportWarningFinding] = Field(
         default_factory=list,
         alias="warningFindings",
         description="Findings with warnings (70-90% confidence, unverified) - empty in required mode",
     )
-    warning_count: int = Field(0, ge=0, alias="warningCount", description="Number of warning findings")
+    warning_count: int = Field(
+        0, ge=0, alias="warningCount", description="Number of warning findings"
+    )
     message: str = Field(
         "",
         description="Human-readable eligibility message",

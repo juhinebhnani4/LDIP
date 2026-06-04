@@ -172,9 +172,7 @@ class TestHybridSearchServiceSearch:
 
     @pytest.mark.asyncio
     @patch("app.services.rag.hybrid_search.validate_namespace")
-    async def test_validates_matter_id(
-        self, mock_validate_ns: MagicMock
-    ) -> None:
+    async def test_validates_matter_id(self, mock_validate_ns: MagicMock) -> None:
         """Should validate matter_id format."""
         mock_validate_ns.side_effect = ValueError("Invalid matter_id")
 
@@ -439,8 +437,8 @@ class TestRRFScoreCalculation:
 
         # Formula: 1/(k+bm25_rank)*bm25_weight + 1/(k+semantic_rank)*semantic_weight
         expected_score = (
-            1.0 / (k + bm25_rank) * bm25_weight +
-            1.0 / (k + semantic_rank) * semantic_weight
+            1.0 / (k + bm25_rank) * bm25_weight
+            + 1.0 / (k + semantic_rank) * semantic_weight
         )
 
         # Expected: 1/61 * 1.0 + 1/62 * 1.0 = 0.01639 + 0.01613 = 0.03252
@@ -483,8 +481,8 @@ class TestRRFScoreCalculation:
 
         # Formula with weights
         expected_score = (
-            1.0 / (k + bm25_rank) * bm25_weight +
-            1.0 / (k + semantic_rank) * semantic_weight
+            1.0 / (k + bm25_rank) * bm25_weight
+            + 1.0 / (k + semantic_rank) * semantic_weight
         )
 
         # Expected: 1/61 * 1.5 + 1/61 * 0.5 = 0.02459 + 0.00820 = 0.03279
@@ -665,14 +663,18 @@ class TestHybridSearchServiceSearchWithRerank:
             MagicMock(index=1, relevance_score=0.65),
         ]
 
-        with patch("app.services.rag.reranker.get_cohere_rerank_service") as mock_rerank_svc:
+        with patch(
+            "app.services.rag.reranker.get_cohere_rerank_service"
+        ) as mock_rerank_svc:
             mock_reranker = MagicMock()
-            mock_reranker.rerank = AsyncMock(return_value=MagicMock(
-                results=[
-                    MagicMock(index=2, relevance_score=0.95),
-                    MagicMock(index=0, relevance_score=0.82),
-                ],
-            ))
+            mock_reranker.rerank = AsyncMock(
+                return_value=MagicMock(
+                    results=[
+                        MagicMock(index=2, relevance_score=0.95),
+                        MagicMock(index=0, relevance_score=0.82),
+                    ],
+                )
+            )
             mock_rerank_svc.return_value = mock_reranker
 
             service = HybridSearchService(embedder=mock_embedder)
@@ -743,12 +745,16 @@ class TestHybridSearchServiceSearchWithRerank:
         mock_validate_results.return_value = mock_rpc_response.data
 
         # Mock reranker to raise error
-        with patch("app.services.rag.reranker.get_cohere_rerank_service") as mock_rerank_svc:
+        with patch(
+            "app.services.rag.reranker.get_cohere_rerank_service"
+        ) as mock_rerank_svc:
             mock_reranker = MagicMock()
-            mock_reranker.rerank = AsyncMock(side_effect=CohereRerankServiceError(
-                message="Cohere API timeout",
-                code="COHERE_TIMEOUT",
-            ))
+            mock_reranker.rerank = AsyncMock(
+                side_effect=CohereRerankServiceError(
+                    message="Cohere API timeout",
+                    code="COHERE_TIMEOUT",
+                )
+            )
             mock_rerank_svc.return_value = mock_reranker
 
             service = HybridSearchService(embedder=mock_embedder)

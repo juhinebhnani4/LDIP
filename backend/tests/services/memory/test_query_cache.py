@@ -314,10 +314,13 @@ class TestBulkInvalidation:
     ) -> None:
         """Should delete all cache entries for matter (AC #4)."""
         # Mock SCAN returning keys
-        mock_redis.scan.return_value = (0, [
-            f"cache:query:{MATTER_ID}:{QUERY_HASH}",
-            f"cache:query:{MATTER_ID}:{QUERY_HASH_2}",
-        ])
+        mock_redis.scan.return_value = (
+            0,
+            [
+                f"cache:query:{MATTER_ID}:{QUERY_HASH}",
+                f"cache:query:{MATTER_ID}:{QUERY_HASH_2}",
+            ],
+        )
         mock_redis.delete.return_value = 2
 
         count = await repository.invalidate_matter_cache(MATTER_ID)
@@ -416,10 +419,13 @@ class TestCacheStats:
         mock_redis: AsyncMock,
     ) -> None:
         """Should return correct stats when entries exist."""
-        mock_redis.scan.return_value = (0, [
-            f"cache:query:{MATTER_ID}:{QUERY_HASH}",
-            f"cache:query:{MATTER_ID}:{QUERY_HASH_2}",
-        ])
+        mock_redis.scan.return_value = (
+            0,
+            [
+                f"cache:query:{MATTER_ID}:{QUERY_HASH}",
+                f"cache:query:{MATTER_ID}:{QUERY_HASH_2}",
+            ],
+        )
 
         stats = await repository.get_cache_stats(MATTER_ID)
 

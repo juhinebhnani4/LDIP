@@ -82,22 +82,26 @@ class PptxGenerator:
         slides: list[dict] = []
 
         # Title slide
-        slides.append({
-            "type": "title",
-            "title": f"Matter Export: {matter_name}",
-            "subtitle": f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        })
+        slides.append(
+            {
+                "type": "title",
+                "title": f"Matter Export: {matter_name}",
+                "subtitle": f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            }
+        )
 
         # Section slides
         for section_id, content in section_content.items():
             title = content.get("title", section_id.replace("-", " ").title())
 
             if "custom_content" in content:
-                slides.append({
-                    "type": "content",
-                    "title": title,
-                    "body": [content["custom_content"]],
-                })
+                slides.append(
+                    {
+                        "type": "content",
+                        "title": title,
+                        "body": [content["custom_content"]],
+                    }
+                )
             elif "parties" in content:
                 slides.extend(self._create_summary_slides(title, content))
             elif "events" in content:
@@ -113,17 +117,19 @@ class PptxGenerator:
 
         # Verification slide
         if verification_summary:
-            slides.append({
-                "type": "content",
-                "title": "Verification Status",
-                "body": [
-                    f"Export Date: {verification_summary.export_date.strftime('%Y-%m-%d %H:%M UTC')}",
-                    f"Total Findings: {verification_summary.total_findings}",
-                    f"Verified: {verification_summary.verified_count}",
-                    f"Pending: {verification_summary.pending_count}",
-                    f"Exported By: {verification_summary.exported_by_name}",
-                ],
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": "Verification Status",
+                    "body": [
+                        f"Export Date: {verification_summary.export_date.strftime('%Y-%m-%d %H:%M UTC')}",
+                        f"Total Findings: {verification_summary.total_findings}",
+                        f"Verified: {verification_summary.verified_count}",
+                        f"Pending: {verification_summary.pending_count}",
+                        f"Exported By: {verification_summary.exported_by_name}",
+                    ],
+                }
+            )
 
         return slides
 
@@ -134,12 +140,17 @@ class PptxGenerator:
         # Overview slide with parties
         parties = content.get("parties", [])
         if parties:
-            party_lines = [f"{p.get('role', 'Unknown')}: {p.get('name', 'Unknown')}" for p in parties]
-            slides.append({
-                "type": "content",
-                "title": f"{title} - Parties",
-                "body": party_lines[:8],  # Limit to 8 items per slide
-            })
+            party_lines = [
+                f"{p.get('role', 'Unknown')}: {p.get('name', 'Unknown')}"
+                for p in parties
+            ]
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} - Parties",
+                    "body": party_lines[:8],  # Limit to 8 items per slide
+                }
+            )
 
         # Key issues slide
         issues = content.get("key_issues", [])
@@ -150,11 +161,13 @@ class PptxGenerator:
                     issue_lines.append(issue.get("title", "Issue"))
                 else:
                     issue_lines.append(str(issue))
-            slides.append({
-                "type": "content",
-                "title": f"{title} - Key Issues",
-                "body": issue_lines,
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} - Key Issues",
+                    "body": issue_lines,
+                }
+            )
 
         # Status slide
         status = content.get("current_status", {})
@@ -165,35 +178,55 @@ class PptxGenerator:
             if status.get("description"):
                 status_lines.append(status["description"][:200])
             if status_lines:
-                slides.append({
-                    "type": "content",
-                    "title": f"{title} - Current Status",
-                    "body": status_lines,
-                })
+                slides.append(
+                    {
+                        "type": "content",
+                        "title": f"{title} - Current Status",
+                        "body": status_lines,
+                    }
+                )
 
-        return slides if slides else [{"type": "content", "title": title, "body": ["No summary data available."]}]
+        return (
+            slides
+            if slides
+            else [
+                {
+                    "type": "content",
+                    "title": title,
+                    "body": ["No summary data available."],
+                }
+            ]
+        )
 
     def _create_timeline_slides(self, title: str, content: dict) -> list[dict]:
         """Create timeline slides."""
         events = content.get("events", [])
         if not events:
-            return [{"type": "content", "title": title, "body": ["No timeline events recorded."]}]
+            return [
+                {
+                    "type": "content",
+                    "title": title,
+                    "body": ["No timeline events recorded."],
+                }
+            ]
 
         slides: list[dict] = []
         # Group events into slides of 5
         for i in range(0, len(events), 5):
-            batch = events[i:i + 5]
+            batch = events[i : i + 5]
             lines = []
             for event in batch:
                 date = event.get("event_date", "Unknown")
                 desc = event.get("description", "")[:100]
                 lines.append(f"{date}: {desc}")
 
-            slides.append({
-                "type": "content",
-                "title": f"{title} ({i + 1}-{i + len(batch)})",
-                "body": lines,
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} ({i + 1}-{i + len(batch)})",
+                    "body": lines,
+                }
+            )
 
         return slides
 
@@ -201,21 +234,25 @@ class PptxGenerator:
         """Create entities slides."""
         entities = content.get("entities", [])
         if not entities:
-            return [{"type": "content", "title": title, "body": ["No entities extracted."]}]
+            return [
+                {"type": "content", "title": title, "body": ["No entities extracted."]}
+            ]
 
         slides: list[dict] = []
         # Group entities into slides of 6
         for i in range(0, min(len(entities), 30), 6):
-            batch = entities[i:i + 6]
+            batch = entities[i : i + 6]
             lines = [
                 f"{e.get('canonical_name', 'Unknown')} ({e.get('entity_type', 'entity')}) - {e.get('mention_count', 0)} mentions"
                 for e in batch
             ]
-            slides.append({
-                "type": "content",
-                "title": f"{title} ({i + 1}-{i + len(batch)})",
-                "body": lines,
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} ({i + 1}-{i + len(batch)})",
+                    "body": lines,
+                }
+            )
 
         return slides
 
@@ -223,21 +260,25 @@ class PptxGenerator:
         """Create citations slides."""
         citations = content.get("citations", [])
         if not citations:
-            return [{"type": "content", "title": title, "body": ["No citations found."]}]
+            return [
+                {"type": "content", "title": title, "body": ["No citations found."]}
+            ]
 
         slides: list[dict] = []
         # Group citations into slides of 5
         for i in range(0, min(len(citations), 25), 5):
-            batch = citations[i:i + 5]
+            batch = citations[i : i + 5]
             lines = [
                 f"{c.get('act_name', 'Unknown')}, {c.get('section', '')} ({c.get('verification_status', 'unknown')})"
                 for c in batch
             ]
-            slides.append({
-                "type": "content",
-                "title": f"{title} ({i + 1}-{i + len(batch)})",
-                "body": lines,
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} ({i + 1}-{i + len(batch)})",
+                    "body": lines,
+                }
+            )
 
         return slides
 
@@ -245,21 +286,25 @@ class PptxGenerator:
         """Create key findings slides."""
         findings = content.get("findings", [])
         if not findings:
-            return [{"type": "content", "title": title, "body": ["No verified findings."]}]
+            return [
+                {"type": "content", "title": title, "body": ["No verified findings."]}
+            ]
 
         slides: list[dict] = []
         # Group findings into slides of 4
         for i in range(0, min(len(findings), 20), 4):
-            batch = findings[i:i + 4]
+            batch = findings[i : i + 4]
             lines = [
                 f"[{f.get('finding_type', 'finding').upper()}] {f.get('finding_summary', '')[:80]}"
                 for f in batch
             ]
-            slides.append({
-                "type": "content",
-                "title": f"{title} ({i + 1}-{i + len(batch)})",
-                "body": lines,
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} ({i + 1}-{i + len(batch)})",
+                    "body": lines,
+                }
+            )
 
         return slides
 
@@ -267,7 +312,13 @@ class PptxGenerator:
         """Create contradictions slides."""
         contradictions = content.get("contradictions", [])
         if not contradictions:
-            return [{"type": "content", "title": title, "body": ["No contradictions detected."]}]
+            return [
+                {
+                    "type": "content",
+                    "title": title,
+                    "body": ["No contradictions detected."],
+                }
+            ]
 
         slides: list[dict] = []
         # One contradiction per slide (they need more space)
@@ -277,15 +328,17 @@ class PptxGenerator:
             statement_a = contradiction.get("statement_a", "")
             statement_b = contradiction.get("statement_b", "")
 
-            slides.append({
-                "type": "content",
-                "title": f"{title} - {con_type.title()} ({severity.upper()})",
-                "body": [
-                    # Issue #5 fix: Use word-boundary truncation
-                    f"Statement A: {truncate_text(statement_a, 100)}",
-                    f"Statement B: {truncate_text(statement_b, 100)}",
-                ],
-            })
+            slides.append(
+                {
+                    "type": "content",
+                    "title": f"{title} - {con_type.title()} ({severity.upper()})",
+                    "body": [
+                        # Issue #5 fix: Use word-boundary truncation
+                        f"Statement A: {truncate_text(statement_a, 100)}",
+                        f"Statement B: {truncate_text(statement_b, 100)}",
+                    ],
+                }
+            )
 
         return slides
 
@@ -299,19 +352,28 @@ class PptxGenerator:
 
             # Relationships
             zf.writestr("_rels/.rels", self._rels_xml())
-            zf.writestr("ppt/_rels/presentation.xml.rels", self._presentation_rels_xml(len(slides)))
+            zf.writestr(
+                "ppt/_rels/presentation.xml.rels",
+                self._presentation_rels_xml(len(slides)),
+            )
 
             # Presentation
             zf.writestr("ppt/presentation.xml", self._presentation_xml(len(slides)))
 
             # Slide layouts
-            zf.writestr("ppt/slideLayouts/_rels/slideLayout1.xml.rels", self._layout_rels_xml())
-            zf.writestr("ppt/slideLayouts/_rels/slideLayout2.xml.rels", self._layout_rels_xml())
+            zf.writestr(
+                "ppt/slideLayouts/_rels/slideLayout1.xml.rels", self._layout_rels_xml()
+            )
+            zf.writestr(
+                "ppt/slideLayouts/_rels/slideLayout2.xml.rels", self._layout_rels_xml()
+            )
             zf.writestr("ppt/slideLayouts/slideLayout1.xml", self._title_layout_xml())
             zf.writestr("ppt/slideLayouts/slideLayout2.xml", self._content_layout_xml())
 
             # Slide master
-            zf.writestr("ppt/slideMasters/_rels/slideMaster1.xml.rels", self._master_rels_xml())
+            zf.writestr(
+                "ppt/slideMasters/_rels/slideMaster1.xml.rels", self._master_rels_xml()
+            )
             zf.writestr("ppt/slideMasters/slideMaster1.xml", self._slide_master_xml())
 
             # Theme
@@ -333,12 +395,14 @@ class PptxGenerator:
 
     def _content_types_xml(self, slide_count: int) -> str:
         """Generate [Content_Types].xml."""
-        slide_overrides = "\n".join([
-            f'  <Override PartName="/ppt/slides/slide{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
-            for i in range(1, slide_count + 1)
-        ])
+        slide_overrides = "\n".join(
+            [
+                f'  <Override PartName="/ppt/slides/slide{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>'
+                for i in range(1, slide_count + 1)
+            ]
+        )
 
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -348,40 +412,44 @@ class PptxGenerator:
   <Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
   <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
 {slide_overrides}
-</Types>'''
+</Types>"""
 
     def _rels_xml(self) -> str:
         """Generate _rels/.rels."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _presentation_rels_xml(self, slide_count: int) -> str:
         """Generate ppt/_rels/presentation.xml.rels."""
-        slide_rels = "\n".join([
-            f'  <Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide{i}.xml"/>'
-            for i in range(1, slide_count + 1)
-        ])
+        slide_rels = "\n".join(
+            [
+                f'  <Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide{i}.xml"/>'
+                for i in range(1, slide_count + 1)
+            ]
+        )
         master_id = slide_count + 1
         theme_id = slide_count + 2
 
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 {slide_rels}
   <Relationship Id="rId{master_id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
   <Relationship Id="rId{theme_id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _presentation_xml(self, slide_count: int) -> str:
         """Generate ppt/presentation.xml."""
-        slide_list = "\n".join([
-            f'      <p:sldId id="{256 + i}" r:id="rId{i}"/>'
-            for i in range(1, slide_count + 1)
-        ])
+        slide_list = "\n".join(
+            [
+                f'      <p:sldId id="{256 + i}" r:id="rId{i}"/>'
+                for i in range(1, slide_count + 1)
+            ]
+        )
         master_id = slide_count + 1
 
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:sldMasterIdLst>
     <p:sldMasterId id="2147483648" r:id="rId{master_id}"/>
@@ -391,34 +459,34 @@ class PptxGenerator:
   </p:sldIdLst>
   <p:sldSz cx="9144000" cy="6858000" type="screen4x3"/>
   <p:notesSz cx="6858000" cy="9144000"/>
-</p:presentation>'''
+</p:presentation>"""
 
     def _layout_rels_xml(self) -> str:
         """Generate slide layout relationships."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _master_rels_xml(self) -> str:
         """Generate slide master relationships."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _slide_rels_xml(self, layout_id: int) -> str:
         """Generate slide relationships."""
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout{layout_id}.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _slide_master_xml(self) -> str:
         """Generate slide master."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:bg>
@@ -440,11 +508,11 @@ class PptxGenerator:
     <p:sldLayoutId id="2147483649" r:id="rId1"/>
     <p:sldLayoutId id="2147483650" r:id="rId2"/>
   </p:sldLayoutIdLst>
-</p:sldMaster>'''
+</p:sldMaster>"""
 
     def _title_layout_xml(self) -> str:
         """Generate title slide layout."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="title">
   <p:cSld name="Title Slide">
     <p:spTree>
@@ -459,11 +527,11 @@ class PptxGenerator:
   <p:clrMapOvr>
     <a:masterClrMapping/>
   </p:clrMapOvr>
-</p:sldLayout>'''
+</p:sldLayout>"""
 
     def _content_layout_xml(self) -> str:
         """Generate content slide layout."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="obj">
   <p:cSld name="Title and Content">
     <p:spTree>
@@ -478,11 +546,11 @@ class PptxGenerator:
   <p:clrMapOvr>
     <a:masterClrMapping/>
   </p:clrMapOvr>
-</p:sldLayout>'''
+</p:sldLayout>"""
 
     def _theme_xml(self) -> str:
         """Generate theme."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="LDIP Theme">
   <a:themeElements>
     <a:clrScheme name="LDIP">
@@ -534,7 +602,7 @@ class PptxGenerator:
       </a:bgFillStyleLst>
     </a:fmtScheme>
   </a:themeElements>
-</a:theme>'''
+</a:theme>"""
 
     def _slide_xml(self, slide: dict) -> str:
         """Generate individual slide XML."""
@@ -549,7 +617,7 @@ class PptxGenerator:
 
     def _title_slide_xml(self, title: str, subtitle: str) -> str:
         """Generate title slide content."""
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
@@ -618,13 +686,14 @@ class PptxGenerator:
   <p:clrMapOvr>
     <a:masterClrMapping/>
   </p:clrMapOvr>
-</p:sld>'''
+</p:sld>"""
 
     def _content_slide_xml(self, title: str, body_lines: list[str]) -> str:
         """Generate content slide content."""
         # Build body paragraphs
-        body_paras = "\n".join([
-            f'''          <a:p>
+        body_paras = "\n".join(
+            [
+                f"""          <a:p>
             <a:pPr marL="342900" indent="-342900">
               <a:buFont typeface="Arial"/>
               <a:buChar char="&#8226;"/>
@@ -633,11 +702,12 @@ class PptxGenerator:
               <a:rPr lang="en-US" sz="1800"/>
               <a:t>{line}</a:t>
             </a:r>
-          </a:p>'''
-            for line in body_lines
-        ])
+          </a:p>"""
+                for line in body_lines
+            ]
+        )
 
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
@@ -697,4 +767,4 @@ class PptxGenerator:
   <p:clrMapOvr>
     <a:masterClrMapping/>
   </p:clrMapOvr>
-</p:sld>'''
+</p:sld>"""

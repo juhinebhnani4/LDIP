@@ -78,7 +78,9 @@ class ExportRequest(BaseModel):
     Story 12-3: AC #3 - Export request with format and sections.
     """
 
-    format: ExportFormat = Field(..., description="Export format (pdf, word, powerpoint)")
+    format: ExportFormat = Field(
+        ..., description="Export format (pdf, word, powerpoint)"
+    )
     sections: list[str] = Field(
         ...,
         min_length=1,
@@ -105,7 +107,9 @@ class ExportRecord(BaseModel):
     format: ExportFormat = Field(..., description="Export format")
     status: ExportStatus = Field(..., description="Current generation status")
     file_path: str | None = Field(None, description="Storage path for generated file")
-    download_url: str | None = Field(None, description="Signed download URL (when completed)")
+    download_url: str | None = Field(
+        None, description="Signed download URL (when completed)"
+    )
     file_name: str = Field(..., description="Generated filename")
     sections_included: list[str] = Field(
         default_factory=list,
@@ -158,6 +162,8 @@ class VerificationSummaryForExport(BaseModel):
     total_findings: int = Field(0, description="Total findings in matter")
     verified_count: int = Field(0, description="Approved by attorney")
     pending_count: int = Field(0, description="Still pending verification")
-    warnings_dismissed: int = Field(0, description="Warnings that were dismissed for export")
+    warnings_dismissed: int = Field(
+        0, description="Warnings that were dismissed for export"
+    )
     exported_by_name: str = Field(..., description="User name who generated export")
     exported_by_email: str = Field(..., description="User email")

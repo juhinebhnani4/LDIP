@@ -55,13 +55,15 @@ def mock_openai_blocked():
     """Mock OpenAI response for blocked query."""
     response = MagicMock()
     response.choices = [MagicMock()]
-    response.choices[0].message.content = json.dumps({
-        "is_safe": False,
-        "violation_type": "implicit_conclusion_request",
-        "explanation": "Query seeks implicit legal conclusion about contract breach",
-        "suggested_rewrite": "What evidence exists regarding the defendant's contract performance?",
-        "confidence": 0.95,
-    })
+    response.choices[0].message.content = json.dumps(
+        {
+            "is_safe": False,
+            "violation_type": "implicit_conclusion_request",
+            "explanation": "Query seeks implicit legal conclusion about contract breach",
+            "suggested_rewrite": "What evidence exists regarding the defendant's contract performance?",
+            "confidence": 0.95,
+        }
+    )
     response.usage = MagicMock()
     response.usage.prompt_tokens = 150
     response.usage.completion_tokens = 50
@@ -74,13 +76,15 @@ def mock_openai_allowed():
     """Mock OpenAI response for allowed query."""
     response = MagicMock()
     response.choices = [MagicMock()]
-    response.choices[0].message.content = json.dumps({
-        "is_safe": True,
-        "violation_type": None,
-        "explanation": "Query seeks factual information from documents",
-        "suggested_rewrite": "",
-        "confidence": 0.98,
-    })
+    response.choices[0].message.content = json.dumps(
+        {
+            "is_safe": True,
+            "violation_type": None,
+            "explanation": "Query seeks factual information from documents",
+            "suggested_rewrite": "",
+            "confidence": 0.98,
+        }
+    )
     response.usage = MagicMock()
     response.usage.prompt_tokens = 100
     response.usage.completion_tokens = 30
@@ -121,22 +125,22 @@ class TestImplicitConclusionBlocked:
             assert check.violation_type == "implicit_conclusion_request"
             assert len(check.explanation) > 0
 
-    async def test_would_you_say_blocked(
-        self, detector, mock_settings
-    ) -> None:
+    async def test_would_you_say_blocked(self, detector, mock_settings) -> None:
         """Should block 'Would you say the defendant is...'
 
         Story 8-2: Task 8.3 - Test case
         """
         blocked_response = MagicMock()
         blocked_response.choices = [MagicMock()]
-        blocked_response.choices[0].message.content = json.dumps({
-            "is_safe": False,
-            "violation_type": "indirect_outcome_seeking",
-            "explanation": "Query directly seeks opinion on liability",
-            "suggested_rewrite": "What documents mention damages and their causes?",
-            "confidence": 0.98,
-        })
+        blocked_response.choices[0].message.content = json.dumps(
+            {
+                "is_safe": False,
+                "violation_type": "indirect_outcome_seeking",
+                "explanation": "Query directly seeks opinion on liability",
+                "suggested_rewrite": "What documents mention damages and their causes?",
+                "confidence": 0.98,
+            }
+        )
         blocked_response.usage = MagicMock()
         blocked_response.usage.prompt_tokens = 150
         blocked_response.usage.completion_tokens = 50
@@ -154,22 +158,22 @@ class TestImplicitConclusionBlocked:
             assert check.is_safe is False
             assert check.violation_type == "indirect_outcome_seeking"
 
-    async def test_does_evidence_support_blocked(
-        self, detector, mock_settings
-    ) -> None:
+    async def test_does_evidence_support_blocked(self, detector, mock_settings) -> None:
         """Should block 'Does the evidence support a finding of...'
 
         Story 8-2: Task 8.4 - Test case
         """
         blocked_response = MagicMock()
         blocked_response.choices = [MagicMock()]
-        blocked_response.choices[0].message.content = json.dumps({
-            "is_safe": False,
-            "violation_type": "implicit_conclusion_request",
-            "explanation": "Query seeks legal conclusion about negligence",
-            "suggested_rewrite": "What evidence is documented regarding the incident?",
-            "confidence": 0.93,
-        })
+        blocked_response.choices[0].message.content = json.dumps(
+            {
+                "is_safe": False,
+                "violation_type": "implicit_conclusion_request",
+                "explanation": "Query seeks legal conclusion about negligence",
+                "suggested_rewrite": "What evidence is documented regarding the incident?",
+                "confidence": 0.93,
+            }
+        )
         blocked_response.usage = MagicMock()
         blocked_response.usage.prompt_tokens = 150
         blocked_response.usage.completion_tokens = 50
@@ -235,9 +239,7 @@ class TestFactualQueryAllowed:
 
             assert check.is_safe is True
 
-    async def test_list_entities_allowed(
-        self, detector, mock_openai_allowed
-    ) -> None:
+    async def test_list_entities_allowed(self, detector, mock_openai_allowed) -> None:
         """Should allow entity extraction queries."""
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
@@ -282,11 +284,12 @@ class TestContextualRewrite:
             assert check.is_safe is False
             assert len(check.suggested_rewrite) > 0
             # Rewrite should reference evidence (preserving factual intent)
-            assert "evidence" in check.suggested_rewrite.lower() or "defendant" in check.suggested_rewrite.lower()
+            assert (
+                "evidence" in check.suggested_rewrite.lower()
+                or "defendant" in check.suggested_rewrite.lower()
+            )
 
-    async def test_no_rewrite_for_allowed(
-        self, detector, mock_openai_allowed
-    ) -> None:
+    async def test_no_rewrite_for_allowed(self, detector, mock_openai_allowed) -> None:
         """Safe queries should not have rewrites."""
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
@@ -316,9 +319,7 @@ class TestTimeoutHandling:
     async def test_timeout_raises_error(self, detector, mock_settings) -> None:
         """Should raise error on timeout (caller decides fail-open behavior)."""
         with patch.object(detector, "_client") as mock_client:
-            mock_client.chat.completions.create = AsyncMock(
-                side_effect=TimeoutError()
-            )
+            mock_client.chat.completions.create = AsyncMock(side_effect=TimeoutError())
 
             with pytest.raises(SubtleDetectorError):
                 await detector.detect_violation("Some query")
@@ -348,9 +349,7 @@ class TestCostTracking:
             # Expected: (150/1000 * 0.00015) + (50/1000 * 0.0006) = 0.0000525
             assert check.llm_cost_usd < 0.01  # Should be very low
 
-    async def test_check_time_tracked(
-        self, detector, mock_openai_blocked
-    ) -> None:
+    async def test_check_time_tracked(self, detector, mock_openai_blocked) -> None:
         """Should track check time."""
         with patch.object(detector, "_client") as mock_client:
             mock_client.chat.completions.create = AsyncMock(
@@ -395,11 +394,13 @@ class TestMockOpenAIResponses:
         # Response missing violation_type
         response = MagicMock()
         response.choices = [MagicMock()]
-        response.choices[0].message.content = json.dumps({
-            "is_safe": True,
-            "explanation": "Query is safe",
-            "confidence": 0.9,
-        })
+        response.choices[0].message.content = json.dumps(
+            {
+                "is_safe": True,
+                "explanation": "Query is safe",
+                "confidence": 0.9,
+            }
+        )
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 30
@@ -593,13 +594,15 @@ class TestViolationTypeValidation:
         """Invalid violation_type from LLM should be coerced to None."""
         response = MagicMock()
         response.choices = [MagicMock()]
-        response.choices[0].message.content = json.dumps({
-            "is_safe": False,
-            "violation_type": "unknown_invalid_type",  # Invalid type
-            "explanation": "Some explanation",
-            "suggested_rewrite": "Safe query here",
-            "confidence": 0.9,
-        })
+        response.choices[0].message.content = json.dumps(
+            {
+                "is_safe": False,
+                "violation_type": "unknown_invalid_type",  # Invalid type
+                "explanation": "Some explanation",
+                "suggested_rewrite": "Safe query here",
+                "confidence": 0.9,
+            }
+        )
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 30
@@ -626,13 +629,15 @@ class TestViolationTypeValidation:
         for violation_type in valid_types:
             response = MagicMock()
             response.choices = [MagicMock()]
-            response.choices[0].message.content = json.dumps({
-                "is_safe": False,
-                "violation_type": violation_type,
-                "explanation": "Test",
-                "suggested_rewrite": "Test",
-                "confidence": 0.9,
-            })
+            response.choices[0].message.content = json.dumps(
+                {
+                    "is_safe": False,
+                    "violation_type": violation_type,
+                    "explanation": "Test",
+                    "suggested_rewrite": "Test",
+                    "confidence": 0.9,
+                }
+            )
             response.usage = MagicMock()
             response.usage.prompt_tokens = 100
             response.usage.completion_tokens = 30

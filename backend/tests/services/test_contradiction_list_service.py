@@ -150,9 +150,7 @@ class TestGetAllContradictions:
         mock_result = MagicMock()
         mock_result.count = 0
 
-        service._supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            mock_result
-        )
+        service._supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
 
         response = await service.get_all_contradictions(
             matter_id="matter-123",
@@ -237,14 +235,10 @@ class TestPagination:
         # Setup mock chain for count
         mock_table = MagicMock()
         service._supabase_client.table.return_value = mock_table
-        mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            mock_count_result
-        )
+        mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_count_result
 
         # Setup mock chain for query (more complex)
-        mock_table.select.return_value.eq.return_value.eq.return_value.order.return_value.order.return_value.range.return_value.execute.return_value = (
-            mock_query_result
-        )
+        mock_table.select.return_value.eq.return_value.eq.return_value.order.return_value.order.return_value.range.return_value.execute.return_value = mock_query_result
 
         response = await service.get_all_contradictions(
             matter_id="matter-123",
@@ -260,9 +254,7 @@ class TestPagination:
         mock_count_result = MagicMock()
         mock_count_result.count = 0
 
-        service._supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            mock_count_result
-        )
+        service._supabase_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_count_result
 
         response = await service.get_all_contradictions(
             matter_id="matter-123",
@@ -455,8 +447,18 @@ class TestContradictionTypeParsing:
             "confidence": 0.9,
             "evidence": {},
             "created_at": "2026-01-15T10:00:00Z",
-            "statement_a": {"chunk_id": "c1", "content": "", "document_id": "", "document_name": ""},
-            "statement_b": {"chunk_id": "c2", "content": "", "document_id": "", "document_name": ""},
+            "statement_a": {
+                "chunk_id": "c1",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
+            "statement_b": {
+                "chunk_id": "c2",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
         }
 
         item = service._build_contradiction_item(data)
@@ -484,8 +486,18 @@ class TestSeverityParsing:
             "confidence": 0.9,
             "evidence": {},
             "created_at": "2026-01-15T10:00:00Z",
-            "statement_a": {"chunk_id": "c1", "content": "", "document_id": "", "document_name": ""},
-            "statement_b": {"chunk_id": "c2", "content": "", "document_id": "", "document_name": ""},
+            "statement_a": {
+                "chunk_id": "c1",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
+            "statement_b": {
+                "chunk_id": "c2",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
         }
 
         item = service._build_contradiction_item(data)
@@ -504,8 +516,18 @@ class TestSeverityParsing:
             "confidence": 0.9,
             "evidence": {},
             "created_at": "2026-01-15T10:00:00Z",
-            "statement_a": {"chunk_id": "c1", "content": "", "document_id": "", "document_name": ""},
-            "statement_b": {"chunk_id": "c2", "content": "", "document_id": "", "document_name": ""},
+            "statement_a": {
+                "chunk_id": "c1",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
+            "statement_b": {
+                "chunk_id": "c2",
+                "content": "",
+                "document_id": "",
+                "document_name": "",
+            },
         }
 
         item = service._build_contradiction_item(data)

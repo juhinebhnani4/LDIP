@@ -68,9 +68,7 @@ def sample_engine_results() -> list[EngineExecutionResult]:
             data={
                 "total_acts": 1,
                 "total_citations": 3,
-                "acts": [
-                    {"act_name": "NI Act", "citation_count": 3}
-                ],
+                "acts": [{"act_name": "NI Act", "citation_count": 3}],
             },
             execution_time_ms=100,
             confidence=0.95,
@@ -88,8 +86,7 @@ def mock_language_police():
 def aggregator_with_policing(mock_settings, mock_language_police):
     """Get aggregator with policing enabled."""
     with patch(
-        "app.engines.orchestrator.aggregator.get_settings",
-        return_value=mock_settings
+        "app.engines.orchestrator.aggregator.get_settings", return_value=mock_settings
     ):
         # Pass mock language police directly to constructor
         return ResultAggregator(language_police=mock_language_police)
@@ -100,7 +97,11 @@ class TestAsyncAggregationWithPolicing:
 
     @pytest.mark.asyncio
     async def test_policing_applied_to_unified_response(
-        self, aggregator_with_policing, sample_engine_results, mock_settings, mock_language_police
+        self,
+        aggregator_with_policing,
+        sample_engine_results,
+        mock_settings,
+        mock_language_police,
     ) -> None:
         """Unified response should be policed during async aggregation."""
         # Mock the language police to return sanitized text
@@ -115,11 +116,13 @@ class TestAsyncAggregationWithPolicing:
         )
 
         # Configure the mock language police
-        mock_language_police.police_output = AsyncMock(return_value=mock_policing_result)
+        mock_language_police.police_output = AsyncMock(
+            return_value=mock_policing_result
+        )
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             result = await aggregator_with_policing.aggregate_results_async(
                 matter_id="matter-123",
@@ -133,7 +136,11 @@ class TestAsyncAggregationWithPolicing:
 
     @pytest.mark.asyncio
     async def test_policing_metadata_populated(
-        self, aggregator_with_policing, sample_engine_results, mock_settings, mock_language_police
+        self,
+        aggregator_with_policing,
+        sample_engine_results,
+        mock_settings,
+        mock_language_police,
     ) -> None:
         """Policing metadata should be populated in result."""
         from app.models.safety import QuotePreservation, ReplacementRecord
@@ -168,11 +175,13 @@ class TestAsyncAggregationWithPolicing:
         )
 
         # Configure the mock language police
-        mock_language_police.police_output = AsyncMock(return_value=mock_policing_result)
+        mock_language_police.police_output = AsyncMock(
+            return_value=mock_policing_result
+        )
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             result = await aggregator_with_policing.aggregate_results_async(
                 matter_id="matter-123",
@@ -191,9 +200,7 @@ class TestPolicingDisabled:
     """Test behavior when policing is disabled."""
 
     @pytest.mark.asyncio
-    async def test_no_policing_when_disabled(
-        self, sample_engine_results
-    ) -> None:
+    async def test_no_policing_when_disabled(self, sample_engine_results) -> None:
         """No policing should occur when disabled."""
         disabled_settings = MagicMock()
         disabled_settings.language_policing_enabled = False
@@ -205,7 +212,7 @@ class TestPolicingDisabled:
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=disabled_settings
+            return_value=disabled_settings,
         ):
             aggregator = ResultAggregator()
             result = await aggregator.aggregate_results_async(
@@ -238,7 +245,11 @@ class TestSyncVsAsync:
 
     @pytest.mark.asyncio
     async def test_async_aggregation_applies_policing(
-        self, aggregator_with_policing, sample_engine_results, mock_settings, mock_language_police
+        self,
+        aggregator_with_policing,
+        sample_engine_results,
+        mock_settings,
+        mock_language_police,
     ) -> None:
         """Async aggregation should apply policing."""
         mock_policing_result = LanguagePolicingResult(
@@ -252,11 +263,13 @@ class TestSyncVsAsync:
         )
 
         # Configure the mock language police
-        mock_language_police.police_output = AsyncMock(return_value=mock_policing_result)
+        mock_language_police.police_output = AsyncMock(
+            return_value=mock_policing_result
+        )
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             result = await aggregator_with_policing.aggregate_results_async(
                 matter_id="matter-123",
@@ -273,15 +286,21 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_policing_error_does_not_block_result(
-        self, aggregator_with_policing, sample_engine_results, mock_settings, mock_language_police
+        self,
+        aggregator_with_policing,
+        sample_engine_results,
+        mock_settings,
+        mock_language_police,
     ) -> None:
         """Policing errors should not block the result."""
         # Configure the mock language police to raise an error
-        mock_language_police.police_output = AsyncMock(side_effect=Exception("LLM error"))
+        mock_language_police.police_output = AsyncMock(
+            side_effect=Exception("LLM error")
+        )
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             # Should NOT raise - should return result with error metadata
             result = await aggregator_with_policing.aggregate_results_async(
@@ -316,7 +335,7 @@ class TestEmptyResponse:
 
         with patch(
             "app.engines.orchestrator.aggregator.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             result = await aggregator_with_policing.aggregate_results_async(
                 matter_id="matter-123",

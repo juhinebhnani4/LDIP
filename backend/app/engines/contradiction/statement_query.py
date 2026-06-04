@@ -63,18 +63,30 @@ DATE_PATTERNS = [
 
 # Month name mapping for written dates
 MONTH_MAP = {
-    "january": "01", "jan": "01",
-    "february": "02", "feb": "02",
-    "march": "03", "mar": "03",
-    "april": "04", "apr": "04",
+    "january": "01",
+    "jan": "01",
+    "february": "02",
+    "feb": "02",
+    "march": "03",
+    "mar": "03",
+    "april": "04",
+    "apr": "04",
     "may": "05",
-    "june": "06", "jun": "06",
-    "july": "07", "jul": "07",
-    "august": "08", "aug": "08",
-    "september": "09", "sep": "09", "sept": "09",
-    "october": "10", "oct": "10",
-    "november": "11", "nov": "11",
-    "december": "12", "dec": "12",
+    "june": "06",
+    "jun": "06",
+    "july": "07",
+    "jul": "07",
+    "august": "08",
+    "aug": "08",
+    "september": "09",
+    "sep": "09",
+    "sept": "09",
+    "october": "10",
+    "oct": "10",
+    "november": "11",
+    "nov": "11",
+    "december": "12",
+    "dec": "12",
 }
 
 # Indian amount patterns
@@ -226,7 +238,9 @@ class ValueExtractor:
 
         return amounts
 
-    def extract_all_values(self, text: str) -> tuple[list[StatementValue], list[StatementValue]]:
+    def extract_all_values(
+        self, text: str
+    ) -> tuple[list[StatementValue], list[StatementValue]]:
         """Extract both dates and amounts from text.
 
         Args:
@@ -597,8 +611,7 @@ class StatementQueryEngine:
         response = await asyncio.to_thread(_query)
 
         return {
-            doc["id"]: doc.get("filename", "Unknown")
-            for doc in (response.data or [])
+            doc["id"]: doc.get("filename", "Unknown") for doc in (response.data or [])
         }
 
     async def _build_entity_statements(

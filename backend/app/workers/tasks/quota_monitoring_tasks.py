@@ -8,6 +8,8 @@ Provides periodic tasks for:
 - Logging structured alerts to Axiom via structlog
 """
 
+from datetime import UTC
+
 import structlog
 
 from app.workers.celery import celery_app
@@ -133,8 +135,9 @@ def _sanitize_provider_name(provider: str) -> str:
         Sanitized provider name safe for SQL queries.
     """
     import re
+
     # Only allow alphanumeric and underscore
-    return re.sub(r'[^a-zA-Z0-9_]', '', provider)
+    return re.sub(r"[^a-zA-Z0-9_]", "", provider)
 
 
 async def _create_admin_notification(pq, supabase) -> None:
@@ -145,10 +148,13 @@ async def _create_admin_notification(pq, supabase) -> None:
         supabase: Supabase client.
     """
     try:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from app.core.config import get_settings
-        from app.models.notification import NotificationPriorityEnum, NotificationTypeEnum
+        from app.models.notification import (
+            NotificationPriorityEnum,
+            NotificationTypeEnum,
+        )
         from app.services.notification_service import NotificationService
 
         settings = get_settings()
@@ -183,13 +189,15 @@ async def _create_admin_notification(pq, supabase) -> None:
         # Determine severity
         usage_pct = max(pq.token_usage_pct, pq.cost_usage_pct)
         is_critical = usage_pct >= 95
-        priority = NotificationPriorityEnum.HIGH if is_critical else NotificationPriorityEnum.MEDIUM
+        priority = (
+            NotificationPriorityEnum.HIGH
+            if is_critical
+            else NotificationPriorityEnum.MEDIUM
+        )
 
         # F8 fix: Sanitize provider name for safe use in queries
         safe_provider = _sanitize_provider_name(pq.provider)
 
-        # F12 fix: Use structured alert key prefix for reliable deduplication
-        alert_key = f"llm_quota_alert_{safe_provider}"
         title = f"LLM Quota Alert: {safe_provider.title()} at {usage_pct:.0f}%"
         message = (
             f"{safe_provider.title()} API usage has reached {usage_pct:.0f}% of daily limit. "
@@ -201,7 +209,7 @@ async def _create_admin_notification(pq, supabase) -> None:
 
         # Check for recent identical notification to avoid spam
         # Only create notification if no similar one in last 30 minutes
-        recent_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        recent_cutoff = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
 
         for admin_user in result.data:
             # F8/F12 fix: Use exact match on alert_key prefix instead of ILIKE

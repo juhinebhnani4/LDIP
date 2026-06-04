@@ -32,7 +32,9 @@ class TestExtractedEntity:
             type=EntityType.PERSON,
             roles=["plaintiff", "petitioner"],
             mentions=[
-                ExtractedEntityMention(text="Mr. Jobalia", context="...filed by Mr. Jobalia...")
+                ExtractedEntityMention(
+                    text="Mr. Jobalia", context="...filed by Mr. Jobalia..."
+                )
             ],
             confidence=0.95,
         )
@@ -170,7 +172,9 @@ class TestMIGEntityExtractorInit:
         assert extractor.model_name == "gemini-1.5-flash"
 
     @patch("app.services.mig.extractor.get_settings")
-    def test_raises_error_when_api_key_missing(self, mock_get_settings: MagicMock) -> None:
+    def test_raises_error_when_api_key_missing(
+        self, mock_get_settings: MagicMock
+    ) -> None:
         """Should raise MIGConfigurationError when API key is missing."""
         mock_settings = MagicMock()
         mock_settings.gemini_api_key = ""
@@ -200,7 +204,10 @@ class TestMIGEntityExtractorExtract:
                     "roles": ["plaintiff"],
                     "confidence": 0.95,
                     "mentions": [
-                        {"text": "Mr. Jobalia", "context": "...plaintiff Mr. Jobalia filed..."}
+                        {
+                            "text": "Mr. Jobalia",
+                            "context": "...plaintiff Mr. Jobalia filed...",
+                        }
                     ],
                 },
                 {
@@ -226,7 +233,9 @@ class TestMIGEntityExtractorExtract:
         }
 
     @patch("app.services.mig.extractor.get_settings")
-    def test_returns_empty_result_for_empty_text(self, mock_get_settings: MagicMock) -> None:
+    def test_returns_empty_result_for_empty_text(
+        self, mock_get_settings: MagicMock
+    ) -> None:
         """Should return empty result for empty text."""
         mock_settings = MagicMock()
         mock_settings.gemini_api_key = "test-key"
@@ -282,7 +291,9 @@ class TestMIGEntityExtractorExtract:
         assert result.page_number == 5
 
     @patch("app.services.mig.extractor.get_settings")
-    def test_handles_malformed_json_response(self, mock_get_settings: MagicMock) -> None:
+    def test_handles_malformed_json_response(
+        self, mock_get_settings: MagicMock
+    ) -> None:
         """Should return empty result for malformed JSON."""
         mock_settings = MagicMock()
         mock_settings.gemini_api_key = "test-key"
@@ -347,23 +358,25 @@ class TestMIGEntityExtractorExtract:
 
         extractor = MIGEntityExtractor()
 
-        response = json.dumps({
-            "entities": [
-                {
-                    "name": "Valid Person",
-                    "canonical_name": "Valid Person",
-                    "type": "PERSON",
-                    "confidence": 0.9,
-                },
-                {
-                    "name": "Invalid Entity",
-                    "canonical_name": "Invalid Entity",
-                    "type": "UNKNOWN_TYPE",  # Invalid type
-                    "confidence": 0.9,
-                },
-            ],
-            "relationships": [],
-        })
+        response = json.dumps(
+            {
+                "entities": [
+                    {
+                        "name": "Valid Person",
+                        "canonical_name": "Valid Person",
+                        "type": "PERSON",
+                        "confidence": 0.9,
+                    },
+                    {
+                        "name": "Invalid Entity",
+                        "canonical_name": "Invalid Entity",
+                        "type": "UNKNOWN_TYPE",  # Invalid type
+                        "confidence": 0.9,
+                    },
+                ],
+                "relationships": [],
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response,
@@ -432,9 +445,16 @@ class TestMIGEntityExtractorHelpers:
 
         extractor = MIGEntityExtractor()
 
-        assert extractor._parse_relationship_type("ALIAS_OF") == RelationshipType.ALIAS_OF
-        assert extractor._parse_relationship_type("HAS_ROLE") == RelationshipType.HAS_ROLE
-        assert extractor._parse_relationship_type("RELATED_TO") == RelationshipType.RELATED_TO
+        assert (
+            extractor._parse_relationship_type("ALIAS_OF") == RelationshipType.ALIAS_OF
+        )
+        assert (
+            extractor._parse_relationship_type("HAS_ROLE") == RelationshipType.HAS_ROLE
+        )
+        assert (
+            extractor._parse_relationship_type("RELATED_TO")
+            == RelationshipType.RELATED_TO
+        )
         assert extractor._parse_relationship_type("INVALID") is None
 
 

@@ -47,22 +47,41 @@ class QueryType(str, Enum):
 # Keywords used to detect summary sub-intent from query text.
 # "brief" is excluded — too common in legal contexts ("amicus brief", "reply brief")
 # and causes false positives that trigger summary retrieval for specific queries.
-_SUMMARY_KEYWORDS = frozenset([
-    "summarize", "summary", "key findings", "overview", "gist",
-    "main points", "highlights", "recap", "outline",
-])
+_SUMMARY_KEYWORDS = frozenset(
+    [
+        "summarize",
+        "summary",
+        "key findings",
+        "overview",
+        "gist",
+        "main points",
+        "highlights",
+        "recap",
+        "outline",
+    ]
+)
 
 # Keywords used to detect comparison sub-intent from query text
-_COMPARISON_KEYWORDS = frozenset([
-    "compare", "comparison", "contrast", "versus", "vs",
-    "differ", "difference", "differences",
-])
+_COMPARISON_KEYWORDS = frozenset(
+    [
+        "compare",
+        "comparison",
+        "contrast",
+        "versus",
+        "vs",
+        "differ",
+        "difference",
+        "differences",
+    ]
+)
 
 # Compiled word-boundary patterns for keyword matching.
 # Using word boundaries (\b) prevents substring false positives like
 # "outlined" matching "outline" or "different" matching "differ".
 _SUMMARY_PATTERNS = [re.compile(rf"\b{re.escape(kw)}\b") for kw in _SUMMARY_KEYWORDS]
-_COMPARISON_PATTERNS = [re.compile(rf"\b{re.escape(kw)}\b") for kw in _COMPARISON_KEYWORDS]
+_COMPARISON_PATTERNS = [
+    re.compile(rf"\b{re.escape(kw)}\b") for kw in _COMPARISON_KEYWORDS
+]
 
 
 @dataclass(frozen=True)
@@ -167,7 +186,9 @@ class QueryProfile:
         )
 
     @classmethod
-    def _scale_for_matter_size(cls, profile: "QueryProfile", document_count: int) -> "QueryProfile":
+    def _scale_for_matter_size(
+        cls, profile: "QueryProfile", document_count: int
+    ) -> "QueryProfile":
         """Scale retrieval parameters based on matter size.
 
         Small matters don't need massive candidate pools — pulling 100
@@ -194,11 +215,13 @@ class QueryProfile:
 
         scaled = cls(
             query_type=profile.query_type,
-            hybrid_limit=max(20, int(profile.hybrid_limit * scale)),  # Scale retrieval pool
-            rerank_top_n=profile.rerank_top_n,                        # Preserve quality
-            max_context_chunks=profile.max_context_chunks,             # Preserve quality
+            hybrid_limit=max(
+                20, int(profile.hybrid_limit * scale)
+            ),  # Scale retrieval pool
+            rerank_top_n=profile.rerank_top_n,  # Preserve quality
+            max_context_chunks=profile.max_context_chunks,  # Preserve quality
             max_chunk_content=profile.max_chunk_content,
-            max_answer_length=profile.max_answer_length,               # Preserve quality
+            max_answer_length=profile.max_answer_length,  # Preserve quality
             system_prompt_key=profile.system_prompt_key,
             search_weights=profile.search_weights,
         )

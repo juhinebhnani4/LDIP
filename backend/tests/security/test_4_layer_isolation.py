@@ -70,6 +70,7 @@ def valid_query_hash() -> str:
 # Layer 1 Tests: PostgreSQL RLS Policies
 # =============================================================================
 
+
 class TestRLSPolicyConcepts:
     """Test the concepts that RLS policies enforce."""
 
@@ -106,6 +107,7 @@ class TestRLSPolicyConcepts:
 # =============================================================================
 # Layer 2 Tests: Vector Namespace Prefix
 # =============================================================================
+
 
 class TestVectorNamespaceIsolation:
     """Test Layer 2: Vector namespace prefix isolation."""
@@ -175,9 +177,7 @@ class TestVectorNamespaceIsolation:
         with pytest.raises(ValueError, match="1536 dimensions"):
             build_semantic_search_query(filter_obj, [])
 
-    def test_validate_search_results_filters_cross_matter(
-        self, valid_matter_id: str
-    ):
+    def test_validate_search_results_filters_cross_matter(self, valid_matter_id: str):
         """Test that search results from other matters are filtered."""
         other_matter_id = str(uuid4())
 
@@ -202,28 +202,23 @@ class TestVectorNamespaceIsolation:
 # Layer 3 Tests: Redis Key Prefix
 # =============================================================================
 
+
 class TestRedisKeyPrefixIsolation:
     """Test Layer 3: Redis key prefix isolation."""
 
-    def test_session_key_format(
-        self, valid_matter_id: str, valid_user_id: str
-    ):
+    def test_session_key_format(self, valid_matter_id: str, valid_user_id: str):
         """Test session key format."""
         key = session_key(valid_matter_id, valid_user_id, "messages")
         expected = f"session:{valid_matter_id}:{valid_user_id}:messages"
         assert key == expected
 
-    def test_session_key_types(
-        self, valid_matter_id: str, valid_user_id: str
-    ):
+    def test_session_key_types(self, valid_matter_id: str, valid_user_id: str):
         """Test all session key types."""
         for key_type in ["messages", "entities", "context", "metadata"]:
             key = session_key(valid_matter_id, valid_user_id, key_type)
             assert key.endswith(f":{key_type}")
 
-    def test_cache_key_format(
-        self, valid_matter_id: str, valid_query_hash: str
-    ):
+    def test_cache_key_format(self, valid_matter_id: str, valid_query_hash: str):
         """Test cache key format."""
         key = cache_key(valid_matter_id, valid_query_hash)
         expected = f"cache:query:{valid_matter_id}:{valid_query_hash}"
@@ -306,6 +301,7 @@ class TestRedisKeyPrefixIsolation:
 # =============================================================================
 # Layer 4 Tests: API Middleware Validation
 # =============================================================================
+
 
 class TestAPIMiddlewareValidation:
     """Test Layer 4: API middleware validation."""
@@ -453,6 +449,7 @@ class TestAPIMiddlewareValidation:
 # Cross-Layer Integration Tests
 # =============================================================================
 
+
 class TestCrossLayerIntegration:
     """Test integration between all security layers."""
 
@@ -499,11 +496,14 @@ class TestCrossLayerIntegration:
 # Audit Logging Tests
 # =============================================================================
 
+
 class TestAuditLogging:
     """Test audit logging for security events."""
 
     @pytest.mark.asyncio
-    async def test_log_matter_access_granted(self, valid_matter_id: str, valid_user_id: str):
+    async def test_log_matter_access_granted(
+        self, valid_matter_id: str, valid_user_id: str
+    ):
         """Test logging successful access."""
         with patch("app.api.deps.logger") as mock_logger:
             await log_matter_access(
@@ -520,7 +520,9 @@ class TestAuditLogging:
             assert call_kwargs["result"] == "granted"
 
     @pytest.mark.asyncio
-    async def test_log_matter_access_denied(self, valid_matter_id: str, valid_user_id: str):
+    async def test_log_matter_access_denied(
+        self, valid_matter_id: str, valid_user_id: str
+    ):
         """Test logging denied access."""
         with patch("app.api.deps.logger") as mock_logger:
             await log_matter_access(

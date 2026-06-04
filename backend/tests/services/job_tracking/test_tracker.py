@@ -28,11 +28,13 @@ from app.services.job_tracking.tracker import (
 @pytest.fixture
 def mock_supabase_response():
     """Create a mock Supabase response."""
+
     def _create(data: list[dict] | None = None, count: int | None = None):
         response = MagicMock()
         response.data = data
         response.count = count
         return response
+
     return _create
 
 
@@ -82,7 +84,9 @@ def sample_stage_row() -> dict[str, Any]:
 @pytest.fixture
 def tracker():
     """Create a JobTrackingService with mocked client."""
-    with patch("app.services.job_tracking.tracker.get_supabase_client") as mock_get_client:
+    with patch(
+        "app.services.job_tracking.tracker.get_supabase_client"
+    ) as mock_get_client:
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         service = JobTrackingService()
@@ -122,15 +126,17 @@ class TestDBRowConversion:
         self, tracker: JobTrackingService, sample_job_row: dict
     ) -> None:
         """Should handle job row with all optional fields populated."""
-        sample_job_row.update({
-            "current_stage": "chunking",
-            "completed_stages": 3,
-            "progress_pct": 42,
-            "estimated_completion": "2026-01-12T11:00:00Z",
-            "error_message": "Test error",
-            "error_code": "TEST_ERROR",
-            "started_at": "2026-01-12T10:05:00Z",
-        })
+        sample_job_row.update(
+            {
+                "current_stage": "chunking",
+                "completed_stages": 3,
+                "progress_pct": 42,
+                "estimated_completion": "2026-01-12T11:00:00Z",
+                "error_message": "Test error",
+                "error_code": "TEST_ERROR",
+                "started_at": "2026-01-12T10:05:00Z",
+            }
+        )
 
         job = tracker._db_row_to_processing_job(sample_job_row)
 
@@ -146,14 +152,16 @@ class TestDBRowConversion:
         self, tracker: JobTrackingService, sample_job_row: dict
     ) -> None:
         """Should handle null values with sensible defaults."""
-        sample_job_row.update({
-            "total_stages": None,
-            "completed_stages": None,
-            "progress_pct": None,
-            "retry_count": None,
-            "max_retries": None,
-            "metadata": None,
-        })
+        sample_job_row.update(
+            {
+                "total_stages": None,
+                "completed_stages": None,
+                "progress_pct": None,
+                "retry_count": None,
+                "max_retries": None,
+                "metadata": None,
+            }
+        )
 
         job = tracker._db_row_to_processing_job(sample_job_row)
 
@@ -198,7 +206,9 @@ class TestJobCreation:
         """Should create job with required fields."""
         # Mock the insert operation
         mock_table = MagicMock()
-        mock_table.insert.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_table.insert.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         tracker._client.table.return_value = mock_table
 
         with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())):
@@ -225,7 +235,9 @@ class TestJobCreation:
         sample_job_row["metadata"] = {"custom": "data"}
 
         mock_table = MagicMock()
-        mock_table.insert.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_table.insert.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         tracker._client.table.return_value = mock_table
 
         with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())):
@@ -252,12 +264,14 @@ class TestJobCreation:
         mock_table.insert.return_value.execute.return_value = mock_supabase_response([])
         tracker._client.table.return_value = mock_table
 
-        with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())):
-            with pytest.raises(JobTrackingError) as exc_info:
-                await tracker.create_job(
-                    matter_id="matter-456",
-                    job_type=JobType.DOCUMENT_PROCESSING,
-                )
+        with (
+            patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())),
+            pytest.raises(JobTrackingError) as exc_info,
+        ):
+            await tracker.create_job(
+                matter_id="matter-456",
+                job_type=JobType.DOCUMENT_PROCESSING,
+            )
 
         assert "Failed to create job" in str(exc_info.value)
 
@@ -281,7 +295,9 @@ class TestJobRetrieval:
         mock_table = MagicMock()
         mock_query = MagicMock()
         mock_query.eq.return_value = mock_query
-        mock_query.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_query.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_query
         tracker._client.table.return_value = mock_table
 
@@ -321,7 +337,9 @@ class TestJobRetrieval:
         mock_table = MagicMock()
         mock_query = MagicMock()
         mock_query.eq.return_value = mock_query
-        mock_query.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_query.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_query
         tracker._client.table.return_value = mock_table
 
@@ -423,7 +441,9 @@ class TestStageHistory:
     ) -> None:
         """Should record stage start."""
         mock_table = MagicMock()
-        mock_table.insert.return_value.execute.return_value = mock_supabase_response([sample_stage_row])
+        mock_table.insert.return_value.execute.return_value = mock_supabase_response(
+            [sample_stage_row]
+        )
         tracker._client.table.return_value = mock_table
 
         with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())):
@@ -454,7 +474,9 @@ class TestStageHistory:
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
         mock_select.order.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_stage_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_stage_row]
+        )
         mock_table.select.return_value = mock_select
 
         mock_update = MagicMock()
@@ -492,7 +514,9 @@ class TestStageHistory:
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
         mock_select.order.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_stage_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_stage_row]
+        )
         mock_table.select.return_value = mock_select
 
         mock_update = MagicMock()
@@ -521,14 +545,26 @@ class TestStageHistory:
         """Should retrieve all stage history for a job."""
         stages = [
             {**sample_stage_row, "stage_name": "ocr", "status": "COMPLETED"},
-            {**sample_stage_row, "id": "stage-124", "stage_name": "validation", "status": "COMPLETED"},
-            {**sample_stage_row, "id": "stage-125", "stage_name": "chunking", "status": "IN_PROGRESS"},
+            {
+                **sample_stage_row,
+                "id": "stage-124",
+                "stage_name": "validation",
+                "status": "COMPLETED",
+            },
+            {
+                **sample_stage_row,
+                "id": "stage-125",
+                "stage_name": "chunking",
+                "status": "IN_PROGRESS",
+            },
         ]
 
         mock_table = MagicMock()
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.order.return_value.execute.return_value = mock_supabase_response(stages)
+        mock_select.order.return_value.execute.return_value = mock_supabase_response(
+            stages
+        )
         mock_table.select.return_value = mock_select
         tracker._client.table.return_value = mock_table
 
@@ -571,7 +607,9 @@ class TestRetryAndCancel:
         # Mock get_job
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_select
 
         # Mock update
@@ -603,7 +641,9 @@ class TestRetryAndCancel:
         mock_table = MagicMock()
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_select
         tracker._client.table.return_value = mock_table
 
@@ -632,7 +672,9 @@ class TestRetryAndCancel:
         # Mock get_job
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_select
 
         # Mock update
@@ -663,7 +705,9 @@ class TestRetryAndCancel:
         mock_table = MagicMock()
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_select
         tracker._client.table.return_value = mock_table
 
@@ -692,7 +736,9 @@ class TestRetryAndCancel:
         # Mock get_job
         mock_select = MagicMock()
         mock_select.eq.return_value = mock_select
-        mock_select.limit.return_value.execute.return_value = mock_supabase_response([sample_job_row])
+        mock_select.limit.return_value.execute.return_value = mock_supabase_response(
+            [sample_job_row]
+        )
         mock_table.select.return_value = mock_select
 
         # Mock update
@@ -764,7 +810,9 @@ class TestServiceFactory:
         # Clear the cache first
         get_job_tracking_service.cache_clear()
 
-        with patch("app.services.job_tracking.tracker.get_supabase_client") as mock_get_client:
+        with patch(
+            "app.services.job_tracking.tracker.get_supabase_client"
+        ) as mock_get_client:
             mock_get_client.return_value = MagicMock()
 
             service1 = get_job_tracking_service()

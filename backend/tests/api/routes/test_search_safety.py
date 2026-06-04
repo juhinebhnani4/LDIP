@@ -77,7 +77,9 @@ def create_mock_search_result(matter_id: str) -> SearchResult:
     )
 
 
-def create_mock_matter_service(role: MatterRole | None = MatterRole.VIEWER) -> MagicMock:
+def create_mock_matter_service(
+    role: MatterRole | None = MatterRole.VIEWER,
+) -> MagicMock:
     """Create a mock matter service for testing."""
     mock_service = MagicMock()
     mock_service.get_user_role.return_value = role
@@ -145,8 +147,12 @@ class TestSearchSafetyHybrid:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -174,7 +180,9 @@ class TestSearchSafetyHybrid:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
         app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_llm
 
         try:
@@ -192,7 +200,10 @@ class TestSearchSafetyHybrid:
             assert response.status_code == 400
             data = response.json()
             assert data["error"]["code"] == "SAFETY_VIOLATION"
-            assert data["error"]["details"]["violation_type"] == "implicit_conclusion_request"
+            assert (
+                data["error"]["details"]["violation_type"]
+                == "implicit_conclusion_request"
+            )
         finally:
             app.dependency_overrides.clear()
 
@@ -212,7 +223,9 @@ class TestSearchSafetyHybrid:
         mock_search_service.search = AsyncMock(return_value=mock_result)
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
         app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_safe
 
         try:
@@ -248,8 +261,12 @@ class TestSearchSafetyBM25:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -279,8 +296,12 @@ class TestSearchSafetySemantic:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -310,8 +331,12 @@ class TestSearchSafetyRerank:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -341,8 +366,12 @@ class TestSearchSafetyAliasExpanded:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -372,8 +401,12 @@ class TestSearchSafetyResponseFormat:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
-        app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_regex
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
+        app.dependency_overrides[get_safety_guard] = (
+            create_mock_safety_guard_unsafe_regex
+        )
 
         try:
             token = create_test_token()
@@ -401,7 +434,9 @@ class TestSearchSafetyResponseFormat:
         matter_id = "550e8400-e29b-41d4-a716-446655440000"
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
         app.dependency_overrides[get_safety_guard] = create_mock_safety_guard_unsafe_llm
 
         try:

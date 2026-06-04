@@ -254,6 +254,7 @@ def get_query_history_store(db_client: Any = None) -> QueryHistoryStore:
         if _query_history_store._db is None:
             try:
                 from app.services.supabase.client import get_supabase_client
+
                 auto_client = get_supabase_client()
                 if auto_client:
                     _query_history_store._db = auto_client
@@ -266,6 +267,7 @@ def get_query_history_store(db_client: Any = None) -> QueryHistoryStore:
     if db_client is None:
         try:
             from app.services.supabase.client import get_supabase_client
+
             db_client = get_supabase_client()
         except Exception:
             pass

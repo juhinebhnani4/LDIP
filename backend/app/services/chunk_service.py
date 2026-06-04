@@ -126,7 +126,9 @@ class ChunkService:
                     "parent_chunk_id": None,
                     "content": chunk.content,
                     "page_number": chunk.page_number,
-                    "bbox_ids": [str(bid) for bid in chunk.bbox_ids] if chunk.bbox_ids else None,
+                    "bbox_ids": [str(bid) for bid in chunk.bbox_ids]
+                    if chunk.bbox_ids
+                    else None,
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
                     "layout_derived": chunk.layout_derived,
@@ -154,10 +156,14 @@ class ChunkService:
                     "matter_id": matter_id,
                     "document_id": document_id,
                     "chunk_index": chunk.chunk_index,
-                    "parent_chunk_id": str(chunk.parent_id) if chunk.parent_id else None,
+                    "parent_chunk_id": str(chunk.parent_id)
+                    if chunk.parent_id
+                    else None,
                     "content": chunk.content,
                     "page_number": chunk.page_number,
-                    "bbox_ids": [str(bid) for bid in chunk.bbox_ids] if chunk.bbox_ids else None,
+                    "bbox_ids": [str(bid) for bid in chunk.bbox_ids]
+                    if chunk.bbox_ids
+                    else None,
                     "token_count": chunk.token_count,
                     "chunk_type": chunk.chunk_type,
                     "layout_derived": chunk.layout_derived,
@@ -221,17 +227,24 @@ class ChunkService:
         try:
             # Delete children first (foreign key constraint)
             def _delete_children() -> Any:
-                return self.client.table("chunks").delete().eq(
-                    "document_id", document_id
-                ).eq("chunk_type", "child").execute()
+                return (
+                    self.client.table("chunks")
+                    .delete()
+                    .eq("document_id", document_id)
+                    .eq("chunk_type", "child")
+                    .execute()
+                )
 
             await asyncio.to_thread(_delete_children)
 
             # Then delete parents
             def _delete_parents() -> Any:
-                return self.client.table("chunks").delete().eq(
-                    "document_id", document_id
-                ).execute()
+                return (
+                    self.client.table("chunks")
+                    .delete()
+                    .eq("document_id", document_id)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_delete_parents)
 
@@ -274,6 +287,7 @@ class ChunkService:
             return 0
 
         try:
+
             def _count() -> int:
                 query = (
                     self.client.table("chunks")
@@ -332,7 +346,9 @@ class ChunkService:
 
             result = query.execute()
 
-            chunks = [self._parse_chunk_with_content(row) for row in (result.data or [])]
+            chunks = [
+                self._parse_chunk_with_content(row) for row in (result.data or [])
+            ]
 
             # Count parents and children
             parent_count = sum(1 for c in chunks if c.chunk_type == ChunkType.PARENT)
@@ -372,10 +388,7 @@ class ChunkService:
 
         try:
             result = (
-                self.client.table("chunks")
-                .select("*")
-                .eq("id", chunk_id)
-                .execute()
+                self.client.table("chunks").select("*").eq("id", chunk_id).execute()
             )
 
             if not result.data:
@@ -626,9 +639,7 @@ class ChunkService:
             page_number=row.get("page_number"),
             bbox_ids=row.get("bbox_ids"),
             entity_ids=row.get("entity_ids"),
-            created_at=datetime.fromisoformat(
-                row["created_at"].replace("Z", "+00:00")
-            ),
+            created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
         )
 
     def _parse_chunk_with_content(self, row: dict[str, Any]) -> ChunkWithContent:
@@ -673,6 +684,7 @@ def cache_chunks_to_redis(document_id: str, chunks: list[dict]) -> bool:
         True if cached successfully, False on skip/error.
     """
     from app.core.config import get_settings
+
     settings = get_settings()
 
     if not settings.shared_chunk_cache_enabled:
@@ -683,6 +695,7 @@ def cache_chunks_to_redis(document_id: str, chunks: list[dict]) -> bool:
         import json
 
         from app.services.distributed_lock import get_sync_redis_client
+
         redis_client = get_sync_redis_client()
         if redis_client is None:
             return False
@@ -718,7 +731,9 @@ def cache_chunks_to_redis(document_id: str, chunks: list[dict]) -> bool:
         return True
 
     except Exception as e:
-        logger.debug("shared_chunk_cache_write_error", document_id=document_id, error=str(e))
+        logger.debug(
+            "shared_chunk_cache_write_error", document_id=document_id, error=str(e)
+        )
         return False
 
 
@@ -736,6 +751,7 @@ def get_cached_chunks(
         List of chunk dicts if cache hit, None on miss/error.
     """
     from app.core.config import get_settings
+
     settings = get_settings()
 
     if not settings.shared_chunk_cache_enabled:
@@ -746,6 +762,7 @@ def get_cached_chunks(
         import json
 
         from app.services.distributed_lock import get_sync_redis_client
+
         redis_client = get_sync_redis_client()
         if redis_client is None:
             return None
@@ -775,7 +792,9 @@ def get_cached_chunks(
         return chunks
 
     except Exception as e:
-        logger.debug("shared_chunk_cache_read_error", document_id=document_id, error=str(e))
+        logger.debug(
+            "shared_chunk_cache_read_error", document_id=document_id, error=str(e)
+        )
         return None
 
 

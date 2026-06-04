@@ -70,6 +70,7 @@ class VoyageEmbeddingService:
             if not self._api_key:
                 raise RuntimeError("Voyage API key not configured")
             import voyageai
+
             self._client = voyageai.Client(api_key=self._api_key)
         return self._client
 
@@ -84,18 +85,26 @@ class VoyageEmbeddingService:
             if cached:
                 return json.loads(cached)
         except Exception as e:
-            logger.warning("voyage_embedding_cache_get_failed", cache_key=cache_key, error=str(e))
+            logger.warning(
+                "voyage_embedding_cache_get_failed", cache_key=cache_key, error=str(e)
+            )
         return None
 
     async def _cache_embedding(self, cache_key: str, embedding: list[float]) -> None:
         if self._redis is None:
             return
         try:
-            await self._redis.setex(cache_key, EMBEDDING_CACHE_TTL, json.dumps(embedding))
+            await self._redis.setex(
+                cache_key, EMBEDDING_CACHE_TTL, json.dumps(embedding)
+            )
         except Exception as e:
-            logger.warning("voyage_embedding_cache_set_failed", cache_key=cache_key, error=str(e))
+            logger.warning(
+                "voyage_embedding_cache_set_failed", cache_key=cache_key, error=str(e)
+            )
 
-    async def embed_text(self, text: str, matter_id: str | None = None) -> list[float] | None:
+    async def embed_text(
+        self, text: str, matter_id: str | None = None
+    ) -> list[float] | None:
         """Generate embedding for single text with circuit breaker protection.
 
         Args:
@@ -142,7 +151,9 @@ class VoyageEmbeddingService:
             )
             return None
 
-    def _do_embed(self, texts: list[str], input_type: str = "query") -> list[list[float]]:
+    def _do_embed(
+        self, texts: list[str], input_type: str = "query"
+    ) -> list[list[float]]:
         """Execute synchronous Voyage embedding API call."""
         result = self.client.embed(
             texts=texts,
@@ -151,9 +162,13 @@ class VoyageEmbeddingService:
         )
         return result.embeddings
 
-    @with_circuit_breaker(CircuitService.VOYAGE_EMBEDDINGS, timeout_override=VOYAGE_EMBED_TIMEOUT_SECONDS)
+    @with_circuit_breaker(
+        CircuitService.VOYAGE_EMBEDDINGS, timeout_override=VOYAGE_EMBED_TIMEOUT_SECONDS
+    )
     async def _call_voyage_embedding(
-        self, text: str, matter_id: str | None = None,
+        self,
+        text: str,
+        matter_id: str | None = None,
     ) -> list[float]:
         """Call Voyage API with circuit breaker protection for single text."""
         tracker = CostTracker(
@@ -162,7 +177,9 @@ class VoyageEmbeddingService:
             matter_id=matter_id,
         )
         embeddings = await asyncio.to_thread(
-            self._do_embed, [text], "query",
+            self._do_embed,
+            [text],
+            "query",
         )
         # Voyage charges per token, estimate ~1 token per 4 chars
         estimated_tokens = max(1, len(text) // 4)
@@ -190,7 +207,9 @@ class VoyageEmbeddingService:
             List of embeddings (or None for empty texts).
         """
         if len(texts) > VOYAGE_MAX_BATCH_SIZE:
-            raise ValueError(f"Batch size {len(texts)} exceeds max {VOYAGE_MAX_BATCH_SIZE}")
+            raise ValueError(
+                f"Batch size {len(texts)} exceeds max {VOYAGE_MAX_BATCH_SIZE}"
+            )
 
         valid_indices: list[int] = []
         valid_texts: list[str] = []
@@ -207,7 +226,9 @@ class VoyageEmbeddingService:
 
         try:
             embeddings = await self._call_voyage_batch_embedding(
-                valid_texts, input_type=input_type, matter_id=matter_id,
+                valid_texts,
+                input_type=input_type,
+                matter_id=matter_id,
             )
 
             results: list[list[float] | None] = [None] * len(texts)
@@ -240,7 +261,9 @@ class VoyageEmbeddingService:
             )
             return [None] * len(texts)
 
-    @with_circuit_breaker(CircuitService.VOYAGE_EMBEDDINGS, timeout_override=VOYAGE_EMBED_TIMEOUT_SECONDS)
+    @with_circuit_breaker(
+        CircuitService.VOYAGE_EMBEDDINGS, timeout_override=VOYAGE_EMBED_TIMEOUT_SECONDS
+    )
     async def _call_voyage_batch_embedding(
         self,
         texts: list[str],
@@ -254,7 +277,9 @@ class VoyageEmbeddingService:
             matter_id=matter_id,
         )
         embeddings = await asyncio.to_thread(
-            self._do_embed, texts, input_type,
+            self._do_embed,
+            texts,
+            input_type,
         )
         # Estimate tokens
         estimated_tokens = sum(max(1, len(t) // 4) for t in texts)
@@ -281,6 +306,7 @@ def get_voyage_embedding_service() -> VoyageEmbeddingService:
     redis_client = None
     try:
         import redis.asyncio as aioredis
+
         from app.core.config import get_settings
 
         settings = get_settings()
@@ -293,5 +319,7 @@ def get_voyage_embedding_service() -> VoyageEmbeddingService:
             error=str(e),
         )
 
-    _voyage_embedding_service_instance = VoyageEmbeddingService(redis_client=redis_client)
+    _voyage_embedding_service_instance = VoyageEmbeddingService(
+        redis_client=redis_client
+    )
     return _voyage_embedding_service_instance

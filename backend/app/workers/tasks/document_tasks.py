@@ -17,6 +17,7 @@ import contextlib
 import structlog
 from celery.exceptions import Ignore, MaxRetriesExceededError, SoftTimeLimitExceeded
 
+from app.core.config import get_settings
 from app.engines.citation import (
     CitationExtractor,
     CitationExtractorError,
@@ -25,7 +26,12 @@ from app.engines.citation import (
     get_citation_storage_service,
 )
 from app.models.activity import ActivityTypeEnum
+from app.models.contradiction import (
+    ComparisonResult,
+    EntityComparisonsResponse,
+)
 from app.models.document import DocumentStatus
+from app.models.entity import EntityEdgeCreate
 from app.models.job import JobStatus, JobType
 from app.models.ocr_validation import CorrectionType, ValidationStatus
 from app.services.activity_service import (
@@ -46,19 +52,17 @@ from app.services.chunking.spatial_text_mapper import (
     enrich_layout_with_text,
     fetch_all_bboxes_for_document,
 )
-from app.services.table_extraction.layout_extractor import (
-    LayoutExtractor,
-    LayoutExtractorError,
-    get_layout_extractor,
+from app.services.contradiction import (
+    StatementComparisonService,
+    get_statement_comparison_service,
 )
-from app.services.table_extraction.models import DocumentLayout
+from app.services.contradiction.comparator import ComparisonServiceError
 from app.services.document_service import (
     DocumentService,
     DocumentServiceError,
     get_document_service,
 )
 from app.services.eta_calculator import get_eta_calculator
-from app.core.config import get_settings
 from app.services.job_tracking import (
     JobTrackingService,
     create_progress_tracker,
@@ -75,7 +79,6 @@ from app.services.mig import (
 )
 from app.services.mig.entity_resolver import AliasResolutionError
 from app.services.mig.extractor import MIGExtractorError
-from app.models.entity import EntityEdgeCreate
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -97,11 +100,13 @@ from app.services.ocr.validation_extractor import (
     ValidationExtractorError,
     get_validation_extractor,
 )
+from app.services.ocr_chunk_service import get_ocr_chunk_service
+from app.services.pdf_chunker import CHUNK_THRESHOLD
+from app.services.pdf_router import CHUNK_SIZE
 from app.services.pubsub_service import (
     FeatureType,
     broadcast_document_status,
     broadcast_entity_discovery,
-    broadcast_entity_streaming,
     broadcast_feature_ready,
     broadcast_job_progress,
     broadcast_job_status_change,
@@ -118,19 +123,11 @@ from app.services.storage_service import (
     get_storage_service,
 )
 from app.services.summary_service import get_summary_service
-from app.services.pdf_chunker import get_pdf_chunker, CHUNK_THRESHOLD
-from app.services.pdf_router import CHUNK_SIZE
-from app.services.ocr_chunk_service import get_ocr_chunk_service
-from app.services.contradiction import (
-    StatementComparisonService,
-    get_statement_comparison_service,
+from app.services.table_extraction.layout_extractor import (
+    LayoutExtractorError,
+    get_layout_extractor,
 )
-from app.services.contradiction.comparator import ComparisonServiceError
-from app.models.contradiction import (
-    ComparisonResult,
-    StatementPairComparison,
-    EntityComparisonsResponse,
-)
+from app.services.table_extraction.models import DocumentLayout
 from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
@@ -183,6 +180,7 @@ def _get_pdf_page_count(pdf_content: bytes, document_id: str) -> int:
         OCRServiceError: If PDF cannot be parsed.
     """
     from io import BytesIO
+
     import pypdf
 
     try:
@@ -416,9 +414,7 @@ def _update_job_stage_start(
 
         # Update estimated completion if available
         if estimated_completion:
-            _run_async(
-                tracker.set_estimated_completion(job_id, estimated_completion)
-            )
+            _run_async(tracker.set_estimated_completion(job_id, estimated_completion))
 
         # Broadcast progress
         if matter_id:
@@ -488,14 +484,14 @@ def _update_job_stage_complete(
 
             # Use MAX to prevent regression from parallel stage completion
             # e.g., citation_extraction (idx 7) completing before alias_resolution (idx 6)
-            current_stages = getattr(job, 'completed_stages', 0) or 0
+            current_stages = getattr(job, "completed_stages", 0) or 0
             if new_completed_stages is not None:
                 completed_stages = max(current_stages, new_completed_stages)
             else:
                 completed_stages = current_stages
 
             # Also prevent progress_pct regression (stages not in time_estimator return 0)
-            current_pct = getattr(job, 'progress_pct', 0) or 0
+            current_pct = getattr(job, "progress_pct", 0) or 0
             progress_pct = max(current_pct, progress_pct)
 
             update = ProcessingJobUpdate(
@@ -667,6 +663,7 @@ def _release_pipeline_lock_safe(document_id: str) -> None:
         return
     try:
         from app.services.distributed_lock import PipelineLock
+
         PipelineLock(document_id).release()
     except Exception as e:
         logger.warning(
@@ -685,9 +682,9 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
     Creates a `findings` row for each contradiction/failed citation first (FK requirement),
     then creates the `finding_verifications` record pointing to that `findings` row.
     """
+    from app.models.verification import FindingVerificationCreate
     from app.services.supabase.client import get_service_client
     from app.services.verification.verification_service import get_verification_service
-    from app.models.verification import FindingVerificationCreate
 
     try:
         client = get_service_client()
@@ -697,65 +694,79 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
         verification_service = get_verification_service()
 
         # 1. Fetch contradictions from statement_comparisons (include chunk refs for source tracking)
-        contradictions = client.table("statement_comparisons") \
-            .select("id, explanation, confidence, statement_a_id, statement_b_id") \
-            .eq("matter_id", matter_id) \
-            .eq("result", "contradiction") \
+        contradictions = (
+            client.table("statement_comparisons")
+            .select("id, explanation, confidence, statement_a_id, statement_b_id")
+            .eq("matter_id", matter_id)
+            .eq("result", "contradiction")
             .execute()
+        )
 
         # 1b. Resolve chunk IDs → document_id + page_number for source references
         chunk_ids_needed: set[str] = set()
-        for row in (contradictions.data or []):
+        for row in contradictions.data or []:
             chunk_ids_needed.add(row["statement_a_id"])
             chunk_ids_needed.add(row["statement_b_id"])
 
         chunk_info: dict[str, dict] = {}  # chunk id -> {document_id, page_number}
         if chunk_ids_needed:
-            chunks_result = client.table("chunks") \
-                .select("id, document_id, page_number") \
-                .in_("id", list(chunk_ids_needed)) \
+            chunks_result = (
+                client.table("chunks")
+                .select("id, document_id, page_number")
+                .in_("id", list(chunk_ids_needed))
                 .execute()
-            for c in (chunks_result.data or []):
+            )
+            for c in chunks_result.data or []:
                 chunk_info[c["id"]] = {
                     "document_id": c.get("document_id"),
                     "page_number": c.get("page_number"),
                 }
 
         # 2. Fetch failed citations from citations
-        failed_citations = client.table("citations") \
-            .select("id, raw_citation_text, confidence, verification_status") \
-            .eq("matter_id", matter_id) \
-            .in_("verification_status", ["mismatch", "section_not_found"]) \
+        failed_citations = (
+            client.table("citations")
+            .select("id, raw_citation_text, confidence, verification_status")
+            .eq("matter_id", matter_id)
+            .in_("verification_status", ["mismatch", "section_not_found"])
             .execute()
+        )
 
         # 3. Get existing findings (by source_id in content JSONB) to skip duplicates on re-runs
-        existing_findings = client.table("findings") \
-            .select("id, content") \
-            .eq("matter_id", matter_id) \
-            .in_("engine_type", ["contradiction", "citation"]) \
+        existing_findings = (
+            client.table("findings")
+            .select("id, content")
+            .eq("matter_id", matter_id)
+            .in_("engine_type", ["contradiction", "citation"])
             .execute()
+        )
 
         # Build set of source IDs that already have findings rows
         existing_source_ids: set[str] = set()
         finding_id_by_source: dict[str, str] = {}
-        for f in (existing_findings.data or []):
+        for f in existing_findings.data or []:
             content = f.get("content") or {}
-            src_id = content.get("statement_comparison_id") or content.get("citation_id")
+            src_id = content.get("statement_comparison_id") or content.get(
+                "citation_id"
+            )
             if src_id:
                 existing_source_ids.add(src_id)
                 finding_id_by_source[src_id] = f["id"]
 
         # 4. Get existing finding_verifications to skip duplicates
-        existing_verifications = client.table("finding_verifications") \
-            .select("finding_id") \
-            .eq("matter_id", matter_id) \
+        existing_verifications = (
+            client.table("finding_verifications")
+            .select("finding_id")
+            .eq("matter_id", matter_id)
             .execute()
-        existing_verification_finding_ids = {r["finding_id"] for r in (existing_verifications.data or [])}
+        )
+        existing_verification_finding_ids = {
+            r["finding_id"] for r in (existing_verifications.data or [])
+        }
 
         # 5. Create findings rows and build verification records
         records_to_create: list[FindingVerificationCreate] = []
 
-        for row in (contradictions.data or []):
+        for row in contradictions.data or []:
             source_id = row["id"]
 
             # Create findings row if not already exists
@@ -766,7 +777,10 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
                     # Resolve source document IDs and pages from chunks
                     source_doc_ids: list[str] = []
                     source_pages: list[int] = []
-                    for chunk_id in [row.get("statement_a_id"), row.get("statement_b_id")]:
+                    for chunk_id in [
+                        row.get("statement_a_id"),
+                        row.get("statement_b_id"),
+                    ]:
                         info = chunk_info.get(chunk_id, {})
                         if info.get("document_id"):
                             source_doc_ids.append(info["document_id"])
@@ -789,9 +803,9 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
                     if source_pages:
                         finding_data["source_pages"] = source_pages
 
-                    finding_result = client.table("findings").insert(
-                        finding_data
-                    ).execute()
+                    finding_result = (
+                        client.table("findings").insert(finding_data).execute()
+                    )
                     if finding_result.data:
                         finding_id = finding_result.data[0]["id"]
                         finding_id_by_source[source_id] = finding_id
@@ -808,33 +822,45 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             if not finding_id or finding_id in existing_verification_finding_ids:
                 continue
 
-            records_to_create.append(FindingVerificationCreate(
-                matter_id=matter_id,
-                finding_id=finding_id,
-                finding_type="contradiction_detected",
-                finding_summary=(row.get("explanation") or "Contradiction between statements")[:500],
-                confidence_before=row.get("confidence") or 50.0,
-            ))
+            records_to_create.append(
+                FindingVerificationCreate(
+                    matter_id=matter_id,
+                    finding_id=finding_id,
+                    finding_type="contradiction_detected",
+                    finding_summary=(
+                        row.get("explanation") or "Contradiction between statements"
+                    )[:500],
+                    confidence_before=row.get("confidence") or 50.0,
+                )
+            )
 
-        for row in (failed_citations.data or []):
+        for row in failed_citations.data or []:
             source_id = row["id"]
 
             # Create findings row if not already exists
             if source_id not in existing_source_ids:
                 try:
                     confidence_raw = row.get("confidence") or 60.0
-                    finding_result = client.table("findings").insert({
-                        "matter_id": matter_id,
-                        "engine_type": "citation",
-                        "finding_type": "citation_verification_failed",
-                        "content": {
-                            "citation_id": source_id,
-                            "raw_citation_text": row.get("raw_citation_text"),
-                            "verification_status": row.get("verification_status"),
-                        },
-                        "confidence": min(confidence_raw / 100.0, 1.0),
-                        "status": "pending",
-                    }).execute()
+                    finding_result = (
+                        client.table("findings")
+                        .insert(
+                            {
+                                "matter_id": matter_id,
+                                "engine_type": "citation",
+                                "finding_type": "citation_verification_failed",
+                                "content": {
+                                    "citation_id": source_id,
+                                    "raw_citation_text": row.get("raw_citation_text"),
+                                    "verification_status": row.get(
+                                        "verification_status"
+                                    ),
+                                },
+                                "confidence": min(confidence_raw / 100.0, 1.0),
+                                "status": "pending",
+                            }
+                        )
+                        .execute()
+                    )
                     if finding_result.data:
                         finding_id = finding_result.data[0]["id"]
                         finding_id_by_source[source_id] = finding_id
@@ -851,13 +877,18 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
             if not finding_id or finding_id in existing_verification_finding_ids:
                 continue
 
-            records_to_create.append(FindingVerificationCreate(
-                matter_id=matter_id,
-                finding_id=finding_id,
-                finding_type="citation_verification_failed",
-                finding_summary=(row.get("raw_citation_text") or f"Citation {row.get('verification_status', 'issue')}")[:500],
-                confidence_before=row.get("confidence") or 60.0,
-            ))
+            records_to_create.append(
+                FindingVerificationCreate(
+                    matter_id=matter_id,
+                    finding_id=finding_id,
+                    finding_type="citation_verification_failed",
+                    finding_summary=(
+                        row.get("raw_citation_text")
+                        or f"Citation {row.get('verification_status', 'issue')}"
+                    )[:500],
+                    confidence_before=row.get("confidence") or 60.0,
+                )
+            )
 
         if not records_to_create:
             logger.debug("verification_records_none_needed", matter_id=matter_id)
@@ -1057,7 +1088,9 @@ def _mark_job_completed(
                     import time
 
                     if processing_start_time:
-                        processing_time_ms = int((time.time() - processing_start_time) * 1000)
+                        processing_time_ms = int(
+                            (time.time() - processing_start_time) * 1000
+                        )
                     else:
                         # Fallback: estimate 3 seconds per page (conservative)
                         processing_time_ms = doc_page_count * 3000
@@ -1088,6 +1121,7 @@ def _mark_job_completed(
         if document_id:
             try:
                 from app.services.distributed_lock import PipelineLock
+
                 PipelineLock(document_id).release()
             except Exception as lock_err:
                 logger.warning(
@@ -1183,8 +1217,12 @@ def _check_batch_completion_and_notify(matter_id: str, completed_job_id: str) ->
 
         # Calculate statistics
         doc_count = len(completed_jobs.data)
-        success_count = sum(1 for j in completed_jobs.data if j["status"] == "COMPLETED")
-        failed_count = sum(1 for j in completed_jobs.data if j["status"] in ("FAILED", "SKIPPED"))
+        success_count = sum(
+            1 for j in completed_jobs.data if j["status"] == "COMPLETED"
+        )
+        failed_count = sum(
+            1 for j in completed_jobs.data if j["status"] in ("FAILED", "SKIPPED")
+        )
 
         if doc_count == 0:
             return
@@ -1506,9 +1544,9 @@ def _sync_entity_ids_to_chunks(document_id: str) -> int:
         updated_count = 0
         for chunk_id, entity_ids in chunk_entities.items():
             try:
-                client.table("chunks").update(
-                    {"entity_ids": list(entity_ids)}
-                ).eq("id", chunk_id).execute()
+                client.table("chunks").update({"entity_ids": list(entity_ids)}).eq(
+                    "id", chunk_id
+                ).execute()
                 updated_count += 1
             except Exception as e:
                 logger.warning(
@@ -1535,7 +1573,9 @@ def _sync_entity_ids_to_chunks(document_id: str) -> int:
         return 0
 
 
-def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLayout | None:
+def _extract_layout_for_chunking(
+    document_id: str, matter_id: str
+) -> DocumentLayout | None:
     """Extract document layout using Docling for layout-aware chunking.
 
     This function downloads the PDF and runs Docling's layout extraction
@@ -1551,12 +1591,13 @@ def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLa
     import tempfile
     from pathlib import Path
 
-    from app.services.storage_service import StorageService, get_storage_service
+    from app.services.storage_service import get_storage_service
     from app.services.supabase.client import get_service_client
 
     try:
         # Check if Docling is available before attempting layout extraction
         from app.services.table_extraction.docling_provider import get_docling_provider
+
         if not get_docling_provider().is_available():
             logger.warning(
                 "layout_extraction_docling_not_available",
@@ -1769,14 +1810,18 @@ def process_document(
             )
 
             # Create chunk records in database
-            _run_async(_create_chunk_records(
-                document_id=document_id,
-                matter_id=matter_id,
-                page_count=page_count,
-            ))
+            _run_async(
+                _create_chunk_records(
+                    document_id=document_id,
+                    matter_id=matter_id,
+                    page_count=page_count,
+                )
+            )
 
             # Import here to avoid circular dependency
-            from app.workers.tasks.chunked_document_tasks import process_document_chunked
+            from app.workers.tasks.chunked_document_tasks import (
+                process_document_chunked,
+            )
 
             # Dispatch to chunked processing task
             process_document_chunked.apply_async(
@@ -1906,15 +1951,12 @@ def process_document(
         )
 
         # Track stage failure for job tracking
-        _update_job_stage_failure(
-            job_id, "ocr", str(e), error_code, matter_id
-        )
+        _update_job_stage_failure(job_id, "ocr", str(e), error_code, matter_id)
 
         # Increment retry count in database
-        try:
+        with contextlib.suppress(DocumentServiceError):
+            # Don't fail the retry because of this
             doc_service.increment_ocr_retry_count(document_id)
-        except DocumentServiceError:
-            pass  # Don't fail the retry because of this
 
         # Check if we've exhausted retries
         # Note: matter_id may not be available if it failed before retrieval
@@ -2228,6 +2270,7 @@ def validate_ocr(
 
     # Stage 1.2: Pipeline deduplication — acquire lock to prevent duplicate runs
     from app.services.distributed_lock import PipelineLock
+
     pipeline_lock = PipelineLock(doc_id)
     if not pipeline_lock.acquire():
         logger.info(
@@ -2276,7 +2319,9 @@ def validate_ocr(
         _update_job_stage_start(job_id, "validation", matter_id)
 
         # Step 1: Extract low-confidence words
-        words_for_gemini, words_for_human = extractor.extract_low_confidence_words(doc_id)
+        words_for_gemini, words_for_human = extractor.extract_low_confidence_words(
+            doc_id
+        )
 
         total_low_confidence = len(words_for_gemini) + len(words_for_human)
 
@@ -2301,13 +2346,17 @@ def validate_ocr(
             }
 
         # Step 2: Apply pattern corrections first
-        pattern_results, remaining_for_gemini = apply_pattern_corrections(words_for_gemini)
+        pattern_results, remaining_for_gemini = apply_pattern_corrections(
+            words_for_gemini
+        )
 
         # Step 3: Validate remaining words with Gemini
         gemini_results = []
         if remaining_for_gemini:
             try:
-                gemini_results = gemini.validate_batch_sync(remaining_for_gemini, document_id=doc_id, matter_id=matter_id)
+                gemini_results = gemini.validate_batch_sync(
+                    remaining_for_gemini, document_id=doc_id, matter_id=matter_id
+                )
             except GeminiValidatorError as e:
                 logger.warning(
                     "validate_ocr_gemini_failed",
@@ -2346,11 +2395,13 @@ def validate_ocr(
 
         # Count corrections by type
         pattern_count = sum(
-            1 for r in all_results
+            1
+            for r in all_results
             if r.was_corrected and r.correction_type == CorrectionType.PATTERN
         )
         gemini_count = sum(
-            1 for r in all_results
+            1
+            for r in all_results
             if r.was_corrected and r.correction_type == CorrectionType.GEMINI
         )
 
@@ -2488,22 +2539,28 @@ def _apply_validation_results(
         try:
             # Update bounding box with corrected text
             if result.bbox_id:
-                client.table("bounding_boxes").update({
-                    "text": result.corrected,
-                    "confidence": result.new_confidence,
-                }).eq("id", result.bbox_id).execute()
+                client.table("bounding_boxes").update(
+                    {
+                        "text": result.corrected,
+                        "confidence": result.new_confidence,
+                    }
+                ).eq("id", result.bbox_id).execute()
 
             # Log the correction
-            client.table("ocr_validation_log").insert({
-                "document_id": document_id,
-                "bbox_id": result.bbox_id if result.bbox_id else None,
-                "original_text": result.original,
-                "corrected_text": result.corrected,
-                "old_confidence": result.old_confidence,
-                "new_confidence": result.new_confidence,
-                "validation_type": result.correction_type.value if result.correction_type else "pattern",
-                "reasoning": result.reasoning,
-            }).execute()
+            client.table("ocr_validation_log").insert(
+                {
+                    "document_id": document_id,
+                    "bbox_id": result.bbox_id if result.bbox_id else None,
+                    "original_text": result.original,
+                    "corrected_text": result.corrected,
+                    "old_confidence": result.old_confidence,
+                    "new_confidence": result.new_confidence,
+                    "validation_type": result.correction_type.value
+                    if result.correction_type
+                    else "pattern",
+                    "reasoning": result.reasoning,
+                }
+            ).execute()
 
             corrections_applied += 1
 
@@ -2537,9 +2594,11 @@ def _update_validation_status(
         return
 
     try:
-        client.table("documents").update({
-            "validation_status": status.value,
-        }).eq("id", document_id).execute()
+        client.table("documents").update(
+            {
+                "validation_status": status.value,
+            }
+        ).eq("id", document_id).execute()
     except Exception as e:
         logger.warning(
             "validate_ocr_status_update_failed",
@@ -2652,6 +2711,7 @@ def calculate_confidence(
 
     if not doc_id:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error("calculate_confidence_no_document_id")
         raise PipelineTaskError(
             "No document_id provided",
@@ -2728,6 +2788,7 @@ def calculate_confidence(
 
         if retry_count >= 2:
             from app.workers.tasks.pipeline_errors import PipelineTaskError
+
             logger.error(
                 "calculate_confidence_task_failed",
                 document_id=doc_id,
@@ -2743,12 +2804,13 @@ def calculate_confidence(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="confidence",
-            )
+            ) from e
 
         raise
 
     except DocumentServiceError as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "calculate_confidence_document_error",
             document_id=doc_id,
@@ -2764,10 +2826,11 @@ def calculate_confidence(
             document_id=doc_id,
             job_id=job_id,
             stage="confidence",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "calculate_confidence_unexpected_error",
             document_id=doc_id,
@@ -2775,7 +2838,9 @@ def calculate_confidence(
             error=str(e),
             error_type=type(e).__name__,
         )
-        _update_job_stage_failure(job_id, "confidence", str(e), "UNEXPECTED_ERROR", None)
+        _update_job_stage_failure(
+            job_id, "confidence", str(e), "UNEXPECTED_ERROR", None
+        )
         _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", None)
         _release_pipeline_lock_safe(doc_id)  # P8 fix: was missing
         raise PipelineTaskError(
@@ -2784,7 +2849,7 @@ def calculate_confidence(
             document_id=doc_id,
             job_id=job_id,
             stage="confidence",
-        )
+        ) from e
 
 
 @celery_app.task(
@@ -2983,13 +3048,10 @@ def chunk_document(
         # Layout-aware chunking: Extract layout structure if enabled
         settings = get_settings()
         layout: DocumentLayout | None = None
-        layout_used = False
-
         if settings.layout_aware_chunking_enabled:
             try:
                 layout = _extract_layout_for_chunking(doc_id, matter_id)
                 if layout and layout.success and layout.has_blocks:
-                    layout_used = True
                     logger.info(
                         "layout_extraction_for_chunking_success",
                         document_id=doc_id,
@@ -3032,7 +3094,9 @@ def chunk_document(
         # Create chunker and process document
         chunker = ParentChildChunker()
         result = chunker.chunk_document(
-            doc_id, doc.extracted_text, layout=layout,
+            doc_id,
+            doc.extracted_text,
+            layout=layout,
             document_context=doc.filename,
         )
 
@@ -3087,17 +3151,22 @@ def chunk_document(
         # This eliminates 2 extra Supabase reads per document
         try:
             from app.services.chunk_service import cache_chunks_to_redis
+
             # Build chunk dicts matching the format downstream tasks expect
             chunk_dicts = []
             for chunk_data in result.parent_chunks + result.child_chunks:
-                chunk_dicts.append({
-                    "id": str(chunk_data.id),
-                    "content": chunk_data.content,
-                    "chunk_type": chunk_data.chunk_type,
-                    "page_number": chunk_data.page_number,
-                    "chunk_index": chunk_data.chunk_index,
-                    "bbox_ids": [str(b) for b in chunk_data.bbox_ids] if chunk_data.bbox_ids else [],
-                })
+                chunk_dicts.append(
+                    {
+                        "id": str(chunk_data.id),
+                        "content": chunk_data.content,
+                        "chunk_type": chunk_data.chunk_type,
+                        "page_number": chunk_data.page_number,
+                        "chunk_index": chunk_data.chunk_index,
+                        "bbox_ids": [str(b) for b in chunk_data.bbox_ids]
+                        if chunk_data.bbox_ids
+                        else [],
+                    }
+                )
             cache_chunks_to_redis(doc_id, chunk_dicts)
         except Exception as e:
             logger.debug("shared_chunk_cache_after_chunking_error", error=str(e))
@@ -3140,6 +3209,7 @@ def chunk_document(
 
         if retry_count >= 2:
             from app.workers.tasks.pipeline_errors import PipelineTaskError
+
             logger.error(
                 "chunk_document_task_failed",
                 document_id=doc_id,
@@ -3155,12 +3225,13 @@ def chunk_document(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="chunking",
-            )
+            ) from e
 
         raise
 
     except DocumentServiceError as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "chunk_document_document_error",
             document_id=doc_id,
@@ -3176,10 +3247,11 @@ def chunk_document(
             document_id=doc_id,
             job_id=job_id,
             stage="chunking",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "chunk_document_unexpected_error",
             document_id=doc_id,
@@ -3196,7 +3268,7 @@ def chunk_document(
             document_id=doc_id,
             job_id=job_id,
             stage="chunking",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -3240,7 +3312,6 @@ def link_chunks_to_bboxes_task(
     )
 
     # Use injected services or get defaults
-    chunks_service = chunk_service or get_chunk_service()
     bbox_service = bounding_box_service or get_bounding_box_service()
 
     try:
@@ -3256,7 +3327,9 @@ def link_chunks_to_bboxes_task(
             # token_count, text_start_offset, text_end_offset
             result = (
                 client.table("chunks")
-                .select("id, content, chunk_index, parent_chunk_id, chunk_type, page_number, token_count, text_start_offset, text_end_offset")
+                .select(
+                    "id, content, chunk_index, parent_chunk_id, chunk_type, page_number, token_count, text_start_offset, text_end_offset"
+                )
                 .eq("document_id", document_id)
                 .execute()
             )
@@ -3275,7 +3348,9 @@ def link_chunks_to_bboxes_task(
                     content=row["content"],
                     chunk_type=row.get("chunk_type", "parent"),
                     chunk_index=row.get("chunk_index", 0),
-                    parent_id=_UUID(row["parent_chunk_id"]) if row.get("parent_chunk_id") else None,
+                    parent_id=_UUID(row["parent_chunk_id"])
+                    if row.get("parent_chunk_id")
+                    else None,
                     token_count=row.get("token_count", 0),
                     page_number=row.get("page_number"),
                     text_start_offset=row.get("text_start_offset"),
@@ -3474,7 +3549,9 @@ def embed_chunks(
             job_id = _lookup_job_id_for_document(doc_id)
 
         # IDEMPOTENCY CHECK: Skip if embedding is already complete
-        is_embedding_complete, total_chunks, embedded_chunks = _check_embedding_complete(doc_id)
+        is_embedding_complete, total_chunks, embedded_chunks = (
+            _check_embedding_complete(doc_id)
+        )
         if is_embedding_complete and not force:
             logger.info(
                 "embed_chunks_idempotency_skip",
@@ -3555,8 +3632,7 @@ def embed_chunks(
 
                 # Filter out already-processed chunks (partial progress)
                 chunks_to_process = [
-                    c for c in batch
-                    if c["id"] not in already_processed
+                    c for c in batch if c["id"] not in already_processed
                 ]
 
                 if not chunks_to_process:
@@ -3568,10 +3644,14 @@ def embed_chunks(
 
                 try:
                     # Generate embeddings for batch
-                    embeddings = await embedder.embed_batch(batch_texts, skip_empty=True, matter_id=matter_id)
+                    embeddings = await embedder.embed_batch(
+                        batch_texts, skip_empty=True, matter_id=matter_id
+                    )
 
                     # Update chunks with embeddings
-                    for _j, (chunk_id, embedding) in enumerate(zip(batch_ids, embeddings, strict=False)):
+                    for _j, (chunk_id, embedding) in enumerate(
+                        zip(batch_ids, embeddings, strict=False)
+                    ):
                         if embedding is None:
                             failed_count += 1
                             if stage_progress:
@@ -3580,10 +3660,12 @@ def embed_chunks(
 
                         try:
                             # Story 1.3: Store embedding model version with vectors
-                            client.table("chunks").update({
-                                "embedding": embedding,
-                                "embedding_model_version": get_current_embedding_model_version(),
-                            }).eq("id", chunk_id).execute()
+                            client.table("chunks").update(
+                                {
+                                    "embedding": embedding,
+                                    "embedding_model_version": get_current_embedding_model_version(),
+                                }
+                            ).eq("id", chunk_id).execute()
                             embedded_count += 1
 
                             # Track partial progress
@@ -3627,7 +3709,9 @@ def embed_chunks(
 
                     # Save progress before retry
                     if progress_tracker and stage_progress:
-                        await progress_tracker.save_progress_async(stage_progress, force=True)
+                        await progress_tracker.save_progress_async(
+                            stage_progress, force=True
+                        )
 
                     if e.is_retryable:
                         raise  # Let Celery retry
@@ -3641,9 +3725,11 @@ def embed_chunks(
 
         # Update document status to searchable
         try:
-            client.table("documents").update({
-                "status": "searchable",
-            }).eq("id", doc_id).execute()
+            client.table("documents").update(
+                {
+                    "status": "searchable",
+                }
+            ).eq("id", doc_id).execute()
 
             logger.info(
                 "document_status_updated_to_searchable",
@@ -3695,7 +3781,11 @@ def embed_chunks(
                 .single()
                 .execute()
             )
-            document_type = doc_type_result.data.get("document_type") if doc_type_result.data else None
+            document_type = (
+                doc_type_result.data.get("document_type")
+                if doc_type_result.data
+                else None
+            )
 
             if document_type == "act":
                 # Index sections for accurate split-view navigation
@@ -3736,6 +3826,7 @@ def embed_chunks(
 
     except SoftTimeLimitExceeded:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         # Task timeout - save progress and mark as failed
         logger.error(
             "embed_chunks_task_timeout",
@@ -3746,7 +3837,9 @@ def embed_chunks(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
-        _mark_job_failed(job_id, "Embedding timeout exceeded (10 minutes)", "TIMEOUT", matter_id)  # P8 fix: was missing
+        _mark_job_failed(
+            job_id, "Embedding timeout exceeded (10 minutes)", "TIMEOUT", matter_id
+        )  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
         raise PipelineTaskError(
             "Embedding timeout exceeded (10 minutes)",
@@ -3755,7 +3848,7 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from None
 
     except EmbeddingServiceError as e:
         retry_count = self.request.retries
@@ -3770,12 +3863,15 @@ def embed_chunks(
 
         if retry_count >= 3:
             from app.workers.tasks.pipeline_errors import PipelineTaskError
+
             logger.error(
                 "embed_chunks_task_failed",
                 document_id=doc_id,
                 error=str(e),
             )
-            _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
+            _mark_job_failed(
+                job_id, e.message, e.code, matter_id
+            )  # P8 fix: was missing
             _release_pipeline_lock_safe(doc_id)
             raise PipelineTaskError(
                 e.message,
@@ -3784,12 +3880,13 @@ def embed_chunks(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="embedding",
-            )
+            ) from e
 
         raise
 
     except DocumentServiceError as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "embed_chunks_document_error",
             document_id=doc_id,
@@ -3804,17 +3901,20 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "embed_chunks_unexpected_error",
             document_id=doc_id,
             error=str(e),
             error_type=type(e).__name__,
         )
-        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)  # P8 fix: was missing
+        _mark_job_failed(
+            job_id, str(e), "UNEXPECTED_ERROR", matter_id
+        )  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
         raise PipelineTaskError(
             str(e),
@@ -3823,7 +3923,7 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -3859,7 +3959,6 @@ def index_act_sections(
         Task result with indexing summary.
     """
     from app.services.section_index_service import (
-        SectionIndexService,
         get_section_index_service,
     )
     from app.services.supabase.client import get_service_client
@@ -3964,7 +4063,7 @@ def index_act_sections(
         )
 
         if self.request.retries < 2:
-            raise self.retry(exc=e)
+            raise self.retry(exc=e) from e
 
         return {
             "status": "section_indexing_failed",
@@ -4036,6 +4135,7 @@ def extract_entities(
 
     if not doc_id:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error("extract_entities_no_document_id")
         raise PipelineTaskError(
             "No document_id provided",
@@ -4144,6 +4244,7 @@ def extract_entities(
 
         # F1: Try shared chunk cache first (avoids Supabase read)
         from app.services.chunk_service import get_cached_chunks
+
         chunks = get_cached_chunks(doc_id, chunk_type_filter="child")
 
         if chunks is None:
@@ -4182,12 +4283,14 @@ def extract_entities(
                 for i in range(0, len(raw_text), window_size - overlap):
                     window_text = raw_text[i : i + window_size]
                     if window_text.strip():
-                        raw_text_windows.append({
-                            "id": f"raw_window_{i}",
-                            "content": window_text,
-                            "chunk_type": "raw_window",
-                            "page_number": None,
-                        })
+                        raw_text_windows.append(
+                            {
+                                "id": f"raw_window_{i}",
+                                "content": window_text,
+                                "chunk_type": "raw_window",
+                                "page_number": None,
+                            }
+                        )
 
                 if raw_text_windows:
                     use_raw_text_fallback = True
@@ -4272,7 +4375,9 @@ def extract_entities(
             # Semaphore to limit concurrent API calls (avoid rate limits)
             semaphore = asyncio.Semaphore(concurrent_limit)
 
-            async def _process_mega_batch(mega_batch: list[dict]) -> tuple[int, int, int]:
+            async def _process_mega_batch(
+                mega_batch: list[dict],
+            ) -> tuple[int, int, int]:
                 """Process multiple chunks in a single API call (mega-batch).
 
                 Returns:
@@ -4292,7 +4397,9 @@ def extract_entities(
                         batch_failed = 0
 
                         # Process each result and save to database
-                        for chunk, result in zip(mega_batch, extraction_results, strict=False):
+                        for chunk, result in zip(
+                            mega_batch, extraction_results, strict=False
+                        ):
                             chunk_id = chunk["id"]
 
                             if result.entities:
@@ -4313,14 +4420,20 @@ def extract_entities(
                                         src_id = name_to_id.get(rel.source.lower())
                                         tgt_id = name_to_id.get(rel.target.lower())
                                         if src_id and tgt_id:
-                                            edges.append(EntityEdgeCreate(
-                                                source_entity_id=src_id,
-                                                target_entity_id=tgt_id,
-                                                relationship_type=rel.type,
-                                                matter_id=matter_id,
-                                                confidence=rel.confidence,
-                                                metadata={"description": rel.description} if rel.description else {},
-                                            ))
+                                            edges.append(
+                                                EntityEdgeCreate(
+                                                    source_entity_id=src_id,
+                                                    target_entity_id=tgt_id,
+                                                    relationship_type=rel.type,
+                                                    matter_id=matter_id,
+                                                    confidence=rel.confidence,
+                                                    metadata={
+                                                        "description": rel.description
+                                                    }
+                                                    if rel.description
+                                                    else {},
+                                                )
+                                            )
                                     if edges:
                                         await graph_service.save_edges(
                                             matter_id=matter_id,
@@ -4361,7 +4474,9 @@ def extract_entities(
                     try:
                         # Extract bbox_ids and convert to string list for gold standard pattern
                         chunk_bbox_ids = chunk.get("bbox_ids") or []
-                        bbox_ids_list = [str(b) for b in chunk_bbox_ids] if chunk_bbox_ids else []
+                        bbox_ids_list = (
+                            [str(b) for b in chunk_bbox_ids] if chunk_bbox_ids else []
+                        )
 
                         extraction_result = await extractor.extract_entities(
                             text=chunk["content"],
@@ -4393,14 +4508,20 @@ def extract_entities(
                                     src_id = name_to_id.get(rel.source.lower())
                                     tgt_id = name_to_id.get(rel.target.lower())
                                     if src_id and tgt_id:
-                                        edges.append(EntityEdgeCreate(
-                                            source_entity_id=src_id,
-                                            target_entity_id=tgt_id,
-                                            relationship_type=rel.type,
-                                            matter_id=matter_id,
-                                            confidence=rel.confidence,
-                                            metadata={"description": rel.description} if rel.description else {},
-                                        ))
+                                        edges.append(
+                                            EntityEdgeCreate(
+                                                source_entity_id=src_id,
+                                                target_entity_id=tgt_id,
+                                                relationship_type=rel.type,
+                                                matter_id=matter_id,
+                                                confidence=rel.confidence,
+                                                metadata={
+                                                    "description": rel.description
+                                                }
+                                                if rel.description
+                                                else {},
+                                            )
+                                        )
                                 if edges:
                                     await graph_service.save_edges(
                                         matter_id=matter_id,
@@ -4420,7 +4541,9 @@ def extract_entities(
                             stage_progress.mark_failed(chunk_id, str(e))
                         if e.is_retryable:
                             if progress_tracker and stage_progress:
-                                await progress_tracker.save_progress_async(stage_progress, force=True)
+                                await progress_tracker.save_progress_async(
+                                    stage_progress, force=True
+                                )
                             raise
                         return (0, 0, False)
                     except Exception as e:
@@ -4436,7 +4559,9 @@ def extract_entities(
                 # MEGA-BATCH MODE: Process chunks in groups, each group = 1 API call
                 # Example: 657 chunks / 5 per batch = 132 API calls (instead of 657)
                 for i in range(0, len(chunks_to_process), ENTITY_EXTRACTION_BATCH_SIZE):
-                    outer_batch = chunks_to_process[i : i + ENTITY_EXTRACTION_BATCH_SIZE]
+                    outer_batch = chunks_to_process[
+                        i : i + ENTITY_EXTRACTION_BATCH_SIZE
+                    ]
 
                     # Split into mega-batches for parallel API calls
                     mega_batches = [
@@ -4483,7 +4608,10 @@ def extract_entities(
                         "extract_entities_batch_complete",
                         document_id=doc_id,
                         batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
-                        total_batches=(len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
+                        total_batches=(
+                            len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1
+                        )
+                        // ENTITY_EXTRACTION_BATCH_SIZE,
                         mode="mega_batch",
                         api_calls=len(mega_batches),
                     )
@@ -4524,12 +4652,17 @@ def extract_entities(
                         "extract_entities_batch_complete",
                         document_id=doc_id,
                         batch_number=i // ENTITY_EXTRACTION_BATCH_SIZE + 1,
-                        total_batches=(len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1) // ENTITY_EXTRACTION_BATCH_SIZE,
+                        total_batches=(
+                            len(chunks_to_process) + ENTITY_EXTRACTION_BATCH_SIZE - 1
+                        )
+                        // ENTITY_EXTRACTION_BATCH_SIZE,
                         mode="parallel",
                     )
 
         try:
-            _run_async(_extract_entities_async(), timeout=540)  # Below soft_time_limit=600
+            _run_async(
+                _extract_entities_async(), timeout=540
+            )  # Below soft_time_limit=600
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -4587,6 +4720,7 @@ def extract_entities(
 
     except SoftTimeLimitExceeded:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         # Task timeout - mark as failed for retry later
         logger.error(
             "extract_entities_task_timeout",
@@ -4596,7 +4730,12 @@ def extract_entities(
         # Save progress so we can resume from where we left off
         if progress_tracker and stage_progress:
             progress_tracker.save_progress(stage_progress, force=True)
-        _mark_job_failed(job_id, "Entity extraction timeout exceeded (10 minutes)", "TIMEOUT", matter_id)  # P8 fix: was missing
+        _mark_job_failed(
+            job_id,
+            "Entity extraction timeout exceeded (10 minutes)",
+            "TIMEOUT",
+            matter_id,
+        )  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
         raise PipelineTaskError(
             "Entity extraction timeout exceeded (10 minutes)",
@@ -4605,7 +4744,7 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from None
 
     except MIGExtractorError as e:
         retry_count = self.request.retries
@@ -4620,12 +4759,15 @@ def extract_entities(
 
         if retry_count >= 3:
             from app.workers.tasks.pipeline_errors import PipelineTaskError
+
             logger.error(
                 "extract_entities_task_failed",
                 document_id=doc_id,
                 error=str(e),
             )
-            _mark_job_failed(job_id, e.message, e.code, matter_id)  # P8 fix: was missing
+            _mark_job_failed(
+                job_id, e.message, e.code, matter_id
+            )  # P8 fix: was missing
             _release_pipeline_lock_safe(doc_id)
             raise PipelineTaskError(
                 e.message,
@@ -4634,12 +4776,13 @@ def extract_entities(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="entity_extraction",
-            )
+            ) from e
 
         raise
 
     except DocumentServiceError as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "extract_entities_document_error",
             document_id=doc_id,
@@ -4654,17 +4797,20 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
+
         logger.error(
             "extract_entities_unexpected_error",
             document_id=doc_id,
             error=str(e),
             error_type=type(e).__name__,
         )
-        _mark_job_failed(job_id, str(e), "UNEXPECTED_ERROR", matter_id)  # P8 fix: was missing
+        _mark_job_failed(
+            job_id, str(e), "UNEXPECTED_ERROR", matter_id
+        )  # P8 fix: was missing
         _release_pipeline_lock_safe(doc_id)
         raise PipelineTaskError(
             str(e),
@@ -4673,7 +4819,7 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -4737,7 +4883,12 @@ def _dispatch_post_entity_tasks(
         )
         # DPP-014: extract_citations gates job completion (citations → contradictions → _mark_job_completed).
         # If dispatch fails, mark job failed immediately — don't let it silently orphan.
-        _mark_job_failed(job_id, f"Failed to dispatch extract_citations: {e}", "DISPATCH_FAILED", matter_id)
+        _mark_job_failed(
+            job_id,
+            f"Failed to dispatch extract_citations: {e}",
+            "DISPATCH_FAILED",
+            matter_id,
+        )
         _release_pipeline_lock_safe(document_id)
 
     # Task 2: Date extraction (with auto-classification enabled)
@@ -4851,7 +5002,7 @@ _MAX_CONTEXT_CHARS_PER_ENTITY = 2000
     retry_backoff_max=120,
     max_retries=3,
     retry_jitter=True,
-    soft_time_limit=300,   # 5 minutes — Phase 1 is CPU-only, should be fast
+    soft_time_limit=300,  # 5 minutes — Phase 1 is CPU-only, should be fast
     time_limit=360,
 )  # type: ignore[misc]
 def resolve_aliases(
@@ -4899,8 +5050,14 @@ def resolve_aliases(
     if prev_result:
         prev_status = prev_result.get("status")
         if prev_status not in ("entities_extracted",):
-            logger.info("resolve_aliases_skipped", document_id=doc_id, prev_status=prev_status)
-            return {"status": "alias_resolution_skipped", "document_id": doc_id, "job_id": job_id}
+            logger.info(
+                "resolve_aliases_skipped", document_id=doc_id, prev_status=prev_status
+            )
+            return {
+                "status": "alias_resolution_skipped",
+                "document_id": doc_id,
+                "job_id": job_id,
+            }
 
     # --- Dedup guard (hostile review C1): prevent concurrent runs for same doc ---
     redis_client = get_sync_redis_client()
@@ -4908,14 +5065,22 @@ def resolve_aliases(
     # SET NX with 30-min TTL — if key exists, another task is already running
     if not redis_client.set(dedup_key, "1", nx=True, ex=1800):
         logger.info("resolve_aliases_dedup_skip", document_id=doc_id)
-        return {"status": "alias_resolution_skipped", "document_id": doc_id,
-                "reason": "Another resolve_aliases is already running", "job_id": job_id}
+        return {
+            "status": "alias_resolution_skipped",
+            "document_id": doc_id,
+            "reason": "Another resolve_aliases is already running",
+            "job_id": job_id,
+        }
 
     doc_service = document_service or get_document_service()
     resolver = entity_resolver or get_entity_resolver()
     graph_service = mig_graph_service or get_mig_graph_service()
 
-    logger.info("resolve_aliases_phase1_started", document_id=doc_id, retry_count=self.request.retries)
+    logger.info(
+        "resolve_aliases_phase1_started",
+        document_id=doc_id,
+        retry_count=self.request.retries,
+    )
 
     try:
         _, matter_id = doc_service.get_document_for_processing(doc_id)
@@ -4923,7 +5088,9 @@ def resolve_aliases(
 
         client = get_service_client()
         if client is None:
-            raise AliasResolutionError(message="Database client not configured", code="DATABASE_NOT_CONFIGURED")
+            raise AliasResolutionError(
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
+            )
 
         async def _phase1_async():
             # --- Fetch ALL entities with pagination (fixes hostile review B3: 1000 cap) ---
@@ -4932,7 +5099,9 @@ def resolve_aliases(
             per_page = 500
             while True:
                 batch, total = await graph_service.get_entities_by_matter(
-                    matter_id=matter_id, page=page, per_page=per_page,
+                    matter_id=matter_id,
+                    page=page,
+                    per_page=per_page,
                 )
                 all_entities.extend(batch)
                 if len(all_entities) >= total or not batch:
@@ -4945,9 +5114,12 @@ def resolve_aliases(
             # --- Incremental: get entity IDs from this document only ---
             doc_entity_ids: set[str] | None = None
             if doc_id:
-                doc_mentions_resp = client.table("entity_mentions").select(
-                    "entity_id"
-                ).eq("document_id", doc_id).execute()
+                doc_mentions_resp = (
+                    client.table("entity_mentions")
+                    .select("entity_id")
+                    .eq("document_id", doc_id)
+                    .execute()
+                )
                 if doc_mentions_resp.data:
                     doc_entity_ids = {m["entity_id"] for m in doc_mentions_resp.data}
 
@@ -4962,10 +5134,13 @@ def resolve_aliases(
             entity_contexts: dict[str, str] = {}
             matter_entity_ids = [e.id for e in all_entities]
             for batch_start in range(0, len(matter_entity_ids), 100):
-                batch_ids = matter_entity_ids[batch_start:batch_start + 100]
-                mentions_response = client.table("entity_mentions").select(
-                    "entity_id, context"
-                ).in_("entity_id", batch_ids).execute()
+                batch_ids = matter_entity_ids[batch_start : batch_start + 100]
+                mentions_response = (
+                    client.table("entity_mentions")
+                    .select("entity_id, context")
+                    .in_("entity_id", batch_ids)
+                    .execute()
+                )
                 if mentions_response.data:
                     for mention in mentions_response.data:
                         eid = mention["entity_id"]
@@ -4975,14 +5150,16 @@ def resolve_aliases(
                         else:
                             current = entity_contexts[eid]
                             if len(current) < _MAX_CONTEXT_CHARS_PER_ENTITY:
-                                entity_contexts[eid] = (current + " | " + ctx)[:_MAX_CONTEXT_CHARS_PER_ENTITY]
+                                entity_contexts[eid] = (current + " | " + ctx)[
+                                    :_MAX_CONTEXT_CHARS_PER_ENTITY
+                                ]
 
             # --- Phase 1: CPU-only pair finding (high + medium) ---
             # Use resolver's find_potential_aliases for each source entity
+            from app.models.entity import EntityType
             from app.services.mig.entity_resolver import (
                 MEDIUM_SIMILARITY_THRESHOLD,
             )
-            from app.models.entity import EntityType
 
             entities_by_type: dict[EntityType, list] = {}
             for entity in all_entities:
@@ -4998,45 +5175,55 @@ def resolve_aliases(
 
                 source_entities = (
                     [e for e in type_entities if e.id in doc_entity_ids]
-                    if doc_entity_ids else type_entities
+                    if doc_entity_ids
+                    else type_entities
                 )
                 seen_pairs: set[tuple[str, str]] = set()
 
                 for entity in source_entities:
                     candidates = resolver.find_potential_aliases(entity, type_entities)
                     for candidate in candidates:
-                        pair_key = tuple(sorted([candidate.entity_id, candidate.candidate_entity_id]))
+                        pair_key = tuple(
+                            sorted([candidate.entity_id, candidate.candidate_entity_id])
+                        )
                         if pair_key in seen_pairs:
                             continue
                         seen_pairs.add(pair_key)
 
                         if candidate.is_auto_linked:
-                            high_confidence_edges.append({
-                                "source_entity_id": candidate.entity_id,
-                                "target_entity_id": candidate.candidate_entity_id,
-                                "confidence": candidate.similarity_score,
-                                "metadata": {
-                                    "auto_linked": True,
-                                    "name_similarity": candidate.name_similarity,
-                                    "component_similarity": candidate.component_similarity,
-                                },
-                            })
+                            high_confidence_edges.append(
+                                {
+                                    "source_entity_id": candidate.entity_id,
+                                    "target_entity_id": candidate.candidate_entity_id,
+                                    "confidence": candidate.similarity_score,
+                                    "metadata": {
+                                        "auto_linked": True,
+                                        "name_similarity": candidate.name_similarity,
+                                        "component_similarity": candidate.component_similarity,
+                                    },
+                                }
+                            )
                         elif candidate.similarity_score >= MEDIUM_SIMILARITY_THRESHOLD:
-                            medium_confidence_pairs.append({
-                                "entity_id": candidate.entity_id,
-                                "entity_name": candidate.entity_name,
-                                "candidate_entity_id": candidate.candidate_entity_id,
-                                "candidate_name": candidate.candidate_name,
-                                "similarity_score": candidate.similarity_score,
-                                "name_similarity": candidate.name_similarity,
-                                "context1": entity_contexts.get(candidate.entity_id, ""),
-                                "context2": entity_contexts.get(candidate.candidate_entity_id, ""),
-                            })
+                            medium_confidence_pairs.append(
+                                {
+                                    "entity_id": candidate.entity_id,
+                                    "entity_name": candidate.entity_name,
+                                    "candidate_entity_id": candidate.candidate_entity_id,
+                                    "candidate_name": candidate.candidate_name,
+                                    "similarity_score": candidate.similarity_score,
+                                    "name_similarity": candidate.name_similarity,
+                                    "context1": entity_contexts.get(
+                                        candidate.entity_id, ""
+                                    ),
+                                    "context2": entity_contexts.get(
+                                        candidate.candidate_entity_id, ""
+                                    ),
+                                }
+                            )
                         else:
                             skipped_low += 1
 
             # --- Create high-confidence edges inline (CPU, fast) ---
-            from app.models.entity import RelationshipType
             for edge_data in high_confidence_edges:
                 await graph_service.create_alias_edge(
                     matter_id=matter_id,
@@ -5059,9 +5246,16 @@ def resolve_aliases(
         if result is None:
             _update_job_stage_complete(job_id, "alias_resolution", matter_id)
             redis_client.delete(dedup_key)
-            logger.info("resolve_aliases_no_entities", document_id=doc_id, matter_id=matter_id)
-            return {"status": "alias_resolution_complete", "document_id": doc_id,
-                    "aliases_created": 0, "reason": "No entities", "job_id": job_id}
+            logger.info(
+                "resolve_aliases_no_entities", document_id=doc_id, matter_id=matter_id
+            )
+            return {
+                "status": "alias_resolution_complete",
+                "document_id": doc_id,
+                "aliases_created": 0,
+                "reason": "No entities",
+                "job_id": job_id,
+            }
 
         medium_pairs = result["medium_pairs"]
         high_count = result["high_confidence_count"]
@@ -5070,30 +5264,43 @@ def resolve_aliases(
         if not medium_pairs:
             # No medium pairs — skip to finalize with just high-confidence edges
             _dispatch_alias_finalize(
-                doc_id, matter_id, job_id,
+                doc_id,
+                matter_id,
+                job_id,
                 high_confidence_edges=result["high_confidence_edges"],
                 batch_results=[],
                 redis_client=redis_client,
             )
             logger.info(
                 "resolve_aliases_phase1_complete_no_medium",
-                document_id=doc_id, high_confidence=high_count,
+                document_id=doc_id,
+                high_confidence=high_count,
                 skipped_low=result["skipped_low"],
             )
-            return {"status": "alias_phase1_complete", "document_id": doc_id,
-                    "high_confidence": high_count, "medium_batches": 0, "job_id": job_id}
+            return {
+                "status": "alias_phase1_complete",
+                "document_id": doc_id,
+                "high_confidence": high_count,
+                "medium_batches": 0,
+                "job_id": job_id,
+            }
 
         # Split medium pairs into batches of 20 (2x CONTEXT_ANALYSIS_BATCH_SIZE for fewer tasks)
         FANOUT_BATCH_SIZE = 20
         batches = [
-            medium_pairs[i:i + FANOUT_BATCH_SIZE]
+            medium_pairs[i : i + FANOUT_BATCH_SIZE]
             for i in range(0, len(medium_pairs), FANOUT_BATCH_SIZE)
         ]
 
         # Store high-confidence edges in Redis for Phase 3
         import json
+
         high_edges_key = _alias_redis_key(doc_id, "high_edges")
-        redis_client.set(high_edges_key, json.dumps(result["high_confidence_edges"]), ex=_ALIAS_KEY_TTL)
+        redis_client.set(
+            high_edges_key,
+            json.dumps(result["high_confidence_edges"]),
+            ex=_ALIAS_KEY_TTL,
+        )
 
         # Set total batch count for completion tracking
         total_key = _alias_redis_key(doc_id, "total")
@@ -5103,10 +5310,15 @@ def resolve_aliases(
 
         # Store matter_id and job_id for Phase 3
         meta_key = _alias_redis_key(doc_id, "meta")
-        redis_client.set(meta_key, json.dumps({"matter_id": matter_id, "job_id": job_id}), ex=_ALIAS_KEY_TTL)
+        redis_client.set(
+            meta_key,
+            json.dumps({"matter_id": matter_id, "job_id": job_id}),
+            ex=_ALIAS_KEY_TTL,
+        )
 
         # Dispatch Phase 2 batches
         from app.workers.celery import celery_app as _celery_app
+
         for batch_idx, batch in enumerate(batches):
             _celery_app.send_task(
                 "app.workers.tasks.document_tasks.resolve_aliases_batch",
@@ -5140,36 +5352,71 @@ def resolve_aliases(
 
     except AliasResolutionError as e:
         retry_count = self.request.retries
-        logger.warning("resolve_aliases_phase1_retry", document_id=doc_id,
-                        retry_count=retry_count, error=str(e))
+        logger.warning(
+            "resolve_aliases_phase1_retry",
+            document_id=doc_id,
+            retry_count=retry_count,
+            error=str(e),
+        )
         _update_job_stage_failure(job_id, "alias_resolution", str(e), e.code, matter_id)
         redis_client.delete(dedup_key)
         if retry_count >= 3:
-            return {"status": "alias_resolution_failed", "document_id": doc_id,
-                    "error_code": e.code, "error_message": e.message, "job_id": job_id}
+            return {
+                "status": "alias_resolution_failed",
+                "document_id": doc_id,
+                "error_code": e.code,
+                "error_message": e.message,
+                "job_id": job_id,
+            }
         raise
 
     except (TimeoutError, SoftTimeLimitExceeded):
-        logger.warning("resolve_aliases_phase1_timeout", document_id=doc_id, matter_id=matter_id)
-        _update_job_stage_failure(job_id, "alias_resolution", "Phase 1 timed out", "TIMEOUT", matter_id)
+        logger.warning(
+            "resolve_aliases_phase1_timeout", document_id=doc_id, matter_id=matter_id
+        )
+        _update_job_stage_failure(
+            job_id, "alias_resolution", "Phase 1 timed out", "TIMEOUT", matter_id
+        )
         redis_client.delete(dedup_key)
-        return {"status": "alias_resolution_failed", "document_id": doc_id,
-                "error_code": "TIMEOUT", "job_id": job_id}
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": doc_id,
+            "error_code": "TIMEOUT",
+            "job_id": job_id,
+        }
 
     except DocumentServiceError as e:
         logger.error("resolve_aliases_document_error", document_id=doc_id, error=str(e))
-        _update_job_stage_failure(job_id, "alias_resolution", e.message, e.code, matter_id)
+        _update_job_stage_failure(
+            job_id, "alias_resolution", e.message, e.code, matter_id
+        )
         redis_client.delete(dedup_key)
-        return {"status": "alias_resolution_failed", "document_id": doc_id,
-                "error_code": e.code, "error_message": e.message, "job_id": job_id}
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": doc_id,
+            "error_code": e.code,
+            "error_message": e.message,
+            "job_id": job_id,
+        }
 
     except Exception as e:
-        logger.error("resolve_aliases_phase1_error", document_id=doc_id,
-                     error=str(e), error_type=type(e).__name__)
-        _update_job_stage_failure(job_id, "alias_resolution", str(e), "UNEXPECTED_ERROR", matter_id)
+        logger.error(
+            "resolve_aliases_phase1_error",
+            document_id=doc_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        _update_job_stage_failure(
+            job_id, "alias_resolution", str(e), "UNEXPECTED_ERROR", matter_id
+        )
         redis_client.delete(dedup_key)
-        return {"status": "alias_resolution_failed", "document_id": doc_id,
-                "error_code": "UNEXPECTED_ERROR", "error_message": str(e), "job_id": job_id}
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": doc_id,
+            "error_code": "UNEXPECTED_ERROR",
+            "error_message": str(e),
+            "job_id": job_id,
+        }
 
 
 def _dispatch_alias_finalize(
@@ -5182,7 +5429,6 @@ def _dispatch_alias_finalize(
 ) -> None:
     """Dispatch Phase 3 finalization. Called when all Phase 2 batches are done,
     or immediately when there are no medium-confidence pairs."""
-    import json
     from app.workers.celery import celery_app as _celery_app
 
     _celery_app.send_task(
@@ -5203,7 +5449,7 @@ def _dispatch_alias_finalize(
     retry_backoff_max=60,
     max_retries=2,
     retry_jitter=True,
-    soft_time_limit=180,   # 3 minutes per batch — ~20 pairs, 2 Gemini calls
+    soft_time_limit=180,  # 3 minutes per batch — ~20 pairs, 2 Gemini calls
     time_limit=240,
 )  # type: ignore[misc]
 def resolve_aliases_batch(
@@ -5222,6 +5468,7 @@ def resolve_aliases_batch(
     Runs on low queue (heavy worker, 10 greenlets). ~30-120 seconds per batch.
     """
     import json
+
     from app.services.distributed_lock import get_sync_redis_client
 
     if not document_id or not pairs:
@@ -5232,20 +5479,26 @@ def resolve_aliases_batch(
     batch_failed = False
     gemini_failures = 0
 
-    logger.info("resolve_aliases_batch_started", document_id=document_id,
-                batch_index=batch_index, pairs_count=len(pairs))
+    logger.info(
+        "resolve_aliases_batch_started",
+        document_id=document_id,
+        batch_index=batch_index,
+        pairs_count=len(pairs),
+    )
 
     try:
         # Build batch_pairs in the format analyze_batch_context expects
         batch_pairs = []
         for i, pair in enumerate(pairs):
-            batch_pairs.append({
-                "pair_id": f"batch{batch_index}_pair{i}",
-                "name1": pair["entity_name"],
-                "context1": pair.get("context1", ""),
-                "name2": pair["candidate_name"],
-                "context2": pair.get("context2", ""),
-            })
+            batch_pairs.append(
+                {
+                    "pair_id": f"batch{batch_index}_pair{i}",
+                    "name1": pair["entity_name"],
+                    "context1": pair.get("context1", ""),
+                    "name2": pair["candidate_name"],
+                    "context2": pair.get("context2", ""),
+                }
+            )
 
         # Call Gemini via the entity resolver's batch analysis
         # Split into sub-batches of CONTEXT_ANALYSIS_BATCH_SIZE (10)
@@ -5255,17 +5508,22 @@ def resolve_aliases_batch(
             nonlocal gemini_failures
             all_confidences: dict[str, float] = {}
             sub_batches = [
-                batch_pairs[i:i + CONTEXT_ANALYSIS_BATCH_SIZE]
+                batch_pairs[i : i + CONTEXT_ANALYSIS_BATCH_SIZE]
                 for i in range(0, len(batch_pairs), CONTEXT_ANALYSIS_BATCH_SIZE)
             ]
             for sub_batch in sub_batches:
                 try:
-                    result = await resolver.analyze_batch_context(sub_batch, matter_id=matter_id)
+                    result = await resolver.analyze_batch_context(
+                        sub_batch, matter_id=matter_id
+                    )
                     all_confidences.update(result)
                 except Exception as e:
                     gemini_failures += 1
-                    logger.warning("resolve_aliases_batch_gemini_failed",
-                                   batch_index=batch_index, error=str(e))
+                    logger.warning(
+                        "resolve_aliases_batch_gemini_failed",
+                        batch_index=batch_index,
+                        error=str(e),
+                    )
                     # Default to 0.5 for failed sub-batches (safe — rejects, not false-positives)
                     for p in sub_batch:
                         all_confidences[p["pair_id"]] = 0.5
@@ -5278,15 +5536,17 @@ def resolve_aliases_batch(
         for i, pair in enumerate(pairs):
             pair_id = f"batch{batch_index}_pair{i}"
             confidence = confidences.get(pair_id, 0.5)
-            batch_results.append({
-                "entity_id": pair["entity_id"],
-                "candidate_entity_id": pair["candidate_entity_id"],
-                "entity_name": pair["entity_name"],
-                "candidate_name": pair["candidate_name"],
-                "similarity_score": pair["similarity_score"],
-                "name_similarity": pair["name_similarity"],
-                "context_confidence": confidence,
-            })
+            batch_results.append(
+                {
+                    "entity_id": pair["entity_id"],
+                    "candidate_entity_id": pair["candidate_entity_id"],
+                    "entity_name": pair["entity_name"],
+                    "candidate_name": pair["candidate_name"],
+                    "similarity_score": pair["similarity_score"],
+                    "name_similarity": pair["name_similarity"],
+                    "context_confidence": confidence,
+                }
+            )
 
         # Store results in Redis list
         results_key = _alias_redis_key(document_id, "results")
@@ -5295,8 +5555,13 @@ def resolve_aliases_batch(
 
     except Exception as e:
         batch_failed = True
-        logger.error("resolve_aliases_batch_failed", document_id=document_id,
-                     batch_index=batch_index, error=str(e), error_type=type(e).__name__)
+        logger.error(
+            "resolve_aliases_batch_failed",
+            document_id=document_id,
+            batch_index=batch_index,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         # Store empty result so counter still advances — partial results are better than stuck
         results_key = _alias_redis_key(document_id, "results")
         redis_client.rpush(results_key, json.dumps([]))
@@ -5311,9 +5576,15 @@ def resolve_aliases_batch(
     total_raw = redis_client.get(total_key)
     total_count = int(total_raw) if total_raw else 0
 
-    logger.info("resolve_aliases_batch_complete", document_id=document_id,
-                batch_index=batch_index, done=done_count, total=total_count,
-                gemini_failures=gemini_failures, batch_failed=batch_failed)
+    logger.info(
+        "resolve_aliases_batch_complete",
+        document_id=document_id,
+        batch_index=batch_index,
+        done=done_count,
+        total=total_count,
+        gemini_failures=gemini_failures,
+        batch_failed=batch_failed,
+    )
 
     if done_count >= total_count and total_count > 0:
         # Last batch — dispatch Phase 3 finalize
@@ -5322,6 +5593,7 @@ def resolve_aliases_batch(
         meta = json.loads(meta_raw) if meta_raw else {}
 
         from app.workers.celery import celery_app as _celery_app
+
         _celery_app.send_task(
             "app.workers.tasks.document_tasks.resolve_aliases_finalize",
             kwargs={
@@ -5332,8 +5604,12 @@ def resolve_aliases_batch(
         )
         logger.info("resolve_aliases_finalize_dispatched", document_id=document_id)
 
-    return {"status": "batch_complete", "document_id": document_id,
-            "batch_index": batch_index, "pairs_analyzed": len(pairs)}
+    return {
+        "status": "batch_complete",
+        "document_id": document_id,
+        "batch_index": batch_index,
+        "pairs_analyzed": len(pairs),
+    }
 
 
 @celery_app.task(
@@ -5344,7 +5620,7 @@ def resolve_aliases_batch(
     retry_backoff_max=60,
     max_retries=2,
     retry_jitter=True,
-    soft_time_limit=180,   # 3 minutes — transitive closure + DB writes
+    soft_time_limit=180,  # 3 minutes — transitive closure + DB writes
     time_limit=240,
 )  # type: ignore[misc]
 def resolve_aliases_finalize(
@@ -5364,6 +5640,7 @@ def resolve_aliases_finalize(
     arrays on canonical entities. Cleans up Redis keys.
     """
     import json
+
     from app.services.distributed_lock import get_sync_redis_client
     from app.services.mig.entity_resolver import CONTEXT_CONFIDENCE_THRESHOLD
 
@@ -5373,7 +5650,9 @@ def resolve_aliases_finalize(
     redis_client = get_sync_redis_client()
     graph_service = get_mig_graph_service()
 
-    logger.info("resolve_aliases_finalize_started", document_id=document_id, matter_id=matter_id)
+    logger.info(
+        "resolve_aliases_finalize_started", document_id=document_id, matter_id=matter_id
+    )
 
     try:
         # --- Read high-confidence edges from Redis ---
@@ -5391,18 +5670,21 @@ def resolve_aliases_finalize(
 
         # --- Filter medium results by confidence threshold ---
         from app.models.entity import RelationshipType
+
         edges_to_create = []
 
         # High-confidence edges (already decided in Phase 1)
         for edge_data in high_edges:
-            edges_to_create.append(EntityEdgeCreate(
-                source_entity_id=edge_data["source_entity_id"],
-                target_entity_id=edge_data["target_entity_id"],
-                relationship_type=RelationshipType.ALIAS_OF,
-                matter_id=matter_id,
-                confidence=edge_data["confidence"],
-                metadata=edge_data.get("metadata", {}),
-            ))
+            edges_to_create.append(
+                EntityEdgeCreate(
+                    source_entity_id=edge_data["source_entity_id"],
+                    target_entity_id=edge_data["target_entity_id"],
+                    relationship_type=RelationshipType.ALIAS_OF,
+                    matter_id=matter_id,
+                    confidence=edge_data["confidence"],
+                    metadata=edge_data.get("metadata", {}),
+                )
+            )
 
         # Medium-confidence edges (decided by Phase 2 Gemini analysis)
         medium_links = 0
@@ -5411,19 +5693,21 @@ def resolve_aliases_finalize(
             similarity = pair_result.get("similarity_score", 0.5)
             final_score = (similarity + context_confidence) / 2
             if final_score >= CONTEXT_CONFIDENCE_THRESHOLD:
-                edges_to_create.append(EntityEdgeCreate(
-                    source_entity_id=pair_result["entity_id"],
-                    target_entity_id=pair_result["candidate_entity_id"],
-                    relationship_type=RelationshipType.ALIAS_OF,
-                    matter_id=matter_id,
-                    confidence=final_score,
-                    metadata={
-                        "auto_linked": False,
-                        "context_analyzed": True,
-                        "name_similarity": pair_result.get("name_similarity", 0),
-                        "context_confidence": context_confidence,
-                    },
-                ))
+                edges_to_create.append(
+                    EntityEdgeCreate(
+                        source_entity_id=pair_result["entity_id"],
+                        target_entity_id=pair_result["candidate_entity_id"],
+                        relationship_type=RelationshipType.ALIAS_OF,
+                        matter_id=matter_id,
+                        confidence=final_score,
+                        metadata={
+                            "auto_linked": False,
+                            "context_analyzed": True,
+                            "name_similarity": pair_result.get("name_similarity", 0),
+                            "context_confidence": context_confidence,
+                        },
+                    )
+                )
                 medium_links += 1
 
         # --- Apply transitive closure ---
@@ -5439,7 +5723,9 @@ def resolve_aliases_finalize(
             page = 1
             while True:
                 batch, total = await graph_service.get_entities_by_matter(
-                    matter_id=matter_id, page=page, per_page=500,
+                    matter_id=matter_id,
+                    page=page,
+                    per_page=500,
                 )
                 all_entities.extend(batch)
                 if len(all_entities) >= total or not batch:
@@ -5466,9 +5752,13 @@ def resolve_aliases_finalize(
                     target = entity_map.get(edge.target_entity_id)
                     if source and target:
                         if source.mention_count >= target.mention_count:
-                            alias_updates.setdefault(source.id, []).append(target.canonical_name)
+                            alias_updates.setdefault(source.id, []).append(
+                                target.canonical_name
+                            )
                         else:
-                            alias_updates.setdefault(target.id, []).append(source.canonical_name)
+                            alias_updates.setdefault(target.id, []).append(
+                                source.canonical_name
+                            )
 
             # Apply alias array updates — one call per entity, no concurrent race
             for entity_id, new_aliases in alias_updates.items():
@@ -5491,14 +5781,20 @@ def resolve_aliases_finalize(
             aliases_created=aliases_created,
         )
         _update_job_stage_complete(
-            job_id, "alias_resolution", matter_id,
-            metadata={"aliases_created": aliases_created, "medium_links": medium_links,
-                      "high_links": len(high_edges)},
+            job_id,
+            "alias_resolution",
+            matter_id,
+            metadata={
+                "aliases_created": aliases_created,
+                "medium_links": medium_links,
+                "high_links": len(high_edges),
+            },
         )
 
         logger.info(
             "resolve_aliases_finalize_complete",
-            document_id=document_id, matter_id=matter_id,
+            document_id=document_id,
+            matter_id=matter_id,
             aliases_created=aliases_created,
             high_confidence=len(high_edges),
             medium_links=medium_links,
@@ -5515,11 +5811,22 @@ def resolve_aliases_finalize(
         }
 
     except Exception as e:
-        logger.error("resolve_aliases_finalize_error", document_id=document_id,
-                     error=str(e), error_type=type(e).__name__)
-        _update_job_stage_failure(job_id, "alias_resolution", str(e), "FINALIZE_ERROR", matter_id)
-        return {"status": "alias_resolution_failed", "document_id": document_id,
-                "error_code": "FINALIZE_ERROR", "error_message": str(e), "job_id": job_id}
+        logger.error(
+            "resolve_aliases_finalize_error",
+            document_id=document_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        _update_job_stage_failure(
+            job_id, "alias_resolution", str(e), "FINALIZE_ERROR", matter_id
+        )
+        return {
+            "status": "alias_resolution_failed",
+            "document_id": document_id,
+            "error_code": "FINALIZE_ERROR",
+            "error_message": str(e),
+            "job_id": job_id,
+        }
 
     finally:
         # --- Cleanup Redis keys ---
@@ -5620,10 +5927,18 @@ def extract_citations(
     client = get_service_client()
     citation_check = None
     if client:
-        citation_check = client.table("citations").select("id", count="exact").eq(
-            "source_document_id", doc_id
-        ).execute()
-    if citation_check and citation_check.count and citation_check.count > 0 and not is_celery_retry:
+        citation_check = (
+            client.table("citations")
+            .select("id", count="exact")
+            .eq("source_document_id", doc_id)
+            .execute()
+        )
+    if (
+        citation_check
+        and citation_check.count
+        and citation_check.count > 0
+        and not is_celery_retry
+    ):
         logger.info(
             "extract_citations_idempotency_skip",
             document_id=doc_id,
@@ -5658,7 +5973,9 @@ def extract_citations(
                     .execute()
                 )
                 if matter_result.data:
-                    analysis_mode = matter_result.data.get("analysis_mode", "deep_analysis")
+                    analysis_mode = matter_result.data.get(
+                        "analysis_mode", "deep_analysis"
+                    )
             except Exception:
                 pass
 
@@ -5671,7 +5988,10 @@ def extract_citations(
                     },
                     queue="default",
                 )
-                logger.debug("detect_contradictions_dispatched_from_idempotency", document_id=doc_id)
+                logger.debug(
+                    "detect_contradictions_dispatched_from_idempotency",
+                    document_id=doc_id,
+                )
             else:
                 # Mark contradiction stage as skipped
                 _update_job_stage_complete(
@@ -5695,7 +6015,12 @@ def extract_citations(
             "job_id": job_id,
         }
 
-    if is_celery_retry and citation_check and citation_check.count and citation_check.count > 0:
+    if (
+        is_celery_retry
+        and citation_check
+        and citation_check.count
+        and citation_check.count > 0
+    ):
         logger.warning(
             "extract_citations_retry_bypassing_idempotency",
             document_id=doc_id,
@@ -5737,7 +6062,9 @@ def extract_citations(
             .single()
             .execute()
         )
-        document_type = doc_type_result.data.get("document_type") if doc_type_result.data else None
+        document_type = (
+            doc_type_result.data.get("document_type") if doc_type_result.data else None
+        )
         if document_type == "act":
             logger.info(
                 "extract_citations_skipped_act_document",
@@ -5748,17 +6075,19 @@ def extract_citations(
             act_job_id = prev_result.get("job_id") if prev_result else None
             if act_job_id is None:
                 act_job_id = _lookup_job_id_for_document(doc_id)
-            try:
+            with contextlib.suppress(Exception):
                 celery_app.send_task(
                     "app.workers.tasks.document_tasks.detect_contradictions",
                     kwargs={
-                        "prev_result": {"status": "citations_extracted", "document_id": doc_id, "job_id": act_job_id},
+                        "prev_result": {
+                            "status": "citations_extracted",
+                            "document_id": doc_id,
+                            "job_id": act_job_id,
+                        },
                         "document_id": doc_id,
                     },
                     queue="default",
                 )
-            except Exception:
-                pass
             return {
                 "status": "citation_extraction_skipped",
                 "document_id": doc_id,
@@ -5779,6 +6108,7 @@ def extract_citations(
 
         # F1: Try shared chunk cache first (avoids Supabase read)
         from app.services.chunk_service import get_cached_chunks
+
         chunks = get_cached_chunks(doc_id, chunk_type_filter="child")
 
         if chunks is None:
@@ -5818,7 +6148,9 @@ def extract_citations(
                     },
                     queue="default",
                 )
-                logger.debug("detect_contradictions_dispatched_no_chunks", document_id=doc_id)
+                logger.debug(
+                    "detect_contradictions_dispatched_no_chunks", document_id=doc_id
+                )
             except Exception as dispatch_err:
                 logger.warning(
                     "detect_contradictions_dispatch_failed_no_chunks",
@@ -5862,8 +6194,13 @@ def extract_citations(
 
         # B1: Determine LLM batch size (citation_batch_size chunks per Gemini call)
         from app.core.config import get_settings as _get_settings
+
         _citation_settings = _get_settings()
-        llm_batch_size = _citation_settings.citation_batch_size if _citation_settings.citation_batching_enabled else 1
+        llm_batch_size = (
+            _citation_settings.citation_batch_size
+            if _citation_settings.citation_batching_enabled
+            else 1
+        )
 
         # Process all batches in a single async context
         async def _extract_citations_async():
@@ -5894,7 +6231,9 @@ def extract_citations(
                         )
 
                         # Process each result
-                        for chunk, extraction_result in zip(llm_batch, batch_results):
+                        for chunk, extraction_result in zip(
+                            llm_batch, batch_results, strict=False
+                        ):
                             chunk_id = chunk["id"]
 
                             if extraction_result.citations:
@@ -5920,7 +6259,9 @@ def extract_citations(
 
                         if e.is_retryable:
                             if progress_tracker and stage_progress:
-                                await progress_tracker.save_progress_async(stage_progress, force=True)
+                                await progress_tracker.save_progress_async(
+                                    stage_progress, force=True
+                                )
                             raise
                         logger.warning(
                             "extract_citations_batch_failed",
@@ -5953,11 +6294,14 @@ def extract_citations(
                     "extract_citations_batch_complete",
                     document_id=doc_id,
                     batch_number=i // CITATION_EXTRACTION_BATCH_SIZE + 1,
-                    total_batches=(len(chunks) + CITATION_EXTRACTION_BATCH_SIZE - 1) // CITATION_EXTRACTION_BATCH_SIZE,
+                    total_batches=(len(chunks) + CITATION_EXTRACTION_BATCH_SIZE - 1)
+                    // CITATION_EXTRACTION_BATCH_SIZE,
                 )
 
         try:
-            _run_async(_extract_citations_async(), timeout=540)  # Below soft_time_limit=600
+            _run_async(
+                _extract_citations_async(), timeout=540
+            )  # Below soft_time_limit=600
         finally:
             # Save final progress
             if progress_tracker and stage_progress:
@@ -6183,7 +6527,9 @@ def extract_citations(
 # Configuration
 CONTRADICTION_MAX_ENTITIES_PER_RUN = 50  # Max entities to process per task run
 CONTRADICTION_MAX_PAIRS_PER_ENTITY = 25  # Max pairs per entity (cost control)
-CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS = 300  # 5 min per entity (25 pairs × 3 batches of 10 × ~10s GPT-4)
+CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS = (
+    300  # 5 min per entity (25 pairs × 3 batches of 10 × ~10s GPT-4)
+)
 CONTRADICTION_CONCURRENCY_LIMIT = 5  # Concurrent entity LLM streams (Phase 3: 3→5, Gemini semaphore(10) is the real throttle)
 
 
@@ -6242,7 +6588,9 @@ def _store_comparison_results(
         evidence_json = None
         if comparison.evidence:
             evidence_json = {
-                "type": comparison.evidence.type.value if comparison.evidence.type else None,
+                "type": comparison.evidence.type.value
+                if comparison.evidence.type
+                else None,
                 "value_a": comparison.evidence.value_a,
                 "value_b": comparison.evidence.value_b,
                 "page_refs": comparison.evidence.page_refs,
@@ -6254,7 +6602,8 @@ def _store_comparison_results(
             "statement_a_id": comparison.statement_a_id,
             "statement_b_id": comparison.statement_b_id,
             "result": comparison.result.value,  # 'contradiction'
-            "contradiction_type": comparison.contradiction_type or "semantic_contradiction",
+            "contradiction_type": comparison.contradiction_type
+            or "semantic_contradiction",
             "severity": severity,
             "reasoning": comparison.reasoning,  # Chain-of-thought from GPT-4
             "explanation": comparison.reasoning,  # Attorney-friendly explanation
@@ -6271,10 +6620,14 @@ def _store_comparison_results(
             # Use upsert to avoid duplicates (statement_a_id + statement_b_id)
             # Note: This requires a unique constraint on (statement_a_id, statement_b_id)
             # If not available, use insert with on_conflict handling
-            result = client.table("statement_comparisons").upsert(
-                records,
-                on_conflict="matter_id,statement_a_id,statement_b_id",
-            ).execute()
+            result = (
+                client.table("statement_comparisons")
+                .upsert(
+                    records,
+                    on_conflict="matter_id,statement_a_id,statement_b_id",
+                )
+                .execute()
+            )
             stored = len(result.data) if result.data else 0
 
             logger.info(
@@ -6391,7 +6744,6 @@ def detect_contradictions(
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
     compare_service = comparison_service or get_statement_comparison_service()
-    mig_service = mig_graph_service or get_mig_graph_service()
 
     logger.info(
         "detect_contradictions_task_started",
@@ -6449,7 +6801,11 @@ def detect_contradictions(
                 .eq("source_document_id", doc_id)
                 .execute()
             )
-            if existing_for_doc.count and existing_for_doc.count > 0 and not is_celery_retry:
+            if (
+                existing_for_doc.count
+                and existing_for_doc.count > 0
+                and not is_celery_retry
+            ):
                 logger.info(
                     "detect_contradictions_idempotency_skip",
                     document_id=doc_id,
@@ -6467,7 +6823,11 @@ def detect_contradictions(
                     "job_id": job_id,
                 }
 
-            if is_celery_retry and existing_for_doc.count and existing_for_doc.count > 0:
+            if (
+                is_celery_retry
+                and existing_for_doc.count
+                and existing_for_doc.count > 0
+            ):
                 logger.warning(
                     "detect_contradictions_retry_bypassing_idempotency",
                     document_id=doc_id,
@@ -6585,7 +6945,9 @@ def detect_contradictions(
             async with _contradiction_semaphore:
                 _entity_start = _time.monotonic()
                 try:
-                    async with asyncio.timeout(CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS):
+                    async with asyncio.timeout(
+                        CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS
+                    ):
                         comparison_result = await compare_service.compare_statements_by_canonical_name(
                             canonical_name=canonical_name,
                             matter_id=matter_id,
@@ -6756,7 +7118,9 @@ def detect_contradictions(
             _dispatch_summary_pregeneration(matter_id)
             _mark_job_completed(job_id, matter_id, document_id=doc_id)
         return {
-            "status": "contradiction_detection_partial" if total_contradictions > 0 else "contradiction_detection_failed",
+            "status": "contradiction_detection_partial"
+            if total_contradictions > 0
+            else "contradiction_detection_failed",
             "document_id": doc_id,
             "error_code": "TIMEOUT",
             "error_message": f"Contradiction detection timeout ({timeout_type}). {entities_processed} entities processed, {total_contradictions} contradictions found before timeout.",

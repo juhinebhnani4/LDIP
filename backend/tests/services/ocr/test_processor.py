@@ -21,7 +21,9 @@ class TestOCRProcessor:
         with patch("app.services.ocr.processor.get_settings") as mock_settings:
             mock_settings.return_value.google_cloud_project_id = "test-project"
             mock_settings.return_value.google_cloud_location = "us"
-            mock_settings.return_value.google_document_ai_processor_id = "test-processor"
+            mock_settings.return_value.google_document_ai_processor_id = (
+                "test-processor"
+            )
 
             processor = OCRProcessor()
 
@@ -246,7 +248,9 @@ class TestOCRProcessorProcessDocument:
     ) -> None:
         """Should correctly extract text from multilingual documents."""
         # Multilingual content: English, Hindi, Gujarati
-        multilingual_text = "Legal Document\nधारा 302 भारतीय दंड संहिता\nકલમ 302 ભારતીય દંડ સંહિતા"
+        multilingual_text = (
+            "Legal Document\nधारा 302 भारतीय दंड संहिता\nકલમ 302 ભારતીય દંડ સંહિતા"
+        )
 
         mock_client = MagicMock()
         mock_response = MagicMock()

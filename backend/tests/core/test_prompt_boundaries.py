@@ -6,8 +6,6 @@ Tests the XML boundary wrapping functions that protect against
 prompt injection attacks in LLM prompts.
 """
 
-import pytest
-
 from app.core.prompt_boundaries import (
     DOCUMENT_CONTENT_CLOSE,
     DOCUMENT_CONTENT_OPEN,
@@ -113,7 +111,7 @@ class TestWrapContext:
         result = wrap_context("Some text", source="doc_123_p1")
 
         assert 'source="doc_123_p1"' in result
-        assert result.startswith('<context source=')
+        assert result.startswith("<context source=")
 
     def test_escapes_source_attribute(self) -> None:
         """Should escape special characters in source attribute."""
@@ -176,7 +174,7 @@ class TestFormatDocumentExcerpt:
         )
 
         assert "<excerpt>" in result
-        assert 'index=' not in result
+        assert "index=" not in result
 
     def test_formats_without_metadata(self) -> None:
         """Should format excerpt without metadata when not provided."""
@@ -194,7 +192,11 @@ class TestFormatMultipleExcerpts:
         """Should format list of excerpts with indices."""
         excerpts = [
             {"content": "First excerpt", "document_name": "Doc1.pdf", "page_number": 1},
-            {"content": "Second excerpt", "document_name": "Doc2.pdf", "page_number": 5},
+            {
+                "content": "Second excerpt",
+                "document_name": "Doc2.pdf",
+                "page_number": 5,
+            },
         ]
         result = format_multiple_excerpts(excerpts)
 
@@ -302,7 +304,7 @@ class TestEscapeAttribute:
         """Should escape quotes for attributes."""
         result = _escape_attribute('value with "quotes"')
 
-        assert '&quot;' in result
+        assert "&quot;" in result
         assert '"' not in result
 
     def test_escapes_ampersand(self) -> None:

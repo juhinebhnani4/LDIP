@@ -6,7 +6,6 @@ All search operations are matter-isolated via the API layer.
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # Valid document types matching the documents table CHECK constraint
 VALID_DOCUMENT_TYPES = frozenset({"case_file", "act", "annexure", "other"})
 
@@ -59,7 +58,7 @@ class SearchFilters(BaseModel):
                 )
 
         # Validate page range consistency
-        if self.page_min is not None and self.page_max is not None:
+        if self.page_min is not None and self.page_max is not None:  # noqa: SIM102
             if self.page_min > self.page_max:
                 raise ValueError(
                     f"page_min ({self.page_min}) must be <= page_max ({self.page_max})"
@@ -290,7 +289,9 @@ class FuzzyMatchInfo(BaseModel):
     """Information about a fuzzy entity match."""
 
     query_term: str = Field(..., description="The term from the query that was matched")
-    matched_entity: str = Field(..., description="The canonical entity name that was matched")
+    matched_entity: str = Field(
+        ..., description="The canonical entity name that was matched"
+    )
     match_score: float = Field(..., description="Match confidence score (0-100)")
     is_exact: bool = Field(..., description="True if exact match, False if fuzzy")
 

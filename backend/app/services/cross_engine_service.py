@@ -220,7 +220,9 @@ class CrossEngineService:
             search_terms.extend(entity_data.get("aliases") or [])
             # Build tsquery: "Nirav Jobalia" → "Nirav & Jobalia", joined by OR
             search_query = " | ".join(
-                term.replace(" ", " & ") for term in search_terms if term and term.strip()
+                term.replace(" ", " & ")
+                for term in search_terms
+                if term and term.strip()
             )
             if search_query:
                 logger.info(
@@ -250,7 +252,9 @@ class CrossEngineService:
                     # IMPORTANT: Must use 'simple' config to match the idx_events_description
                     # GIN index (to_tsvector('simple', description)). Using 'english' would cause
                     # index misses and fail on Hindi/Gujarati text.
-                    .text_search("description", search_query, options={"config": "simple"})
+                    .text_search(
+                        "description", search_query, options={"config": "simple"}
+                    )
                     .execute()
                 )
                 total_events = events_result.count if events_result.count else 0
@@ -261,7 +265,9 @@ class CrossEngineService:
 
         for event_data in events_result.data or []:
             doc_data = event_data.get("documents")
-            event_date_str = str(event_data["event_date"]) if event_data.get("event_date") else ""
+            event_date_str = (
+                str(event_data["event_date"]) if event_data.get("event_date") else ""
+            )
             event = CrossLinkedTimelineEvent(
                 event_id=event_data["id"],
                 event_date=event_date_str,
@@ -337,7 +343,9 @@ class CrossEngineService:
             .execute()
         )
 
-        total_contradictions = all_contradictions_result.count if all_contradictions_result.count else 0
+        total_contradictions = (
+            all_contradictions_result.count if all_contradictions_result.count else 0
+        )
 
         if not all_contradictions_result.data:
             return EntityContradictionSummary(
@@ -351,7 +359,11 @@ class CrossEngineService:
             )
 
         # Get entity name from first result (using identity_nodes table)
-        entity_name = all_contradictions_result.data[0].get("identity_nodes", {}).get("canonical_name", "Unknown")
+        entity_name = (
+            all_contradictions_result.data[0]
+            .get("identity_nodes", {})
+            .get("canonical_name", "Unknown")
+        )
 
         # Count severities from the fetched data (no extra query needed)
         high_count = 0
@@ -380,7 +392,9 @@ class CrossEngineService:
                 chunk_ids.add(row["statement_b_id"])
 
         # Fetch chunk and document info in one query
-        chunk_doc_map: dict[str, tuple[str, str, str]] = {}  # chunk_id -> (doc_id, doc_name, content)
+        chunk_doc_map: dict[
+            str, tuple[str, str, str]
+        ] = {}  # chunk_id -> (doc_id, doc_name, content)
         if chunk_ids:
             chunks_result = (
                 self._supabase.table("chunks")
@@ -402,13 +416,19 @@ class CrossEngineService:
             stmt_b_id = row.get("statement_b_id", "")
 
             # Get document info from our map
-            doc_a_id, doc_a_name, excerpt_a = chunk_doc_map.get(stmt_a_id, ("", "Unknown", ""))
-            doc_b_id, doc_b_name, excerpt_b = chunk_doc_map.get(stmt_b_id, ("", "Unknown", ""))
+            doc_a_id, doc_a_name, excerpt_a = chunk_doc_map.get(
+                stmt_a_id, ("", "Unknown", "")
+            )
+            doc_b_id, doc_b_name, excerpt_b = chunk_doc_map.get(
+                stmt_b_id, ("", "Unknown", "")
+            )
 
             contradictions.append(
                 CrossLinkedContradiction(
                     contradiction_id=row["id"],
-                    contradiction_type=row.get("contradiction_type", "semantic_contradiction"),
+                    contradiction_type=row.get(
+                        "contradiction_type", "semantic_contradiction"
+                    ),
                     severity=row.get("severity", "low"),
                     explanation=row.get("explanation", ""),
                     statement_a_excerpt=excerpt_a,
@@ -526,15 +546,25 @@ class CrossEngineService:
                     related_contradictions.append(
                         CrossLinkedContradiction(
                             contradiction_id=row["id"],
-                            contradiction_type=row.get("contradiction_type", "semantic_contradiction"),
+                            contradiction_type=row.get(
+                                "contradiction_type", "semantic_contradiction"
+                            ),
                             severity=row.get("severity", "low"),
                             explanation=row.get("explanation", ""),
-                            statement_a_excerpt=row.get("statement_a_content", "")[:200],
-                            statement_b_excerpt=row.get("statement_b_content", "")[:200],
+                            statement_a_excerpt=row.get("statement_a_content", "")[
+                                :200
+                            ],
+                            statement_b_excerpt=row.get("statement_b_content", "")[
+                                :200
+                            ],
                             document_a_id=row.get("document_a_id", ""),
-                            document_a_name=doc_a.get("filename", "Unknown") if doc_a else "Unknown",
+                            document_a_name=doc_a.get("filename", "Unknown")
+                            if doc_a
+                            else "Unknown",
                             document_b_id=row.get("document_b_id", ""),
-                            document_b_name=doc_b.get("filename", "Unknown") if doc_b else "Unknown",
+                            document_b_name=doc_b.get("filename", "Unknown")
+                            if doc_b
+                            else "Unknown",
                             confidence=row.get("confidence", 0.5),
                         )
                     )
@@ -617,7 +647,11 @@ class CrossEngineService:
             if events_result.data:
                 for event_data_item in events_result.data:
                     doc_data = event_data_item.get("documents")
-                    event_date_str = str(event_data_item["event_date"]) if event_data_item.get("event_date") else ""
+                    event_date_str = (
+                        str(event_data_item["event_date"])
+                        if event_data_item.get("event_date")
+                        else ""
+                    )
                     related_events.append(
                         CrossLinkedTimelineEvent(
                             event_id=event_data_item["id"],
@@ -625,7 +659,9 @@ class CrossEngineService:
                             event_type=event_data_item["event_type"],
                             description=event_data_item["description"],
                             document_id=event_data_item.get("document_id"),
-                            document_name=doc_data.get("filename") if doc_data else None,
+                            document_name=doc_data.get("filename")
+                            if doc_data
+                            else None,
                             source_page=event_data_item.get("source_page"),
                             confidence=event_data_item.get("confidence", 1.0),
                         )
@@ -635,7 +671,9 @@ class CrossEngineService:
             contradiction_id=contradiction_data["id"],
             entity_id=entity_id or "",
             entity_name=entity_data.get("canonical_name", "Unknown"),
-            contradiction_type=contradiction_data.get("contradiction_type", "semantic_contradiction"),
+            contradiction_type=contradiction_data.get(
+                "contradiction_type", "semantic_contradiction"
+            ),
             severity=contradiction_data.get("severity", "low"),
             explanation=contradiction_data.get("explanation", ""),
             related_events=related_events,

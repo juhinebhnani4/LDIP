@@ -19,14 +19,14 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import structlog
-
 from google.genai import types
 
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost
 from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import RawEvent
 from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver
@@ -41,7 +41,7 @@ logger = structlog.get_logger(__name__)
 
 # Confidence threshold for entity linking
 # Can be overridden via ENTITY_LINK_CONFIDENCE_THRESHOLD env var
-import os as _os
+import os as _os  # noqa: E402
 
 LINK_CONFIDENCE_THRESHOLD = float(
     _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.70")
@@ -57,17 +57,35 @@ MAX_BATCH_SIZE = 20
 
 # Indian title patterns for entity mention extraction
 INDIAN_TITLE_PATTERNS = [
-    r"\bShri\b", r"\bSmt\b", r"\bKumari\b", r"\bDr\.?\b",
-    r"\bAdv\.?\b", r"\bAdvocate\b", r"\bHon\.?\b", r"\bHon'ble\b",
-    r"\bJustice\b", r"\bMr\.?\b", r"\bMrs\.?\b", r"\bMs\.?\b",
+    r"\bShri\b",
+    r"\bSmt\b",
+    r"\bKumari\b",
+    r"\bDr\.?\b",
+    r"\bAdv\.?\b",
+    r"\bAdvocate\b",
+    r"\bHon\.?\b",
+    r"\bHon'ble\b",
+    r"\bJustice\b",
+    r"\bMr\.?\b",
+    r"\bMrs\.?\b",
+    r"\bMs\.?\b",
 ]
 
 # Organization indicators
 ORG_INDICATORS = [
-    r"\bLtd\.?\b", r"\bLimited\b", r"\bPvt\.?\b", r"\bPrivate\b",
-    r"\bCorp\.?\b", r"\bCorporation\b", r"\bInc\.?\b",
-    r"\bBank\b", r"\bCompany\b", r"\bAssociation\b",
-    r"\bTrust\b", r"\bFoundation\b", r"\bBoard\b",
+    r"\bLtd\.?\b",
+    r"\bLimited\b",
+    r"\bPvt\.?\b",
+    r"\bPrivate\b",
+    r"\bCorp\.?\b",
+    r"\bCorporation\b",
+    r"\bInc\.?\b",
+    r"\bBank\b",
+    r"\bCompany\b",
+    r"\bAssociation\b",
+    r"\bTrust\b",
+    r"\bFoundation\b",
+    r"\bBoard\b",
 ]
 
 # Entity extraction prompt for Gemini (when names are ambiguous)
@@ -267,7 +285,9 @@ class EventEntityLinker:
 
         # Optionally use Gemini for additional extraction
         if use_gemini and self.client:
-            gemini_mentions = await self._extract_mentions_with_gemini(description, matter_id=matter_id)
+            gemini_mentions = await self._extract_mentions_with_gemini(
+                description, matter_id=matter_id
+            )
             # Merge mentions, avoiding duplicates
             existing_texts = {m.text.lower() for m in mentions}
             for gm in gemini_mentions:
@@ -356,7 +376,8 @@ class EventEntityLinker:
 
             if use_gemini and self.client:
                 gemini_mentions = await self._extract_mentions_with_gemini(
-                    event.description, matter_id=matter_id,
+                    event.description,
+                    matter_id=matter_id,
                 )
                 existing_texts = {m.text.lower() for m in mentions}
                 for gm in gemini_mentions:
@@ -553,9 +574,22 @@ class EventEntityLinker:
             return text
         # Build pattern to strip leading titles
         title_words = (
-            "shri", "smt", "kumari", "dr", "adv", "advocate",
-            "hon", "hon'ble", "honourable", "justice",
-            "mr", "mrs", "ms", "miss", "prof", "professor",
+            "shri",
+            "smt",
+            "kumari",
+            "dr",
+            "adv",
+            "advocate",
+            "hon",
+            "hon'ble",
+            "honourable",
+            "justice",
+            "mr",
+            "mrs",
+            "ms",
+            "miss",
+            "prof",
+            "professor",
         )
         pattern = r"^(?:" + "|".join(re.escape(t) for t in title_words) + r")\.?\s+"
         cleaned = re.sub(pattern, "", text.strip(), flags=re.IGNORECASE)
@@ -653,7 +687,9 @@ class EventEntityLinker:
         # Match 2-4 consecutive capitalized words, including ALL CAPS and single-letter initials
         try:
             # Standard Title Case: "Nirav Jobalia", "Nirav D Jobalia"
-            proper_noun_pattern = r"\b([A-Z][a-z]+(?:\s+[A-Z]\.?(?:\s+|$))*(?:\s*[A-Z][a-z]+){0,3})\b"
+            proper_noun_pattern = (
+                r"\b([A-Z][a-z]+(?:\s+[A-Z]\.?(?:\s+|$))*(?:\s*[A-Z][a-z]+){0,3})\b"
+            )
             for match in re.finditer(proper_noun_pattern, text):
                 name = match.group(1).strip()
                 lower_name = name.lower()
@@ -699,15 +735,26 @@ class EventEntityLinker:
     def _is_common_phrase(self, text: str) -> bool:
         """Check if text is a common phrase (not an entity)."""
         common_phrases = {
-            "the petitioner", "the respondent", "the court",
-            "the above", "the same", "the said", "the matter",
-            "high court", "supreme court", "district court",
-            "civil suit", "writ petition", "special leave",
+            "the petitioner",
+            "the respondent",
+            "the court",
+            "the above",
+            "the same",
+            "the said",
+            "the matter",
+            "high court",
+            "supreme court",
+            "district court",
+            "civil suit",
+            "writ petition",
+            "special leave",
         }
         return text in common_phrases
 
     async def _extract_mentions_with_gemini(
-        self, description: str, matter_id: str | None = None,
+        self,
+        description: str,
+        matter_id: str | None = None,
     ) -> list[EntityMention]:
         """Use Gemini to extract entity mentions for complex cases.
 
@@ -875,7 +922,10 @@ class EventEntityLinker:
                 normalized_mention, normalized_entity
             )
 
-            if canonical_score > best_score and canonical_score >= LINK_CONFIDENCE_THRESHOLD:
+            if (
+                canonical_score > best_score
+                and canonical_score >= LINK_CONFIDENCE_THRESHOLD
+            ):
                 best_score = canonical_score
                 best_match = EntityLinkResult(
                     mention_text=mention.text,
@@ -893,7 +943,10 @@ class EventEntityLinker:
                     normalized_mention, normalized_alias
                 )
 
-                if alias_score > best_score and alias_score >= LINK_CONFIDENCE_THRESHOLD:
+                if (
+                    alias_score > best_score
+                    and alias_score >= LINK_CONFIDENCE_THRESHOLD
+                ):
                     best_score = alias_score
                     best_match = EntityLinkResult(
                         mention_text=mention.text,

@@ -176,52 +176,36 @@ class TestNameSimilarity:
 
     def test_exact_match(self, resolver: EntityResolver) -> None:
         """Test exact name match returns 1.0."""
-        score = resolver.calculate_name_similarity(
-            "Nirav Jobalia",
-            "Nirav Jobalia"
-        )
+        score = resolver.calculate_name_similarity("Nirav Jobalia", "Nirav Jobalia")
         assert score == 1.0
 
     def test_case_insensitive_match(self, resolver: EntityResolver) -> None:
         """Test case insensitive matching."""
-        score = resolver.calculate_name_similarity(
-            "nirav jobalia",
-            "NIRAV JOBALIA"
-        )
+        score = resolver.calculate_name_similarity("nirav jobalia", "NIRAV JOBALIA")
         assert score == 1.0
 
     def test_initials_to_full_name(self, resolver: EntityResolver) -> None:
         """Test matching initials to full name."""
         score = resolver.calculate_name_similarity(
-            "N.D. Jobalia",
-            "Nirav Dineshbhai Jobalia"
+            "N.D. Jobalia", "Nirav Dineshbhai Jobalia"
         )
         # Should have high similarity due to initial matching
         assert score > 0.7
 
     def test_title_variation(self, resolver: EntityResolver) -> None:
         """Test matching names with different titles."""
-        score = resolver.calculate_name_similarity(
-            "Mr. Jobalia",
-            "Shri Jobalia"
-        )
+        score = resolver.calculate_name_similarity("Mr. Jobalia", "Shri Jobalia")
         # Should still have reasonable similarity (same last name)
         assert score > 0.5
 
     def test_different_names(self, resolver: EntityResolver) -> None:
         """Test completely different names have low similarity."""
-        score = resolver.calculate_name_similarity(
-            "John Smith",
-            "Jane Doe"
-        )
+        score = resolver.calculate_name_similarity("John Smith", "Jane Doe")
         assert score < LOW_SIMILARITY_THRESHOLD
 
     def test_partial_name_match(self, resolver: EntityResolver) -> None:
         """Test partial name matching (first name only)."""
-        score = resolver.calculate_name_similarity(
-            "Nirav",
-            "Nirav Jobalia"
-        )
+        score = resolver.calculate_name_similarity("Nirav", "Nirav Jobalia")
         # Should have some similarity but not very high
         assert 0.3 < score < 0.8
 
@@ -289,7 +273,9 @@ class TestFindPotentialAliases:
 
         if len(candidates) >= 2:
             for i in range(len(candidates) - 1):
-                assert candidates[i].similarity_score >= candidates[i + 1].similarity_score
+                assert (
+                    candidates[i].similarity_score >= candidates[i + 1].similarity_score
+                )
 
     def test_high_similarity_auto_linked(
         self,
@@ -362,10 +348,7 @@ class TestEdgeCases:
 
     def test_unicode_names(self, resolver: EntityResolver) -> None:
         """Test handling of Unicode characters in names."""
-        score = resolver.calculate_name_similarity(
-            "José García",
-            "Jose Garcia"
-        )
+        score = resolver.calculate_name_similarity("José García", "Jose Garcia")
         # Should still work with accented characters
         assert score > 0.8
 

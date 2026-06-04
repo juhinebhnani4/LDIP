@@ -70,7 +70,9 @@ class ReasoningArchiveService:
         # Find traces to archive
         result = (
             self.client.table("reasoning_traces")
-            .select("id, matter_id, reasoning_text, reasoning_structured, input_summary, created_at")
+            .select(
+                "id, matter_id, reasoning_text, reasoning_structured, input_summary, created_at"
+            )
             .lt("created_at", cutoff_date.isoformat())
             .is_("archived_at", "null")
             .limit(ARCHIVE_BATCH_SIZE)
@@ -79,7 +81,9 @@ class ReasoningArchiveService:
 
         traces = result.data
         if not traces:
-            logger.info("reasoning_archival_no_traces", cutoff_date=cutoff_date.isoformat())
+            logger.info(
+                "reasoning_archival_no_traces", cutoff_date=cutoff_date.isoformat()
+            )
             return {"archived": 0, "failed": 0}
 
         archived = 0
@@ -142,13 +146,15 @@ class ReasoningArchiveService:
 
         # Update trace record (clear large text, set archive path)
         # Story 4.2: Keep a placeholder text so trace row is still meaningful
-        self.client.table("reasoning_traces").update({
-            "reasoning_text": f"[Archived to cold storage: {archive_path}]",
-            "reasoning_structured": None,
-            "input_summary": None,
-            "archived_at": datetime.now(UTC).isoformat(),
-            "archive_path": archive_path,
-        }).eq("id", trace_id).execute()
+        self.client.table("reasoning_traces").update(
+            {
+                "reasoning_text": f"[Archived to cold storage: {archive_path}]",
+                "reasoning_structured": None,
+                "input_summary": None,
+                "archived_at": datetime.now(UTC).isoformat(),
+                "archive_path": archive_path,
+            }
+        ).eq("id", trace_id).execute()
 
         logger.debug(
             "reasoning_trace_archived",
@@ -196,13 +202,15 @@ class ReasoningArchiveService:
             archived_data = json.loads(gzip.decompress(response))
 
             # Restore to database
-            self.client.table("reasoning_traces").update({
-                "reasoning_text": archived_data["reasoning_text"],
-                "reasoning_structured": archived_data.get("reasoning_structured"),
-                "input_summary": archived_data.get("input_summary"),
-                "archived_at": None,
-                "archive_path": None,
-            }).eq("id", trace_id).execute()
+            self.client.table("reasoning_traces").update(
+                {
+                    "reasoning_text": archived_data["reasoning_text"],
+                    "reasoning_structured": archived_data.get("reasoning_structured"),
+                    "input_summary": archived_data.get("input_summary"),
+                    "archived_at": None,
+                    "archive_path": None,
+                }
+            ).eq("id", trace_id).execute()
 
             # Delete from storage
             self.client.storage.from_(self.bucket).remove([archive_path])

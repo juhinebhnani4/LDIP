@@ -48,7 +48,9 @@ class SourceRef(BaseModel):
     """
 
     document_id: str = Field(description="Document UUID")
-    document_name: str = Field(default="Unknown Document", description="Document filename")
+    document_name: str = Field(
+        default="Unknown Document", description="Document filename"
+    )
     page: int | None = Field(default=None, description="Page number (1-indexed)")
     bbox_ids: list[str] = Field(
         default_factory=list,
@@ -199,9 +201,15 @@ class ArchivedSession(BaseModel):
     )
 
     # Session stats
-    total_query_count: int = Field(default=0, ge=0, description="Total queries in session")
-    total_messages: int = Field(default=0, ge=0, description="Total messages in session")
-    ttl_extended_count: int = Field(default=0, ge=0, description="Times TTL was extended")
+    total_query_count: int = Field(
+        default=0, ge=0, description="Total queries in session"
+    )
+    total_messages: int = Field(
+        default=0, ge=0, description="Total messages in session"
+    )
+    ttl_extended_count: int = Field(
+        default=0, ge=0, description="Times TTL was extended"
+    )
 
     # Archival metadata
     archival_reason: Literal["expired", "manual_end", "logout"] = Field(
@@ -255,7 +263,9 @@ class QueryHistoryEntry(BaseModel):
     verified_at: str | None = Field(default=None, description="Verification timestamp")
 
     # Cost tracking
-    tokens_used: int | None = Field(default=None, ge=0, description="Total tokens consumed")
+    tokens_used: int | None = Field(
+        default=None, ge=0, description="Total tokens consumed"
+    )
     cost_usd: float | None = Field(default=None, ge=0, description="Total cost in USD")
 
 
@@ -314,7 +324,9 @@ class TimelineCache(BaseModel):
         default_factory=list,
         description="Timeline events sorted by date",
     )
-    date_range_start: str | None = Field(default=None, description="Earliest event date")
+    date_range_start: str | None = Field(
+        default=None, description="Earliest event date"
+    )
     date_range_end: str | None = Field(default=None, description="Latest event date")
     event_count: int = Field(default=0, ge=0, description="Total events in timeline")
 
@@ -547,7 +559,9 @@ class CachedQueryResult(BaseModel):
     """
 
     # Query identification
-    query_hash: str = Field(description="SHA256 hash of normalized query (64 hex chars)")
+    query_hash: str = Field(
+        description="SHA256 hash of normalized query (64 hex chars)"
+    )
     matter_id: str = Field(description="Matter UUID for isolation")
     original_query: str = Field(description="Original user query before normalization")
     normalized_query: str = Field(description="Normalized query used for hashing")

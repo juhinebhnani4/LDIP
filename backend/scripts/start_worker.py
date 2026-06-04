@@ -46,7 +46,9 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Start Celery worker with optimized settings")
+    parser = argparse.ArgumentParser(
+        description="Start Celery worker with optimized settings"
+    )
     parser.add_argument(
         "--solo",
         action="store_true",
@@ -113,8 +115,11 @@ def main():
 
     # Build command
     cmd = [
-        sys.executable, "-m", "celery",
-        "-A", "app.workers.celery:celery_app",
+        sys.executable,
+        "-m",
+        "celery",
+        "-A",
+        "app.workers.celery:celery_app",
         "worker",
         f"--loglevel={args.loglevel}",
         f"--pool={pool}",

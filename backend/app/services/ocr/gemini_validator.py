@@ -16,12 +16,6 @@ from functools import lru_cache
 
 import structlog
 
-from app.core.gemini_client import GeminiClientError, get_gemini_client
-from app.core.llm_rate_limiter import (
-    LLMProvider as RateLimitProvider,
-    get_distributed_rate_limiter,
-    get_rate_limiter,
-)
 from app.core.circuit_breaker import (
     CircuitOpenError,
     CircuitService,
@@ -29,7 +23,21 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
-from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost, persist_cost_sync
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+    persist_cost,
+    persist_cost_sync,
+)
+from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+)
+from app.core.llm_rate_limiter import (
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
 from app.models.ocr_validation import (
     CorrectionType,
     LowConfidenceWord,
@@ -319,7 +327,9 @@ Example response:
 
         try:
             # Call Gemini asynchronously with circuit breaker
-            response_text = await self._call_gemini_validate(prompt, document_id=document_id, matter_id=matter_id)
+            response_text = await self._call_gemini_validate(
+                prompt, document_id=document_id, matter_id=matter_id
+            )
 
             # Parse response
             results = self._parse_response(response_text, words)
@@ -359,7 +369,9 @@ Example response:
             return self._fallback_results(words)
 
     @with_circuit_breaker(CircuitService.GEMINI_FLASH)
-    async def _call_gemini_validate(self, prompt: str, document_id: str | None = None, matter_id: str | None = None) -> str:
+    async def _call_gemini_validate(
+        self, prompt: str, document_id: str | None = None, matter_id: str | None = None
+    ) -> str:
         """Call Gemini API with circuit breaker protection.
 
         Args:
@@ -450,7 +462,9 @@ Example response:
                             corrected=corrected,
                             old_confidence=word.confidence,
                             new_confidence=confidence,
-                            correction_type=CorrectionType.GEMINI if was_corrected else None,
+                            correction_type=CorrectionType.GEMINI
+                            if was_corrected
+                            else None,
                             reasoning=reasoning if was_corrected else None,
                             was_corrected=was_corrected,
                         )

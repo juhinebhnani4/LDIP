@@ -9,10 +9,7 @@ Covers:
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.engines.rag.query_profile import QueryProfile, QueryType
-
 
 # =============================================================================
 # _scale_for_matter_size
@@ -142,18 +139,21 @@ class TestFromIntentSignalsWithDocumentCount:
     def _make_rag_signal(self):
         """Create a minimal RAG intent signal."""
         from app.models.orchestrator import EngineType
+
         signal = MagicMock()
         signal.engine = EngineType.RAG
         return signal
 
     def _make_timeline_signal(self):
         from app.models.orchestrator import EngineType
+
         signal = MagicMock()
         signal.engine = EngineType.TIMELINE
         return signal
 
     def _make_contradiction_signal(self):
         from app.models.orchestrator import EngineType
+
         signal = MagicMock()
         signal.engine = EngineType.CONTRADICTION
         return signal
@@ -208,7 +208,7 @@ class TestFromIntentSignalsWithDocumentCount:
 
         assert profile.query_type == QueryType.LOOKUP
         assert profile.hybrid_limit == 25  # int(50 * 0.5)
-        assert profile.rerank_top_n == 5   # Preserved (default profile value)
+        assert profile.rerank_top_n == 5  # Preserved (default profile value)
 
     def test_timeline_with_medium_matter(self):
         """Timeline query + medium matter."""

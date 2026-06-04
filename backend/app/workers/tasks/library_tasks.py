@@ -16,7 +16,7 @@ from celery.exceptions import Retry
 
 from app.models.library import LibraryDocumentStatus
 from app.services.chunking.parent_child_chunker import ParentChildChunker
-from app.services.library_service import get_library_service, LibraryService
+from app.services.library_service import LibraryService, get_library_service
 from app.services.rag.embedder import EmbeddingService, get_embedding_service
 from app.services.supabase.client import get_service_client
 from app.workers.celery import celery_app
@@ -35,12 +35,12 @@ EMBEDDING_RATE_LIMIT_DELAY = 0.5  # Seconds between batches
 # false positives from mid-sentence references.
 _SECTION_TITLE_RE = re.compile(
     r"^\s*("
-    r"(?:Section|Sec\.?)\s+\d+[A-Z]?"          # Section 4, Section 137A, Sec. 5
-    r"|Article\s+\d+[A-Z]?"                     # Article 14, Article 370A
-    r"|Rule\s+\d+[A-Z]?"                        # Rule 5, Rule 11A
-    r"|Order\s+[IVXLCDM]+(?:\s+Rule\s+\d+)?"   # Order XXI, Order XXI Rule 1
-    r"|Schedule\s+[IVXLCDM\d]+"                 # Schedule I, Schedule 2
-    r"|Chapter\s+[IVXLCDM\d]+"                  # Chapter III, Chapter 4
+    r"(?:Section|Sec\.?)\s+\d+[A-Z]?"  # Section 4, Section 137A, Sec. 5
+    r"|Article\s+\d+[A-Z]?"  # Article 14, Article 370A
+    r"|Rule\s+\d+[A-Z]?"  # Rule 5, Rule 11A
+    r"|Order\s+[IVXLCDM]+(?:\s+Rule\s+\d+)?"  # Order XXI, Order XXI Rule 1
+    r"|Schedule\s+[IVXLCDM\d]+"  # Schedule I, Schedule 2
+    r"|Chapter\s+[IVXLCDM\d]+"  # Chapter III, Chapter 4
     r")",
     re.MULTILINE | re.IGNORECASE,
 )
@@ -156,7 +156,8 @@ def chunk_library_document(
         # Create chunker and process
         chunker = ParentChildChunker()
         result = chunker.chunk_document(
-            library_document_id, extracted_text,
+            library_document_id,
+            extracted_text,
             document_context=doc_context,
         )
 
@@ -169,17 +170,19 @@ def chunk_library_document(
         for chunk in result.parent_chunks:
             section = _extract_section_title(chunk.content)
             parent_section_map[str(chunk.id)] = section
-            chunk_records.append({
-                "id": str(chunk.id),
-                "library_document_id": library_document_id,
-                "chunk_index": chunk.chunk_index,
-                "parent_chunk_id": None,
-                "content": chunk.content,
-                "page_number": chunk.page_number,
-                "section_title": section,
-                "token_count": chunk.token_count,
-                "chunk_type": "parent",
-            })
+            chunk_records.append(
+                {
+                    "id": str(chunk.id),
+                    "library_document_id": library_document_id,
+                    "chunk_index": chunk.chunk_index,
+                    "parent_chunk_id": None,
+                    "content": chunk.content,
+                    "page_number": chunk.page_number,
+                    "section_title": section,
+                    "token_count": chunk.token_count,
+                    "chunk_type": "parent",
+                }
+            )
 
         # Create parent chunks first to get IDs
         if chunk_records:
@@ -192,21 +195,21 @@ def chunk_library_document(
                 parent_id_str = str(chunk.parent_id) if chunk.parent_id else None
                 # Child inherits parent's section, or extracts its own if parent had none
                 child_section = (
-                    parent_section_map.get(parent_id_str)
-                    if parent_id_str
-                    else None
+                    parent_section_map.get(parent_id_str) if parent_id_str else None
                 ) or _extract_section_title(chunk.content)
-                child_records.append({
-                    "id": str(chunk.id),
-                    "library_document_id": library_document_id,
-                    "chunk_index": chunk.chunk_index,
-                    "parent_chunk_id": parent_id_str,
-                    "content": chunk.content,
-                    "page_number": chunk.page_number,
-                    "section_title": child_section,
-                    "token_count": chunk.token_count,
-                    "chunk_type": "child",
-                })
+                child_records.append(
+                    {
+                        "id": str(chunk.id),
+                        "library_document_id": library_document_id,
+                        "chunk_index": chunk.chunk_index,
+                        "parent_chunk_id": parent_id_str,
+                        "content": chunk.content,
+                        "page_number": chunk.page_number,
+                        "section_title": child_section,
+                        "token_count": chunk.token_count,
+                        "chunk_type": "child",
+                    }
+                )
 
             if child_records:
                 client.table("library_chunks").insert(child_records).execute()
@@ -232,6 +235,7 @@ def chunk_library_document(
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
+
         logger.error(
             "chunk_library_document_failed",
             library_document_id=library_document_id,
@@ -247,14 +251,20 @@ def chunk_library_document(
                 quality_flags=["chunking_failed"],
             )
         except Exception as status_err:
-            logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=library_document_id, target_status="failed", original_error=str(e))
+            logger.error(
+                "status_update_on_failure_swallowed",
+                error=str(status_err),
+                library_document_id=library_document_id,
+                target_status="failed",
+                original_error=str(e),
+            )
 
         # DPP-002: Raise instead of return — Celery stops the chain
         raise LibraryPipelineTaskError(
             str(e),
             error_code="CHUNKING_FAILED",
             library_document_id=library_document_id,
-        )
+        ) from e
 
 
 # =============================================================================
@@ -298,6 +308,7 @@ def embed_library_chunks(
 
     if not lib_doc_id:
         from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
+
         logger.error("embed_library_chunks_no_document_id")
         raise LibraryPipelineTaskError(
             "No library_document_id provided",
@@ -310,6 +321,7 @@ def embed_library_chunks(
 
     if client is None:
         from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
+
         raise LibraryPipelineTaskError(
             "Database client not configured",
             error_code="DATABASE_NOT_CONFIGURED",
@@ -332,6 +344,7 @@ def embed_library_chunks(
     # through — the lock lives here, not at each dispatch site (avoids the
     # ARCH-003 "release at N call sites" smell; one finally releases it).
     from app.services.distributed_lock import PipelineLock
+
     _lock = PipelineLock(lib_doc_id)
     if not _lock.acquire():
         logger.info(
@@ -434,13 +447,15 @@ def embed_library_chunks(
         # first blip — while a genuinely empty/garbage doc still fails fast.
         had_transient_failure = False
         for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
-            batch = chunks[i:i + EMBEDDING_BATCH_SIZE]
+            batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
             batch_texts = [c["content"] for c in batch]
             batch_ids = [c["id"] for c in batch]
 
             # Generate embeddings (GAP-11: pass library_document_id for cost attribution)
-            async def _embed_batch():
-                return await embedder.embed_batch(batch_texts, library_document_id=lib_doc_id)
+            async def _embed_batch(batch_texts=batch_texts):
+                return await embedder.embed_batch(
+                    batch_texts, library_document_id=lib_doc_id
+                )
 
             embeddings = run_async(_embed_batch())
 
@@ -466,33 +481,38 @@ def embed_library_chunks(
                 continue
 
             # Update chunks with embeddings
-            for chunk_id, embedding in zip(batch_ids, embeddings):
+            for chunk_id, embedding in zip(batch_ids, embeddings, strict=False):
                 if embedding is not None:
-                    client.table("library_chunks").update(
-                        {"embedding": embedding}
-                    ).eq("id", chunk_id).execute()
+                    client.table("library_chunks").update({"embedding": embedding}).eq(
+                        "id", chunk_id
+                    ).execute()
                     embedded_count += 1
 
             # Rate limit delay between batches
             if i + EMBEDDING_BATCH_SIZE < len(chunks):
                 import time
+
                 time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
 
         # GAP-4: Generate Voyage embeddings (best-effort, non-blocking)
         voyage_count = 0
         try:
             from app.core.config import get_settings
+
             settings = get_settings()
             if settings.voyage_api_key:
-                from app.services.rag.voyage_embedder import get_voyage_embedding_service
+                from app.services.rag.voyage_embedder import (
+                    get_voyage_embedding_service,
+                )
+
                 voyage_embedder = get_voyage_embedding_service()
 
                 for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
-                    batch = chunks[i:i + EMBEDDING_BATCH_SIZE]
+                    batch = chunks[i : i + EMBEDDING_BATCH_SIZE]
                     batch_texts = [c["content"] for c in batch]
                     batch_ids = [c["id"] for c in batch]
 
-                    async def _embed_voyage_batch():
+                    async def _embed_voyage_batch(batch_texts=batch_texts):
                         return await voyage_embedder.embed_batch(
                             batch_texts,
                             matter_id=None,
@@ -501,7 +521,9 @@ def embed_library_chunks(
 
                     voyage_embeddings = run_async(_embed_voyage_batch())
                     if voyage_embeddings:
-                        for chunk_id, v_emb in zip(batch_ids, voyage_embeddings):
+                        for chunk_id, v_emb in zip(
+                            batch_ids, voyage_embeddings, strict=False
+                        ):
                             if v_emb is not None:
                                 client.table("library_chunks").update(
                                     {"embedding_voyage": v_emb}
@@ -510,6 +532,7 @@ def embed_library_chunks(
 
                     if i + EMBEDDING_BATCH_SIZE < len(chunks):
                         import time
+
                         time.sleep(EMBEDDING_RATE_LIMIT_DELAY)
 
                 logger.info(
@@ -591,7 +614,7 @@ def embed_library_chunks(
                     # exponential-ish countdown bounded at 120s; self.retry raises
                     # celery Retry (re-raised past the generic handler below).
                     raise self.retry(
-                        countdown=min(120, 15 * (2 ** self.request.retries)),
+                        countdown=min(120, 15 * (2**self.request.retries)),
                     )
                 # Bounded retries exhausted — terminal, but LABELED as a throttle so
                 # ops can tell "OpenAI quota problem" from "bad document". FAILED
@@ -673,6 +696,7 @@ def embed_library_chunks(
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import LibraryPipelineTaskError
+
         logger.error(
             "embed_library_chunks_failed",
             library_document_id=lib_doc_id,
@@ -688,14 +712,20 @@ def embed_library_chunks(
                 quality_flags=["embedding_failed"],
             )
         except Exception as status_err:
-            logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=lib_doc_id, target_status="failed", original_error=str(e))
+            logger.error(
+                "status_update_on_failure_swallowed",
+                error=str(status_err),
+                library_document_id=lib_doc_id,
+                target_status="failed",
+                original_error=str(e),
+            )
 
         # DPP-002: Raise instead of return — Celery stops the chain
         raise LibraryPipelineTaskError(
             str(e),
             error_code="EMBEDDING_FAILED",
             library_document_id=lib_doc_id,
-        )
+        ) from e
 
     finally:
         # RISK-2: single release point for the embed lock — runs on success,
@@ -875,7 +905,11 @@ def ocr_and_process_library_document(
             pdf_bytes = client.storage.from_("documents").download(storage_path)
         except Exception as storage_err:
             err_msg = str(storage_err).lower()
-            if "not found" in err_msg or "404" in err_msg or "object not found" in err_msg:
+            if (
+                "not found" in err_msg
+                or "404" in err_msg
+                or "object not found" in err_msg
+            ):
                 logger.error(
                     "ocr_library_document_storage_missing",
                     library_document_id=library_document_id,
@@ -901,8 +935,10 @@ def ocr_and_process_library_document(
         extraction_method = "unknown"
 
         try:
-            import pypdf
             from io import BytesIO
+
+            import pypdf
+
             reader = pypdf.PdfReader(BytesIO(pdf_bytes))
             page_count = len(reader.pages)
             page_texts = []
@@ -936,8 +972,11 @@ def ocr_and_process_library_document(
                 reason="insufficient text from pypdf",
             )
             from app.services.ocr.processor import OCRProcessor
+
             processor = OCRProcessor()
-            ocr_result = processor.process_document(pdf_bytes, library_document_id=library_document_id)
+            ocr_result = processor.process_document(
+                pdf_bytes, library_document_id=library_document_id
+            )
             extracted_text = ocr_result.full_text
             page_count = ocr_result.page_count
             extraction_method = "document_ai"
@@ -948,18 +987,25 @@ def ocr_and_process_library_document(
                 LibraryDocumentStatus.FAILED,
                 quality_flags=["ocr_empty_text"],
             )
-            return {"status": "failed", "library_document_id": library_document_id, "reason": "empty_text"}
+            return {
+                "status": "failed",
+                "library_document_id": library_document_id,
+                "reason": "empty_text",
+            }
 
         # 4. Update page_count on the library document
-        client.table("library_documents").update({
-            "page_count": page_count,
-        }).eq("id", library_document_id).execute()
+        client.table("library_documents").update(
+            {
+                "page_count": page_count,
+            }
+        ).eq("id", library_document_id).execute()
 
         # 5. Chunk inline (text is already in memory — no need to serialize
         #    through Redis, which hits the 100MB Upstash record limit for
         #    large Acts like Income Tax Act at 3MB+).
         chunk_result = chunk_library_document(
-            library_document_id, extracted_text,
+            library_document_id,
+            extracted_text,
         )
         logger.info(
             "library_chunking_inline_complete",
@@ -969,6 +1015,7 @@ def ocr_and_process_library_document(
 
         # 6. Dispatch embedding as a separate task (small message — just the ID)
         from celery import chain
+
         steps = [embed_library_chunks.s(library_document_id=library_document_id)]
 
         if on_complete_callbacks:
@@ -983,9 +1030,11 @@ def ocr_and_process_library_document(
             steps[0].apply_async(queue="default")
         else:
             pipeline = chain(*steps)
-            pipeline.link_error(on_library_chain_error.s(
-                library_document_id=library_document_id,
-            ))
+            pipeline.link_error(
+                on_library_chain_error.s(
+                    library_document_id=library_document_id,
+                )
+            )
             pipeline.apply_async(queue="default")
 
         logger.info(
@@ -1026,7 +1075,13 @@ def ocr_and_process_library_document(
                     quality_flags=["ocr_failed"],
                 )
             except Exception as status_err:
-                logger.error("status_update_on_failure_swallowed", error=str(status_err), library_document_id=library_document_id, target_status="failed", original_error=str(e))
+                logger.error(
+                    "status_update_on_failure_swallowed",
+                    error=str(status_err),
+                    library_document_id=library_document_id,
+                    target_status="failed",
+                    original_error=str(e),
+                )
             return {
                 "status": "failed",
                 "library_document_id": library_document_id,
@@ -1129,9 +1184,12 @@ def promote_chunks_to_library(
 
     try:
         # Idempotency: skip if library_chunks already exist
-        existing = client.table("library_chunks").select(
-            "id", count="exact"
-        ).eq("library_document_id", library_document_id).execute()
+        existing = (
+            client.table("library_chunks")
+            .select("id", count="exact")
+            .eq("library_document_id", library_document_id)
+            .execute()
+        )
 
         if existing.count and existing.count > 0:
             logger.info(
@@ -1140,9 +1198,11 @@ def promote_chunks_to_library(
                 count=existing.count,
             )
             # Ensure status is completed
-            client.table("library_documents").update({
-                "status": "completed",
-            }).eq("id", library_document_id).execute()
+            client.table("library_documents").update(
+                {
+                    "status": "completed",
+                }
+            ).eq("id", library_document_id).execute()
             return {
                 "status": "already_exists",
                 "library_document_id": library_document_id,
@@ -1150,25 +1210,32 @@ def promote_chunks_to_library(
             }
 
         # Check if source document has chunks
-        source_chunks = client.table("chunks").select(
-            "content, embedding, page_number, chunk_index, token_count, chunk_type"
-        ).eq("document_id", source_document_id).is_(
-            "parent_chunk_id", "null"
-        ).order("chunk_index").execute()
+        source_chunks = (
+            client.table("chunks")
+            .select(
+                "content, embedding, page_number, chunk_index, token_count, chunk_type"
+            )
+            .eq("document_id", source_document_id)
+            .is_("parent_chunk_id", "null")
+            .order("chunk_index")
+            .execute()
+        )
 
         if source_chunks.data and len(source_chunks.data) > 0:
             # Copy chunks to library_chunks
             library_chunks = []
             for i, chunk in enumerate(source_chunks.data):
-                library_chunks.append({
-                    "library_document_id": library_document_id,
-                    "chunk_index": chunk.get("chunk_index", i),
-                    "content": chunk["content"],
-                    "page_number": chunk.get("page_number"),
-                    "token_count": chunk.get("token_count"),
-                    "chunk_type": chunk.get("chunk_type", "parent"),
-                    "embedding": chunk.get("embedding"),
-                })
+                library_chunks.append(
+                    {
+                        "library_document_id": library_document_id,
+                        "chunk_index": chunk.get("chunk_index", i),
+                        "content": chunk["content"],
+                        "page_number": chunk.get("page_number"),
+                        "token_count": chunk.get("token_count"),
+                        "chunk_type": chunk.get("chunk_type", "parent"),
+                        "embedding": chunk.get("embedding"),
+                    }
+                )
 
             # Insert in batches to avoid payload limits
             batch_size = 100
@@ -1179,13 +1246,15 @@ def promote_chunks_to_library(
                 total_inserted += len(batch)
 
             # Update library document status to completed
-            client.table("library_documents").update({
-                "status": "completed",
-                "page_count": max(
-                    (c.get("page_number") or 0 for c in source_chunks.data),
-                    default=None,
-                ),
-            }).eq("id", library_document_id).execute()
+            client.table("library_documents").update(
+                {
+                    "status": "completed",
+                    "page_count": max(
+                        (c.get("page_number") or 0 for c in source_chunks.data),
+                        default=None,
+                    ),
+                }
+            ).eq("id", library_document_id).execute()
 
             logger.info(
                 "promote_chunks_copied",
@@ -1240,7 +1309,12 @@ def promote_chunks_to_library(
                     queue="default",
                 )
             except Exception as dispatch_err:
-                logger.error("ocr_fallback_dispatch_swallowed", error=str(dispatch_err), library_document_id=library_document_id, storage_path=storage_path)
+                logger.error(
+                    "ocr_fallback_dispatch_swallowed",
+                    error=str(dispatch_err),
+                    library_document_id=library_document_id,
+                    storage_path=storage_path,
+                )
             return {
                 "status": "failed",
                 "library_document_id": library_document_id,

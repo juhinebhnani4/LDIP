@@ -10,9 +10,8 @@ import structlog
 
 from app.services.rag.embedding_migration import (
     MigrationConfig,
-    MigrationProgress,
-    get_embedding_migration_service,
     get_current_embedding_model_version,
+    get_embedding_migration_service,
 )
 from app.workers.celery_app import celery_app
 from app.workers.utils import run_async
@@ -70,7 +69,7 @@ def _validate_migration_params(
         }
 
     # Validate target_model_version if provided
-    if target_model_version is not None:
+    if target_model_version is not None:  # noqa: SIM102
         if not isinstance(target_model_version, str) or not target_model_version:
             return {
                 "status": "validation_error",
@@ -79,7 +78,11 @@ def _validate_migration_params(
             }
 
     # Validate batch_size is within acceptable range
-    if not isinstance(batch_size, int) or batch_size < MIN_BATCH_SIZE or batch_size > MAX_BATCH_SIZE:
+    if (
+        not isinstance(batch_size, int)
+        or batch_size < MIN_BATCH_SIZE
+        or batch_size > MAX_BATCH_SIZE
+    ):
         return {
             "status": "validation_error",
             "error": f"batch_size must be an integer between {MIN_BATCH_SIZE} and {MAX_BATCH_SIZE}",
@@ -173,7 +176,8 @@ def migrate_embeddings(
 
         config = MigrationConfig(
             source_model_version=source_model_version,
-            target_model_version=target_model_version or get_current_embedding_model_version(),
+            target_model_version=target_model_version
+            or get_current_embedding_model_version(),
             matter_id=matter_id,
             batch_size=batch_size,
             resume_from_chunk_id=resume_from_chunk_id,

@@ -216,7 +216,9 @@ class TestCohereRerankServiceRerank:
 
             service = CohereRerankService()
             mock_client = MagicMock()
-            mock_client.rerank.side_effect = CohereApiError(status_code=500, body="API error")
+            mock_client.rerank.side_effect = CohereApiError(
+                status_code=500, body="API error"
+            )
             service._client = mock_client
 
             with pytest.raises(CohereRerankServiceError) as exc_info:
@@ -246,6 +248,7 @@ class TestCohereRerankServiceRerank:
                 # Create a mock that sleeps longer than our patched timeout
                 def slow_rerank(*args, **kwargs):
                     import time
+
                     time.sleep(0.1)  # Longer than patched 0.01s timeout
                     return MagicMock()
 
@@ -298,6 +301,7 @@ class TestGetCohereRerankService:
         """Should return same instance on multiple calls."""
         # Reset the global instance for testing
         import app.services.rag.reranker as reranker_module
+
         reranker_module._rerank_service_instance = None
 
         with patch("app.services.rag.reranker.get_settings") as mock_settings:

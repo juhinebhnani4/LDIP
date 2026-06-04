@@ -26,7 +26,10 @@ import structlog
 
 from app.core.bbox_search import search_bboxes_for_text
 from app.core.page_detection import ACT_PATTERN, SECTION_PATTERN
-from app.core.reliability_logging import log_citation_page_detection, log_citation_page_fallback
+from app.core.reliability_logging import (
+    log_citation_page_detection,
+    log_citation_page_fallback,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -47,7 +50,9 @@ def _evict_oldest_if_needed() -> None:
         # Python 3.7+ dicts maintain insertion order, so first key is oldest
         oldest_key = next(iter(_bbox_cache))
         del _bbox_cache[oldest_key]
-        logger.debug("bbox_cache_evicted", document_id=oldest_key[:8] if oldest_key else None)
+        logger.debug(
+            "bbox_cache_evicted", document_id=oldest_key[:8] if oldest_key else None
+        )
 
 
 def set_document_bboxes(document_id: str, bboxes: list[dict]) -> None:

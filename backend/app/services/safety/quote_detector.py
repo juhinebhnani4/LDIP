@@ -269,9 +269,7 @@ class QuoteDetector:
 
         return regions
 
-    def _remove_overlaps(
-        self, regions: list[ProtectedRegion]
-    ) -> list[ProtectedRegion]:
+    def _remove_overlaps(self, regions: list[ProtectedRegion]) -> list[ProtectedRegion]:
         """Remove overlapping regions, keeping longer ones.
 
         Story 8-3: Task 3.5 - Handle nested quotes.

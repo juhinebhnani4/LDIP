@@ -15,7 +15,6 @@ import pytest
 
 from app.models.timeline import ExtractedDate
 
-
 # =============================================================================
 # Phase 1.1 — Dedup key tests
 # =============================================================================
@@ -47,7 +46,9 @@ class TestDedupKey:
 
         assert _dedup_key(filing) != _dedup_key(hearing)
 
-    def test_same_date_same_type_different_description_produces_different_keys(self) -> None:
+    def test_same_date_same_type_different_description_produces_different_keys(
+        self,
+    ) -> None:
         """Two filings on same date with different descriptions should NOT be deduped."""
         from app.workers.tasks.engine_tasks import _dedup_key
 
@@ -343,12 +344,11 @@ class TestEntityLinkingThreshold:
     def test_default_threshold_is_070(self) -> None:
         """Default LINK_CONFIDENCE_THRESHOLD should be 0.70."""
         # Re-import to get current value
-        import importlib
         import app.engines.timeline.entity_linker as linker_module
 
         # The default (without env override) should be 0.70
         # We check the module-level constant
-        assert linker_module.LINK_CONFIDENCE_THRESHOLD == pytest.approx(0.70, abs=0.01)
+        assert pytest.approx(0.70, abs=0.01) == linker_module.LINK_CONFIDENCE_THRESHOLD
 
 
 # =============================================================================
@@ -364,13 +364,19 @@ class TestEntityJourneyFallback:
 
         return CrossEngineService(supabase=mock_supabase)
 
-    def _build_chain(self, mock_supabase, entity_data, events_primary, events_fallback=None):
+    def _build_chain(
+        self, mock_supabase, entity_data, events_primary, events_fallback=None
+    ):
         """Build a mock Supabase method chain for get_entity_journey."""
         # Mock identity_nodes query
         entity_query = MagicMock()
         entity_query.execute.return_value = MagicMock(data=entity_data)
         entity_select = MagicMock()
-        entity_select.eq.return_value = MagicMock(eq=MagicMock(return_value=MagicMock(single=MagicMock(return_value=entity_query))))
+        entity_select.eq.return_value = MagicMock(
+            eq=MagicMock(
+                return_value=MagicMock(single=MagicMock(return_value=entity_query))
+            )
+        )
 
         # Track calls to build correct chain
         call_count = {"value": 0}

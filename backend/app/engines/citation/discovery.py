@@ -35,6 +35,7 @@ class ActResolutionStats:
 
     This ensures stats and discovery report use identical counting logic.
     """
+
     total_acts: int = 0  # Excludes invalid acts
     missing_count: int = 0
     available_count: int = 0
@@ -92,18 +93,20 @@ def compute_resolution_stats(
         stats.total_citations += resolution.citation_count
 
         # Check for data inconsistencies
-        if check_consistency:
+        if check_consistency:  # noqa: SIM102
             # Inconsistency: has document_id but marked as missing
             if (
                 resolution.act_document_id
                 and resolution.resolution_status == ActResolutionStatus.MISSING
             ):
-                stats.inconsistencies.append({
-                    "type": "document_status_mismatch",
-                    "act_name": resolution.act_name_normalized,
-                    "issue": "Has document_id but status is 'missing'",
-                    "document_id": resolution.act_document_id,
-                })
+                stats.inconsistencies.append(
+                    {
+                        "type": "document_status_mismatch",
+                        "act_name": resolution.act_name_normalized,
+                        "issue": "Has document_id but status is 'missing'",
+                        "document_id": resolution.act_document_id,
+                    }
+                )
 
         # Count by status
         if resolution.resolution_status == ActResolutionStatus.MISSING:
@@ -199,7 +202,7 @@ class ActDiscoveryService:
                     continue
 
                 # Skip available/auto-fetched if not requested
-                if not include_available:
+                if not include_available:  # noqa: SIM102
                     if resolution.resolution_status in (
                         ActResolutionStatus.AVAILABLE,
                         ActResolutionStatus.AUTO_FETCHED,
@@ -236,18 +239,22 @@ class ActDiscoveryService:
                 matter_id=matter_id,
                 total_acts=len(summaries),
                 missing_acts=sum(
-                    1 for s in summaries
+                    1
+                    for s in summaries
                     if s.resolution_status == ActResolutionStatus.MISSING
                 ),
                 available_acts=sum(
-                    1 for s in summaries
-                    if s.resolution_status in (
+                    1
+                    for s in summaries
+                    if s.resolution_status
+                    in (
                         ActResolutionStatus.AVAILABLE,
                         ActResolutionStatus.AUTO_FETCHED,
                     )
                 ),
                 auto_fetched_acts=sum(
-                    1 for s in summaries
+                    1
+                    for s in summaries
                     if s.resolution_status == ActResolutionStatus.AUTO_FETCHED
                 ),
             )
@@ -278,7 +285,8 @@ class ActDiscoveryService:
         """
         report = await self.get_discovery_report(matter_id, include_available=False)
         return [
-            act for act in report
+            act
+            for act in report
             if act.resolution_status == ActResolutionStatus.MISSING
             and act.user_action == UserAction.PENDING
         ]

@@ -292,7 +292,9 @@ class TestCreateProgressTracker:
 
     def test_returns_tracker_with_valid_job_id(self) -> None:
         """Should return tracker when job_id is provided."""
-        with patch("app.services.job_tracking.partial_progress.get_job_tracking_service"):
+        with patch(
+            "app.services.job_tracking.partial_progress.get_job_tracking_service"
+        ):
             result = create_progress_tracker(
                 job_id="job-123",
                 matter_id="matter-456",

@@ -16,6 +16,7 @@ from math import ceil
 
 import structlog
 
+from app.core.data_quality import DataQualityMetrics
 from app.models.timeline import (
     ClassifiedEvent,
     ClassifiedEventsListResponse,
@@ -34,7 +35,6 @@ from app.models.timeline import (
     UnclassifiedEventItem,
     UnclassifiedEventsResponse,
 )
-from app.core.data_quality import DataQualityMetrics
 from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
@@ -131,7 +131,7 @@ class TimelineService:
         for date_obj in dates:
             # Use event_description if available, otherwise build from context
             description = ""
-            if hasattr(date_obj, 'event_description') and date_obj.event_description:
+            if hasattr(date_obj, "event_description") and date_obj.event_description:
                 description = date_obj.event_description
             else:
                 # Fallback: Combine context into description
@@ -152,31 +152,38 @@ class TimelineService:
 
             # Use event_type if available and valid, otherwise use "raw_date"
             event_type = "raw_date"
-            if hasattr(date_obj, 'event_type') and date_obj.event_type:
-                valid_types = ["filing", "hearing", "order", "notice", "transaction", "document", "deadline", "incident"]
+            if hasattr(date_obj, "event_type") and date_obj.event_type:
+                valid_types = [
+                    "filing",
+                    "hearing",
+                    "order",
+                    "notice",
+                    "transaction",
+                    "document",
+                    "deadline",
+                    "incident",
+                ]
                 if date_obj.event_type in valid_types:
                     event_type = date_obj.event_type
 
-            event_records.append({
-                "matter_id": matter_id,
-                "document_id": document_id,
-                "event_date": date_obj.extracted_date.isoformat(),
-                "event_date_precision": date_obj.date_precision,
-                "event_date_text": date_obj.date_text,
-                "event_type": event_type,
-                "description": description[:5000],  # Limit description length
-                "source_page": date_obj.page_number,
-                "source_bbox_ids": date_obj.bbox_ids,
-                "confidence": date_obj.confidence,
-                "is_manual": False,
-            })
+            event_records.append(
+                {
+                    "matter_id": matter_id,
+                    "document_id": document_id,
+                    "event_date": date_obj.extracted_date.isoformat(),
+                    "event_date_precision": date_obj.date_precision,
+                    "event_date_text": date_obj.date_text,
+                    "event_type": event_type,
+                    "description": description[:5000],  # Limit description length
+                    "source_page": date_obj.page_number,
+                    "source_bbox_ids": date_obj.bbox_ids,
+                    "confidence": date_obj.confidence,
+                    "is_manual": False,
+                }
+            )
 
         def _insert():
-            return (
-                self.client.table("events")
-                .insert(event_records)
-                .execute()
-            )
+            return self.client.table("events").insert(event_records).execute()
 
         try:
             response = await asyncio.to_thread(_insert)
@@ -214,7 +221,7 @@ class TimelineService:
                 matter_id=matter_id,
                 document_id=document_id,
             )
-            raise TimelineServiceError(f"Failed to save extracted dates: {e}")
+            raise TimelineServiceError(f"Failed to save extracted dates: {e}") from e
 
     def save_extracted_dates_sync(
         self,
@@ -239,14 +246,21 @@ class TimelineService:
 
         # Valid event types from prompts
         valid_types = {
-            "filing", "hearing", "order", "notice", "transaction",
-            "document", "deadline", "incident", "unclassified"
+            "filing",
+            "hearing",
+            "order",
+            "notice",
+            "transaction",
+            "document",
+            "deadline",
+            "incident",
+            "unclassified",
         }
 
         event_records = []
         for date_obj in dates:
             # Use event_description if available, otherwise build from context
-            if hasattr(date_obj, 'event_description') and date_obj.event_description:
+            if hasattr(date_obj, "event_description") and date_obj.event_description:
                 description = date_obj.event_description
             else:
                 context_parts = []
@@ -265,30 +279,28 @@ class TimelineService:
 
             # Use event_type if available and valid, otherwise use "raw_date"
             event_type = "raw_date"
-            if hasattr(date_obj, 'event_type') and date_obj.event_type:
+            if hasattr(date_obj, "event_type") and date_obj.event_type:  # noqa: SIM102
                 if date_obj.event_type in valid_types:
                     event_type = date_obj.event_type
 
-            event_records.append({
-                "matter_id": matter_id,
-                "document_id": document_id,
-                "event_date": date_obj.extracted_date.isoformat(),
-                "event_date_precision": date_obj.date_precision,
-                "event_date_text": date_obj.date_text,
-                "event_type": event_type,
-                "description": description[:5000],
-                "source_page": date_obj.page_number,
-                "source_bbox_ids": date_obj.bbox_ids,
-                "confidence": date_obj.confidence,
-                "is_manual": False,
-            })
+            event_records.append(
+                {
+                    "matter_id": matter_id,
+                    "document_id": document_id,
+                    "event_date": date_obj.extracted_date.isoformat(),
+                    "event_date_precision": date_obj.date_precision,
+                    "event_date_text": date_obj.date_text,
+                    "event_type": event_type,
+                    "description": description[:5000],
+                    "source_page": date_obj.page_number,
+                    "source_bbox_ids": date_obj.bbox_ids,
+                    "confidence": date_obj.confidence,
+                    "is_manual": False,
+                }
+            )
 
         try:
-            response = (
-                self.client.table("events")
-                .insert(event_records)
-                .execute()
-            )
+            response = self.client.table("events").insert(event_records).execute()
 
             if response.data:
                 event_ids = [row["id"] for row in response.data]
@@ -320,7 +332,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to save extracted dates: {e}")
+            raise TimelineServiceError(f"Failed to save extracted dates: {e}") from e
 
     async def get_raw_dates_for_document(
         self,
@@ -336,6 +348,7 @@ class TimelineService:
         Returns:
             List of RawEvent records ordered by event_date.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -371,6 +384,7 @@ class TimelineService:
         Returns:
             RawDatesListResponse with paginated events.
         """
+
         def _query():
             # Retry up to 2 times for transient Supabase 416 errors
             # (Range Not Satisfiable during concurrent writes)
@@ -411,10 +425,7 @@ class TimelineService:
 
         response = await asyncio.to_thread(_query)
 
-        items = [
-            self._db_row_to_list_item(row)
-            for row in (response.data or [])
-        ]
+        items = [self._db_row_to_list_item(row) for row in (response.data or [])]
 
         total = response.count or 0
         total_pages = ceil(total / per_page) if per_page > 0 else 0
@@ -449,6 +460,7 @@ class TimelineService:
         Returns:
             RawDatesListResponse with paginated raw dates.
         """
+
         def _query():
             query = (
                 self.client.table("events")
@@ -474,10 +486,7 @@ class TimelineService:
 
         response = await asyncio.to_thread(_query)
 
-        items = [
-            self._db_row_to_list_item(row)
-            for row in (response.data or [])
-        ]
+        items = [self._db_row_to_list_item(row) for row in (response.data or [])]
 
         total = response.count or 0
         total_pages = ceil(total / per_page) if per_page > 0 else 0
@@ -506,6 +515,7 @@ class TimelineService:
         Returns:
             RawEvent if found, None otherwise.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -536,6 +546,7 @@ class TimelineService:
         Returns:
             Number of deleted events.
         """
+
         def _delete():
             return (
                 self.client.table("events")
@@ -564,7 +575,7 @@ class TimelineService:
                 error=str(e),
                 document_id=document_id,
             )
-            raise TimelineServiceError(f"Failed to delete raw dates: {e}")
+            raise TimelineServiceError(f"Failed to delete raw dates: {e}") from e
 
     async def has_dates_for_document(
         self,
@@ -580,6 +591,7 @@ class TimelineService:
         Returns:
             True if document has existing raw_date events.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -656,11 +668,13 @@ class TimelineService:
         def _update():
             return (
                 self.client.table("events")
-                .update({
-                    "event_type": event_type,
-                    "confidence": confidence,
-                    "is_manual": is_manual,
-                })
+                .update(
+                    {
+                        "event_type": event_type,
+                        "confidence": confidence,
+                        "is_manual": is_manual,
+                    }
+                )
                 .eq("id", event_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -692,7 +706,9 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update event classification: {e}")
+            raise TimelineServiceError(
+                f"Failed to update event classification: {e}"
+            ) from e
 
     def update_event_classification_sync(
         self,
@@ -719,11 +735,13 @@ class TimelineService:
         try:
             response = (
                 self.client.table("events")
-                .update({
-                    "event_type": event_type,
-                    "confidence": confidence,
-                    "is_manual": is_manual,
-                })
+                .update(
+                    {
+                        "event_type": event_type,
+                        "confidence": confidence,
+                        "is_manual": is_manual,
+                    }
+                )
                 .eq("id", event_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -745,7 +763,9 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update event classification: {e}")
+            raise TimelineServiceError(
+                f"Failed to update event classification: {e}"
+            ) from e
 
     async def get_unclassified_events(
         self,
@@ -767,13 +787,16 @@ class TimelineService:
         Returns:
             UnclassifiedEventsResponse with paginated events.
         """
+
         def _query():
             # Use OR filter for multiple conditions
             return (
                 self.client.table("events")
                 .select("*", count="exact")
                 .eq("matter_id", matter_id)
-                .or_("event_type.eq.raw_date,event_type.eq.unclassified,confidence.lt.0.7")
+                .or_(
+                    "event_type.eq.raw_date,event_type.eq.unclassified,confidence.lt.0.7"
+                )
                 .order("event_date", desc=False)
                 .range((page - 1) * per_page, page * per_page - 1)
                 .execute()
@@ -783,8 +806,7 @@ class TimelineService:
             response = await asyncio.to_thread(_query)
 
             items = [
-                self._db_row_to_unclassified_item(row)
-                for row in (response.data or [])
+                self._db_row_to_unclassified_item(row) for row in (response.data or [])
             ]
 
             total = response.count or 0
@@ -806,7 +828,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get unclassified events: {e}")
+            raise TimelineServiceError(f"Failed to get unclassified events: {e}") from e
 
     async def get_events_for_classification(
         self,
@@ -822,6 +844,7 @@ class TimelineService:
         Returns:
             List of RawEvent objects with event_type='raw_date'.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -846,7 +869,9 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+            raise TimelineServiceError(
+                f"Failed to get events for classification: {e}"
+            ) from e
 
     def get_events_for_classification_sync(
         self,
@@ -876,12 +901,7 @@ class TimelineService:
             if document_id:
                 query = query.eq("document_id", document_id)
 
-            response = (
-                query
-                .order("event_date", desc=False)
-                .limit(limit)
-                .execute()
-            )
+            response = query.order("event_date", desc=False).limit(limit).execute()
 
             if response.data:
                 return [self._db_row_to_raw_event(row) for row in response.data]
@@ -893,7 +913,9 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+            raise TimelineServiceError(
+                f"Failed to get events for classification: {e}"
+            ) from e
 
     def get_all_events_for_reclassification_sync(
         self,
@@ -955,7 +977,9 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for reclassification: {e}")
+            raise TimelineServiceError(
+                f"Failed to get events for reclassification: {e}"
+            ) from e
 
     async def bulk_update_classifications(
         self,
@@ -993,14 +1017,17 @@ class TimelineService:
 
         for (event_type, confidence), event_ids in type_groups.items():
             try:
+
                 def _batch_update(et=event_type, conf=confidence, ids=event_ids):
                     return (
                         self.client.table("events")
-                        .update({
-                            "event_type": et,
-                            "confidence": conf,
-                            "is_manual": False,
-                        })
+                        .update(
+                            {
+                                "event_type": et,
+                                "confidence": conf,
+                                "is_manual": False,
+                            }
+                        )
                         .in_("id", ids)
                         .eq("matter_id", matter_id)
                         .execute()
@@ -1075,11 +1102,13 @@ class TimelineService:
             try:
                 response = (
                     self.client.table("events")
-                    .update({
-                        "event_type": event_type,
-                        "confidence": confidence,
-                        "is_manual": False,
-                    })
+                    .update(
+                        {
+                            "event_type": event_type,
+                            "confidence": confidence,
+                            "is_manual": False,
+                        }
+                    )
                     .in_("id", event_ids)
                     .eq("matter_id", matter_id)
                     .execute()
@@ -1139,6 +1168,7 @@ class TimelineService:
         Returns:
             ClassifiedEventsListResponse with paginated events.
         """
+
         def _query():
             # Retry up to 2 times for transient Supabase 416 errors
             last_err = None
@@ -1205,7 +1235,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get classified events: {e}")
+            raise TimelineServiceError(f"Failed to get classified events: {e}") from e
 
     async def update_manual_classification(
         self,
@@ -1225,14 +1255,17 @@ class TimelineService:
         Returns:
             Updated ClassifiedEvent or None if not found.
         """
+
         def _update():
             return (
                 self.client.table("events")
-                .update({
-                    "event_type": event_type.value,
-                    "confidence": 1.0,  # Human verified
-                    "is_manual": True,
-                })
+                .update(
+                    {
+                        "event_type": event_type.value,
+                        "confidence": 1.0,  # Human verified
+                        "is_manual": True,
+                    }
+                )
                 .eq("id", event_id)
                 .eq("matter_id", matter_id)
                 .select()
@@ -1264,7 +1297,9 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update manual classification: {e}")
+            raise TimelineServiceError(
+                f"Failed to update manual classification: {e}"
+            ) from e
 
     async def count_events_for_classification(
         self,
@@ -1280,6 +1315,7 @@ class TimelineService:
         Returns:
             Count of events with event_type='raw_date'.
         """
+
         def _query():
             query = (
                 self.client.table("events")
@@ -1363,7 +1399,7 @@ class TimelineService:
         if match:
             is_ambiguous = True
             ambiguity_reason = match.group(1)  # None if no reason
-            clean_description = description[match.end():]
+            clean_description = description[match.end() :]
             return is_ambiguous, ambiguity_reason, clean_description
 
         return False, None, description
@@ -1421,8 +1457,8 @@ class TimelineService:
 
         # Extract ambiguity info from description
         description = row.get("description", "")
-        is_ambiguous, _, clean_description = (
-            self._parse_ambiguity_from_description(description)
+        is_ambiguous, _, clean_description = self._parse_ambiguity_from_description(
+            description
         )
 
         return RawDateListItem(
@@ -1441,7 +1477,9 @@ class TimelineService:
             source_bbox_ids=row.get("source_bbox_ids") or [],
         )
 
-    def _db_row_to_classification_list_item(self, row: dict) -> EventClassificationListItem:
+    def _db_row_to_classification_list_item(
+        self, row: dict
+    ) -> EventClassificationListItem:
         """Convert database row to classification list item."""
         from datetime import date
 
@@ -1488,10 +1526,12 @@ class TimelineService:
         # If this was classified but with low confidence, suggest alternatives
         if event_type not in ("raw_date", "unclassified") and confidence < 0.7:
             # The actual classified type is still the best guess
-            suggested_types.append({
-                "type": event_type,
-                "confidence": confidence,
-            })
+            suggested_types.append(
+                {
+                    "type": event_type,
+                    "confidence": confidence,
+                }
+            )
 
         return UnclassifiedEventItem(
             id=row["id"],
@@ -1568,6 +1608,7 @@ class TimelineService:
         Returns:
             True if update succeeded.
         """
+
         def _update():
             return (
                 self.client.table("events")
@@ -1595,7 +1636,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event entities: {e}")
+            raise TimelineServiceError(f"Failed to update event entities: {e}") from e
 
     def update_event_entities_sync(
         self,
@@ -1637,7 +1678,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event entities: {e}")
+            raise TimelineServiceError(f"Failed to update event entities: {e}") from e
 
     async def bulk_update_event_entities(
         self,
@@ -1745,6 +1786,7 @@ class TimelineService:
         Returns:
             List of RawEvent objects without entity links.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -1769,7 +1811,9 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+            raise TimelineServiceError(
+                f"Failed to get events for entity linking: {e}"
+            ) from e
 
     def get_events_for_entity_linking_sync(
         self,
@@ -1830,7 +1874,9 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+            raise TimelineServiceError(
+                f"Failed to get events for entity linking: {e}"
+            ) from e
 
     async def get_events_by_entity(
         self,
@@ -1850,6 +1896,7 @@ class TimelineService:
         Returns:
             RawDatesListResponse with events involving the entity.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -1864,10 +1911,7 @@ class TimelineService:
         try:
             response = await asyncio.to_thread(_query)
 
-            items = [
-                self._db_row_to_list_item(row)
-                for row in (response.data or [])
-            ]
+            items = [self._db_row_to_list_item(row) for row in (response.data or [])]
 
             total = response.count or 0
             total_pages = ceil(total / per_page) if per_page > 0 else 0
@@ -1889,7 +1933,7 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events by entity: {e}")
+            raise TimelineServiceError(f"Failed to get events by entity: {e}") from e
 
     async def count_events_for_entity_linking(
         self,
@@ -1903,6 +1947,7 @@ class TimelineService:
         Returns:
             Count of events without entity links.
         """
+
         def _query():
             return (
                 self.client.table("events")
@@ -1970,12 +2015,7 @@ class TimelineService:
         }
 
         def _insert():
-            return (
-                self.client.table("events")
-                .insert(event_record)
-                .select()
-                .execute()
-            )
+            return self.client.table("events").insert(event_record).select().execute()
 
         try:
             response = await asyncio.to_thread(_insert)
@@ -1990,7 +2030,9 @@ class TimelineService:
                 )
                 return self._db_row_to_manual_event_response(row)
 
-            raise TimelineServiceError("Failed to create manual event - no data returned")
+            raise TimelineServiceError(
+                "Failed to create manual event - no data returned"
+            )
 
         except TimelineServiceError:
             raise
@@ -2000,7 +2042,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to create manual event: {e}")
+            raise TimelineServiceError(f"Failed to create manual event: {e}") from e
 
     async def update_manual_event(
         self,
@@ -2097,7 +2139,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update manual event: {e}")
+            raise TimelineServiceError(f"Failed to update manual event: {e}") from e
 
     async def delete_manual_event(
         self,
@@ -2158,7 +2200,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to delete manual event: {e}")
+            raise TimelineServiceError(f"Failed to delete manual event: {e}") from e
 
     async def set_event_verification(
         self,
@@ -2176,6 +2218,7 @@ class TimelineService:
         Returns:
             ManualEventResponse with updated event, or None if not found.
         """
+
         def _update():
             return (
                 self.client.table("events")
@@ -2206,7 +2249,9 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event verification: {e}")
+            raise TimelineServiceError(
+                f"Failed to update event verification: {e}"
+            ) from e
 
     def _db_row_to_manual_event_response(self, row: dict) -> ManualEventResponse:
         """Convert database row to ManualEventResponse."""

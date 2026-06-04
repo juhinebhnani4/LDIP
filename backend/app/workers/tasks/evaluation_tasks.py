@@ -19,12 +19,14 @@ from typing import Any
 import structlog
 from celery.exceptions import SoftTimeLimitExceeded
 
-from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.supabase.client import (
-    get_supabase_client as get_supabase,
     get_service_client,
 )
+from app.services.supabase.client import (
+    get_supabase_client as get_supabase,
+)
+from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
@@ -37,7 +39,10 @@ def _extract_search_latency(rag_result) -> int | None:  # noqa: ANN001
     time. This extracts that value for accurate A/B latency comparison.
     Falls back to full pipeline execution_time_ms if search_latency not available.
     """
-    if hasattr(rag_result, "search_latency_ms") and rag_result.search_latency_ms is not None:
+    if (
+        hasattr(rag_result, "search_latency_ms")
+        and rag_result.search_latency_ms is not None
+    ):
         return rag_result.search_latency_ms
     # Fallback: use full pipeline time (less accurate but better than nothing)
     if hasattr(rag_result, "execution_time_ms"):
@@ -149,6 +154,7 @@ def _run_post_batch_checks(
         return {"regression_check": "skipped", "reason": "no_successful_results"}
 
     try:
+
         async def _check_async() -> dict[str, Any]:
             from app.services.evaluation.baseline_service import BaselineService
             from app.services.evaluation.regression_detector import detect_regression
@@ -252,7 +258,6 @@ def run_batch_evaluation(
     Returns:
         Task result with evaluation summary + regression report.
     """
-    settings = get_settings()
     job_id = self.request.id
 
     logger.info(
@@ -266,9 +271,8 @@ def run_batch_evaluation(
     )
 
     try:
-        async def _evaluate_async() -> dict[str, Any]:
-            import time as _time
 
+        async def _evaluate_async() -> dict[str, Any]:
             from app.services.evaluation import get_ragas_evaluator
             from app.services.evaluation.golden_dataset import GoldenDatasetService
             from app.services.rag.pipeline_service import get_rag_pipeline_service
@@ -375,26 +379,36 @@ def run_batch_evaluation(
                             ).execute()
                         except Exception as _upsert_err:
                             _err_msg = str(_upsert_err).lower()
-                            if "duplicate" in _err_msg or "unique" in _err_msg or "conflict" in _err_msg:
-                                _upd = supabase.table("evaluation_results") \
-                                    .update(row) \
-                                    .eq("job_id", job_id) \
-                                    .eq("golden_item_id", item.id) \
+                            if (
+                                "duplicate" in _err_msg
+                                or "unique" in _err_msg
+                                or "conflict" in _err_msg
+                            ):
+                                _upd = (
+                                    supabase.table("evaluation_results")
+                                    .update(row)
+                                    .eq("job_id", job_id)
+                                    .eq("golden_item_id", item.id)
                                     .execute()
+                                )
                                 if not _upd.data:
                                     # Row was deleted between upsert and update
-                                    supabase.table("evaluation_results").insert(row).execute()
+                                    supabase.table("evaluation_results").insert(
+                                        row
+                                    ).execute()
                             else:
                                 raise
                     else:
                         supabase.table("evaluation_results").insert(row).execute()
 
-                    results.append({
-                        "golden_item_id": item.id,
-                        "question_preview": item.question[:50],
-                        "overall_score": eval_result.overall_score,
-                        "scores": eval_result.scores.model_dump(),
-                    })
+                    results.append(
+                        {
+                            "golden_item_id": item.id,
+                            "question_preview": item.question[:50],
+                            "overall_score": eval_result.overall_score,
+                            "scores": eval_result.scores.model_dump(),
+                        }
+                    )
 
                     total_score += eval_result.overall_score
 
@@ -406,10 +420,12 @@ def run_batch_evaluation(
                     )
 
                 except Exception as e:
-                    errors.append({
-                        "golden_item_id": item.id,
-                        "error": str(e),
-                    })
+                    errors.append(
+                        {
+                            "golden_item_id": item.id,
+                            "error": str(e),
+                        }
+                    )
                     logger.warning(
                         "evaluation_item_failed",
                         job_id=job_id,
@@ -558,6 +574,7 @@ def evaluate_chat_response(
     )
 
     try:
+
         async def _evaluate_async() -> dict[str, Any]:
             from app.services.evaluation import get_ragas_evaluator
             from app.services.rag.pipeline_service import get_rag_pipeline_service
@@ -687,6 +704,7 @@ def run_scheduled_evaluation(
     _lock_key: str | None = None
     try:
         from app.services.distributed_lock import get_sync_redis_client
+
         _redis = get_sync_redis_client()
         # Use the Celery task ID as the lock key — Beat delivers the same
         # periodic task with a unique ID each time, but duplicate deliveries
@@ -716,9 +734,7 @@ def run_scheduled_evaluation(
     try:
         # Find matters with golden datasets
         supabase = get_service_client()
-        golden_counts_result = supabase.rpc(
-            "get_evaluation_quality_summary"
-        ).execute()
+        golden_counts_result = supabase.rpc("get_evaluation_quality_summary").execute()
 
         if not golden_counts_result.data:
             return {
@@ -729,7 +745,9 @@ def run_scheduled_evaluation(
         matters = golden_counts_result.data
 
         # Check monthly cost budget
-        month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(UTC).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
         cost_result = (
             supabase.table("evaluation_results")
             .select("id", count="exact")
@@ -754,8 +772,9 @@ def run_scheduled_evaluation(
 
         # Per-matter timeout: .apply() runs inline so inner task's time_limit is
         # not enforced by Celery. We use signal.alarm (Unix) as a guard.
-        import signal
         import platform
+        import signal
+
         _is_unix = platform.system() != "Windows"
         PER_MATTER_TIMEOUT = 35 * 60  # 35 minutes (inner task has 30 min hard limit)
 
@@ -769,7 +788,10 @@ def run_scheduled_evaluation(
 
             # Cost check before each matter
             estimated_cost = _estimate_eval_cost(golden_count)
-            if cumulative_cost + estimated_cost > settings.evaluation_monthly_budget_usd:
+            if (
+                cumulative_cost + estimated_cost
+                > settings.evaluation_monthly_budget_usd
+            ):
                 logger.warning(
                     "scheduled_evaluation_budget_exceeded",
                     matter_id=m_id,
@@ -779,11 +801,13 @@ def run_scheduled_evaluation(
                     budget=settings.evaluation_monthly_budget_usd,
                 )
                 total_skipped += 1
-                results.append({
-                    "matter_id": m_id,
-                    "matter_title": m_title,
-                    "status": "skipped_budget",
-                })
+                results.append(
+                    {
+                        "matter_id": m_id,
+                        "matter_title": m_title,
+                        "status": "skipped_budget",
+                    }
+                )
                 continue
 
             # Trigger batch evaluation (synchronous within this task — sequential per matter)
@@ -808,7 +832,9 @@ def run_scheduled_evaluation(
                     _prev_handler = signal.getsignal(signal.SIGALRM)
 
                     def _timeout_handler(signum, frame):  # type: ignore[no-untyped-def]
-                        raise TimeoutError(f"Per-matter evaluation timed out after {PER_MATTER_TIMEOUT}s")
+                        raise TimeoutError(
+                            f"Per-matter evaluation timed out after {PER_MATTER_TIMEOUT}s"
+                        )
 
                     signal.signal(signal.SIGALRM, _timeout_handler)
                     signal.alarm(PER_MATTER_TIMEOUT)
@@ -832,14 +858,16 @@ def run_scheduled_evaluation(
 
                 total_evaluated += 1
 
-                results.append({
-                    "matter_id": m_id,
-                    "matter_title": m_title,
-                    "status": batch_result.get("status", "unknown"),
-                    "average_score": batch_result.get("average_score"),
-                    "has_regression": batch_result.get("has_regression", False),
-                    "successful": batch_result.get("successful", 0),
-                })
+                results.append(
+                    {
+                        "matter_id": m_id,
+                        "matter_title": m_title,
+                        "status": batch_result.get("status", "unknown"),
+                        "average_score": batch_result.get("average_score"),
+                        "has_regression": batch_result.get("has_regression", False),
+                        "successful": batch_result.get("successful", 0),
+                    }
+                )
 
             except Exception as e:
                 logger.error(
@@ -847,12 +875,14 @@ def run_scheduled_evaluation(
                     matter_id=m_id,
                     error=str(e),
                 )
-                results.append({
-                    "matter_id": m_id,
-                    "matter_title": m_title,
-                    "status": "failed",
-                    "error": str(e)[:200],
-                })
+                results.append(
+                    {
+                        "matter_id": m_id,
+                        "matter_title": m_title,
+                        "status": "failed",
+                        "error": str(e)[:200],
+                    }
+                )
 
         logger.info(
             "scheduled_evaluation_completed",
@@ -864,7 +894,7 @@ def run_scheduled_evaluation(
 
         # Release distributed lock early so manual re-runs are unblocked
         if _lock_key:
-            try:
+            try:  # noqa: SIM105
                 _redis.delete(_lock_key)
             except Exception:
                 pass  # TTL will handle cleanup
@@ -953,6 +983,7 @@ def run_ab_comparison(
     )
 
     try:
+
         async def _run_comparison_async() -> dict[str, Any]:
             from app.services.evaluation.ab_testing import ABTestRunner
 
@@ -962,20 +993,28 @@ def run_ab_comparison(
             existing_runs = await runner.list_runs(
                 matter_id=matter_id, status=None, limit=5
             )
-            active_statuses = {"pending", "running_control", "running_treatment", "comparing"}
+            active_statuses = {
+                "pending",
+                "running_control",
+                "running_treatment",
+                "comparing",
+            }
             for existing in existing_runs:
                 if (
                     existing.get("id") != run_id
                     and existing.get("status") in active_statuses
                 ):
-                    await runner.update_run(run_id, {
-                        "status": "cancelled",
-                        "error_message": (
-                            f"Another A/B test ({existing['id']}) is already "
-                            f"{existing['status']} for this matter"
-                        ),
-                        "completed_at": datetime.now(UTC).isoformat(),
-                    })
+                    await runner.update_run(
+                        run_id,
+                        {
+                            "status": "cancelled",
+                            "error_message": (
+                                f"Another A/B test ({existing['id']}) is already "
+                                f"{existing['status']} for this matter"
+                            ),
+                            "completed_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
                     return {
                         "status": "cancelled",
                         "reason": "duplicate_run",
@@ -1000,16 +1039,23 @@ def run_ab_comparison(
 
             control_job_id = control_result.get("job_id")
             if not control_job_id or control_result.get("status") == "failed":
-                await runner.update_run(run_id, {
-                    "status": "failed",
-                    "error_message": f"Control arm failed: {control_result.get('error_message', 'unknown')}",
-                    "completed_at": datetime.now(UTC).isoformat(),
-                }, expected_status="running_control")
+                await runner.update_run(
+                    run_id,
+                    {
+                        "status": "failed",
+                        "error_message": f"Control arm failed: {control_result.get('error_message', 'unknown')}",
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    },
+                    expected_status="running_control",
+                )
                 return {"status": "failed", "phase": "control", **control_result}
 
-            await runner.update_run(run_id, {
-                "control_job_id": control_job_id,
-            })
+            await runner.update_run(
+                run_id,
+                {
+                    "control_job_id": control_job_id,
+                },
+            )
 
             logger.info(
                 "ab_comparison_control_done",
@@ -1020,7 +1066,9 @@ def run_ab_comparison(
 
             # Step 2: Run treatment arm
             await runner.update_run(
-                run_id, {"status": "running_treatment"}, expected_status="running_control"
+                run_id,
+                {"status": "running_treatment"},
+                expected_status="running_control",
             )
 
             treatment_result = run_batch_evaluation.apply(
@@ -1036,17 +1084,24 @@ def run_ab_comparison(
 
             treatment_job_id = treatment_result.get("job_id")
             if not treatment_job_id or treatment_result.get("status") == "failed":
-                await runner.update_run(run_id, {
-                    "status": "failed",
-                    "treatment_job_id": treatment_job_id,
-                    "error_message": f"Treatment arm failed: {treatment_result.get('error_message', 'unknown')}",
-                    "completed_at": datetime.now(UTC).isoformat(),
-                }, expected_status="running_treatment")
+                await runner.update_run(
+                    run_id,
+                    {
+                        "status": "failed",
+                        "treatment_job_id": treatment_job_id,
+                        "error_message": f"Treatment arm failed: {treatment_result.get('error_message', 'unknown')}",
+                        "completed_at": datetime.now(UTC).isoformat(),
+                    },
+                    expected_status="running_treatment",
+                )
                 return {"status": "failed", "phase": "treatment", **treatment_result}
 
-            await runner.update_run(run_id, {
-                "treatment_job_id": treatment_job_id,
-            })
+            await runner.update_run(
+                run_id,
+                {
+                    "treatment_job_id": treatment_job_id,
+                },
+            )
 
             logger.info(
                 "ab_comparison_treatment_done",
@@ -1069,7 +1124,9 @@ def run_ab_comparison(
                 "decision_confidence": comparison.get("decision_confidence"),
                 "decision_reasoning": comparison.get("decision_reasoning"),
                 "control_overall": comparison.get("control_scores", {}).get("overall"),
-                "treatment_overall": comparison.get("treatment_scores", {}).get("overall"),
+                "treatment_overall": comparison.get("treatment_scores", {}).get(
+                    "overall"
+                ),
             }
 
         result = run_async(_run_comparison_async(), timeout=3000)
@@ -1094,15 +1151,26 @@ def run_ab_comparison(
         # (completed/cancelled). Without this guard, a post-completion error
         # (e.g., in serialization) would overwrite a valid "completed" result.
         try:
+
             async def _mark_failed() -> None:
                 from app.services.evaluation.ab_testing import ABTestRunner
+
                 run = await ABTestRunner.get_run(run_id)
-                if run and run.get("status") not in ("completed", "cancelled", "failed"):
-                    await ABTestRunner.update_run(run_id, {
-                        "status": "failed",
-                        "error_message": str(e),
-                        "completed_at": datetime.now(UTC).isoformat(),
-                    }, expected_status=run["status"])
+                if run and run.get("status") not in (
+                    "completed",
+                    "cancelled",
+                    "failed",
+                ):
+                    await ABTestRunner.update_run(
+                        run_id,
+                        {
+                            "status": "failed",
+                            "error_message": str(e),  # noqa: F821
+                            "completed_at": datetime.now(UTC).isoformat(),
+                        },
+                        expected_status=run["status"],
+                    )
+
             run_async(_mark_failed(), timeout=10)
         except Exception:
             pass

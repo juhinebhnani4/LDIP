@@ -106,7 +106,9 @@ class SourceReferenceEvent(BaseModel):
     page: int | None = Field(default=None, description="Page number")
     chunk_id: str | None = Field(default=None, description="Chunk UUID")
     confidence: float | None = Field(default=None, description="Relevance score")
-    bbox_ids: list[str] | None = Field(default=None, description="Bounding box UUIDs for highlighting")
+    bbox_ids: list[str] | None = Field(
+        default=None, description="Bounding box UUIDs for highlighting"
+    )
 
 
 class StreamCompleteEvent(BaseModel):
@@ -137,46 +139,40 @@ class StreamCompleteEvent(BaseModel):
     message_id: str | None = Field(default=None, description="Saved message ID")
     search_mode: str | None = Field(
         default=None,
-        description="Search mode: 'hybrid', 'bm25_fallback', or 'bm25_only'"
+        description="Search mode: 'hybrid', 'bm25_fallback', or 'bm25_only'",
     )
     search_notice: str | None = Field(
         default=None,
-        description="User-friendly notice if search was degraded (e.g., rate limit)"
+        description="User-friendly notice if search was degraded (e.g., rate limit)",
     )
     # Response completeness indicators
     truncated: bool = Field(
-        default=False,
-        description="True if response was truncated due to length"
+        default=False, description="True if response was truncated due to length"
     )
     more_available: bool = Field(
         default=False,
-        description="True if more results are available beyond what was shown"
+        description="True if more results are available beyond what was shown",
     )
     total_results_hint: int | None = Field(
-        default=None,
-        description="Total results available (if more_available is True)"
+        default=None, description="Total results available (if more_available is True)"
     )
     # Query safety rewrite metadata
     query_was_rewritten: bool = Field(
         default=False,
-        description="True if query was automatically rewritten for safety"
+        description="True if query was automatically rewritten for safety",
     )
     original_query: str | None = Field(
-        default=None,
-        description="Original query before safety rewrite (if rewritten)"
+        default=None, description="Original query before safety rewrite (if rewritten)"
     )
     rewritten_query: str | None = Field(
-        default=None,
-        description="Rewritten query after safety rewrite (if rewritten)"
+        default=None, description="Rewritten query after safety rewrite (if rewritten)"
     )
     # A/B testing: provider metadata
     embedding_provider: str | None = Field(
-        default=None,
-        description="Embedding provider used: 'openai' or 'voyage'"
+        default=None, description="Embedding provider used: 'openai' or 'voyage'"
     )
     rerank_provider: str | None = Field(
-        default=None,
-        description="Reranker provider used: 'cohere' or 'voyage'"
+        default=None, description="Reranker provider used: 'cohere' or 'voyage'"
     )
 
 

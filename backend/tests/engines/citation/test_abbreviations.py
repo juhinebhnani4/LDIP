@@ -3,7 +3,6 @@
 Story 3-1: Act Citation Extraction (AC: #2)
 """
 
-
 from app.engines.citation.abbreviations import (
     ACT_ABBREVIATIONS,
     extract_year_from_name,
@@ -195,7 +194,9 @@ class TestActAbbreviationsDictionary:
             assert len(value) == 2, f"Tuple for {key} doesn't have 2 elements"
             name, year = value
             assert isinstance(name, str), f"Name for {key} is not a string"
-            assert year is None or isinstance(year, int), f"Year for {key} is not int or None"
+            assert year is None or isinstance(year, int), (
+                f"Year for {key} is not int or None"
+            )
 
     def test_criminal_law_acts_present(self) -> None:
         """Should contain major criminal law Acts."""

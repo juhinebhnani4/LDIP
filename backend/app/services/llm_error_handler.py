@@ -8,9 +8,10 @@ Provides standardized error handling for LLM API calls with:
 - Rate limit detection and backoff recommendations
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 import structlog
 
@@ -102,9 +103,7 @@ ERROR_MESSAGES = {
     LLMErrorCode.SERVICE_UNAVAILABLE: (
         "Our AI service is temporarily unavailable. Please try again in a few minutes."
     ),
-    LLMErrorCode.UNKNOWN_ERROR: (
-        "An unexpected error occurred. Please try again."
-    ),
+    LLMErrorCode.UNKNOWN_ERROR: ("An unexpected error occurred. Please try again."),
 }
 
 # Retry recommendations for each error type
@@ -115,8 +114,14 @@ RETRY_RECOMMENDATIONS = {
     LLMErrorCode.TIMEOUT: (True, None),  # Retry immediately
     LLMErrorCode.CONNECTION_ERROR: (True, 5),  # Retry after 5 seconds
     LLMErrorCode.INVALID_RESPONSE: (True, None),  # Retry immediately
-    LLMErrorCode.CONTENT_FILTERED: (False, None),  # Don't retry (user needs to rephrase)
-    LLMErrorCode.CONTEXT_TOO_LONG: (False, None),  # Don't retry (user needs to rephrase)
+    LLMErrorCode.CONTENT_FILTERED: (
+        False,
+        None,
+    ),  # Don't retry (user needs to rephrase)
+    LLMErrorCode.CONTEXT_TOO_LONG: (
+        False,
+        None,
+    ),  # Don't retry (user needs to rephrase)
     LLMErrorCode.SERVICE_UNAVAILABLE: (True, 30),  # Retry after 30 seconds
     LLMErrorCode.UNKNOWN_ERROR: (True, 5),  # Retry after 5 seconds
 }
@@ -140,9 +145,7 @@ def classify_error(exception: Exception, provider: str = "unknown") -> LLMErrorR
     # Classify based on exception type and message content
     code = _classify_error_code(error_str, error_type)
 
-    retry_suggested, retry_after = RETRY_RECOMMENDATIONS.get(
-        code, (True, 5)
-    )
+    retry_suggested, retry_after = RETRY_RECOMMENDATIONS.get(code, (True, 5))
 
     result = LLMErrorResult(
         code=code,
@@ -175,69 +178,126 @@ def _classify_error_code(error_str: str, error_type: str) -> LLMErrorCode:
         Classified LLMErrorCode.
     """
     # Rate limiting patterns
-    if any(pattern in error_str for pattern in [
-        "rate limit", "ratelimit", "rate_limit",
-        "429", "too many requests", "quota exceeded",
-        "resource exhausted", "resourceexhausted",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "rate limit",
+            "ratelimit",
+            "rate_limit",
+            "429",
+            "too many requests",
+            "quota exceeded",
+            "resource exhausted",
+            "resourceexhausted",
+        ]
+    ):
         if "quota" in error_str:
             return LLMErrorCode.QUOTA_EXCEEDED
         return LLMErrorCode.RATE_LIMITED
 
     # Timeout patterns
-    if any(pattern in error_str for pattern in [
-        "timeout", "timed out", "deadline exceeded",
-        "deadline_exceeded", "read timed out",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "timeout",
+            "timed out",
+            "deadline exceeded",
+            "deadline_exceeded",
+            "read timed out",
+        ]
+    ):
         return LLMErrorCode.TIMEOUT
 
     # Connection patterns
-    if any(pattern in error_str for pattern in [
-        "connection", "connect", "network",
-        "unreachable", "dns", "ssl",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "connection",
+            "connect",
+            "network",
+            "unreachable",
+            "dns",
+            "ssl",
+        ]
+    ):
         return LLMErrorCode.CONNECTION_ERROR
 
     # Content filtering
-    if any(pattern in error_str for pattern in [
-        "content filter", "blocked", "safety",
-        "recitation", "harmful", "prohibited",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "content filter",
+            "blocked",
+            "safety",
+            "recitation",
+            "harmful",
+            "prohibited",
+        ]
+    ):
         return LLMErrorCode.CONTENT_FILTERED
 
     # Context length
-    if any(pattern in error_str for pattern in [
-        "context length", "token limit", "too long",
-        "max tokens", "maximum context",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "context length",
+            "token limit",
+            "too long",
+            "max tokens",
+            "maximum context",
+        ]
+    ):
         return LLMErrorCode.CONTEXT_TOO_LONG
 
     # Service unavailable
-    if any(pattern in error_str for pattern in [
-        "service unavailable", "503", "overloaded",
-        "maintenance", "temporarily unavailable",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "service unavailable",
+            "503",
+            "overloaded",
+            "maintenance",
+            "temporarily unavailable",
+        ]
+    ):
         return LLMErrorCode.SERVICE_UNAVAILABLE
 
     # Invalid response
-    if any(pattern in error_str for pattern in [
-        "invalid response", "parse error", "json",
-        "unexpected response", "malformed",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "invalid response",
+            "parse error",
+            "json",
+            "unexpected response",
+            "malformed",
+        ]
+    ):
         return LLMErrorCode.INVALID_RESPONSE
 
     # API errors (catch-all for HTTP errors)
-    if any(pattern in error_str for pattern in [
-        "400", "401", "403", "404", "500", "502", "504",
-        "api error", "api_error", "http error",
-    ]):
+    if any(
+        pattern in error_str
+        for pattern in [
+            "400",
+            "401",
+            "403",
+            "404",
+            "500",
+            "502",
+            "504",
+            "api error",
+            "api_error",
+            "http error",
+        ]
+    ):
         return LLMErrorCode.API_ERROR
 
     # Default
     return LLMErrorCode.UNKNOWN_ERROR
 
 
-async def with_error_handling(
+async def with_error_handling[T](
     operation: Callable[[], T],
     provider: str = "unknown",
     context: str = "LLM operation",

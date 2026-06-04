@@ -39,24 +39,25 @@ def clear_service_caches():
     get_pattern_corrector.cache_clear()
     get_validation_extractor.cache_clear()
 
-from app.models.ocr import OCRBoundingBox, OCRPage, OCRResult
-from app.models.ocr_validation import (
+
+from app.models.ocr import OCRBoundingBox, OCRPage, OCRResult  # noqa: E402
+from app.models.ocr_validation import (  # noqa: E402
     CorrectionType,
     HumanReviewStatus,
     LowConfidenceWord,
     ValidationResult,
 )
-from app.services.bounding_box_service import BoundingBoxService
-from app.services.document_service import DocumentService
-from app.services.ocr import OCRProcessor
-from app.services.ocr.gemini_validator import GeminiOCRValidator
-from app.services.ocr.human_review_service import HumanReviewService
-from app.services.ocr.pattern_corrector import (
+from app.services.bounding_box_service import BoundingBoxService  # noqa: E402
+from app.services.document_service import DocumentService  # noqa: E402
+from app.services.ocr import OCRProcessor  # noqa: E402
+from app.services.ocr.gemini_validator import GeminiOCRValidator  # noqa: E402
+from app.services.ocr.human_review_service import HumanReviewService  # noqa: E402
+from app.services.ocr.pattern_corrector import (  # noqa: E402
     apply_pattern_corrections,
 )
-from app.services.ocr.validation_extractor import ValidationExtractor
-from app.services.storage_service import StorageService
-from app.workers.tasks.document_tasks import validate_ocr
+from app.services.ocr.validation_extractor import ValidationExtractor  # noqa: E402
+from app.services.storage_service import StorageService  # noqa: E402
+from app.workers.tasks.document_tasks import validate_ocr  # noqa: E402
 
 
 class TestValidationPipelineIntegration:
@@ -184,7 +185,10 @@ class TestValidationPipelineIntegration:
                 height=5.0,
             ),
         ]
-        mock_validation_extractor.extract_low_confidence_words.return_value = (gemini_words, [])
+        mock_validation_extractor.extract_low_confidence_words.return_value = (
+            gemini_words,
+            [],
+        )
 
         # Mock pattern correction result
         pattern_corrected = [
@@ -279,7 +283,10 @@ class TestValidationPipelineIntegration:
                 height=5.0,
             ),
         ]
-        mock_validation_extractor.extract_low_confidence_words.return_value = ([], human_words)
+        mock_validation_extractor.extract_low_confidence_words.return_value = (
+            [],
+            human_words,
+        )
         mock_human_review_service.add_to_queue.return_value = 2
 
         # Run validate_ocr task using dependency injection
@@ -383,17 +390,25 @@ class TestValidationTaskChaining:
         """Test that process_document result is correctly passed to validate_ocr."""
         from app.workers.tasks.document_tasks import process_document
 
-        with patch("app.workers.tasks.document_tasks.broadcast_document_status"):
-            with patch("app.workers.tasks.document_tasks.get_document_service") as mock_get_doc:
-                with patch("app.workers.tasks.document_tasks.get_storage_service") as mock_get_storage:
-                    with patch("app.workers.tasks.document_tasks.get_ocr_processor") as mock_get_ocr:
-                        with patch("app.workers.tasks.document_tasks.get_bounding_box_service") as mock_get_bbox:
-                            mock_get_doc.return_value = mock_document_service
-                            mock_get_storage.return_value = mock_storage_service
-                            mock_get_ocr.return_value = mock_ocr_processor
-                            mock_get_bbox.return_value = mock_bbox_service
+        with (
+            patch("app.workers.tasks.document_tasks.broadcast_document_status"),
+            patch(
+                "app.workers.tasks.document_tasks.get_document_service"
+            ) as mock_get_doc,
+            patch(
+                "app.workers.tasks.document_tasks.get_storage_service"
+            ) as mock_get_storage,
+            patch("app.workers.tasks.document_tasks.get_ocr_processor") as mock_get_ocr,
+            patch(
+                "app.workers.tasks.document_tasks.get_bounding_box_service"
+            ) as mock_get_bbox,
+        ):
+            mock_get_doc.return_value = mock_document_service
+            mock_get_storage.return_value = mock_storage_service
+            mock_get_ocr.return_value = mock_ocr_processor
+            mock_get_bbox.return_value = mock_bbox_service
 
-                            result = process_document.run("doc-chain")
+            result = process_document.run("doc-chain")
 
         # Result should contain fields needed by validate_ocr
         assert result["status"] == "ocr_complete"
@@ -535,7 +550,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify bounding_boxes table updated
         update_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "bounding_boxes"
         ]
         assert len(update_calls) > 0
@@ -613,7 +629,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify ocr_validation_log table has insert called
         insert_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "ocr_validation_log"
         ]
         assert len(insert_calls) > 0
@@ -655,7 +672,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify documents table has validation_status updated
         update_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "documents"
         ]
         assert len(update_calls) > 0
@@ -909,7 +927,11 @@ class TestValidationErrorHandling:
         )
 
         # Either continues without Gemini corrections or marks as failed
-        assert result["status"] in ["validated", "validation_complete", "validation_failed"]
+        assert result["status"] in [
+            "validated",
+            "validation_complete",
+            "validation_failed",
+        ]
 
     def test_handles_missing_prev_result_fields(self) -> None:
         """Test handling when prev_result is missing required fields."""

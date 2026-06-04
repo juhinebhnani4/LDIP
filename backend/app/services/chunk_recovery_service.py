@@ -6,7 +6,6 @@ This service detects chunks stuck in PROCESSING state and recovers them
 by resetting to PENDING for retry. Follows the JobRecoveryService pattern.
 """
 
-import asyncio
 from functools import lru_cache
 
 import structlog
@@ -317,7 +316,9 @@ class ChunkRecoveryService:
                 document_id=chunk.document_id,
                 chunk_index=chunk.chunk_index,
                 recovery_attempt=recovery_attempts + 1,
-                original_error=chunk.error_message[:100] if chunk.error_message else None,
+                original_error=chunk.error_message[:100]
+                if chunk.error_message
+                else None,
             )
 
             return {

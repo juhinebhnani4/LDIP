@@ -98,9 +98,7 @@ class TestSearchMatterIsolationLayer2:
         )
 
         # Verify validate_search_results was called with matter_id
-        mock_validate_results.assert_called_once_with(
-            results_data, authorized_matter
-        )
+        mock_validate_results.assert_called_once_with(results_data, authorized_matter)
 
         # All results should be from the authorized matter
         for r in result.results:
@@ -335,8 +333,7 @@ class TestSearchAuditLogging:
         # Verify log contains matter_id
         log_calls = mock_logger.info.call_args_list
         assert any(
-            "550e8400-e29b-41d4-a716-446655440000" in str(call)
-            for call in log_calls
+            "550e8400-e29b-41d4-a716-446655440000" in str(call) for call in log_calls
         )
 
     @pytest.mark.asyncio

@@ -11,14 +11,12 @@ validating:
 """
 
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pypdf import PdfWriter
 
-from app.services.pdf_chunker import PDFChunker
 from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
-
+from app.services.pdf_chunker import PDFChunker
 
 # =============================================================================
 # Fixtures
@@ -31,8 +29,8 @@ def create_test_pdf():
 
     def _create(page_count: int, with_text: bool = False) -> bytes:
         writer = PdfWriter()
-        for i in range(page_count):
-            page = writer.add_blank_page(width=612, height=792)
+        for _ in range(page_count):
+            writer.add_blank_page(width=612, height=792)
         buffer = BytesIO()
         writer.write(buffer)
         return buffer.getvalue()
@@ -55,16 +53,18 @@ def mock_ocr_chunk_result():
 
         for relative_page in range(1, page_count + 1):
             for roi in range(bboxes_per_page):
-                bboxes.append({
-                    "page": relative_page,
-                    "reading_order_index": roi,
-                    "text": f"Text block {roi} on relative page {relative_page}",
-                    "x": 72 + (roi % 5) * 100,
-                    "y": 72 + (roi // 5) * 100,
-                    "width": 90,
-                    "height": 20,
-                    "confidence": 0.95,
-                })
+                bboxes.append(
+                    {
+                        "page": relative_page,
+                        "reading_order_index": roi,
+                        "text": f"Text block {roi} on relative page {relative_page}",
+                        "x": 72 + (roi % 5) * 100,
+                        "y": 72 + (roi // 5) * 100,
+                        "width": 90,
+                        "height": 20,
+                        "confidence": 0.95,
+                    }
+                )
 
         return ChunkOCRResult(
             chunk_index=chunk_index,
@@ -101,7 +101,7 @@ class TestFullPipelineIntegration:
 
         # Simulate OCR for each chunk
         ocr_results = []
-        for chunk_bytes, page_start, page_end in chunks:
+        for _chunk_bytes, page_start, page_end in chunks:
             chunk_index = len(ocr_results)
             ocr_result = mock_ocr_chunk_result(
                 chunk_index=chunk_index,
@@ -125,7 +125,9 @@ class TestFullPipelineIntegration:
                 f"Page {bbox['page']} out of range [1, {page_count}]"
             )
 
-    def test_422_page_document_matches_spec(self, create_test_pdf, mock_ocr_chunk_result):
+    def test_422_page_document_matches_spec(
+        self, create_test_pdf, mock_ocr_chunk_result
+    ):
         """422-page document (original failing document) processes correctly."""
         page_count = 422
         pdf_bytes = create_test_pdf(page_count)
@@ -139,10 +141,22 @@ class TestFullPipelineIntegration:
 
         # Verify chunk boundaries
         expected_ranges = [
-            (1, 25), (26, 50), (51, 75), (76, 100),
-            (101, 125), (126, 150), (151, 175), (176, 200),
-            (201, 225), (226, 250), (251, 275), (276, 300),
-            (301, 325), (326, 350), (351, 375), (376, 400),
+            (1, 25),
+            (26, 50),
+            (51, 75),
+            (76, 100),
+            (101, 125),
+            (126, 150),
+            (151, 175),
+            (176, 200),
+            (201, 225),
+            (226, 250),
+            (251, 275),
+            (276, 300),
+            (301, 325),
+            (326, 350),
+            (351, 375),
+            (376, 400),
             (401, 422),  # Last chunk has 22 pages
         ]
 
@@ -243,7 +257,13 @@ class TestCrossChunkBoundaries:
             page_start=1,
             page_end=25,
             bounding_boxes=[
-                {"page": 25, "reading_order_index": 0, "text": "Page 25", "x": 100, "y": 100},
+                {
+                    "page": 25,
+                    "reading_order_index": 0,
+                    "text": "Page 25",
+                    "x": 100,
+                    "y": 100,
+                },
             ],
             full_text="",
             overall_confidence=0.9,
@@ -254,8 +274,20 @@ class TestCrossChunkBoundaries:
             page_start=26,
             page_end=50,
             bounding_boxes=[
-                {"page": 1, "reading_order_index": 0, "text": "Page 26", "x": 200, "y": 200},
-                {"page": 25, "reading_order_index": 0, "text": "Page 50", "x": 300, "y": 300},
+                {
+                    "page": 1,
+                    "reading_order_index": 0,
+                    "text": "Page 26",
+                    "x": 200,
+                    "y": 200,
+                },
+                {
+                    "page": 25,
+                    "reading_order_index": 0,
+                    "text": "Page 50",
+                    "x": 300,
+                    "y": 300,
+                },
             ],
             full_text="",
             overall_confidence=0.9,
@@ -266,7 +298,13 @@ class TestCrossChunkBoundaries:
             page_start=51,
             page_end=75,
             bounding_boxes=[
-                {"page": 1, "reading_order_index": 0, "text": "Page 51", "x": 400, "y": 400},
+                {
+                    "page": 1,
+                    "reading_order_index": 0,
+                    "text": "Page 51",
+                    "x": 400,
+                    "y": 400,
+                },
             ],
             full_text="",
             overall_confidence=0.9,
@@ -303,7 +341,9 @@ class TestBoundingBoxCountValidation:
         for i in range(3):
             page_start = i * 25 + 1
             page_end = (i + 1) * 25
-            chunks.append(mock_ocr_chunk_result(i, page_start, page_end, bboxes_per_page=20))
+            chunks.append(
+                mock_ocr_chunk_result(i, page_start, page_end, bboxes_per_page=20)
+            )
 
         merger = OCRResultMerger()
         result = merger.merge_results(chunks, "doc-75")
@@ -421,7 +461,9 @@ class TestStreamingPipelineIntegration:
 
             # Simulate OCR for each chunk
             ocr_results = []
-            for i, (chunk_path, page_start, page_end) in enumerate(stream_result.chunks):
+            for i, (chunk_path, page_start, page_end) in enumerate(
+                stream_result.chunks
+            ):
                 # Read chunk bytes (in real scenario, would send to Document AI)
                 chunk_bytes = chunk_path.read_bytes()
                 assert chunk_bytes.startswith(b"%PDF-")

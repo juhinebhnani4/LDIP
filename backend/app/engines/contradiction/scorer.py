@@ -61,57 +61,57 @@ EXPLANATION_TEMPLATES = {
     SeverityLevel.HIGH: {
         ContradictionType.DATE_MISMATCH: (
             "HIGH SEVERITY: Date conflict detected.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "The documents show dates of '{value_a}' vs '{value_b}' - "
             "a significant discrepancy requiring immediate review."
         ),
         ContradictionType.AMOUNT_MISMATCH: (
             "HIGH SEVERITY: Amount conflict detected.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "The amounts of {value_a} vs {value_b} represent "
             "a significant financial discrepancy requiring immediate review."
         ),
         ContradictionType.FACTUAL_CONTRADICTION: (
             "HIGH SEVERITY: Direct factual conflict detected.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements make directly conflicting factual claims "
             "that require immediate attorney review."
         ),
         ContradictionType.SEMANTIC_CONTRADICTION: (
             "HIGH SEVERITY: Significant semantic conflict detected.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements have opposing meanings that require attorney review."
         ),
     },
     SeverityLevel.MEDIUM: {
         ContradictionType.DATE_MISMATCH: (
             "MEDIUM SEVERITY: Possible date conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "The documents may show conflicting dates of '{value_a}' vs '{value_b}'. "
             "Review recommended to confirm discrepancy."
         ),
         ContradictionType.AMOUNT_MISMATCH: (
             "MEDIUM SEVERITY: Possible amount conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "The amounts of {value_a} vs {value_b} may indicate a financial discrepancy. "
             "Review recommended."
         ),
         ContradictionType.FACTUAL_CONTRADICTION: (
             "MEDIUM SEVERITY: Possible factual conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements may make conflicting claims. Review recommended."
         ),
         ContradictionType.SEMANTIC_CONTRADICTION: (
             "MEDIUM SEVERITY: Semantic conflict detected.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements have potentially opposing meanings. "
             "Interpretation may vary - review recommended."
         ),
@@ -119,29 +119,29 @@ EXPLANATION_TEMPLATES = {
     SeverityLevel.LOW: {
         ContradictionType.DATE_MISMATCH: (
             "LOW SEVERITY: Uncertain date conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "Possible date discrepancy of '{value_a}' vs '{value_b}', but confidence is low. "
             "Verification recommended before acting on this finding."
         ),
         ContradictionType.AMOUNT_MISMATCH: (
             "LOW SEVERITY: Uncertain amount conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "Possible amount discrepancy of {value_a} vs {value_b}, but confidence is low. "
             "Verification recommended before acting on this finding."
         ),
         ContradictionType.FACTUAL_CONTRADICTION: (
             "LOW SEVERITY: Uncertain factual conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements may conflict, but analysis is uncertain. "
             "Verification recommended."
         ),
         ContradictionType.SEMANTIC_CONTRADICTION: (
             "LOW SEVERITY: Possible semantic conflict.\n\n"
-            "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-            "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+            'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+            'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
             "These statements may have different meanings, but analysis is uncertain. "
             "Verification recommended before drawing conclusions."
         ),
@@ -398,8 +398,8 @@ class ContradictionScorer:
             contradiction_type,
             (
                 "{severity_upper} SEVERITY: Conflict detected.\n\n"
-                "Statement A ({doc_a}, page {page_a}): \"{excerpt_a}\"\n"
-                "Statement B ({doc_b}, page {page_b}): \"{excerpt_b}\"\n\n"
+                'Statement A ({doc_a}, page {page_a}): "{excerpt_a}"\n'
+                'Statement B ({doc_b}, page {page_b}): "{excerpt_b}"\n\n'
                 "These statements conflict. Review recommended."
             ),
         )

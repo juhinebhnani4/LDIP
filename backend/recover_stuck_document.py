@@ -12,13 +12,11 @@ Example:
     python recover_stuck_document.py f1a7f5bb-d106-4fef-812d-6f3a92a08b9e a7cbad0c-ee48-4f3e-8934-82ec1d01305d 4b04794f-797d-4dc4-a6a3-d0288138c8af
 """
 
-import sys
 import os
+import sys
 
 # Add the backend app to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from app.workers.celery import celery_app
 
 
 def recover_document(document_id: str, matter_id: str, job_id: str | None = None):
@@ -44,7 +42,9 @@ def recover_document(document_id: str, matter_id: str, job_id: str | None = None
     )
 
     print(f"Recovery task dispatched: {result.id}")
-    print("The task will check if document has 0 chunks and trigger downstream if needed.")
+    print(
+        "The task will check if document has 0 chunks and trigger downstream if needed."
+    )
     print("Monitor Celery logs for progress.")
 
     return result

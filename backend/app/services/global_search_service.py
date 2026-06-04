@@ -122,9 +122,12 @@ class GlobalSearchService:
 
             # Query matter_attorneys to get accessible matter IDs
             # Then join with matters table to get titles
-            response = supabase.table("matter_attorneys").select(
-                "matter_id, matters(id, title, description)"
-            ).eq("user_id", user_id).execute()
+            response = (
+                supabase.table("matter_attorneys")
+                .select("matter_id, matters(id, title, description)")
+                .eq("user_id", user_id)
+                .execute()
+            )
 
             if not response.data:
                 return []
@@ -133,11 +136,13 @@ class GlobalSearchService:
             for row in response.data:
                 matter_data = row.get("matters")
                 if matter_data:
-                    matters.append(MatterInfo(
-                        id=matter_data["id"],
-                        title=matter_data.get("title", ""),
-                        description=matter_data.get("description"),
-                    ))
+                    matters.append(
+                        MatterInfo(
+                            id=matter_data["id"],
+                            title=matter_data.get("title", ""),
+                            description=matter_data.get("description"),
+                        )
+                    )
 
             logger.debug(
                 "accessible_matters_found",
@@ -233,14 +238,18 @@ class GlobalSearchService:
 
         for matter in matters:
             if query_lower in matter.title.lower():
-                matched.append(GlobalSearchResultItem(
-                    id=matter.id,
-                    type="matter",
-                    title=matter.title,
-                    matter_id=matter.id,
-                    matter_title=matter.title,
-                    matched_content=(matter.description or "")[:100] if matter.description else "",
-                ))
+                matched.append(
+                    GlobalSearchResultItem(
+                        id=matter.id,
+                        type="matter",
+                        title=matter.title,
+                        matter_id=matter.id,
+                        matter_title=matter.title,
+                        matched_content=(matter.description or "")[:100]
+                        if matter.description
+                        else "",
+                    )
+                )
 
             if len(matched) >= limit:
                 break
@@ -351,21 +360,23 @@ class GlobalSearchService:
             content = result_with_matter.result.content
             snippet = self._extract_match_snippet(content, query, max_length=100)
 
-            document_results.append(GlobalSearchResultItem(
-                id=result_with_matter.result.document_id,  # Use document_id, not chunk id
-                type="document",
-                title=f"Document (Page {result_with_matter.result.page_number or 'N/A'})",
-                matter_id=result_with_matter.matter.id,
-                matter_title=result_with_matter.matter.title,
-                matched_content=snippet,
-            ))
+            document_results.append(
+                GlobalSearchResultItem(
+                    id=result_with_matter.result.document_id,  # Use document_id, not chunk id
+                    type="document",
+                    title=f"Document (Page {result_with_matter.result.page_number or 'N/A'})",
+                    matter_id=result_with_matter.matter.id,
+                    matter_title=result_with_matter.matter.title,
+                    matched_content=snippet,
+                )
+            )
 
             if len(document_results) >= limit:
                 break
 
         # Combine: matter results first, then document results
         # Filter matter results to stay within limit
-        combined = matter_results[:min(len(matter_results), 5)]
+        combined = matter_results[: min(len(matter_results), 5)]
         remaining = limit - len(combined)
         combined.extend(document_results[:remaining])
 

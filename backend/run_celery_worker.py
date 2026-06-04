@@ -1,6 +1,7 @@
 """Script to start Celery worker from Windows."""
-import sys
+
 import os
+import sys
 
 # Add backend to Python path
 backend_path = r"e:\Career coaching\100x\LDIP\backend"
@@ -10,9 +11,18 @@ if backend_path not in sys.path:
 os.chdir(backend_path)
 
 # Now import and run celery
-from celery.__main__ import main
+from celery.__main__ import main  # noqa: E402
 
 # Run as worker with gevent pool (supports concurrent tasks)
 # Use app.workers.celery instead of app.workers.celery_app
-sys.argv = ['celery', '-A', 'app.workers.celery', 'worker', '--loglevel=info', '--pool=gevent', '-c', '100']
+sys.argv = [
+    "celery",
+    "-A",
+    "app.workers.celery",
+    "worker",
+    "--loglevel=info",
+    "--pool=gevent",
+    "-c",
+    "100",
+]
 main()

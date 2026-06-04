@@ -71,8 +71,7 @@ class CitationService:
         """
         if self.client is None:
             raise CitationServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -110,7 +109,7 @@ class CitationService:
             )
             raise CitationServiceError(
                 message=f"Failed to link source bounding boxes: {e!s}",
-                code="SOURCE_LINK_FAILED"
+                code="SOURCE_LINK_FAILED",
             ) from e
 
     def link_citation_to_target_bboxes(
@@ -135,8 +134,7 @@ class CitationService:
         """
         if self.client is None:
             raise CitationServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -174,7 +172,7 @@ class CitationService:
             )
             raise CitationServiceError(
                 message=f"Failed to link target bounding boxes: {e!s}",
-                code="TARGET_LINK_FAILED"
+                code="TARGET_LINK_FAILED",
             ) from e
 
     def get_source_bboxes_for_citation(
@@ -197,8 +195,7 @@ class CitationService:
         """
         if self.client is None:
             raise CitationServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -211,8 +208,7 @@ class CitationService:
 
             if not result.data:
                 raise CitationServiceError(
-                    message="Citation not found",
-                    code="CITATION_NOT_FOUND"
+                    message="Citation not found", code="CITATION_NOT_FOUND"
                 )
 
             bbox_ids = result.data[0].get("source_bbox_ids") or []
@@ -232,7 +228,7 @@ class CitationService:
             )
             raise CitationServiceError(
                 message=f"Failed to get source bounding boxes: {e!s}",
-                code="SOURCE_GET_FAILED"
+                code="SOURCE_GET_FAILED",
             ) from e
 
     def get_target_bboxes_for_citation(
@@ -255,8 +251,7 @@ class CitationService:
         """
         if self.client is None:
             raise CitationServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -269,8 +264,7 @@ class CitationService:
 
             if not result.data:
                 raise CitationServiceError(
-                    message="Citation not found",
-                    code="CITATION_NOT_FOUND"
+                    message="Citation not found", code="CITATION_NOT_FOUND"
                 )
 
             bbox_ids = result.data[0].get("target_bbox_ids") or []
@@ -290,7 +284,7 @@ class CitationService:
             )
             raise CitationServiceError(
                 message=f"Failed to get target bounding boxes: {e!s}",
-                code="TARGET_GET_FAILED"
+                code="TARGET_GET_FAILED",
             ) from e
 
     def get_bboxes_for_citation(

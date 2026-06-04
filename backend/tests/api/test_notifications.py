@@ -43,6 +43,7 @@ def test_client(mock_auth_user: AuthenticatedUser) -> TestClient:
     """Create test client with mocked authentication."""
     # Clear the notification service cache to ensure fresh service instance
     from app.services.notification_service import get_notification_service
+
     get_notification_service.cache_clear()
 
     app.dependency_overrides[get_current_user] = lambda: mock_auth_user
@@ -110,7 +111,13 @@ def create_mock_supabase_client(
 
     # Create a flexible mock that handles various query patterns
     mock_result = MagicMock()
-    mock_result.data = query_data if isinstance(query_data, list) else [query_data] if query_data else []
+    mock_result.data = (
+        query_data
+        if isinstance(query_data, list)
+        else [query_data]
+        if query_data
+        else []
+    )
     mock_result.count = count
 
     # Make all chain methods return something that eventually gives the result
@@ -185,7 +192,10 @@ class TestGetNotifications:
         response = client.get("/api/notifications")
 
         # Should return 401 or redirect
-        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+        assert response.status_code in [
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        ]
 
     @patch("app.services.notification_service.get_supabase_client")
     def test_accepts_limit_parameter(

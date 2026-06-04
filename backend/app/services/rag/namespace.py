@@ -26,8 +26,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 
 # Valid embedding dimensions for supported providers:
@@ -52,12 +51,15 @@ def _validate_uuid(value: str, name: str) -> None:
             parameter=name,
             value=value[:50] if value else None,
         )
-        raise ValueError(f"Invalid UUID for {name}: potential namespace injection attempt")
+        raise ValueError(
+            f"Invalid UUID for {name}: potential namespace injection attempt"
+        )
 
 
 # =============================================================================
 # Namespace Filter Data Class
 # =============================================================================
+
 
 @dataclass
 class MatterNamespaceFilter:
@@ -72,6 +74,7 @@ class MatterNamespaceFilter:
         chunk_type: Optional chunk type filter ('parent' or 'child').
         entity_ids: Optional list of entity IDs to filter by.
     """
+
     matter_id: str
     document_ids: list[str] | None = None
     chunk_type: str | None = None
@@ -96,6 +99,7 @@ class MatterNamespaceFilter:
 # =============================================================================
 # Namespace Filter Functions
 # =============================================================================
+
 
 def get_namespace_filter(
     matter_id: str,
@@ -131,7 +135,9 @@ def get_namespace_filter(
     """
     if not matter_id:
         logger.error("vector_query_without_matter_id")
-        raise ValueError("matter_id is REQUIRED for all vector queries - security violation")
+        raise ValueError(
+            "matter_id is REQUIRED for all vector queries - security violation"
+        )
 
     return MatterNamespaceFilter(
         matter_id=matter_id,
@@ -212,6 +218,7 @@ def build_vector_query_filter(
 # Query Builders
 # =============================================================================
 
+
 def build_semantic_search_query(
     namespace_filter: MatterNamespaceFilter,
     query_embedding: list[float],
@@ -257,11 +264,13 @@ def build_semantic_search_query(
         raise ValueError("limit must be between 1 and 100")
 
     params = build_vector_query_filter(namespace_filter)
-    params.update({
-        "query_embedding": query_embedding,
-        "match_count": limit,
-        "similarity_threshold": similarity_threshold,
-    })
+    params.update(
+        {
+            "query_embedding": query_embedding,
+            "match_count": limit,
+            "similarity_threshold": similarity_threshold,
+        }
+    )
 
     return params
 
@@ -303,11 +312,13 @@ def build_hybrid_search_query(
     sanitized_query = _sanitize_keyword_query(keyword_query)
 
     params = build_semantic_search_query(namespace_filter, query_embedding, limit)
-    params.update({
-        "keyword_query": sanitized_query,
-        "vector_weight": vector_weight,
-        "keyword_weight": 1 - vector_weight,
-    })
+    params.update(
+        {
+            "keyword_query": sanitized_query,
+            "vector_weight": vector_weight,
+            "keyword_weight": 1 - vector_weight,
+        }
+    )
 
     return params
 
@@ -338,6 +349,7 @@ def _sanitize_keyword_query(query: str) -> str:
 # =============================================================================
 # Namespace Validation for Results
 # =============================================================================
+
 
 def validate_search_results(
     results: list[dict[str, Any]],

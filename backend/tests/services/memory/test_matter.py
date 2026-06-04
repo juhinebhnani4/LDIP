@@ -54,18 +54,12 @@ def mock_supabase() -> MagicMock:
     ]
 
     # Setup default response chain for get_latest (3 eq calls: matter_id, memory_type, user_id)
-    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
-        []
-    )
+    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
 
     # Setup default response chain for get_archived_sessions (variable eq calls)
-    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
-        []
-    )
+    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = []
     # With user_id filter
-    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
-        []
-    )
+    mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = []
 
     return mock
 
@@ -201,9 +195,7 @@ class TestGetLatestArchivedSession:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return None when no archived session exists."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = (
-            []
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
 
         result = await matter_repo.get_latest_archived_session(MATTER_ID, USER_ID)
 
@@ -224,7 +216,9 @@ class TestGetLatestArchivedSession:
         await matter_repo.get_latest_archived_session(MATTER_ID, USER_ID)
 
         # Verify all 3 eq calls were made (matter_id, memory_type, user_id filter)
-        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        eq_calls = (
+            mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        )
         # First eq call should be matter_id
         assert eq_calls[0][0] == ("matter_id", MATTER_ID)
 
@@ -263,9 +257,7 @@ class TestGetArchivedSessions:
     ) -> None:
         """Should return empty list when no sessions."""
         # Without user_id filter, there are 2 eq calls: matter_id, memory_type
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = (
-            []
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = []
 
         result = await matter_repo.get_archived_sessions(MATTER_ID)
 
@@ -285,7 +277,9 @@ class TestMatterIsolation:
         await matter_repo.get_latest_archived_session(MATTER_ID, USER_ID)
 
         # Verify query filters by matter_id
-        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        eq_calls = (
+            mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        )
         assert any(call[0] == ("matter_id", MATTER_ID) for call in eq_calls)
 
     @pytest.mark.asyncio
@@ -405,7 +399,15 @@ class TestQueryHistoryMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should pass limit parameter to DB function (Epic 7 Code Review Fix)."""
-        entries_data = [{"query_id": f"q{i}", "query_text": f"Query {i}", "asked_by": "u1", "asked_at": "2026-01-14T10:00:00Z"} for i in range(5)]
+        entries_data = [
+            {
+                "query_id": f"q{i}",
+                "query_text": f"Query {i}",
+                "asked_by": "u1",
+                "asked_at": "2026-01-14T10:00:00Z",
+            }
+            for i in range(5)
+        ]
         # DB function returns already-limited results
         mock_supabase.rpc.return_value.execute.return_value.data = entries_data
 
@@ -460,9 +462,7 @@ class TestTimelineCacheMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return None when no cache exists."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         cache = await matter_repo.get_timeline_cache(MATTER_ID)
 
@@ -544,9 +544,7 @@ class TestTimelineCacheMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return False when nothing to delete."""
-        mock_supabase.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
-            []
-        )
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
 
         deleted = await matter_repo.invalidate_timeline_cache(MATTER_ID)
 
@@ -568,9 +566,7 @@ class TestEntityGraphCacheMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return None when no cache exists."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         cache = await matter_repo.get_entity_graph_cache(MATTER_ID)
 
@@ -725,13 +721,13 @@ class TestMatterIsolationStory73:
         mock_supabase: MagicMock,
     ) -> None:
         """Timeline cache should be filtered by matter_id."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         await matter_repo.get_timeline_cache(MATTER_ID)
 
-        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        eq_calls = (
+            mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        )
         assert any(call[0] == ("matter_id", MATTER_ID) for call in eq_calls)
 
     @pytest.mark.asyncio
@@ -741,13 +737,13 @@ class TestMatterIsolationStory73:
         mock_supabase: MagicMock,
     ) -> None:
         """Entity graph cache should be filtered by matter_id."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         await matter_repo.get_entity_graph_cache(MATTER_ID)
 
-        eq_calls = mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        eq_calls = (
+            mock_supabase.table.return_value.select.return_value.eq.call_args_list
+        )
         assert any(call[0] == ("matter_id", MATTER_ID) for call in eq_calls)
 
 
@@ -781,9 +777,7 @@ class TestGenericMemoryMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return None when memory not found."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         data = await matter_repo.get_memory(MATTER_ID, "custom_type")
 
@@ -828,7 +822,9 @@ class TestErrorHandling:
             asked_at="2026-01-14T10:00:00Z",
         )
 
-        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
+            "DB connection failed"
+        )
 
         with pytest.raises(RuntimeError, match="Failed to append query"):
             await matter_repo.append_query(MATTER_ID, entry)
@@ -858,9 +854,7 @@ class TestErrorHandling:
         mock_supabase: MagicMock,
     ) -> None:
         """Should raise RuntimeError on database failure (Epic 7 Code Review Fix)."""
-        mock_supabase.rpc.return_value.execute.side_effect = Exception(
-            "DB unavailable"
-        )
+        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB unavailable")
 
         with pytest.raises(RuntimeError, match="Failed to get query history"):
             await matter_repo.get_query_history(MATTER_ID)
@@ -929,7 +923,9 @@ class TestKeyFindingsErrorHandling:
         sample_key_finding: KeyFinding,
     ) -> None:
         """Should raise RuntimeError on database failure."""
-        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
+            "DB connection failed"
+        )
 
         with pytest.raises(RuntimeError, match="Failed to add key finding"):
             await matter_repo.add_key_finding(MATTER_ID, sample_key_finding)
@@ -947,7 +943,9 @@ class TestKeyFindingsErrorHandling:
             "data": {"findings": [sample_key_finding.model_dump(mode="json")]}
         }
         # But upsert fails
-        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB write failed")
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
+            "DB write failed"
+        )
 
         with pytest.raises(RuntimeError, match="Failed to delete key finding"):
             await matter_repo.delete_key_finding(MATTER_ID, "finding-123")
@@ -964,7 +962,9 @@ class TestResearchNotesErrorHandling:
         sample_research_note: ResearchNote,
     ) -> None:
         """Should raise RuntimeError on database failure."""
-        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB connection failed")
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
+            "DB connection failed"
+        )
 
         with pytest.raises(RuntimeError, match="Failed to add research note"):
             await matter_repo.add_research_note(MATTER_ID, sample_research_note)
@@ -982,7 +982,9 @@ class TestResearchNotesErrorHandling:
             "data": {"notes": [sample_research_note.model_dump(mode="json")]}
         }
         # But upsert fails
-        mock_supabase.rpc.return_value.execute.side_effect = Exception("DB write failed")
+        mock_supabase.rpc.return_value.execute.side_effect = Exception(
+            "DB write failed"
+        )
 
         with pytest.raises(RuntimeError, match="Failed to delete research note"):
             await matter_repo.delete_research_note(MATTER_ID, "note-123")
@@ -1028,9 +1030,7 @@ class TestKeyFindingsMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return empty findings when none exist."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         findings = await matter_repo.get_key_findings(MATTER_ID)
 
@@ -1209,9 +1209,7 @@ class TestResearchNotesMethods:
         mock_supabase: MagicMock,
     ) -> None:
         """Should return empty notes when none exist."""
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = (
-            None
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
         notes = await matter_repo.get_research_notes(MATTER_ID)
 

@@ -10,7 +10,6 @@ Provides estimated completion times for document processing based on:
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Literal
 
 import structlog
@@ -219,9 +218,7 @@ class ETACalculator:
             ETAResult with min/max/best estimates and confidence.
         """
         # Calculate total pages to process
-        total_pages = sum(
-            doc.get("page_count", 1) for doc in pending_docs
-        )
+        total_pages = sum(doc.get("page_count", 1) for doc in pending_docs)
 
         if total_pages == 0:
             return ETAResult(

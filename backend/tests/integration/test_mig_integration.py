@@ -173,9 +173,7 @@ class TestMIGPipelineIntegration:
         extractor = MIGEntityExtractor()
 
         # Mock Gemini API call
-        with patch.object(
-            extractor, "_parse_response"
-        ) as mock_parse:
+        with patch.object(extractor, "_parse_response") as mock_parse:
             # Create expected extraction result
             expected_result = EntityExtractionResult(
                 entities=[
@@ -235,9 +233,7 @@ class TestMIGPipelineIntegration:
         # Mock: no existing entity found
         mock_select_response = MagicMock()
         mock_select_response.data = []
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.ilike.return_value.limit.return_value.execute.return_value = (
-            mock_select_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.ilike.return_value.limit.return_value.execute.return_value = mock_select_response
 
         # Mock: insert returns new entity
         new_entity_id = str(uuid4())
@@ -305,9 +301,7 @@ class TestMIGPipelineIntegration:
         # Mock: get entity with matter_id filter
         mock_select_response = MagicMock()
         mock_select_response.data = []  # Entity not found in this matter
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_select_response
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_select_response
 
         service = MIGGraphService()
 
@@ -430,9 +424,7 @@ class TestMIGMentionTracking:
         # Mock existing entity with mention_count
         mock_select_current = MagicMock()
         mock_select_current.data = [{"mention_count": 5}]
-        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
-            mock_select_current
-        )
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = mock_select_current
 
         # Mock update
         mock_update_response = MagicMock()
@@ -449,9 +441,7 @@ class TestMIGMentionTracking:
                 "updated_at": "2024-01-15T11:00:00+00:00",
             }
         ]
-        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            mock_update_response
-        )
+        mock_client.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = mock_update_response
 
         service = MIGGraphService()
 

@@ -55,14 +55,20 @@ class EntityNodeBase(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    canonical_name: str = Field(..., alias="canonicalName", description="Normalized entity name")
-    entity_type: EntityType = Field(..., alias="entityType", description="Entity type classification")
+    canonical_name: str = Field(
+        ..., alias="canonicalName", description="Normalized entity name"
+    )
+    entity_type: EntityType = Field(
+        ..., alias="entityType", description="Entity type classification"
+    )
 
 
 class EntityNodeCreate(EntityNodeBase):
     """Model for creating an entity node record."""
 
-    matter_id: str = Field(..., alias="matterId", description="Matter UUID for isolation")
+    matter_id: str = Field(
+        ..., alias="matterId", description="Matter UUID for isolation"
+    )
     metadata: dict = Field(
         default_factory=dict,
         description="Additional metadata (roles, aliases found, first_mention_doc)",
@@ -75,13 +81,21 @@ class EntityNode(EntityNodeBase):
     id: str = Field(..., description="Entity UUID")
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
     metadata: dict = Field(default_factory=dict, description="Entity metadata")
-    mention_count: int = Field(default=0, alias="mentionCount", description="Number of mentions")
+    mention_count: int = Field(
+        default=0, alias="mentionCount", description="Number of mentions"
+    )
     aliases: list[str] = Field(default_factory=list, description="Known aliases")
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Last update timestamp"
+    )
     # Story 3.3: Soft merge tracking
     merged_into_id: str | None = Field(
-        None, alias="mergedIntoId", description="If merged, references target entity (Story 3.3)"
+        None,
+        alias="mergedIntoId",
+        description="If merged, references target entity (Story 3.3)",
     )
     merged_at: datetime | None = Field(
         None, alias="mergedAt", description="When entity was merged (Story 3.3)"
@@ -130,8 +144,12 @@ class EntityEdgeBase(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    source_entity_id: str = Field(..., alias="sourceEntityId", description="Source entity UUID")
-    target_entity_id: str = Field(..., alias="targetEntityId", description="Target entity UUID")
+    source_entity_id: str = Field(
+        ..., alias="sourceEntityId", description="Source entity UUID"
+    )
+    target_entity_id: str = Field(
+        ..., alias="targetEntityId", description="Target entity UUID"
+    )
     relationship_type: RelationshipType = Field(
         ..., alias="relationshipType", description="Relationship type classification"
     )
@@ -140,7 +158,9 @@ class EntityEdgeBase(BaseModel):
 class EntityEdgeCreate(EntityEdgeBase):
     """Model for creating an entity edge record."""
 
-    matter_id: str = Field(..., alias="matterId", description="Matter UUID for isolation")
+    matter_id: str = Field(
+        ..., alias="matterId", description="Matter UUID for isolation"
+    )
     confidence: float = Field(
         default=1.0, ge=0.0, le=1.0, description="Extraction confidence"
     )
@@ -156,7 +176,9 @@ class EntityEdge(EntityEdgeBase):
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
     confidence: float = Field(..., description="Extraction confidence")
     metadata: dict = Field(default_factory=dict, description="Edge metadata")
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
 
     # Populated when fetching edges with entity details
     source_entity_name: str | None = Field(
@@ -177,7 +199,9 @@ class EntityMentionBase(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    mention_text: str = Field(..., alias="mentionText", description="Exact text of the mention")
+    mention_text: str = Field(
+        ..., alias="mentionText", description="Exact text of the mention"
+    )
     context: str | None = Field(None, description="Surrounding text (±50 chars)")
 
 
@@ -185,7 +209,9 @@ class EntityMentionCreate(EntityMentionBase):
     """Model for creating an entity mention record."""
 
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
     chunk_id: str | None = Field(None, alias="chunkId", description="Source chunk UUID")
     page_number: int | None = Field(None, alias="pageNumber", description="Page number")
     bbox_ids: list[str] = Field(
@@ -201,15 +227,23 @@ class EntityMention(EntityMentionBase):
 
     id: str = Field(..., description="Mention UUID")
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
     chunk_id: str | None = Field(None, alias="chunkId", description="Source chunk UUID")
     page_number: int | None = Field(None, alias="pageNumber", description="Page number")
-    bbox_ids: list[str] = Field(default_factory=list, alias="bboxIds", description="Bounding box UUIDs")
+    bbox_ids: list[str] = Field(
+        default_factory=list, alias="bboxIds", description="Bounding box UUIDs"
+    )
     confidence: float = Field(..., description="Extraction confidence")
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
 
     # Populated when fetching mentions with document details
-    document_name: str | None = Field(None, alias="documentName", description="Source document name")
+    document_name: str | None = Field(
+        None, alias="documentName", description="Source document name"
+    )
 
 
 # =============================================================================
@@ -296,10 +330,12 @@ class EntityExtractionResult(BaseModel):
         description="Bounding box UUIDs for precise source highlighting (gold standard pattern)",
     )
     was_truncated: bool = Field(
-        default=False, description="True if input text was truncated due to length limits"
+        default=False,
+        description="True if input text was truncated due to length limits",
     )
     original_length: int | None = Field(
-        None, description="Original text length before truncation (None if not truncated)"
+        None,
+        description="Original text length before truncation (None if not truncated)",
     )
     processed_length: int | None = Field(
         None, description="Actual text length processed (None if not truncated)"
@@ -319,7 +355,9 @@ class PaginationMeta(BaseModel):
     total: int = Field(..., ge=0, description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
     per_page: int = Field(..., ge=1, alias="perPage", description="Items per page")
-    total_pages: int = Field(..., ge=0, alias="totalPages", description="Total number of pages")
+    total_pages: int = Field(
+        ..., ge=0, alias="totalPages", description="Total number of pages"
+    )
 
 
 class EntityListItem(BaseModel):
@@ -328,9 +366,13 @@ class EntityListItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., description="Entity UUID")
-    canonical_name: str = Field(..., alias="canonicalName", description="Normalized entity name")
+    canonical_name: str = Field(
+        ..., alias="canonicalName", description="Normalized entity name"
+    )
     entity_type: EntityType = Field(..., alias="entityType", description="Entity type")
-    mention_count: int = Field(..., alias="mentionCount", description="Number of mentions")
+    mention_count: int = Field(
+        ..., alias="mentionCount", description="Number of mentions"
+    )
     metadata: dict = Field(default_factory=dict, description="Entity metadata")
 
 

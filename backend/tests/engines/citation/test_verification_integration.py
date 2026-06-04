@@ -124,15 +124,11 @@ class TestVerificationFlow:
     """Tests for complete verification workflow."""
 
     @pytest.mark.asyncio
-    async def test_batch_verification_flow(
-        self, sample_citations, mock_act_chunks
-    ):
+    async def test_batch_verification_flow(self, sample_citations, mock_act_chunks):
         """Test batch verification of multiple citations."""
         # Mock storage service
         mock_storage = MagicMock(spec=CitationStorageService)
-        mock_storage.get_citations_for_act = AsyncMock(
-            return_value=sample_citations
-        )
+        mock_storage.get_citations_for_act = AsyncMock(return_value=sample_citations)
         mock_storage.update_citation_verification = AsyncMock(
             return_value=sample_citations[0]
         )
@@ -143,8 +139,10 @@ class TestVerificationFlow:
         # Use **kwargs to handle keyword argument calls from verifier
         mock_indexer.get_section_chunks = AsyncMock(
             side_effect=lambda act_document_id=None, section=None: (
-                [mock_act_chunks[0]] if section == "138"
-                else [mock_act_chunks[1]] if section == "139"
+                [mock_act_chunks[0]]
+                if section == "138"
+                else [mock_act_chunks[1]]
+                if section == "139"
                 else []
             )
         )

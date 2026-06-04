@@ -16,7 +16,7 @@ CRITICAL: Uses matter access validation for Layer 4 security.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -291,7 +291,7 @@ async def get_matter_summary(
             # Cache evicted — fall through to regenerate
 
         # 4. Check for recent FAILED job (within last 5 minutes)
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+        cutoff = datetime.now(UTC) - timedelta(minutes=5)
         recent_failed = next(
             (
                 j
@@ -323,7 +323,11 @@ async def get_matter_summary(
                 job_type_filter=JobType.SUMMARY_GENERATION,
             )
             active_job = next(
-                (j for j in jobs if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)),
+                (
+                    j
+                    for j in jobs
+                    if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)
+                ),
                 None,
             )
             if active_job is not None:
@@ -353,9 +357,7 @@ async def get_matter_summary(
 
         # CRITICAL: .delay() is synchronous (blocks on Redis broker).
         # Run in a thread to avoid freezing the async event loop.
-        result = await asyncio.to_thread(
-            generate_summary.delay, matter_id, job.id
-        )
+        result = await asyncio.to_thread(generate_summary.delay, matter_id, job.id)
 
         # Store Celery task ID on the job record for debugging correlation
         await tracker.update_job_status(

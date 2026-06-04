@@ -127,10 +127,12 @@ class TestMaliciousPDFValidation:
         router = PDFRouter()
 
         # Mock to simulate mismatch (would require corrupted PDF in real scenario)
-        with patch.object(router, "_count_actual_pages", return_value=8):
-            with patch("app.services.pdf_router.logger") as mock_logger:
-                router.get_page_count(sample_pdf_10_pages)
-                mock_logger.warning.assert_called()
+        with (
+            patch.object(router, "_count_actual_pages", return_value=8),
+            patch("app.services.pdf_router.logger") as mock_logger,
+        ):
+            router.get_page_count(sample_pdf_10_pages)
+            mock_logger.warning.assert_called()
 
 
 class TestShouldUseChunkedProcessing:

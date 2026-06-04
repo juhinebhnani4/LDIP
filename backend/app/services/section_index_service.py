@@ -21,7 +21,9 @@ logger = structlog.get_logger(__name__)
 # Section header patterns for Indian Acts
 SECTION_HEADER_PATTERNS = [
     # "123. Title of section" - most common format
-    re.compile(r"^(\d+[A-Z]?)\.\s+([A-Z][a-z].*?)(?:\.\s*[-—]|\s*[-—]|$)", re.MULTILINE),
+    re.compile(
+        r"^(\d+[A-Z]?)\.\s+([A-Z][a-z].*?)(?:\.\s*[-—]|\s*[-—]|$)", re.MULTILINE
+    ),
     # "Section 123" standalone
     re.compile(r"^Section\s+(\d+[A-Z]?(?:\(\d+\))?)\b", re.IGNORECASE | re.MULTILINE),
     # "[Section 123]" in brackets
@@ -153,7 +155,8 @@ class SectionIndexService:
                     section_number=normalized,
                     page_number=row["page_number"],
                     section_title=row.get("section_title"),
-                    confidence=row.get("confidence", 0.8) * 0.9,  # Slight confidence reduction
+                    confidence=row.get("confidence", 0.8)
+                    * 0.9,  # Slight confidence reduction
                     bbox_id=row.get("bbox_id"),
                     source="section_index_base",
                 )
@@ -302,16 +305,18 @@ class SectionIndexService:
                     if match.lastindex and match.lastindex >= 2:
                         title = match.group(2).strip()
 
-                    sections.append({
-                        "document_id": document_id,
-                        "matter_id": matter_id,
-                        "section_number": section_num,
-                        "page_number": page,
-                        "section_title": title,
-                        "confidence": 0.9,
-                        "is_toc": False,
-                        "bbox_id": str(bbox["id"]),
-                    })
+                    sections.append(
+                        {
+                            "document_id": document_id,
+                            "matter_id": matter_id,
+                            "section_number": section_num,
+                            "page_number": page,
+                            "section_title": title,
+                            "confidence": 0.9,
+                            "is_toc": False,
+                            "bbox_id": str(bbox["id"]),
+                        }
+                    )
 
         if not sections:
             logger.info(

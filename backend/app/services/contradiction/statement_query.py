@@ -162,13 +162,15 @@ class StatementQueryService:
 
             # Get statements
             if include_aliases:
-                entity_statements = await self.engine.get_statements_for_canonical_entity(
-                    entity_id=entity_id,
-                    matter_id=matter_id,
-                    include_aliases=True,
-                    document_ids=document_ids,
-                    page=page,
-                    per_page=per_page,
+                entity_statements = (
+                    await self.engine.get_statements_for_canonical_entity(
+                        entity_id=entity_id,
+                        matter_id=matter_id,
+                        include_aliases=True,
+                        document_ids=document_ids,
+                        page=page,
+                        per_page=per_page,
+                    )
                 )
             else:
                 entity_statements = await self.engine.get_statements_for_entity(

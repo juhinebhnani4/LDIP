@@ -44,10 +44,6 @@ from app.engines.orchestrator.query_history import (
     QueryHistoryStore,
     get_query_history_store,
 )
-from app.services.memory.query_cache_service import (
-    QueryCacheService,
-    get_query_cache_service,
-)
 from app.models.orchestrator import (
     EngineType,
     IntentAnalysisResult,
@@ -57,6 +53,10 @@ from app.models.orchestrator import (
     SourceReference,
 )
 from app.models.safety import SafetyCheckResult
+from app.services.memory.query_cache_service import (
+    QueryCacheService,
+    get_query_cache_service,
+)
 from app.services.safety import SafetyGuard, get_safety_guard
 from app.services.supabase.client import get_supabase_client
 
@@ -131,7 +131,9 @@ class QueryOrchestrator:
         """
         self._safety_guard = safety_guard or get_safety_guard()
         self._intent_analyzer = intent_analyzer or get_intent_analyzer()
-        self._multi_intent_analyzer = multi_intent_analyzer or get_multi_intent_analyzer()
+        self._multi_intent_analyzer = (
+            multi_intent_analyzer or get_multi_intent_analyzer()
+        )
         self._planner = planner or get_execution_planner()
         self._executor = executor or get_engine_executor()
         self._aggregator = aggregator or get_result_aggregator()
@@ -192,8 +194,7 @@ class QueryOrchestrator:
             # If we have a suggested rewrite that's actually different, use it
             rewrite = safety_result.suggested_rewrite
             rewrite_is_different = (
-                rewrite
-                and rewrite.strip().lower() != original_query.strip().lower()
+                rewrite and rewrite.strip().lower() != original_query.strip().lower()
             )
 
             if rewrite_is_different:
@@ -276,7 +277,8 @@ class QueryOrchestrator:
                     # Reconstruct OrchestratorResult from cached data
                     # Restore sources from cached data
                     cached_sources = [
-                        SourceReference(**s) for s in cached.response_data.get("sources", [])
+                        SourceReference(**s)
+                        for s in cached.response_data.get("sources", [])
                     ]
                     cached_result = OrchestratorResult(
                         matter_id=matter_id,
@@ -284,10 +286,12 @@ class QueryOrchestrator:
                         success=cached.response_data.get("success", True),
                         unified_response=cached.response_data.get("unified_response"),
                         successful_engines=[
-                            EngineType(e) for e in cached.response_data.get("successful_engines", [])
+                            EngineType(e)
+                            for e in cached.response_data.get("successful_engines", [])
                         ],
                         failed_engines=[
-                            EngineType(e) for e in cached.response_data.get("failed_engines", [])
+                            EngineType(e)
+                            for e in cached.response_data.get("failed_engines", [])
                         ],
                         sources=cached_sources,
                         confidence=cached.confidence,
@@ -330,12 +334,20 @@ class QueryOrchestrator:
                         .execute()
                     )
                     document_count = count_resp.count
-                    logger.info("matter_document_count", matter_id=matter_id, document_count=document_count)
+                    logger.info(
+                        "matter_document_count",
+                        matter_id=matter_id,
+                        document_count=document_count,
+                    )
             except Exception as e:
-                logger.warning("matter_document_count_failed", matter_id=matter_id, error=str(e))
+                logger.warning(
+                    "matter_document_count_failed", matter_id=matter_id, error=str(e)
+                )
 
             # New multi-intent classification path
-            multi_classification = await self._multi_intent_analyzer.classify(query, document_count=document_count)
+            multi_classification = await self._multi_intent_analyzer.classify(
+                query, document_count=document_count
+            )
             engines = list(multi_classification.required_engines)
 
             # Create legacy IntentAnalysisResult for backward compatibility (audit logging)
@@ -351,7 +363,9 @@ class QueryOrchestrator:
                 is_multi_intent=multi_classification.is_multi_intent,
                 required_engines=[e.value for e in engines],
                 aggregation_strategy=multi_classification.aggregation_strategy,
-                compound_intent=multi_classification.compound_intent.name if multi_classification.compound_intent else None,
+                compound_intent=multi_classification.compound_intent.name
+                if multi_classification.compound_intent
+                else None,
                 llm_was_used=multi_classification.llm_was_used,
             )
         else:
@@ -398,12 +412,11 @@ class QueryOrchestrator:
 
                 mig_service = get_mig_graph_service()
                 ent_list, _ = await mig_service.get_entities_by_matter(
-                    matter_id=matter_id, per_page=500,
+                    matter_id=matter_id,
+                    per_page=500,
                 )
                 if ent_list:
-                    ent_tuples = [
-                        (e.id, e.canonical_name, e.aliases) for e in ent_list
-                    ]
+                    ent_tuples = [(e.id, e.canonical_name, e.aliases) for e in ent_list]
                     ent_matches = fuzzy_match_entities(query, ent_tuples)
                     if ent_matches:
                         context = dict(context) if context else {}
@@ -431,7 +444,9 @@ class QueryOrchestrator:
                         .single()
                         .execute()
                     )
-                    cause_title = ct_resp.data.get("cause_title") if ct_resp.data else None
+                    cause_title = (
+                        ct_resp.data.get("cause_title") if ct_resp.data else None
+                    )
                     if cause_title:
                         context = dict(context) if context else {}
                         context["cause_title"] = cause_title
@@ -441,7 +456,9 @@ class QueryOrchestrator:
                             cause_title_length=len(cause_title),
                         )
             except Exception as e:
-                logger.warning("cause_title_load_failed", matter_id=matter_id, error=str(e))
+                logger.warning(
+                    "cause_title_load_failed", matter_id=matter_id, error=str(e)
+                )
 
         # Step 2: Execute engines
         engine_results = await self._executor.execute_engines(
@@ -464,7 +481,9 @@ class QueryOrchestrator:
         }
 
         if multi_classification:
-            aggregation_kwargs["aggregation_strategy"] = multi_classification.aggregation_strategy
+            aggregation_kwargs["aggregation_strategy"] = (
+                multi_classification.aggregation_strategy
+            )
             aggregation_kwargs["primary_engine"] = multi_classification.primary_engine
             aggregation_kwargs["compound_intent"] = multi_classification.compound_intent
 
@@ -488,14 +507,20 @@ class QueryOrchestrator:
                     "unified_response": result.unified_response,
                     "successful_engines": [e.value for e in result.successful_engines],
                     "failed_engines": [e.value for e in result.failed_engines],
-                    "sources": [s.model_dump() for s in result.sources] if result.sources else [],
+                    "sources": [s.model_dump() for s in result.sources]
+                    if result.sources
+                    else [],
                 }
                 await self._cache_service.cache_result(
                     matter_id=matter_id,
                     query=query,
-                    result_summary=result.unified_response[:200] if result.unified_response else "",
+                    result_summary=result.unified_response[:200]
+                    if result.unified_response
+                    else "",
                     response_data=response_data,
-                    engine_used=result.successful_engines[0].value if result.successful_engines else None,
+                    engine_used=result.successful_engines[0].value
+                    if result.successful_engines
+                    else None,
                     findings_count=len(result.successful_engines),
                     confidence=result.confidence,
                 )

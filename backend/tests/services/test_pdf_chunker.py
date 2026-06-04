@@ -24,7 +24,6 @@ from app.services.pdf_chunker import (
     DEFAULT_CHUNK_SIZE,
     MEMORY_LIMIT_MB,
     STREAMING_THRESHOLD_MB,
-    MemoryLimitExceededError,
     PDFChunker,
     PDFChunkerError,
     StreamingChunkResult,
@@ -38,7 +37,7 @@ def create_pdf():
 
     def _create(page_count: int) -> bytes:
         writer = PdfWriter()
-        for i in range(page_count):
+        for _ in range(page_count):
             # Add page number text for debugging
             writer.add_blank_page(width=612, height=792)
         buffer = BytesIO()
@@ -387,7 +386,7 @@ class TestPageValidation:
             prev_end = chunks[i - 1][2]
             curr_start = chunks[i][1]
             assert curr_start == prev_end + 1, (
-                f"Gap between chunk {i-1} (end={prev_end}) "
+                f"Gap between chunk {i - 1} (end={prev_end}) "
                 f"and chunk {i} (start={curr_start})"
             )
 
@@ -403,7 +402,7 @@ class TestStreamingSplit:
         with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
             assert len(result.chunks) == 3
 
-            for chunk_path, page_start, page_end in result.chunks:
+            for chunk_path, _page_start, _page_end in result.chunks:
                 assert chunk_path.exists()
                 assert chunk_path.suffix == ".pdf"
 
@@ -522,6 +521,7 @@ class TestStreamingChunkResultClass:
             # Ensure cleanup even if test fails
             if temp_dir.exists():
                 import shutil
+
                 shutil.rmtree(temp_dir)
 
     def test_manual_cleanup(self):
@@ -539,6 +539,7 @@ class TestStreamingChunkResultClass:
         finally:
             if temp_dir.exists():
                 import shutil
+
                 shutil.rmtree(temp_dir)
 
 

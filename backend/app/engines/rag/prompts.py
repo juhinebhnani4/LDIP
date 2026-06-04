@@ -244,7 +244,11 @@ def _format_context(
     formatted = []
     for i, chunk in enumerate(selected_chunks, 1):
         # Support both snake_case (from DB) and camelCase (from API)
-        doc_name = chunk.get("document_name") or chunk.get("documentName") or "Unknown Document"
+        doc_name = (
+            chunk.get("document_name")
+            or chunk.get("documentName")
+            or "Unknown Document"
+        )
         page = chunk.get("page_number") or chunk.get("pageNumber") or "?"
         content = chunk.get("content", "")[:effective_max_content]
 
@@ -319,7 +323,9 @@ def _deduplicate_chunk_boundaries(
                 continue
 
             overlap = _find_boundary_overlap(
-                prev_content, current_content, min_overlap=min_overlap,
+                prev_content,
+                current_content,
+                min_overlap=min_overlap,
             )
             if overlap > best_overlap:
                 best_overlap = overlap

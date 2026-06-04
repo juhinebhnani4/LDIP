@@ -111,13 +111,17 @@ class TestValidateBatchSync:
         result = []
         for i, word in enumerate(words):
             corrected = corrections.get(i, word.text)
-            result.append({
-                "index": i,
-                "original": word.text,
-                "corrected": corrected,
-                "confidence": 0.9 if corrected != word.text else word.confidence,
-                "reasoning": "Corrected" if corrected != word.text else "No correction needed",
-            })
+            result.append(
+                {
+                    "index": i,
+                    "original": word.text,
+                    "corrected": corrected,
+                    "confidence": 0.9 if corrected != word.text else word.confidence,
+                    "reasoning": "Corrected"
+                    if corrected != word.text
+                    else "No correction needed",
+                }
+            )
         return json.dumps(result)
 
     def test_returns_empty_for_empty_input(
@@ -299,13 +303,15 @@ class TestValidateBatchAsync:
         """Create a mock Gemini response."""
         result = []
         for i, word in enumerate(words):
-            result.append({
-                "index": i,
-                "original": word.text,
-                "corrected": word.text,
-                "confidence": word.confidence,
-                "reasoning": "No correction needed",
-            })
+            result.append(
+                {
+                    "index": i,
+                    "original": word.text,
+                    "corrected": word.text,
+                    "confidence": word.confidence,
+                    "reasoning": "No correction needed",
+                }
+            )
         return json.dumps(result)
 
     @pytest.mark.anyio
@@ -350,9 +356,11 @@ class TestValidateBatchAsync:
             side_effect=Exception("Async API Error")
         )
 
-        with patch.object(mock_validator, "_model", mock_model):
-            with pytest.raises(GeminiValidatorError):
-                await mock_validator.validate_batch_async(words)
+        with (
+            patch.object(mock_validator, "_model", mock_model),
+            pytest.raises(GeminiValidatorError),
+        ):
+            await mock_validator.validate_batch_async(words)
 
 
 class TestParseResponse:
@@ -553,13 +561,15 @@ class TestValidateAllWords:
         def create_response(batch_words: list[LowConfidenceWord]) -> str:
             result = []
             for i, word in enumerate(batch_words):
-                result.append({
-                    "index": i,
-                    "original": word.text,
-                    "corrected": word.text,
-                    "confidence": word.confidence,
-                    "reasoning": "No correction",
-                })
+                result.append(
+                    {
+                        "index": i,
+                        "original": word.text,
+                        "corrected": word.text,
+                        "confidence": word.confidence,
+                        "reasoning": "No correction",
+                    }
+                )
             return json.dumps(result)
 
         with patch("app.services.ocr.gemini_validator.get_settings") as mock_settings:
@@ -567,11 +577,15 @@ class TestValidateAllWords:
             mock_settings.return_value.gemini_model = "gemini-1.5-flash"
             mock_settings.return_value.ocr_validation_batch_size = 20
 
-            with patch("app.services.ocr.gemini_validator.GeminiOCRValidator") as MockValidator:
+            with patch(
+                "app.services.ocr.gemini_validator.GeminiOCRValidator"
+            ) as MockValidator:
                 mock_instance = MagicMock()
 
                 # Mock validate_batch_async to return appropriate results
-                async def mock_validate(batch: list[LowConfidenceWord]) -> list[ValidationResult]:
+                async def mock_validate(
+                    batch: list[LowConfidenceWord],
+                ) -> list[ValidationResult]:
                     return [
                         ValidationResult(
                             bbox_id=w.bbox_id,
@@ -617,7 +631,9 @@ class TestValidateAllWords:
             mock_settings.return_value.gemini_model = "gemini-1.5-flash"
             mock_settings.return_value.ocr_validation_batch_size = 20
 
-            with patch("app.services.ocr.gemini_validator.GeminiOCRValidator") as MockValidator:
+            with patch(
+                "app.services.ocr.gemini_validator.GeminiOCRValidator"
+            ) as MockValidator:
                 mock_instance = MagicMock()
                 mock_instance.validate_batch_async = AsyncMock(
                     side_effect=Exception("Batch failed")

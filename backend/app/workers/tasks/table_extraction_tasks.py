@@ -11,23 +11,26 @@ Table chunks are embedded and FTS-indexed automatically by downstream tasks.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import structlog
 
-from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.document_service import DocumentService, get_document_service
 from app.services.storage_service import StorageService, get_storage_service
-from app.services.supabase.client import get_supabase_client as get_supabase
 from app.services.supabase.client import get_service_client
+from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from app.services.table_extraction.models import ExtractedTable, TableExtractionResult
+    from app.services.table_extraction.models import (
+        ExtractedTable,
+        TableExtractionResult,
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -112,7 +115,13 @@ def extract_tables(
     # Skip if previous task failed
     if prev_result:
         prev_status = prev_result.get("status")
-        failed_statuses = ("failed", "error", "ocr_failed", "chunking_failed", "chunking_skipped")
+        failed_statuses = (
+            "failed",
+            "error",
+            "ocr_failed",
+            "chunking_failed",
+            "chunking_skipped",
+        )
         if prev_status in failed_statuses:
             logger.info(
                 "extract_tables_skipped",
@@ -180,7 +189,9 @@ def extract_tables(
             if result.has_tables:
                 _store_tables(result, matter_id, doc_id)
                 table_chunk_count = _create_table_chunks(
-                    result, matter_id, doc_id,
+                    result,
+                    matter_id,
+                    doc_id,
                 )
 
             logger.info(
@@ -194,7 +205,9 @@ def extract_tables(
             )
 
             return {
-                "status": "table_extraction_complete" if result.success else "table_extraction_partial",
+                "status": "table_extraction_complete"
+                if result.success
+                else "table_extraction_partial",
                 "document_id": doc_id,
                 "matter_id": matter_id,
                 "job_id": job_id,
@@ -206,10 +219,8 @@ def extract_tables(
         finally:
             # Clean up temp file — runs regardless of where the exception occurred
             if tmp_path is not None:
-                try:
+                with contextlib.suppress(Exception):
                     tmp_path.unlink()
-                except Exception:
-                    pass
 
     except ConnectionError as e:
         # Manual retry for transient network errors. We handle this inside
@@ -231,7 +242,7 @@ def extract_tables(
                 error=str(e),
             )
             # self.retry() raises Retry exception — Celery re-queues the task
-            raise self.retry(exc=e, countdown=min(30 * (2 ** retry_count), 60))
+            raise self.retry(exc=e, countdown=min(30 * (2**retry_count), 60)) from e
 
         # Retries exhausted — return gracefully so the chain continues
         logger.error(
@@ -304,18 +315,22 @@ def _store_tables(
 
     for table in result.tables:
         try:
-            supabase.table("document_tables").insert({
-                "document_id": document_id,
-                "matter_id": matter_id,
-                "table_index": table.table_index,
-                "page_number": table.page_number,
-                "markdown_content": table.markdown_content,
-                "row_count": table.row_count,
-                "col_count": table.col_count,
-                "confidence": table.confidence,
-                "bounding_box": table.bounding_box.model_dump() if table.bounding_box else None,
-                "caption": table.caption,
-            }).execute()
+            supabase.table("document_tables").insert(
+                {
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "table_index": table.table_index,
+                    "page_number": table.page_number,
+                    "markdown_content": table.markdown_content,
+                    "row_count": table.row_count,
+                    "col_count": table.col_count,
+                    "confidence": table.confidence,
+                    "bounding_box": table.bounding_box.model_dump()
+                    if table.bounding_box
+                    else None,
+                    "caption": table.caption,
+                }
+            ).execute()
 
             logger.debug(
                 "table_stored",
@@ -369,9 +384,7 @@ def _create_table_chunks(
 
     # Idempotency: delete existing table chunks for this document
     try:
-        client.table("chunks").delete().eq(
-            "document_id", document_id
-        ).eq(
+        client.table("chunks").delete().eq("document_id", document_id).eq(
             "chunk_type", "table"
         ).execute()
     except Exception as e:
@@ -394,7 +407,9 @@ def _create_table_chunks(
             .limit(1)
             .execute()
         )
-        next_index = (max_index_resp.data[0]["chunk_index"] + 1) if max_index_resp.data else 0
+        next_index = (
+            (max_index_resp.data[0]["chunk_index"] + 1) if max_index_resp.data else 0
+        )
     except Exception as e:
         logger.error(
             "table_chunks_max_index_query_failed",
@@ -430,24 +445,29 @@ def _create_table_chunks(
 
         if token_count <= TABLE_CHUNK_MAX_TOKENS:
             # Single chunk for the whole table
-            chunk_records.append({
-                "id": str(uuid4()),
-                "matter_id": matter_id,
-                "document_id": document_id,
-                "chunk_index": next_index,
-                "parent_chunk_id": None,
-                "content": full_content,
-                "page_number": table.page_number,
-                "bbox_ids": None,
-                "token_count": token_count,
-                "chunk_type": "table",
-                "layout_derived": True,
-            })
+            chunk_records.append(
+                {
+                    "id": str(uuid4()),
+                    "matter_id": matter_id,
+                    "document_id": document_id,
+                    "chunk_index": next_index,
+                    "parent_chunk_id": None,
+                    "content": full_content,
+                    "page_number": table.page_number,
+                    "bbox_ids": None,
+                    "token_count": token_count,
+                    "chunk_type": "table",
+                    "layout_derived": True,
+                }
+            )
             next_index += 1
         else:
             # Split large table by rows
             split_chunks = _split_table_by_rows(
-                table, matter_id, document_id, next_index,
+                table,
+                matter_id,
+                document_id,
+                next_index,
             )
             chunk_records.extend(split_chunks)
             next_index += len(split_chunks)
@@ -518,19 +538,21 @@ def _split_table_by_rows(
         # Table too small to split, shouldn't happen but handle gracefully
         page_part = f", p. {table.page_number}" if table.page_number else ""
         content = f"Table {table.table_index + 1}{page_part}\n{table.markdown_content}"
-        return [{
-            "id": str(uuid4()),
-            "matter_id": matter_id,
-            "document_id": document_id,
-            "chunk_index": start_index,
-            "parent_chunk_id": None,
-            "content": content,
-            "page_number": table.page_number,
-            "bbox_ids": None,
-            "token_count": count_tokens(content),
-            "chunk_type": "table",
-            "layout_derived": True,
-        }]
+        return [
+            {
+                "id": str(uuid4()),
+                "matter_id": matter_id,
+                "document_id": document_id,
+                "chunk_index": start_index,
+                "parent_chunk_id": None,
+                "content": content,
+                "page_number": table.page_number,
+                "bbox_ids": None,
+                "token_count": count_tokens(content),
+                "chunk_type": "table",
+                "layout_derived": True,
+            }
+        ]
 
     header_line = lines[0]
     separator_line = lines[1]
@@ -544,7 +566,9 @@ def _split_table_by_rows(
 
     # Budget for data rows per chunk. If the header is extremely wide (many columns),
     # ensure a minimum budget of 200 tokens per chunk to avoid 1-row-per-chunk explosion.
-    row_budget = max(TABLE_CHUNK_MAX_TOKENS - header_tokens - 30, 200)  # 30 tokens for prefix
+    row_budget = max(
+        TABLE_CHUNK_MAX_TOKENS - header_tokens - 30, 200
+    )  # 30 tokens for prefix
 
     chunks: list[dict] = []
     current_rows: list[str] = []
@@ -576,19 +600,21 @@ def _split_table_by_rows(
             # Flush current chunk
             prefix = f"Table {table.table_index + 1}{caption_part}, part {part_num}{page_part}"
             content = f"{prefix}\n{header_block}\n" + "\n".join(current_rows)
-            chunks.append({
-                "id": str(uuid4()),
-                "matter_id": matter_id,
-                "document_id": document_id,
-                "chunk_index": start_index + len(chunks),
-                "parent_chunk_id": None,
-                "content": content,
-                "page_number": table.page_number,
-                "bbox_ids": None,
-                "token_count": count_tokens(content),
-                "chunk_type": "table",
-                "layout_derived": True,
-            })
+            chunks.append(
+                {
+                    "id": str(uuid4()),
+                    "matter_id": matter_id,
+                    "document_id": document_id,
+                    "chunk_index": start_index + len(chunks),
+                    "parent_chunk_id": None,
+                    "content": content,
+                    "page_number": table.page_number,
+                    "bbox_ids": None,
+                    "token_count": count_tokens(content),
+                    "chunk_type": "table",
+                    "layout_derived": True,
+                }
+            )
             current_rows = []
             current_tokens = 0
             part_num += 1
@@ -603,18 +629,20 @@ def _split_table_by_rows(
             prefix += f", part {part_num}"
         prefix += page_part
         content = f"{prefix}\n{header_block}\n" + "\n".join(current_rows)
-        chunks.append({
-            "id": str(uuid4()),
-            "matter_id": matter_id,
-            "document_id": document_id,
-            "chunk_index": start_index + len(chunks),
-            "parent_chunk_id": None,
-            "content": content,
-            "page_number": table.page_number,
-            "bbox_ids": None,
-            "token_count": count_tokens(content),
-            "chunk_type": "table",
-            "layout_derived": True,
-        })
+        chunks.append(
+            {
+                "id": str(uuid4()),
+                "matter_id": matter_id,
+                "document_id": document_id,
+                "chunk_index": start_index + len(chunks),
+                "parent_chunk_id": None,
+                "content": content,
+                "page_number": table.page_number,
+                "bbox_ids": None,
+                "token_count": count_tokens(content),
+                "chunk_type": "table",
+                "layout_derived": True,
+            }
+        )
 
     return chunks

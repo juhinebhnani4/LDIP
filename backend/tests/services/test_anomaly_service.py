@@ -367,16 +367,34 @@ class TestDeleteAndSummary:
         assert result == 5
 
     @pytest.mark.asyncio
-    async def test_get_anomaly_summary(
-        self, anomaly_service: AnomalyService
-    ) -> None:
+    async def test_get_anomaly_summary(self, anomaly_service: AnomalyService) -> None:
         """Should return summary counts."""
         mock_response = MagicMock()
         mock_response.data = [
-            {"severity": "high", "anomaly_type": "gap", "verified": False, "dismissed": False},
-            {"severity": "high", "anomaly_type": "sequence_violation", "verified": True, "dismissed": False},
-            {"severity": "medium", "anomaly_type": "gap", "verified": False, "dismissed": True},
-            {"severity": "low", "anomaly_type": "duplicate", "verified": False, "dismissed": False},
+            {
+                "severity": "high",
+                "anomaly_type": "gap",
+                "verified": False,
+                "dismissed": False,
+            },
+            {
+                "severity": "high",
+                "anomaly_type": "sequence_violation",
+                "verified": True,
+                "dismissed": False,
+            },
+            {
+                "severity": "medium",
+                "anomaly_type": "gap",
+                "verified": False,
+                "dismissed": True,
+            },
+            {
+                "severity": "low",
+                "anomaly_type": "duplicate",
+                "verified": False,
+                "dismissed": False,
+            },
         ]
 
         mock_query = MagicMock()

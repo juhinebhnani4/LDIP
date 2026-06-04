@@ -33,8 +33,7 @@ logger = structlog.get_logger(__name__)
 
 # UUID validation pattern
 UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 
 # Minimum response time for access denied (timing attack mitigation)
@@ -328,6 +327,7 @@ class MatterAccessContext:
         role: The user's role on this matter (if applicable).
         access_level: Type of access validated (any, viewer, editor, owner).
     """
+
     matter_id: str
     user_id: str
     role: MatterRole | None = None
@@ -647,14 +647,13 @@ async def require_admin_access(
 
     # Check if user is in admin email list
     admin_emails = (
-        settings.admin_emails.split(",") if hasattr(settings, "admin_emails") and settings.admin_emails else []
+        settings.admin_emails.split(",")
+        if hasattr(settings, "admin_emails") and settings.admin_emails
+        else []
     )
     admin_emails = [e.strip().lower() for e in admin_emails if e.strip()]
 
-    is_admin = (
-        user.email.lower() in admin_emails
-        or user.role == "admin"
-    )
+    is_admin = user.email.lower() in admin_emails or user.role == "admin"
 
     if not is_admin:
         logger.warning(

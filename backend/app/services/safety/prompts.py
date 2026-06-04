@@ -473,9 +473,13 @@ def validate_policing_response(response: dict) -> list[str]:
                 if isinstance(item, str):
                     continue  # Allow string for backward compatibility
                 if not isinstance(item, dict):
-                    errors.append(f"Item {i} in 'changes_made' must be an object or string")
+                    errors.append(
+                        f"Item {i} in 'changes_made' must be an object or string"
+                    )
                 elif "original" not in item or "replacement" not in item:
-                    errors.append(f"Item {i} in 'changes_made' must have 'original' and 'replacement'")
+                    errors.append(
+                        f"Item {i} in 'changes_made' must have 'original' and 'replacement'"
+                    )
 
     # Validate confidence range
     if "confidence" in response:

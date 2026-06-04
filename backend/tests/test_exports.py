@@ -118,7 +118,10 @@ class TestPDFGenerator:
                     {"role": "Defendant", "name": "Acme Corp"},
                 ],
                 "key_issues": [
-                    {"title": "Contract Breach", "description": "Failure to deliver goods"},
+                    {
+                        "title": "Contract Breach",
+                        "description": "Failure to deliver goods",
+                    },
                 ],
             },
         }
@@ -554,10 +557,19 @@ class TestExecutiveSummaryPDFGenerator:
                 {"role": "Plaintiff", "name": "John Doe", "relevance": "Primary"},
             ],
             critical_dates=[
-                {"date": "2024-01-15", "type": "filing", "description": "Initial filing"},
+                {
+                    "date": "2024-01-15",
+                    "type": "filing",
+                    "description": "Initial filing",
+                },
             ],
             verified_issues=[
-                {"type": "contradiction", "severity": "high", "summary": "Test issue", "detail": "Details"},
+                {
+                    "type": "contradiction",
+                    "severity": "high",
+                    "summary": "Test issue",
+                    "detail": "Details",
+                },
             ],
             recommended_actions=["Review documents", "Schedule hearing"],
             pending_verification_count=3,
@@ -590,7 +602,12 @@ class TestExecutiveSummaryPDFGenerator:
             parties=[],
             critical_dates=[],
             verified_issues=[
-                {"type": "citation", "severity": "high", "summary": "Citation issue", "detail": ""},
+                {
+                    "type": "citation",
+                    "severity": "high",
+                    "summary": "Citation issue",
+                    "detail": "",
+                },
             ],
             recommended_actions=[],
             pending_verification_count=0,
@@ -664,7 +681,10 @@ class TestExecutiveSummaryPDFGenerator:
         lines_text = "\n".join(lines)
 
         assert "https://app.ldip.ai/matters/test-matter-id-123" in lines_text
-        assert "Generated from full analysis - open LDIP for complete details" in lines_text
+        assert (
+            "Generated from full analysis - open LDIP for complete details"
+            in lines_text
+        )
 
     def test_page_limit_enforcement(self):
         """Test content truncation when exceeding 2 pages (AC #3)."""
@@ -685,11 +705,20 @@ class TestExecutiveSummaryPDFGenerator:
                 for i in range(10)
             ],
             critical_dates=[
-                {"date": f"2024-01-{i:02d}", "type": "hearing", "description": f"Event {i}"}
+                {
+                    "date": f"2024-01-{i:02d}",
+                    "type": "hearing",
+                    "description": f"Event {i}",
+                }
                 for i in range(1, 11)
             ],
             verified_issues=[
-                {"type": "contradiction", "severity": "high", "summary": f"Issue {i}", "detail": f"Detail {i}"}
+                {
+                    "type": "contradiction",
+                    "severity": "high",
+                    "summary": f"Issue {i}",
+                    "detail": f"Detail {i}",
+                }
                 for i in range(10)
             ],
             recommended_actions=[f"Action {i}" for i in range(10)],

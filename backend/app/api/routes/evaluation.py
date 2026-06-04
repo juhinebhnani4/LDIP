@@ -8,9 +8,8 @@ All endpoints enforce matter isolation.
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
-from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
-
 from app.api.deps import get_matter_service
+from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
 from app.models.evaluation import (
@@ -139,19 +138,21 @@ async def evaluate_qa_pair(
 
             pipeline = get_rag_pipeline_service()
             supabase = get_supabase()
-            supabase.table("evaluation_results").insert({
-                "matter_id": matter_id,
-                "question": body.question,
-                "answer": body.answer,
-                "contexts": body.contexts,
-                "context_recall": result.scores.context_recall,
-                "faithfulness": result.scores.faithfulness,
-                "answer_relevancy": result.scores.answer_relevancy,
-                "overall_score": result.overall_score,
-                "metric_scores": result.scores.model_dump(exclude_none=True),
-                "pipeline_config": pipeline._get_pipeline_config(),
-                "triggered_by": "manual",
-            }).execute()
+            supabase.table("evaluation_results").insert(
+                {
+                    "matter_id": matter_id,
+                    "question": body.question,
+                    "answer": body.answer,
+                    "contexts": body.contexts,
+                    "context_recall": result.scores.context_recall,
+                    "faithfulness": result.scores.faithfulness,
+                    "answer_relevancy": result.scores.answer_relevancy,
+                    "overall_score": result.overall_score,
+                    "metric_scores": result.scores.model_dump(exclude_none=True),
+                    "pipeline_config": pipeline._get_pipeline_config(),
+                    "triggered_by": "manual",
+                }
+            ).execute()
 
         return EvaluateResponse(data=result)
 
@@ -260,7 +261,11 @@ async def get_evaluation_results(
         query = query.eq("triggered_by", triggered_by)
 
     offset = (page - 1) * per_page
-    result = query.order("evaluated_at", desc=True).range(offset, offset + per_page - 1).execute()
+    result = (
+        query.order("evaluated_at", desc=True)
+        .range(offset, offset + per_page - 1)
+        .execute()
+    )
 
     total = result.count or 0
     total_pages = (total + per_page - 1) // per_page if total > 0 else 0

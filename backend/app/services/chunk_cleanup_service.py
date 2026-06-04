@@ -120,9 +120,7 @@ class ChunkCleanupService:
             for chunk in chunks:
                 if chunk.result_storage_path:
                     try:
-                        self.storage_service.delete_file(
-                            chunk.result_storage_path
-                        )
+                        self.storage_service.delete_file(chunk.result_storage_path)
                         result["storage_files_deleted"] += 1
                     except Exception as e:
                         logger.warning(
@@ -131,11 +129,13 @@ class ChunkCleanupService:
                             storage_path=chunk.result_storage_path,
                             error=str(e),
                         )
-                        result["storage_errors"].append({
-                            "chunk_id": chunk.id,
-                            "path": chunk.result_storage_path,
-                            "error": str(e),
-                        })
+                        result["storage_errors"].append(
+                            {
+                                "chunk_id": chunk.id,
+                                "path": chunk.result_storage_path,
+                                "error": str(e),
+                            }
+                        )
 
         # Delete chunk records
         result["chunks_deleted"] = await self.chunk_service.delete_chunks_for_document(
@@ -217,10 +217,12 @@ class ChunkCleanupService:
                     document_id=doc_info["document_id"],
                     error=str(e),
                 )
-                result["errors"].append({
-                    "document_id": doc_info["document_id"],
-                    "error": str(e),
-                })
+                result["errors"].append(
+                    {
+                        "document_id": doc_info["document_id"],
+                        "error": str(e),
+                    }
+                )
 
         logger.info(
             "stale_chunks_cleanup_complete",

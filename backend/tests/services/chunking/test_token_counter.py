@@ -1,6 +1,5 @@
 """Unit tests for token counter utility."""
 
-
 from app.services.chunking.token_counter import (
     count_tokens,
     estimate_tokens_fast,

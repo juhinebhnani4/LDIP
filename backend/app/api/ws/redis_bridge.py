@@ -5,6 +5,7 @@ Handles channel patterns, connection lifecycle, and graceful shutdown.
 """
 
 import asyncio
+import contextlib
 import json
 from datetime import UTC, datetime
 
@@ -96,10 +97,8 @@ class RedisBridge:
 
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
         await self._cleanup()
         logger.info("redis_bridge_stopped")
@@ -115,10 +114,8 @@ class RedisBridge:
             self._pubsub = None
 
         if self._redis:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis.close()
-            except Exception:
-                pass
             self._redis = None
 
     async def _listen_loop(self) -> None:
@@ -216,15 +213,18 @@ class RedisBridge:
         """
         parts = channel.split(":")
 
-        if channel.startswith("matter:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("processing:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("citations:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("features:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("discoveries:") and len(parts) >= 2:
+        if (
+            channel.startswith("matter:")
+            and len(parts) >= 2
+            or channel.startswith("processing:")
+            and len(parts) >= 2
+            or channel.startswith("citations:")
+            and len(parts) >= 2
+            or channel.startswith("features:")
+            and len(parts) >= 2
+            or channel.startswith("discoveries:")
+            and len(parts) >= 2
+        ):
             return parts[1]
 
         return None

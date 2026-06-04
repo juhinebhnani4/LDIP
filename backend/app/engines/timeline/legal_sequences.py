@@ -263,8 +263,12 @@ class LegalSequenceValidator:
         Returns:
             True if this is a critical violation.
         """
-        a_str = event_a_type.value if isinstance(event_a_type, EventType) else event_a_type
-        b_str = event_b_type.value if isinstance(event_b_type, EventType) else event_b_type
+        a_str = (
+            event_a_type.value if isinstance(event_a_type, EventType) else event_a_type
+        )
+        b_str = (
+            event_b_type.value if isinstance(event_b_type, EventType) else event_b_type
+        )
 
         return (a_str.lower(), b_str.lower()) in CRITICAL_SEQUENCE_VIOLATIONS
 
@@ -281,8 +285,12 @@ class LegalSequenceValidator:
         Returns:
             True if this is a medium severity violation.
         """
-        a_str = event_a_type.value if isinstance(event_a_type, EventType) else event_a_type
-        b_str = event_b_type.value if isinstance(event_b_type, EventType) else event_b_type
+        a_str = (
+            event_a_type.value if isinstance(event_a_type, EventType) else event_a_type
+        )
+        b_str = (
+            event_b_type.value if isinstance(event_b_type, EventType) else event_b_type
+        )
 
         return (a_str.lower(), b_str.lower()) in MEDIUM_SEQUENCE_VIOLATIONS
 

@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.table_extraction.extractor import TableExtractor, get_table_extractor
-from app.services.table_extraction.models import ExtractedTable, TableExtractionResult
 
 
 class TestTableExtractor:
@@ -51,7 +50,9 @@ class TestTableExtractor:
         return table
 
     @pytest.mark.anyio
-    async def test_extract_tables_returns_result(self, extractor: TableExtractor) -> None:
+    async def test_extract_tables_returns_result(
+        self, extractor: TableExtractor
+    ) -> None:
         """Should return TableExtractionResult even with no tables."""
         # Mock the converter
         mock_doc = MagicMock()
@@ -142,7 +143,9 @@ class TestTableExtractor:
             assert result.success is False
 
     @pytest.mark.anyio
-    async def test_extract_tables_file_not_found(self, extractor: TableExtractor) -> None:
+    async def test_extract_tables_file_not_found(
+        self, extractor: TableExtractor
+    ) -> None:
         """Should return error result when file not found."""
         result = await extractor.extract_tables(
             file_path=Path("/nonexistent/path/test.pdf"),
@@ -159,7 +162,9 @@ class TestTableExtractor:
         self, extractor: TableExtractor
     ) -> None:
         """Should skip extraction when disabled in config."""
-        with patch("app.services.table_extraction.extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.table_extraction.extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.table_extraction_enabled = False
 
             # Create new extractor with mocked settings

@@ -161,9 +161,11 @@ class TestAdapterRegistry:
     def test_get_adapter_invalid_type_raises(self):
         """get_adapter should raise ValueError for unknown engine type."""
         # Create a mock engine type not in registry
-        with patch.dict(ADAPTER_REGISTRY, clear=True):
-            with pytest.raises(ValueError, match="No adapter registered"):
-                get_adapter(EngineType.CITATION)
+        with (
+            patch.dict(ADAPTER_REGISTRY, clear=True),
+            pytest.raises(ValueError, match="No adapter registered"),
+        ):
+            get_adapter(EngineType.CITATION)
 
     def test_get_cached_adapter_returns_same_instance(self):
         """get_cached_adapter should return cached instances."""
@@ -193,7 +195,9 @@ class TestCitationEngineAdapter:
         """Execute should call the discovery service with correct matter_id."""
         adapter = CitationEngineAdapter()
 
-        with patch.object(adapter, "_get_discovery", return_value=mock_citation_discovery):
+        with patch.object(
+            adapter, "_get_discovery", return_value=mock_citation_discovery
+        ):
             result = await adapter.execute(
                 matter_id="matter-123",
                 query="What citations?",
@@ -394,7 +398,9 @@ class TestRAGEngineAdapter:
         adapter = RAGEngineAdapter()
 
         mock_search = MagicMock()
-        mock_search.search_with_rerank = AsyncMock(side_effect=Exception("Search error"))
+        mock_search.search_with_rerank = AsyncMock(
+            side_effect=Exception("Search error")
+        )
 
         with patch.object(adapter, "_get_search", return_value=mock_search):
             result = await adapter.execute(
@@ -460,7 +466,9 @@ class TestMatterIsolation:
         """Citation adapter should propagate matter_id to underlying service."""
         adapter = CitationEngineAdapter()
 
-        with patch.object(adapter, "_get_discovery", return_value=mock_citation_discovery):
+        with patch.object(
+            adapter, "_get_discovery", return_value=mock_citation_discovery
+        ):
             await adapter.execute(matter_id="secure-matter", query="Test")
 
         call_args = mock_citation_discovery.get_discovery_report.call_args

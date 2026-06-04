@@ -15,7 +15,9 @@ from typing import Final
 # System Prompts
 # =============================================================================
 
-VERIFICATION_SYSTEM_PROMPT: Final[str] = """You are a legal text verification assistant specialized in Indian law.
+VERIFICATION_SYSTEM_PROMPT: Final[
+    str
+] = """You are a legal text verification assistant specialized in Indian law.
 Your task is to verify citations from legal documents against the actual text of Acts and statutes.
 
 You must:
@@ -32,7 +34,9 @@ Always respond in valid JSON format as specified in each prompt."""
 # Section Matching Prompt
 # =============================================================================
 
-SECTION_MATCHING_PROMPT: Final[str] = """Find Section {section_number} in the following Act text chunks.
+SECTION_MATCHING_PROMPT: Final[
+    str
+] = """Find Section {section_number} in the following Act text chunks.
 
 ACT NAME: {act_name}
 SECTION TO FIND: {section_number}
@@ -87,7 +91,9 @@ EXAMPLE - Section Not Found:
 # Text Comparison Prompt
 # =============================================================================
 
-TEXT_COMPARISON_PROMPT: Final[str] = """Compare the quoted text from a legal citation against the actual Act text.
+TEXT_COMPARISON_PROMPT: Final[
+    str
+] = """Compare the quoted text from a legal citation against the actual Act text.
 
 CITATION QUOTE (from case document):
 "{citation_quote}"
@@ -155,7 +161,9 @@ EXAMPLE - Mismatch:
 # Verification Explanation Prompt
 # =============================================================================
 
-VERIFICATION_EXPLANATION_PROMPT: Final[str] = """Generate a concise, human-readable explanation for the following citation verification result.
+VERIFICATION_EXPLANATION_PROMPT: Final[
+    str
+] = """Generate a concise, human-readable explanation for the following citation verification result.
 
 CITATION DETAILS:
 - Act: {act_name}

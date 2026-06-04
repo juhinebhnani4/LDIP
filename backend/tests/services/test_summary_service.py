@@ -149,10 +149,7 @@ class TestGetAttentionItems:
         result = await service.get_attention_items("matter-123")
 
         # Should have at least one attention item for contradictions
-        assert any(
-            item.type == AttentionItemType.CONTRADICTION
-            for item in result
-        )
+        assert any(item.type == AttentionItemType.CONTRADICTION for item in result)
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_no_issues(self, mock_supabase_client) -> None:
@@ -389,9 +386,7 @@ class TestGenerateSubjectMatter:
         assert result.sources == []
 
     @pytest.mark.asyncio
-    async def test_calls_openai_with_correct_prompt(
-        self, mock_openai_client
-    ) -> None:
+    async def test_calls_openai_with_correct_prompt(self, mock_openai_client) -> None:
         """Should call OpenAI with formatted prompt."""
         service = SummaryService()
         service._openai_client = mock_openai_client
@@ -401,10 +396,14 @@ class TestGenerateSubjectMatter:
         mock_response.choices = [
             MagicMock(
                 message=MagicMock(
-                    content=json.dumps({
-                        "description": "Test description",
-                        "sources": [{"documentName": "doc.pdf", "pageRange": "1-5"}],
-                    })
+                    content=json.dumps(
+                        {
+                            "description": "Test description",
+                            "sources": [
+                                {"documentName": "doc.pdf", "pageRange": "1-5"}
+                            ],
+                        }
+                    )
                 )
             )
         ]
@@ -469,9 +468,7 @@ class TestGetKeyIssues:
         ]
         mock_response = MagicMock()
         mock_response.choices = [
-            MagicMock(
-                message=MagicMock(content=json.dumps({"issues": issues}))
-            )
+            MagicMock(message=MagicMock(content=json.dumps({"issues": issues})))
         ]
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=mock_response
@@ -482,7 +479,9 @@ class TestGetKeyIssues:
         with patch(
             "app.services.summary_service.get_language_policing_service"
         ) as mock_policing:
-            mock_policing.return_value.sanitize_text.return_value.sanitized_text = "Issue"
+            mock_policing.return_value.sanitize_text.return_value.sanitized_text = (
+                "Issue"
+            )
 
             result = await service.get_key_issues("matter-123", chunks)
 
@@ -505,7 +504,10 @@ class TestGetParties:
 
         # Mock documents query (step 1)
         mock_docs = MagicMock()
-        mock_docs.data = [{"id": "doc-1", "filename": "doc.pdf"}, {"id": "doc-2", "filename": "petition.pdf"}]
+        mock_docs.data = [
+            {"id": "doc-1", "filename": "doc.pdf"},
+            {"id": "doc-2", "filename": "petition.pdf"},
+        ]
 
         # Mock identity_nodes query (step 2)
         mock_entities = MagicMock()
@@ -577,7 +579,9 @@ class TestGetParties:
                 "id": f"entity-{i}",
                 "canonical_name": f"Party {i}",
                 "entity_type": "PERSON",
-                "metadata": {"roles": ["petitioner"]},  # Give them roles so they're included
+                "metadata": {
+                    "roles": ["petitioner"]
+                },  # Give them roles so they're included
             }
             for i in range(1, 10)
         ]
@@ -654,9 +658,7 @@ class TestVerificationStats:
         assert result == 70.0
 
     @pytest.mark.asyncio
-    async def test_returns_zero_on_no_verifications(
-        self, mock_supabase_client
-    ) -> None:
+    async def test_returns_zero_on_no_verifications(self, mock_supabase_client) -> None:
         """Should return 0 when no verifications exist."""
         service = SummaryService()
         service._supabase_client = mock_supabase_client

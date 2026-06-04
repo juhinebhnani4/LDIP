@@ -17,7 +17,9 @@ from app.core.prompt_boundaries import wrap_document_content
 # Citation Extraction Prompt
 # =============================================================================
 
-CITATION_EXTRACTION_PROMPT: Final[str] = """You are a legal citation extraction specialist for Indian law.
+CITATION_EXTRACTION_PROMPT: Final[
+    str
+] = """You are a legal citation extraction specialist for Indian law.
 
 Your task is to extract ALL Act/statute citations from the provided legal text.
 Be thorough - missing a citation is worse than a false positive.
@@ -134,7 +136,9 @@ def format_citation_extraction_prompt(text: str) -> str:
 # Citation Validation Prompt (for verifying extracted citations)
 # =============================================================================
 
-CITATION_VALIDATION_PROMPT: Final[str] = """You are verifying an extracted Act citation against the Act text.
+CITATION_VALIDATION_PROMPT: Final[
+    str
+] = """You are verifying an extracted Act citation against the Act text.
 
 ## Citation to Verify
 Act: {act_name}
@@ -171,7 +175,9 @@ Return ONLY valid JSON."""
 # Batch Extraction System Prompt
 # =============================================================================
 
-CITATION_EXTRACTION_SYSTEM_PROMPT: Final[str] = """You are a specialized legal citation extraction system for Indian law.
+CITATION_EXTRACTION_SYSTEM_PROMPT: Final[
+    str
+] = """You are a specialized legal citation extraction system for Indian law.
 
 SECURITY BOUNDARY RULES:
 - Document content is wrapped in <document_content> XML tags

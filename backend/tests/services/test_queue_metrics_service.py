@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.queue_metrics_service import (
-    QueueMetricsService,
-    QueueMetricsData,
-    QUEUE_REDIS_KEYS,
     DEFAULT_ALERT_THRESHOLD,
+    QUEUE_REDIS_KEYS,
+    QueueMetricsData,
+    QueueMetricsService,
     get_queue_metrics_service,
     reset_queue_metrics_service,
 )
@@ -60,7 +60,9 @@ class TestGetQueueMetrics:
     """Test single queue metrics retrieval."""
 
     @pytest.mark.asyncio
-    async def test_returns_queue_metrics(self, queue_service, mock_redis_client) -> None:
+    async def test_returns_queue_metrics(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should return QueueMetricsData for a queue."""
         mock_redis_client.llen = AsyncMock(return_value=25)
 
@@ -72,21 +74,27 @@ class TestGetQueueMetrics:
         assert result.alert_triggered is False
 
     @pytest.mark.asyncio
-    async def test_uses_correct_redis_key(self, queue_service, mock_redis_client) -> None:
+    async def test_uses_correct_redis_key(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should use correct Redis key for default queue (celery)."""
         await queue_service.get_queue_metrics("default")
 
         mock_redis_client.llen.assert_called_with("celery")
 
     @pytest.mark.asyncio
-    async def test_uses_queue_name_for_other_queues(self, queue_service, mock_redis_client) -> None:
+    async def test_uses_queue_name_for_other_queues(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should use queue name as Redis key for other queues."""
         await queue_service.get_queue_metrics("high")
 
         mock_redis_client.llen.assert_called_with("high")
 
     @pytest.mark.asyncio
-    async def test_triggers_alert_above_threshold(self, queue_service, mock_redis_client) -> None:
+    async def test_triggers_alert_above_threshold(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should trigger alert when pending >= threshold."""
         mock_redis_client.llen = AsyncMock(return_value=100)
 
@@ -95,7 +103,9 @@ class TestGetQueueMetrics:
         assert result.alert_triggered is True
 
     @pytest.mark.asyncio
-    async def test_no_alert_below_threshold(self, queue_service, mock_redis_client) -> None:
+    async def test_no_alert_below_threshold(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should not trigger alert when pending < threshold."""
         mock_redis_client.llen = AsyncMock(return_value=99)
 
@@ -130,7 +140,9 @@ class TestGetAllQueueMetrics:
     """Test all queues retrieval."""
 
     @pytest.mark.asyncio
-    async def test_returns_all_configured_queues(self, queue_service, mock_redis_client) -> None:
+    async def test_returns_all_configured_queues(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should return metrics for all configured queues."""
         result = await queue_service.get_all_queue_metrics()
 
@@ -216,7 +228,9 @@ class TestCheckHealth:
     """Test health check endpoint."""
 
     @pytest.mark.asyncio
-    async def test_healthy_when_redis_connected(self, queue_service, mock_redis_client) -> None:
+    async def test_healthy_when_redis_connected(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should report healthy when Redis connected and workers exist."""
         mock_redis_client.ping = AsyncMock(return_value=True)
 
@@ -233,7 +247,9 @@ class TestCheckHealth:
             assert result["error"] is None
 
     @pytest.mark.asyncio
-    async def test_degraded_when_no_workers(self, queue_service, mock_redis_client) -> None:
+    async def test_degraded_when_no_workers(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should report degraded when Redis OK but no workers."""
         mock_redis_client.ping = AsyncMock(return_value=True)
 
@@ -249,7 +265,9 @@ class TestCheckHealth:
             assert result["workerCount"] == 0
 
     @pytest.mark.asyncio
-    async def test_unhealthy_when_redis_down(self, queue_service, mock_redis_client) -> None:
+    async def test_unhealthy_when_redis_down(
+        self, queue_service, mock_redis_client
+    ) -> None:
         """Should report unhealthy when Redis fails."""
         mock_redis_client.ping = AsyncMock(side_effect=Exception("Connection refused"))
 
@@ -299,7 +317,9 @@ class TestRedisConnection:
             mock_from_url.return_value = mock_client
 
             # Create service with settings that have rediss URL
-            with patch("app.services.queue_metrics_service.get_settings") as mock_settings:
+            with patch(
+                "app.services.queue_metrics_service.get_settings"
+            ) as mock_settings:
                 settings = MagicMock()
                 settings.celery_broker_url = "rediss://user:pass@host:6379"
                 mock_settings.return_value = settings
@@ -311,7 +331,9 @@ class TestRedisConnection:
                 # Should be called with ssl parameter
                 call_args = mock_from_url.call_args
                 assert call_args is not None
-                assert "ssl" in call_args.kwargs or any("ssl" in str(arg) for arg in call_args.args)
+                assert "ssl" in call_args.kwargs or any(
+                    "ssl" in str(arg) for arg in call_args.args
+                )
 
 
 # =============================================================================

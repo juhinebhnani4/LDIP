@@ -195,7 +195,7 @@ class NotificationService:
                 f"Failed to get notifications: {e}",
                 code="QUERY_FAILED",
                 status_code=500,
-            )
+            ) from e
 
     # =========================================================================
     # Task 3.3: Get Unread Count (AC #2)

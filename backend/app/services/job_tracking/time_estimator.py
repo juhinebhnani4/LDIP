@@ -322,7 +322,9 @@ class TimeEstimator:
         except ValueError:
             # Unknown stage, return full estimate
             logger.warning("unknown_stage_for_estimate", stage=current_stage)
-            return self.estimate_total_document_time(page_count, text_length, chunk_count)
+            return self.estimate_total_document_time(
+                page_count, text_length, chunk_count
+            )
 
         # Calculate remaining stages
         remaining = timedelta(0)
@@ -423,16 +425,16 @@ class TimeEstimator:
         # Stage weights (approximate percentage of total time)
         # Must match PIPELINE_STAGES in document_tasks.py (all 10 stages)
         stage_weights = {
-            "ocr": 30,                    # OCR typically takes longest
+            "ocr": 30,  # OCR typically takes longest
             "validation": 5,
             "confidence": 2,
             "chunking": 5,
             "embedding": 10,
             "entity_extraction": 15,
             "alias_resolution": 3,
-            "citation_extraction": 10,     # Gemini API calls per chunk
-            "citation_verification": 5,    # Verification + India Code lookups
-            "contradiction_detection": 15, # GPT-4o escalation pairs
+            "citation_extraction": 10,  # Gemini API calls per chunk
+            "citation_verification": 5,  # Verification + India Code lookups
+            "contradiction_detection": 15,  # GPT-4o escalation pairs
         }
 
         # Stage order

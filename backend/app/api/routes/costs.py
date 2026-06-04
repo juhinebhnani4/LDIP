@@ -8,7 +8,7 @@ Endpoints:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -107,7 +107,9 @@ RERANKING_PROVIDERS = {
 async def get_cost_comparison(
     request: Request,
     current_user: AuthenticatedUser = Depends(get_current_user),
-    days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    days: int = Query(
+        default=30, ge=1, le=365, description="Number of days to look back"
+    ),
     matter_id: str | None = Query(default=None, description="Filter by matter ID"),
 ) -> CostComparisonResponse:
     """Get cost comparison between providers for A/B testing analysis."""
@@ -116,10 +118,15 @@ async def get_cost_comparison(
         if not supabase:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"error": {"code": "SERVICE_UNAVAILABLE", "message": "Database not configured"}},
+                detail={
+                    "error": {
+                        "code": "SERVICE_UNAVAILABLE",
+                        "message": "Database not configured",
+                    }
+                },
             )
 
-        since = (datetime.now(tz=timezone.utc) - timedelta(days=days)).isoformat()
+        since = (datetime.now(tz=UTC) - timedelta(days=days)).isoformat()
 
         # Build query for all embedding + reranking providers
         all_provider_names = []
@@ -166,7 +173,9 @@ async def get_cost_comparison(
                 total_inr=round(total_inr, 4),
                 total_usd=round(total_usd, 8),
                 query_count=count,
-                avg_cost_per_query_inr=round(total_inr / count, 4) if count > 0 else 0.0,
+                avg_cost_per_query_inr=round(total_inr / count, 4)
+                if count > 0
+                else 0.0,
             )
 
         # Build comparison

@@ -44,9 +44,7 @@ class TableExtractionResult(BaseModel):
         default_factory=list, description="All extracted tables"
     )
     total_tables: int = Field(default=0, description="Count of tables found")
-    error: str | None = Field(
-        None, description="Error message if extraction failed"
-    )
+    error: str | None = Field(None, description="Error message if extraction failed")
     processing_time_ms: int | None = Field(
         None, description="Time taken for extraction in milliseconds"
     )
@@ -114,9 +112,7 @@ class DocumentLayout(BaseModel):
     processing_time_ms: int | None = Field(
         None, description="Time taken for layout extraction in milliseconds"
     )
-    error: str | None = Field(
-        None, description="Error message if extraction failed"
-    )
+    error: str | None = Field(None, description="Error message if extraction failed")
 
     @property
     def success(self) -> bool:

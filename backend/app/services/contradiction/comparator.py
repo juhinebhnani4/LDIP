@@ -248,7 +248,8 @@ class StatementComparisonService:
 
             # Filter by confidence threshold
             filtered_comparisons = [
-                c for c in batch_result.comparisons
+                c
+                for c in batch_result.comparisons
                 if c.confidence >= confidence_threshold
             ]
 
@@ -258,7 +259,8 @@ class StatementComparisonService:
                 entity_name=entity_statements.entity_name,
                 comparisons=filtered_comparisons,
                 contradictions_found=sum(
-                    1 for c in filtered_comparisons
+                    1
+                    for c in filtered_comparisons
                     if c.result == ComparisonResult.CONTRADICTION
                 ),
                 total_pairs_compared=len(filtered_comparisons),
@@ -449,7 +451,9 @@ class StatementComparisonService:
             .in_("id", doc_ids)
             .execute()
         )
-        doc_names = {d["id"]: d.get("filename", "Unknown") for d in (docs_resp.data or [])}
+        doc_names = {
+            d["id"]: d.get("filename", "Unknown") for d in (docs_resp.data or [])
+        }
 
         # Build EntityStatements structure from chunks
         # Group by document
@@ -463,6 +467,7 @@ class StatementComparisonService:
         # Build document statements
         document_statements: list[DocumentStatements] = []
         from app.engines.contradiction.statement_query import ValueExtractor
+
         extractor = ValueExtractor()
 
         for doc_id, doc_chunks in docs_map.items():
@@ -512,8 +517,7 @@ class StatementComparisonService:
 
         # Filter by confidence threshold
         filtered_comparisons = [
-            c for c in batch_result.comparisons
-            if c.confidence >= confidence_threshold
+            c for c in batch_result.comparisons if c.confidence >= confidence_threshold
         ]
 
         # Build response
@@ -522,7 +526,8 @@ class StatementComparisonService:
             entity_name=entity_name,
             comparisons=filtered_comparisons,
             contradictions_found=sum(
-                1 for c in filtered_comparisons
+                1
+                for c in filtered_comparisons
                 if c.result == ComparisonResult.CONTRADICTION
             ),
             total_pairs_compared=len(filtered_comparisons),

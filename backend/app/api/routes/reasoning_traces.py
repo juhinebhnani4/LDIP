@@ -32,7 +32,9 @@ from app.services.reasoning_trace_service import (
     get_reasoning_trace_service,
 )
 
-router = APIRouter(prefix="/matters/{matter_id}/reasoning-traces", tags=["reasoning-traces"])
+router = APIRouter(
+    prefix="/matters/{matter_id}/reasoning-traces", tags=["reasoning-traces"]
+)
 logger = structlog.get_logger(__name__)
 
 
@@ -57,7 +59,9 @@ def _get_service() -> ReasoningTraceService:
 )
 async def get_reasoning_trace_stats(
     matter_id: str = Path(..., description="Matter UUID"),
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
     service: ReasoningTraceService = Depends(_get_service),
 ) -> ReasoningTraceStatsResponse:
     """Get reasoning trace statistics for a matter.
@@ -102,7 +106,9 @@ async def list_reasoning_traces(
     include_archived: bool = Query(False, description="Include archived traces"),
     limit: int = Query(100, ge=1, le=500, description="Maximum traces to return"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
     service: ReasoningTraceService = Depends(_get_service),
 ) -> ReasoningTraceListResponse:
     """List reasoning traces for a matter.
@@ -166,7 +172,9 @@ async def list_reasoning_traces(
 async def get_reasoning_trace(
     matter_id: str = Path(..., description="Matter UUID"),
     trace_id: str = Path(..., description="Trace UUID"),
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
     service: ReasoningTraceService = Depends(_get_service),
 ) -> ReasoningTraceResponse:
     """Get a specific reasoning trace.
@@ -226,7 +234,9 @@ async def get_reasoning_trace(
 async def get_traces_for_finding(
     matter_id: str = Path(..., description="Matter UUID"),
     finding_id: str = Path(..., description="Finding UUID"),
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
+    ),
     service: ReasoningTraceService = Depends(_get_service),
 ) -> ReasoningTraceListResponse:
     """Get all reasoning traces for a specific finding.

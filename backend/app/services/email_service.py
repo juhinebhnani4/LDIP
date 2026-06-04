@@ -123,7 +123,7 @@ class EmailService:
             except ImportError:
                 raise EmailConfigurationError(
                     "Resend package not installed. Run: pip install resend"
-                )
+                ) from None
         return self._client
 
     def is_configured(self) -> bool:
@@ -321,7 +321,7 @@ class EmailService:
                 attempt_number=attempt_number,
                 **(metadata or {}),
             )
-            raise EmailSendError(f"Failed to send email: {e}")
+            raise EmailSendError(f"Failed to send email: {e}") from e
 
 
 # =============================================================================

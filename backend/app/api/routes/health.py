@@ -1,6 +1,7 @@
 """Health check endpoints (Story 13.2, 13.3 - Circuit Breaker + Rate Limit Status)."""
 
 import asyncio
+from datetime import UTC
 from typing import Any
 
 import structlog
@@ -15,7 +16,6 @@ from app.core.circuit_breaker import (
 )
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import HEALTH_RATE_LIMIT, get_rate_limit_status, limiter
-from app.workers.celery import celery_app
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = structlog.get_logger(__name__)
@@ -425,16 +425,19 @@ async def get_pipeline_health(
             }
         }
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     # Configuration status
     config_status = {
         "gemini_configured": settings.is_gemini_configured,
-        "gemini_model": settings.gemini_model if settings.is_gemini_configured else None,
+        "gemini_model": settings.gemini_model
+        if settings.is_gemini_configured
+        else None,
         "openai_configured": settings.is_openai_configured,
         "cohere_configured": bool(settings.cohere_api_key),
         "documentai_configured": bool(
-            settings.google_cloud_project_id and settings.google_document_ai_processor_id
+            settings.google_cloud_project_id
+            and settings.google_document_ai_processor_id
         ),
     }
 
@@ -449,6 +452,7 @@ async def get_pipeline_health(
     if db:
         try:
             from app.services.supabase.client import get_service_client
+
             client = get_service_client()
 
             # Run all DB queries in a thread to avoid blocking the event loop
@@ -468,7 +472,7 @@ async def get_pipeline_health(
                 )
                 ps["processing_jobs_count"] = jobs_resp.count or 0
 
-                stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
+                stuck_threshold = datetime.now(UTC) - timedelta(minutes=30)
                 stuck_resp = (
                     client.table("processing_jobs")
                     .select("id", count="exact")
@@ -478,7 +482,7 @@ async def get_pipeline_health(
                 )
                 ps["stuck_jobs_count"] = stuck_resp.count or 0
 
-                chunk_threshold = datetime.now(timezone.utc) - timedelta(
+                chunk_threshold = datetime.now(UTC) - timedelta(
                     seconds=settings.chunk_stale_threshold_seconds
                 )
                 stale_chunks_resp = (
@@ -490,9 +494,7 @@ async def get_pipeline_health(
                 )
                 ps["stale_chunks_count"] = stale_chunks_resp.count or 0
 
-                pending_merges_resp = (
-                    client.rpc("count_pending_merges", {}).execute()
-                )
+                pending_merges_resp = client.rpc("count_pending_merges", {}).execute()
                 if pending_merges_resp.data:
                     ps["pending_merges_count"] = pending_merges_resp.data or 0
 
@@ -507,7 +509,10 @@ async def get_pipeline_health(
     overall_status = "healthy"
     if not config_status["gemini_configured"] or not config_status["openai_configured"]:
         overall_status = "degraded"
-    if processing_status["stuck_jobs_count"] > 0 or processing_status["stale_chunks_count"] > 0:
+    if (
+        processing_status["stuck_jobs_count"] > 0
+        or processing_status["stale_chunks_count"] > 0
+    ):
         overall_status = "warning"
 
     logger.debug(
@@ -551,12 +556,15 @@ async def get_invariant_health(
     if db:
         try:
             from app.services.supabase.client import get_service_client
+
             client = get_service_client()
 
             def _read_system_health() -> list[dict]:
                 resp = (
                     client.table("system_health")
-                    .select("name, severity, ok, violating_count, sample, message, checked_at")
+                    .select(
+                        "name, severity, ok, violating_count, sample, message, checked_at"
+                    )
                     .order("ok")  # surface not-ok (false) first
                     .execute()
                 )

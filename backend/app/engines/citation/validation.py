@@ -125,11 +125,23 @@ class ActValidationService:
             else:
                 # Fallback to basic built-in patterns
                 self._garbage_patterns = [
-                    (re.compile(r"\.\s+[A-Z]", re.IGNORECASE), "Period followed by capital"),
+                    (
+                        re.compile(r"\.\s+[A-Z]", re.IGNORECASE),
+                        "Period followed by capital",
+                    ),
                     (re.compile(r"\.\s+[a-z]"), "Period followed by lowercase"),
-                    (re.compile(r"\s+accordingly\s+", re.IGNORECASE), "Legal continuation"),
-                    (re.compile(r"\s+Respondent\s+", re.IGNORECASE), "Legal party reference"),
-                    (re.compile(r"\s+Petitioner\s+", re.IGNORECASE), "Legal party reference"),
+                    (
+                        re.compile(r"\s+accordingly\s+", re.IGNORECASE),
+                        "Legal continuation",
+                    ),
+                    (
+                        re.compile(r"\s+Respondent\s+", re.IGNORECASE),
+                        "Legal party reference",
+                    ),
+                    (
+                        re.compile(r"\s+Petitioner\s+", re.IGNORECASE),
+                        "Legal party reference",
+                    ),
                 ]
         return self._garbage_patterns
 
@@ -142,8 +154,15 @@ class ActValidationService:
             else:
                 # Fallback to basic built-in suffixes
                 self._valid_suffixes = (
-                    "act", "code", "rules", "regulations", "ordinance",
-                    "order", "bill", "amendment", "notification",
+                    "act",
+                    "code",
+                    "rules",
+                    "regulations",
+                    "ordinance",
+                    "order",
+                    "bill",
+                    "amendment",
+                    "notification",
                 )
         return self._valid_suffixes
 
@@ -156,10 +175,23 @@ class ActValidationService:
             else:
                 # Fallback to basic built-in keywords
                 self._valid_keywords = {
-                    "act", "code", "rules", "regulations", "ordinance",
-                    "amendment", "indian", "central", "state", "prevention",
-                    "protection", "enforcement", "regulation", "development",
-                    "welfare", "management", "control",
+                    "act",
+                    "code",
+                    "rules",
+                    "regulations",
+                    "ordinance",
+                    "amendment",
+                    "indian",
+                    "central",
+                    "state",
+                    "prevention",
+                    "protection",
+                    "enforcement",
+                    "regulation",
+                    "development",
+                    "welfare",
+                    "management",
+                    "control",
                 }
         return self._valid_keywords
 
@@ -201,7 +233,9 @@ class ActValidationService:
         garbage_patterns = self._detect_garbage_patterns(act_name)
         # Also check garbage patterns on cleaned name (catches post-truncation garbage)
         cleaned_garbage = self._detect_garbage_patterns(cleaned)
-        garbage_patterns.extend([p for p in cleaned_garbage if p not in garbage_patterns])
+        garbage_patterns.extend(
+            [p for p in cleaned_garbage if p not in garbage_patterns]
+        )
 
         # Step 2b: Check if cleaned result is a generic term (always invalid)
         is_generic_term = self._is_generic_term(cleaned)
@@ -250,7 +284,11 @@ class ActValidationService:
         canonical_name = None
         year = None
         if canonical_result:
-            canonical_name = f"{canonical_result[0]}, {canonical_result[1]}" if canonical_result[1] else canonical_result[0]
+            canonical_name = (
+                f"{canonical_result[0]}, {canonical_result[1]}"
+                if canonical_result[1]
+                else canonical_result[0]
+            )
             year = canonical_result[1]
 
         return ActValidationResult(
@@ -340,20 +378,33 @@ class ActValidationService:
 
         # Check for generic terms that are too vague
         generic_terms = {
-            "the act", "act", "the code", "code", "the ordinance", "ordinance",
-            "the rules", "rules", "the regulations", "regulations",
-            "the bill", "bill", "the amendment", "amendment",
+            "the act",
+            "act",
+            "the code",
+            "code",
+            "the ordinance",
+            "ordinance",
+            "the rules",
+            "rules",
+            "the regulations",
+            "regulations",
+            "the bill",
+            "bill",
+            "the amendment",
+            "amendment",
         }
         if lower_name_no_year in generic_terms:
             return True
 
         # Check minimum word count (at least 2 meaningful words excluding articles)
-        words = [w for w in re.findall(r"\w+", lower_name_no_year) if w not in ("the", "of", "and", "for", "to", "in", "on", "a", "an")]
+        words = [
+            w
+            for w in re.findall(r"\w+", lower_name_no_year)
+            if w not in ("the", "of", "and", "for", "to", "in", "on", "a", "an")
+        ]
         if len(words) < 2:
             # Exception: Known abbreviations like "IPC", "CrPC"
-            if lower_name_no_year in self._known_act_names:
-                return False
-            return True
+            return lower_name_no_year not in self._known_act_names
 
         # Must end with valid suffix
         valid_suffixes = self._get_valid_suffixes()
@@ -364,9 +415,7 @@ class ActValidationService:
         if not has_valid_suffix:
             # Exception: Some acts are referred to without suffix (e.g., "IPC", "CrPC")
             # Check if it's a known abbreviation
-            if lower_name_no_year in self._known_act_names:
-                return False
-            return True
+            return lower_name_no_year not in self._known_act_names
 
         # Must contain at least one valid keyword
         valid_keywords = self._get_valid_keywords()
@@ -375,9 +424,7 @@ class ActValidationService:
 
         if not has_valid_keyword:
             # Exception: Short act names that are abbreviations
-            if len(lower_name_no_year) < 20:
-                return False
-            return True
+            return not len(lower_name_no_year) < 20
 
         return False
 
@@ -525,17 +572,20 @@ async def validate_act_name_with_llm(
         )
 
     try:
-        from google.genai import types
-        from app.core.gemini_client import get_gemini_client
-        from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
         import json
+
+        from google.genai import types
+
+        from app.core.gemini_client import get_gemini_client
+        from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+        from app.core.llm_rate_limiter import get_rate_limiter
 
         client = get_gemini_client()
 
         # Build prompt
         context_section = ""
         if context:
-            context_section = f"\nContext where it was found:\n\"{context[:500]}\"\n"
+            context_section = f'\nContext where it was found:\n"{context[:500]}"\n'
 
         prompt = f'''Is the following a valid Indian legal act/statute name?
 
@@ -570,8 +620,14 @@ JSON response:'''
             )
 
         # Track cost
-        from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
-        usage = getattr(response, 'usage_metadata', None)
+        from app.core.cost_tracking import (
+            CostTracker,
+            LLMProvider,
+            estimate_tokens,
+            persist_cost,
+        )
+
+        usage = getattr(response, "usage_metadata", None)
         tracker = CostTracker(
             provider=LLMProvider.GEMINI_FLASH,
             operation="citation_act_validation",
@@ -579,8 +635,8 @@ JSON response:'''
             matter_id=matter_id,
         )
         if usage:
-            input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-            output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+            input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+            output_tokens = getattr(usage, "candidates_token_count", 0) or 0
         else:
             input_tokens = estimate_tokens(prompt)
             output_tokens = estimate_tokens(response.text) if response.text else 0
@@ -609,7 +665,9 @@ JSON response:'''
             )
         except json.JSONDecodeError:
             # If JSON parsing fails, try to extract decision from text
-            is_valid = "true" in response_text.lower() and "is_valid" in response_text.lower()
+            is_valid = (
+                "true" in response_text.lower() and "is_valid" in response_text.lower()
+            )
             return LLMValidationResult(
                 is_valid=is_valid,
                 canonical_name=None,

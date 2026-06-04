@@ -11,7 +11,7 @@ Provides admin-only endpoints for:
 All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
-import asyncio
+from datetime import UTC
 from enum import Enum
 
 import structlog
@@ -191,7 +191,9 @@ async def _get_document(document_id: str) -> dict:
     client = get_service_client()
     response = (
         client.table("documents")
-        .select("id, filename, status, matter_id, extracted_text, ocr_error, updated_at")
+        .select(
+            "id, filename, status, matter_id, extracted_text, ocr_error, updated_at"
+        )
         .eq("id", document_id)
         .single()
         .execute()
@@ -318,7 +320,6 @@ async def retry_failed_tasks(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> RetryFailedResponse:
     """Retry all failed/stuck tasks for a document."""
-    from app.workers.celery import celery_app
 
     doc = await _get_document(document_id)
     tasks_triggered = []
@@ -371,6 +372,7 @@ async def retry_failed_tasks(
         # 2. Delete RAG chunks (cascades to embeddings)
         try:
             from app.services.chunk_service import ChunkService
+
             chunk_svc = ChunkService()
             await chunk_svc.delete_chunks_for_document(document_id)
             cleanup_actions.append("deleted_rag_chunks")
@@ -379,22 +381,24 @@ async def retry_failed_tasks(
 
         # 3. Reset document status to pending
         try:
-            client.table("documents").update({
-                "status": "pending",
-                "ocr_error": None,
-            }).eq("id", document_id).execute()
+            client.table("documents").update(
+                {
+                    "status": "pending",
+                    "ocr_error": None,
+                }
+            ).eq("id", document_id).execute()
             cleanup_actions.append("reset_status_to_pending")
         except Exception as e:
             logger.warning("retry_cleanup_reset_status_failed", error=str(e))
 
         # 4. Mark any PROCESSING jobs as FAILED so they don't block
         try:
-            client.table("processing_jobs").update({
-                "status": "FAILED",
-                "error_message": "Superseded by admin retry",
-            }).eq("document_id", document_id).eq(
-                "status", "PROCESSING"
-            ).execute()
+            client.table("processing_jobs").update(
+                {
+                    "status": "FAILED",
+                    "error_message": "Superseded by admin retry",
+                }
+            ).eq("document_id", document_id).eq("status", "PROCESSING").execute()
             cleanup_actions.append("failed_stale_jobs")
         except Exception as e:
             logger.warning("retry_cleanup_jobs_failed", error=str(e))
@@ -402,6 +406,7 @@ async def retry_failed_tasks(
         # 5. Release pipeline lock
         try:
             from app.services.distributed_lock import PipelineLock
+
             PipelineLock(document_id).release()
             cleanup_actions.append("released_pipeline_lock")
         except Exception as e:
@@ -419,8 +424,10 @@ async def retry_failed_tasks(
         await _cleanup_for_full_reprocess()
 
         # Full pipeline: process_document → post-OCR chain
-        from app.workers.tasks.document_tasks import process_document
         from celery import chain as celery_chain
+
+        from app.workers.tasks.document_tasks import process_document
+
         post_ocr = create_post_ocr_chain(
             document_id=document_id,
             matter_id=matter_id or "",
@@ -437,6 +444,7 @@ async def retry_failed_tasks(
         # Stuck in ocr_complete with no chunks — release lock and run full post-OCR chain
         try:
             from app.services.distributed_lock import PipelineLock
+
             PipelineLock(document_id).release()
             cleanup_actions.append("released_pipeline_lock")
         except Exception as e:
@@ -462,11 +470,17 @@ async def retry_failed_tasks(
 
     elif chunks_count > 0 and entities_count == 0:
         # Has chunks but no entities - run from embed onwards
-        from app.workers.tasks.document_tasks import embed_chunks, extract_entities
         from celery import chain as celery_chain
+
+        from app.workers.tasks.document_tasks import embed_chunks, extract_entities
+
         embed_chain = celery_chain(
             embed_chunks.s(
-                prev_result={"document_id": document_id, "status": "chunking_complete", "job_id": None},
+                prev_result={
+                    "document_id": document_id,
+                    "status": "chunking_complete",
+                    "job_id": None,
+                },
             ),
             extract_entities.s(),
         )
@@ -560,7 +574,9 @@ async def get_pipeline_status(
         .execute()
     )
     chunks_count = chunks_resp.count or 0
-    chunks_with_embeddings = sum(1 for c in (chunks_resp.data or []) if c.get("embedding"))
+    chunks_with_embeddings = sum(
+        1 for c in (chunks_resp.data or []) if c.get("embedding")
+    )
 
     # Get entity count
     entities_resp = (
@@ -653,14 +669,14 @@ async def reprocess_stuck_documents(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> ReprocessStuckResponse:
     """Find and reprocess stuck documents in a matter."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.workers.celery import celery_app
 
     client = get_service_client()
 
     # Calculate threshold time
-    threshold_time = datetime.now(timezone.utc) - timedelta(hours=hours_threshold)
+    threshold_time = datetime.now(UTC) - timedelta(hours=hours_threshold)
 
     # Find stuck documents
     response = (
@@ -688,7 +704,7 @@ async def reprocess_stuck_documents(
     stuck_infos = []
     for doc in stuck_docs:
         updated_at = datetime.fromisoformat(doc["updated_at"].replace("Z", "+00:00"))
-        hours_stuck = (datetime.now(timezone.utc) - updated_at).total_seconds() / 3600
+        hours_stuck = (datetime.now(UTC) - updated_at).total_seconds() / 3600
 
         stuck_infos.append(
             StuckDocumentInfo(
@@ -969,7 +985,7 @@ async def get_jobs_overview(
             for row in stage_query.data or []:
                 jid = row["job_id"]
                 if jid not in wait_times:
-                    from datetime import datetime, timezone
+                    from datetime import datetime
 
                     try:
                         job_created = next(
@@ -1053,10 +1069,10 @@ async def get_bottleneck_stats(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> BottleneckStatsResponse:
     """Get stage duration analytics to identify pipeline bottlenecks."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     client = get_service_client()
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
 
     try:
         # Get completed and failed stages with timing
@@ -1157,10 +1173,10 @@ async def get_error_patterns(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> ErrorPatternsResponse:
     """Get aggregated error patterns from job stage history."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     client = get_service_client()
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
 
     try:
         # Source 1: job_stage_history (normal pipeline tasks)
@@ -1190,11 +1206,13 @@ async def get_error_patterns(
         )
 
         for job_row in jobs_result.data or []:
-            rows.append({
-                "stage_name": job_row.get("current_stage") or "chunked_processing",
-                "error_message": job_row.get("error_message"),
-                "created_at": job_row.get("updated_at"),
-            })
+            rows.append(
+                {
+                    "stage_name": job_row.get("current_stage") or "chunked_processing",
+                    "error_message": job_row.get("error_message"),
+                    "created_at": job_row.get("updated_at"),
+                }
+            )
 
         # Group by (truncated error_message, stage_name)
         pattern_map: dict[tuple[str, str], dict] = {}

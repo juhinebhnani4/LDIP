@@ -109,8 +109,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bounding_boxes:
@@ -159,8 +158,7 @@ class BoundingBoxService:
 
             # Create batches
             batches = [
-                records[i : i + batch_size]
-                for i in range(0, len(records), batch_size)
+                records[i : i + batch_size] for i in range(0, len(records), batch_size)
             ]
 
             if use_parallel and len(batches) > 1:
@@ -169,7 +167,9 @@ class BoundingBoxService:
                 total_saved = self._insert_batches_sequential(batches)
 
             elapsed_ms = int((time.time() - start_time) * 1000)
-            boxes_per_second = round(total_saved / (elapsed_ms / 1000), 1) if elapsed_ms > 0 else 0
+            boxes_per_second = (
+                round(total_saved / (elapsed_ms / 1000), 1) if elapsed_ms > 0 else 0
+            )
 
             logger.info(
                 "bounding_boxes_save_complete",
@@ -191,8 +191,7 @@ class BoundingBoxService:
                 error=str(e),
             )
             raise BoundingBoxServiceError(
-                message=f"Failed to save bounding boxes: {e!s}",
-                code="SAVE_FAILED"
+                message=f"Failed to save bounding boxes: {e!s}", code="SAVE_FAILED"
             ) from e
 
     def _insert_batches_sequential(self, batches: list[list[dict]]) -> int:
@@ -278,8 +277,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         logger.info(
@@ -288,9 +286,12 @@ class BoundingBoxService:
         )
 
         try:
-            result = self.client.table("bounding_boxes").delete().eq(
-                "document_id", document_id
-            ).execute()
+            result = (
+                self.client.table("bounding_boxes")
+                .delete()
+                .eq("document_id", document_id)
+                .execute()
+            )
 
             deleted_count = len(result.data) if result.data else 0
 
@@ -309,8 +310,7 @@ class BoundingBoxService:
                 error=str(e),
             )
             raise BoundingBoxServiceError(
-                message=f"Failed to delete bounding boxes: {e!s}",
-                code="DELETE_FAILED"
+                message=f"Failed to delete bounding boxes: {e!s}", code="DELETE_FAILED"
             ) from e
 
     def get_bounding_boxes_for_page(
@@ -335,8 +335,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -373,7 +372,7 @@ class BoundingBoxService:
             )
             raise BoundingBoxServiceError(
                 message=f"Failed to get bounding boxes for page: {e!s}",
-                code="GET_PAGE_FAILED"
+                code="GET_PAGE_FAILED",
             ) from e
 
     def get_bounding_boxes_for_document(
@@ -400,8 +399,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -455,7 +453,7 @@ class BoundingBoxService:
             )
             raise BoundingBoxServiceError(
                 message=f"Failed to get bounding boxes for document: {e!s}",
-                code="GET_DOCUMENT_FAILED"
+                code="GET_DOCUMENT_FAILED",
             ) from e
 
     def get_bounding_boxes_by_ids(
@@ -480,8 +478,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -518,9 +515,8 @@ class BoundingBoxService:
             )
             raise BoundingBoxServiceError(
                 message=f"Failed to get bounding boxes by IDs: {e!s}",
-                code="GET_BY_IDS_FAILED"
+                code="GET_BY_IDS_FAILED",
             ) from e
-
 
     # =========================================================================
     # Bbox Reference Validation (Story 17.8)
@@ -550,8 +546,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not bbox_ids:
@@ -559,11 +554,7 @@ class BoundingBoxService:
 
         try:
             # Query for existence of all bbox IDs
-            query = (
-                self.client.table("bounding_boxes")
-                .select("id")
-                .in_("id", bbox_ids)
-            )
+            query = self.client.table("bounding_boxes").select("id").in_("id", bbox_ids)
 
             if document_id:
                 query = query.eq("document_id", document_id)
@@ -600,7 +591,7 @@ class BoundingBoxService:
             )
             raise BoundingBoxServiceError(
                 message=f"Failed to validate bbox references: {e!s}",
-                code="VALIDATION_FAILED"
+                code="VALIDATION_FAILED",
             ) from e
 
     def cleanup_invalid_bbox_references(
@@ -627,8 +618,7 @@ class BoundingBoxService:
         """
         if self.client is None:
             raise BoundingBoxServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
@@ -655,7 +645,7 @@ class BoundingBoxService:
                 .execute()
             )
 
-            for citation in (citations_result.data or []):
+            for citation in citations_result.data or []:
                 citation_id = citation["id"]
                 updated = False
                 update_data = {}
@@ -666,7 +656,9 @@ class BoundingBoxService:
                     valid_source = [bid for bid in source_ids if bid in valid_bbox_ids]
                     if len(valid_source) != len(source_ids):
                         update_data["source_bbox_ids"] = valid_source
-                        stats["invalid_refs_removed"] += len(source_ids) - len(valid_source)
+                        stats["invalid_refs_removed"] += len(source_ids) - len(
+                            valid_source
+                        )
                         updated = True
 
                 # Validate target_bbox_ids
@@ -675,11 +667,15 @@ class BoundingBoxService:
                     valid_target = [bid for bid in target_ids if bid in valid_bbox_ids]
                     if len(valid_target) != len(target_ids):
                         update_data["target_bbox_ids"] = valid_target
-                        stats["invalid_refs_removed"] += len(target_ids) - len(valid_target)
+                        stats["invalid_refs_removed"] += len(target_ids) - len(
+                            valid_target
+                        )
                         updated = True
 
                 if updated:
-                    self.client.table("citations").update(update_data).eq("id", citation_id).execute()
+                    self.client.table("citations").update(update_data).eq(
+                        "id", citation_id
+                    ).execute()
                     stats["citations_updated"] += 1
 
             # Clean up entity_mentions with invalid bbox_ids
@@ -690,18 +686,22 @@ class BoundingBoxService:
                 .execute()
             )
 
-            for entity in (entities_result.data or []):
+            for entity in entities_result.data or []:
                 entity_id = entity["id"]
                 bbox_ids = entity.get("bbox_ids") or []
 
                 if bbox_ids:
-                    valid_entity_bboxes = [bid for bid in bbox_ids if bid in valid_bbox_ids]
+                    valid_entity_bboxes = [
+                        bid for bid in bbox_ids if bid in valid_bbox_ids
+                    ]
                     if len(valid_entity_bboxes) != len(bbox_ids):
                         self.client.table("entity_mentions").update(
                             {"bbox_ids": valid_entity_bboxes}
                         ).eq("id", entity_id).execute()
                         stats["entities_updated"] += 1
-                        stats["invalid_refs_removed"] += len(bbox_ids) - len(valid_entity_bboxes)
+                        stats["invalid_refs_removed"] += len(bbox_ids) - len(
+                            valid_entity_bboxes
+                        )
 
             logger.info(
                 "bbox_reference_cleanup_complete",
@@ -719,7 +719,7 @@ class BoundingBoxService:
             )
             raise BoundingBoxServiceError(
                 message=f"Failed to cleanup bbox references: {e!s}",
-                code="CLEANUP_FAILED"
+                code="CLEANUP_FAILED",
             ) from e
 
 

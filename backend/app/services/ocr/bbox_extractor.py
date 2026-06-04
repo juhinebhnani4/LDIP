@@ -305,7 +305,9 @@ def _extract_text_from_anchor(
 
     for segment in text_anchor.text_segments:
         start_idx = int(segment.start_index) if segment.start_index is not None else 0
-        end_idx = int(segment.end_index) if segment.end_index is not None else len(full_text)
+        end_idx = (
+            int(segment.end_index) if segment.end_index is not None else len(full_text)
+        )
         text_parts.append(full_text[start_idx:end_idx])
         min_start = start_idx if min_start is None else min(min_start, start_idx)
         max_end = end_idx if max_end is None else max(max_end, end_idx)

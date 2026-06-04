@@ -1,10 +1,13 @@
 """Invalidate summary cache for all matters to pick up parties fix."""
+
 import asyncio
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 from app.services.summary_service import get_summary_service
 from app.services.supabase.client import get_supabase_client
+
 
 async def main():
     client = get_supabase_client()
@@ -28,6 +31,7 @@ async def main():
 
     print("\nCache invalidation complete!")
     print("Frontend will now fetch fresh summaries with updated parties.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

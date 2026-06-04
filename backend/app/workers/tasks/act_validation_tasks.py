@@ -15,7 +15,6 @@ from uuid import uuid4
 import structlog
 
 from app.core.config import get_settings
-from app.engines.citation.abbreviations import normalize_act_name, get_canonical_name
 from app.engines.citation.india_code import IndiaCodeClient, is_india_code_enabled
 from app.engines.citation.validation import (
     ActValidationService,
@@ -37,7 +36,10 @@ logger = structlog.get_logger(__name__)
 
 
 def _get_or_create_validation_cache(
-    client: Any, normalized_name: str, canonical_name: str | None = None, year: int | None = None
+    client: Any,
+    normalized_name: str,
+    canonical_name: str | None = None,
+    year: int | None = None,
 ) -> str | None:
     """Get or create a validation cache entry.
 
@@ -50,7 +52,7 @@ def _get_or_create_validation_cache(
                 "p_act_name_normalized": normalized_name,
                 "p_act_name_canonical": canonical_name,
                 "p_act_year": year,
-            }
+            },
         ).execute()
 
         if result.data:
@@ -85,7 +87,7 @@ def _update_validation_cache(
                 "p_cached_storage_path": cached_storage_path,
                 "p_validation_confidence": confidence,
                 "p_validation_metadata": metadata,
-            }
+            },
         ).execute()
         return True
     except Exception as e:
@@ -130,7 +132,8 @@ def _update_act_resolution(
 def _extract_year_from_name(name: str) -> int | None:
     """Extract year from act name like 'Indian Contract Act, 1872'."""
     import re
-    match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', name)
+
+    match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", name)
     return int(match.group(1)) if match else None
 
 
@@ -154,9 +157,13 @@ def _find_library_document_by_title(client: Any, title: str) -> dict | None:
         if result.data:
             best = result.data[0]
             # Fetch storage_path (RPC doesn't return it, but callers need it)
-            doc_result = client.table("library_documents").select(
-                "id, title, storage_path"
-            ).eq("id", best["id"]).limit(1).execute()
+            doc_result = (
+                client.table("library_documents")
+                .select("id, title, storage_path")
+                .eq("id", best["id"])
+                .limit(1)
+                .execute()
+            )
             if doc_result.data:
                 return doc_result.data[0]
             return {"id": best["id"], "title": best["title"], "storage_path": None}
@@ -166,9 +173,13 @@ def _find_library_document_by_title(client: Any, title: str) -> dict | None:
         logger.warning("find_library_document_rpc_error", title=title, error=str(e))
         # Fallback: exact ilike match if RPC fails
         try:
-            result = client.table("library_documents").select(
-                "id, title, storage_path"
-            ).ilike("title", title).limit(1).execute()
+            result = (
+                client.table("library_documents")
+                .select("id, title, storage_path")
+                .ilike("title", title)
+                .limit(1)
+                .execute()
+            )
             return result.data[0] if result.data else None
         except Exception:
             return None
@@ -219,14 +230,20 @@ def _link_act_from_library(
                 title=display_name,
             )
             # Check if this library doc actually has chunks (it may need processing)
-            chunk_check = client.table("library_chunks").select("id", count="exact").eq(
-                "library_document_id", library_doc_id
-            ).execute()
+            chunk_check = (
+                client.table("library_chunks")
+                .select("id", count="exact")
+                .eq("library_document_id", library_doc_id)
+                .execute()
+            )
             if not chunk_check.count:
                 # Library doc exists but was never processed — trigger OCR + processing
                 storage_path_existing = library_doc.get("storage_path")
                 if storage_path_existing:
-                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    from app.workers.tasks.library_tasks import (
+                        ocr_and_process_library_document,
+                    )
+
                     ocr_kwargs = {
                         "library_document_id": library_doc_id,
                         "storage_path": storage_path_existing,
@@ -237,25 +254,34 @@ def _link_act_from_library(
                         kwargs=ocr_kwargs,
                         queue="default",
                     )
-                    logger.info("act_ocr_processing_triggered_existing", library_document_id=library_doc_id)
+                    logger.info(
+                        "act_ocr_processing_triggered_existing",
+                        library_document_id=library_doc_id,
+                    )
         else:
             # 2. Create new library document
             library_doc_id = str(uuid4())
-            result = client.table("library_documents").insert({
-                "id": library_doc_id,
-                "filename": filename,
-                "storage_path": storage_path,
-                "file_size": file_size,
-                "document_type": "act",
-                "title": display_name,
-                "short_title": normalized_name.replace("_", " ").title(),
-                "year": year,
-                "jurisdiction": "central",
-                "source": "india_code",
-                "source_url": india_code_url,
-                "status": "pending",
-                "added_by": None,  # System-added
-            }).execute()
+            result = (
+                client.table("library_documents")
+                .insert(
+                    {
+                        "id": library_doc_id,
+                        "filename": filename,
+                        "storage_path": storage_path,
+                        "file_size": file_size,
+                        "document_type": "act",
+                        "title": display_name,
+                        "short_title": normalized_name.replace("_", " ").title(),
+                        "year": year,
+                        "jurisdiction": "central",
+                        "source": "india_code",
+                        "source_url": india_code_url,
+                        "status": "pending",
+                        "added_by": None,  # System-added
+                    }
+                )
+                .execute()
+            )
 
             if not result.data:
                 logger.error(
@@ -272,6 +298,7 @@ def _link_act_from_library(
 
             # Trigger OCR + processing for the new library document
             from app.workers.tasks.library_tasks import ocr_and_process_library_document
+
             ocr_kwargs = {
                 "library_document_id": library_doc_id,
                 "storage_path": storage_path,
@@ -282,14 +309,18 @@ def _link_act_from_library(
                 kwargs=ocr_kwargs,
                 queue="default",
             )
-            logger.info("act_ocr_processing_triggered", library_document_id=library_doc_id)
+            logger.info(
+                "act_ocr_processing_triggered", library_document_id=library_doc_id
+            )
 
         # 3. Check if already linked to this matter
-        existing_link = client.table("matter_library_links").select("id").eq(
-            "matter_id", matter_id
-        ).eq(
-            "library_document_id", library_doc_id
-        ).execute()
+        existing_link = (
+            client.table("matter_library_links")
+            .select("id")
+            .eq("matter_id", matter_id)
+            .eq("library_document_id", library_doc_id)
+            .execute()
+        )
 
         if existing_link.data:
             logger.info(
@@ -300,9 +331,14 @@ def _link_act_from_library(
             return library_doc_id
 
         # 4. Get a user_id for linked_by (from any document in this matter)
-        user_result = client.table("documents").select("uploaded_by").eq(
-            "matter_id", matter_id
-        ).not_.is_("uploaded_by", "null").limit(1).execute()
+        user_result = (
+            client.table("documents")
+            .select("uploaded_by")
+            .eq("matter_id", matter_id)
+            .not_.is_("uploaded_by", "null")
+            .limit(1)
+            .execute()
+        )
         linked_by = user_result.data[0]["uploaded_by"] if user_result.data else None
 
         if not linked_by:
@@ -317,11 +353,17 @@ def _link_act_from_library(
             return library_doc_id
 
         # 5. Create the link
-        link_result = client.table("matter_library_links").insert({
-            "matter_id": matter_id,
-            "library_document_id": library_doc_id,
-            "linked_by": linked_by,
-        }).execute()
+        link_result = (
+            client.table("matter_library_links")
+            .insert(
+                {
+                    "matter_id": matter_id,
+                    "library_document_id": library_doc_id,
+                    "linked_by": linked_by,
+                }
+            )
+            .execute()
+        )
 
         if link_result.data:
             logger.info(
@@ -385,7 +427,9 @@ def _create_document_for_auto_fetched_act(
     )
 
 
-def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int = 50) -> list[dict]:
+def _get_unvalidated_acts(
+    client: Any, matter_id: str | None = None, limit: int = 50
+) -> list[dict]:
     """Get acts that need validation or re-evaluation.
 
     Returns two categories:
@@ -394,9 +438,14 @@ def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int 
     """
     try:
         # Query 1: Acts never validated (no cache entry)
-        query1 = client.table("act_resolutions").select(
-            "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
-        ).is_("validation_cache_id", "null").eq("resolution_status", "missing")
+        query1 = (
+            client.table("act_resolutions")
+            .select(
+                "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
+            )
+            .is_("validation_cache_id", "null")
+            .eq("resolution_status", "missing")
+        )
 
         if matter_id:
             query1 = query1.eq("matter_id", matter_id)
@@ -407,9 +456,14 @@ def _get_unvalidated_acts(client: Any, matter_id: str | None = None, limit: int 
         # Query 2: Acts validated but still stuck in 'missing' (need re-evaluation for auto-fetch)
         remaining = limit - len(unvalidated)
         if remaining > 0:
-            query2 = client.table("act_resolutions").select(
-                "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
-            ).not_.is_("validation_cache_id", "null").eq("resolution_status", "missing")
+            query2 = (
+                client.table("act_resolutions")
+                .select(
+                    "id, matter_id, act_name_normalized, act_name_display, resolution_status, validation_cache_id"
+                )
+                .not_.is_("validation_cache_id", "null")
+                .eq("resolution_status", "missing")
+            )
 
             if matter_id:
                 query2 = query2.eq("matter_id", matter_id)
@@ -428,13 +482,16 @@ def _get_acts_needing_fetch(client: Any, limit: int = 5) -> list[dict]:
     """Get valid acts that need PDF fetching."""
     try:
         # Get acts where validation_status is 'valid' but no cached_storage_path
-        result = client.table("act_validation_cache").select(
-            "id, act_name_normalized, act_name_canonical, act_year, india_code_doc_id"
-        ).eq(
-            "validation_status", "valid"
-        ).is_(
-            "cached_storage_path", "null"
-        ).limit(limit).execute()
+        result = (
+            client.table("act_validation_cache")
+            .select(
+                "id, act_name_normalized, act_name_canonical, act_year, india_code_doc_id"
+            )
+            .eq("validation_status", "valid")
+            .is_("cached_storage_path", "null")
+            .limit(limit)
+            .execute()
+        )
 
         return result.data or []
 
@@ -487,7 +544,9 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
     validation_service = ActValidationService()
 
     # Get unvalidated acts using configurable limit
-    acts = _get_unvalidated_acts(client, matter_id, limit=settings.validation_max_acts_per_task)
+    acts = _get_unvalidated_acts(
+        client, matter_id, limit=settings.validation_max_acts_per_task
+    )
     logger.info("validate_acts_found", matter_id=matter_id, count=len(acts))
 
     results = {
@@ -510,8 +569,12 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
             if existing_cache_id:
                 if settings.india_code_auto_fetch_enabled:
                     _update_act_resolution(
-                        client, matter_id, normalized, "auto_fetching",
-                        is_valid=True, validation_cache_id=existing_cache_id,
+                        client,
+                        matter_id,
+                        normalized,
+                        "auto_fetching",
+                        is_valid=True,
+                        validation_cache_id=existing_cache_id,
                     )
                     results["valid"] += 1
                 continue
@@ -553,7 +616,11 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                 results["invalid"] += 1
             elif validation.validation_status == ValidationStatus.VALID:
                 # Use auto_fetching if auto-fetch is enabled, otherwise stay missing
-                status = "auto_fetching" if settings.india_code_auto_fetch_enabled else "missing"
+                status = (
+                    "auto_fetching"
+                    if settings.india_code_auto_fetch_enabled
+                    else "missing"
+                )
                 _update_act_resolution(
                     client,
                     matter_id,
@@ -567,13 +634,18 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                 # Unknown — regex can't decide. Use LLM fallback before
                 # assuming valid and sending to India Code (wastes fetches).
                 try:
-                    from app.engines.citation.validation import validate_act_name_with_llm
-                    llm_result = run_async(validate_act_name_with_llm(
-                        act_name=act_display,
-                        context=None,
-                        document_id=None,
-                        matter_id=matter_id,
-                    ))
+                    from app.engines.citation.validation import (
+                        validate_act_name_with_llm,
+                    )
+
+                    llm_result = run_async(
+                        validate_act_name_with_llm(
+                            act_name=act_display,
+                            context=None,
+                            document_id=None,
+                            matter_id=matter_id,
+                        )
+                    )
 
                     if not llm_result.is_valid:
                         # LLM says garbage — mark invalid
@@ -627,7 +699,11 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                     # Fall through to default behavior on LLM failure
 
                 # Proceed with India Code lookup (either LLM confirmed or LLM unavailable)
-                status = "auto_fetching" if settings.india_code_auto_fetch_enabled else "missing"
+                status = (
+                    "auto_fetching"
+                    if settings.india_code_auto_fetch_enabled
+                    else "missing"
+                )
                 _update_act_resolution(
                     client,
                     matter_id,
@@ -722,7 +798,6 @@ def fetch_acts_from_india_code(self) -> dict:
                 normalized = act.get("act_name_normalized", "")
                 canonical = act.get("act_name_canonical")
                 year = act.get("act_year")
-                doc_id = act.get("india_code_doc_id")
 
                 try:
                     # Check if already cached
@@ -743,9 +818,7 @@ def fetch_acts_from_india_code(self) -> dict:
                         results["known_mapping"] += 1
                         known_doc_id = india_code.get_known_doc_id(normalized)
 
-                        download = await india_code.download_pdf(
-                            known_doc_id, pdf_url
-                        )
+                        download = await india_code.download_pdf(known_doc_id, pdf_url)
 
                         if download.success and download.pdf_bytes:
                             storage_path = cache_service.cache_act(
@@ -782,7 +855,9 @@ def fetch_acts_from_india_code(self) -> dict:
 
                         if search_results:
                             first_result = search_results[0]
-                            download = await india_code.download_pdf(first_result.doc_id)
+                            download = await india_code.download_pdf(
+                                first_result.doc_id
+                            )
 
                             if not download.success:
                                 logger.warning(
@@ -853,16 +928,20 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
     Returns dict with counts of resolutions and documents updated/created.
     """
     settings = get_settings()
-    cache_service = get_act_cache_service()
 
     # Track affected matter_ids for broadcasting
     affected_matter_ids: set[str] = set()
 
     try:
         # === SUCCESS PATH: Update resolutions where PDFs are now cached ===
-        cached_result = client.table("act_validation_cache").select(
-            "id, act_name_normalized, act_name_canonical, cached_storage_path, india_code_url"
-        ).not_.is_("cached_storage_path", "null").execute()
+        cached_result = (
+            client.table("act_validation_cache")
+            .select(
+                "id, act_name_normalized, act_name_canonical, cached_storage_path, india_code_url"
+            )
+            .not_.is_("cached_storage_path", "null")
+            .execute()
+        )
 
         cached_acts = cached_result.data or []
         updated_resolutions = 0
@@ -876,13 +955,13 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
             india_code_url = cached.get("india_code_url")
 
             # Get all matching act_resolutions that are missing or auto_fetching
-            resolutions_result = client.table("act_resolutions").select(
-                "id, matter_id"
-            ).eq(
-                "act_name_normalized", normalized
-            ).in_(
-                "resolution_status", ["missing", "auto_fetching"]
-            ).execute()
+            resolutions_result = (
+                client.table("act_resolutions")
+                .select("id, matter_id")
+                .eq("act_name_normalized", normalized)
+                .in_("resolution_status", ["missing", "auto_fetching"])
+                .execute()
+            )
 
             pending_resolutions = resolutions_result.data or []
 
@@ -894,8 +973,7 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                 try:
                     prefix = settings.act_cache_storage_prefix
                     files = client.storage.from_("documents").list(
-                        path=f"{prefix}/",
-                        options={"search": f"{normalized}.pdf"}
+                        path=f"{prefix}/", options={"search": f"{normalized}.pdf"}
                     )
                     for f in files or []:
                         if f.get("name") == f"{normalized}.pdf":
@@ -918,30 +996,32 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                     storage_path,
                     india_code_url,
                     file_size,
-                    on_complete_callbacks=[{
-                        "task_name": "app.workers.tasks.verification_tasks.trigger_verification_on_act_upload",
-                        "kwargs": {
-                            "matter_id": matter_id,
-                            "act_name": canonical or normalized,
-                            # act_document_id auto-injected by fire_library_callbacks
-                        },
-                        "queue": "default",
-                    }],
+                    on_complete_callbacks=[
+                        {
+                            "task_name": "app.workers.tasks.verification_tasks.trigger_verification_on_act_upload",
+                            "kwargs": {
+                                "matter_id": matter_id,
+                                "act_name": canonical or normalized,
+                                # act_document_id auto-injected by fire_library_callbacks
+                            },
+                            "queue": "default",
+                        }
+                    ],
                 )
 
                 if doc_id:
                     created_documents += 1
 
                     # Update act_resolution with document_id
-                    client.table("act_resolutions").update({
-                        "resolution_status": "auto_fetched",
-                        "user_action": "auto_fetched",
-                        "validation_cache_id": cache_id,
-                        "act_document_id": doc_id,
-                        "updated_at": "now()",
-                    }).eq(
-                        "id", resolution.get("id")
-                    ).execute()
+                    client.table("act_resolutions").update(
+                        {
+                            "resolution_status": "auto_fetched",
+                            "user_action": "auto_fetched",
+                            "validation_cache_id": cache_id,
+                            "act_document_id": doc_id,
+                            "updated_at": "now()",
+                        }
+                    ).eq("id", resolution.get("id")).execute()
 
                     updated_resolutions += 1
                     affected_matter_ids.add(matter_id)
@@ -960,11 +1040,12 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
 
         # === FAILURE PATH: Mark acts as not_on_indiacode if validation says so ===
         try:
-            not_found_result = client.table("act_validation_cache").select(
-                "id, act_name_normalized"
-            ).eq(
-                "validation_status", "not_on_indiacode"
-            ).execute()
+            not_found_result = (
+                client.table("act_validation_cache")
+                .select("id, act_name_normalized")
+                .eq("validation_status", "not_on_indiacode")
+                .execute()
+            )
 
             not_found_acts = not_found_result.data or []
             failed_resolutions = 0
@@ -974,25 +1055,25 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                 cache_id = nf.get("id")
 
                 # Find resolutions stuck in auto_fetching or missing for this act
-                stuck_result = client.table("act_resolutions").select(
-                    "id, matter_id"
-                ).eq(
-                    "act_name_normalized", normalized
-                ).in_(
-                    "resolution_status", ["auto_fetching", "missing"]
-                ).execute()
+                stuck_result = (
+                    client.table("act_resolutions")
+                    .select("id, matter_id")
+                    .eq("act_name_normalized", normalized)
+                    .in_("resolution_status", ["auto_fetching", "missing"])
+                    .execute()
+                )
 
                 stuck_resolutions = stuck_result.data or []
 
                 for resolution in stuck_resolutions:
                     matter_id = resolution.get("matter_id")
-                    client.table("act_resolutions").update({
-                        "resolution_status": "not_on_indiacode",
-                        "validation_cache_id": cache_id,
-                        "updated_at": "now()",
-                    }).eq(
-                        "id", resolution.get("id")
-                    ).execute()
+                    client.table("act_resolutions").update(
+                        {
+                            "resolution_status": "not_on_indiacode",
+                            "validation_cache_id": cache_id,
+                            "updated_at": "now()",
+                        }
+                    ).eq("id", resolution.get("id")).execute()
 
                     failed_resolutions += 1
                     affected_matter_ids.add(matter_id)
@@ -1011,11 +1092,16 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                 from app.engines.citation.discovery import compute_resolution_stats
                 from app.models.citation import ActResolution
 
-                res_result = client.table("act_resolutions").select(
-                    "id, matter_id, act_name_normalized, act_name_display, "
-                    "act_document_id, resolution_status, user_action, citation_count, "
-                    "first_seen_at, created_at, updated_at"
-                ).eq("matter_id", mid).execute()
+                res_result = (
+                    client.table("act_resolutions")
+                    .select(
+                        "id, matter_id, act_name_normalized, act_name_display, "
+                        "act_document_id, resolution_status, user_action, citation_count, "
+                        "first_seen_at, created_at, updated_at"
+                    )
+                    .eq("matter_id", mid)
+                    .execute()
+                )
 
                 resolutions = [
                     ActResolution(
@@ -1037,6 +1123,7 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
                 stats = compute_resolution_stats(resolutions, include_invalid=False)
 
                 from app.services.pubsub_service import broadcast_act_discovery_update
+
                 broadcast_act_discovery_update(
                     matter_id=mid,
                     total_acts=stats.total_acts,

@@ -55,13 +55,17 @@ class ChunkData:
     parent_id: UUID | None
     token_count: int
     page_number: int | None = None
-    section_title: str | None = None  # e.g. "Section 4" — extracted from legal document headings
+    section_title: str | None = (
+        None  # e.g. "Section 4" — extracted from legal document headings
+    )
     bbox_ids: list[UUID] = field(default_factory=list)
     block_types: list[str] = field(default_factory=list)
     text_start_offset: int | None = None
     text_end_offset: int | None = None
     layout_derived: bool = False
-    source_block_ids: list[UUID] = field(default_factory=list)  # Track source layout blocks
+    source_block_ids: list[UUID] = field(
+        default_factory=list
+    )  # Track source layout blocks
 
 
 @dataclass
@@ -557,7 +561,12 @@ class ParentChildChunker:
             total_tokens=total_tokens,
         )
 
-    def _get_block_text(self, block: LayoutBlock, full_text: str, page_texts: dict[int, str] | None = None) -> str:
+    def _get_block_text(
+        self,
+        block: LayoutBlock,
+        full_text: str,
+        page_texts: dict[int, str] | None = None,
+    ) -> str:
         """Extract text for a block from the full document text.
 
         Issue #1 fix: Enhanced with fallback to page-based text extraction.
@@ -639,12 +648,14 @@ class ParentChildChunker:
         for i, block_text in enumerate(text_parts):
             block = blocks[i]
             end_in_parent = pos_in_parent + len(block_text)
-            block_offset_map.append((
-                pos_in_parent,
-                end_in_parent,
-                block.text_start,
-                block.text_end,
-            ))
+            block_offset_map.append(
+                (
+                    pos_in_parent,
+                    end_in_parent,
+                    block.text_start,
+                    block.text_end,
+                )
+            )
             pos_in_parent = end_in_parent + 2  # +2 for "\n\n" joiner
 
         chunk = ChunkData(
@@ -684,12 +695,14 @@ class ParentChildChunker:
         Returns:
             Position in full_text, or None if unmappable.
         """
-        for start_in_parent, end_in_parent, text_start, text_end in block_offset_map:
+        for start_in_parent, end_in_parent, text_start, _text_end in block_offset_map:
             if start_in_parent <= pos <= end_in_parent and text_start is not None:
                 offset_in_block = pos - start_in_parent
                 return text_start + offset_in_block
         # If position falls in a joiner gap, use the nearest block boundary
-        for i, (start_in_parent, end_in_parent, text_start, text_end) in enumerate(block_offset_map):
+        for _, (start_in_parent, _end_in_parent, text_start, _text_end) in enumerate(
+            block_offset_map
+        ):
             if pos < start_in_parent and text_start is not None:
                 return text_start
         # Past all blocks — use end of last block

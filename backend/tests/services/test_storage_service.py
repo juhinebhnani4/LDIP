@@ -51,18 +51,14 @@ def storage_service(mock_supabase_client: MagicMock) -> StorageService:
 class TestStorageServiceInit:
     """Tests for StorageService initialization."""
 
-    def test_init_with_provided_client(
-        self, mock_supabase_client: MagicMock
-    ) -> None:
+    def test_init_with_provided_client(self, mock_supabase_client: MagicMock) -> None:
         """Test initialization with provided client."""
         service = StorageService(client=mock_supabase_client)
         assert service.client == mock_supabase_client
         assert service.bucket == "documents"
 
     @patch("app.services.storage_service.get_service_client")
-    def test_init_without_client_uses_default(
-        self, mock_get_client: MagicMock
-    ) -> None:
+    def test_init_without_client_uses_default(self, mock_get_client: MagicMock) -> None:
         """Test initialization without client uses service client."""
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client

@@ -30,7 +30,9 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Configuration
-DEFAULT_CHUNK_SIZE = 15  # Pages per chunk (Document AI limit: 15 non-imageless, 30 imageless)
+DEFAULT_CHUNK_SIZE = (
+    15  # Pages per chunk (Document AI limit: 15 non-imageless, 30 imageless)
+)
 CHUNK_THRESHOLD = 30  # Documents > 30 pages use chunking
 SPLIT_TIMEOUT_SECONDS = 30  # Max time for split operation
 
@@ -115,7 +117,9 @@ class StreamingChunkResult:
             IndexError: If index out of range.
         """
         if index < 0 or index >= len(self.chunks):
-            raise IndexError(f"Chunk index {index} out of range (0-{len(self.chunks) - 1})")
+            raise IndexError(
+                f"Chunk index {index} out of range (0-{len(self.chunks) - 1})"
+            )
         return self.chunks[index][0].read_bytes()
 
     def iter_chunk_bytes(self):
@@ -265,7 +269,9 @@ class PDFChunker:
 
         except pypdf.errors.PdfReadError as e:
             logger.error("pdf_parse_failed", error=str(e))
-            raise PDFChunkerError(f"Failed to parse PDF: {e}", code="PDF_PARSE_ERROR") from e
+            raise PDFChunkerError(
+                f"Failed to parse PDF: {e}", code="PDF_PARSE_ERROR"
+            ) from e
         except (PDFChunkerError, MemoryLimitExceededError):
             raise
         except Exception as e:
@@ -376,7 +382,9 @@ class PDFChunker:
         except pypdf.errors.PdfReadError as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
             logger.error("pdf_parse_failed", error=str(e))
-            raise PDFChunkerError(f"Failed to parse PDF: {e}", code="PDF_PARSE_ERROR") from e
+            raise PDFChunkerError(
+                f"Failed to parse PDF: {e}", code="PDF_PARSE_ERROR"
+            ) from e
         except Exception as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
             logger.error("pdf_streaming_split_failed", error=str(e))

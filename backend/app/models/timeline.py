@@ -58,19 +58,33 @@ class EventClassificationResult(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    event_id: str = Field(..., alias="eventId", description="Event UUID that was classified")
-    event_type: EventType = Field(..., alias="eventType", description="Classified event type")
+    event_id: str = Field(
+        ..., alias="eventId", description="Event UUID that was classified"
+    )
+    event_type: EventType = Field(
+        ..., alias="eventType", description="Classified event type"
+    )
     classification_confidence: float = Field(
-        ..., ge=0.0, le=1.0, alias="classificationConfidence", description="Confidence score for classification"
+        ...,
+        ge=0.0,
+        le=1.0,
+        alias="classificationConfidence",
+        description="Confidence score for classification",
     )
     secondary_types: list[SecondaryTypeScore] = Field(
-        default_factory=list, alias="secondaryTypes", description="Alternative classifications with scores"
+        default_factory=list,
+        alias="secondaryTypes",
+        description="Alternative classifications with scores",
     )
     keywords_matched: list[str] = Field(
-        default_factory=list, alias="keywordsMatched", description="Keywords that matched for classification"
+        default_factory=list,
+        alias="keywordsMatched",
+        description="Keywords that matched for classification",
     )
     classification_reasoning: str | None = Field(
-        None, alias="classificationReasoning", description="LLM explanation for the classification"
+        None,
+        alias="classificationReasoning",
+        description="LLM explanation for the classification",
     )
 
 
@@ -85,7 +99,9 @@ class ClassifiedEvent(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
     event_date: date = Field(..., alias="eventDate", description="Event date")
     event_date_precision: Literal["day", "month", "year", "approximate"] = Field(
         default="day", alias="eventDatePrecision", description="Date precision level"
@@ -93,21 +109,35 @@ class ClassifiedEvent(BaseModel):
     event_date_text: str | None = Field(
         None, alias="eventDateText", description="Original date text from document"
     )
-    event_type: EventType = Field(..., alias="eventType", description="Classified event type")
+    event_type: EventType = Field(
+        ..., alias="eventType", description="Classified event type"
+    )
     description: str = Field(..., description="Context text surrounding the date")
     classification_confidence: float = Field(
-        default=0.8, ge=0.0, le=1.0, alias="classificationConfidence", description="Classification confidence"
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        alias="classificationConfidence",
+        description="Classification confidence",
     )
-    source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
+    source_page: int | None = Field(
+        None, alias="sourcePage", description="Source page number"
+    )
     source_bbox_ids: list[str] = Field(
         default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs"
     )
     verified: bool = Field(
         default=False, description="Whether event has been manually verified"
     )
-    is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    is_manual: bool = Field(
+        default=False, alias="isManual", description="Whether manually created"
+    )
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Last update timestamp"
+    )
 
 
 # =============================================================================
@@ -122,7 +152,9 @@ class ExtractedDate(BaseModel):
     text, normalized date, surrounding context, and confidence metadata.
     """
 
-    extracted_date: date = Field(..., description="Normalized date in Python date format")
+    extracted_date: date = Field(
+        ..., description="Normalized date in Python date format"
+    )
     date_text: str = Field(
         ..., description="Original date text as it appears in document"
     )
@@ -131,11 +163,11 @@ class ExtractedDate(BaseModel):
     )
     event_type: str = Field(
         default="unclassified",
-        description="Event type: filing, hearing, order, notice, transaction, document, deadline, incident, unclassified"
+        description="Event type: filing, hearing, order, notice, transaction, document, deadline, incident, unclassified",
     )
     event_description: str = Field(
         default="",
-        description="Clear, action-oriented summary of the event (10-20 words)"
+        description="Clear, action-oriented summary of the event (10-20 words)",
     )
     context_before: str = Field(
         default="", description="Up to 200 words before the date"
@@ -252,7 +284,9 @@ class PaginationMeta(BaseModel):
     total: int = Field(..., ge=0, description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
     per_page: int = Field(..., ge=1, alias="perPage", description="Items per page")
-    total_pages: int = Field(..., ge=0, alias="totalPages", description="Total number of pages")
+    total_pages: int = Field(
+        ..., ge=0, alias="totalPages", description="Total number of pages"
+    )
 
 
 class RawDateListItem(BaseModel):
@@ -262,20 +296,38 @@ class RawDateListItem(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     event_date: date = Field(..., alias="eventDate", description="Extracted date")
-    event_date_precision: str = Field(..., alias="eventDatePrecision", description="Date precision")
-    event_date_text: str | None = Field(None, alias="eventDateText", description="Original date text")
-    event_type: str = Field(default="raw_date", alias="eventType", description="Event type classification")
-    description: str = Field(..., description="Context text")
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
-    source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
-    confidence: float = Field(..., description="Extraction confidence")
-    is_ambiguous: bool = Field(default=False, alias="isAmbiguous", description="Whether date is ambiguous")
-    entities_involved: list[str] = Field(
-        default_factory=list, alias="entitiesInvolved", description="Related entity UUIDs"
+    event_date_precision: str = Field(
+        ..., alias="eventDatePrecision", description="Date precision"
     )
-    is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
+    event_date_text: str | None = Field(
+        None, alias="eventDateText", description="Original date text"
+    )
+    event_type: str = Field(
+        default="raw_date", alias="eventType", description="Event type classification"
+    )
+    description: str = Field(..., description="Context text")
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
+    source_page: int | None = Field(
+        None, alias="sourcePage", description="Source page number"
+    )
+    confidence: float = Field(..., description="Extraction confidence")
+    is_ambiguous: bool = Field(
+        default=False, alias="isAmbiguous", description="Whether date is ambiguous"
+    )
+    entities_involved: list[str] = Field(
+        default_factory=list,
+        alias="entitiesInvolved",
+        description="Related entity UUIDs",
+    )
+    is_manual: bool = Field(
+        default=False, alias="isManual", description="Whether manually created"
+    )
     source_bbox_ids: list[str] = Field(
-        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+        default_factory=list,
+        alias="sourceBboxIds",
+        description="Bounding box UUIDs for highlighting",
     )
 
 
@@ -312,7 +364,9 @@ class DateExtractionJobData(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    job_id: str = Field(..., alias="jobId", description="Job UUID for progress tracking")
+    job_id: str = Field(
+        ..., alias="jobId", description="Job UUID for progress tracking"
+    )
     status: str = Field(default="queued", description="Job status")
     documents_to_process: int | None = Field(
         default=None,
@@ -353,17 +407,27 @@ class EventClassificationListItem(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     event_date: date = Field(..., alias="eventDate", description="Event date")
-    event_date_precision: str = Field(..., alias="eventDatePrecision", description="Date precision")
-    event_date_text: str | None = Field(None, alias="eventDateText", description="Original date text")
+    event_date_precision: str = Field(
+        ..., alias="eventDatePrecision", description="Date precision"
+    )
+    event_date_text: str | None = Field(
+        None, alias="eventDateText", description="Original date text"
+    )
     event_type: str = Field(..., alias="eventType", description="Classified event type")
     description: str = Field(..., description="Context text")
     classification_confidence: float = Field(
         ..., alias="classificationConfidence", description="Classification confidence"
     )
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
-    source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
+    source_page: int | None = Field(
+        None, alias="sourcePage", description="Source page number"
+    )
     source_bbox_ids: list[str] = Field(
-        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+        default_factory=list,
+        alias="sourceBboxIds",
+        description="Bounding box UUIDs for highlighting",
     )
     verified: bool = Field(default=False, description="Whether verified")
 
@@ -388,13 +452,21 @@ class UnclassifiedEventItem(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     event_date: date = Field(..., alias="eventDate", description="Event date")
-    event_type: str = Field(..., alias="eventType", description="Current event type (unclassified)")
-    description: str = Field(..., description="Context text")
-    classification_confidence: float = Field(..., alias="classificationConfidence", description="Confidence score")
-    suggested_types: list[SecondaryTypeScore] = Field(
-        default_factory=list, alias="suggestedTypes", description="Suggested event types for manual selection"
+    event_type: str = Field(
+        ..., alias="eventType", description="Current event type (unclassified)"
     )
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
+    description: str = Field(..., description="Context text")
+    classification_confidence: float = Field(
+        ..., alias="classificationConfidence", description="Confidence score"
+    )
+    suggested_types: list[SecondaryTypeScore] = Field(
+        default_factory=list,
+        alias="suggestedTypes",
+        description="Suggested event types for manual selection",
+    )
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
 
 
 class UnclassifiedEventsResponse(BaseModel):
@@ -412,9 +484,13 @@ class ClassificationJobData(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    job_id: str = Field(..., alias="jobId", description="Job UUID for progress tracking")
+    job_id: str = Field(
+        ..., alias="jobId", description="Job UUID for progress tracking"
+    )
     status: str = Field(default="queued", description="Job status")
-    events_to_classify: int = Field(..., alias="eventsToClassify", description="Number of events to classify")
+    events_to_classify: int = Field(
+        ..., alias="eventsToClassify", description="Number of events to classify"
+    )
 
 
 class ClassificationJobResponse(BaseModel):
@@ -454,8 +530,12 @@ class EntityReference(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    canonical_name: str = Field(..., alias="canonicalName", description="Entity canonical name")
-    entity_type: str = Field(..., alias="entityType", description="Entity type (PERSON, ORG, etc.)")
+    canonical_name: str = Field(
+        ..., alias="canonicalName", description="Entity canonical name"
+    )
+    entity_type: str = Field(
+        ..., alias="entityType", description="Entity type (PERSON, ORG, etc.)"
+    )
     role: str | None = Field(None, description="Entity role in matter")
 
 
@@ -466,22 +546,40 @@ class TimelineEventWithEntities(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     event_date: date = Field(..., alias="eventDate", description="Event date")
-    event_date_precision: str = Field(..., alias="eventDatePrecision", description="Date precision")
-    event_date_text: str | None = Field(None, alias="eventDateText", description="Original date text")
+    event_date_precision: str = Field(
+        ..., alias="eventDatePrecision", description="Date precision"
+    )
+    event_date_text: str | None = Field(
+        None, alias="eventDateText", description="Original date text"
+    )
     event_type: str = Field(..., alias="eventType", description="Event type")
     description: str = Field(..., description="Event description")
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
-    document_name: str | None = Field(None, alias="documentName", description="Source document filename")
-    source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
+    document_name: str | None = Field(
+        None, alias="documentName", description="Source document filename"
+    )
+    source_page: int | None = Field(
+        None, alias="sourcePage", description="Source page number"
+    )
     confidence: float = Field(..., description="Classification confidence")
     entities: list[EntityReference] = Field(
         default_factory=list, description="Linked entities"
     )
-    is_ambiguous: bool = Field(default=False, alias="isAmbiguous", description="Whether date is ambiguous")
-    is_verified: bool = Field(default=False, alias="isVerified", description="Whether manually verified")
-    is_manual: bool = Field(default=False, alias="isManual", description="Whether manually created")
+    is_ambiguous: bool = Field(
+        default=False, alias="isAmbiguous", description="Whether date is ambiguous"
+    )
+    is_verified: bool = Field(
+        default=False, alias="isVerified", description="Whether manually verified"
+    )
+    is_manual: bool = Field(
+        default=False, alias="isManual", description="Whether manually created"
+    )
     source_bbox_ids: list[str] = Field(
-        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+        default_factory=list,
+        alias="sourceBboxIds",
+        description="Bounding box UUIDs for highlighting",
     )
 
 
@@ -500,16 +598,30 @@ class TimelineStatisticsData(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    total_events: int = Field(..., alias="totalEvents", description="Total number of events")
+    total_events: int = Field(
+        ..., alias="totalEvents", description="Total number of events"
+    )
     events_by_type: dict[str, int] = Field(
         default_factory=dict, alias="eventsByType", description="Event count by type"
     )
-    entities_involved: int = Field(..., alias="entitiesInvolved", description="Number of unique entities")
-    date_range_start: date | None = Field(None, alias="dateRangeStart", description="Earliest event date")
-    date_range_end: date | None = Field(None, alias="dateRangeEnd", description="Latest event date")
-    events_with_entities: int = Field(..., alias="eventsWithEntities", description="Events with entity links")
-    events_without_entities: int = Field(..., alias="eventsWithoutEntities", description="Events without entity links")
-    verified_events: int = Field(..., alias="verifiedEvents", description="Manually verified events")
+    entities_involved: int = Field(
+        ..., alias="entitiesInvolved", description="Number of unique entities"
+    )
+    date_range_start: date | None = Field(
+        None, alias="dateRangeStart", description="Earliest event date"
+    )
+    date_range_end: date | None = Field(
+        None, alias="dateRangeEnd", description="Latest event date"
+    )
+    events_with_entities: int = Field(
+        ..., alias="eventsWithEntities", description="Events with entity links"
+    )
+    events_without_entities: int = Field(
+        ..., alias="eventsWithoutEntities", description="Events without entity links"
+    )
+    verified_events: int = Field(
+        ..., alias="verifiedEvents", description="Manually verified events"
+    )
 
 
 class TimelineStatisticsResponse(BaseModel):
@@ -526,9 +638,13 @@ class EntityLinkingJobData(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    job_id: str = Field(..., alias="jobId", description="Job UUID for progress tracking")
+    job_id: str = Field(
+        ..., alias="jobId", description="Job UUID for progress tracking"
+    )
     status: str = Field(default="queued", description="Job status")
-    events_to_process: int = Field(..., alias="eventsToProcess", description="Number of events to process")
+    events_to_process: int = Field(
+        ..., alias="eventsToProcess", description="Number of events to process"
+    )
 
 
 class EntityLinkingJobResponse(BaseModel):
@@ -556,9 +672,15 @@ class EntityEventCount(BaseModel):
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
     canonical_name: str = Field(..., alias="canonicalName", description="Entity name")
     entity_type: str = Field(..., alias="entityType", description="Entity type")
-    event_count: int = Field(..., alias="eventCount", description="Number of events involving entity")
-    first_appearance: date | None = Field(None, alias="firstAppearance", description="First event date")
-    last_appearance: date | None = Field(None, alias="lastAppearance", description="Last event date")
+    event_count: int = Field(
+        ..., alias="eventCount", description="Number of events involving entity"
+    )
+    first_appearance: date | None = Field(
+        None, alias="firstAppearance", description="First event date"
+    )
+    last_appearance: date | None = Field(
+        None, alias="lastAppearance", description="Last event date"
+    )
 
 
 class EntitiesInTimelineResponse(BaseModel):
@@ -589,16 +711,23 @@ class ManualEventCreateRequest(BaseModel):
     event_date: date = Field(..., alias="eventDate", description="Event date")
     event_type: EventType = Field(..., alias="eventType", description="Event type")
     title: str = Field(
-        ..., min_length=5, max_length=200, description="Event title (used as description)"
+        ...,
+        min_length=5,
+        max_length=200,
+        description="Event title (used as description)",
     )
-    description: str = Field(default="", max_length=2000, description="Additional description")
+    description: str = Field(
+        default="", max_length=2000, description="Additional description"
+    )
     entity_ids: list[str] = Field(
         default_factory=list, alias="entityIds", description="Entity UUIDs to link"
     )
     source_document_id: str | None = Field(
         None, alias="sourceDocumentId", description="Optional source document reference"
     )
-    source_page: int | None = Field(None, ge=1, alias="sourcePage", description="Optional source page number")
+    source_page: int | None = Field(
+        None, ge=1, alias="sourcePage", description="Optional source page number"
+    )
 
 
 class ManualEventUpdateRequest(BaseModel):
@@ -614,13 +743,21 @@ class ManualEventUpdateRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    event_date: date | None = Field(None, alias="eventDate", description="New event date")
-    event_type: EventType | None = Field(None, alias="eventType", description="New event type")
+    event_date: date | None = Field(
+        None, alias="eventDate", description="New event date"
+    )
+    event_type: EventType | None = Field(
+        None, alias="eventType", description="New event type"
+    )
     title: str | None = Field(
         None, min_length=5, max_length=200, description="New title"
     )
-    description: str | None = Field(None, max_length=2000, description="New description")
-    entity_ids: list[str] | None = Field(None, alias="entityIds", description="New entity links")
+    description: str | None = Field(
+        None, max_length=2000, description="New description"
+    )
+    entity_ids: list[str] | None = Field(
+        None, alias="entityIds", description="New entity links"
+    )
 
 
 class ManualEventResponse(BaseModel):
@@ -633,21 +770,39 @@ class ManualEventResponse(BaseModel):
 
     id: str = Field(..., description="Event UUID")
     event_date: date = Field(..., alias="eventDate", description="Event date")
-    event_date_precision: str = Field(..., alias="eventDatePrecision", description="Date precision")
-    event_date_text: str | None = Field(None, alias="eventDateText", description="Original date text")
+    event_date_precision: str = Field(
+        ..., alias="eventDatePrecision", description="Date precision"
+    )
+    event_date_text: str | None = Field(
+        None, alias="eventDateText", description="Original date text"
+    )
     event_type: str = Field(..., alias="eventType", description="Event type")
     description: str = Field(..., description="Event description")
-    document_id: str | None = Field(None, alias="documentId", description="Source document UUID")
-    source_page: int | None = Field(None, alias="sourcePage", description="Source page number")
+    document_id: str | None = Field(
+        None, alias="documentId", description="Source document UUID"
+    )
+    source_page: int | None = Field(
+        None, alias="sourcePage", description="Source page number"
+    )
     confidence: float = Field(..., description="Confidence score")
     entities: list[EntityReference] = Field(
         default_factory=list, description="Linked entities"
     )
-    is_ambiguous: bool = Field(default=False, alias="isAmbiguous", description="Whether date is ambiguous")
-    is_verified: bool = Field(default=False, alias="isVerified", description="Whether manually verified")
-    is_manual: bool = Field(..., alias="isManual", description="Whether manually created")
-    created_by: str | None = Field(None, alias="createdBy", description="Creator user ID")
-    created_at: datetime | None = Field(None, alias="createdAt", description="Creation timestamp")
+    is_ambiguous: bool = Field(
+        default=False, alias="isAmbiguous", description="Whether date is ambiguous"
+    )
+    is_verified: bool = Field(
+        default=False, alias="isVerified", description="Whether manually verified"
+    )
+    is_manual: bool = Field(
+        ..., alias="isManual", description="Whether manually created"
+    )
+    created_by: str | None = Field(
+        None, alias="createdBy", description="Creator user ID"
+    )
+    created_at: datetime | None = Field(
+        None, alias="createdAt", description="Creation timestamp"
+    )
 
 
 class ManualEventCreateResponse(BaseModel):
@@ -685,7 +840,9 @@ class EventVerificationRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    is_verified: bool = Field(..., alias="isVerified", description="Whether event is verified")
+    is_verified: bool = Field(
+        ..., alias="isVerified", description="Whether event is verified"
+    )
 
 
 # Forward reference resolution

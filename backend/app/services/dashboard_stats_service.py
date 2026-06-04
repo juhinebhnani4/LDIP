@@ -121,12 +121,14 @@ class DashboardStatsService:
                 )
 
             # Run all three stat queries in parallel for efficiency
-            active_matters_count, verified_findings_count, pending_reviews_count = (
-                await asyncio.gather(
-                    self._count_active_matters(matter_ids),
-                    self._count_verified_findings(matter_ids),
-                    self._count_pending_reviews(matter_ids),
-                )
+            (
+                active_matters_count,
+                verified_findings_count,
+                pending_reviews_count,
+            ) = await asyncio.gather(
+                self._count_active_matters(matter_ids),
+                self._count_verified_findings(matter_ids),
+                self._count_pending_reviews(matter_ids),
             )
 
             stats = DashboardStats(

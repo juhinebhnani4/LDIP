@@ -16,13 +16,18 @@ from functools import lru_cache
 from typing import Any
 
 import structlog
-
 from google.genai import types
 
 from app.core.config import get_settings
-from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+    persist_cost,
+)
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.core.prompt_boundaries import detect_injection_patterns, has_injection_patterns
 
 logger = structlog.get_logger(__name__)
@@ -227,9 +232,13 @@ class InjectionDetector:
 
                 if llm_result:
                     # Combine regex and LLM findings
-                    all_patterns = list(set(regex_found + llm_result.get("patterns_found", [])))
+                    all_patterns = list(
+                        set(regex_found + llm_result.get("patterns_found", []))
+                    )
 
-                    risk_level = self._parse_risk_level(llm_result.get("risk_level", "none"))
+                    risk_level = self._parse_risk_level(
+                        llm_result.get("risk_level", "none")
+                    )
                     confidence = float(llm_result.get("confidence", 0.5))
 
                     logger.info(
@@ -259,7 +268,9 @@ class InjectionDetector:
 
         # Return regex-only result
         if regex_found:
-            risk_level = InjectionRisk.MEDIUM if len(regex_found) >= 2 else InjectionRisk.LOW
+            risk_level = (
+                InjectionRisk.MEDIUM if len(regex_found) >= 2 else InjectionRisk.LOW
+            )
             return InjectionScanResult(
                 risk_level=risk_level,
                 confidence=0.6,
@@ -276,7 +287,9 @@ class InjectionDetector:
             scan_method="regex_only",
         )
 
-    async def _llm_scan(self, text: str, document_id: str | None = None) -> dict[str, Any] | None:
+    async def _llm_scan(
+        self, text: str, document_id: str | None = None
+    ) -> dict[str, Any] | None:
         """Run LLM-based injection detection.
 
         Args:

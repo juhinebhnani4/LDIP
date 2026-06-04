@@ -47,9 +47,7 @@ class TestFullPipelineEntityLinkingToAnomalyDetection:
     def mock_job_tracker(self) -> MagicMock:
         """Create mock job tracking service."""
         tracker = MagicMock()
-        tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="linking-job-123")
-        )
+        tracker.create_job = AsyncMock(return_value=MagicMock(id="linking-job-123"))
         tracker.update_job_status = AsyncMock()
         return tracker
 
@@ -78,9 +76,7 @@ class TestFullPipelineEntityLinkingToAnomalyDetection:
         mock_entity.id = "entity-1"
         mock_entity.canonical_name = "ABC Corporation"
 
-        service.get_entities_by_matter = AsyncMock(
-            return_value=([mock_entity], 1)
-        )
+        service.get_entities_by_matter = AsyncMock(return_value=([mock_entity], 1))
         return service
 
     @pytest.fixture
@@ -319,9 +315,7 @@ class TestPipelineAnomalyTypes:
     def mock_job_tracker(self) -> MagicMock:
         """Create mock job tracking service."""
         tracker = MagicMock()
-        tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="job-789")
-        )
+        tracker.create_job = AsyncMock(return_value=MagicMock(id="job-789"))
         tracker.update_job_status = AsyncMock()
         return tracker
 
@@ -375,7 +369,9 @@ class TestPipelineAnomalyTypes:
         ]
         mock_timeline = MagicMock()
         mock_timeline.events = events
-        mock_get_builder.return_value.build_timeline = AsyncMock(return_value=mock_timeline)
+        mock_get_builder.return_value.build_timeline = AsyncMock(
+            return_value=mock_timeline
+        )
 
         # Mock detector that finds sequence violation
         mock_anomaly = MagicMock()
@@ -430,7 +426,9 @@ class TestPipelineAnomalyTypes:
         ]
         mock_timeline = MagicMock()
         mock_timeline.events = events
-        mock_get_builder.return_value.build_timeline = AsyncMock(return_value=mock_timeline)
+        mock_get_builder.return_value.build_timeline = AsyncMock(
+            return_value=mock_timeline
+        )
 
         # Mock detector that finds gap
         mock_anomaly = MagicMock()
@@ -458,9 +456,7 @@ class TestPipelineIdempotency:
     def mock_job_tracker(self) -> MagicMock:
         """Create mock job tracking service."""
         tracker = MagicMock()
-        tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="job-001")
-        )
+        tracker.create_job = AsyncMock(return_value=MagicMock(id="job-001"))
         tracker.update_job_status = AsyncMock()
         return tracker
 
@@ -505,7 +501,9 @@ class TestPipelineIdempotency:
 
         mock_timeline = MagicMock()
         mock_timeline.events = []  # Empty timeline
-        mock_get_builder.return_value.build_timeline = AsyncMock(return_value=mock_timeline)
+        mock_get_builder.return_value.build_timeline = AsyncMock(
+            return_value=mock_timeline
+        )
         mock_get_detector.return_value.detect_anomalies = AsyncMock(return_value=[])
 
         # Execute with force_redetect=False (incremental, as used by auto-trigger)
@@ -546,7 +544,9 @@ class TestPipelineIdempotency:
 
         mock_timeline = MagicMock()
         mock_timeline.events = []
-        mock_get_builder.return_value.build_timeline = AsyncMock(return_value=mock_timeline)
+        mock_get_builder.return_value.build_timeline = AsyncMock(
+            return_value=mock_timeline
+        )
         mock_get_detector.return_value.detect_anomalies = AsyncMock(return_value=[])
 
         # Execute with force_redetect=True (manual trigger)

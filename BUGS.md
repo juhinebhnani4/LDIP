@@ -2128,7 +2128,7 @@ The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (CI is decoration until it can pass + block merges) |
-| **Status** | OPEN (discovered 2026-06-04) |
+| **Status** | IN PROGRESS (2026-06-04: lint + format green & regression-verified across 7 commits; pytest-green + branch-protection still pending — see **Progress** below) |
 | **Date Found** | 2026-06-04 |
 | **Source** | Silent-failure detection session (INF-012) |
 
@@ -2143,6 +2143,96 @@ The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month
 - `scripts/reextract_timeline_events.py:344` `timeline_service` — out-of-scope reference (assigned at line 132 in a different scope); would `NameError` if that branch runs. **Real defect, but in a manual one-off script, not the live app.**
 
 **Recommended path** (not yet done — deferred as out-of-scope for INF-012): (1) `ruff check --fix` the ~334 safe fixes in a dedicated cleanup PR; (2) hand-review B904/E402/B023; (3) fix the one real defect (`reextract_timeline_events.py:344`); (4) get CI green; (5) **turn on branch protection so a red CI blocks merges** — only then is CI a real layer-2 guard.
+
+**Progress (2026-06-04, branch `ci-hardening-inf013`):**
+
+Re-confirmed with CI's pinned ruff 0.14.10: the real count was **676 errors / 416 auto-fixable** (the 517/0.14.7 figure undercounted). Also discovered two deeper "CI is decoration" facts the original entry missed:
+- **CI never *ran* at all.** `ci-backend.yml` triggered only on `main`/`develop`, which **don't exist** (default branch is `master`). Fixed first (commit 1) — keystone, since branch protection can't gate a check that never executes.
+- **`master` was 21 commits stale** vs the work branch; fast-forwarded `master` to current (incl. the INF-012 watchman) so the cleanup PRs have the right base.
+
+Seven commits land the cleanup (all behavior-preserving except #4):
+1. `ci:` wire `ci-backend.yml` to `master`.
+2. `chore:` `ruff --fix` 463 safe auto-fixes (160 files).
+3. `chore:` hand-fix the 260 non-auto-fixable — B904 `from e`/`from None`; per-case F841 (kept every side-effecting call, e.g. `_verify_document_access`; noqa+TODO on latent `storage_path`/`year` stubs); B023 default-arg binding (all verified same-iteration → no late-binding bug); SIM105/102/108 rewrites or noqa; B007 `_`-rename; **scoped** noqa for E402 load-order + the 6 F821 false-positives (NOT the reextract one).
+4. `fix:` the one real F821 defect — `reextract_timeline_events.py` entity-linking branch never created `timeline_service`; now does.
+5. `test:` unblock pytest **collection** — two pre-existing aborts: `hypothesis` never declared as a dep (added + relocked), and `test_ocr_chunk_service.py` imported the removed `STALE_CHUNK_THRESHOLD_SECONDS` constant (Story 4.3 made it config-driven; test rewritten to assert `settings.chunk_stale_threshold_seconds == 90`).
+6. `style:` big-bang `ruff format .` (415 files, semantically null) — makes the `ruff format --check` gate green.
+7. `chore:` `.git-blame-ignore-revs` for #6.
+
+`ruff check .` and `ruff format --check .` are now **clean**. **Regression-verified** against `master` using a throwaway local redis container (Docker) + CI's placeholder env: identical invocations on both branches yield **identical failure sets (196 = 196), 0 branch-only failures** → the cleanup introduced no behavior change any test detects.
+
+**NEW BLOCKER for step (4) "get CI green":** that 196 is a separate, pre-existing problem — **196 tests fail in a CI-like env** (placeholder Supabase/API keys) with `getaddrinfo`/`ConnectError`/`missing-api-key`. They fail **identically on `master`**, so they're not from this cleanup, but they will likely keep CI's **pytest** step red even after lint/format are green. Unknown whether they pass on CI's Linux env (could be Windows-local mock-patching quirks) — **the next step is to open a PR `ci-hardening-inf013` → `master` so CI actually runs and tells us the truth**, then decide whether the 196 are a real CI blocker (separate work item: proper Supabase/LLM mocking) before step (5) branch protection. Do **not** enable branch protection until CI's full job (lint + format + pytest + security-tests) is actually green.
+
+**CI run confirmed (2026-06-04, PR #60, run 26946760147):** opening the PR triggered backend CI for the first time ever. Results:
+- ✅ **`ruff check .` GREEN on Linux.** ✅ **`ruff format --check .` GREEN on Linux.** (Lint/format half of INF-013 = done.)
+- Surfaced a **third undeclared-dep gap**: `pytest-cov` was used by the CI command (`--cov=app`) but never declared → `unrecognized arguments: --cov`, pytest aborted at exit 4. Fixed (commit 9: add `pytest-cov`, relock).
+- ❌ **pytest: 2955 passed / 236 failed** on CI. The 236 are the pre-existing env/mock-dependent failures — **confirmed real on Linux**, spanning Supabase + OpenAI + Gemini + Cohere mock gaps across many test files. NOT caused by this cleanup (master-diff proved 0 branch-only failures).
+
+**Net:** INF-013's lint/format/deps work is **complete and CI-verified green**. The remaining blocker to a *fully* green merge-gate is the **236 pre-existing pytest failures** — a distinct test-suite-health work item (proper external-service mocking; candidate for `forensic-hunt` to find shared root-cause SHAPEs). Branch protection on the **full** `lint-and-test` job must wait for that. **Option to get a partial real guard now:** split `ci-backend.yml` into separate `lint` (ruff+format, already green) and `test` (pytest) jobs, and make only `lint` merge-blocking until the 236 are fixed.
+
+---
+
+### INF-014: 236 Pre-Existing pytest Failures — Test Suite Rotted While CI Never Ran
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (blocks the `test` CI job from becoming merge-blocking; **test-only — no prod impact**) |
+| **Status** | OPEN (discovered 2026-06-04 via INF-013's first-ever real CI run) |
+| **Date Found** | 2026-06-04 |
+| **Source** | INF-013 — first real CI execution (PR #60, run `26946760147`) |
+
+**Description**: The first time backend CI ever actually ran (after INF-013 fixed the branch triggers, the 676 lint errors, the format gate, and three undeclared deps — `hypothesis`/`pytest-cov`), the `pytest` step reported **2955 passed / 236 failed** on CI (ubuntu-latest + redis 7-alpine + placeholder Supabase/LLM creds). These 236 are **pre-existing and NOT caused by the INF-013 lint cleanup** — proven by an apples-to-apples branch-vs-`master` diff (identical failure sets, **0 branch-only failures**) run against a throwaway local redis container. They reproduce identically Windows-local and Linux-CI.
+
+**Meta-cause (the important part)**: this is the **same disease as INF-013, one layer down**. Because CI never executed for months (wrong triggers + missing deps), nothing forced tests to stay in sync with code. The suite **drifted** — production signatures, return shapes, constants, enums and class internals changed while tests kept asserting the old contract. A CI that doesn't run doesn't just miss lint; it lets the entire test suite rot silently. (The INF-013 `STALE_CHUNK_THRESHOLD_SECONDS` collection error was the first visible symptom of this rot.)
+
+**Root-cause taxonomy** (from sampling representative failures across the largest clusters; per-line evidence captured 2026-06-04 with redis-container + the placeholder env from INF-013's notes):
+
+1. **Test↔code contract drift** (largest, structural — tests assert a stale API):
+   - *Signature drift* — `engines/citation/test_storage.py`: `TypeError: get_citations_by_document() missing 1 required positional argument: 'matter_id'` (matter-isolation param added to the method; tests never updated). ~6.
+   - *Return-shape drift* — `services/memory/test_query_cache.py`: `KeyError: 'count'` (cache-stats dict shape changed). ~10.
+   - *Constant drift* — `services/rag/test_reranker.py::test_default_top_n`: `assert 5 == 3` (default `top_n` changed 3→5). Same shape as the `STALE_CHUNK` constant test.
+   - *Renamed-internal drift* — `services/ocr/test_gemini_validator.py`: `AttributeError: ... does not have the attribute '_model'` (test `patch.object(..., '_model')`s a renamed attribute). ~10.
+   - *Behavior drift* — `engines/orchestrator/test_intent_analyzer.py`: `assert <QueryIntent multi_engine> == <citation>` (classifier routing changed; also nudged by placeholder `GOOGLE_API_KEY` → LLM path falls back to `multi_engine`). ~23 (largest single cluster).
+
+2. **Unmocked external-service calls** (env-dependent) — tests hit real network: `ConnectError(gaierror(11001, 'getaddrinfo failed'))` resolving `placeholder.supabase.co` / LLM endpoints. Seen in `library_service`, `api/routes/test_entities`, `engines/timeline/test_date_extractor`, `services/test_global_search_service`, `engines/citation/test_extractor`, `workers/test_document_tasks`. They call the **real** client because nothing patches it → need a conftest-level Supabase + httpx mock.
+
+3. **Rate-limiter (slowapi) unit-call incompatibility** — `api/routes/test_summary.py` (~18, 2nd-largest): `Exception: parameter 'request' must be an instance of starlette.requests.Request`. Endpoints decorated with `@limiter.limit(...)` can't be called as plain functions without a real `Request`; the tests predate the decorator.
+
+4. **Auth dependency not overridden** — `api/test_users.py` (~9): `assert 401 == 200` — the test client never overrides/mocks `get_current_user`, so auth returns 401.
+
+5. **Invalid test fixtures** — `workers/test_document_tasks.py`, `services/ocr/*`: `pypdf.errors.PdfStreamError: Stream has ended unexpectedly` (fake PDF byte fixtures aren't parseable PDFs).
+
+6. **Test-isolation / state pollution** (NOT a code or contract bug) — `services/test_chunking_logging.py` (16): **passes 18/18 in isolation**, fails only inside the full suite → an earlier test mutates shared global state (structlog config / a singleton). Flaky-ordering, fixable independently. (This is exactly what made the first branch-vs-`master` comparison falsely report "16 regressions" before re-running apples-to-apples.)
+
+**Top failing files** (local full-suite run, 212 of the 236; CI's +24 are coverage-context / suite-order deltas):
+
+| count | file | dominant category |
+|------:|------|-------------------|
+| 23 | `engines/orchestrator/test_intent_analyzer.py` | behavior drift (1) |
+| 18 | `api/routes/test_summary.py` | slowapi rate-limit (3) |
+| 16 | `services/test_chunking_logging.py` | test-isolation (6) |
+| 11 | `workers/test_engine_tasks_anomaly_trigger.py` | unmocked / drift (2/1) |
+| 11 | `engines/timeline/test_date_extractor.py` | unmocked LLM (2) |
+| 10 | `services/ocr/test_gemini_validator.py` | renamed-internal (1) |
+| 10 | `services/memory/test_query_cache.py` | return-shape (1) |
+| 9 | `api/test_users.py` | auth not mocked (4) |
+| 8 | `workers/test_document_tasks.py` | invalid PDF + unmocked (5/2) |
+| 6 | `services/test_global_search_service.py` · `engines/citation/test_storage.py` · `engines/timeline/test_event_classifier.py` · `engines/rag/test_query_profile.py` · `workers/test_chunked_document_tasks.py` | mixed (1/2/5) |
+| 5 | `services/table_extraction/test_extractor.py` · `engines/orchestrator/test_adapters.py` | drift/unmocked |
+| ≤4 | ~25 more files (orchestrator_safety, aggregator, maintenance_tasks, summary_service, subtle_detector, reranker, hybrid_search, search, documents, …) | mixed |
+
+**Reproduce**: `docker run -d --rm -p 6379:6379 redis:latest`, then from `backend/` with the CI placeholder env (`SUPABASE_URL=https://placeholder.supabase.co`, placeholder keys, `REDIS_URL=redis://localhost:6379/0`): `uv run pytest --ignore=tests/integration -q -rfE`. Two files also need pre-existing fixes already landed on the branch (`hypothesis` dep; the `STALE_CHUNK` test) to even collect.
+
+**Remediation (separate work item — do NOT fold into INF-013):**
+1. Run `forensic-hunt` on cluster "pre-existing pytest failures" to confirm the shared SHAPEs above and surface any missed.
+2. Fix by category, highest-leverage first:
+   - **Conftest autouse fixture** mocking the Supabase client + outbound httpx for unit tests → clears category 2 broadly in one move.
+   - FastAPI `app.dependency_overrides` for auth (4) and a Request-bearing/override harness for rate-limited endpoints (3).
+   - Update drifted assertions/signatures/constants/patched-names to the **current** contract (1) — mechanical but per-test; each must reflect intended current behavior, not just be forced green.
+   - Real minimal PDF fixture (5).
+   - Find and fix the global-state mutator behind the `test_chunking_logging` ordering pollution (6).
+3. Only after `uv run pytest` is green in the CI env, promote the `test` job to a **required** status check (alongside `lint`, already required) — completing INF-013 step (5).
+
+**Guard value**: each of these 236 is a test that *would* have caught a real regression but silently didn't, because CI never ran. Fixing them converts the `test` job from decoration into a real layer-2 guard — the entire point of INF-013/INF-014.
 
 ---
 

@@ -99,7 +99,9 @@ class VerificationConfigurationError(CitationVerificationError):
     """Raised when Gemini is not properly configured."""
 
     def __init__(self, message: str):
-        super().__init__(message, code="VERIFICATION_NOT_CONFIGURED", is_retryable=False)
+        super().__init__(
+            message, code="VERIFICATION_NOT_CONFIGURED", is_retryable=False
+        )
 
 
 class SectionNotFoundError(CitationVerificationError):
@@ -221,7 +223,9 @@ class CitationVerifier:
             if section_match is None:
                 # Section not found
                 processing_time = int((time.time() - start_time) * 1000)
-                available_sections = self.act_indexer.get_available_sections(act_document_id)
+                available_sections = self.act_indexer.get_available_sections(
+                    act_document_id
+                )
 
                 explanation = await self._generate_not_found_explanation(
                     act_name=act_name,
@@ -272,7 +276,9 @@ class CitationVerifier:
                     status = VerificationStatus.MISMATCH
                     diff_details = DiffDetail(
                         citation_text=citation.quoted_text,
-                        act_text=section_match.section_text[:500],  # Truncate for storage
+                        act_text=section_match.section_text[
+                            :500
+                        ],  # Truncate for storage
                         match_type=comparison.match_type,
                         differences=[comparison.explanation],
                     )
@@ -289,7 +295,9 @@ class CitationVerifier:
                 section_found=True,
                 similarity_score=similarity_score,
                 match_type=diff_details.match_type if diff_details else "exact",
-                differences=[diff_details.differences[0]] if diff_details and diff_details.differences else [],
+                differences=[diff_details.differences[0]]
+                if diff_details and diff_details.differences
+                else [],
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -443,7 +451,7 @@ class CitationVerifier:
         """
         # Prepare chunks text
         chunks_text = "\n\n---\n\n".join(
-            f"CHUNK {i+1} (ID: {c.id}, Page: {c.page_number or 'N/A'}):\n{c.content[:2000]}"
+            f"CHUNK {i + 1} (ID: {c.id}, Page: {c.page_number or 'N/A'}):\n{c.content[:2000]}"
             for i, c in enumerate(chunks)
         )
 
@@ -455,7 +463,9 @@ class CitationVerifier:
 
         try:
             response = await self._call_gemini_with_retry(
-                prompt, document_id=document_id, matter_id=matter_id,
+                prompt,
+                document_id=document_id,
+                matter_id=matter_id,
             )
             result = self._parse_json_response(response)
 
@@ -463,13 +473,13 @@ class CitationVerifier:
                 chunk_id = result.get("chunk_id")
                 if chunk_id:
                     # Find the matching chunk
-                    matching_chunk = next(
-                        (c for c in chunks if c.id == chunk_id), None
-                    )
+                    matching_chunk = next((c for c in chunks if c.id == chunk_id), None)
                     if matching_chunk:
                         return SectionMatch(
                             section_number=result.get("section_number", section),
-                            section_text=result.get("section_text", matching_chunk.content[:1000]),
+                            section_text=result.get(
+                                "section_text", matching_chunk.content[:1000]
+                            ),
                             chunk_id=chunk_id,
                             page_number=matching_chunk.page_number,  # Allow None - don't default to 1
                             bbox_ids=[],
@@ -523,7 +533,9 @@ class CitationVerifier:
 
         try:
             response = await self._call_gemini_with_retry(
-                prompt, document_id=document_id, matter_id=matter_id,
+                prompt,
+                document_id=document_id,
+                matter_id=matter_id,
             )
             result = self._parse_json_response(response)
 
@@ -589,7 +601,9 @@ class CitationVerifier:
                     f"Section {section} of {act_name} verified. "
                     f"The quoted text is a paraphrase of the Act text (similarity: {similarity_score:.0f}%)."
                 )
-            return f"Section {section} of {act_name} verified. Citation matches Act text."
+            return (
+                f"Section {section} of {act_name} verified. Citation matches Act text."
+            )
         elif status == VerificationStatus.MISMATCH:
             diff_str = f" Differences: {', '.join(differences)}" if differences else ""
             return (
@@ -617,7 +631,9 @@ class CitationVerifier:
         Returns:
             Human-readable explanation.
         """
-        sections_str = ", ".join(available_sections) if available_sections else "unknown"
+        sections_str = (
+            ", ".join(available_sections) if available_sections else "unknown"
+        )
         return (
             f"Section {section} not found in {act_name}. "
             f"Available sections include: {sections_str}. "
@@ -625,7 +641,10 @@ class CitationVerifier:
         )
 
     async def _call_gemini_with_retry(
-        self, prompt: str, document_id: str | None = None, matter_id: str | None = None,
+        self,
+        prompt: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> str:
         """Call Gemini API with retry logic and rate limiting.
 
@@ -752,7 +771,7 @@ class CitationVerifier:
         # Remove extra whitespace
         normalized = re.sub(r"\s+", " ", normalized)
         # Remove punctuation variations
-        normalized = re.sub(r"[''""\"']", "", normalized)
+        normalized = re.sub(r"[''" "\"']", "", normalized)
         return normalized.strip()
 
     def verify_citation_sync(
@@ -776,9 +795,7 @@ class CitationVerifier:
         Returns:
             VerificationResult with status and explanation.
         """
-        return asyncio.run(
-            self.verify_citation(citation, act_document_id, act_name)
-        )
+        return asyncio.run(self.verify_citation(citation, act_document_id, act_name))
 
 
 # =============================================================================

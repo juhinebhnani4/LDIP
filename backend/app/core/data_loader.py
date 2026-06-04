@@ -198,8 +198,36 @@ def get_validation_rules() -> dict[str, Any]:
     # Return defaults if file not found
     if not data:
         return {
-            "valid_suffixes": ["act", "code", "rules", "regulations", "ordinance", "order", "bill", "amendment", "notification"],
-            "valid_keywords": ["act", "code", "rules", "regulations", "ordinance", "amendment", "indian", "central", "state", "prevention", "protection", "enforcement", "regulation", "development", "welfare", "management", "control"],
+            "valid_suffixes": [
+                "act",
+                "code",
+                "rules",
+                "regulations",
+                "ordinance",
+                "order",
+                "bill",
+                "amendment",
+                "notification",
+            ],
+            "valid_keywords": [
+                "act",
+                "code",
+                "rules",
+                "regulations",
+                "ordinance",
+                "amendment",
+                "indian",
+                "central",
+                "state",
+                "prevention",
+                "protection",
+                "enforcement",
+                "regulation",
+                "development",
+                "welfare",
+                "management",
+                "control",
+            ],
         }
 
     return data
@@ -240,9 +268,20 @@ def get_generic_terms() -> set[str]:
     if not terms:
         # Fallback defaults
         return {
-            "act", "the act", "code", "the code", "ordinance", "the ordinance",
-            "rules", "the rules", "regulations", "the regulations",
-            "bill", "the bill", "amendment", "the amendment",
+            "act",
+            "the act",
+            "code",
+            "the code",
+            "ordinance",
+            "the ordinance",
+            "rules",
+            "the rules",
+            "regulations",
+            "the regulations",
+            "bill",
+            "the bill",
+            "amendment",
+            "the amendment",
         }
 
     return set(t.lower() for t in terms)

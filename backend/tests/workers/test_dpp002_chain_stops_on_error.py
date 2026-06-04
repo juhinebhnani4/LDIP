@@ -12,14 +12,11 @@ Run:
     cd backend && python -m pytest tests/workers/test_dpp002_chain_stops_on_error.py -v
 """
 
-from unittest.mock import MagicMock, patch, call
 import pytest
-
 from celery import chain as celery_chain
 
 from app.workers.celery import celery_app
 from app.workers.tasks.pipeline_errors import PipelineTaskError
-
 
 # ---------------------------------------------------------------------------
 # Helpers: lightweight stub tasks that record execution order
@@ -32,7 +29,12 @@ execution_log: list[str] = []
 def step_a(self, document_id: str = "doc-1"):
     """Simulates validate_ocr — first task in chain."""
     execution_log.append("step_a")
-    return {"status": "a_done", "document_id": document_id, "job_id": "job-1", "matter_id": "matter-1"}
+    return {
+        "status": "a_done",
+        "document_id": document_id,
+        "job_id": "job-1",
+        "matter_id": "matter-1",
+    }
 
 
 @celery_app.task(name="test.step_b_fails", bind=True)
@@ -80,6 +82,7 @@ def error_callback(self, failed_task_id: str, **kwargs):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def celery_eager_mode():
     """Run all Celery tasks synchronously in-process."""
@@ -108,6 +111,7 @@ def clear_log():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestDPP002ChainStopsOnError:
     """Validate that PipelineTaskError stops Celery chains (DPP-002)."""
@@ -143,8 +147,12 @@ class TestDPP002ChainStopsOnError:
         # step_a ran, step_b ran (and raised), step_c and step_d should NOT have run
         assert "step_a" in execution_log
         assert "step_b_fails" in execution_log
-        assert "step_c" not in execution_log, "Downstream task step_c ran after PipelineTaskError!"
-        assert "step_d" not in execution_log, "Downstream task step_d ran after PipelineTaskError!"
+        assert "step_c" not in execution_log, (
+            "Downstream task step_c ran after PipelineTaskError!"
+        )
+        assert "step_d" not in execution_log, (
+            "Downstream task step_d ran after PipelineTaskError!"
+        )
 
     def test_chain_stops_at_first_failure(self):
         """Error at position 2 in a 4-task chain means only tasks 1-2 execute."""

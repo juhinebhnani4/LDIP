@@ -16,9 +16,7 @@ class TestLinkEntitiesForMatterAnomalyTrigger:
     def mock_services(self) -> dict:
         """Create mock services for testing."""
         job_tracker = MagicMock()
-        job_tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="job-123")
-        )
+        job_tracker.create_job = AsyncMock(return_value=MagicMock(id="job-123"))
         job_tracker.update_job_status = AsyncMock()
 
         timeline_service = MagicMock()
@@ -71,9 +69,9 @@ class TestLinkEntitiesForMatterAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-1"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         # Create mock entities
         mock_entity = MagicMock()
@@ -134,9 +132,9 @@ class TestLinkEntitiesForMatterAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-1"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         # Create mock entities but no matches
         mock_entity = MagicMock()
@@ -186,7 +184,9 @@ class TestLinkEntitiesForMatterAnomalyTrigger:
         mock_get_linker.return_value = mock_services["entity_linker"]
         mock_get_cache.return_value = mock_services["cache_service"]
 
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = []
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = []
 
         # Execute task
         result = link_entities_for_matter.run("matter-123")
@@ -230,9 +230,9 @@ class TestLinkEntitiesForMatterAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-1"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         mock_entity = MagicMock()
         mock_services["mig_service"].get_entities_by_matter = AsyncMock(
@@ -302,9 +302,9 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-123"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         # Create mock entities
         mock_entity = MagicMock()
@@ -367,9 +367,9 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-123"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         mock_entity = MagicMock()
         mock_services["mig_service"].get_entities_by_matter = AsyncMock(
@@ -428,9 +428,9 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-123"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         # No MIG entities
         mock_services["mig_service"].get_entities_by_matter = AsyncMock(
@@ -481,7 +481,9 @@ class TestLinkEntitiesAfterExtractionAnomalyTrigger:
         mock_get_cache.return_value = mock_services["cache_service"]
 
         # No events for this document
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = []
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = []
 
         # Execute task
         result = link_entities_after_extraction.run(
@@ -505,9 +507,7 @@ class TestDetectTimelineAnomaliesJobCreation:
     def mock_services(self) -> dict:
         """Create mock services for testing."""
         job_tracker = MagicMock()
-        job_tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="auto-job-123")
-        )
+        job_tracker.create_job = AsyncMock(return_value=MagicMock(id="auto-job-123"))
         job_tracker.update_job_status = AsyncMock()
 
         anomaly_service = MagicMock()
@@ -623,9 +623,7 @@ class TestAnomalyTriggerGracefulFailure:
     def mock_services(self) -> dict:
         """Create mock services for testing."""
         job_tracker = MagicMock()
-        job_tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="job-123")
-        )
+        job_tracker.create_job = AsyncMock(return_value=MagicMock(id="job-123"))
         job_tracker.update_job_status = AsyncMock()
 
         timeline_service = MagicMock()
@@ -677,9 +675,9 @@ class TestAnomalyTriggerGracefulFailure:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-1"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         mock_entity = MagicMock()
         mock_services["mig_service"].get_entities_by_matter = AsyncMock(
@@ -730,9 +728,9 @@ class TestAnomalyTriggerGracefulFailure:
         mock_event.id = "event-1"
         mock_event.description = "Test event"
         mock_event.document_id = "doc-123"
-        mock_services["timeline_service"].get_events_for_entity_linking_sync.return_value = [
-            mock_event
-        ]
+        mock_services[
+            "timeline_service"
+        ].get_events_for_entity_linking_sync.return_value = [mock_event]
 
         mock_entity = MagicMock()
         mock_services["mig_service"].get_entities_by_matter = AsyncMock(
@@ -766,9 +764,7 @@ class TestManualRetriggerAfterAutoTriggerFailure:
     def mock_services(self) -> dict:
         """Create mock services for testing."""
         job_tracker = MagicMock()
-        job_tracker.create_job = AsyncMock(
-            return_value=MagicMock(id="manual-job-789")
-        )
+        job_tracker.create_job = AsyncMock(return_value=MagicMock(id="manual-job-789"))
         job_tracker.update_job_status = AsyncMock()
 
         anomaly_service = MagicMock()

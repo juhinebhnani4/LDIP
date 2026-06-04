@@ -49,7 +49,10 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "prevention of money laundering act": ("Prevention of Money Laundering Act", 2002),
     "pota": ("Prevention of Terrorism Act", 2002),
     "uapa": ("Unlawful Activities (Prevention) Act", 1967),
-    "unlawful activities prevention act": ("Unlawful Activities (Prevention) Act", 1967),
+    "unlawful activities prevention act": (
+        "Unlawful Activities (Prevention) Act",
+        1967,
+    ),
     # -------------------------------------------------------------------------
     # Civil and Commercial Law
     # -------------------------------------------------------------------------
@@ -80,15 +83,30 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     # -------------------------------------------------------------------------
     # Banking and Finance
     # -------------------------------------------------------------------------
-    "sarfaesi": ("Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act", 2002),
-    "sarfaesi act": ("Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act", 2002),
-    "securitisation act": ("Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act", 2002),
+    "sarfaesi": (
+        "Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act",
+        2002,
+    ),
+    "sarfaesi act": (
+        "Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act",
+        2002,
+    ),
+    "securitisation act": (
+        "Securitisation and Reconstruction of Financial Assets and Enforcement of Security Interest Act",
+        2002,
+    ),
     "rbi act": ("Reserve Bank of India Act", 1934),
     "reserve bank of india act": ("Reserve Bank of India Act", 1934),
     "banking regulation act": ("Banking Regulation Act", 1949),
     "bra": ("Banking Regulation Act", 1949),
-    "recovery of debts act": ("Recovery of Debts Due to Banks and Financial Institutions Act", 1993),
-    "rddbfi act": ("Recovery of Debts Due to Banks and Financial Institutions Act", 1993),
+    "recovery of debts act": (
+        "Recovery of Debts Due to Banks and Financial Institutions Act",
+        1993,
+    ),
+    "rddbfi act": (
+        "Recovery of Debts Due to Banks and Financial Institutions Act",
+        1993,
+    ),
     "drt act": ("Recovery of Debts Due to Banks and Financial Institutions Act", 1993),
     "insolvency and bankruptcy code": ("Insolvency and Bankruptcy Code", 2016),
     "ibc": ("Insolvency and Bankruptcy Code", 2016),
@@ -105,8 +123,14 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "llp act": ("Limited Liability Partnership Act", 2008),
     "limited liability partnership act": ("Limited Liability Partnership Act", 2008),
     "sebi act": ("Securities and Exchange Board of India Act", 1992),
-    "securities and exchange board of india act": ("Securities and Exchange Board of India Act", 1992),
-    "securities contracts regulation act": ("Securities Contracts (Regulation) Act", 1956),
+    "securities and exchange board of india act": (
+        "Securities and Exchange Board of India Act",
+        1992,
+    ),
+    "securities contracts regulation act": (
+        "Securities Contracts (Regulation) Act",
+        1956,
+    ),
     "scra": ("Securities Contracts (Regulation) Act", 1956),
     "competition act": ("Competition Act", 2002),
     # -------------------------------------------------------------------------
@@ -126,9 +150,15 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "fema": ("Foreign Exchange Management Act", 1999),
     "foreign exchange management act": ("Foreign Exchange Management Act", 1999),
     "fera": ("Foreign Exchange Regulation Act", 1973),
-    "black money act": ("Black Money (Undisclosed Foreign Income and Assets) and Imposition of Tax Act", 2015),
+    "black money act": (
+        "Black Money (Undisclosed Foreign Income and Assets) and Imposition of Tax Act",
+        2015,
+    ),
     "benami act": ("Prohibition of Benami Property Transactions Act", 1988),
-    "prohibition of benami property transactions act": ("Prohibition of Benami Property Transactions Act", 1988),
+    "prohibition of benami property transactions act": (
+        "Prohibition of Benami Property Transactions Act",
+        1988,
+    ),
     # -------------------------------------------------------------------------
     # Information Technology and Media
     # -------------------------------------------------------------------------
@@ -139,14 +169,20 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "trade marks act": ("Trade Marks Act", 1999),
     "designs act": ("Designs Act", 2000),
     "cinematograph act": ("Cinematograph Act", 1952),
-    "cable television networks act": ("Cable Television Networks (Regulation) Act", 1995),
+    "cable television networks act": (
+        "Cable Television Networks (Regulation) Act",
+        1995,
+    ),
     # -------------------------------------------------------------------------
     # Labour and Employment
     # -------------------------------------------------------------------------
     "industrial disputes act": ("Industrial Disputes Act", 1947),
     "ida": ("Industrial Disputes Act", 1947),
     "factories act": ("Factories Act", 1948),
-    "employees provident fund act": ("Employees' Provident Funds and Miscellaneous Provisions Act", 1952),
+    "employees provident fund act": (
+        "Employees' Provident Funds and Miscellaneous Provisions Act",
+        1952,
+    ),
     "epf act": ("Employees' Provident Funds and Miscellaneous Provisions Act", 1952),
     "esic act": ("Employees' State Insurance Act", 1948),
     "payment of wages act": ("Payment of Wages Act", 1936),
@@ -154,18 +190,33 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "payment of bonus act": ("Payment of Bonus Act", 1965),
     "payment of gratuity act": ("Payment of Gratuity Act", 1972),
     "contract labour act": ("Contract Labour (Regulation and Abolition) Act", 1970),
-    "sexual harassment act": ("Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act", 2013),
-    "posh act": ("Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act", 2013),
+    "sexual harassment act": (
+        "Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act",
+        2013,
+    ),
+    "posh act": (
+        "Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act",
+        2013,
+    ),
     # -------------------------------------------------------------------------
     # Property and Land Law
     # -------------------------------------------------------------------------
     "rera": ("Real Estate (Regulation and Development) Act", 2016),
-    "real estate regulation act": ("Real Estate (Regulation and Development) Act", 2016),
+    "real estate regulation act": (
+        "Real Estate (Regulation and Development) Act",
+        2016,
+    ),
     "registration act": ("Registration Act", 1908),
     "stamp act": ("Indian Stamp Act", 1899),
     "indian stamp act": ("Indian Stamp Act", 1899),
-    "land acquisition act": ("Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act", 2013),
-    "rfctlarr act": ("Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act", 2013),
+    "land acquisition act": (
+        "Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act",
+        2013,
+    ),
+    "rfctlarr act": (
+        "Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act",
+        2013,
+    ),
     "easements act": ("Indian Easements Act", 1882),
     "indian easements act": ("Indian Easements Act", 1882),
     "partition act": ("Partition Act", 1893),
@@ -186,7 +237,10 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "domestic violence act": ("Protection of Women from Domestic Violence Act", 2005),
     "pwdv act": ("Protection of Women from Domestic Violence Act", 2005),
     "dv act": ("Protection of Women from Domestic Violence Act", 2005),
-    "maintenance and welfare of parents act": ("Maintenance and Welfare of Parents and Senior Citizens Act", 2007),
+    "maintenance and welfare of parents act": (
+        "Maintenance and Welfare of Parents and Senior Citizens Act",
+        2007,
+    ),
     "indian succession act": ("Indian Succession Act", 1925),
     "guardians and wards act": ("Guardians and Wards Act", 1890),
     # -------------------------------------------------------------------------
@@ -198,15 +252,27 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     "administrative tribunals act": ("Administrative Tribunals Act", 1985),
     "rti act": ("Right to Information Act", 2005),
     "right to information act": ("Right to Information Act", 2005),
-    "right to education act": ("Right of Children to Free and Compulsory Education Act", 2009),
+    "right to education act": (
+        "Right of Children to Free and Compulsory Education Act",
+        2009,
+    ),
     "rte act": ("Right of Children to Free and Compulsory Education Act", 2009),
     "consumer protection act": ("Consumer Protection Act", 2019),
     "cpa": ("Consumer Protection Act", 2019),
     "consumer protection act 2019": ("Consumer Protection Act", 2019),
     "consumer protection act 1986": ("Consumer Protection Act", 1986),
-    "sc/st act": ("Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act", 1989),
-    "poa act": ("Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act", 1989),
-    "atrocities act": ("Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act", 1989),
+    "sc/st act": (
+        "Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act",
+        1989,
+    ),
+    "poa act": (
+        "Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act",
+        1989,
+    ),
+    "atrocities act": (
+        "Scheduled Castes and Scheduled Tribes (Prevention of Atrocities) Act",
+        1989,
+    ),
     # -------------------------------------------------------------------------
     # Environmental Law
     # -------------------------------------------------------------------------
@@ -249,18 +315,51 @@ ACT_ABBREVIATIONS: Final[dict[str, tuple[str, int | None]]] = {
     # Securities and Special Courts
     # -------------------------------------------------------------------------
     # TORTS = Trial of Offences Relating to Transactions in Securities
-    "torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "torts": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "the torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "special court act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "special courts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "special court torts act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "trial of offences relating to transactions in securities act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
-    "trial of offences relating to transaction in securities act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),  # singular variant
-    "special court (trial of offences relating to transactions in securities) act": ("Special Court (Trial of Offences Relating to Transactions in Securities) Act", 1992),
+    "torts act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "torts": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "the torts act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "special court act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "special courts act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "special court torts act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "trial of offences relating to transactions in securities act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
+    "trial of offences relating to transaction in securities act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),  # singular variant
+    "special court (trial of offences relating to transactions in securities) act": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Act",
+        1992,
+    ),
     # Also handle the ordinance version
-    "special court ordinance": ("Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance", 1992),
-    "torts ordinance": ("Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance", 1992),
+    "special court ordinance": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance",
+        1992,
+    ),
+    "torts ordinance": (
+        "Special Court (Trial of Offences Relating to Transactions in Securities) Ordinance",
+        1992,
+    ),
     # -------------------------------------------------------------------------
     # Insolvency (additional variations)
     # -------------------------------------------------------------------------

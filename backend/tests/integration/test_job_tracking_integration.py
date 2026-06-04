@@ -111,7 +111,9 @@ class TestJobLifecycleIntegration:
                             # Verify matter_id if provided
                             if matter_id is None or job.get("matter_id") == matter_id:
                                 jobs_storage[job_id].update(data)
-                                jobs_storage[job_id]["updated_at"] = datetime.now(UTC).isoformat()
+                                jobs_storage[job_id]["updated_at"] = datetime.now(
+                                    UTC
+                                ).isoformat()
                                 return MagicMock(data=[jobs_storage[job_id]])
                         return MagicMock(data=[])
 
@@ -124,6 +126,7 @@ class TestJobLifecycleIntegration:
                 table.update = mock_update
 
             elif name == "job_stage_history":
+
                 def mock_insert(data):
                     result = MagicMock()
                     stage_id = str(uuid4())
@@ -147,14 +150,24 @@ class TestJobLifecycleIntegration:
 
                     def mock_order(*args, **kwargs):
                         result = MagicMock()
-                        matching = [s for s in stages_storage if s.get("job_id") == query._job_id]
+                        matching = [
+                            s
+                            for s in stages_storage
+                            if s.get("job_id") == query._job_id
+                        ]
                         result.execute.return_value = MagicMock(data=matching)
                         return result
 
                     def mock_limit(n):
                         result = MagicMock()
-                        matching = [s for s in stages_storage if s.get("job_id") == query._job_id]
-                        result.execute.return_value = MagicMock(data=matching[-1:] if matching else [])
+                        matching = [
+                            s
+                            for s in stages_storage
+                            if s.get("job_id") == query._job_id
+                        ]
+                        result.execute.return_value = MagicMock(
+                            data=matching[-1:] if matching else []
+                        )
                         return result
 
                     query.eq = mock_eq
@@ -235,7 +248,14 @@ class TestJobLifecycleIntegration:
         await job_tracker.record_stage_complete(job_id, "ocr", {"page_count": 10})
 
         # Step 4: Process remaining stages
-        stages = ["validation", "confidence", "chunking", "embedding", "entity_extraction", "alias_resolution"]
+        stages = [
+            "validation",
+            "confidence",
+            "chunking",
+            "embedding",
+            "entity_extraction",
+            "alias_resolution",
+        ]
 
         for i, stage in enumerate(stages):
             await job_tracker.record_stage_start(job_id, stage)
@@ -377,12 +397,14 @@ class TestPartialProgressIntegration:
                         "started_at": "2026-01-12T10:00:00",
                     }
                 }
-            }
+            },
         )
 
     def test_resume_from_partial_progress(self, mock_job_with_metadata):
         """Test resuming processing from saved partial progress."""
-        with patch("app.services.job_tracking.partial_progress.get_job_tracking_service") as mock_get:
+        with patch(
+            "app.services.job_tracking.partial_progress.get_job_tracking_service"
+        ) as mock_get:
             mock_tracker = MagicMock()
             mock_tracker.get_job = AsyncMock(return_value=mock_job_with_metadata)
             mock_get.return_value = mock_tracker
@@ -468,11 +490,20 @@ class TestTimeEstimatorIntegration:
         """Test that progress percentage increases through stages."""
         estimator = TimeEstimator()
 
-        stages = ["ocr", "validation", "chunking", "embedding", "entity_extraction", "alias_resolution"]
+        stages = [
+            "ocr",
+            "validation",
+            "chunking",
+            "embedding",
+            "entity_extraction",
+            "alias_resolution",
+        ]
         progress_values = []
 
         for stage in stages:
-            progress = estimator.estimate_stage_progress(stage, 0.5)  # 50% through each stage
+            progress = estimator.estimate_stage_progress(
+                stage, 0.5
+            )  # 50% through each stage
             progress_values.append(progress)
 
         # Progress should generally increase (allowing for mid-stage dips)
@@ -547,7 +578,9 @@ class TestMatterIsolationIntegration:
                 def mock_execute():
                     result = MagicMock()
                     if query._matter_id:
-                        result.data = [j for j in jobs if j["matter_id"] == query._matter_id]
+                        result.data = [
+                            j for j in jobs if j["matter_id"] == query._matter_id
+                        ]
                     else:
                         result.data = jobs
                     return result
@@ -599,8 +632,7 @@ class TestMatterIsolationIntegration:
             # Try to get a job with wrong matter_id
             # The mock will return empty when matter_id filter doesn't match
             job = await tracker.get_job(
-                job_id="some-job-id",
-                matter_id="wrong-matter-id"
+                job_id="some-job-id", matter_id="wrong-matter-id"
             )
 
             # Should return None (no match)
@@ -631,7 +663,11 @@ class TestQueueStatsIntegration:
 
         # Total should be sum of all
         total = (
-            stats.queued + stats.processing + stats.completed +
-            stats.failed + stats.cancelled + stats.skipped
+            stats.queued
+            + stats.processing
+            + stats.completed
+            + stats.failed
+            + stats.cancelled
+            + stats.skipped
         )
         assert total == 113

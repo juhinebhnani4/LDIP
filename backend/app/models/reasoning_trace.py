@@ -49,10 +49,14 @@ class ReasoningTrace(BaseModel):
         description="Finding UUID (nullable if not linked to specific finding)",
     )
 
-    engine_type: EngineType = Field(..., alias="engineType", description="Source engine")
+    engine_type: EngineType = Field(
+        ..., alias="engineType", description="Source engine"
+    )
     model_used: str = Field(..., alias="modelUsed", description="LLM model identifier")
 
-    reasoning_text: str = Field(..., alias="reasoningText", description="Chain-of-thought explanation")
+    reasoning_text: str = Field(
+        ..., alias="reasoningText", description="Chain-of-thought explanation"
+    )
     reasoning_structured: dict[str, Any] | None = Field(
         None,
         alias="reasoningStructured",
@@ -90,7 +94,9 @@ class ReasoningTrace(BaseModel):
         description="Estimated cost in USD",
     )
 
-    created_at: datetime = Field(..., alias="createdAt", description="When trace was created")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="When trace was created"
+    )
     archived_at: datetime | None = Field(
         None,
         alias="archivedAt",
@@ -117,7 +123,9 @@ class ReasoningTraceCreate(BaseModel):
         alias="findingId",
         description="Optional finding UUID to link",
     )
-    engine_type: EngineType = Field(..., alias="engineType", description="Source engine")
+    engine_type: EngineType = Field(
+        ..., alias="engineType", description="Source engine"
+    )
     model_used: str = Field(..., alias="modelUsed", description="LLM model identifier")
     reasoning_text: str = Field(
         ...,
@@ -170,7 +178,9 @@ class ReasoningTraceSummary(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., description="Trace UUID")
-    engine_type: EngineType = Field(..., alias="engineType", description="Source engine")
+    engine_type: EngineType = Field(
+        ..., alias="engineType", description="Source engine"
+    )
     model_used: str = Field(..., alias="modelUsed", description="LLM model identifier")
     reasoning_preview: str = Field(
         ...,
@@ -184,8 +194,12 @@ class ReasoningTraceSummary(BaseModel):
         alias="confidenceScore",
         description="Confidence score (0-1 scale)",
     )
-    created_at: datetime = Field(..., alias="createdAt", description="When trace was created")
-    is_archived: bool = Field(..., alias="isArchived", description="Whether trace is in cold storage")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="When trace was created"
+    )
+    is_archived: bool = Field(
+        ..., alias="isArchived", description="Whether trace is in cold storage"
+    )
 
 
 class ReasoningTraceStats(BaseModel):
@@ -196,7 +210,9 @@ class ReasoningTraceStats(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    total_traces: int = Field(0, ge=0, alias="totalTraces", description="Total reasoning traces")
+    total_traces: int = Field(
+        0, ge=0, alias="totalTraces", description="Total reasoning traces"
+    )
     traces_by_engine: dict[str, int] = Field(
         default_factory=dict,
         alias="tracesByEngine",

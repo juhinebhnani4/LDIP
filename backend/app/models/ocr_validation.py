@@ -86,13 +86,13 @@ class ValidationResult(BaseModel):
     original: str = Field(..., description="Original OCR text")
     corrected: str = Field(..., description="Corrected text (may be same as original)")
     old_confidence: float = Field(..., ge=0, le=1, description="Original confidence")
-    new_confidence: float = Field(..., ge=0, le=1, description="New confidence after validation")
+    new_confidence: float = Field(
+        ..., ge=0, le=1, description="New confidence after validation"
+    )
     correction_type: CorrectionType | None = Field(
         None, description="Type of correction applied (None if no change)"
     )
-    reasoning: str | None = Field(
-        None, description="Explanation for the correction"
-    )
+    reasoning: str | None = Field(None, description="Explanation for the correction")
     was_corrected: bool = Field(
         default=False, description="Whether the text was actually changed"
     )
@@ -109,11 +109,15 @@ class ValidationLogEntry(BaseModel):
     bbox_id: str | None = Field(None, description="UUID of the bounding box")
     original_text: str = Field(..., description="Original OCR text")
     corrected_text: str = Field(..., description="Corrected text")
-    old_confidence: float | None = Field(None, ge=0, le=1, description="Original confidence")
+    old_confidence: float | None = Field(
+        None, ge=0, le=1, description="Original confidence"
+    )
     new_confidence: float | None = Field(None, ge=0, le=1, description="New confidence")
     validation_type: CorrectionType = Field(..., description="Type of validation")
     reasoning: str | None = Field(None, description="Explanation for correction")
-    created_at: datetime | None = Field(None, description="When the correction was made")
+    created_at: datetime | None = Field(
+        None, description="When the correction was made"
+    )
 
 
 class HumanReviewItem(BaseModel):
@@ -166,7 +170,9 @@ class DocumentValidationSummary(BaseModel):
     total_words_validated: int = Field(0, ge=0, description="Total words processed")
     pattern_corrections: int = Field(0, ge=0, description="Pattern-based corrections")
     gemini_corrections: int = Field(0, ge=0, description="Gemini corrections")
-    human_review_pending: int = Field(0, ge=0, description="Items awaiting human review")
+    human_review_pending: int = Field(
+        0, ge=0, description="Items awaiting human review"
+    )
     human_review_completed: int = Field(0, ge=0, description="Human reviews completed")
     average_confidence_before: float | None = Field(
         None, ge=0, le=1, description="Average confidence before validation"

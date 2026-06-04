@@ -240,9 +240,7 @@ def enrich_layout_with_text(
 
     orphan_blocks_created = 0
     if orphan_bboxes:
-        orphan_blocks_created = _create_orphan_blocks(
-            layout, orphan_bboxes, full_text
-        )
+        orphan_blocks_created = _create_orphan_blocks(layout, orphan_bboxes, full_text)
 
     logger.info(
         "spatial_text_mapping_complete",
@@ -310,9 +308,7 @@ def _create_orphan_blocks(
             by_page.setdefault(page, []).append(bbox)
 
     created = 0
-    max_reading_order = max(
-        (b.reading_order for b in layout.blocks), default=-1
-    )
+    max_reading_order = max((b.reading_order for b in layout.blocks), default=-1)
 
     for page, page_orphans in sorted(by_page.items()):
         # Sort by reading order
@@ -388,9 +384,7 @@ def _create_orphan_blocks(
     return created
 
 
-def fetch_all_bboxes_for_document(
-    bbox_service, document_id: str
-) -> list[dict]:
+def fetch_all_bboxes_for_document(bbox_service, document_id: str) -> list[dict]:
     """Fetch all bounding boxes for a document using paginated queries.
 
     Reuses the same pagination pattern as bbox_linker.link_chunks_to_bboxes.

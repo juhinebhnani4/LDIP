@@ -89,17 +89,19 @@ class TestSaveCitations:
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_select
         mock_select.single.return_value = mock_select
-        mock_select.execute.return_value = MagicMock(data={
-            "id": "res-id",
-            "matter_id": "matter-123",
-            "act_name_normalized": "test",
-            "act_name_display": "Test",
-            "resolution_status": "missing",
-            "user_action": "pending",
-            "citation_count": 1,
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-        })
+        mock_select.execute.return_value = MagicMock(
+            data={
+                "id": "res-id",
+                "matter_id": "matter-123",
+                "act_name_normalized": "test",
+                "act_name_display": "Test",
+                "resolution_status": "missing",
+                "user_action": "pending",
+                "citation_count": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            }
+        )
 
         with patch(
             "app.engines.citation.storage.get_service_client",
@@ -155,17 +157,19 @@ class TestSaveCitations:
         mock_table.select.return_value = mock_select
         mock_select.eq.return_value = mock_select
         mock_select.single.return_value = mock_select
-        mock_select.execute.return_value = MagicMock(data={
-            "id": "res-id",
-            "matter_id": "matter-123",
-            "act_name_normalized": "test",
-            "act_name_display": "Test",
-            "resolution_status": "missing",
-            "user_action": "pending",
-            "citation_count": 1,
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-        })
+        mock_select.execute.return_value = MagicMock(
+            data={
+                "id": "res-id",
+                "matter_id": "matter-123",
+                "act_name_normalized": "test",
+                "act_name_display": "Test",
+                "resolution_status": "missing",
+                "user_action": "pending",
+                "citation_count": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            }
+        )
 
         with patch(
             "app.engines.citation.storage.get_service_client",

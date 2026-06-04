@@ -61,9 +61,7 @@ class BboxPageIndex:
 
         self.all_pages = sorted(self.by_page.keys())
 
-    def get_bboxes_for_pages(
-        self, pages: list[int]
-    ) -> tuple[list[dict], list[str]]:
+    def get_bboxes_for_pages(self, pages: list[int]) -> tuple[list[dict], list[str]]:
         """Get bboxes and their normalized texts for specific pages.
 
         Args:
@@ -203,7 +201,9 @@ async def link_chunk_to_bboxes(
         chunk_words = set(chunk_text_normalized.split()[:50])
 
         # Check bboxes in the matched window
-        for idx in range(best_match_start, min(best_match_start + window_size, len(all_bboxes))):
+        for idx in range(
+            best_match_start, min(best_match_start + window_size, len(all_bboxes))
+        ):
             bbox = all_bboxes[idx]
             bbox_text = bbox_texts[idx]
 
@@ -216,7 +216,9 @@ async def link_chunk_to_bboxes(
                 bbox_id = bbox.get("id")
                 if bbox_id:
                     try:
-                        matched_bbox_ids.append(UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id)
+                        matched_bbox_ids.append(
+                            UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id
+                        )
                         page = bbox.get("page_number")
                         if page is not None:
                             page_counts[page] += 1
@@ -318,7 +320,9 @@ async def _link_chunk_with_page_index(
     if best_match_score >= MATCH_THRESHOLD and best_match_start >= 0:
         chunk_words = set(chunk_text_normalized.split()[:50])
 
-        for idx in range(best_match_start, min(best_match_start + window_size, len(page_bboxes))):
+        for idx in range(
+            best_match_start, min(best_match_start + window_size, len(page_bboxes))
+        ):
             bbox = page_bboxes[idx]
             bbox_text = page_texts[idx]
 
@@ -330,7 +334,9 @@ async def _link_chunk_with_page_index(
                 bbox_id = bbox.get("id")
                 if bbox_id:
                     try:
-                        matched_bbox_ids.append(UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id)
+                        matched_bbox_ids.append(
+                            UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id
+                        )
                         page = bbox.get("page_number")
                         if page is not None:
                             page_counts[page] += 1
@@ -387,8 +393,10 @@ def _link_by_offset_overlap(
     """
     # Filter and sort bboxes by start offset
     offset_bboxes = [
-        b for b in all_bboxes
-        if b.get("text_start_offset") is not None and b.get("text_end_offset") is not None
+        b
+        for b in all_bboxes
+        if b.get("text_start_offset") is not None
+        and b.get("text_end_offset") is not None
     ]
     offset_bboxes.sort(key=lambda b: b["text_start_offset"])
 
@@ -425,7 +433,9 @@ def _link_by_offset_overlap(
             bbox_id = bbox.get("id")
             if bbox_id:
                 try:
-                    matched_bbox_ids.append(UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id)
+                    matched_bbox_ids.append(
+                        UUID(bbox_id) if isinstance(bbox_id, str) else bbox_id
+                    )
                     page = bbox.get("page_number")
                     if page is not None:
                         page_counts[page] += 1
@@ -512,9 +522,7 @@ async def link_chunks_to_bboxes(
     bboxes_with_offsets = sum(
         1 for b in all_bboxes if b.get("text_start_offset") is not None
     )
-    chunks_with_offsets = sum(
-        1 for c in chunks if c.text_start_offset is not None
-    )
+    chunks_with_offsets = sum(1 for c in chunks if c.text_start_offset is not None)
     use_offset_linking = (
         bboxes_with_offsets > len(all_bboxes) * 0.5
         and chunks_with_offsets > len(chunks) * 0.5
@@ -571,9 +579,11 @@ async def link_chunks_to_bboxes(
     # BUG-014: Positional interpolation for remaining page=None chunks.
     # After bbox linking, interpolate page numbers from neighboring chunks
     # that DO have pages, or estimate proportionally from total page count.
-    all_pages_list = sorted(set(
-        b.get("page_number") for b in all_bboxes if b.get("page_number") is not None
-    ))
+    all_pages_list = sorted(
+        set(
+            b.get("page_number") for b in all_bboxes if b.get("page_number") is not None
+        )
+    )
     none_count_before = sum(1 for c in chunks if c.page_number is None)
     if none_count_before > 0 and all_pages_list:
         _interpolate_missing_pages(chunks, all_pages_list)

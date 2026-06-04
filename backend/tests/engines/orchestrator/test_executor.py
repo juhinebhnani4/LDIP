@@ -107,6 +107,7 @@ def mock_adapters(mock_adapter):
                     execution_time_ms=50,
                     confidence=0.85,
                 )
+
             return execute_fn
 
         adapter.execute = AsyncMock(side_effect=make_execute_fn(engine_type))
@@ -205,21 +206,25 @@ class TestErrorHandling:
         """If one engine fails, others should still succeed."""
         success_adapter = MagicMock()
         success_adapter.engine_type = EngineType.CITATION
-        success_adapter.execute = AsyncMock(return_value=EngineExecutionResult(
-            engine=EngineType.CITATION,
-            success=True,
-            data={"test": "data"},
-            execution_time_ms=50,
-        ))
+        success_adapter.execute = AsyncMock(
+            return_value=EngineExecutionResult(
+                engine=EngineType.CITATION,
+                success=True,
+                data={"test": "data"},
+                execution_time_ms=50,
+            )
+        )
 
         failure_adapter = MagicMock()
         failure_adapter.engine_type = EngineType.TIMELINE
-        failure_adapter.execute = AsyncMock(return_value=EngineExecutionResult(
-            engine=EngineType.TIMELINE,
-            success=False,
-            error="Test failure",
-            execution_time_ms=30,
-        ))
+        failure_adapter.execute = AsyncMock(
+            return_value=EngineExecutionResult(
+                engine=EngineType.TIMELINE,
+                success=False,
+                error="Test failure",
+                execution_time_ms=30,
+            )
+        )
 
         adapters = {
             EngineType.CITATION: success_adapter,
@@ -294,12 +299,14 @@ class TestTimeoutHandling:
         """One timing out engine shouldn't block others."""
         fast_adapter = MagicMock()
         fast_adapter.engine_type = EngineType.CITATION
-        fast_adapter.execute = AsyncMock(return_value=EngineExecutionResult(
-            engine=EngineType.CITATION,
-            success=True,
-            data={},
-            execution_time_ms=10,
-        ))
+        fast_adapter.execute = AsyncMock(
+            return_value=EngineExecutionResult(
+                engine=EngineType.CITATION,
+                success=True,
+                data={},
+                execution_time_ms=10,
+            )
+        )
 
         async def slow_execute(matter_id, query, context=None):
             await asyncio.sleep(1.0)  # Slow but within timeout
@@ -353,6 +360,7 @@ class TestTimeoutHandling:
     @pytest.mark.asyncio
     async def test_timeout_error_includes_engine_specific_timeout(self, executor):
         """Timeout error message should reference the per-engine timeout, not a generic one."""
+
         async def slow_execute(matter_id, query, context=None):
             await asyncio.sleep(100)  # Will be killed by timeout
 
@@ -421,10 +429,12 @@ class TestMatterIsolation:
 
         def make_adapter(engine_type):
             async def capture_execute(matter_id, query, context=None):
-                captured_calls.append({
-                    "engine": engine_type,
-                    "matter_id": matter_id,
-                })
+                captured_calls.append(
+                    {
+                        "engine": engine_type,
+                        "matter_id": matter_id,
+                    }
+                )
                 return EngineExecutionResult(
                     engine=engine_type,
                     success=True,

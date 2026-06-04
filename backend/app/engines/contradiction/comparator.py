@@ -97,6 +97,7 @@ def _get_cached_comparison(cache_key: str) -> str | None:
     """
     try:
         from app.services.distributed_lock import get_sync_redis_client
+
         redis_client = get_sync_redis_client()
         if redis_client is None:
             return None
@@ -119,6 +120,7 @@ def _set_cached_comparison(cache_key: str, response_text: str) -> None:
     try:
         settings = get_settings()
         from app.services.distributed_lock import get_sync_redis_client
+
         redis_client = get_sync_redis_client()
         if redis_client is None:
             return
@@ -167,8 +169,12 @@ class LLMCostTracker:
         # Screening tier cost (Gemini)
         if self.screening_model:
             screening_pricing = get_pricing(self.screening_model)
-            screening_input = (self.screening_input_tokens / 1000) * screening_pricing.input_cost_per_1k
-            screening_output = (self.screening_output_tokens / 1000) * screening_pricing.output_cost_per_1k
+            screening_input = (
+                self.screening_input_tokens / 1000
+            ) * screening_pricing.input_cost_per_1k
+            screening_output = (
+                self.screening_output_tokens / 1000
+            ) * screening_pricing.output_cost_per_1k
             total_cost += screening_input + screening_output
 
         # Full analysis tier cost (GPT-4) - only if escalated
@@ -200,15 +206,16 @@ class ComparisonBatchResult:
 
         gpt4_pricing = get_pricing("gpt-4o")
         input_cost = (self.total_input_tokens / 1000) * gpt4_pricing.input_cost_per_1k
-        output_cost = (self.total_output_tokens / 1000) * gpt4_pricing.output_cost_per_1k
+        output_cost = (
+            self.total_output_tokens / 1000
+        ) * gpt4_pricing.output_cost_per_1k
         return input_cost + output_cost
 
     @property
     def contradictions_found(self) -> int:
         """Count contradictions in results."""
         return sum(
-            1 for c in self.comparisons
-            if c.result == ComparisonResult.CONTRADICTION
+            1 for c in self.comparisons if c.result == ComparisonResult.CONTRADICTION
         )
 
 
@@ -325,7 +332,9 @@ class StatementComparator:
         # Two-tier routing config
         self.routing_enabled = settings.contradiction_model_routing_enabled
         self.screening_model = settings.contradiction_screening_model
-        self.confidence_threshold = settings.contradiction_screening_confidence_threshold
+        self.confidence_threshold = (
+            settings.contradiction_screening_confidence_threshold
+        )
         self.escalate_results = settings.contradiction_escalate_results
 
         # Gemini API key (reuse from entity extraction)
@@ -438,7 +447,9 @@ class StatementComparator:
                 )
 
                 if screening_result:
-                    result, confidence, quick_reason, in_tokens, out_tokens = screening_result
+                    result, confidence, quick_reason, in_tokens, out_tokens = (
+                        screening_result
+                    )
 
                     # Track screening costs
                     cost_tracker.screening_model = self.screening_model
@@ -460,7 +471,8 @@ class StatementComparator:
 
                         # Map screening result to ComparisonResult
                         result_enum = (
-                            ComparisonResult.CONSISTENT if result == "consistent"
+                            ComparisonResult.CONSISTENT
+                            if result == "consistent"
                             else ComparisonResult.UNRELATED
                         )
 
@@ -539,8 +551,15 @@ class StatementComparator:
                 page_b=statement_b.page_number,
             )
 
-            response_text, input_tokens, output_tokens, cached_tokens = await self._call_gpt4_comparison(
-                user_prompt, document_id=statement_a.document_id, matter_id=matter_id,
+            (
+                response_text,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+            ) = await self._call_gpt4_comparison(
+                user_prompt,
+                document_id=statement_a.document_id,
+                matter_id=matter_id,
             )
 
             # Track GPT-4 tokens
@@ -572,11 +591,16 @@ class StatementComparator:
                 cached_input_tokens=cached_tokens,
             )
             gpt4_tracker.log_cost()
-            await persist_cost(gpt4_tracker, metadata={
-                "comparison_result": comparison.result.value,
-                "confidence": comparison.confidence,
-                "reasoning_preview": comparison.reasoning[:200] if comparison.reasoning else "",
-            })
+            await persist_cost(
+                gpt4_tracker,
+                metadata={
+                    "comparison_result": comparison.result.value,
+                    "confidence": comparison.confidence,
+                    "reasoning_preview": comparison.reasoning[:200]
+                    if comparison.reasoning
+                    else "",
+                },
+            )
 
             processing_time = int((time.time() - start_time) * 1000)
 
@@ -697,13 +721,18 @@ class StatementComparator:
                 document_id=document_id,
                 matter_id=matter_id,
             )
-            screening_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            screening_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             screening_tracker.log_cost()
-            await persist_cost(screening_tracker, metadata={
-                "screening_result": result,
-                "screening_confidence": confidence,
-                "quick_reason": quick_reason,
-            })
+            await persist_cost(
+                screening_tracker,
+                metadata={
+                    "screening_result": result,
+                    "screening_confidence": confidence,
+                    "quick_reason": quick_reason,
+                },
+            )
 
             return result, confidence, quick_reason, input_tokens, output_tokens
 
@@ -717,7 +746,10 @@ class StatementComparator:
 
     @with_circuit_breaker(CircuitService.OPENAI_CHAT)
     async def _call_gpt4_comparison(
-        self, user_prompt: str, document_id: str | None = None, matter_id: str | None = None,
+        self,
+        user_prompt: str,
+        document_id: str | None = None,
+        matter_id: str | None = None,
     ) -> tuple[str, int, int]:
         """Call GPT-4 API with circuit breaker protection.
 
@@ -812,7 +844,7 @@ class StatementComparator:
         total_output_tokens = 0
 
         for i in range(0, len(pairs), batch_size):
-            batch = pairs[i:i + batch_size]
+            batch = pairs[i : i + batch_size]
 
             # Process batch in parallel
             tasks = [
@@ -901,7 +933,9 @@ class StatementComparator:
         scored_pairs: list[tuple[float, StatementPair]] = []  # (score, pair)
         seen_keys: set[tuple[str, str]] = set()
 
-        for (stmt_a, doc_a_name), (stmt_b, doc_b_name) in itertools.combinations(all_statements, 2):
+        for (stmt_a, doc_a_name), (stmt_b, doc_b_name) in itertools.combinations(
+            all_statements, 2
+        ):
             # Skip same-document pairs if cross_document_only
             if cross_document_only and stmt_a.document_id == stmt_b.document_id:
                 continue

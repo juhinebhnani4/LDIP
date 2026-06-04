@@ -36,6 +36,7 @@ class _PartyWithPriority(TypedDict):
     relevance: str
     _priority: int
 
+
 logger = structlog.get_logger(__name__)
 
 
@@ -80,7 +81,14 @@ class ExecutiveSummaryService:
     """
 
     # Priority event types for critical dates
-    CRITICAL_EVENT_TYPES = ('hearing', 'filing', 'deadline', 'judgment', 'order', 'motion')
+    CRITICAL_EVENT_TYPES = (
+        "hearing",
+        "filing",
+        "deadline",
+        "judgment",
+        "order",
+        "motion",
+    )
 
     # Max limits per section (for 1-2 page constraint)
     MAX_PARTIES = 10
@@ -139,7 +147,7 @@ class ExecutiveSummaryService:
             parties=parties,
             critical_dates=critical_dates,
             verified_issues=verified_issues,
-            recommended_actions=attention_items[:self.MAX_ACTIONS],
+            recommended_actions=attention_items[: self.MAX_ACTIONS],
             pending_verification_count=pending_count,
             parties_count=len(parties),
             dates_count=len(critical_dates),
@@ -150,9 +158,11 @@ class ExecutiveSummaryService:
         """Get matter name for title."""
         try:
             result = await asyncio.to_thread(
-                lambda: supabase.table("matters").select(
-                    "name"
-                ).eq("id", matter_id).single().execute()
+                lambda: supabase.table("matters")
+                .select("name")
+                .eq("id", matter_id)
+                .single()
+                .execute()
             )
             return result.data.get("name", "Matter") if result.data else "Matter"
         except Exception:
@@ -170,9 +180,11 @@ class ExecutiveSummaryService:
         """
         try:
             result = await asyncio.to_thread(
-                lambda: supabase.table("matter_summaries").select(
-                    "parties, subject_matter, current_status, attention_items"
-                ).eq("matter_id", matter_id).single().execute()
+                lambda: supabase.table("matter_summaries")
+                .select("parties, subject_matter, current_status, attention_items")
+                .eq("matter_id", matter_id)
+                .single()
+                .execute()
             )
 
             if not result.data:
@@ -237,7 +249,7 @@ class ExecutiveSummaryService:
 
         if len(words) > self.MAX_OVERVIEW_WORDS:
             # Truncate at word boundary
-            overview = " ".join(words[:self.MAX_OVERVIEW_WORDS]) + "..."
+            overview = " ".join(words[: self.MAX_OVERVIEW_WORDS]) + "..."
 
         return overview or "No case overview available."
 
@@ -270,23 +282,27 @@ class ExecutiveSummaryService:
                 name = party.get("name", "Unknown")
                 relevance = party.get("relevance", "")
 
-                parsed_parties.append({
-                    "role": party.get("role", "Unknown"),
-                    "name": name,
-                    "relevance": relevance,
-                    "_priority": role_priority.get(role, 10),
-                })
+                parsed_parties.append(
+                    {
+                        "role": party.get("role", "Unknown"),
+                        "name": name,
+                        "relevance": relevance,
+                        "_priority": role_priority.get(role, 10),
+                    }
+                )
             elif isinstance(party, str):
-                parsed_parties.append({
-                    "role": "Party",
-                    "name": party,
-                    "relevance": "",
-                    "_priority": 10,
-                })
+                parsed_parties.append(
+                    {
+                        "role": "Party",
+                        "name": party,
+                        "relevance": "",
+                        "_priority": 10,
+                    }
+                )
 
         # Sort by priority and take top MAX_PARTIES
         parsed_parties.sort(key=lambda p: p["_priority"])
-        top_parties = parsed_parties[:self.MAX_PARTIES]
+        top_parties = parsed_parties[: self.MAX_PARTIES]
 
         # Return without internal priority field
         return [
@@ -302,13 +318,17 @@ class ExecutiveSummaryService:
         actions = []
         for item in attention_items:
             if isinstance(item, dict):
-                action = item.get("action") or item.get("description") or item.get("item", "")
+                action = (
+                    item.get("action")
+                    or item.get("description")
+                    or item.get("item", "")
+                )
                 if action:
                     actions.append(str(action))
             elif isinstance(item, str):
                 actions.append(item)
 
-        return actions[:self.MAX_ACTIONS]
+        return actions[: self.MAX_ACTIONS]
 
     async def _fetch_critical_dates(
         self,
@@ -322,13 +342,13 @@ class ExecutiveSummaryService:
         try:
             # Filter by critical event types
             result = await asyncio.to_thread(
-                lambda: supabase.table("events").select(
-                    "id, event_date, event_type, description, confidence"
-                ).eq("matter_id", matter_id).in_(
-                    "event_type", list(self.CRITICAL_EVENT_TYPES)
-                ).order(
-                    "event_date", desc=False
-                ).limit(self.MAX_DATES).execute()
+                lambda: supabase.table("events")
+                .select("id, event_date, event_type, description, confidence")
+                .eq("matter_id", matter_id)
+                .in_("event_type", list(self.CRITICAL_EVENT_TYPES))
+                .order("event_date", desc=False)
+                .limit(self.MAX_DATES)
+                .execute()
             )
 
             dates = result.data or []
@@ -336,16 +356,20 @@ class ExecutiveSummaryService:
             # Format for display
             formatted_dates = []
             for event in dates:
-                formatted_dates.append({
-                    "date": event.get("event_date", "Unknown"),
-                    "type": event.get("event_type", "event"),
-                    "description": event.get("description", ""),
-                })
+                formatted_dates.append(
+                    {
+                        "date": event.get("event_date", "Unknown"),
+                        "type": event.get("event_type", "event"),
+                        "description": event.get("description", ""),
+                    }
+                )
 
             return formatted_dates
 
         except Exception as e:
-            logger.warning("critical_dates_fetch_failed", matter_id=matter_id, error=str(e))
+            logger.warning(
+                "critical_dates_fetch_failed", matter_id=matter_id, error=str(e)
+            )
             return []
 
     async def _fetch_verified_issues(
@@ -376,14 +400,16 @@ class ExecutiveSummaryService:
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         all_issues.sort(key=lambda x: severity_order.get(x.get("severity", "low"), 4))
 
-        verified_issues = all_issues[:self.MAX_ISSUES]
+        verified_issues = all_issues[: self.MAX_ISSUES]
 
         # Count pending verifications
         try:
             pending_result = await asyncio.to_thread(
-                lambda: supabase.table("finding_verifications").select(
-                    "id"
-                ).eq("matter_id", matter_id).eq("decision", "pending").execute()
+                lambda: supabase.table("finding_verifications")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .eq("decision", "pending")
+                .execute()
             )
             pending_count = len(pending_result.data or [])
         except Exception:
@@ -416,11 +442,12 @@ class ExecutiveSummaryService:
 
         try:
             result = await asyncio.to_thread(
-                lambda: supabase.table("finding_verifications").select(
-                    "finding_id, decision"
-                ).eq("matter_id", matter_id).eq(
-                    "finding_type", finding_type
-                ).in_("finding_id", finding_ids).execute()
+                lambda: supabase.table("finding_verifications")
+                .select("finding_id, decision")
+                .eq("matter_id", matter_id)
+                .eq("finding_type", finding_type)
+                .in_("finding_id", finding_ids)
+                .execute()
             )
 
             verifications = result.data or []
@@ -461,13 +488,14 @@ class ExecutiveSummaryService:
         try:
             # Get high severity/confidence contradictions
             result = await asyncio.to_thread(
-                lambda: supabase.table("contradictions").select(
+                lambda: supabase.table("contradictions")
+                .select(
                     "id, contradiction_type, severity, confidence, statement_a, statement_b"
-                ).eq("matter_id", matter_id).gte(
-                    "confidence", 70
-                ).in_(
-                    "severity", ["high", "critical"]
-                ).execute()
+                )
+                .eq("matter_id", matter_id)
+                .gte("confidence", 70)
+                .in_("severity", ["high", "critical"])
+                .execute()
             )
 
             contradictions = result.data or []
@@ -485,18 +513,22 @@ class ExecutiveSummaryService:
             verified = []
             for con in contradictions:
                 if con["id"] in approved_ids:
-                    verified.append({
-                        "type": "contradiction",
-                        "severity": con.get("severity", "high"),
-                        "summary": f"{con.get('contradiction_type', 'Contradiction')}: "
-                                   f"Conflicting statements detected",
-                        "detail": "Statement A conflicts with Statement B",
-                    })
+                    verified.append(
+                        {
+                            "type": "contradiction",
+                            "severity": con.get("severity", "high"),
+                            "summary": f"{con.get('contradiction_type', 'Contradiction')}: "
+                            f"Conflicting statements detected",
+                            "detail": "Statement A conflicts with Statement B",
+                        }
+                    )
 
             return verified
 
         except Exception as e:
-            logger.warning("contradictions_fetch_failed", matter_id=matter_id, error=str(e))
+            logger.warning(
+                "contradictions_fetch_failed", matter_id=matter_id, error=str(e)
+            )
             return []
 
     async def _fetch_verified_citations(
@@ -508,11 +540,11 @@ class ExecutiveSummaryService:
         try:
             # Get citations with issues
             result = await asyncio.to_thread(
-                lambda: supabase.table("citations").select(
-                    "id, act_name, section, verification_status"
-                ).eq("matter_id", matter_id).eq(
-                    "verification_status", "issue_found"
-                ).execute()
+                lambda: supabase.table("citations")
+                .select("id, act_name, section, verification_status")
+                .eq("matter_id", matter_id)
+                .eq("verification_status", "issue_found")
+                .execute()
             )
 
             citations = result.data or []
@@ -530,12 +562,14 @@ class ExecutiveSummaryService:
             verified = []
             for cit in citations:
                 if cit["id"] in approved_ids:
-                    verified.append({
-                        "type": "citation",
-                        "severity": "high",
-                        "summary": f"Citation issue: {cit.get('act_name', 'Unknown Act')}",
-                        "detail": f"Section {cit.get('section', 'N/A')} verification failed",
-                    })
+                    verified.append(
+                        {
+                            "type": "citation",
+                            "severity": "high",
+                            "summary": f"Citation issue: {cit.get('act_name', 'Unknown Act')}",
+                            "detail": f"Section {cit.get('section', 'N/A')} verification failed",
+                        }
+                    )
 
             return verified
 
@@ -553,11 +587,13 @@ class ExecutiveSummaryService:
         """Check if a finding has been approved in verification queue."""
         try:
             result = await asyncio.to_thread(
-                lambda: supabase.table("finding_verifications").select(
-                    "decision"
-                ).eq("matter_id", matter_id).eq(
-                    "finding_type", finding_type
-                ).eq("finding_id", finding_id).single().execute()
+                lambda: supabase.table("finding_verifications")
+                .select("decision")
+                .eq("matter_id", matter_id)
+                .eq("finding_type", finding_type)
+                .eq("finding_id", finding_id)
+                .single()
+                .execute()
             )
 
             return result.data.get("decision") == "approved" if result.data else False

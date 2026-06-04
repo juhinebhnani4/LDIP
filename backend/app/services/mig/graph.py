@@ -18,6 +18,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.bbox_filter import get_filtered_bbox_ids
 from app.models.entity import (
     EntityEdge,
     EntityEdgeCreate,
@@ -29,7 +30,6 @@ from app.models.entity import (
     ExtractedEntity,
 )
 from app.services.supabase.client import get_supabase_client
-from app.core.bbox_filter import get_filtered_bbox_ids
 
 
 def _normalize_for_matching(text: str) -> str:
@@ -57,16 +57,20 @@ def _normalize_for_matching(text: str) -> str:
     # Strip leading/trailing
     return result.strip()
 
+
 # Import is done lazily to avoid circular dependencies
 _broadcast_entity_streaming = None
+
 
 def _get_broadcast_entity_streaming():
     """Lazily import broadcast function to avoid circular imports."""
     global _broadcast_entity_streaming
     if _broadcast_entity_streaming is None:
         from app.services.pubsub_service import broadcast_entity_streaming
+
         _broadcast_entity_streaming = broadcast_entity_streaming
     return _broadcast_entity_streaming
+
 
 logger = structlog.get_logger(__name__)
 
@@ -203,10 +207,7 @@ class MIGGraphService:
         saved_nodes: list[EntityNode] = []
 
         # Step 1: Batch lookup existing entities
-        lookup_keys = [
-            (e.canonical_name.lower(), e.type.value)
-            for e in entities
-        ]
+        lookup_keys = [(e.canonical_name.lower(), e.type.value) for e in entities]
         existing_map = await self._batch_find_existing_entities(
             matter_id=matter_id,
             lookup_keys=lookup_keys,
@@ -236,7 +237,7 @@ class MIGGraphService:
             broadcast = _get_broadcast_entity_streaming()
             current_count = len(saved_nodes)
             for node in created:
-                try:
+                try:  # noqa: SIM105
                     broadcast(
                         matter_id=matter_id,
                         entity_name=node.canonical_name,
@@ -299,18 +300,24 @@ class MIGGraphService:
 
                 # Use filtered bbox_ids if found, otherwise fall back to chunk's
                 mention_bbox_ids = filtered_ids if filtered_ids else chunk_bbox_ids
-                mention_page = detected_page if detected_page is not None else extraction_result.page_number
+                mention_page = (
+                    detected_page
+                    if detected_page is not None
+                    else extraction_result.page_number
+                )
 
-                all_mentions.append({
-                    "entity_id": entity_id,
-                    "document_id": doc_id,
-                    "chunk_id": extraction_result.source_chunk_id,
-                    "page_number": mention_page,
-                    "mention_text": mention.text,
-                    "context": mention.context,
-                    "confidence": extracted.confidence,
-                    "bbox_ids": mention_bbox_ids,
-                })
+                all_mentions.append(
+                    {
+                        "entity_id": entity_id,
+                        "document_id": doc_id,
+                        "chunk_id": extraction_result.source_chunk_id,
+                        "page_number": mention_page,
+                        "mention_text": mention.text,
+                        "context": mention.context,
+                        "confidence": extracted.confidence,
+                        "bbox_ids": mention_bbox_ids,
+                    }
+                )
 
         if all_mentions:
             await self._batch_insert_mentions(all_mentions)
@@ -388,7 +395,10 @@ class MIGGraphService:
                 result[canonical_key] = row
 
             # Check canonical_name match (normalized)
-            canonical_normalized = (_normalize_for_matching(canonical_name), entity_type)
+            canonical_normalized = (
+                _normalize_for_matching(canonical_name),
+                entity_type,
+            )
             if canonical_normalized in normalized_to_original:
                 original_key = normalized_to_original[canonical_normalized]
                 if original_key not in result:
@@ -451,23 +461,28 @@ class MIGGraphService:
             metadata = {
                 "roles": extracted.roles,
                 "aliases_found": [
-                    m.text for m in extracted.mentions
+                    m.text
+                    for m in extracted.mentions
                     if m.text != extracted.canonical_name
                 ],
                 "first_extraction_confidence": extracted.confidence,
             }
-            rows_to_insert.append({
-                "matter_id": matter_id,
-                "canonical_name": extracted.canonical_name,
-                "entity_type": extracted.type.value,
-                "metadata": metadata,
-                "mention_count": len(extracted.mentions) or 1,
-            })
+            rows_to_insert.append(
+                {
+                    "matter_id": matter_id,
+                    "canonical_name": extracted.canonical_name,
+                    "entity_type": extracted.type.value,
+                    "metadata": metadata,
+                    "mention_count": len(extracted.mentions) or 1,
+                }
+            )
 
         def _insert():
             return (
                 self.client.table("identity_nodes")
-                .upsert(rows_to_insert, on_conflict="matter_id,entity_type,canonical_name")
+                .upsert(
+                    rows_to_insert, on_conflict="matter_id,entity_type,canonical_name"
+                )
                 .execute()
             )
 
@@ -508,7 +523,9 @@ class MIGGraphService:
             return []
 
         async def _update_one(
-            entity_id: str, additional: int, new_roles: list[str],
+            entity_id: str,
+            additional: int,
+            new_roles: list[str],
         ) -> EntityNode | None:
             try:
                 updated = await self._update_entity_mention_count(
@@ -550,11 +567,7 @@ class MIGGraphService:
             return
 
         def _insert():
-            return (
-                self.client.table("entity_mentions")
-                .insert(mentions)
-                .execute()
-            )
+            return self.client.table("entity_mentions").insert(mentions).execute()
 
         try:
             await asyncio.to_thread(_insert)
@@ -572,6 +585,7 @@ class MIGGraphService:
         entity_type: EntityType,
     ) -> dict | None:
         """Find existing entity by canonical name and type."""
+
         def _query():
             return (
                 self.client.table("identity_nodes")
@@ -597,20 +611,24 @@ class MIGGraphService:
         """Create new entity node in database."""
         metadata = {
             "roles": extracted.roles,
-            "aliases_found": [m.text for m in extracted.mentions if m.text != extracted.canonical_name],
+            "aliases_found": [
+                m.text for m in extracted.mentions if m.text != extracted.canonical_name
+            ],
             "first_extraction_confidence": extracted.confidence,
         }
 
         def _insert():
             return (
                 self.client.table("identity_nodes")
-                .insert({
-                    "matter_id": matter_id,
-                    "canonical_name": extracted.canonical_name,
-                    "entity_type": extracted.type.value,
-                    "metadata": metadata,
-                    "mention_count": len(extracted.mentions) or 1,
-                })
+                .insert(
+                    {
+                        "matter_id": matter_id,
+                        "canonical_name": extracted.canonical_name,
+                        "entity_type": extracted.type.value,
+                        "metadata": metadata,
+                        "mention_count": len(extracted.mentions) or 1,
+                    }
+                )
                 .execute()
             )
 
@@ -633,6 +651,7 @@ class MIGGraphService:
         new_roles: list[str] | None = None,
     ) -> dict | None:
         """Increment mention count and merge any new roles for existing entity."""
+
         def _get_current():
             return (
                 self.client.table("identity_nodes")
@@ -720,21 +739,28 @@ class MIGGraphService:
                     if detected_page is not None:
                         mention_page = detected_page
 
-            mentions_to_insert.append({
-                "entity_id": entity_id,
-                "document_id": extraction_result.source_document_id,
-                "chunk_id": extraction_result.source_chunk_id,
-                "page_number": mention_page,
-                "mention_text": mention.text,
-                "context": mention.context,
-                "confidence": extracted.confidence,
-                "bbox_ids": mention_bbox_ids,
-            })
+            mentions_to_insert.append(
+                {
+                    "entity_id": entity_id,
+                    "document_id": extraction_result.source_document_id,
+                    "chunk_id": extraction_result.source_chunk_id,
+                    "page_number": mention_page,
+                    "mention_text": mention.text,
+                    "context": mention.context,
+                    "confidence": extracted.confidence,
+                    "bbox_ids": mention_bbox_ids,
+                }
+            )
 
         if mentions_to_insert:
             try:
+
                 def _insert_mentions():
-                    return self.client.table("entity_mentions").insert(mentions_to_insert).execute()
+                    return (
+                        self.client.table("entity_mentions")
+                        .insert(mentions_to_insert)
+                        .execute()
+                    )
 
                 await asyncio.to_thread(_insert_mentions)
             except Exception as e:
@@ -783,7 +809,8 @@ class MIGGraphService:
 
         for edge in edges:
             try:
-                def _insert_edge():
+
+                def _insert_edge(edge=edge):
                     return (
                         self.client.table("identity_edges")
                         .upsert(
@@ -875,6 +902,7 @@ class MIGGraphService:
         ]
 
         try:
+
             def _insert_mentions():
                 return (
                     self.client.table("entity_mentions")
@@ -935,6 +963,7 @@ class MIGGraphService:
         Returns:
             EntityNode if found, None otherwise.
         """
+
         def _query():
             return (
                 self.client.table("identity_nodes")
@@ -973,6 +1002,7 @@ class MIGGraphService:
             Story 3.3: Excludes merged entities (merged_into_id IS NOT NULL).
             This ensures merge suggestions only show active entities.
         """
+
         def _query():
             # Build query - exclude merged entities (Story 3.3)
             query = (
@@ -1039,7 +1069,9 @@ class MIGGraphService:
 
         response = await asyncio.to_thread(_query)
 
-        mentions = [self._db_row_to_entity_mention(row) for row in (response.data or [])]
+        mentions = [
+            self._db_row_to_entity_mention(row) for row in (response.data or [])
+        ]
         total = response.count or 0
 
         return mentions, total
@@ -1103,6 +1135,7 @@ class MIGGraphService:
         if edges and related_entity_ids:
             related_entity_ids.discard(entity_id)  # We already know this entity
             if related_entity_ids:
+
                 def _fetch_names():
                     return (
                         self.client.table("identity_nodes")
@@ -1113,8 +1146,7 @@ class MIGGraphService:
 
                 names_response = await asyncio.to_thread(_fetch_names)
                 name_map = {
-                    r["id"]: r["canonical_name"]
-                    for r in (names_response.data or [])
+                    r["id"]: r["canonical_name"] for r in (names_response.data or [])
                 }
                 # Also add current entity name
                 name_map[entity_id] = entity.canonical_name
@@ -1346,10 +1378,12 @@ class MIGGraphService:
         def _update():
             return (
                 self.client.table("identity_nodes")
-                .update({
-                    "aliases": unique_aliases,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "aliases": unique_aliases,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", entity_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -1484,6 +1518,7 @@ class MIGGraphService:
         Returns:
             List of EntityNode objects with matching alias.
         """
+
         def _query():
             return (
                 self.client.table("identity_nodes")
@@ -1532,9 +1567,7 @@ class MIGGraphService:
             if existing not in alias_names:
                 alias_names.append(existing)
 
-        return await self.update_entity_aliases_array(
-            entity_id, matter_id, alias_names
-        )
+        return await self.update_entity_aliases_array(entity_id, matter_id, alias_names)
 
 
 # =============================================================================

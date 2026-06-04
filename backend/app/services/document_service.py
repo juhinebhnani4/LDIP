@@ -10,6 +10,7 @@ from functools import lru_cache
 import structlog
 from supabase import Client
 
+from app.engines.citation.abbreviations import normalize_act_name
 from app.models.document import (
     Document,
     DocumentListItem,
@@ -19,9 +20,8 @@ from app.models.document import (
     PaginationMeta,
     UploadedDocument,
 )
+from app.services.storage_service import StorageError, get_storage_service
 from app.services.supabase.client import get_supabase_client
-from app.services.storage_service import get_storage_service, StorageError
-from app.engines.citation.abbreviations import normalize_act_name
 
 logger = structlog.get_logger(__name__)
 
@@ -52,7 +52,9 @@ DOCUMENT_LIST_SELECT_FIELDS = (
 class DocumentServiceError(Exception):
     """Base exception for document service operations."""
 
-    def __init__(self, message: str, code: str = "DOCUMENT_ERROR", status_code: int = 500):
+    def __init__(
+        self, message: str, code: str = "DOCUMENT_ERROR", status_code: int = 500
+    ):
         self.message = message
         self.code = code
         self.status_code = status_code
@@ -66,7 +68,7 @@ class DocumentNotFoundError(DocumentServiceError):
         super().__init__(
             message=f"Document not found: {document_id}",
             code="DOCUMENT_NOT_FOUND",
-            status_code=404
+            status_code=404,
         )
 
 
@@ -115,8 +117,7 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         # Determine is_reference_material based on document type if not provided
@@ -133,21 +134,26 @@ class DocumentService:
 
         try:
             # Insert document record
-            result = self.client.table("documents").insert({
-                "matter_id": matter_id,
-                "filename": filename,
-                "storage_path": storage_path,
-                "file_size": file_size,
-                "document_type": document_type.value,
-                "is_reference_material": is_reference_material,
-                "uploaded_by": uploaded_by,
-                "status": DocumentStatus.PENDING.value,
-            }).execute()
+            result = (
+                self.client.table("documents")
+                .insert(
+                    {
+                        "matter_id": matter_id,
+                        "filename": filename,
+                        "storage_path": storage_path,
+                        "file_size": file_size,
+                        "document_type": document_type.value,
+                        "is_reference_material": is_reference_material,
+                        "uploaded_by": uploaded_by,
+                        "status": DocumentStatus.PENDING.value,
+                    }
+                )
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentServiceError(
-                    message="Failed to create document record",
-                    code="INSERT_FAILED"
+                    message="Failed to create document record", code="INSERT_FAILED"
                 )
 
             doc_data = result.data[0]
@@ -178,8 +184,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to create document: {e!s}",
-                code="CREATE_FAILED"
+                message=f"Failed to create document: {e!s}", code="CREATE_FAILED"
             ) from e
 
     def get_document(self, document_id: str) -> Document:
@@ -197,14 +202,16 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
-            result = self.client.table("documents").select("*").eq(
-                "id", document_id
-            ).execute()
+            result = (
+                self.client.table("documents")
+                .select("*")
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
@@ -220,8 +227,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to get document: {e!s}",
-                code="GET_FAILED"
+                message=f"Failed to get document: {e!s}", code="GET_FAILED"
             ) from e
 
     def get_documents_by_matter(self, matter_id: str) -> list[Document]:
@@ -238,14 +244,17 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
-            result = self.client.table("documents").select("*").eq(
-                "matter_id", matter_id
-            ).order("created_at", desc=True).execute()
+            result = (
+                self.client.table("documents")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
 
             return [self._parse_document(doc) for doc in result.data]
 
@@ -256,8 +265,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to list documents: {e!s}",
-                code="LIST_FAILED"
+                message=f"Failed to list documents: {e!s}", code="LIST_FAILED"
             ) from e
 
     def list_documents(
@@ -293,22 +301,25 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # Build query with filters
             # Note: Service role key bypasses RLS, so we must explicitly filter soft-deleted documents
             # IMPORTANT: Use DOCUMENT_LIST_SELECT_FIELDS constant to ensure SELECT stays in sync with model
-            query = self.client.table("documents").select(
-                DOCUMENT_LIST_SELECT_FIELDS,
-                count="exact"
-            ).eq("matter_id", matter_id).is_("deleted_at", "null")
+            query = (
+                self.client.table("documents")
+                .select(DOCUMENT_LIST_SELECT_FIELDS, count="exact")
+                .eq("matter_id", matter_id)
+                .is_("deleted_at", "null")
+            )
 
             # Exclude documents migrated to library (Acts show in LinkedLibraryPanel instead)
             # Filter: migrated_to_library IS NULL OR migrated_to_library = FALSE
-            query = query.or_("migrated_to_library.is.null,migrated_to_library.eq.false")
+            query = query.or_(
+                "migrated_to_library.is.null,migrated_to_library.eq.false"
+            )
 
             # Apply optional filters
             if document_type is not None:
@@ -324,14 +335,22 @@ class DocumentService:
             offset = (page - 1) * per_page
 
             # Validate sort column to prevent injection
-            allowed_sort_columns = {"uploaded_at", "filename", "file_size", "document_type", "status"}
+            allowed_sort_columns = {
+                "uploaded_at",
+                "filename",
+                "file_size",
+                "document_type",
+                "status",
+            }
             if sort_by not in allowed_sort_columns:
                 sort_by = "uploaded_at"
 
             # Execute with pagination and sorting
-            result = query.order(
-                sort_by, desc=(sort_order.lower() == "desc")
-            ).range(offset, offset + per_page - 1).execute()
+            result = (
+                query.order(sort_by, desc=(sort_order.lower() == "desc"))
+                .range(offset, offset + per_page - 1)
+                .execute()
+            )
 
             total = result.count or 0
             total_pages = (total + per_page - 1) // per_page if total > 0 else 0
@@ -384,8 +403,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to list documents: {e!s}",
-                code="LIST_FAILED"
+                message=f"Failed to list documents: {e!s}", code="LIST_FAILED"
             ) from e
 
     def update_document(
@@ -414,8 +432,7 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         # First verify document exists
@@ -441,14 +458,16 @@ class DocumentService:
             return existing
 
         try:
-            result = self.client.table("documents").update(
-                update_data
-            ).eq("id", document_id).execute()
+            result = (
+                self.client.table("documents")
+                .update(update_data)
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentServiceError(
-                    message="Failed to update document",
-                    code="UPDATE_FAILED"
+                    message="Failed to update document", code="UPDATE_FAILED"
                 )
 
             doc_data = result.data[0]
@@ -472,8 +491,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to update document: {e!s}",
-                code="UPDATE_FAILED"
+                message=f"Failed to update document: {e!s}", code="UPDATE_FAILED"
             ) from e
 
     def bulk_update_documents(
@@ -495,18 +513,24 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         # Auto-set is_reference_material for acts
         is_reference_material = document_type == DocumentType.ACT
 
         try:
-            result = self.client.table("documents").update({
-                "document_type": document_type.value,
-                "is_reference_material": is_reference_material,
-            }).in_("id", document_ids).execute()
+            result = (
+                self.client.table("documents")
+                .update(
+                    {
+                        "document_type": document_type.value,
+                        "is_reference_material": is_reference_material,
+                    }
+                )
+                .in_("id", document_ids)
+                .execute()
+            )
 
             updated_count = len(result.data) if result.data else 0
 
@@ -527,7 +551,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to bulk update documents: {e!s}",
-                code="BULK_UPDATE_FAILED"
+                code="BULK_UPDATE_FAILED",
             ) from e
 
     def delete_document(self, document_id: str, cleanup_storage: bool = True) -> bool:
@@ -546,15 +570,17 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # First fetch document to get storage_path
-            result = self.client.table("documents").select("id, storage_path").eq(
-                "id", document_id
-            ).execute()
+            result = (
+                self.client.table("documents")
+                .select("id, storage_path")
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
@@ -562,9 +588,7 @@ class DocumentService:
             storage_path = result.data[0].get("storage_path")
 
             # Delete the document from database
-            self.client.table("documents").delete().eq(
-                "id", document_id
-            ).execute()
+            self.client.table("documents").delete().eq("id", document_id).execute()
 
             logger.info("document_deleted", document_id=document_id)
 
@@ -598,8 +622,7 @@ class DocumentService:
                 error=str(e),
             )
             raise DocumentServiceError(
-                message=f"Failed to delete document: {e!s}",
-                code="DELETE_FAILED"
+                message=f"Failed to delete document: {e!s}", code="DELETE_FAILED"
             ) from e
 
     def soft_delete_document(self, document_id: str) -> dict:
@@ -620,15 +643,17 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # First verify document exists and get matter_id for cache invalidation
-            result = self.client.table("documents").select("id, matter_id").eq(
-                "id", document_id
-            ).execute()
+            result = (
+                self.client.table("documents")
+                .select("id, matter_id")
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
@@ -639,15 +664,21 @@ class DocumentService:
             # status='deleted' is the wall: every recovery task filters on status,
             # so deleted docs are structurally excluded from recovery loops (INF-009).
             deleted_at = datetime.now(UTC)
-            update_result = self.client.table("documents").update({
-                "deleted_at": deleted_at.isoformat(),
-                "status": "deleted",
-            }).eq("id", document_id).execute()
+            update_result = (
+                self.client.table("documents")
+                .update(
+                    {
+                        "deleted_at": deleted_at.isoformat(),
+                        "status": "deleted",
+                    }
+                )
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not update_result.data:
                 raise DocumentServiceError(
-                    message="Failed to soft delete document",
-                    code="SOFT_DELETE_FAILED"
+                    message="Failed to soft delete document", code="SOFT_DELETE_FAILED"
                 )
 
             # Cascade cleanup: delete related data to prevent orphaned records
@@ -684,7 +715,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to soft delete document: {e!s}",
-                code="SOFT_DELETE_FAILED"
+                code="SOFT_DELETE_FAILED",
             ) from e
 
     def _invalidate_summary_cache(self, matter_id: str) -> None:
@@ -695,6 +726,7 @@ class DocumentService:
         """
         try:
             import asyncio
+
             from app.services.summary_service import get_summary_service
 
             # Run async cache invalidation in sync context
@@ -730,8 +762,7 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         affected = {
@@ -745,34 +776,59 @@ class DocumentService:
         try:
             # Delete chunks (they have ON DELETE CASCADE, but for soft-delete
             # we need to manually remove them to prevent orphaned embeddings)
-            chunks_result = self.client.table("chunks").delete().eq(
-                "document_id", document_id
-            ).execute()
-            affected["chunks_deleted"] = len(chunks_result.data) if chunks_result.data else 0
+            chunks_result = (
+                self.client.table("chunks")
+                .delete()
+                .eq("document_id", document_id)
+                .execute()
+            )
+            affected["chunks_deleted"] = (
+                len(chunks_result.data) if chunks_result.data else 0
+            )
 
             # Delete citations from this document
-            citations_result = self.client.table("citations").delete().eq(
-                "source_document_id", document_id
-            ).execute()
-            affected["citations_deleted"] = len(citations_result.data) if citations_result.data else 0
+            citations_result = (
+                self.client.table("citations")
+                .delete()
+                .eq("source_document_id", document_id)
+                .execute()
+            )
+            affected["citations_deleted"] = (
+                len(citations_result.data) if citations_result.data else 0
+            )
 
             # Nullify document_id on events (matches ON DELETE SET NULL behavior)
-            events_result = self.client.table("events").update({
-                "document_id": None
-            }).eq("document_id", document_id).execute()
-            affected["events_nullified"] = len(events_result.data) if events_result.data else 0
+            events_result = (
+                self.client.table("events")
+                .update({"document_id": None})
+                .eq("document_id", document_id)
+                .execute()
+            )
+            affected["events_nullified"] = (
+                len(events_result.data) if events_result.data else 0
+            )
 
             # Delete processing jobs for this document
-            jobs_result = self.client.table("processing_jobs").delete().eq(
-                "document_id", document_id
-            ).execute()
-            affected["processing_jobs_deleted"] = len(jobs_result.data) if jobs_result.data else 0
+            jobs_result = (
+                self.client.table("processing_jobs")
+                .delete()
+                .eq("document_id", document_id)
+                .execute()
+            )
+            affected["processing_jobs_deleted"] = (
+                len(jobs_result.data) if jobs_result.data else 0
+            )
 
             # Delete entity mentions for this document
-            mentions_result = self.client.table("entity_mentions").delete().eq(
-                "document_id", document_id
-            ).execute()
-            affected["entity_mentions_deleted"] = len(mentions_result.data) if mentions_result.data else 0
+            mentions_result = (
+                self.client.table("entity_mentions")
+                .delete()
+                .eq("document_id", document_id)
+                .execute()
+            )
+            affected["entity_mentions_deleted"] = (
+                len(mentions_result.data) if mentions_result.data else 0
+            )
 
             logger.info(
                 "cascade_soft_delete_completed",
@@ -884,8 +940,7 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         update_data: dict[str, str | int | float | None] = {
@@ -912,9 +967,12 @@ class DocumentService:
             update_data["ocr_error"] = ocr_error
 
         try:
-            result = self.client.table("documents").update(
-                update_data
-            ).eq("id", document_id).execute()
+            result = (
+                self.client.table("documents")
+                .update(update_data)
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 logger.warning(
@@ -941,7 +999,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to update OCR status: {e!s}",
-                code="OCR_STATUS_UPDATE_FAILED"
+                code="OCR_STATUS_UPDATE_FAILED",
             ) from e
 
     def update_injection_scan(
@@ -964,8 +1022,7 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         update_data: dict = {
@@ -976,9 +1033,12 @@ class DocumentService:
             update_data["injection_scan_result"] = scan_result
 
         try:
-            result = self.client.table("documents").update(
-                update_data
-            ).eq("id", document_id).execute()
+            result = (
+                self.client.table("documents")
+                .update(update_data)
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 logger.warning(
@@ -1003,7 +1063,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to update injection scan: {e!s}",
-                code="INJECTION_SCAN_UPDATE_FAILED"
+                code="INJECTION_SCAN_UPDATE_FAILED",
             ) from e
 
     def increment_ocr_retry_count(self, document_id: str) -> int:
@@ -1020,15 +1080,17 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # Get current retry count
-            result = self.client.table("documents").select(
-                "ocr_retry_count"
-            ).eq("id", document_id).execute()
+            result = (
+                self.client.table("documents")
+                .select("ocr_retry_count")
+                .eq("id", document_id)
+                .execute()
+            )
 
             current_count = 0
             if result.data:
@@ -1037,9 +1099,11 @@ class DocumentService:
             new_count = current_count + 1
 
             # Update retry count
-            self.client.table("documents").update({
-                "ocr_retry_count": new_count,
-            }).eq("id", document_id).execute()
+            self.client.table("documents").update(
+                {
+                    "ocr_retry_count": new_count,
+                }
+            ).eq("id", document_id).execute()
 
             logger.info(
                 "document_ocr_retry_incremented",
@@ -1057,7 +1121,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to increment retry count: {e!s}",
-                code="RETRY_INCREMENT_FAILED"
+                code="RETRY_INCREMENT_FAILED",
             ) from e
 
     def get_document_for_processing(self, document_id: str) -> tuple[str, str]:
@@ -1075,14 +1139,16 @@ class DocumentService:
         """
         if self.client is None:
             raise DocumentServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
-            result = self.client.table("documents").select(
-                "storage_path, matter_id"
-            ).eq("id", document_id).execute()
+            result = (
+                self.client.table("documents")
+                .select("storage_path, matter_id")
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not result.data:
                 raise DocumentNotFoundError(document_id)
@@ -1100,7 +1166,7 @@ class DocumentService:
             )
             raise DocumentServiceError(
                 message=f"Failed to get document for processing: {e!s}",
-                code="GET_FOR_PROCESSING_FAILED"
+                code="GET_FOR_PROCESSING_FAILED",
             ) from e
 
     def get_pending_documents_for_matter(self, matter_id: str) -> list[dict]:
@@ -1128,9 +1194,13 @@ class DocumentService:
                 DocumentStatus.EMBEDDING.value,
             ]
 
-            result = self.client.table("documents").select(
-                "id, page_count, status"
-            ).eq("matter_id", matter_id).in_("status", pending_statuses).execute()
+            result = (
+                self.client.table("documents")
+                .select("id, page_count, status")
+                .eq("matter_id", matter_id)
+                .in_("status", pending_statuses)
+                .execute()
+            )
 
             if not result.data:
                 return []
@@ -1177,9 +1247,14 @@ class DocumentService:
 
             # === Path 1: Acts already in library (correct path) ===
             # Query matter_library_links → library_documents for Acts
-            links_result = self.client.table("matter_library_links").select(
-                "library_document_id, library_documents(id, title, filename, source, status)"
-            ).eq("matter_id", matter_id).execute()
+            links_result = (
+                self.client.table("matter_library_links")
+                .select(
+                    "library_document_id, library_documents(id, title, filename, source, status)"
+                )
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             linked_acts = links_result.data or []
 
@@ -1195,7 +1270,9 @@ class DocumentService:
                 source = lib_doc.get("source", "user_upload")
 
                 # Extract act name from title
-                act_name = title or (filename.rsplit(".", 1)[0] if "." in filename else filename)
+                act_name = title or (
+                    filename.rsplit(".", 1)[0] if "." in filename else filename
+                )
                 normalized_name = normalize_act_name(act_name)
 
                 # Determine resolution status
@@ -1205,11 +1282,13 @@ class DocumentService:
                     resolution_status = "available"
 
                 # Check if act_resolution exists and update if needed
-                existing = self.client.table("act_resolutions").select(
-                    "id, resolution_status, act_document_id"
-                ).eq("matter_id", matter_id).eq(
-                    "act_name_normalized", normalized_name
-                ).execute()
+                existing = (
+                    self.client.table("act_resolutions")
+                    .select("id, resolution_status, act_document_id")
+                    .eq("matter_id", matter_id)
+                    .eq("act_name_normalized", normalized_name)
+                    .execute()
+                )
 
                 if existing.data:
                     resolution = existing.data[0]
@@ -1218,12 +1297,16 @@ class DocumentService:
                         resolution.get("resolution_status") == "missing"
                         or resolution.get("act_document_id") != library_doc_id
                     ):
-                        self.client.table("act_resolutions").update({
-                            "resolution_status": resolution_status,
-                            "act_document_id": library_doc_id,
-                            "user_action": "auto_fetched" if source == "india_code" else "uploaded",
-                            "updated_at": datetime.now(UTC).isoformat(),
-                        }).eq("id", resolution["id"]).execute()
+                        self.client.table("act_resolutions").update(
+                            {
+                                "resolution_status": resolution_status,
+                                "act_document_id": library_doc_id,
+                                "user_action": "auto_fetched"
+                                if source == "india_code"
+                                else "uploaded",
+                                "updated_at": datetime.now(UTC).isoformat(),
+                            }
+                        ).eq("id", resolution["id"]).execute()
 
                         updated_count += 1
                         logger.info(
@@ -1235,15 +1318,19 @@ class DocumentService:
                         )
                 else:
                     # Create resolution with library_documents.id
-                    self.client.table("act_resolutions").insert({
-                        "matter_id": matter_id,
-                        "act_name_normalized": normalized_name,
-                        "act_name_display": act_name,
-                        "resolution_status": resolution_status,
-                        "act_document_id": library_doc_id,
-                        "user_action": "auto_fetched" if source == "india_code" else "uploaded",
-                        "citation_count": 0,
-                    }).execute()
+                    self.client.table("act_resolutions").insert(
+                        {
+                            "matter_id": matter_id,
+                            "act_name_normalized": normalized_name,
+                            "act_name_display": act_name,
+                            "resolution_status": resolution_status,
+                            "act_document_id": library_doc_id,
+                            "user_action": "auto_fetched"
+                            if source == "india_code"
+                            else "uploaded",
+                            "citation_count": 0,
+                        }
+                    ).execute()
 
                     updated_count += 1
                     logger.info(
@@ -1254,28 +1341,34 @@ class DocumentService:
                     )
 
             # === Path 2: Detect un-promoted Acts still in documents table ===
-            unpromoted = self.client.table("documents").select(
-                "id, filename, storage_path"
-            ).eq(
-                "matter_id", matter_id
-            ).eq(
-                "document_type", "act"
-            ).or_(
-                "migrated_to_library.is.null,migrated_to_library.eq.false"
-            ).is_("deleted_at", "null").execute()
+            unpromoted = (
+                self.client.table("documents")
+                .select("id, filename, storage_path")
+                .eq("matter_id", matter_id)
+                .eq("document_type", "act")
+                .or_("migrated_to_library.is.null,migrated_to_library.eq.false")
+                .is_("deleted_at", "null")
+                .execute()
+            )
 
             unpromoted_docs = unpromoted.data or []
             for doc in unpromoted_docs:
                 try:
                     from app.services.library_service import get_library_service
+
                     lib_service = get_library_service()
                     # Get a user_id for the promotion
-                    user_result = self.client.table("documents").select(
-                        "uploaded_by"
-                    ).eq("matter_id", matter_id).not_.is_(
-                        "uploaded_by", "null"
-                    ).limit(1).execute()
-                    user_id = user_result.data[0]["uploaded_by"] if user_result.data else None
+                    user_result = (
+                        self.client.table("documents")
+                        .select("uploaded_by")
+                        .eq("matter_id", matter_id)
+                        .not_.is_("uploaded_by", "null")
+                        .limit(1)
+                        .execute()
+                    )
+                    user_id = (
+                        user_result.data[0]["uploaded_by"] if user_result.data else None
+                    )
 
                     if user_id:
                         library_doc_id = lib_service.promote_document_to_library(
@@ -1284,7 +1377,10 @@ class DocumentService:
                             user_id=user_id,
                         )
 
-                        from app.workers.tasks.library_tasks import promote_chunks_to_library
+                        from app.workers.tasks.library_tasks import (
+                            promote_chunks_to_library,
+                        )
+
                         promote_chunks_to_library.apply_async(
                             kwargs={
                                 "library_document_id": library_doc_id,

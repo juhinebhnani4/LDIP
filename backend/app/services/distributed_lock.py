@@ -22,7 +22,9 @@ CHUNK_LOCK_KEY_PATTERN = "chunk_lock:{document_id}:{chunk_index}"
 
 # Pipeline deduplication lock (Stage 1.2: prevents duplicate pipeline runs)
 PIPELINE_LOCK_KEY = "pipeline_lock:{document_id}"
-PIPELINE_LOCK_TIMEOUT = 1800  # 30 min — covers longest pipeline (422-page contradiction detection)
+PIPELINE_LOCK_TIMEOUT = (
+    1800  # 30 min — covers longest pipeline (422-page contradiction detection)
+)
 
 
 class DistributedLockError(Exception):
@@ -207,7 +209,11 @@ class PipelineLock:
                 logger.info("pipeline_already_running", document_id=self.document_id)
             return acquired
         except redis.RedisError as e:
-            logger.error("pipeline_lock_acquire_error", document_id=self.document_id, error=str(e))
+            logger.error(
+                "pipeline_lock_acquire_error",
+                document_id=self.document_id,
+                error=str(e),
+            )
             # Fail open: allow pipeline to proceed if Redis is down
             return True
 
@@ -217,7 +223,11 @@ class PipelineLock:
             self._client.delete(self.lock_key)
             logger.info("pipeline_lock_released", document_id=self.document_id)
         except redis.RedisError as e:
-            logger.warning("pipeline_lock_release_error", document_id=self.document_id, error=str(e))
+            logger.warning(
+                "pipeline_lock_release_error",
+                document_id=self.document_id,
+                error=str(e),
+            )
 
     def is_locked(self) -> bool:
         """Check if a pipeline is currently running for this document."""

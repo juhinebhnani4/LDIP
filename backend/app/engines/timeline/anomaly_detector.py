@@ -163,10 +163,7 @@ class TimelineAnomalyDetector:
             List of sequence violation anomalies.
         """
         # Filter to sequenceable event types only
-        seq_events = [
-            e for e in events
-            if e.event_type.value in SEQUENCEABLE_TYPES
-        ]
+        seq_events = [e for e in events if e.event_type.value in SEQUENCEABLE_TYPES]
 
         if len(seq_events) < 2:
             return []
@@ -179,8 +176,12 @@ class TimelineAnomalyDetector:
             event_a = seq_events[i]
             event_b = seq_events[i + 1]
 
-            pos_a = self.validator.get_event_position(event_a.event_type, expected_sequence)
-            pos_b = self.validator.get_event_position(event_b.event_type, expected_sequence)
+            pos_a = self.validator.get_event_position(
+                event_a.event_type, expected_sequence
+            )
+            pos_b = self.validator.get_event_position(
+                event_b.event_type, expected_sequence
+            )
 
             # Skip if either type is not in the expected sequence
             if pos_a == -1 or pos_b == -1:
@@ -205,8 +206,14 @@ class TimelineAnomalyDetector:
                         title=f"{event_b.event_type.value.capitalize()} after {event_a.event_type.value}",
                         explanation=explanation,
                         event_ids=[event_a.event_id, event_b.event_id],
-                        expected_order=[event_b.event_type.value, event_a.event_type.value],
-                        actual_order=[event_a.event_type.value, event_b.event_type.value],
+                        expected_order=[
+                            event_b.event_type.value,
+                            event_a.event_type.value,
+                        ],
+                        actual_order=[
+                            event_a.event_type.value,
+                            event_b.event_type.value,
+                        ],
                         confidence=0.9,
                     )
                 )
@@ -234,10 +241,7 @@ class TimelineAnomalyDetector:
             List of gap anomalies.
         """
         # Filter to sequenceable event types
-        seq_events = [
-            e for e in events
-            if e.event_type.value in SEQUENCEABLE_TYPES
-        ]
+        seq_events = [e for e in events if e.event_type.value in SEQUENCEABLE_TYPES]
 
         if len(seq_events) < 2:
             return []
@@ -334,9 +338,7 @@ class TimelineAnomalyDetector:
             for event in date_events:
                 # Create a set of significant words (3+ chars, lowercase)
                 tokens = {
-                    word.lower()
-                    for word in event.description.split()
-                    if len(word) >= 3
+                    word.lower() for word in event.description.split() if len(word) >= 3
                 }
                 token_sets.append((event, tokens))
 

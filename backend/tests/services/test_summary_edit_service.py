@@ -70,7 +70,9 @@ class TestSaveEdit:
         """Should successfully save edit via upsert."""
         mock_execute = MagicMock()
         mock_execute.data = [sample_edit_row]
-        mock_supabase.table.return_value.upsert.return_value.execute.return_value = mock_execute
+        mock_supabase.table.return_value.upsert.return_value.execute.return_value = (
+            mock_execute
+        )
 
         result = await service.save_edit(
             matter_id="matter-123",
@@ -87,7 +89,9 @@ class TestSaveEdit:
         mock_supabase.table.assert_called_with("summary_edits")
 
     @pytest.mark.asyncio
-    async def test_save_edit_upsert_updates_existing(self, service, mock_supabase, sample_edit_row):
+    async def test_save_edit_upsert_updates_existing(
+        self, service, mock_supabase, sample_edit_row
+    ):
         """Should update existing edit on conflict."""
         mock_execute = MagicMock()
         mock_execute.data = [sample_edit_row]
@@ -112,8 +116,8 @@ class TestSaveEdit:
     @pytest.mark.asyncio
     async def test_save_edit_error_handling(self, service, mock_supabase):
         """Should raise EditSaveError on failure."""
-        mock_supabase.table.return_value.upsert.return_value.execute.side_effect = Exception(
-            "Database error"
+        mock_supabase.table.return_value.upsert.return_value.execute.side_effect = (
+            Exception("Database error")
         )
 
         with pytest.raises(EditSaveError) as exc_info:

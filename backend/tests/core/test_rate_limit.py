@@ -100,7 +100,7 @@ class TestRateLimitKeyExtraction:
         mock_request.headers = Headers({})
 
         # hasattr should return False now
-        with patch('app.core.rate_limit.get_remote_address', return_value="10.0.0.1"):
+        with patch("app.core.rate_limit.get_remote_address", return_value="10.0.0.1"):
             key = _get_rate_limit_key(mock_request)
         assert key == "10.0.0.1"
 
@@ -163,14 +163,19 @@ class TestCustom429Handler:
         exc = MagicMock(spec=RateLimitExceeded)
         exc.detail = "Rate limit exceeded: 30 per 1 minute"
 
-        with patch('app.core.rate_limit.get_remote_address', return_value="127.0.0.1"):
-            with patch('app.core.rate_limit.get_correlation_id', return_value="test-corr-123"):
-                response = rate_limit_exceeded_handler(mock_request, exc)
+        with (
+            patch("app.core.rate_limit.get_remote_address", return_value="127.0.0.1"),
+            patch(
+                "app.core.rate_limit.get_correlation_id", return_value="test-corr-123"
+            ),
+        ):
+            response = rate_limit_exceeded_handler(mock_request, exc)
 
         assert response.status_code == 429
 
         # Parse response body
         import json
+
         body = json.loads(response.body)
 
         # Verify error structure
@@ -203,9 +208,11 @@ class TestCustom429Handler:
         exc = MagicMock(spec=RateLimitExceeded)
         exc.detail = "Rate limit exceeded: 60 per 1 minute"
 
-        with patch('app.core.rate_limit.get_remote_address', return_value="10.0.0.1"):
-            with patch('app.core.rate_limit.get_correlation_id', return_value="test-123"):
-                response = rate_limit_exceeded_handler(mock_request, exc)
+        with (
+            patch("app.core.rate_limit.get_remote_address", return_value="10.0.0.1"),
+            patch("app.core.rate_limit.get_correlation_id", return_value="test-123"),
+        ):
+            response = rate_limit_exceeded_handler(mock_request, exc)
 
         # Verify headers
         assert "retry-after" in response.headers
@@ -257,7 +264,9 @@ class TestRateLimitStatus:
         mock_request.client.host = "203.0.113.50"
         mock_request.headers = Headers({})
 
-        with patch('app.core.rate_limit.get_remote_address', return_value="203.0.113.50"):
+        with patch(
+            "app.core.rate_limit.get_remote_address", return_value="203.0.113.50"
+        ):
             status = get_rate_limit_status(mock_request)
 
         assert status["key"] == "203.0.113.50"

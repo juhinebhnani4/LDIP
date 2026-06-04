@@ -22,7 +22,6 @@ from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import (
     CACHE_TTL,
     cache_key,
-    cache_pattern,
     query_version_key,
     validate_key_access,
 )
@@ -114,7 +113,8 @@ class QueryCacheRepository:
             logger.error(
                 "redis_get_cached_result_failed",
                 matter_id=matter_id,
-                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",  # Truncate for logging
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH]
+                + "...",  # Truncate for logging
                 error=str(e),
             )
             raise RuntimeError(f"Failed to get cached result from Redis: {e}") from e

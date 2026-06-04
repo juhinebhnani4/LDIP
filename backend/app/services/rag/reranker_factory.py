@@ -36,6 +36,7 @@ def get_rerank_service(provider: RerankProvider | str | None = None):
 
     # Kill switch: force Cohere when A/B testing is disabled
     from app.core.config import get_settings
+
     settings = get_settings()
     if not settings.voyage_ab_testing_enabled:
         provider_enum = RerankProvider.COHERE
@@ -43,10 +44,12 @@ def get_rerank_service(provider: RerankProvider | str | None = None):
     if provider_enum not in _instances:
         if provider_enum == RerankProvider.VOYAGE:
             from app.services.rag.voyage_reranker import VoyageRerankService
+
             _instances[provider_enum] = VoyageRerankService()
             logger.info("voyage_rerank_service_initialized")
         else:
             from app.services.rag.reranker import CohereRerankService
+
             _instances[provider_enum] = CohereRerankService()
             logger.info("cohere_rerank_service_initialized")
 

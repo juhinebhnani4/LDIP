@@ -3,8 +3,9 @@
 Story 15.3: Integrate Chunk Progress with Job Tracking
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.models.job import JobStatus
 from app.models.ocr_chunk import ChunkProgress
@@ -138,9 +139,7 @@ class TestChunkProgressTracker:
             chunk_service=mock_chunk_service,
         )
 
-        with patch(
-            "app.services.job_tracking.chunk_progress.broadcast_job_progress"
-        ):
+        with patch("app.services.job_tracking.chunk_progress.broadcast_job_progress"):
             await tracker.update_chunk_progress(
                 job_id="job-123",
                 document_id="doc-456",
@@ -169,9 +168,7 @@ class TestChunkProgressTracker:
             chunk_service=mock_chunk_service,
         )
 
-        with patch(
-            "app.services.job_tracking.chunk_progress.broadcast_job_progress"
-        ):
+        with patch("app.services.job_tracking.chunk_progress.broadcast_job_progress"):
             await tracker.update_chunk_progress(
                 job_id="job-123",
                 document_id="doc-456",
@@ -243,9 +240,7 @@ class TestReportChunkFailure:
             chunk_service=mock_chunk_service,
         )
 
-        with patch(
-            "app.services.job_tracking.chunk_progress.broadcast_job_progress"
-        ):
+        with patch("app.services.job_tracking.chunk_progress.broadcast_job_progress"):
             await tracker.report_chunk_failure(
                 job_id="job-123",
                 document_id="doc-456",

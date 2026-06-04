@@ -11,12 +11,22 @@ from pydantic import BaseModel, Field
 class CostByOperation(BaseModel):
     """Cost breakdown by operation type."""
 
-    operation: str = Field(..., description="Operation type (e.g., embedding, analysis, qa)")
+    operation: str = Field(
+        ..., description="Operation type (e.g., embedding, analysis, qa)"
+    )
     cost_inr: float = Field(..., alias="costInr", description="Total cost in INR")
-    cost_usd: float = Field(..., alias="costUsd", description="Total cost in USD for reference")
-    input_tokens: int = Field(..., alias="inputTokens", description="Total input tokens")
-    output_tokens: int = Field(..., alias="outputTokens", description="Total output tokens")
-    operation_count: int = Field(..., alias="operationCount", description="Number of operations")
+    cost_usd: float = Field(
+        ..., alias="costUsd", description="Total cost in USD for reference"
+    )
+    input_tokens: int = Field(
+        ..., alias="inputTokens", description="Total input tokens"
+    )
+    output_tokens: int = Field(
+        ..., alias="outputTokens", description="Total output tokens"
+    )
+    operation_count: int = Field(
+        ..., alias="operationCount", description="Number of operations"
+    )
 
     model_config = {
         "populate_by_name": True,
@@ -28,10 +38,18 @@ class CostByProvider(BaseModel):
 
     provider: str = Field(..., description="Provider identifier (e.g., gpt-4, gemini)")
     cost_inr: float = Field(..., alias="costInr", description="Total cost in INR")
-    cost_usd: float = Field(..., alias="costUsd", description="Total cost in USD for reference")
-    input_tokens: int = Field(..., alias="inputTokens", description="Total input tokens")
-    output_tokens: int = Field(..., alias="outputTokens", description="Total output tokens")
-    operation_count: int = Field(..., alias="operationCount", description="Number of operations")
+    cost_usd: float = Field(
+        ..., alias="costUsd", description="Total cost in USD for reference"
+    )
+    input_tokens: int = Field(
+        ..., alias="inputTokens", description="Total input tokens"
+    )
+    output_tokens: int = Field(
+        ..., alias="outputTokens", description="Total output tokens"
+    )
+    operation_count: int = Field(
+        ..., alias="operationCount", description="Number of operations"
+    )
 
     model_config = {
         "populate_by_name": True,
@@ -42,8 +60,12 @@ class DailyCost(BaseModel):
     """Daily cost entry for time-series display."""
 
     date: str = Field(..., description="Date in YYYY-MM-DD format")
-    cost_inr: float = Field(..., alias="costInr", description="Cost for this day in INR")
-    cost_usd: float = Field(..., alias="costUsd", description="Cost for this day in USD")
+    cost_inr: float = Field(
+        ..., alias="costInr", description="Cost for this day in INR"
+    )
+    cost_usd: float = Field(
+        ..., alias="costUsd", description="Cost for this day in USD"
+    )
 
     model_config = {
         "populate_by_name": True,
@@ -308,7 +330,9 @@ class UsageDashboardResponse(BaseModel):
     total_requests: int = Field(default=0, alias="totalRequests")
     daily_spend: list[DailyUsage] = Field(default_factory=list, alias="dailySpend")
     by_provider: list[ProviderUsage] = Field(default_factory=list, alias="byProvider")
-    by_operation: list[OperationUsage] = Field(default_factory=list, alias="byOperation")
+    by_operation: list[OperationUsage] = Field(
+        default_factory=list, alias="byOperation"
+    )
     by_matter: list[MatterUsage] = Field(default_factory=list, alias="byMatter")
 
     model_config = {"populate_by_name": True}

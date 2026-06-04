@@ -20,13 +20,15 @@ logger = structlog.get_logger(__name__)
 
 # Get settings for URL expiry (default to 24 hours if not configured)
 _settings = get_settings()
-CACHED_ACT_URL_EXPIRES = getattr(_settings, 'act_cache_url_expiry_seconds', 86400)
+CACHED_ACT_URL_EXPIRES = getattr(_settings, "act_cache_url_expiry_seconds", 86400)
 
 
 class ActCacheError(Exception):
     """Base exception for act cache operations."""
 
-    def __init__(self, message: str, code: str = "ACT_CACHE_ERROR", status_code: int = 500):
+    def __init__(
+        self, message: str, code: str = "ACT_CACHE_ERROR", status_code: int = 500
+    ):
         self.message = message
         self.code = code
         self.status_code = status_code
@@ -80,15 +82,14 @@ class ActCacheService:
         if self.client is None:
             return False
 
-        storage_path = self._get_storage_path(normalized_name)
+        storage_path = self._get_storage_path(normalized_name)  # noqa: F841  # TODO: cache-existence check should use this path
 
         try:
             # Try to get file info - if it exists, it's cached
             # We use list with prefix to check existence
             prefix = self._settings.act_cache_storage_prefix
             result = self.client.storage.from_(self.bucket).list(
-                path=f"{prefix}/",
-                options={"search": f"{normalized_name}.pdf"}
+                path=f"{prefix}/", options={"search": f"{normalized_name}.pdf"}
             )
 
             # Check if our file is in the results
@@ -128,8 +129,7 @@ class ActCacheService:
         """
         if self.client is None:
             raise ActCacheError(
-                message="Storage client not configured",
-                code="STORAGE_NOT_CONFIGURED"
+                message="Storage client not configured", code="STORAGE_NOT_CONFIGURED"
             )
 
         storage_path = self._get_storage_path(normalized_name)
@@ -148,7 +148,7 @@ class ActCacheService:
                 file_options={
                     "content-type": content_type,
                     "upsert": "true",  # Overwrite if exists
-                }
+                },
             )
 
             logger.info(
@@ -166,8 +166,7 @@ class ActCacheService:
                 error=str(e),
             )
             raise ActCacheError(
-                message=f"Failed to cache Act PDF: {e!s}",
-                code="CACHE_FAILED"
+                message=f"Failed to cache Act PDF: {e!s}", code="CACHE_FAILED"
             ) from e
 
     def get_cached_act(self, normalized_name: str) -> bytes | None:
@@ -228,8 +227,7 @@ class ActCacheService:
 
         try:
             response = self.client.storage.from_(self.bucket).create_signed_url(
-                path=storage_path,
-                expires_in=expires_in
+                path=storage_path, expires_in=expires_in
             )
 
             return response.get("signedURL")

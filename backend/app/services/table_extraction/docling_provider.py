@@ -95,7 +95,8 @@ class DoclingProvider:
         Returns:
             Detected version string, or "unknown" if all methods fail.
         """
-        from importlib.metadata import version as pkg_version, PackageNotFoundError
+        from importlib.metadata import PackageNotFoundError
+        from importlib.metadata import version as pkg_version
 
         # Strategy 1: importlib.metadata for "docling"
         try:
@@ -108,6 +109,7 @@ class DoclingProvider:
         # Strategy 2: docling.__version__ attribute (some packages set this)
         try:
             import docling
+
             v = getattr(docling, "__version__", None)
             if v and v != "0.0.0":
                 return v

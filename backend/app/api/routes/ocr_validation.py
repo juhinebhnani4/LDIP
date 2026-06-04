@@ -131,17 +131,28 @@ async def get_validation_status(
         document_service.get_document(document_id)
 
         # Get validation status from document
-        doc_result = client.table("documents").select(
-            "validation_status"
-        ).eq("id", document_id).single().execute()
+        doc_result = (
+            client.table("documents")
+            .select("validation_status")
+            .eq("id", document_id)
+            .single()
+            .execute()
+        )
 
-        validation_status_str = doc_result.data.get("validation_status", "pending") if doc_result.data else "pending"
+        validation_status_str = (
+            doc_result.data.get("validation_status", "pending")
+            if doc_result.data
+            else "pending"
+        )
         validation_status = ValidationStatus(validation_status_str)
 
         # Count corrections from validation log
-        log_result = client.table("ocr_validation_log").select(
-            "validation_type"
-        ).eq("document_id", document_id).execute()
+        log_result = (
+            client.table("ocr_validation_log")
+            .select("validation_type")
+            .eq("document_id", document_id)
+            .execute()
+        )
 
         pattern_count = 0
         gemini_count = 0
@@ -158,9 +169,12 @@ async def get_validation_status(
                         human_count += 1
 
         # Count human review items
-        human_result = client.table("ocr_human_review").select(
-            "status"
-        ).eq("document_id", document_id).execute()
+        human_result = (
+            client.table("ocr_human_review")
+            .select("status")
+            .eq("document_id", document_id)
+            .execute()
+        )
 
         human_pending = 0
         human_completed = 0
@@ -252,23 +266,25 @@ async def get_validation_log(
         document_service.get_document(document_id)
 
         # Get total count
-        count_result = client.table("ocr_validation_log").select(
-            "id", count="exact"
-        ).eq("document_id", document_id).execute()
+        count_result = (
+            client.table("ocr_validation_log")
+            .select("id", count="exact")
+            .eq("document_id", document_id)
+            .execute()
+        )
 
         total = count_result.count or 0
 
         # Get paginated log entries
         offset = (page - 1) * per_page
-        result = client.table("ocr_validation_log").select(
-            "*"
-        ).eq(
-            "document_id", document_id
-        ).order(
-            "created_at", desc=True
-        ).range(
-            offset, offset + per_page - 1
-        ).execute()
+        result = (
+            client.table("ocr_validation_log")
+            .select("*")
+            .eq("document_id", document_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + per_page - 1)
+            .execute()
+        )
 
         entries = []
         if result.data:
@@ -284,7 +300,9 @@ async def get_validation_log(
                         new_confidence=row.get("new_confidence"),
                         validation_type=row["validation_type"],
                         reasoning=row.get("reasoning"),
-                        created_at=datetime.fromisoformat(row["created_at"]) if row.get("created_at") else None,
+                        created_at=datetime.fromisoformat(row["created_at"])
+                        if row.get("created_at")
+                        else None,
                     )
                 )
 

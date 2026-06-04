@@ -132,7 +132,8 @@ async def global_search(
             detail={
                 "error": {
                     "code": "SAFETY_VIOLATION",
-                    "message": safety_result.explanation or "Query blocked by safety guard",
+                    "message": safety_result.explanation
+                    or "Query blocked by safety guard",
                     "details": {
                         "violation_type": safety_result.violation_type,
                         "suggested_rewrite": safety_result.suggested_rewrite,

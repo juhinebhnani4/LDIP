@@ -10,18 +10,19 @@ Validates structured logging for the chunking pipeline:
 - Performance metrics logged for monitoring
 """
 
-import json
-import logging
-from io import BytesIO, StringIO
-from unittest.mock import MagicMock, patch
+import contextlib
+from io import BytesIO
 
 import pytest
 import structlog
 from pypdf import PdfWriter
 
+from app.services.ocr_result_merger import (
+    ChunkOCRResult,
+    MergeValidationError,
+    OCRResultMerger,
+)
 from app.services.pdf_chunker import PDFChunker
-from app.services.ocr_result_merger import ChunkOCRResult, MergeValidationError, OCRResultMerger
-
 
 # =============================================================================
 # Fixtures
@@ -84,12 +85,10 @@ class TestPDFChunkerLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(75)
             chunker = PDFChunker(enable_memory_tracking=False)
-            chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+            chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         # Find the completion log
-        split_complete = [
-            e for e in captured if e.get("event") == "pdf_split_complete"
-        ]
+        split_complete = [e for e in captured if e.get("event") == "pdf_split_complete"]
         assert len(split_complete) == 1
 
         log = split_complete[0]
@@ -102,7 +101,7 @@ class TestPDFChunkerLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(50)
             chunker = PDFChunker(enable_memory_tracking=False)
-            chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+            chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         # Should have 2 chunk_extracted events (at debug level)
         chunk_logs = [e for e in captured if e.get("event") == "chunk_extracted"]
@@ -119,7 +118,7 @@ class TestPDFChunkerLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(75)
             chunker = PDFChunker(enable_memory_tracking=False)
-            with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
+            with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:  # noqa: F841
                 pass
 
         split_complete = [
@@ -137,7 +136,7 @@ class TestPDFChunkerLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(50)
             chunker = PDFChunker(enable_memory_tracking=False)
-            with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
+            with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:  # noqa: F841
                 pass  # Trigger cleanup on exit
 
         cleanup_logs = [
@@ -149,14 +148,10 @@ class TestPDFChunkerLogging:
         """Error is logged when PDF parsing fails."""
         with structlog.testing.capture_logs() as captured:
             chunker = PDFChunker(enable_memory_tracking=False)
-            try:
+            with contextlib.suppress(Exception):
                 chunker.split_pdf(b"Invalid PDF content")
-            except Exception:
-                pass
 
-        error_logs = [
-            e for e in captured if e.get("event") == "pdf_parse_failed"
-        ]
+        error_logs = [e for e in captured if e.get("event") == "pdf_parse_failed"]
         assert len(error_logs) == 1
         assert "error" in error_logs[0]
 
@@ -189,11 +184,9 @@ class TestOCRResultMergerLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            result = merger.merge_results(chunks, "doc-123")
+            merger.merge_results(chunks, "doc-123")
 
-        merge_complete = [
-            e for e in captured if e.get("event") == "ocr_results_merged"
-        ]
+        merge_complete = [e for e in captured if e.get("event") == "ocr_results_merged"]
         assert len(merge_complete) == 1
 
         log = merge_complete[0]
@@ -243,10 +236,8 @@ class TestOCRResultMergerLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            try:
+            with contextlib.suppress(MergeValidationError):
                 merger.merge_results(chunks, "doc-test")
-            except MergeValidationError:
-                pass
 
         error_logs = [
             e for e in captured if e.get("event") == "page_range_validation_failed"
@@ -272,10 +263,8 @@ class TestOCRResultMergerLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            try:
+            with contextlib.suppress(MergeValidationError):
                 merger.merge_results(chunks, "doc-test")
-            except MergeValidationError:
-                pass
 
         checksum_logs = [
             e for e in captured if e.get("event") == "chunk_checksum_mismatch"
@@ -305,7 +294,7 @@ class TestCorrelationIdTracking:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            result = merger.merge_results(chunks, "doc-correlation-test-123")
+            merger.merge_results(chunks, "doc-correlation-test-123")
 
         merge_log = [e for e in captured if e.get("event") == "ocr_results_merged"][0]
         assert merge_log["document_id"] == "doc-correlation-test-123"
@@ -319,7 +308,7 @@ class TestChunkIndexTracking:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(50)
             chunker = PDFChunker(enable_memory_tracking=False)
-            chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+            chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         chunk_logs = [e for e in captured if e.get("event") == "chunk_extracted"]
 
@@ -340,7 +329,7 @@ class TestPerformanceMetricsLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(100)
             chunker = PDFChunker(enable_memory_tracking=False)
-            chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+            chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         split_log = [e for e in captured if e.get("event") == "pdf_split_complete"][0]
         assert split_log["total_pages"] == 100
@@ -364,7 +353,7 @@ class TestPerformanceMetricsLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            result = merger.merge_results(chunks, "doc-test")
+            merger.merge_results(chunks, "doc-test")
 
         merge_log = [e for e in captured if e.get("event") == "ocr_results_merged"][0]
         assert merge_log["chunk_count"] == 10
@@ -385,7 +374,7 @@ class TestPerformanceMetricsLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            result = merger.merge_results(chunks, "doc-test")
+            merger.merge_results(chunks, "doc-test")
 
         merge_log = [e for e in captured if e.get("event") == "ocr_results_merged"][0]
         assert merge_log["total_bboxes"] == 25
@@ -406,7 +395,7 @@ class TestPerformanceMetricsLogging:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            result = merger.merge_results(chunks, "doc-test")
+            merger.merge_results(chunks, "doc-test")
 
         merge_log = [e for e in captured if e.get("event") == "ocr_results_merged"][0]
         assert merge_log["confidence"] == 0.92
@@ -440,12 +429,12 @@ class TestFailurePointIdentification:
 
         with structlog.testing.capture_logs() as captured:
             merger = OCRResultMerger()
-            try:
+            with contextlib.suppress(MergeValidationError):
                 merger.merge_results(chunks, "doc-test")
-            except MergeValidationError:
-                pass
 
-        error_log = [e for e in captured if e.get("event") == "page_range_validation_failed"][0]
+        error_log = [
+            e for e in captured if e.get("event") == "page_range_validation_failed"
+        ][0]
 
         # Error should identify the problematic chunk boundary
         assert "errors" in error_log
@@ -462,13 +451,11 @@ class TestFailurePointIdentification:
 
         with structlog.testing.capture_logs() as captured:
             chunker = PDFChunker(enable_memory_tracking=False)
-            try:
+            with contextlib.suppress(Exception):
                 chunker.split_pdf(empty_pdf)
-            except Exception:
-                pass
 
         # Should have an error event (the specific event depends on implementation)
-        error_events = [e for e in captured if e.get("log_level") == "error"]
+        error_events = [e for e in captured if e.get("log_level") == "error"]  # noqa: F841
         # Note: structlog.testing.capture_logs may not capture log_level
         # This test verifies error path is exercised
 
@@ -485,7 +472,7 @@ class TestMemoryWarningLogging:
         with structlog.testing.capture_logs() as captured:
             pdf_bytes = create_pdf(10)  # Small PDF won't trigger warning
             chunker = PDFChunker(enable_memory_tracking=True)
-            chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+            chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         # Check if any memory warning was logged (unlikely with small PDF)
         memory_warnings = [

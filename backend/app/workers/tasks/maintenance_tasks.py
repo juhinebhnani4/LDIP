@@ -6,6 +6,9 @@ Periodic tasks for:
 - System health monitoring
 """
 
+import contextlib
+from datetime import UTC
+
 import structlog
 
 from app.workers.celery import celery_app
@@ -27,8 +30,11 @@ def _get_effective_stage_from_job(job: dict) -> str | None:
         return job.get("current_stage")
 
     dispatchable_stages = [
-        "embedding", "entity_extraction", "alias_resolution",
-        "citation_extraction", "contradiction_detection",
+        "embedding",
+        "entity_extraction",
+        "alias_resolution",
+        "citation_extraction",
+        "contradiction_detection",
     ]
 
     last_completed_idx = -1
@@ -47,7 +53,9 @@ def _get_effective_stage_from_job(job: dict) -> str | None:
     return job.get("current_stage")
 
 
-def _is_pipeline_data_complete(client, document_id: str, document_type: str = "case_file") -> bool:
+def _is_pipeline_data_complete(
+    client, document_id: str, document_type: str = "case_file"
+) -> bool:
     """Check if all pipeline stages produced output for a document.
 
     Stage 1.3: Smarter Recovery — prevents re-dispatching documents that
@@ -199,7 +207,9 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
 
         response = (
             client.table("processing_jobs")
-            .select("id, document_id, matter_id, job_type, current_stage, updated_at, metadata")
+            .select(
+                "id, document_id, matter_id, job_type, current_stage, updated_at, metadata"
+            )
             .eq("status", "QUEUED")
             .lt("updated_at", cutoff_time.isoformat())
             .execute()
@@ -257,12 +267,16 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             # These are matter-level jobs that may not have a document_id
             if job_type in ENGINE_JOB_TYPES:
                 if not matter_id:
-                    errors.append({"job_id": job_id, "error": "engine job missing matter_id"})
+                    errors.append(
+                        {"job_id": job_id, "error": "engine job missing matter_id"}
+                    )
                     continue
 
                 try:
                     if job_type == "DATE_EXTRACTION":
-                        from app.workers.tasks.engine_tasks import extract_dates_from_matter
+                        from app.workers.tasks.engine_tasks import (
+                            extract_dates_from_matter,
+                        )
 
                         extract_dates_from_matter.apply_async(
                             kwargs={
@@ -280,10 +294,12 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                             job_type=job_type,
                             reason="engine job auto-completed, data exists from pipeline",
                         )
-                        client.table("processing_jobs").update({
-                            "status": "COMPLETED",
-                            "updated_at": datetime.now(UTC).isoformat(),
-                        }).eq("id", job_id).execute()
+                        client.table("processing_jobs").update(
+                            {
+                                "status": "COMPLETED",
+                                "updated_at": datetime.now(UTC).isoformat(),
+                            }
+                        ).eq("id", job_id).execute()
                         skipped += 1
                         continue
 
@@ -317,9 +333,18 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
             # Zombie QUEUED jobs for completed documents should be auto-completed, not re-dispatched.
             try:
-                doc_resp = client.table("documents").select("status, document_type").eq("id", doc_id).execute()
-                doc_status = (doc_resp.data[0]["status"] if doc_resp.data else None)
-                doc_type = (doc_resp.data[0].get("document_type", "case_file") if doc_resp.data else "case_file")
+                doc_resp = (
+                    client.table("documents")
+                    .select("status, document_type")
+                    .eq("id", doc_id)
+                    .execute()
+                )
+                doc_status = doc_resp.data[0]["status"] if doc_resp.data else None
+                doc_type = (
+                    doc_resp.data[0].get("document_type", "case_file")
+                    if doc_resp.data
+                    else "case_file"
+                )
                 if doc_status == "completed":
                     logger.info(
                         "stuck_queued_job_auto_completed",
@@ -327,10 +352,12 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                         document_id=doc_id,
                         reason="document already completed",
                     )
-                    client.table("processing_jobs").update({
-                        "status": "COMPLETED",
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    }).eq("id", job_id).execute()
+                    client.table("processing_jobs").update(
+                        {
+                            "status": "COMPLETED",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }
+                    ).eq("id", job_id).execute()
                     skipped += 1
                     continue
             except Exception:
@@ -345,17 +372,17 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                     document_id=doc_id,
                     reason="all pipeline data exists, marking COMPLETED",
                 )
-                client.table("processing_jobs").update({
-                    "status": "COMPLETED",
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }).eq("id", job_id).execute()
+                client.table("processing_jobs").update(
+                    {
+                        "status": "COMPLETED",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                ).eq("id", job_id).execute()
                 # Also update document status if needed
-                try:
-                    client.table("documents").update(
-                        {"status": "completed"}
-                    ).eq("id", doc_id).neq("status", "completed").execute()
-                except Exception:
-                    pass
+                with contextlib.suppress(Exception):
+                    client.table("documents").update({"status": "completed"}).eq(
+                        "id", doc_id
+                    ).neq("status", "completed").execute()
                 skipped += 1
                 continue
 
@@ -363,6 +390,7 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
             if matter_id:
                 try:
                     from app.core.config import get_settings as _get_settings
+
                     _settings = _get_settings()
                     matter_processing = (
                         client.table("processing_jobs")
@@ -575,12 +603,14 @@ def sync_stale_job_status(self, stale_minutes: int = 30) -> dict:
 
                 # Update if different
                 if actual_stage != current_stage or actual_progress != current_progress:
-                    client.table("processing_jobs").update({
-                        "status": new_status,
-                        "current_stage": actual_stage,
-                        "progress_pct": actual_progress,
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    }).eq("id", job_id).execute()
+                    client.table("processing_jobs").update(
+                        {
+                            "status": new_status,
+                            "current_stage": actual_stage,
+                            "progress_pct": actual_progress,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }
+                    ).eq("id", job_id).execute()
 
                     synced += 1
                     logger.info(
@@ -797,9 +827,12 @@ def recover_skipped_large_documents(self) -> dict:
         recovery_service = get_job_recovery_service(supabase)
 
         # Find SKIPPED jobs with page limit errors
-        response = supabase.table("processing_jobs").select(
-            "id, matter_id, document_id, error_message, metadata"
-        ).eq("status", "SKIPPED").execute()
+        response = (
+            supabase.table("processing_jobs")
+            .select("id, matter_id, document_id, error_message, metadata")
+            .eq("status", "SKIPPED")
+            .execute()
+        )
 
         skipped_jobs = response.data or []
         results = {
@@ -827,9 +860,7 @@ def recover_skipped_large_documents(self) -> dict:
                 continue
 
             # Attempt recovery with chunked processing
-            result = run_async(
-                recovery_service.recover_with_chunked_processing(job)
-            )
+            result = run_async(recovery_service.recover_with_chunked_processing(job))
             if result.get("success"):
                 results["converted"] += 1
                 logger.info(
@@ -840,10 +871,12 @@ def recover_skipped_large_documents(self) -> dict:
                     chunk_count=result.get("chunk_count"),
                 )
             else:
-                results["errors"].append({
-                    "job_id": job["id"],
-                    "error": result.get("error"),
-                })
+                results["errors"].append(
+                    {
+                        "job_id": job["id"],
+                        "error": result.get("error"),
+                    }
+                )
 
         logger.info(
             "recover_skipped_large_documents_completed",
@@ -953,9 +986,9 @@ def fix_missing_extracted_text(self) -> dict:
                     continue
 
                 # Update document with extracted_text
-                client.table("documents").update(
-                    {"extracted_text": full_text}
-                ).eq("id", doc_id).execute()
+                client.table("documents").update({"extracted_text": full_text}).eq(
+                    "id", doc_id
+                ).execute()
 
                 logger.info(
                     "fix_extracted_text_success",
@@ -971,10 +1004,12 @@ def fix_missing_extracted_text(self) -> dict:
                     document_id=doc_id,
                     error=str(e),
                 )
-                results["errors"].append({
-                    "document_id": doc_id,
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "document_id": doc_id,
+                        "error": str(e),
+                    }
+                )
 
         logger.info(
             "fix_missing_extracted_text_completed",
@@ -1084,9 +1119,9 @@ def sync_missing_entity_ids(self) -> dict:
 
                 # Update each chunk
                 for chunk_id, entity_ids in chunk_entities.items():
-                    client.table("chunks").update(
-                        {"entity_ids": list(entity_ids)}
-                    ).eq("id", chunk_id).execute()
+                    client.table("chunks").update({"entity_ids": list(entity_ids)}).eq(
+                        "id", chunk_id
+                    ).execute()
                     results["chunks_updated"] += 1
 
                 results["documents_synced"] += 1
@@ -1125,7 +1160,9 @@ def sync_missing_entity_ids(self) -> dict:
     max_retries=1,
     default_retry_delay=60,
 )
-def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None = None) -> dict:
+def resume_stuck_pipelines(
+    self, stale_hours: int = 1, stale_minutes: int | None = None
+) -> dict:
     """Resume document processing pipelines that got stuck at intermediate stages.
 
     Finds documents that are stuck at ocr_complete (or other intermediate states)
@@ -1146,7 +1183,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
     Returns:
         Dictionary with recovery results.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.services.supabase.client import get_service_client
 
@@ -1173,12 +1210,14 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
         # The old query: .eq("status", "ocr_complete").not_.is_("extracted_text", "null")
         # The new query: status NOT IN terminal states. Let _is_pipeline_data_complete()
         # decide what to do — it's the single source of truth for completion.
-        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=effective_minutes)
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=effective_minutes)
 
         _TERMINAL_STATUSES = ["completed", "failed", "deleted"]
         stuck_docs = (
             client.table("documents")
-            .select("id, matter_id, filename, status, updated_at, extracted_text, document_type")
+            .select(
+                "id, matter_id, filename, status, updated_at, extracted_text, document_type"
+            )
             .not_.in_("status", _TERMINAL_STATUSES)
             .is_("deleted_at", "null")
             .lt("updated_at", cutoff_time.isoformat())
@@ -1194,7 +1233,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
         # Stage 1.2: Import PipelineLock for dedup checks
         from app.services.distributed_lock import PipelineLock
 
-        for doc in (stuck_docs.data or []):
+        for doc in stuck_docs.data or []:
             doc_id = doc["id"]
             matter_id = doc["matter_id"]
             filename = doc.get("filename", "unknown")
@@ -1220,16 +1259,19 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                         doc_status=doc.get("status", ""),
                         reason="all pipeline data exists, marking completed",
                     )
-                    client.table("documents").update(
-                        {"status": "completed"}
-                    ).eq("id", doc_id).execute()
+                    client.table("documents").update({"status": "completed"}).eq(
+                        "id", doc_id
+                    ).execute()
                     # Also complete any stuck processing jobs
                     try:
-                        from datetime import datetime as dt_cls, timezone as tz_cls
-                        client.table("processing_jobs").update({
-                            "status": "COMPLETED",
-                            "updated_at": dt_cls.now(tz_cls.utc).isoformat(),
-                        }).eq("document_id", doc_id).in_(
+                        from datetime import datetime as dt_cls
+
+                        client.table("processing_jobs").update(
+                            {
+                                "status": "COMPLETED",
+                                "updated_at": dt_cls.now(UTC).isoformat(),
+                            }
+                        ).eq("document_id", doc_id).in_(
                             "status", ["PROCESSING", "QUEUED"]
                         ).execute()
                     except Exception:
@@ -1252,6 +1294,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                         reason="no extracted_text, restarting from OCR",
                     )
                     from app.workers.tasks.document_tasks import process_document
+
                     process_document.apply_async(
                         kwargs={"document_id": doc_id},
                         countdown=5,
@@ -1261,11 +1304,14 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
                 # Also mark FAILED jobs for this doc as QUEUED so Part B can re-dispatch
                 try:
-                    from datetime import datetime as dt_cls2, timezone as tz_cls2
-                    client.table("processing_jobs").update({
-                        "status": "QUEUED",
-                        "updated_at": dt_cls2.now(tz_cls2.utc).isoformat(),
-                    }).eq("document_id", doc_id).eq("status", "FAILED").execute()
+                    from datetime import datetime as dt_cls2
+
+                    client.table("processing_jobs").update(
+                        {
+                            "status": "QUEUED",
+                            "updated_at": dt_cls2.now(UTC).isoformat(),
+                        }
+                    ).eq("document_id", doc_id).eq("status", "FAILED").execute()
                 except Exception:
                     pass  # Best effort — Part A handles recovery below
 
@@ -1335,9 +1381,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     document_id=doc_id,
                     filename=filename,
                 )
-                client.table("documents").update(
-                    {"status": "completed"}
-                ).eq("id", doc_id).execute()
+                client.table("documents").update({"status": "completed"}).eq(
+                    "id", doc_id
+                ).execute()
                 results["resumed"] += 1
 
             except Exception as e:
@@ -1357,13 +1403,15 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
         try:
             stuck_jobs = (
                 client.table("processing_jobs")
-                .select("id, document_id, matter_id, current_stage, updated_at, metadata, status")
+                .select(
+                    "id, document_id, matter_id, current_stage, updated_at, metadata, status"
+                )
                 .eq("status", "PROCESSING")
                 .lt("updated_at", cutoff_time.isoformat())
                 .execute()
             )
 
-            for job in (stuck_jobs.data or []):
+            for job in stuck_jobs.data or []:
                 job_doc_id = job.get("document_id")
                 job_matter_id = job.get("matter_id")
                 stage = job.get("current_stage", "")
@@ -1383,9 +1431,18 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 # BUG-FIX #8+#11: Check if document is already completed before re-dispatching.
                 job_doc_type = "case_file"
                 try:
-                    doc_check = client.table("documents").select("status, document_type").eq("id", job_doc_id).execute()
-                    doc_st = (doc_check.data[0]["status"] if doc_check.data else None)
-                    job_doc_type = (doc_check.data[0].get("document_type", "case_file") if doc_check.data else "case_file")
+                    doc_check = (
+                        client.table("documents")
+                        .select("status, document_type")
+                        .eq("id", job_doc_id)
+                        .execute()
+                    )
+                    doc_st = doc_check.data[0]["status"] if doc_check.data else None
+                    job_doc_type = (
+                        doc_check.data[0].get("document_type", "case_file")
+                        if doc_check.data
+                        else "case_file"
+                    )
                     if doc_st == "completed":
                         logger.info(
                             "stuck_processing_job_auto_completed",
@@ -1393,30 +1450,36 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                             document_id=job_doc_id,
                             reason="document already completed",
                         )
-                        client.table("processing_jobs").update({
-                            "status": "COMPLETED",
-                            "updated_at": datetime.now(timezone.utc).isoformat(),
-                        }).eq("id", job["id"]).execute()
+                        client.table("processing_jobs").update(
+                            {
+                                "status": "COMPLETED",
+                                "updated_at": datetime.now(UTC).isoformat(),
+                            }
+                        ).eq("id", job["id"]).execute()
                         results["resumed"] += 1
                         continue
                 except Exception:
                     pass  # If check fails, proceed with normal dispatch
 
                 # Stage 1.3: Check if pipeline data is complete — mark done instead of re-dispatching
-                if _is_pipeline_data_complete(client, job_doc_id, document_type=job_doc_type):
+                if _is_pipeline_data_complete(
+                    client, job_doc_id, document_type=job_doc_type
+                ):
                     logger.info(
                         "stuck_processing_job_data_complete",
                         job_id=job["id"],
                         document_id=job_doc_id,
                         reason="all pipeline data exists, marking COMPLETED",
                     )
-                    client.table("processing_jobs").update({
-                        "status": "COMPLETED",
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }).eq("id", job["id"]).execute()
-                    client.table("documents").update(
-                        {"status": "completed"}
-                    ).eq("id", job_doc_id).neq("status", "completed").execute()
+                    client.table("processing_jobs").update(
+                        {
+                            "status": "COMPLETED",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }
+                    ).eq("id", job["id"]).execute()
+                    client.table("documents").update({"status": "completed"}).eq(
+                        "id", job_doc_id
+                    ).neq("status", "completed").execute()
                     results["resumed"] += 1
                     continue
 
@@ -1443,7 +1506,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                             )
                         else:
                             # Re-dispatch contradiction detection
-                            from app.workers.tasks.document_tasks import detect_contradictions
+                            from app.workers.tasks.document_tasks import (
+                                detect_contradictions,
+                            )
+
                             detect_contradictions.apply_async(
                                 kwargs={"document_id": job_doc_id},
                                 queue="default",
@@ -1452,6 +1518,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                             results["resumed"] += 1
                     elif stage in ("citation_extraction", "citation_verification"):
                         from app.workers.tasks.document_tasks import extract_citations
+
                         extract_citations.apply_async(
                             kwargs={"document_id": job_doc_id},
                             queue="default",
@@ -1473,9 +1540,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                         results["resumed"] += 1
 
                     # Update job timestamp to prevent immediate re-dispatch
-                    from datetime import datetime as dt_cls, timezone as tz_cls
+                    from datetime import datetime as dt_cls
+
                     client.table("processing_jobs").update(
-                        {"updated_at": dt_cls.now(tz_cls.utc).isoformat()}
+                        {"updated_at": dt_cls.now(UTC).isoformat()}
                     ).eq("id", job["id"]).execute()
 
                     logger.info(
@@ -1507,7 +1575,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 .lt("updated_at", cutoff_time.isoformat())
                 .execute()
             )
-            for lib_doc in (stuck_lib_docs.data or []):
+            for lib_doc in stuck_lib_docs.data or []:
                 lib_doc_id = lib_doc["id"]
                 handled_lib_ids.add(lib_doc_id)
 
@@ -1523,6 +1591,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                 if chunk_count > 0:
                     # Chunks exist — dispatch embedding only (not full OCR)
                     from app.workers.tasks.library_tasks import embed_library_chunks
+
                     embed_library_chunks.apply_async(
                         kwargs={"library_document_id": lib_doc_id},
                         queue="default",
@@ -1536,9 +1605,15 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     )
                 elif lib_doc.get("storage_path"):
                     # No chunks — need full OCR + chunk + embed
-                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    from app.workers.tasks.library_tasks import (
+                        ocr_and_process_library_document,
+                    )
+
                     ocr_and_process_library_document.apply_async(
-                        kwargs={"library_document_id": lib_doc_id, "storage_path": lib_doc["storage_path"]},
+                        kwargs={
+                            "library_document_id": lib_doc_id,
+                            "storage_path": lib_doc["storage_path"],
+                        },
                         queue="default",
                     )
                     results["resumed"] += 1
@@ -1579,7 +1654,8 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     .execute()
                 )
                 from app.workers.tasks.library_tasks import embed_library_chunks
-                for rec_doc in (reconcile_docs.data or []):
+
+                for rec_doc in reconcile_docs.data or []:
                     embed_library_chunks.apply_async(
                         kwargs={"library_document_id": rec_doc["id"]},
                         queue="default",
@@ -1729,11 +1805,7 @@ def sync_act_resolutions_with_documents(self) -> dict:
             return {"error": "Database client not configured"}
 
         # Get all matters with act_resolutions
-        matters_response = (
-            client.table("act_resolutions")
-            .select("matter_id")
-            .execute()
-        )
+        matters_response = client.table("act_resolutions").select("matter_id").execute()
 
         if not matters_response.data:
             logger.info("sync_act_resolutions_no_matters")
@@ -1769,7 +1841,9 @@ def sync_act_resolutions_with_documents(self) -> dict:
                 # Get all resolutions for this matter
                 resolutions_response = (
                     client.table("act_resolutions")
-                    .select("id, act_name_normalized, resolution_status, act_document_id, validation_cache_id, is_valid")
+                    .select(
+                        "id, act_name_normalized, resolution_status, act_document_id, validation_cache_id, is_valid"
+                    )
                     .eq("matter_id", matter_id)
                     .execute()
                 )
@@ -1787,11 +1861,13 @@ def sync_act_resolutions_with_documents(self) -> dict:
 
                     # Case 1: Resolution says 'missing' but document exists
                     if current_status == "missing" and matching_doc:
-                        client.table("act_resolutions").update({
-                            "resolution_status": "available",
-                            "act_document_id": matching_doc["id"],
-                            "user_action": "uploaded",
-                        }).eq("id", res_id).execute()
+                        client.table("act_resolutions").update(
+                            {
+                                "resolution_status": "available",
+                                "act_document_id": matching_doc["id"],
+                                "user_action": "uploaded",
+                            }
+                        ).eq("id", res_id).execute()
 
                         results["resolutions_fixed"] += 1
                         results["missing_to_available"] += 1
@@ -1804,7 +1880,10 @@ def sync_act_resolutions_with_documents(self) -> dict:
 
                     # Case 2: Resolution says 'available' but document doesn't exist
                     # (and document_id is set but document was deleted)
-                    elif current_status in ("available", "auto_fetched") and current_doc_id:
+                    elif (
+                        current_status in ("available", "auto_fetched")
+                        and current_doc_id
+                    ):
                         # Check if the referenced document still exists
                         doc_check = (
                             client.table("documents")
@@ -1815,11 +1894,13 @@ def sync_act_resolutions_with_documents(self) -> dict:
 
                         if not doc_check.data:
                             # Document was deleted, revert to missing
-                            client.table("act_resolutions").update({
-                                "resolution_status": "missing",
-                                "act_document_id": None,
-                                "user_action": "pending",
-                            }).eq("id", res_id).execute()
+                            client.table("act_resolutions").update(
+                                {
+                                    "resolution_status": "missing",
+                                    "act_document_id": None,
+                                    "user_action": "pending",
+                                }
+                            ).eq("id", res_id).execute()
 
                             results["resolutions_fixed"] += 1
                             results["available_to_missing"] += 1
@@ -1833,13 +1914,18 @@ def sync_act_resolutions_with_documents(self) -> dict:
                     # Case 3: Resolution says 'missing' but is validated + auto-fetch enabled
                     # Catches acts validated before auto-fetch was deployed, or any future state drift
                     elif current_status == "missing" and not matching_doc:
-                        if resolution.get("validation_cache_id") and resolution.get("is_valid"):
+                        if resolution.get("validation_cache_id") and resolution.get(
+                            "is_valid"
+                        ):
                             from app.core.config import get_settings
+
                             settings = get_settings()
                             if settings.india_code_auto_fetch_enabled:
-                                client.table("act_resolutions").update({
-                                    "resolution_status": "auto_fetching",
-                                }).eq("id", res_id).execute()
+                                client.table("act_resolutions").update(
+                                    {
+                                        "resolution_status": "auto_fetching",
+                                    }
+                                ).eq("id", res_id).execute()
 
                                 results["resolutions_fixed"] += 1
                                 results["missing_to_auto_fetching"] += 1
@@ -1925,7 +2011,9 @@ def repair_stuck_missing_acts(self) -> dict:
         # Find all stuck acts: missing + validated + has cache entry
         stuck_response = (
             client.table("act_resolutions")
-            .select("id, matter_id, act_name_normalized, act_name_display, validation_cache_id")
+            .select(
+                "id, matter_id, act_name_normalized, act_name_display, validation_cache_id"
+            )
             .eq("resolution_status", "missing")
             .eq("is_valid", True)
             .not_.is_("validation_cache_id", "null")
@@ -1941,9 +2029,11 @@ def repair_stuck_missing_acts(self) -> dict:
 
         for act in stuck_acts:
             try:
-                client.table("act_resolutions").update({
-                    "resolution_status": "auto_fetching",
-                }).eq("id", act["id"]).execute()
+                client.table("act_resolutions").update(
+                    {
+                        "resolution_status": "auto_fetching",
+                    }
+                ).eq("id", act["id"]).execute()
 
                 results["transitioned"] += 1
                 logger.info(
@@ -1952,16 +2042,24 @@ def repair_stuck_missing_acts(self) -> dict:
                     matter_id=act.get("matter_id"),
                 )
             except Exception as e:
-                results["errors"].append({
-                    "act_id": act["id"],
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "act_id": act["id"],
+                        "error": str(e),
+                    }
+                )
 
         # Trigger fetch pipeline to process the newly queued acts
         if results["transitioned"] > 0:
-            from app.workers.tasks.act_validation_tasks import fetch_acts_from_india_code
+            from app.workers.tasks.act_validation_tasks import (
+                fetch_acts_from_india_code,
+            )
+
             fetch_acts_from_india_code.apply_async(queue="low")
-            logger.info("repair_stuck_missing_acts_fetch_triggered", count=results["transitioned"])
+            logger.info(
+                "repair_stuck_missing_acts_fetch_triggered",
+                count=results["transitioned"],
+            )
 
         logger.info(
             "repair_stuck_missing_acts_completed",
@@ -2105,7 +2203,9 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
                         break
 
                     for citation in citations:
-                        citation_normalized = normalize_act_name(citation.get("act_name", ""))
+                        citation_normalized = normalize_act_name(
+                            citation.get("act_name", "")
+                        )
                         # Track every non-terminal citation whose Act is resolved here —
                         # this is the per-Act "still needs verification" signal (RISK-1).
                         if citation_normalized in available_normalized_names:
@@ -2127,12 +2227,21 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
                     matter_updated = 0
 
                     for i in range(0, len(citations_to_update), UPDATE_BATCH_SIZE):
-                        batch = citations_to_update[i:i + UPDATE_BATCH_SIZE]
-                        update_result = client.table("citations").update({
-                            "verification_status": "pending",
-                            "updated_at": datetime.now(UTC).isoformat(),
-                        }).in_("id", batch).execute()
-                        matter_updated += len(update_result.data) if update_result.data else 0
+                        batch = citations_to_update[i : i + UPDATE_BATCH_SIZE]
+                        update_result = (
+                            client.table("citations")
+                            .update(
+                                {
+                                    "verification_status": "pending",
+                                    "updated_at": datetime.now(UTC).isoformat(),
+                                }
+                            )
+                            .in_("id", batch)
+                            .execute()
+                        )
+                        matter_updated += (
+                            len(update_result.data) if update_result.data else 0
+                        )
 
                     results["citations_updated"] += matter_updated
                     results["act_unavailable_to_pending"] += matter_updated
@@ -2286,11 +2395,21 @@ def hard_delete_expired_documents(self, retention_days: int = 30) -> dict:
                 # Hard delete the document row (cascade cleanup already ran on soft-delete,
                 # but delete any stragglers that may have been created after soft-delete)
                 client.table("chunks").delete().eq("document_id", doc_id).execute()
-                client.table("citations").delete().eq("source_document_id", doc_id).execute()
-                client.table("entity_mentions").delete().eq("document_id", doc_id).execute()
-                client.table("processing_jobs").delete().eq("document_id", doc_id).execute()
-                client.table("events").update({"document_id": None}).eq("document_id", doc_id).execute()
-                client.table("bounding_boxes").delete().eq("document_id", doc_id).execute()
+                client.table("citations").delete().eq(
+                    "source_document_id", doc_id
+                ).execute()
+                client.table("entity_mentions").delete().eq(
+                    "document_id", doc_id
+                ).execute()
+                client.table("processing_jobs").delete().eq(
+                    "document_id", doc_id
+                ).execute()
+                client.table("events").update({"document_id": None}).eq(
+                    "document_id", doc_id
+                ).execute()
+                client.table("bounding_boxes").delete().eq(
+                    "document_id", doc_id
+                ).execute()
 
                 # Finally delete the document itself
                 client.table("documents").delete().eq("id", doc_id).execute()
@@ -2500,10 +2619,7 @@ def recover_stuck_documents(self) -> dict:
         # Try RPC first, fall back to manual query if function doesn't exist
         stuck_docs = None
         try:
-            stuck_docs_response = client.rpc(
-                "find_stuck_documents",
-                {}
-            ).execute()
+            stuck_docs_response = client.rpc("find_stuck_documents", {}).execute()
             if stuck_docs_response.data:
                 stuck_docs = stuck_docs_response.data
         except Exception as rpc_error:
@@ -2518,7 +2634,9 @@ def recover_stuck_documents(self) -> dict:
             # Manual approach: get all OCR_COMPLETE/COMPLETED documents (exclude soft-deleted)
             docs_response = (
                 client.table("documents")
-                .select("id, matter_id, filename, status, extracted_text, page_count, document_type")
+                .select(
+                    "id, matter_id, filename, status, extracted_text, page_count, document_type"
+                )
                 .in_("status", ["ocr_complete", "completed"])
                 .is_("deleted_at", "null")
                 .execute()
@@ -2536,7 +2654,9 @@ def recover_stuck_documents(self) -> dict:
                 # If all expected pipeline data exists for this document type,
                 # it's not stuck — skip it. This prevents infinite re-dispatch
                 # of e.g. act documents that legitimately have 0 chunks.
-                if _is_pipeline_data_complete(client, doc["id"], document_type=doc_type):
+                if _is_pipeline_data_complete(
+                    client, doc["id"], document_type=doc_type
+                ):
                     continue
 
                 stuck_docs.append(doc)
@@ -2605,10 +2725,12 @@ def recover_stuck_documents(self) -> dict:
                     document_id=document_id,
                     error=str(e),
                 )
-                results["errors"].append({
-                    "document_id": document_id,
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "document_id": document_id,
+                        "error": str(e),
+                    }
+                )
 
         logger.info(
             "recover_stuck_documents_completed",
@@ -2628,6 +2750,7 @@ def recover_stuck_documents(self) -> dict:
 # =============================================================================
 # Worker Heartbeat (INF-005)
 # =============================================================================
+
 
 @celery_app.task(
     name="app.workers.tasks.maintenance_tasks.write_worker_heartbeat",
@@ -2649,6 +2772,7 @@ def write_worker_heartbeat() -> dict:
 # =============================================================================
 # System Invariant Audit (silent-failure detection)
 # =============================================================================
+
 
 @celery_app.task(
     name="app.workers.tasks.maintenance_tasks.audit_system_invariants",
@@ -2709,7 +2833,11 @@ def audit_system_invariants(self) -> dict:
                 "system_invariants_violations_detected",
                 violation_count=len(violations),
                 invariants=[
-                    {"name": r["name"], "severity": r["severity"], "count": r["violating_count"]}
+                    {
+                        "name": r["name"],
+                        "severity": r["severity"],
+                        "count": r["violating_count"],
+                    }
                     for r in violations
                 ],
             )

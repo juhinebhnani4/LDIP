@@ -9,7 +9,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Debug Info Models
 # =============================================================================
@@ -18,9 +17,13 @@ from pydantic import BaseModel, Field
 class TimingBreakdown(BaseModel):
     """Detailed timing breakdown for search operations."""
 
-    embedding_ms: float | None = Field(None, description="Time to generate query embedding")
+    embedding_ms: float | None = Field(
+        None, description="Time to generate query embedding"
+    )
     bm25_search_ms: float | None = Field(None, description="BM25 search time")
-    semantic_search_ms: float | None = Field(None, description="Semantic/vector search time")
+    semantic_search_ms: float | None = Field(
+        None, description="Semantic/vector search time"
+    )
     rrf_fusion_ms: float | None = Field(None, description="RRF score fusion time")
     rerank_ms: float | None = Field(None, description="Cohere reranking time")
     total_ms: float = Field(..., description="Total search time")
@@ -36,16 +39,24 @@ class ChunkDebugInfo(BaseModel):
     chunk_type: str = Field(..., description="parent or child")
 
     # Ranking info
-    bm25_rank: int | None = Field(None, description="Position in BM25 results (1-indexed)")
+    bm25_rank: int | None = Field(
+        None, description="Position in BM25 results (1-indexed)"
+    )
     bm25_score: float | None = Field(None, description="Raw BM25 score")
-    semantic_rank: int | None = Field(None, description="Position in semantic results (1-indexed)")
-    semantic_score: float | None = Field(None, description="Cosine similarity score (0-1)")
+    semantic_rank: int | None = Field(
+        None, description="Position in semantic results (1-indexed)"
+    )
+    semantic_score: float | None = Field(
+        None, description="Cosine similarity score (0-1)"
+    )
     rrf_score: float = Field(..., description="Combined RRF score")
     rrf_rank: int = Field(..., description="Position after RRF fusion (1-indexed)")
 
     # Reranker info (if used)
     rerank_score: float | None = Field(None, description="Cohere relevance score (0-1)")
-    rerank_rank: int | None = Field(None, description="Position after reranking (1-indexed)")
+    rerank_rank: int | None = Field(
+        None, description="Position after reranking (1-indexed)"
+    )
 
     # Content preview
     content_preview: str = Field(..., description="First 200 chars of content")
@@ -72,7 +83,9 @@ class SearchDebugInfo(BaseModel):
     rerank_used: bool = Field(..., description="Was reranking actually used")
     rerank_model: str | None = Field(None, description="Reranking model")
     rerank_top_n: int | None = Field(None, description="Top N after reranking")
-    rerank_fallback_reason: str | None = Field(None, description="Why reranking failed/skipped")
+    rerank_fallback_reason: str | None = Field(
+        None, description="Why reranking failed/skipped"
+    )
 
     # Results
     bm25_results_count: int = Field(..., description="Results from BM25")
@@ -104,7 +117,9 @@ class InspectorSearchRequest(BaseModel):
 class InspectorSearchResponse(BaseModel):
     """Response with full debug information."""
 
-    data: list[dict[str, Any]] = Field(..., description="Search results (standard format)")
+    data: list[dict[str, Any]] = Field(
+        ..., description="Search results (standard format)"
+    )
     meta: dict[str, Any] = Field(..., description="Search metadata")
     debug: SearchDebugInfo = Field(..., description="Full debug information")
 

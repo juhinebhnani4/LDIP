@@ -180,14 +180,16 @@ class OCRChunkService:
         def _insert():
             return (
                 self.client.table("document_ocr_chunks")
-                .insert({
-                    "document_id": document_id,
-                    "matter_id": matter_id,
-                    "chunk_index": chunk_index,
-                    "page_start": page_start,
-                    "page_end": page_end,
-                    "status": ChunkStatus.PENDING.value,
-                })
+                .insert(
+                    {
+                        "document_id": document_id,
+                        "matter_id": matter_id,
+                        "chunk_index": chunk_index,
+                        "page_start": page_start,
+                        "page_end": page_end,
+                        "status": ChunkStatus.PENDING.value,
+                    }
+                )
                 .execute()
             )
 
@@ -215,7 +217,11 @@ class OCRChunkService:
 
             # Handle unique constraint violation
             error_str = str(e).lower()
-            if "unique" in error_str or "duplicate" in error_str or "23505" in error_str:
+            if (
+                "unique" in error_str
+                or "duplicate" in error_str
+                or "23505" in error_str
+            ):
                 logger.warning(
                     "chunk_duplicate",
                     document_id=document_id,
@@ -240,6 +246,7 @@ class OCRChunkService:
         Returns:
             DocumentOCRChunk if found, None otherwise.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -395,6 +402,7 @@ class OCRChunkService:
         Returns:
             List of DocumentOCRChunk records ordered by chunk_index.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -420,6 +428,7 @@ class OCRChunkService:
         Returns:
             List of failed DocumentOCRChunk records.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -446,6 +455,7 @@ class OCRChunkService:
         Returns:
             List of pending DocumentOCRChunk records.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -474,6 +484,7 @@ class OCRChunkService:
         Returns:
             List of processing DocumentOCRChunk records.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -504,12 +515,15 @@ class OCRChunkService:
         Returns:
             True if heartbeat was recorded, False if chunk not found.
         """
+
         def _update():
             return (
                 self.client.table("document_ocr_chunks")
-                .update({
-                    "processing_started_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "processing_started_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", chunk_id)
                 .eq("status", ChunkStatus.PROCESSING.value)
                 .execute()
@@ -631,11 +645,13 @@ class OCRChunkService:
         def _update():
             return (
                 self.client.table("document_ocr_chunks")
-                .update({
-                    "status": ChunkStatus.FAILED.value,
-                    "error_message": "worker_timeout",
-                    "processing_completed_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "status": ChunkStatus.FAILED.value,
+                        "error_message": "worker_timeout",
+                        "processing_completed_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", chunk_id)
                 .execute()
             )
@@ -702,9 +718,7 @@ class OCRChunkService:
 
         def _insert():
             return (
-                self.client.table("document_ocr_chunks")
-                .insert(insert_data)
-                .execute()
+                self.client.table("document_ocr_chunks").insert(insert_data).execute()
             )
 
         try:
@@ -729,12 +743,18 @@ class OCRChunkService:
 
             # Handle unique constraint violation
             error_str = str(e).lower()
-            if "unique" in error_str or "duplicate" in error_str or "23505" in error_str:
+            if (
+                "unique" in error_str
+                or "duplicate" in error_str
+                or "23505" in error_str
+            ):
                 logger.warning(
                     "chunks_batch_duplicate",
                     document_id=document_id,
                 )
-                raise DuplicateChunkError(document_id, -1) from None  # -1 indicates batch
+                raise DuplicateChunkError(
+                    document_id, -1
+                ) from None  # -1 indicates batch
 
             logger.error(
                 "chunks_batch_create_failed",
@@ -752,6 +772,7 @@ class OCRChunkService:
         Returns:
             ChunkProgress with status counts.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -771,7 +792,7 @@ class OCRChunkService:
             "failed": 0,
         }
 
-        for row in (response.data or []):
+        for row in response.data or []:
             counts["total"] += 1
             status = row.get("status", "").lower()
             if status in counts:
@@ -797,6 +818,7 @@ class OCRChunkService:
         Returns:
             List of dicts with document_id, matter_id, chunk_count.
         """
+
         def _query():
             return (
                 self.client.table("document_ocr_chunks")
@@ -808,7 +830,7 @@ class OCRChunkService:
 
         # Aggregate by document
         doc_status: dict[str, dict] = {}
-        for row in (response.data or []):
+        for row in response.data or []:
             doc_id = row["document_id"]
             if doc_id not in doc_status:
                 doc_status[doc_id] = {
@@ -827,7 +849,7 @@ class OCRChunkService:
 
         # Filter to only documents where all chunks are completed
         ready_docs = []
-        for doc_id, info in doc_status.items():
+        for _doc_id, info in doc_status.items():
             if (
                 info["total"] > 0
                 and info["completed"] == info["total"]
@@ -835,11 +857,13 @@ class OCRChunkService:
                 and info["processing"] == 0
                 and info["failed"] == 0
             ):
-                ready_docs.append({
-                    "document_id": info["document_id"],
-                    "matter_id": info["matter_id"],
-                    "chunk_count": info["total"],
-                })
+                ready_docs.append(
+                    {
+                        "document_id": info["document_id"],
+                        "matter_id": info["matter_id"],
+                        "chunk_count": info["total"],
+                    }
+                )
 
         if ready_docs:
             logger.info(
@@ -865,6 +889,7 @@ class OCRChunkService:
         Returns:
             Number of records deleted.
         """
+
         def _delete():
             return (
                 self.client.table("document_ocr_chunks")
@@ -929,7 +954,7 @@ class OCRChunkService:
 
         # Aggregate by document and filter by document status
         doc_chunks: dict[str, dict] = {}
-        for row in (response.data or []):
+        for row in response.data or []:
             doc_id = row["document_id"]
             if doc_id not in doc_chunks:
                 doc_chunks[doc_id] = {
@@ -1070,6 +1095,7 @@ class OCRChunkService:
             InvalidPageRangeError: If page_start > page_end.
             OCRChunkServiceError: If operation fails.
         """
+
         # First try to get existing chunk
         def _query_existing():
             return (
@@ -1154,14 +1180,16 @@ class OCRChunkService:
         def _update():
             return (
                 self.client.table("document_ocr_chunks")
-                .update({
-                    "status": ChunkStatus.PENDING.value,
-                    "error_message": None,
-                    "result_storage_path": None,
-                    "result_checksum": None,
-                    "processing_started_at": None,
-                    "processing_completed_at": None,
-                })
+                .update(
+                    {
+                        "status": ChunkStatus.PENDING.value,
+                        "error_message": None,
+                        "result_storage_path": None,
+                        "result_checksum": None,
+                        "processing_started_at": None,
+                        "processing_completed_at": None,
+                    }
+                )
                 .eq("id", chunk_id)
                 .execute()
             )
@@ -1215,8 +1243,12 @@ class OCRChunkService:
             result_storage_path=row.get("result_storage_path"),
             result_checksum=row.get("result_checksum"),
             ocr_full_text=row.get("ocr_full_text"),
-            processing_started_at=self._parse_timestamp(row.get("processing_started_at")),
-            processing_completed_at=self._parse_timestamp(row.get("processing_completed_at")),
+            processing_started_at=self._parse_timestamp(
+                row.get("processing_started_at")
+            ),
+            processing_completed_at=self._parse_timestamp(
+                row.get("processing_completed_at")
+            ),
             created_at=self._parse_timestamp_required(row["created_at"], "created_at"),
             updated_at=self._parse_timestamp_required(row["updated_at"], "updated_at"),
         )

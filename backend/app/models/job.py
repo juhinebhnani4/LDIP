@@ -87,18 +87,14 @@ class JobStageHistory(BaseModel):
 
     id: str = Field(..., description="Stage history UUID")
     job_id: str = Field(..., description="Parent job UUID")
-    stage_name: str = Field(..., description="Stage name: ocr, validation, chunking, etc.")
-    status: StageStatus = Field(
-        default=StageStatus.PENDING,
-        description="Stage status"
+    stage_name: str = Field(
+        ..., description="Stage name: ocr, validation, chunking, etc."
     )
+    status: StageStatus = Field(default=StageStatus.PENDING, description="Stage status")
     started_at: datetime | None = Field(None, description="When stage started")
     completed_at: datetime | None = Field(None, description="When stage completed")
     error_message: str | None = Field(None, description="Error message if failed")
-    metadata: dict = Field(
-        default_factory=dict,
-        description="Stage-specific metadata"
-    )
+    metadata: dict = Field(default_factory=dict, description="Stage-specific metadata")
     created_at: datetime = Field(..., description="Record creation timestamp")
 
 
@@ -106,19 +102,22 @@ class ProcessingJobBase(BaseModel):
     """Base processing job properties."""
 
     matter_id: str = Field(..., description="Matter UUID this job belongs to")
-    document_id: str | None = Field(None, description="Document UUID (null for matter-level jobs)")
+    document_id: str | None = Field(
+        None, description="Document UUID (null for matter-level jobs)"
+    )
     job_type: JobType = Field(..., description="Type of processing job")
 
 
 class ProcessingJobCreate(ProcessingJobBase):
     """Model for creating a new processing job."""
 
-    celery_task_id: str | None = Field(None, description="Celery task ID for correlation")
-    max_retries: int = Field(default=3, ge=0, le=10, description="Maximum retry attempts")
-    metadata: dict = Field(
-        default_factory=dict,
-        description="Initial job metadata"
+    celery_task_id: str | None = Field(
+        None, description="Celery task ID for correlation"
     )
+    max_retries: int = Field(
+        default=3, ge=0, le=10, description="Maximum retry attempts"
+    )
+    metadata: dict = Field(default_factory=dict, description="Initial job metadata")
 
 
 class ProcessingJobUpdate(BaseModel):
@@ -126,14 +125,22 @@ class ProcessingJobUpdate(BaseModel):
 
     status: JobStatus | None = Field(None, description="New status")
     current_stage: str | None = Field(None, description="Current processing stage")
-    completed_stages: int | None = Field(None, ge=0, description="Number of completed stages")
-    progress_pct: int | None = Field(None, ge=0, le=100, description="Progress percentage")
-    estimated_completion: datetime | None = Field(None, description="Estimated completion time")
+    completed_stages: int | None = Field(
+        None, ge=0, description="Number of completed stages"
+    )
+    progress_pct: int | None = Field(
+        None, ge=0, le=100, description="Progress percentage"
+    )
+    estimated_completion: datetime | None = Field(
+        None, description="Estimated completion time"
+    )
     error_message: str | None = Field(None, description="Error message if failed")
     error_code: str | None = Field(None, description="Machine-readable error code")
     retry_count: int | None = Field(None, ge=0, description="Current retry count")
     started_at: datetime | None = Field(None, description="Processing start time")
-    completed_at: datetime | None = Field(None, description="Processing completion time")
+    completed_at: datetime | None = Field(
+        None, description="Processing completion time"
+    )
     metadata: dict | None = Field(None, description="Updated metadata")
 
 
@@ -142,23 +149,21 @@ class ProcessingJob(ProcessingJobBase):
 
     id: str = Field(..., description="Job UUID")
     status: JobStatus = Field(
-        default=JobStatus.QUEUED,
-        description="Current job status"
+        default=JobStatus.QUEUED, description="Current job status"
     )
-    celery_task_id: str | None = Field(None, description="Celery task ID for correlation")
+    celery_task_id: str | None = Field(
+        None, description="Celery task ID for correlation"
+    )
 
     # Progress tracking
     current_stage: str | None = Field(None, description="Current processing stage name")
     total_stages: int = Field(default=7, description="Total stages in pipeline")
     completed_stages: int = Field(default=0, description="Completed stages count")
     progress_pct: int = Field(
-        default=0,
-        ge=0, le=100,
-        description="Overall progress percentage"
+        default=0, ge=0, le=100, description="Overall progress percentage"
     )
     estimated_completion: datetime | None = Field(
-        None,
-        description="Estimated completion timestamp"
+        None, description="Estimated completion timestamp"
     )
 
     # Error handling
@@ -170,7 +175,7 @@ class ProcessingJob(ProcessingJobBase):
     # Metadata for partial progress
     metadata: dict = Field(
         default_factory=dict,
-        description="Job metadata (completed_pages, chunks_created, etc.)"
+        description="Job metadata (completed_pages, chunks_created, etc.)",
     )
 
     # Timestamps
@@ -180,7 +185,7 @@ class ProcessingJob(ProcessingJobBase):
     updated_at: datetime = Field(..., description="Last update timestamp")
     heartbeat_at: datetime | None = Field(
         None,
-        description="Last heartbeat timestamp for long-running job health monitoring"
+        description="Last heartbeat timestamp for long-running job health monitoring",
     )
 
 
@@ -188,8 +193,7 @@ class ProcessingJobWithHistory(ProcessingJob):
     """Processing job with stage history included."""
 
     stage_history: list[JobStageHistory] = Field(
-        default_factory=list,
-        description="Stage-level history records"
+        default_factory=list, description="Stage-level history records"
     )
 
 
@@ -203,8 +207,7 @@ class JobQueueStats(BaseModel):
     cancelled: int = Field(default=0, ge=0, description="Cancelled jobs")
     skipped: int = Field(default=0, ge=0, description="Skipped jobs")
     avg_processing_time_ms: int = Field(
-        default=0, ge=0,
-        description="Average processing time in milliseconds"
+        default=0, ge=0, description="Average processing time in milliseconds"
     )
 
 
@@ -218,7 +221,9 @@ class JobListItem(BaseModel):
     status: JobStatus = Field(..., description="Current job status")
     current_stage: str | None = Field(None, description="Current stage name")
     progress_pct: int = Field(default=0, description="Progress percentage")
-    estimated_completion: datetime | None = Field(None, description="Estimated completion")
+    estimated_completion: datetime | None = Field(
+        None, description="Estimated completion"
+    )
     retry_count: int = Field(default=0, description="Retry attempts")
     error_message: str | None = Field(None, description="Error if failed")
     created_at: datetime = Field(..., description="When job was created")
@@ -234,6 +239,7 @@ class PaginationMeta(BaseModel):
 
 
 # API Response Models (following { data } or { error } format)
+
 
 class JobResponse(BaseModel):
     """API response wrapper for a single job."""
@@ -265,10 +271,7 @@ class JobErrorDetail(BaseModel):
 
     code: str = Field(..., description="Machine-readable error code")
     message: str = Field(..., description="Human-readable error message")
-    details: dict = Field(
-        default_factory=dict,
-        description="Additional error context"
-    )
+    details: dict = Field(default_factory=dict, description="Additional error context")
 
 
 class JobErrorResponse(BaseModel):

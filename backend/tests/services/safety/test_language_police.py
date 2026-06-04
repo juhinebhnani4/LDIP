@@ -44,7 +44,9 @@ def language_police_regex_only(mock_settings):
 
     mock_settings.policing_llm_enabled = False
 
-    with patch("app.services.safety.language_police.get_settings", return_value=mock_settings):
+    with patch(
+        "app.services.safety.language_police.get_settings", return_value=mock_settings
+    ):
         return LanguagePolice()
 
 
@@ -56,7 +58,9 @@ def language_police_llm_enabled(mock_settings):
 
     mock_settings.policing_llm_enabled = True
 
-    with patch("app.services.safety.language_police.get_settings", return_value=mock_settings):
+    with patch(
+        "app.services.safety.language_police.get_settings", return_value=mock_settings
+    ):
         return LanguagePolice()
 
 
@@ -198,12 +202,10 @@ class TestFailOpenBehavior:
 
         with patch(
             "app.services.safety.language_police.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             police = LanguagePolice()
-            result = await police.police_output(
-                "The defendant is guilty of fraud."
-            )
+            result = await police.police_output("The defendant is guilty of fraud.")
 
             # Should fall back to regex
             assert "liability regarding" in result.sanitized_text.lower()
@@ -223,9 +225,7 @@ class TestInputSanitization:
         assert '"""' not in result.original_text or result.sanitized_text is not None
 
     @pytest.mark.asyncio
-    async def test_very_long_text_truncated(
-        self, language_police_llm_enabled
-    ) -> None:
+    async def test_very_long_text_truncated(self, language_police_llm_enabled) -> None:
         """Very long text should be truncated for LLM."""
         # Create text longer than 8000 chars
         long_text = "The defendant violated Section 138. " * 500
@@ -256,7 +256,7 @@ class TestSingletonFactory:
 
         with patch(
             "app.services.safety.language_police.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             police1 = get_language_police()
             police2 = get_language_police()
@@ -267,7 +267,7 @@ class TestSingletonFactory:
         """reset_language_police should clear the singleton."""
         with patch(
             "app.services.safety.language_police.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             police1 = get_language_police()
             reset_language_police()
@@ -280,9 +280,7 @@ class TestTimingMetrics:
     """Test timing metrics are properly tracked."""
 
     @pytest.mark.asyncio
-    async def test_sanitization_time_tracked(
-        self, language_police_regex_only
-    ) -> None:
+    async def test_sanitization_time_tracked(self, language_police_regex_only) -> None:
         """Sanitization time should be tracked in result."""
         result = await language_police_regex_only.police_output(
             "The defendant violated Section 138."

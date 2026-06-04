@@ -205,7 +205,9 @@ class TestStreamingOrchestrator:
 
         # Last token should have full accumulated text
         last_token = token_events[-1]
-        assert last_token.data["accumulated"] == mock_orchestrator_result.unified_response
+        assert (
+            last_token.data["accumulated"] == mock_orchestrator_result.unified_response
+        )
 
     @pytest.mark.asyncio
     async def test_process_streaming_emits_complete_event(

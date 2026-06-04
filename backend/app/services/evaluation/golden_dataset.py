@@ -72,14 +72,20 @@ class GoldenDatasetService:
             GoldenDatasetError: If insertion fails.
         """
         try:
-            result = self.supabase.table("golden_dataset").insert({
-                "matter_id": item.matter_id,
-                "question": item.question,
-                "expected_answer": item.expected_answer,
-                "relevant_chunk_ids": item.relevant_chunk_ids,
-                "tags": item.tags,
-                "created_by": item.created_by,
-            }).execute()
+            result = (
+                self.supabase.table("golden_dataset")
+                .insert(
+                    {
+                        "matter_id": item.matter_id,
+                        "question": item.question,
+                        "expected_answer": item.expected_answer,
+                        "relevant_chunk_ids": item.relevant_chunk_ids,
+                        "tags": item.tags,
+                        "created_by": item.created_by,
+                    }
+                )
+                .execute()
+            )
 
             if not result.data:
                 raise GoldenDatasetError("Insert returned no data")
@@ -243,7 +249,12 @@ class GoldenDatasetService:
         """
         try:
             # Only allow specific fields to be updated
-            allowed_fields = {"question", "expected_answer", "relevant_chunk_ids", "tags"}
+            allowed_fields = {
+                "question",
+                "expected_answer",
+                "relevant_chunk_ids",
+                "tags",
+            }
             filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
 
             if not filtered_updates:

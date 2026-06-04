@@ -15,8 +15,6 @@ Implements:
 - AC 4.1.4: API retrieval of full chain-of-thought
 """
 
-from datetime import datetime
-
 import structlog
 from supabase import Client
 
@@ -84,7 +82,9 @@ class ReasoningTraceService:
             "model_used": trace.model_used,
             "reasoning_text": trace.reasoning_text,
             "reasoning_structured": trace.reasoning_structured,
-            "input_summary": trace.input_summary[:1000] if trace.input_summary else None,
+            "input_summary": trace.input_summary[:1000]
+            if trace.input_summary
+            else None,
             "prompt_template_version": trace.prompt_template_version,
             "confidence_score": trace.confidence_score,
             "tokens_used": trace.tokens_used,
@@ -195,7 +195,9 @@ class ReasoningTraceService:
         """
         query = (
             self.client.table("reasoning_traces")
-            .select("id, engine_type, model_used, reasoning_text, confidence_score, created_at, archived_at")
+            .select(
+                "id, engine_type, model_used, reasoning_text, confidence_score, created_at, archived_at"
+            )
             .eq("matter_id", matter_id)
         )
 
@@ -205,7 +207,11 @@ class ReasoningTraceService:
         if not include_archived:
             query = query.is_("archived_at", "null")
 
-        result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        result = (
+            query.order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
 
         return [
             ReasoningTraceSummary(
@@ -307,7 +313,9 @@ class ReasoningTraceService:
             import json
 
             # Download from Supabase Storage
-            response = self.client.storage.from_("reasoning-archive").download(trace.archive_path)
+            response = self.client.storage.from_("reasoning-archive").download(
+                trace.archive_path
+            )
             archived_data = json.loads(gzip.decompress(response))
 
             # Create new trace with hydrated data
@@ -317,7 +325,9 @@ class ReasoningTraceService:
                 finding_id=trace.finding_id,
                 engine_type=trace.engine_type,
                 model_used=trace.model_used,
-                reasoning_text=archived_data.get("reasoning_text", trace.reasoning_text),
+                reasoning_text=archived_data.get(
+                    "reasoning_text", trace.reasoning_text
+                ),
                 reasoning_structured=archived_data.get("reasoning_structured"),
                 input_summary=archived_data.get("input_summary"),
                 prompt_template_version=trace.prompt_template_version,

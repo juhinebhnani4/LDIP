@@ -74,10 +74,12 @@ class MergeTriggerService:
                         "merge_trigger_document_not_found",
                         document_id=document_id,
                     )
-                    results["errors"].append({
-                        "document_id": document_id,
-                        "error": "Document not found",
-                    })
+                    results["errors"].append(
+                        {
+                            "document_id": document_id,
+                            "error": "Document not found",
+                        }
+                    )
                     continue
 
                 # Skip if already completed or failed
@@ -127,10 +129,12 @@ class MergeTriggerService:
                     document_id=document_id,
                     error=str(e),
                 )
-                results["errors"].append({
-                    "document_id": document_id,
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "document_id": document_id,
+                        "error": str(e),
+                    }
+                )
 
         return results
 

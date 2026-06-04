@@ -21,5 +21,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Revert migration."""
     # Intentionally empty.
-
-

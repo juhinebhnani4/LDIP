@@ -187,14 +187,22 @@ class VerificationService:
         requirement = self.get_verification_requirement(create_data.confidence_before)
 
         try:
-            result = supabase.table("finding_verifications").insert({
-                "matter_id": create_data.matter_id,
-                "finding_id": create_data.finding_id,
-                "finding_type": create_data.finding_type,
-                "finding_summary": create_data.finding_summary[:500],  # Truncate
-                "confidence_before": create_data.confidence_before,
-                "decision": VerificationDecision.PENDING.value,
-            }).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .insert(
+                    {
+                        "matter_id": create_data.matter_id,
+                        "finding_id": create_data.finding_id,
+                        "finding_type": create_data.finding_type,
+                        "finding_summary": create_data.finding_summary[
+                            :500
+                        ],  # Truncate
+                        "confidence_before": create_data.confidence_before,
+                        "decision": VerificationDecision.PENDING.value,
+                    }
+                )
+                .execute()
+            )
 
             if not result.data:
                 raise VerificationServiceError(
@@ -269,9 +277,12 @@ class VerificationService:
             update_fields["notes"] = update_data.notes[:2000]  # Truncate
 
         try:
-            result = supabase.table("finding_verifications").update(
-                update_fields
-            ).eq("id", verification_id).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .update(update_fields)
+                .eq("id", verification_id)
+                .execute()
+            )
 
             if not result.data:
                 raise VerificationNotFoundError(verification_id)
@@ -322,9 +333,12 @@ class VerificationService:
             VerificationNotFoundError: If not found.
         """
         try:
-            result = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("id", verification_id).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("id", verification_id)
+                .execute()
+            )
 
             if not result.data:
                 raise VerificationNotFoundError(verification_id)
@@ -361,9 +375,12 @@ class VerificationService:
             FindingVerification record or None if not found.
         """
         try:
-            result = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("finding_id", finding_id).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("finding_id", finding_id)
+                .execute()
+            )
 
             if not result.data:
                 return None
@@ -404,16 +421,20 @@ class VerificationService:
             List of FindingVerification records.
         """
         try:
-            query = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("matter_id", matter_id)
+            query = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("matter_id", matter_id)
+            )
 
             if decision is not None:
                 query = query.eq("decision", decision.value)
 
-            result = query.order(
-                "created_at", desc=True
-            ).range(offset, offset + limit - 1).execute()
+            result = (
+                query.order("created_at", desc=True)
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
 
             return [self._to_model(r) for r in result.data]
 
@@ -450,20 +471,25 @@ class VerificationService:
         start_time = time.perf_counter()
 
         try:
-            result = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("matter_id", matter_id).eq(
-                "decision", VerificationDecision.PENDING.value
-            ).order(
-                "confidence_before", desc=False  # Low confidence first (REQUIRED)
-            ).order(
-                "created_at", desc=False  # Oldest first
-            ).limit(limit).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("decision", VerificationDecision.PENDING.value)
+                .order(
+                    "confidence_before",
+                    desc=False,  # Low confidence first (REQUIRED)
+                )
+                .order(
+                    "created_at",
+                    desc=False,  # Oldest first
+                )
+                .limit(limit)
+                .execute()
+            )
 
             # Batch-fetch source document names via findings → documents
-            doc_name_map = self._batch_fetch_document_names(
-                result.data, supabase
-            )
+            doc_name_map = self._batch_fetch_document_names(result.data, supabase)
 
             items = [
                 self._to_queue_item(r, doc_name_map.get(r.get("finding_id")))
@@ -515,18 +541,24 @@ class VerificationService:
         start_time = time.perf_counter()
 
         try:
-            result = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("matter_id", matter_id).order(
-                "confidence_before", desc=False  # Low confidence first
-            ).order(
-                "created_at", desc=False  # Oldest first
-            ).limit(limit).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .order(
+                    "confidence_before",
+                    desc=False,  # Low confidence first
+                )
+                .order(
+                    "created_at",
+                    desc=False,  # Oldest first
+                )
+                .limit(limit)
+                .execute()
+            )
 
             # Batch-fetch source document names via findings → documents
-            doc_name_map = self._batch_fetch_document_names(
-                result.data, supabase
-            )
+            doc_name_map = self._batch_fetch_document_names(result.data, supabase)
 
             items = [
                 self._to_queue_item(r, doc_name_map.get(r.get("finding_id")))
@@ -574,9 +606,12 @@ class VerificationService:
         start_time = time.perf_counter()
 
         try:
-            result = supabase.table("finding_verifications").select(
-                "*"
-            ).eq("matter_id", matter_id).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             records = result.data
 
@@ -687,9 +722,12 @@ class VerificationService:
             """Update a single verification with concurrency control."""
             async with semaphore:
                 try:
-                    result = supabase.table("finding_verifications").update(
-                        update_fields
-                    ).eq("id", verification_id).execute()
+                    result = (
+                        supabase.table("finding_verifications")
+                        .update(update_fields)
+                        .eq("id", verification_id)
+                        .execute()
+                    )
                     return (verification_id, bool(result.data))
                 except Exception as e:
                     logger.warning(
@@ -791,18 +829,18 @@ class VerificationService:
         Returns:
             Dict mapping finding_id → document filename.
         """
-        finding_ids = [
-            r["finding_id"] for r in records
-            if r.get("finding_id")
-        ]
+        finding_ids = [r["finding_id"] for r in records if r.get("finding_id")]
         if not finding_ids:
             return {}
 
         try:
             # Get source_document_ids (uuid[]) for each finding
-            findings_result = supabase.table("findings").select(
-                "id, source_document_ids"
-            ).in_("id", finding_ids).execute()
+            findings_result = (
+                supabase.table("findings")
+                .select("id, source_document_ids")
+                .in_("id", finding_ids)
+                .execute()
+            )
 
             if not findings_result.data:
                 return {}
@@ -818,9 +856,12 @@ class VerificationService:
                 return {}
 
             # Get filenames for document IDs
-            docs_result = supabase.table("documents").select(
-                "id, filename"
-            ).in_("id", doc_ids).execute()
+            docs_result = (
+                supabase.table("documents")
+                .select("id, filename")
+                .in_("id", doc_ids)
+                .execute()
+            )
 
             doc_id_to_name: dict[str, str] = {
                 d["id"]: d["filename"]

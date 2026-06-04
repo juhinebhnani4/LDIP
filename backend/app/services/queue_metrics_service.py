@@ -12,8 +12,8 @@ CRITICAL: Celery stores queues in Redis as lists. The queue names in Redis are:
 - "low" for maintenance/background tasks
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal
 
 import structlog
@@ -27,9 +27,9 @@ logger = structlog.get_logger(__name__)
 # Must match task_queues in celery.py: default, llm, heavy, low
 QUEUE_REDIS_KEYS = {
     "default": "celery",  # Celery's default queue is named "celery" in Redis
-    "llm": "llm",         # LLM-bound tasks (embedding, entities, citations, aliases)
-    "heavy": "heavy",     # O(n^2) tasks (contradiction detection)
-    "low": "low",         # Maintenance, background tasks
+    "llm": "llm",  # LLM-bound tasks (embedding, entities, citations, aliases)
+    "heavy": "heavy",  # O(n^2) tasks (contradiction detection)
+    "low": "low",  # Maintenance, background tasks
 }
 
 # Default alert threshold (jobs pending before alert triggers)
@@ -169,7 +169,7 @@ class QueueMetricsService:
             List of QueueMetricsData for each queue.
         """
         metrics = []
-        for queue_name in QUEUE_REDIS_KEYS.keys():
+        for queue_name in QUEUE_REDIS_KEYS:
             try:
                 queue_metrics = await self.get_queue_metrics(queue_name)
                 metrics.append(queue_metrics)
@@ -233,19 +233,21 @@ class QueueMetricsService:
             tasks: list[ActiveTaskInfo] = []
 
             for worker_name, task_list in active.items():
-                for task in (task_list or []):
+                for task in task_list or []:
                     # Celery active() returns time_start as Unix timestamp
                     time_start = task.get("time_start", 0)
                     runtime = now - time_start if time_start else 0
 
-                    tasks.append(ActiveTaskInfo(
-                        task_name=task.get("name", "unknown"),
-                        task_id=task.get("id", ""),
-                        worker_name=worker_name,
-                        runtime_seconds=round(runtime, 1),
-                        args=task.get("args"),
-                        kwargs=task.get("kwargs"),
-                    ))
+                    tasks.append(
+                        ActiveTaskInfo(
+                            task_name=task.get("name", "unknown"),
+                            task_id=task.get("id", ""),
+                            worker_name=worker_name,
+                            runtime_seconds=round(runtime, 1),
+                            args=task.get("args"),
+                            kwargs=task.get("kwargs"),
+                        )
+                    )
 
             # Sort by runtime descending — longest running first
             tasks.sort(key=lambda t: t.runtime_seconds, reverse=True)
@@ -290,7 +292,7 @@ class QueueMetricsService:
             "status": status,
             "redisConnected": redis_connected,
             "workerCount": worker_count,
-            "lastCheckedAt": datetime.now(timezone.utc).isoformat(),
+            "lastCheckedAt": datetime.now(UTC).isoformat(),
             "error": error_message,
         }
 

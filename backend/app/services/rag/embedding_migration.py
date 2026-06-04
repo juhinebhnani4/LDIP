@@ -13,18 +13,16 @@ CRITICAL: This allows zero-downtime upgrades of embedding models.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from functools import lru_cache
 from typing import Any
 
 import structlog
 
-from app.core.config import get_settings
-from app.core.supabase import get_service_client, get_supabase_client
+from app.core.supabase import get_service_client
 from app.services.rag.embedder import (
-    EMBEDDING_MODEL_VERSION,
     EmbeddingService,
     get_current_embedding_model_version,
     get_embedding_service,
@@ -94,7 +92,9 @@ class MigrationProgress:
             "skipped_chunks": self.skipped_chunks,
             "progress_percent": round(self.progress_percent, 2),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "last_chunk_id": self.last_chunk_id,
             "error_message": self.error_message,
         }
@@ -165,7 +165,7 @@ class EmbeddingMigrationService:
             MigrationProgress with final status.
         """
         progress = MigrationProgress(
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         try:
@@ -178,7 +178,7 @@ class EmbeddingMigrationService:
                     source_version=config.source_model_version,
                     target_version=config.target_model_version,
                 )
-                progress.completed_at = datetime.now(timezone.utc)
+                progress.completed_at = datetime.now(UTC)
                 return progress
 
             logger.info(
@@ -224,14 +224,16 @@ class EmbeddingMigrationService:
                 if config.rate_limit_delay > 0:
                     await asyncio.sleep(config.rate_limit_delay)
 
-            progress.completed_at = datetime.now(timezone.utc)
+            progress.completed_at = datetime.now(UTC)
 
             logger.info(
                 "migration_completed",
                 processed=progress.processed_chunks,
                 failed=progress.failed_chunks,
                 skipped=progress.skipped_chunks,
-                duration_seconds=(progress.completed_at - progress.started_at).total_seconds(),
+                duration_seconds=(
+                    progress.completed_at - progress.started_at
+                ).total_seconds(),
             )
 
         except Exception as e:
@@ -249,10 +251,14 @@ class EmbeddingMigrationService:
         config: MigrationConfig,
     ) -> int:
         """Count chunks needing migration."""
-        query = self.client.table("chunks").select(
-            "id",
-            count="exact",
-        ).eq("embedding_model_version", config.source_model_version)
+        query = (
+            self.client.table("chunks")
+            .select(
+                "id",
+                count="exact",
+            )
+            .eq("embedding_model_version", config.source_model_version)
+        )
 
         if config.matter_id:
             query = query.eq("matter_id", config.matter_id)
@@ -266,11 +272,13 @@ class EmbeddingMigrationService:
         after_chunk_id: str | None = None,
     ) -> list[dict]:
         """Get a batch of chunks to migrate."""
-        query = self.client.table("chunks").select(
-            "id, content, matter_id, document_id"
-        ).eq(
-            "embedding_model_version", config.source_model_version
-        ).order("id").limit(config.batch_size)
+        query = (
+            self.client.table("chunks")
+            .select("id, content, matter_id, document_id")
+            .eq("embedding_model_version", config.source_model_version)
+            .order("id")
+            .limit(config.batch_size)
+        )
 
         if config.matter_id:
             query = query.eq("matter_id", config.matter_id)
@@ -308,10 +316,12 @@ class EmbeddingMigrationService:
                     continue
 
                 try:
-                    self.client.table("chunks").update({
-                        "embedding": embedding,
-                        "embedding_model_version": target_version,
-                    }).eq("id", chunk_id).execute()
+                    self.client.table("chunks").update(
+                        {
+                            "embedding": embedding,
+                            "embedding_model_version": target_version,
+                        }
+                    ).eq("id", chunk_id).execute()
                     results["processed"] += 1
 
                 except Exception as e:
@@ -347,9 +357,7 @@ class EmbeddingMigrationService:
         current_version = get_current_embedding_model_version()
 
         # Query version distribution
-        query = self.client.table("chunks").select(
-            "embedding_model_version"
-        )
+        query = self.client.table("chunks").select("embedding_model_version")
 
         if matter_id:
             query = query.eq("matter_id", matter_id)
@@ -358,7 +366,7 @@ class EmbeddingMigrationService:
         response = query.execute()
 
         version_counts: dict[str, int] = {}
-        for chunk in (response.data or []):
+        for chunk in response.data or []:
             version = chunk.get("embedding_model_version") or "unknown"
             version_counts[version] = version_counts.get(version, 0) + 1
 
@@ -371,7 +379,9 @@ class EmbeddingMigrationService:
             "total_chunks": total,
             "current_version_count": current_count,
             "migration_needed": total > current_count,
-            "migration_progress_percent": (current_count / total * 100) if total > 0 else 100,
+            "migration_progress_percent": (current_count / total * 100)
+            if total > 0
+            else 100,
         }
 
 

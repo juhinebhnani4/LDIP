@@ -418,7 +418,9 @@ class TestRejectAuthenticated:
             response = await reject_verification(
                 matter_id="matter-123",
                 verification_id="verification-123",
-                request=RejectVerificationRequest(notes="False positive - citation is correct"),
+                request=RejectVerificationRequest(
+                    notes="False positive - citation is correct"
+                ),
                 membership=mock_matter_membership,
                 db=mock_db,
                 service=mock_service,
@@ -539,10 +541,13 @@ class TestVerificationNotFound:
 
         mock_db = MagicMock()
 
-        with patch(
-            "app.api.routes.verifications._get_verification_service",
-            return_value=mock_service,
-        ), pytest.raises(HTTPException) as exc_info:
+        with (
+            patch(
+                "app.api.routes.verifications._get_verification_service",
+                return_value=mock_service,
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
             await approve_verification(
                 matter_id="matter-123",
                 verification_id="nonexistent-id",

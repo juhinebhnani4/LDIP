@@ -14,8 +14,6 @@ Uses Gemini Flash for cost-effective rewriting (same as summarizer).
 
 from __future__ import annotations
 
-from functools import lru_cache
-
 import structlog
 from google.genai import types
 
@@ -27,7 +25,8 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.core.prompt_boundaries import _escape_xml_tags
 
 logger = structlog.get_logger(__name__)
@@ -87,10 +86,7 @@ def _is_degraded_rewrite(original: str, rewritten: str) -> bool:
     # Rewrite ends mid-sentence (no terminal punctuation and original had it)
     orig_has_punct = original.rstrip()[-1:] in ".?!"
     rewritten_has_punct = rewritten.rstrip()[-1:] in ".?!"
-    if orig_has_punct and not rewritten_has_punct:
-        return True
-
-    return False
+    return bool(orig_has_punct and not rewritten_has_punct)
 
 
 async def rewrite_query(

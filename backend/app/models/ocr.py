@@ -41,10 +41,16 @@ class OCRBoundingBox(BaseModel):
         None, ge=0, le=1, description="OCR confidence score (0-1)"
     )
     reading_order_index: int | None = Field(
-        None, ge=0, description="Reading order within page (0-indexed, top-to-bottom, left-to-right)"
+        None,
+        ge=0,
+        description="Reading order within page (0-indexed, top-to-bottom, left-to-right)",
     )
-    text_start_offset: int | None = Field(None, ge=0, description="Char start in OCR full_text (inclusive)")
-    text_end_offset: int | None = Field(None, ge=0, description="Char end in OCR full_text (exclusive)")
+    text_start_offset: int | None = Field(
+        None, ge=0, description="Char start in OCR full_text (inclusive)"
+    )
+    text_end_offset: int | None = Field(
+        None, ge=0, description="Char end in OCR full_text (exclusive)"
+    )
 
 
 class OCRPage(BaseModel):

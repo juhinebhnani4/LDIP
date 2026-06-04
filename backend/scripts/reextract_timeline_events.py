@@ -330,6 +330,7 @@ def main():
                 print(f"Found {len(events)} events to link")
 
                 # Process in batches
+                timeline_service = get_timeline_service()
                 batch_size = 50
                 total_updated = 0
                 for i in range(0, len(events), batch_size):

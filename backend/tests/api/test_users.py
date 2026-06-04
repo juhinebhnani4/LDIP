@@ -5,12 +5,13 @@ Story 14.14: Settings Page Implementation
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from app.core.security import get_current_user
 from app.main import app
 from app.models.auth import AuthenticatedUser
 
@@ -38,19 +39,22 @@ def mock_supabase():
 
 @pytest.fixture
 def client(mock_user, mock_supabase):
-    """Create a test client with mocked dependencies."""
+    """Create a test client with mocked dependencies.
+
+    Auth is bypassed via ``app.dependency_overrides[get_current_user]`` — the
+    canonical INF-014 ② wall pattern. Patching ``app.core.security.get_current_user``
+    does NOT work: the route captured the dependency object at decoration time,
+    so the override must go through ``app.dependency_overrides`` (this was the
+    original ``assert 401 == 200`` bug).
+    """
     from app.api.routes import users
 
-    # Override dependencies
+    app.dependency_overrides[get_current_user] = lambda: mock_user
     app.dependency_overrides[users.get_supabase_client] = lambda: mock_supabase
 
-    with (
-        patch("app.core.security.get_current_user", return_value=mock_user),
-        TestClient(app) as test_client,
-    ):
+    with TestClient(app) as test_client:
         yield test_client
 
-    # Clean up
     app.dependency_overrides.clear()
 
 

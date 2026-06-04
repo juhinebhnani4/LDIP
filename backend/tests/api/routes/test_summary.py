@@ -634,7 +634,7 @@ class TestGetSummaryVerifications:
 
     @pytest.mark.asyncio
     async def test_get_verifications_success(
-        self, mock_viewer_access, mock_verification_record
+        self, mock_request, mock_viewer_access, mock_verification_record
     ) -> None:
         """Should successfully get verifications."""
         from app.api.routes.summary import get_summary_verifications
@@ -646,6 +646,7 @@ class TestGetSummaryVerifications:
         )
 
         response = await get_summary_verifications(
+            request=mock_request,
             access=mock_viewer_access,
             section_type=None,
             verification_service=mock_verification_service,
@@ -657,7 +658,7 @@ class TestGetSummaryVerifications:
 
     @pytest.mark.asyncio
     async def test_get_verifications_with_filter(
-        self, mock_viewer_access, mock_verification_record
+        self, mock_request, mock_viewer_access, mock_verification_record
     ) -> None:
         """Should filter verifications by section type."""
         from app.api.routes.summary import get_summary_verifications
@@ -669,6 +670,7 @@ class TestGetSummaryVerifications:
         )
 
         await get_summary_verifications(
+            request=mock_request,
             access=mock_viewer_access,
             section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
             verification_service=mock_verification_service,

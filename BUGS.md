@@ -2261,6 +2261,37 @@ Representative confirmed signatures: `TypeError: '>' not supported between 'Magi
 4. **④ Real minimal-PDF fixture** for Shape C (~4).
 5. **⑤ Regression sentinel:** the now-required `test` job + the `xfail(strict=True)` self-cleaning quarantine is the sentinel — the suite can no longer rot silently, because new drift turns the required job red and fixed tests are forced off the list.
 
+#### INF-014 ② — SHIPPED 2026-06-04 (the Shape-A wall) + bugs uncovered
+
+**What shipped:** one conftest wall (`backend/tests/conftest.py`) — autouse structlog cache-off + contextvars reset, autouse real-httpx-egress block, a canonical `authed_client` via `app.dependency_overrides[get_current_user]`, and a `mock_request` (real `starlette.Request` + scoped limiter disable). Quarantine trimmed **218 → 190** (removed 28 that pass for the right reason ON CI: chunking_logging 16, test_users auth 9, summary get_verifications 2, dpp002 chain 1). Required `test` job green on CI (PR #62).
+
+**⚠️ LESSON — local `.env` masks CI failures (cost me a red CI run).** I first removed 32, but 4 timeline tests (`test_event_classifier` mocked_gemini ×2 + network_timeout, `test_date_extractor::test_extract_with_mocked_gemini`) passed locally and FAILED on CI with `GeminiClientError: Gemini API key not configured`. They construct `EventClassifier()`/`DateExtractor()` (which require `GEMINI_API_KEY`) *before* the `_model` mock applies; my local `.env` supplies `GEMINI_API_KEY`, CI does not (ci-backend.yml sets OPENAI/GOOGLE/COHERE placeholders but NOT GEMINI_API_KEY, GOOGLE_CLOUD_PROJECT_ID, or GOOGLE_DOCUMENT_AI_PROCESSOR_ID). SAME masking hit the OCR test. **Faithful local CI-parity REQUIRES emptying every key CI doesn't set** (`GEMINI_API_KEY= GOOGLE_CLOUD_PROJECT_ID= GOOGLE_DOCUMENT_AI_PROCESSOR_ID=`), not just setting placeholders for the ones it does. The 4 were re-quarantined (they're genuine CI failures — config/Shape-A "client needs a key", for ③ or a CI-env fix that adds `GEMINI_API_KEY: placeholder`).
+
+**⚠️ strict=FALSE caveat (deviates from the ⑤ plan above).** ① shipped `strict=False`, NOT `strict=True`. Consequence: the quarantine is **NOT self-cleaning** — a fixed test silently XPASSes and stays on the list until a human prunes it (as ② did manually). The "self-cleaning sentinel" promised in ⑤ does not exist. Pruning pressure is a periodic `-rX` report only. If ③ stalls, the 186 become permanent dead tests behind a green badge — the exact rot INF-014 set out to kill, now blessed by a required green check. **This is the central honesty risk of the whole initiative; see CI-INTEGRITY note below.**
+
+**Bugs UNCOVERED during ② (each is a test that *would* have caught a real problem):**
+
+1. **PROD BUG — 4 summary endpoints 500 on every call** (`verify_summary_section`, `add_summary_note`, `save_section_edit`, `regenerate_section` in `app/api/routes/summary.py`). Each declares its rate-limiter param as `http_request` but ALSO has a body param named `request`. slowapi (`extension.py:709`) finds its Request param **by the literal name `"request"`**, grabs the body model, fails `isinstance(_, starlette.Request)`, and raises → HTTP 500. Verified by replicating FastAPI's all-kwargs call convention. **Fix (separate PR):** rename the limiter param to `request` and the body param to `payload` (+ update body refs), then un-quarantine the 4 endpoints' tests. Owner decision 2026-06-04: fix in a follow-up PR.
+
+2. **LATENT PROD FRAGILITY — DB-backed pricing silently zeroes all LLM cost.** `app/core/pricing_loader.py`: `initialize_pricing()` runs at app startup; if `load_pricing_from_db()` returns an **empty-but-non-None** dict, `get_provider_pricing()` returns it as authoritative and `get_pricing()` falls to the **zero-cost default** for every model → all LLM cost computes as **$0**, process-wide, with no error. Triggered in tests by a MagicMock client (iterates as empty); triggerable in PROD if the `llm_pricing` table is empty or the query returns `[]`. Recommend: treat empty as a load FAILURE (fall back to hardcoded `PROVIDER_PRICING`) rather than caching `{}` as truth.
+
+3. **STALE TESTS mislabeled as "flaky state pollution".** The worker cluster (`test_engine_tasks_anomaly_trigger` 11, `test_maintenance_tasks` 3, `test_timeline_phase1_fixes` 1) was recorded in ① as Shape-A order-dependent pollution the wall would fix. **It is not** — it fails **deterministically in isolation** (Shape-B mock/contract drift, e.g. `sync_citation_statuses_with_resolutions` returns `citations_updated=0` because the mock query chain no longer matches the code). Stays quarantined for ③. Note: `sync_citation_statuses` is RISK-1's citation-verification authority, so its stale tests are a real blind spot. The genuine state-pollution cluster was `test_chunking_logging` (fixed by the wall).
+
+4. **STALE TESTS — summary `get_matter_summary` group (Shape B).** Tests mock `get_summary`; the endpoint now calls `get_cached_summary` + a job-dispatch flow. Side effect: `test_service_error_returns_500` / `test_openai_not_configured_returns_503` can no longer distinguish error codes (all paths funnel to `INTERNAL_ERROR`). For ③.
+
+5. **TEST BUG + CI BLIND SPOT — Document AI never exercised in CI.** `OCRProcessor(project_id="")` does `project_id or settings.google_cloud_project_id`, so an empty arg falls through to settings. `test_raises_configuration_error_when_not_configured` only passes because CI has **no** `GOOGLE_CLOUD_PROJECT_ID` (hits the unconfigured branch); locally with a real `.env` it makes a live gRPC call and fails. Implication: the **configured** Document AI path has zero CI coverage.
+
+#### CI-INTEGRITY note (2026-06-04, in response to a direct owner question)
+
+Honest scope of what the green `test` check means today — NOT "all tests pass":
+
+- **186 unit tests are suppressed** (xfail). They gate nothing. If the code they cover regresses, CI stays green. Green = "the ~2872 non-quarantined unit tests still pass + known-broken ones are tracked."
+- **`tests/integration/*` is excluded entirely** (`--ignore`). No integration coverage in CI at all. A dedicated integration job with real creds is an un-started follow-up.
+- **Placeholder credentials.** No real Supabase / LLM / GCP. So real DB CHECK-constraint/enum mismatches (cf. the `section_not_found` incident), real Document AI, and real LLM behavior are **not exercised**. Bugs of that class cannot be caught here.
+- **No coverage threshold gate** — `--cov` reports but does not fail on low coverage.
+- **We have NOT** deleted tests or weakened assertions to manufacture green. ② specifically REFUSED to: it left the Shape-B `get_matter_summary` group quarantined, refused to fake the 4 prod-bug endpoints green, and REMOVED an autouse Supabase mock once it was found to fabricate empty-but-successful query results (which silently zeroed LLM cost). Removals were earned by real fixes, verified to pass for the right reason.
+- **The standing risk** is the `strict=False` quarantine: it is comfortable green now in exchange for a promise (③) to fix 186 tests. If that promise isn't kept, the green badge permanently overstates health. The mitigation is to actually run ③ and to keep the list strictly shrinking.
+
 ---
 
 ## 7. Other

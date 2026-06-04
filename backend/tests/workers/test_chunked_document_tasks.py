@@ -111,7 +111,7 @@ class TestProcessDocumentChunked:
             {"status": "success", "chunk_index": 1},
         ]
 
-        with patch(
+        with patch(  # noqa: SIM117
             "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
             return_value=mock_services["chunk_service"],
         ):
@@ -133,7 +133,7 @@ class TestProcessDocumentChunked:
                         ) as mock_merge:
                             mock_merge.return_value = {"status": "ocr_complete"}
 
-                            result = process_document_chunked(
+                            process_document_chunked(
                                 document_id="doc-456",
                                 matter_id="matter-123",
                             )
@@ -165,7 +165,7 @@ class TestProcessDocumentChunked:
             Exception("Chunk 1 failed"),  # Failure
         ]
 
-        with patch(
+        with patch(  # noqa: SIM117
             "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
             return_value=mock_services["chunk_service"],
         ):
@@ -229,7 +229,7 @@ class TestProcessSingleChunk:
             (b"%PDF-chunk...", 1, 25)
         ]
 
-        with patch(
+        with patch(  # noqa: SIM117
             "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
             return_value=mock_services["chunk_service"],
         ):
@@ -266,7 +266,7 @@ class TestProcessSingleChunk:
                                         AsyncMock()
                                     )
 
-                                    result = process_single_chunk(
+                                    process_single_chunk(
                                         document_id="doc-456",
                                         matter_id="matter-123",
                                         chunk_id="chunk-1",
@@ -305,7 +305,7 @@ class TestProcessSingleChunk:
             (b"%PDF-chunk...", 1, 25)
         ]
 
-        with patch(
+        with patch(  # noqa: SIM117
             "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
             return_value=mock_services["chunk_service"],
         ):
@@ -401,7 +401,7 @@ class TestRetryFailedChunks:
 
         mock_services["chunk_service"].get_failed_chunks = AsyncMock(return_value=[])
 
-        with patch(
+        with patch(  # noqa: SIM117
             "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
             return_value=mock_services["chunk_service"],
         ):

@@ -777,8 +777,8 @@ class RAGEngineAdapter(EngineAdapter):
 
     async def _expand_parent_context(
         self,
-        results: "RerankedSearchResult",
-    ) -> "RerankedSearchResult":
+        results: "RerankedSearchResult",  # noqa: F821
+    ) -> "RerankedSearchResult":  # noqa: F821
         """Replace child chunk content with parent chunk content for richer LLM context.
 
         Gap 1: Parent-Child Context Expansion.
@@ -1651,8 +1651,6 @@ class EntityLookupEngineAdapter(EngineAdapter):
 
             # Do hybrid search for entity context
             search = self._get_search()
-            from app.core.config import get_settings
-            settings = get_settings()
 
             results = await search.search_with_library(
                 query=search_query,

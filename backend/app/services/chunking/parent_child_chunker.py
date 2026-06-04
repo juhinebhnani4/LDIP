@@ -684,12 +684,12 @@ class ParentChildChunker:
         Returns:
             Position in full_text, or None if unmappable.
         """
-        for start_in_parent, end_in_parent, text_start, text_end in block_offset_map:
+        for start_in_parent, end_in_parent, text_start, _text_end in block_offset_map:
             if start_in_parent <= pos <= end_in_parent and text_start is not None:
                 offset_in_block = pos - start_in_parent
                 return text_start + offset_in_block
         # If position falls in a joiner gap, use the nearest block boundary
-        for i, (start_in_parent, end_in_parent, text_start, text_end) in enumerate(block_offset_map):
+        for _, (start_in_parent, _end_in_parent, text_start, _text_end) in enumerate(block_offset_map):
             if pos < start_in_parent and text_start is not None:
                 return text_start
         # Past all blocks — use end of last block

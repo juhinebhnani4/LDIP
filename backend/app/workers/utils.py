@@ -79,7 +79,7 @@ def _ensure_nest_asyncio() -> bool:
         return False
 
 
-def run_async(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
+def run_async[T](coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
     """Run async coroutine in sync context for Celery tasks.
 
     This function safely executes async code from synchronous Celery tasks.
@@ -178,7 +178,7 @@ def _get_or_create_shared_loop() -> asyncio.AbstractEventLoop:
         return loop
 
 
-def _run_in_thread(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
+def _run_in_thread[T](coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
     """Run coroutine in a thread-safe manner.
 
     In gevent: dispatches to a shared persistent event loop via
@@ -205,7 +205,7 @@ def _run_in_thread(coro: Coroutine[Any, Any, T], timeout: int = 300) -> T:
             future.cancel()
             raise TimeoutError(
                 f"Async operation timed out after {timeout}s (coroutine cancelled)"
-            )
+            ) from None
 
     # Non-gevent fallback: existing threading.Thread approach (unchanged)
     import threading as _threading

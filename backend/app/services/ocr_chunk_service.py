@@ -827,7 +827,7 @@ class OCRChunkService:
 
         # Filter to only documents where all chunks are completed
         ready_docs = []
-        for doc_id, info in doc_status.items():
+        for _doc_id, info in doc_status.items():
             if (
                 info["total"] > 0
                 and info["completed"] == info["total"]

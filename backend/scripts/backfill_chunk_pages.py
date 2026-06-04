@@ -152,7 +152,7 @@ def backfill_document_chunks(document_id: str, client, dry_run: bool = False) ->
     # Match chunks to pages
     updated = 0
 
-    for i, chunk in enumerate(chunks):
+    for _, chunk in enumerate(chunks):
         content = chunk.get("content", "")
         if not content:
             continue

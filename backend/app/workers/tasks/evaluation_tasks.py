@@ -254,7 +254,6 @@ def run_batch_evaluation(
     Returns:
         Task result with evaluation summary + regression report.
     """
-    settings = get_settings()
     job_id = self.request.id
 
     logger.info(
@@ -865,7 +864,7 @@ def run_scheduled_evaluation(
 
         # Release distributed lock early so manual re-runs are unblocked
         if _lock_key:
-            try:
+            try:  # noqa: SIM105
                 _redis.delete(_lock_key)
             except Exception:
                 pass  # TTL will handle cleanup
@@ -1101,7 +1100,7 @@ def run_ab_comparison(
                 if run and run.get("status") not in ("completed", "cancelled", "failed"):
                     await ABTestRunner.update_run(run_id, {
                         "status": "failed",
-                        "error_message": str(e),
+                        "error_message": str(e),  # noqa: F821
                         "completed_at": datetime.now(UTC).isoformat(),
                     }, expected_status=run["status"])
             run_async(_mark_failed(), timeout=10)

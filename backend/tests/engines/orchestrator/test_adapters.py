@@ -161,9 +161,11 @@ class TestAdapterRegistry:
     def test_get_adapter_invalid_type_raises(self):
         """get_adapter should raise ValueError for unknown engine type."""
         # Create a mock engine type not in registry
-        with patch.dict(ADAPTER_REGISTRY, clear=True):
-            with pytest.raises(ValueError, match="No adapter registered"):
-                get_adapter(EngineType.CITATION)
+        with (
+            patch.dict(ADAPTER_REGISTRY, clear=True),
+            pytest.raises(ValueError, match="No adapter registered"),
+        ):
+            get_adapter(EngineType.CITATION)
 
     def test_get_cached_adapter_returns_same_instance(self):
         """get_cached_adapter should return cached instances."""

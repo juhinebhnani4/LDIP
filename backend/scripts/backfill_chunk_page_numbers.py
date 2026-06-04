@@ -80,7 +80,7 @@ async def backfill_document_chunks(document_id: str, client, bbox_service) -> di
 
     # Update chunks in database
     updated_count = 0
-    for chunk, original in zip(chunk_data_list, chunks_to_update):
+    for chunk, original in zip(chunk_data_list, chunks_to_update, strict=False):
         if chunk.page_number is not None:
             # Update the chunk with page_number and bbox_ids
             await asyncio.to_thread(

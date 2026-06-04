@@ -284,7 +284,7 @@ def _run_injection_scan(
             error=str(e),
         )
         # Set risk to none on failure - document can still proceed
-        try:
+        try:  # noqa: SIM105
             doc_service.update_injection_scan(
                 document_id=document_id,
                 injection_risk="none",
@@ -337,7 +337,7 @@ def process_document_chunked(
     # Note: storage_service kept for testing DI but used via get_storage_service() in sub-tasks
     chunks_svc = chunk_service or get_ocr_chunk_service()
     docs_svc = doc_service or get_document_service()
-    progress_tracker = get_chunk_progress_tracker()
+    progress_tracker = get_chunk_progress_tracker()  # noqa: F841  # fail-fast init; tracker used via getter in sub-tasks
 
     logger.info(
         "process_document_chunked_started",
@@ -533,7 +533,7 @@ def process_single_chunk(
     chunks_svc = chunk_service or get_ocr_chunk_service()
     docs_svc = doc_service or get_document_service()
     ocr = ocr_processor or get_ocr_processor()
-    chunker = pdf_chunker or get_pdf_chunker()
+    chunker = pdf_chunker or get_pdf_chunker()  # noqa: F841  # DI handle; chunking runs in sub-tasks
     progress_tracker = get_chunk_progress_tracker()
     limiter = rate_limiter or get_chunk_rate_limiter()
 
@@ -771,7 +771,7 @@ def process_single_chunk(
             raise self.retry(
                 exc=e,
                 countdown=int(e.cooldown_remaining) + 5,  # Wait for circuit to close
-            )
+            ) from e
 
         except Exception as e:
             # Update chunk status to failed

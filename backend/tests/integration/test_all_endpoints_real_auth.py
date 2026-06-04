@@ -158,7 +158,7 @@ class APITestClient:
 
             try:
                 response_data = response.json()
-            except:
+            except Exception:
                 response_data = {"raw": response.text[:500]}
 
             # Success if 2xx or expected 4xx for validation tests

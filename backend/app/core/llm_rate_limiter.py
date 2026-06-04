@@ -289,11 +289,11 @@ class SyncRateLimiter:
 
     provider: LLMProvider
     config: RateLimiterConfig = field(default_factory=RateLimiterConfig)
-    _semaphore: "threading.Semaphore" = field(init=False)
+    _semaphore: "threading.Semaphore" = field(init=False)  # noqa: F821
     _last_request_time: float = field(default=0.0, init=False)
     _request_count: int = field(default=0, init=False)
     _rate_limited_count: int = field(default=0, init=False)
-    _lock: "threading.Lock" = field(init=False)
+    _lock: "threading.Lock" = field(init=False)  # noqa: F821
 
     def __post_init__(self):
         """Initialize semaphore and lock after dataclass init."""
@@ -345,7 +345,7 @@ class SyncRateLimiterRegistry:
     """Singleton registry for sync LLM rate limiters."""
 
     _instance: "SyncRateLimiterRegistry | None" = None
-    _lock: "threading.Lock | None" = None
+    _lock: "threading.Lock | None" = None  # noqa: F821
 
     def __new__(cls) -> "SyncRateLimiterRegistry":
         """Create singleton instance."""

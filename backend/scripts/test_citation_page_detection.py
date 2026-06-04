@@ -17,9 +17,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from supabase import create_client  # noqa: E402
 
-from app.engines.citation.storage import _find_citation_page_from_bboxes
+from app.engines.citation.storage import _find_citation_page_from_bboxes  # noqa: E402
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")

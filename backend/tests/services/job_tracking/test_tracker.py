@@ -252,12 +252,14 @@ class TestJobCreation:
         mock_table.insert.return_value.execute.return_value = mock_supabase_response([])
         tracker._client.table.return_value = mock_table
 
-        with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())):
-            with pytest.raises(JobTrackingError) as exc_info:
-                await tracker.create_job(
-                    matter_id="matter-456",
-                    job_type=JobType.DOCUMENT_PROCESSING,
-                )
+        with (
+            patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda f: f())),
+            pytest.raises(JobTrackingError) as exc_info,
+        ):
+            await tracker.create_job(
+                matter_id="matter-456",
+                job_type=JobType.DOCUMENT_PROCESSING,
+            )
 
         assert "Failed to create job" in str(exc_info.value)
 

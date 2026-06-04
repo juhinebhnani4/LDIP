@@ -342,7 +342,7 @@ class RAGAnswerGenerator:
                     timeout_seconds=generation_timeout,
                     generation_time_ms=generation_time_ms,
                 )
-                raise RAGGenerationTimeoutError(generation_timeout)
+                raise RAGGenerationTimeoutError(generation_timeout) from None
 
             except Exception as e:
                 last_error = e

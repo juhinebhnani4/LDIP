@@ -44,9 +44,11 @@ def client(mock_user, mock_supabase):
     # Override dependencies
     app.dependency_overrides[users.get_supabase_client] = lambda: mock_supabase
 
-    with patch("app.core.security.get_current_user", return_value=mock_user):
-        with TestClient(app) as test_client:
-            yield test_client
+    with (
+        patch("app.core.security.get_current_user", return_value=mock_user),
+        TestClient(app) as test_client,
+    ):
+        yield test_client
 
     # Clean up
     app.dependency_overrides.clear()

@@ -168,7 +168,7 @@ async def _run_migration(
             continue
 
         # Update each chunk with its Voyage embedding
-        for chunk, embedding in zip(chunks, embeddings):
+        for chunk, embedding in zip(chunks, embeddings, strict=False):
             try:
                 supabase.table("chunks").update(
                     {"embedding_voyage": embedding}

@@ -89,7 +89,7 @@ class RecursiveTextSplitter:
                 break
 
         # Split by separator
-        if separator:
+        if separator:  # noqa: SIM108
             splits = text.split(separator)
         else:
             # Character-level split

@@ -162,13 +162,15 @@ class TestCitationExtractionFlow:
         """
 
         # Extract with regex only (mocking Gemini to fail)
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=text,
-                    document_id="test-doc",
-                    matter_id="test-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=text,
+                document_id="test-doc",
+                matter_id="test-matter",
+            )
 
         # Should still extract citations via regex
         assert len(result.citations) >= 2, "Regex should extract at least 2 citations"
@@ -350,13 +352,15 @@ class TestCitationExtractionPerformance:
         ])
 
         # This should not timeout or run out of memory
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=citations_text,
-                    document_id="perf-test-doc",
-                    matter_id="perf-test-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=citations_text,
+                document_id="perf-test-doc",
+                matter_id="perf-test-matter",
+            )
 
         # Regex should find some pattern matches
         # Exact count depends on pattern matching specifics
@@ -373,13 +377,15 @@ class TestCitationExtractionPerformance:
         Section 138 NI Act, 1881 applies here.
         """
 
-        with patch.object(extractor, "_extract_with_gemini", return_value=[]):
-            with patch.object(extractor, "_extract_with_gemini_sync", return_value=[]):
-                result = extractor.extract_from_text_sync(
-                    text=text,
-                    document_id="dedup-test",
-                    matter_id="dedup-matter",
-                )
+        with (
+            patch.object(extractor, "_extract_with_gemini", return_value=[]),
+            patch.object(extractor, "_extract_with_gemini_sync", return_value=[]),
+        ):
+            result = extractor.extract_from_text_sync(
+                text=text,
+                document_id="dedup-test",
+                matter_id="dedup-matter",
+            )
 
         # Should have merged duplicates
         section_138_count = sum(

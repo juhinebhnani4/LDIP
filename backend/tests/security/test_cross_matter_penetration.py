@@ -13,6 +13,7 @@ the 4-layer matter isolation using various attack vectors:
 CRITICAL: All these tests MUST fail (attacks blocked) for security compliance.
 """
 
+import contextlib
 import time
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -262,15 +263,13 @@ class TestTimingAttacks:
         times = []
         for _ in range(5):
             start = time.time()
-            try:
+            with contextlib.suppress(HTTPException):
                 await validator(
                     request=mock_request,
                     matter_id=str(uuid4()),  # Different UUID each time
                     user=mock_user,
                     matter_service=mock_matter_service,
                 )
-            except HTTPException:
-                pass
             elapsed = time.time() - start
             times.append(elapsed)
 

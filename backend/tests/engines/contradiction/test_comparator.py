@@ -818,13 +818,15 @@ class TestRetryLogic:
                 content="Test", page_number=1,
             )
 
-            with pytest.raises(ComparatorError):
-                with patch("asyncio.sleep", new_callable=AsyncMock):
-                    await comparator.compare_statement_pair(
-                        statement_a=stmt,
-                        statement_b=stmt,
-                        entity_name="Test",
-                    )
+            with (
+                pytest.raises(ComparatorError),
+                patch("asyncio.sleep", new_callable=AsyncMock),
+            ):
+                await comparator.compare_statement_pair(
+                    statement_a=stmt,
+                    statement_b=stmt,
+                    entity_name="Test",
+                )
 
             # Should only be called once (no retry)
             assert mock_client.chat.completions.create.call_count == 1

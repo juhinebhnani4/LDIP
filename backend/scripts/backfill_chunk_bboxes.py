@@ -24,8 +24,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from rapidfuzz import fuzz
-from supabase import create_client
+from rapidfuzz import fuzz  # noqa: E402
+from supabase import create_client  # noqa: E402
 
 # Initialize Supabase client
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")

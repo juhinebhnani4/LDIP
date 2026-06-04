@@ -14,9 +14,9 @@ import time
 from dotenv import load_dotenv
 
 load_dotenv()
-from openai import OpenAI
+from openai import OpenAI  # noqa: E402
 
-from app.services.supabase.client import get_supabase_client
+from app.services.supabase.client import get_supabase_client  # noqa: E402
 
 # Config — matches backend/app/services/rag/embedder.py
 EMBEDDING_MODEL = "text-embedding-3-small"

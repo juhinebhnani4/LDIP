@@ -37,7 +37,7 @@ def create_pdf():
 
     def _create(page_count: int) -> bytes:
         writer = PdfWriter()
-        for i in range(page_count):
+        for _ in range(page_count):
             # Add page number text for debugging
             writer.add_blank_page(width=612, height=792)
         buffer = BytesIO()
@@ -402,7 +402,7 @@ class TestStreamingSplit:
         with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
             assert len(result.chunks) == 3
 
-            for chunk_path, page_start, page_end in result.chunks:
+            for chunk_path, _page_start, _page_end in result.chunks:
                 assert chunk_path.exists()
                 assert chunk_path.suffix == ".pdf"
 

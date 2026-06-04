@@ -113,7 +113,7 @@ def _deduplicate_extracted_dates(dates: list) -> list:
 
     # For each group, pick the best one (highest confidence, has page/bbox)
     unique_dates = []
-    for date_key, group in date_groups.items():
+    for _date_key, group in date_groups.items():
         if len(group) == 1:
             unique_dates.append(group[0])
         else:

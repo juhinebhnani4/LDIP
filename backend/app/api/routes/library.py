@@ -163,7 +163,7 @@ async def list_library_documents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e
 
 
 @router.get("/documents/{document_id}", response_model=LibraryDocument, response_model_by_alias=True)
@@ -183,13 +183,13 @@ async def get_library_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "NOT_FOUND", "message": "Library document not found"}},
-        )
+        ) from None
     except LibraryServiceError as e:
         logger.error("get_library_document_failed", document_id=document_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e
 
 
 @router.post("/documents/check-duplicates", response_model=DuplicateCheckResponse, response_model_by_alias=True)
@@ -218,7 +218,7 @@ async def check_duplicates(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e
 
 
 # =============================================================================
@@ -251,7 +251,7 @@ async def get_linked_library_documents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e
 
 
 @matters_router.post("/documents", response_model=LinkSuccessResponse, response_model_by_alias=True, status_code=status.HTTP_201_CREATED)
@@ -287,12 +287,12 @@ async def link_library_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "NOT_FOUND", "message": "Library document not found"}},
-        )
+        ) from None
     except LibraryLinkExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": {"code": "ALREADY_LINKED", "message": "Document is already linked to this matter"}},
-        )
+        ) from None
     except LibraryServiceError as e:
         logger.error(
             "link_library_document_failed",
@@ -303,7 +303,7 @@ async def link_library_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e
 
 
 @matters_router.delete("/documents/{document_id}", response_model=UnlinkSuccessResponse, response_model_by_alias=True)
@@ -351,4 +351,4 @@ async def unlink_library_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
-        )
+        ) from e

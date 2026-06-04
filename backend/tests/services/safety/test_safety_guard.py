@@ -422,19 +422,23 @@ class TestSingleton:
         """get_safety_guard should return same instance."""
         reset_safety_guard()
 
-        with patch("app.services.safety.safety_guard.get_guardrail_service"):
-            with patch("app.services.safety.safety_guard.get_subtle_violation_detector"):
-                guard1 = get_safety_guard()
-                guard2 = get_safety_guard()
+        with (
+            patch("app.services.safety.safety_guard.get_guardrail_service"),
+            patch("app.services.safety.safety_guard.get_subtle_violation_detector"),
+        ):
+            guard1 = get_safety_guard()
+            guard2 = get_safety_guard()
 
-                assert guard1 is guard2
+            assert guard1 is guard2
 
     def test_reset_creates_new_instance(self, mock_settings) -> None:
         """reset_safety_guard should allow new instance creation."""
-        with patch("app.services.safety.safety_guard.get_guardrail_service"):
-            with patch("app.services.safety.safety_guard.get_subtle_violation_detector"):
-                guard1 = get_safety_guard()
-                reset_safety_guard()
-                guard2 = get_safety_guard()
+        with (
+            patch("app.services.safety.safety_guard.get_guardrail_service"),
+            patch("app.services.safety.safety_guard.get_subtle_violation_detector"),
+        ):
+            guard1 = get_safety_guard()
+            reset_safety_guard()
+            guard2 = get_safety_guard()
 
-                assert guard1 is not guard2
+            assert guard1 is not guard2

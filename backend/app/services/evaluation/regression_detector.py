@@ -230,10 +230,7 @@ def detect_regression(
         question = curr.get("question", base.get("question", ""))
 
         # Calculate relative change
-        if base_score > 0:
-            relative_pct = (delta / base_score) * 100
-        else:
-            relative_pct = 0.0
+        relative_pct = delta / base_score * 100 if base_score > 0 else 0.0
 
         # Determine per-item severity
         regressed_metrics: list[str] = []

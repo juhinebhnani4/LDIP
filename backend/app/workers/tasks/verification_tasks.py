@@ -190,7 +190,7 @@ async def _verify_citations_batch_async(
             results["errors"] += 1
 
             # Fix Issue 6: Mark failed citations as ERROR status
-            try:
+            try:  # noqa: SIM105
                 await storage.update_citation_verification(
                     citation_id=citation.id,
                     matter_id=matter_id,
@@ -288,7 +288,7 @@ def verify_citations_for_act(
         # Retry if transient error
         if self.request.retries < MAX_RETRIES:
             retry_delay = RETRY_DELAYS[min(self.request.retries, len(RETRY_DELAYS) - 1)]
-            raise self.retry(exc=e, countdown=retry_delay)
+            raise self.retry(exc=e, countdown=retry_delay) from e
 
         # Return partial results on final failure
         return {
@@ -441,7 +441,7 @@ def verify_single_citation(
         # Retry if transient error
         if self.request.retries < MAX_RETRIES:
             retry_delay = RETRY_DELAYS[min(self.request.retries, len(RETRY_DELAYS) - 1)]
-            raise self.retry(exc=e, countdown=retry_delay)
+            raise self.retry(exc=e, countdown=retry_delay) from e
 
         return {
             "status": "error",

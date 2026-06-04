@@ -229,9 +229,10 @@ def calculate_similarity(
         return 1.0
 
     # For very short org cores, require exact match
-    if entity_type != EntityType.PERSON:
-        if len(core1) < MIN_ORG_CORE_LENGTH or len(core2) < MIN_ORG_CORE_LENGTH:
-            return 1.0 if core1 == core2 else 0.0
+    if entity_type != EntityType.PERSON and (
+        len(core1) < MIN_ORG_CORE_LENGTH or len(core2) < MIN_ORG_CORE_LENGTH
+    ):
+        return 1.0 if core1 == core2 else 0.0
 
     return JaroWinklerModule.normalized_similarity(core1, core2)
 
@@ -282,13 +283,13 @@ def find_merge_groups(
             # Build merge clusters using Union-Find
             parent: dict[str, str] = {e.id: e.id for e in group}
 
-            def find(x: str) -> str:
+            def find(x: str, parent=parent) -> str:
                 while parent[x] != x:
                     parent[x] = parent[parent[x]]
                     x = parent[x]
                 return x
 
-            def union(x: str, y: str) -> None:
+            def union(x: str, y: str, parent=parent) -> None:
                 px, py = find(x), find(y)
                 if px != py:
                     parent[px] = py

@@ -72,7 +72,7 @@ SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "esq"})
 
 # Patterns for numbered role entities (should NEVER merge with different numbers)
 # Examples: "Respondent No. 2", "Applicant No 3", "Defendant No.1", "Petitioner No. 5"
-import re
+import re  # noqa: E402
 
 NUMBERED_ROLE_PATTERN = re.compile(
     r'^(respondent|applicant|petitioner|defendant|plaintiff|appellant|'
@@ -845,7 +845,7 @@ class EntityResolver:
                     concurrent_limit=ALIAS_CONCURRENT_LIMIT,
                 )
 
-                async def _process_batch(batch: list[dict]) -> dict[str, float]:
+                async def _process_batch(batch: list[dict], semaphore=semaphore) -> dict[str, float]:
                     async with semaphore:
                         return await self.analyze_batch_context(batch, matter_id=matter_id)
 

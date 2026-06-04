@@ -216,10 +216,7 @@ class OCRCleaner:
             1 for c in text
             if not c.isalnum() and not c.isspace() and c not in '.,;:!?-\'"(){}[]'
         )
-        if len(text) > 0 and (special_char_count / len(text)) > 0.1:
-            return True
-
-        return False
+        return bool(len(text) > 0 and special_char_count / len(text) > 0.1)
 
 
 # =============================================================================

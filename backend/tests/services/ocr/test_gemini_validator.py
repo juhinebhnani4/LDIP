@@ -350,9 +350,11 @@ class TestValidateBatchAsync:
             side_effect=Exception("Async API Error")
         )
 
-        with patch.object(mock_validator, "_model", mock_model):
-            with pytest.raises(GeminiValidatorError):
-                await mock_validator.validate_batch_async(words)
+        with (
+            patch.object(mock_validator, "_model", mock_model),
+            pytest.raises(GeminiValidatorError),
+        ):
+            await mock_validator.validate_batch_async(words)
 
 
 class TestParseResponse:

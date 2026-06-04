@@ -26,12 +26,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.engines.citation.abbreviations import (
+from app.engines.citation.abbreviations import (  # noqa: E402
     clean_act_name,
     get_canonical_name,
     normalize_act_name,
 )
-from app.services.supabase.client import get_service_client
+from app.services.supabase.client import get_service_client  # noqa: E402
 
 
 def is_garbage_act_name(act_name: str) -> bool:
@@ -141,7 +141,6 @@ async def consolidate_resolutions(dry_run: bool = True, matter_id: str | None = 
     for res in resolutions:
         matter = res["matter_id"]
         display_name = res.get("act_name_display") or ""
-        normalized = res.get("act_name_normalized") or ""
 
         # Clean the display name
         cleaned = clean_act_name(display_name)

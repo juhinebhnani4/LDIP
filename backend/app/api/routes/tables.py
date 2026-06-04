@@ -324,7 +324,7 @@ async def get_document_tables(
     Returns:
         List of tables from the document.
     """
-    matter_id = _verify_document_access(
+    _verify_document_access(
         document_id, current_user.id, document_service, matter_service
     )
 

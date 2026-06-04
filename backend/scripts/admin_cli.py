@@ -285,7 +285,7 @@ def skip_job(job_id: str, reason: str):
             timeout=30.0,
         )
         response.raise_for_status()
-        data = response.json()
+        response.json()
 
         click.echo(f"\n✓ Job {job_id} marked as skipped")
         click.echo(f"  Reason: {reason}")

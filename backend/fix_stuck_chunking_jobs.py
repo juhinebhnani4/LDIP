@@ -84,7 +84,6 @@ def main():
         job = item['job']
         job_id = job['id']
         doc_id = job['document_id']
-        matter_id = job['matter_id']
 
         # Update job to skip chunking and go to embedding
         client.table("processing_jobs").update({

@@ -64,7 +64,7 @@ def valid_chunk_results(draw, total_pages, chunk_size):
         num_bboxes = draw(st.integers(min_value=0, max_value=10))
         bboxes = []
 
-        for i in range(num_bboxes):
+        for _ in range(num_bboxes):
             # Generate a relative page within chunk (1 to page_count)
             relative_page = draw(st.integers(min_value=1, max_value=page_count))
             reading_order = draw(st.integers(min_value=0, max_value=20))
@@ -257,7 +257,7 @@ class TestPDFChunkerProperties:
     @settings(max_examples=500, deadline=None)
     def test_chunk_ranges_cover_all_pages(self, page_count, chunk_size):
         """Property: All pages are covered by exactly one chunk."""
-        chunker = PDFChunker(enable_memory_tracking=False)
+        PDFChunker(enable_memory_tracking=False)
 
         # Calculate expected chunks
         chunks_info = []

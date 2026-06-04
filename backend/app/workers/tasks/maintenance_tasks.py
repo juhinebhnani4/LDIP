@@ -6,6 +6,7 @@ Periodic tasks for:
 - System health monitoring
 """
 
+import contextlib
 from datetime import UTC
 
 import structlog
@@ -354,12 +355,10 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                     "updated_at": datetime.now(UTC).isoformat(),
                 }).eq("id", job_id).execute()
                 # Also update document status if needed
-                try:
+                with contextlib.suppress(Exception):
                     client.table("documents").update(
                         {"status": "completed"}
                     ).eq("id", doc_id).neq("status", "completed").execute()
-                except Exception:
-                    pass
                 skipped += 1
                 continue
 

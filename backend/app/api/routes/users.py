@@ -273,7 +273,7 @@ async def sign_out_all_devices(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to sign out from all devices: {str(e)}",
-        )
+        ) from e
 
 
 @router.delete("/me")
@@ -301,7 +301,7 @@ async def delete_account(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete account: {str(e)}",
-        )
+        ) from e
 
 
 @router.patch("/me/profile", response_model=UserProfile)
@@ -346,7 +346,7 @@ async def update_user_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile: {str(e)}",
-        )
+        ) from e
 
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

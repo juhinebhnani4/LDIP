@@ -238,7 +238,7 @@ def _classify_error_code(error_str: str, error_type: str) -> LLMErrorCode:
     return LLMErrorCode.UNKNOWN_ERROR
 
 
-async def with_error_handling(
+async def with_error_handling[T](
     operation: Callable[[], T],
     provider: str = "unknown",
     context: str = "LLM operation",

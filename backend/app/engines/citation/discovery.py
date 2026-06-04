@@ -92,7 +92,7 @@ def compute_resolution_stats(
         stats.total_citations += resolution.citation_count
 
         # Check for data inconsistencies
-        if check_consistency:
+        if check_consistency:  # noqa: SIM102
             # Inconsistency: has document_id but marked as missing
             if (
                 resolution.act_document_id
@@ -199,7 +199,7 @@ class ActDiscoveryService:
                     continue
 
                 # Skip available/auto-fetched if not requested
-                if not include_available:
+                if not include_available:  # noqa: SIM102
                     if resolution.resolution_status in (
                         ActResolutionStatus.AVAILABLE,
                         ActResolutionStatus.AUTO_FETCHED,

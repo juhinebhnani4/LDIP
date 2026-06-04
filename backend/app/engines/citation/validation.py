@@ -351,9 +351,7 @@ class ActValidationService:
         words = [w for w in re.findall(r"\w+", lower_name_no_year) if w not in ("the", "of", "and", "for", "to", "in", "on", "a", "an")]
         if len(words) < 2:
             # Exception: Known abbreviations like "IPC", "CrPC"
-            if lower_name_no_year in self._known_act_names:
-                return False
-            return True
+            return lower_name_no_year not in self._known_act_names
 
         # Must end with valid suffix
         valid_suffixes = self._get_valid_suffixes()
@@ -364,9 +362,7 @@ class ActValidationService:
         if not has_valid_suffix:
             # Exception: Some acts are referred to without suffix (e.g., "IPC", "CrPC")
             # Check if it's a known abbreviation
-            if lower_name_no_year in self._known_act_names:
-                return False
-            return True
+            return lower_name_no_year not in self._known_act_names
 
         # Must contain at least one valid keyword
         valid_keywords = self._get_valid_keywords()
@@ -375,9 +371,7 @@ class ActValidationService:
 
         if not has_valid_keyword:
             # Exception: Short act names that are abbreviations
-            if len(lower_name_no_year) < 20:
-                return False
-            return True
+            return not len(lower_name_no_year) < 20
 
         return False
 

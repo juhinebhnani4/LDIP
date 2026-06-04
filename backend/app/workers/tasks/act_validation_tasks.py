@@ -725,7 +725,6 @@ def fetch_acts_from_india_code(self) -> dict:
                 normalized = act.get("act_name_normalized", "")
                 canonical = act.get("act_name_canonical")
                 year = act.get("act_year")
-                doc_id = act.get("india_code_doc_id")
 
                 try:
                     # Check if already cached
@@ -856,7 +855,6 @@ def _update_matter_resolutions_from_cache(client: Any) -> dict:
     Returns dict with counts of resolutions and documents updated/created.
     """
     settings = get_settings()
-    cache_service = get_act_cache_service()
 
     # Track affected matter_ids for broadcasting
     affected_matter_ids: set[str] = set()

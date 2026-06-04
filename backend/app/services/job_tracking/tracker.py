@@ -191,7 +191,7 @@ class JobTrackingService:
             if isinstance(e, JobTrackingError):
                 raise
             logger.error("job_create_failed", error=str(e), matter_id=matter_id)
-            raise JobTrackingError(f"Failed to create job: {e}")
+            raise JobTrackingError(f"Failed to create job: {e}") from e
 
     async def get_job(
         self,

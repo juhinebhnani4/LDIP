@@ -62,7 +62,7 @@ class ABCompareRequest(BaseModel):
         try:
             _uuid.UUID(v)
         except (ValueError, AttributeError):
-            raise ValueError("matter_id must be a valid UUID")
+            raise ValueError("matter_id must be a valid UUID") from None
         return v
     tags: list[str] | None = Field(None, description="Golden dataset tag filters")
     control_embedding: Literal["openai", "voyage"] = Field("openai", description="Control embedding provider")

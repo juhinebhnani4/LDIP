@@ -58,7 +58,7 @@ class SearchFilters(BaseModel):
                 )
 
         # Validate page range consistency
-        if self.page_min is not None and self.page_max is not None:
+        if self.page_min is not None and self.page_max is not None:  # noqa: SIM102
             if self.page_min > self.page_max:
                 raise ValueError(
                     f"page_min ({self.page_min}) must be <= page_max ({self.page_max})"

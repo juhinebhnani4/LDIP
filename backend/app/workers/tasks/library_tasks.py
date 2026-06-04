@@ -254,7 +254,7 @@ def chunk_library_document(
             str(e),
             error_code="CHUNKING_FAILED",
             library_document_id=library_document_id,
-        )
+        ) from e
 
 
 # =============================================================================
@@ -439,7 +439,7 @@ def embed_library_chunks(
             batch_ids = [c["id"] for c in batch]
 
             # Generate embeddings (GAP-11: pass library_document_id for cost attribution)
-            async def _embed_batch():
+            async def _embed_batch(batch_texts=batch_texts):
                 return await embedder.embed_batch(batch_texts, library_document_id=lib_doc_id)
 
             embeddings = run_async(_embed_batch())
@@ -466,7 +466,7 @@ def embed_library_chunks(
                 continue
 
             # Update chunks with embeddings
-            for chunk_id, embedding in zip(batch_ids, embeddings):
+            for chunk_id, embedding in zip(batch_ids, embeddings, strict=False):
                 if embedding is not None:
                     client.table("library_chunks").update(
                         {"embedding": embedding}
@@ -494,7 +494,7 @@ def embed_library_chunks(
                     batch_texts = [c["content"] for c in batch]
                     batch_ids = [c["id"] for c in batch]
 
-                    async def _embed_voyage_batch():
+                    async def _embed_voyage_batch(batch_texts=batch_texts):
                         return await voyage_embedder.embed_batch(
                             batch_texts,
                             matter_id=None,
@@ -503,7 +503,7 @@ def embed_library_chunks(
 
                     voyage_embeddings = run_async(_embed_voyage_batch())
                     if voyage_embeddings:
-                        for chunk_id, v_emb in zip(batch_ids, voyage_embeddings):
+                        for chunk_id, v_emb in zip(batch_ids, voyage_embeddings, strict=False):
                             if v_emb is not None:
                                 client.table("library_chunks").update(
                                     {"embedding_voyage": v_emb}
@@ -697,7 +697,7 @@ def embed_library_chunks(
             str(e),
             error_code="EMBEDDING_FAILED",
             library_document_id=lib_doc_id,
-        )
+        ) from e
 
     finally:
         # RISK-2: single release point for the embed lock — runs on success,

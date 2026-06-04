@@ -476,7 +476,7 @@ class TestSummaryModelValidation:
 # Story 14.4: Summary Verification API Tests
 # =============================================================================
 
-from app.models.summary import (
+from app.models.summary import (  # noqa: E402
     SummaryNoteCreate,
     SummaryNoteRecord,
     SummarySectionTypeEnum,

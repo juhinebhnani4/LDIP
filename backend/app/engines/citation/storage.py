@@ -272,7 +272,7 @@ class CitationStorageService:
                     records.append(record)
 
                 # Insert batch using asyncio.to_thread
-                def _insert_batch():
+                def _insert_batch(records=records):
                     return self.client.table("citations").insert(records).execute()
 
                 result = await asyncio.to_thread(_insert_batch)

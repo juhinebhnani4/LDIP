@@ -86,7 +86,7 @@ def create_document_chunks():
                 "bbox_ids": [str(uuid4()) for _ in range(20)],  # 20 bboxes
                 "embedding": [0.1] * 1536,
             })
-            chunk_id += 1
+            chunk_id += 1  # noqa: SIM113
 
         return chunks
 
@@ -114,7 +114,6 @@ class TestGlobalSearchWithLargeDocuments:
         )
 
         # Simulate search that matches chunks
-        query = "legal terms and obligations"
         search_results = [
             chunk for chunk in chunks
             if "legal terms" in chunk["content"].lower()

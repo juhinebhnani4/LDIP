@@ -69,7 +69,7 @@ def _validate_migration_params(
         }
 
     # Validate target_model_version if provided
-    if target_model_version is not None:
+    if target_model_version is not None:  # noqa: SIM102
         if not isinstance(target_model_version, str) or not target_model_version:
             return {
                 "status": "validation_error",

@@ -163,9 +163,13 @@ class TestCustom429Handler:
         exc = MagicMock(spec=RateLimitExceeded)
         exc.detail = "Rate limit exceeded: 30 per 1 minute"
 
-        with patch('app.core.rate_limit.get_remote_address', return_value="127.0.0.1"):
-            with patch('app.core.rate_limit.get_correlation_id', return_value="test-corr-123"):
-                response = rate_limit_exceeded_handler(mock_request, exc)
+        with (
+            patch('app.core.rate_limit.get_remote_address', return_value="127.0.0.1"),
+            patch(
+                'app.core.rate_limit.get_correlation_id', return_value="test-corr-123"
+            ),
+        ):
+            response = rate_limit_exceeded_handler(mock_request, exc)
 
         assert response.status_code == 429
 
@@ -203,9 +207,11 @@ class TestCustom429Handler:
         exc = MagicMock(spec=RateLimitExceeded)
         exc.detail = "Rate limit exceeded: 60 per 1 minute"
 
-        with patch('app.core.rate_limit.get_remote_address', return_value="10.0.0.1"):
-            with patch('app.core.rate_limit.get_correlation_id', return_value="test-123"):
-                response = rate_limit_exceeded_handler(mock_request, exc)
+        with (
+            patch('app.core.rate_limit.get_remote_address', return_value="10.0.0.1"),
+            patch('app.core.rate_limit.get_correlation_id', return_value="test-123"),
+        ):
+            response = rate_limit_exceeded_handler(mock_request, exc)
 
         # Verify headers
         assert "retry-after" in response.headers

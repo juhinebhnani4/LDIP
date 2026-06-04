@@ -29,8 +29,8 @@ def create_test_pdf():
 
     def _create(page_count: int, with_text: bool = False) -> bytes:
         writer = PdfWriter()
-        for i in range(page_count):
-            page = writer.add_blank_page(width=612, height=792)
+        for _ in range(page_count):
+            writer.add_blank_page(width=612, height=792)
         buffer = BytesIO()
         writer.write(buffer)
         return buffer.getvalue()
@@ -99,7 +99,7 @@ class TestFullPipelineIntegration:
 
         # Simulate OCR for each chunk
         ocr_results = []
-        for chunk_bytes, page_start, page_end in chunks:
+        for _chunk_bytes, page_start, page_end in chunks:
             chunk_index = len(ocr_results)
             ocr_result = mock_ocr_chunk_result(
                 chunk_index=chunk_index,

@@ -40,7 +40,7 @@ result = client.table("processing_jobs").update({
 print("Job reset to QUEUED.")
 
 # Now trigger the task
-from app.workers.tasks.document_tasks import process_document
+from app.workers.tasks.document_tasks import process_document  # noqa: E402
 
 print(f"\nQueuing process_document task for document: {document_id}")
 task = process_document.delay(document_id)

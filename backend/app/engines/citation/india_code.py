@@ -18,7 +18,7 @@ import asyncio
 import re
 from dataclasses import dataclass
 from typing import Final
-from urllib.parse import quote, urljoin
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -225,9 +225,6 @@ class IndiaCodeClient:
         if year:
             search_term = f"{search_term} {year}"
 
-        # URL encode the search term
-        encoded_term = quote(search_term)
-
         # Search URL - using simple search on Central Acts handle
         search_url = f"{BASE_URL}/handle/{CENTRAL_ACTS_HANDLE}/simple-search"
         params = {
@@ -368,12 +365,7 @@ class IndiaCodeClient:
                 # Generate possible filename patterns
                 year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", title)
                 if year_match:
-                    year = year_match.group(1)
-                    # Try common patterns
-                    patterns = [
-                        f"a{year}*.pdf",
-                        f"{year}*.pdf",
-                    ]
+                    year = year_match.group(1)  # noqa: F841  # stub: filename-pattern discovery TODO
                     # For now, return the base pattern
                     # The actual filename would need to be discovered
 

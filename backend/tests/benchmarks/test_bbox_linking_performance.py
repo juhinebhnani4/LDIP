@@ -189,7 +189,7 @@ class TestBboxLinkingMemory:
         tracemalloc.start()
 
         linker = MockBboxLinker()
-        result_chunks = linker.link_bboxes_to_chunks(bboxes, chunks)
+        linker.link_bboxes_to_chunks(bboxes, chunks)
 
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -279,7 +279,7 @@ class TestBatchedMatching:
         linker = MockBboxLinker()
 
         start = time.perf_counter()
-        result_chunks = linker.link_bboxes_to_chunks(bboxes, chunks)
+        linker.link_bboxes_to_chunks(bboxes, chunks)
         elapsed = time.perf_counter() - start
 
         print(f"\n10,000 bbox linking: {elapsed:.2f}s")
@@ -456,7 +456,7 @@ class TestLargeDocumentScenarios:
         linker = MockBboxLinker()
 
         start = time.perf_counter()
-        result_chunks = linker.link_bboxes_to_chunks(bboxes, chunks)
+        linker.link_bboxes_to_chunks(bboxes, chunks)
         elapsed = time.perf_counter() - start
 
         print(f"\n1000-page document: {elapsed:.2f}s")

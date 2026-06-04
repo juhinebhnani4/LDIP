@@ -236,7 +236,7 @@ class MIGGraphService:
             broadcast = _get_broadcast_entity_streaming()
             current_count = len(saved_nodes)
             for node in created:
-                try:
+                try:  # noqa: SIM105
                     broadcast(
                         matter_id=matter_id,
                         entity_name=node.canonical_name,
@@ -783,7 +783,7 @@ class MIGGraphService:
 
         for edge in edges:
             try:
-                def _insert_edge():
+                def _insert_edge(edge=edge):
                     return (
                         self.client.table("identity_edges")
                         .upsert(

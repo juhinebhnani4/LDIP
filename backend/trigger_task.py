@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from celery import chain
+from celery import chain  # noqa: E402
 
-from app.workers.celery import celery_app
-from app.workers.tasks.document_tasks import (
+from app.workers.celery import celery_app  # noqa: E402
+from app.workers.tasks.document_tasks import (  # noqa: E402
     calculate_confidence,
     chunk_document,
     embed_chunks,

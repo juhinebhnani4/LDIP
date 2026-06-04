@@ -80,7 +80,7 @@ class ActCacheService:
         if self.client is None:
             return False
 
-        storage_path = self._get_storage_path(normalized_name)
+        storage_path = self._get_storage_path(normalized_name)  # noqa: F841  # TODO: cache-existence check should use this path
 
         try:
             # Try to get file info - if it exists, it's cached

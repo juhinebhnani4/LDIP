@@ -984,11 +984,7 @@ class SummaryService:
             "petitioner nos",
             "appellant nos",
         ]
-        for placeholder in placeholders:
-            if name_lower.startswith(placeholder):
-                return True
-
-        return False
+        return any(name_lower.startswith(placeholder) for placeholder in placeholders)
 
     def _parse_parties_from_overview(self, description: str) -> list[PartyInfo]:
         """Parse party names from the GPT-4 case overview markdown.

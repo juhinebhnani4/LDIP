@@ -616,7 +616,7 @@ class TimelineBuilder:
         max_valid_year = current_year + 5  # Allow up to 5 years in future for deadlines
         valid_events = []
         for event in events:
-            if isinstance(event.event_date, date_type):
+            if isinstance(event.event_date, date_type):  # noqa: SIM102
                 if event.event_date.year > max_valid_year:
                     logger.debug(
                         "timeline_event_filtered_invalid_year",
@@ -665,7 +665,7 @@ class TimelineBuilder:
         deduplicated: list[TimelineEvent] = []
         total_merged = 0
 
-        for date_key, date_events in events_by_date.items():
+        for _date_key, date_events in events_by_date.items():
             if len(date_events) == 1:
                 deduplicated.append(date_events[0])
                 continue

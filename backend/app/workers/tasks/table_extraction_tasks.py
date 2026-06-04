@@ -11,6 +11,7 @@ Table chunks are embedded and FTS-indexed automatically by downstream tasks.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -208,10 +209,8 @@ def extract_tables(
         finally:
             # Clean up temp file — runs regardless of where the exception occurred
             if tmp_path is not None:
-                try:
+                with contextlib.suppress(Exception):
                     tmp_path.unlink()
-                except Exception:
-                    pass
 
     except ConnectionError as e:
         # Manual retry for transient network errors. We handle this inside
@@ -233,7 +232,7 @@ def extract_tables(
                 error=str(e),
             )
             # self.retry() raises Retry exception — Celery re-queues the task
-            raise self.retry(exc=e, countdown=min(30 * (2 ** retry_count), 60))
+            raise self.retry(exc=e, countdown=min(30 * (2 ** retry_count), 60)) from e
 
         # Retries exhausted — return gracefully so the chain continues
         logger.error(

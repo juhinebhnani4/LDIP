@@ -193,8 +193,6 @@ async def _create_admin_notification(pq, supabase) -> None:
         # F8 fix: Sanitize provider name for safe use in queries
         safe_provider = _sanitize_provider_name(pq.provider)
 
-        # F12 fix: Use structured alert key prefix for reliable deduplication
-        alert_key = f"llm_quota_alert_{safe_provider}"
         title = f"LLM Quota Alert: {safe_provider.title()} at {usage_pct:.0f}%"
         message = (
             f"{safe_provider.title()} API usage has reached {usage_pct:.0f}% of daily limit. "

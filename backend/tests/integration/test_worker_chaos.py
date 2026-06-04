@@ -101,7 +101,6 @@ class TestWorkerKilledMidProcessing:
         # Simulates the idempotency feature: already-processed chunks are skipped
 
         completed_chunk_ids = [f"chunk_{i}" for i in range(4)]
-        failed_chunk_index = 4
 
         # Simulate retry: check which chunks need processing
         chunks_to_process = []
@@ -255,7 +254,6 @@ class TestRecoveryScenarios:
     def test_duplicate_chunk_handling(self, sample_chunks):
         """Duplicate chunks don't cause corruption."""
         # Simulate: chunk 3 was processed twice due to retry
-        chunks_with_duplicate = sample_chunks.copy()
 
         # In the actual system, the database unique constraint would prevent
         # duplicate storage. Here we verify the merge handles duplicates gracefully.
@@ -360,7 +358,7 @@ class TestChaosSimulation:
         assert result.chunk_count == 10
 
         # Verify page ordering is correct in result
-        for i, chunk in enumerate(sample_chunks):
+        for _i, chunk in enumerate(sample_chunks):
             expected_first_page = chunk.page_start
             expected_last_page = chunk.page_end
             # Find corresponding bboxes

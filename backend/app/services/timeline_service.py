@@ -214,7 +214,7 @@ class TimelineService:
                 matter_id=matter_id,
                 document_id=document_id,
             )
-            raise TimelineServiceError(f"Failed to save extracted dates: {e}")
+            raise TimelineServiceError(f"Failed to save extracted dates: {e}") from e
 
     def save_extracted_dates_sync(
         self,
@@ -265,7 +265,7 @@ class TimelineService:
 
             # Use event_type if available and valid, otherwise use "raw_date"
             event_type = "raw_date"
-            if hasattr(date_obj, 'event_type') and date_obj.event_type:
+            if hasattr(date_obj, 'event_type') and date_obj.event_type:  # noqa: SIM102
                 if date_obj.event_type in valid_types:
                     event_type = date_obj.event_type
 
@@ -320,7 +320,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to save extracted dates: {e}")
+            raise TimelineServiceError(f"Failed to save extracted dates: {e}") from e
 
     async def get_raw_dates_for_document(
         self,
@@ -564,7 +564,7 @@ class TimelineService:
                 error=str(e),
                 document_id=document_id,
             )
-            raise TimelineServiceError(f"Failed to delete raw dates: {e}")
+            raise TimelineServiceError(f"Failed to delete raw dates: {e}") from e
 
     async def has_dates_for_document(
         self,
@@ -692,7 +692,7 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update event classification: {e}")
+            raise TimelineServiceError(f"Failed to update event classification: {e}") from e
 
     def update_event_classification_sync(
         self,
@@ -745,7 +745,7 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update event classification: {e}")
+            raise TimelineServiceError(f"Failed to update event classification: {e}") from e
 
     async def get_unclassified_events(
         self,
@@ -806,7 +806,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get unclassified events: {e}")
+            raise TimelineServiceError(f"Failed to get unclassified events: {e}") from e
 
     async def get_events_for_classification(
         self,
@@ -846,7 +846,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+            raise TimelineServiceError(f"Failed to get events for classification: {e}") from e
 
     def get_events_for_classification_sync(
         self,
@@ -893,7 +893,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for classification: {e}")
+            raise TimelineServiceError(f"Failed to get events for classification: {e}") from e
 
     def get_all_events_for_reclassification_sync(
         self,
@@ -955,7 +955,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get events for reclassification: {e}")
+            raise TimelineServiceError(f"Failed to get events for reclassification: {e}") from e
 
     async def bulk_update_classifications(
         self,
@@ -1205,7 +1205,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to get classified events: {e}")
+            raise TimelineServiceError(f"Failed to get classified events: {e}") from e
 
     async def update_manual_classification(
         self,
@@ -1264,7 +1264,7 @@ class TimelineService:
                 error=str(e),
                 event_id=event_id,
             )
-            raise TimelineServiceError(f"Failed to update manual classification: {e}")
+            raise TimelineServiceError(f"Failed to update manual classification: {e}") from e
 
     async def count_events_for_classification(
         self,
@@ -1595,7 +1595,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event entities: {e}")
+            raise TimelineServiceError(f"Failed to update event entities: {e}") from e
 
     def update_event_entities_sync(
         self,
@@ -1637,7 +1637,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event entities: {e}")
+            raise TimelineServiceError(f"Failed to update event entities: {e}") from e
 
     async def bulk_update_event_entities(
         self,
@@ -1769,7 +1769,7 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+            raise TimelineServiceError(f"Failed to get events for entity linking: {e}") from e
 
     def get_events_for_entity_linking_sync(
         self,
@@ -1830,7 +1830,7 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events for entity linking: {e}")
+            raise TimelineServiceError(f"Failed to get events for entity linking: {e}") from e
 
     async def get_events_by_entity(
         self,
@@ -1889,7 +1889,7 @@ class TimelineService:
                 matter_id=matter_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to get events by entity: {e}")
+            raise TimelineServiceError(f"Failed to get events by entity: {e}") from e
 
     async def count_events_for_entity_linking(
         self,
@@ -2000,7 +2000,7 @@ class TimelineService:
                 error=str(e),
                 matter_id=matter_id,
             )
-            raise TimelineServiceError(f"Failed to create manual event: {e}")
+            raise TimelineServiceError(f"Failed to create manual event: {e}") from e
 
     async def update_manual_event(
         self,
@@ -2097,7 +2097,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update manual event: {e}")
+            raise TimelineServiceError(f"Failed to update manual event: {e}") from e
 
     async def delete_manual_event(
         self,
@@ -2158,7 +2158,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to delete manual event: {e}")
+            raise TimelineServiceError(f"Failed to delete manual event: {e}") from e
 
     async def set_event_verification(
         self,
@@ -2206,7 +2206,7 @@ class TimelineService:
                 event_id=event_id,
                 error=str(e),
             )
-            raise TimelineServiceError(f"Failed to update event verification: {e}")
+            raise TimelineServiceError(f"Failed to update event verification: {e}") from e
 
     def _db_row_to_manual_event_response(self, row: dict) -> ManualEventResponse:
         """Convert database row to ManualEventResponse."""

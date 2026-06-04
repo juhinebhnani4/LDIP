@@ -428,7 +428,7 @@ async def import_sample_case(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to import sample case: {str(e)}",
-        )
+        ) from None
 
 
 @router.get("/check")

@@ -29,17 +29,21 @@ class TestRedisClient:
     @pytest.mark.asyncio
     async def test_get_redis_client_returns_same_instance(self) -> None:
         """Client should be singleton - same instance returned."""
-        with patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379/0"}, clear=True):
-            with patch("redis.asyncio.from_url") as mock_from_url:
-                mock_client = MagicMock()
-                mock_from_url.return_value = mock_client
+        with (
+            patch.dict(
+                os.environ, {"REDIS_URL": "redis://localhost:6379/0"}, clear=True
+            ),
+            patch("redis.asyncio.from_url") as mock_from_url,
+        ):
+            mock_client = MagicMock()
+            mock_from_url.return_value = mock_client
 
-                client1 = await get_redis_client()
-                client2 = await get_redis_client()
+            client1 = await get_redis_client()
+            client2 = await get_redis_client()
 
-                assert client1 is client2
-                # Only called once due to singleton
-                mock_from_url.assert_called_once()
+            assert client1 is client2
+            # Only called once due to singleton
+            mock_from_url.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_redis_client_with_upstash_env(self) -> None:
@@ -72,33 +76,37 @@ class TestRedisClient:
         """Should fallback to redis-py when Upstash not configured."""
         # Clear Upstash env vars
         env = {"REDIS_URL": "redis://localhost:6379/0"}
-        with patch.dict(os.environ, env, clear=True):
-            with patch("redis.asyncio.from_url") as mock_from_url:
-                mock_client = MagicMock()
-                mock_from_url.return_value = mock_client
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("redis.asyncio.from_url") as mock_from_url,
+        ):
+            mock_client = MagicMock()
+            mock_from_url.return_value = mock_client
 
-                reset_redis_client()
-                client = await get_redis_client()
+            reset_redis_client()
+            client = await get_redis_client()
 
-                assert client is mock_client
-                mock_from_url.assert_called_once_with(
-                    "redis://localhost:6379/0", decode_responses=True
-                )
+            assert client is mock_client
+            mock_from_url.assert_called_once_with(
+                "redis://localhost:6379/0", decode_responses=True
+            )
 
     @pytest.mark.asyncio
     async def test_get_redis_client_default_url(self) -> None:
         """Should use default Redis URL when not specified."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("redis.asyncio.from_url") as mock_from_url:
-                mock_client = MagicMock()
-                mock_from_url.return_value = mock_client
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("redis.asyncio.from_url") as mock_from_url,
+        ):
+            mock_client = MagicMock()
+            mock_from_url.return_value = mock_client
 
-                reset_redis_client()
-                await get_redis_client()
+            reset_redis_client()
+            await get_redis_client()
 
-                mock_from_url.assert_called_with(
-                    "redis://localhost:6379/0", decode_responses=True
-                )
+            mock_from_url.assert_called_with(
+                "redis://localhost:6379/0", decode_responses=True
+            )
 
     def test_reset_redis_client(self) -> None:
         """Reset should clear the singleton."""
@@ -109,14 +117,14 @@ class TestRedisClient:
     @pytest.mark.asyncio
     async def test_get_redis_client_raises_when_no_client_available(self) -> None:
         """Should raise RuntimeError when no Redis client can be initialized."""
-        with patch.dict(os.environ, {}, clear=True):
-            # Mock ImportError for redis - this simulates no redis package
-            with patch(
-                "redis.asyncio.from_url", side_effect=ImportError("No redis")
-            ):
-                reset_redis_client()
-                with pytest.raises(RuntimeError, match="No Redis client"):
-                    await get_redis_client()
+        # Mock ImportError for redis - this simulates no redis package
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("redis.asyncio.from_url", side_effect=ImportError("No redis")),
+        ):
+            reset_redis_client()
+            with pytest.raises(RuntimeError, match="No Redis client"):
+                await get_redis_client()
 
 
 class TestRedisClientIntegration:

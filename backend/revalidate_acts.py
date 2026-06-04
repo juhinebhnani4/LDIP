@@ -13,9 +13,12 @@ import sys
 # Fix Windows console encoding
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from app.core.logging import get_logger
-from app.engines.citation.validation import ActValidationService, ValidationStatus
-from app.services.supabase.client import get_service_client
+from app.core.logging import get_logger  # noqa: E402
+from app.engines.citation.validation import (  # noqa: E402
+    ActValidationService,
+    ValidationStatus,
+)
+from app.services.supabase.client import get_service_client  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -46,7 +49,6 @@ def revalidate_matter(matter_id: str | None = None):
 
     for act in acts:
         act_display = act.get("act_name_display") or act.get("act_name_normalized", "")
-        normalized = act.get("act_name_normalized", "")
         act_id = act.get("id")
         current_status = act.get("resolution_status")
 

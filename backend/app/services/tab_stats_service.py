@@ -201,7 +201,7 @@ class TabStatsService:
                 f"Failed to get tab stats: {e}",
                 code="TAB_STATS_QUERY_FAILED",
                 status_code=500,
-            )
+            ) from e
 
     # =========================================================================
     # Task 2.3: Timeline Stats

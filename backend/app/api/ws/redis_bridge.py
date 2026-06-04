@@ -5,6 +5,7 @@ Handles channel patterns, connection lifecycle, and graceful shutdown.
 """
 
 import asyncio
+import contextlib
 import json
 from datetime import UTC, datetime
 
@@ -96,10 +97,8 @@ class RedisBridge:
 
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
         await self._cleanup()
         logger.info("redis_bridge_stopped")
@@ -115,10 +114,8 @@ class RedisBridge:
             self._pubsub = None
 
         if self._redis:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis.close()
-            except Exception:
-                pass
             self._redis = None
 
     async def _listen_loop(self) -> None:

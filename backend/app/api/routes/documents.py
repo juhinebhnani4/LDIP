@@ -461,7 +461,7 @@ async def _upload_act_to_library(
     import re
     normalized_name = re.sub(r'[^\w\s-]', '', title.lower())
     normalized_name = re.sub(r'\s+', '_', normalized_name)
-    storage_path = f"global/acts/{normalized_name}.pdf"
+    storage_path = f"global/acts/{normalized_name}.pdf"  # noqa: F841  # TODO: wire into global acts upload path
 
     # GAP-12: Standardized dedup using find_library_duplicates RPC
     try:

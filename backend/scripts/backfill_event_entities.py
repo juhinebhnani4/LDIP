@@ -90,7 +90,7 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
     print(f"{'='*60}\n")
 
     timeline_service = get_timeline_service()
-    mig_service = get_mig_graph_service()
+    get_mig_graph_service()
     entity_linker = get_event_entity_linker()
 
     # Get events to process

@@ -839,7 +839,7 @@ class ABTestRunner:
             )
             # Guard: only overwrite to "failed" if still in "comparing" state.
             # If already cancelled or completed, don't clobber.
-            try:
+            try:  # noqa: SIM105
                 await runner.update_run(run_id, {
                     "status": "failed",
                     "error_message": str(e),

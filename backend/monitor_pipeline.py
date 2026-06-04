@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from supabase import create_client  # noqa: E402
 
 url = os.getenv('SUPABASE_URL')
 key = os.getenv('SUPABASE_SERVICE_KEY')

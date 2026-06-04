@@ -117,7 +117,7 @@ class TestSplitPerformance:
         chunker = PDFChunker(enable_memory_tracking=False)
 
         start = time.perf_counter()
-        chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+        chunker.split_pdf(pdf_bytes, chunk_size=25)
         elapsed = time.perf_counter() - start
 
         # Allow ~0.05s per page as baseline
@@ -220,7 +220,7 @@ class TestMemoryBenchmarks:
         tracemalloc.start()
 
         merger = OCRResultMerger()
-        result = merger.merge_results(chunks, "doc-test")
+        merger.merge_results(chunks, "doc-test")
 
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -287,13 +287,13 @@ class TestStreamingPerformance:
 
         # Regular split
         start = time.perf_counter()
-        regular_chunks = chunker.split_pdf(pdf_bytes, chunk_size=25)
+        chunker.split_pdf(pdf_bytes, chunk_size=25)
         regular_time = time.perf_counter() - start
 
         # Streaming split
         start = time.perf_counter()
         with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
-            streaming_chunks = len(result.chunks)
+            len(result.chunks)
         streaming_time = time.perf_counter() - start
 
         print(f"\nRegular split: {regular_time:.2f}s")
@@ -319,7 +319,7 @@ class TestStreamingPerformance:
         # Streaming split memory
         gc.collect()
         tracemalloc.start()
-        with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
+        with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:  # noqa: F841
             _, streaming_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 

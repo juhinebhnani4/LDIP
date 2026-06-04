@@ -13,7 +13,7 @@ env_file = Path(__file__).parent.parent.parent / ".env"
 if env_file.exists():
     load_dotenv(env_file)
 
-from app.core.config import get_settings
+from app.core.config import get_settings  # noqa: E402
 
 settings = get_settings()
 
@@ -303,9 +303,9 @@ celery_app.autodiscover_tasks(["app.workers.tasks"])
 # Beat only needs the beat_schedule dict (task name strings) — it never executes
 # task code. CELERY_BEAT_ONLY=true skips these heavy imports (~1GB RAM savings).
 
-import os
+import os  # noqa: E402
 
-import structlog
+import structlog  # noqa: E402
 
 _logger = structlog.get_logger(__name__)
 

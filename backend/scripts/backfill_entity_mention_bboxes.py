@@ -28,9 +28,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from supabase import create_client  # noqa: E402
 
-from app.core.bbox_search import search_bboxes_for_text
+from app.core.bbox_search import search_bboxes_for_text  # noqa: E402
 
 # Initialize Supabase client
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")

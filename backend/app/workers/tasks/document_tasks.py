@@ -1911,10 +1911,9 @@ def process_document(
         )
 
         # Increment retry count in database
-        try:
+        with contextlib.suppress(DocumentServiceError):
+            # Don't fail the retry because of this
             doc_service.increment_ocr_retry_count(document_id)
-        except DocumentServiceError:
-            pass  # Don't fail the retry because of this
 
         # Check if we've exhausted retries
         # Note: matter_id may not be available if it failed before retrieval
@@ -2743,7 +2742,7 @@ def calculate_confidence(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="confidence",
-            )
+            ) from e
 
         raise
 
@@ -2764,7 +2763,7 @@ def calculate_confidence(
             document_id=doc_id,
             job_id=job_id,
             stage="confidence",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
@@ -2784,7 +2783,7 @@ def calculate_confidence(
             document_id=doc_id,
             job_id=job_id,
             stage="confidence",
-        )
+        ) from e
 
 
 @celery_app.task(
@@ -2983,13 +2982,10 @@ def chunk_document(
         # Layout-aware chunking: Extract layout structure if enabled
         settings = get_settings()
         layout: DocumentLayout | None = None
-        layout_used = False
-
         if settings.layout_aware_chunking_enabled:
             try:
                 layout = _extract_layout_for_chunking(doc_id, matter_id)
                 if layout and layout.success and layout.has_blocks:
-                    layout_used = True
                     logger.info(
                         "layout_extraction_for_chunking_success",
                         document_id=doc_id,
@@ -3155,7 +3151,7 @@ def chunk_document(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="chunking",
-            )
+            ) from e
 
         raise
 
@@ -3176,7 +3172,7 @@ def chunk_document(
             document_id=doc_id,
             job_id=job_id,
             stage="chunking",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
@@ -3196,7 +3192,7 @@ def chunk_document(
             document_id=doc_id,
             job_id=job_id,
             stage="chunking",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -3240,7 +3236,6 @@ def link_chunks_to_bboxes_task(
     )
 
     # Use injected services or get defaults
-    chunks_service = chunk_service or get_chunk_service()
     bbox_service = bounding_box_service or get_bounding_box_service()
 
     try:
@@ -3755,7 +3750,7 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from None
 
     except EmbeddingServiceError as e:
         retry_count = self.request.retries
@@ -3784,7 +3779,7 @@ def embed_chunks(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="embedding",
-            )
+            ) from e
 
         raise
 
@@ -3804,7 +3799,7 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
@@ -3823,7 +3818,7 @@ def embed_chunks(
             job_id=job_id,
             matter_id=matter_id,
             stage="embedding",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -3963,7 +3958,7 @@ def index_act_sections(
         )
 
         if self.request.retries < 2:
-            raise self.retry(exc=e)
+            raise self.retry(exc=e) from e
 
         return {
             "status": "section_indexing_failed",
@@ -4604,7 +4599,7 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from None
 
     except MIGExtractorError as e:
         retry_count = self.request.retries
@@ -4633,7 +4628,7 @@ def extract_entities(
                 job_id=job_id,
                 matter_id=matter_id,
                 stage="entity_extraction",
-            )
+            ) from e
 
         raise
 
@@ -4653,7 +4648,7 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from e
 
     except Exception as e:
         from app.workers.tasks.pipeline_errors import PipelineTaskError
@@ -4672,7 +4667,7 @@ def extract_entities(
             job_id=job_id,
             matter_id=matter_id,
             stage="entity_extraction",
-        )
+        ) from e
 
 
 # =============================================================================
@@ -5747,7 +5742,7 @@ def extract_citations(
             act_job_id = prev_result.get("job_id") if prev_result else None
             if act_job_id is None:
                 act_job_id = _lookup_job_id_for_document(doc_id)
-            try:
+            with contextlib.suppress(Exception):
                 celery_app.send_task(
                     "app.workers.tasks.document_tasks.detect_contradictions",
                     kwargs={
@@ -5756,8 +5751,6 @@ def extract_citations(
                     },
                     queue="default",
                 )
-            except Exception:
-                pass
             return {
                 "status": "citation_extraction_skipped",
                 "document_id": doc_id,
@@ -5893,7 +5886,7 @@ def extract_citations(
                         )
 
                         # Process each result
-                        for chunk, extraction_result in zip(llm_batch, batch_results):
+                        for chunk, extraction_result in zip(llm_batch, batch_results, strict=False):
                             chunk_id = chunk["id"]
 
                             if extraction_result.citations:
@@ -6390,7 +6383,6 @@ def detect_contradictions(
     # Use injected services or get defaults
     doc_service = document_service or get_document_service()
     compare_service = comparison_service or get_statement_comparison_service()
-    mig_service = mig_graph_service or get_mig_graph_service()
 
     logger.info(
         "detect_contradictions_task_started",

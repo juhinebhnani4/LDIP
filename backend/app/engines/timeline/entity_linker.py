@@ -41,7 +41,7 @@ logger = structlog.get_logger(__name__)
 
 # Confidence threshold for entity linking
 # Can be overridden via ENTITY_LINK_CONFIDENCE_THRESHOLD env var
-import os as _os
+import os as _os  # noqa: E402
 
 LINK_CONFIDENCE_THRESHOLD = float(
     _os.environ.get("ENTITY_LINK_CONFIDENCE_THRESHOLD", "0.70")

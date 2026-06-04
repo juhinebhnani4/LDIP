@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from app.core.config import get_settings
-from app.services.email_service import get_email_service
+from app.core.config import get_settings  # noqa: E402
+from app.services.email_service import get_email_service  # noqa: E402
 
 
 async def send_test_email(recipient: str | None = None):

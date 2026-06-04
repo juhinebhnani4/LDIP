@@ -377,9 +377,12 @@ class CitationVerifier:
             )
 
             if not chunks:
-                # Try LLM-based search as fallback
-                all_chunks, _, _ = await asyncio.to_thread(
-                    self.act_indexer.chunk_service.get_chunks_for_document,
+                # Try LLM-based search as fallback. Serve from the chunks the index was
+                # built on (matter `chunks` OR library `library_chunks`, decided once at
+                # index time) — NOT chunk_service.get_chunks_for_document, which reads the
+                # `chunks` table only and is empty for every library Act (GAP-24).
+                all_chunks = await asyncio.to_thread(
+                    self.act_indexer.get_indexed_chunks,
                     act_document_id,
                 )
                 if all_chunks:

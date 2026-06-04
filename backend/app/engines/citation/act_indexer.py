@@ -100,12 +100,26 @@ class ActIndex:
         sections: dict[str, list[str]],  # section_number -> chunk_ids
         boundaries: list[SectionBoundary],
         indexed_at: datetime,
+        chunks_by_id: dict[str, ChunkWithContent] | None = None,
     ):
         self.document_id = document_id
         self.act_name = act_name
         self.sections = sections
         self.boundaries = boundaries
         self.indexed_at = indexed_at
+        # The exact ChunkWithContent objects this index was built from, keyed by id.
+        # Section lookup and the verifier's LLM fallback serve content from HERE rather
+        # than re-fetching by id from chunk_service.get_chunk (which reads the `chunks`
+        # table only). The chunks-vs-library_chunks table decision is made ONCE, during
+        # index_act_document, where the library_chunks fallback already lives — so a
+        # library Act's section text is reachable instead of silently lost to a
+        # wrong-table re-fetch. (GAP-24, 2026-06-04.)
+        self.chunks_by_id: dict[str, ChunkWithContent] = chunks_by_id or {}
+
+    @property
+    def all_chunks(self) -> list[ChunkWithContent]:
+        """All chunks this index was built from, in stable id-insertion order."""
+        return list(self.chunks_by_id.values())
 
     @property
     def section_numbers(self) -> list[str]:
@@ -273,13 +287,20 @@ class ActIndexer:
                 if boundary.chunk_id not in sections[section]:
                     sections[section].append(boundary.chunk_id)
 
-            # Create index
+            # Create index. Retain the exact chunks we just loaded (from `chunks` or,
+            # for library Acts, `library_chunks`) so section lookup and the LLM fallback
+            # serve content from here — never re-fetching by id from the chunks-only
+            # get_chunk. Keyed by id; insertion order preserves the parents-first,
+            # chunk_index ordering returned by the chunk service.
+            chunks_by_id: dict[str, ChunkWithContent] = {c.id: c for c in chunks}
+
             index = ActIndex(
                 document_id=document_id,
                 act_name=act_name,
                 sections=sections,
                 boundaries=boundaries,
                 indexed_at=datetime.now(UTC),
+                chunks_by_id=chunks_by_id,
             )
 
             # Cache the index
@@ -390,50 +411,30 @@ class ActIndexer:
         if not chunk_ids:
             return []
 
-        # Load chunks with content
-        try:
-            chunks = []
-            for chunk_id in chunk_ids:
-                try:
-                    chunk = await asyncio.to_thread(
-                        self.chunk_service.get_chunk,
-                        chunk_id,
-                    )
-                    # Convert to ChunkWithContent format
-                    chunks.append(ChunkWithContent(
-                        id=chunk.id,
-                        document_id=chunk.document_id,
-                        chunk_type=chunk.chunk_type,
-                        chunk_index=chunk.chunk_index,
-                        token_count=chunk.token_count,
-                        parent_chunk_id=chunk.parent_chunk_id,
-                        page_number=chunk.page_number,
-                        content=chunk.content,
-                    ))
-                except Exception as e:
-                    logger.warning(
-                        "chunk_load_failed",
-                        chunk_id=chunk_id,
-                        error=str(e),
-                    )
-                    continue
+        # Serve the chunk content from the objects the index was built from. These were
+        # loaded once in index_act_document from whichever table holds this Act's body
+        # (`chunks` for matter Acts, `library_chunks` for library Acts). Re-fetching by id
+        # via chunk_service.get_chunk would read the `chunks` table ONLY, so every library
+        # Act's section text was silently lost there (GAP-24). No table decision here.
+        chunks = [
+            index.chunks_by_id[chunk_id]
+            for chunk_id in chunk_ids
+            if chunk_id in index.chunks_by_id
+        ]
 
-            # Sort by page number
-            chunks.sort(key=lambda c: c.page_number or 0)
-
-            return chunks
-
-        except Exception as e:
-            logger.error(
-                "get_section_chunks_failed",
+        missing = [cid for cid in chunk_ids if cid not in index.chunks_by_id]
+        if missing:
+            logger.warning(
+                "section_chunks_missing_from_index",
                 act_document_id=act_document_id,
                 section=section,
-                error=str(e),
+                missing_count=len(missing),
             )
-            raise ActIndexerError(
-                f"Failed to retrieve section chunks: {e}",
-                code="CHUNK_RETRIEVAL_FAILED",
-            ) from e
+
+        # Sort by page number
+        chunks.sort(key=lambda c: c.page_number or 0)
+
+        return chunks
 
     def extract_section_boundaries(
         self,
@@ -524,6 +525,11 @@ class ActIndexer:
         normalized = re.sub(r"\s+", "", section)
         # Ensure consistent format for subsections
         normalized = re.sub(r"\((\d+)\)", r"(\1)", normalized)
+        # Collapse the separator between a section number and its alpha suffix so the
+        # citation form "39-A" matches the IndiaCode text form "39A" (and "5-A"/"5A").
+        # Applied identically on index-build and lookup, so both sides stay in lockstep.
+        # (GAP-24: Constitution Article 39A is cited as "39-A" ×15 but the text uses "39A".)
+        normalized = re.sub(r"(\d)[-–—]([A-Za-z])", r"\1\2", normalized)
         return normalized
 
     def get_available_sections(self, document_id: str) -> list[str]:
@@ -542,6 +548,21 @@ class ActIndexer:
             raise ActNotIndexedError(document_id)
 
         return self._index_cache[document_id].section_numbers
+
+    def get_indexed_chunks(self, act_document_id: str) -> list[ChunkWithContent]:
+        """Return the chunks this Act was indexed from (matter or library table).
+
+        The verifier's LLM fallback uses this instead of
+        ``chunk_service.get_chunks_for_document``, which reads the ``chunks`` table only
+        and is empty for library Acts — the table decision was already made (and the
+        ``library_chunks`` fallback already applied) when the index was built. (GAP-24.)
+
+        Raises:
+            ActNotIndexedError: If the Act has not been indexed.
+        """
+        if act_document_id not in self._index_cache:
+            raise ActNotIndexedError(act_document_id)
+        return self._index_cache[act_document_id].all_chunks
 
     def clear_cache(self, document_id: str | None = None) -> None:
         """Clear index cache.

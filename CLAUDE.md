@@ -71,6 +71,21 @@ Replace `<TABLE_NAME>` with the actual table. Use ONLY columns that appear in th
 - Spec docs or markdown files
 - Your own memory/training data
 
+**Column existence is necessary but NOT sufficient — also check VALUE constraints.**
+When you write a constrained value (enum string, status, type discriminator) to a
+column, the exact string the app emits MUST be accepted by the live CHECK
+constraint / Postgres ENUM. Diff the app enum's `.value` strings against the live
+catalog:
+```sql
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.<table>'::regclass AND contype='c';
+-- and for enum types:
+SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='<type>';
+```
+Any app value not in the DB set is a silent write-rejection (SQLSTATE `23514`/`22P02`)
+— and if the writer swallows the error, it is permanent, invisible data loss.
+(2026-06-04: `citations_verification_status_check` allowed `not_found` while the
+enum emitted `section_not_found` → every such write rejected and lost for months.)
+
 ### 2. Read Before Write — EVERY time
 Before modifying ANY file:
 - **Read the file first** (or at minimum the function you're changing)

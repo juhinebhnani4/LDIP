@@ -364,6 +364,50 @@ has_function_privilege() / has_table_privilege() — exit code 0 is not
 proof. If PUBLIC has a grant, REVOKE FROM PUBLIC, not just named roles.
 ```
 
+### 2.6 — Enum/constraint parity: the value the app WRITES must be accepted by the column
+
+For every code path that writes a **constrained** value to a DB column — an
+enum string, a status, a type discriminator, anything backed by a `CHECK
+(col = ANY(ARRAY[...]))`, a Postgres `ENUM` type, or a FK — verify the LIVE
+constraint accepts the EXACT string the application emits. Read both sides and
+diff them character-for-character:
+
+- **App side**: the enum definition (`class XStatus(str, Enum)`) — the literal
+  `.value` strings, not the member names.
+- **DB side**: query the live catalog, not migration files:
+  - CHECK constraint: `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='public.<table>'::regclass AND contype='c';`
+  - Enum type: `SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='<type>';`
+- **Diff the two sets.** Any app value not in the DB set is a write that will be
+  rejected (SQLSTATE `23514` for CHECK, `22P02` for enum) — and if the caller
+  swallows the error, it is **silent, permanent data loss**. Any DB value not in
+  the app set is dead/legacy and a clue the two drifted.
+
+This is the column-content analogue of the existing schema-column check (1.5E):
+columns existing is necessary but not sufficient — the *allowed values* must
+also match. One catalog query catches drift that has otherwise survived for
+months (the constraint and enum get edited in different PRs; nothing re-checks
+parity).
+
+> **Why this was added (2026-06-04):** RISK-1 verification surfaced that
+> `citations_verification_status_check` allowed `'not_found'` while the enum
+> `VerificationStatus` emits `'section_not_found'`. Every section-not-found
+> write was rejected (23514) and swallowed by `update_citation_verification`'s
+> try/except, so the value `section_not_found` had NEVER appeared in the table —
+> citations that resolved to it stayed `pending` for months. One
+> `pg_get_constraintdef` query diffed against the enum would have caught it
+> instantly. The batch task reported `errors=0` the whole time because it
+> counted the verification verdict, not the write outcome (see hostile-review
+> Section M).
+
+**Prompt fragment:**
+```
+For any column I write an enum/constrained value to: read the app enum's
+.value strings AND query the live CHECK constraint (pg_get_constraintdef) or
+pg_enum labels. Diff them. Any app value not accepted by the DB is a silent
+write-rejection (23514/22P02) — especially dangerous if the writer swallows
+the error. Migration files are not proof; query the live catalog.
+```
+
 ---
 
 ## Composite Prompt Templates

@@ -245,6 +245,49 @@ For every changed code path:
   ESPECIALLY dangerous when unexercised — silent failure means you won't
   know it's broken until someone checks logs or data.
 
+### M. Counter Honesty & Activation Blast Radius
+
+> **Why this exists (2026-06-04)**: RISK-1 added a reconciler that DISPATCHES
+> the existing `verify_citations_for_act` task. The diff was clean and passed
+> hostile review. But the change ACTIVATED a downstream write path
+> (`update_citation_verification`) at scale that had a latent bug — it wrote
+> `section_not_found`, which the DB CHECK constraint rejected (23514). The
+> batch loop reported `total=23, not_found=23, errors=0` and `verification_task
+> _complete` while persisting ZERO rows, because it counted the verification
+> VERDICT (`result.status`), not the DB-WRITE outcome. Pre-deploy review trusted
+> `errors=0`. The bug was found only by querying the live DB and seeing
+> `updated_since_deploy=0` contradict the logs.
+
+Two checks, both about not trusting a green signal:
+
+**M1 — Does the success/error counter measure the WRITE, or just the verdict?**
+For every task or loop that reports a count (`errors=0`, `processed=N`,
+`succeeded=N`):
+- Trace what increments it. Is it incremented on the DB-write RESULT, or on an
+  in-memory decision made BEFORE/INDEPENDENT of the write?
+- If the write function **swallows its exception and returns `None`/falsy** (very
+  common in this codebase — `persist_cost`, `update_citation_verification`,
+  service-layer writers), does the caller CHECK that return before counting
+  success? If it ignores the return, the counter is **lying** — it will report
+  success while the row never changed.
+- **BUG FOUND** if a counter can read "success" on a path where the write
+  silently failed. The fix: count the write outcome, not the verdict; treat a
+  falsy write-return as an error.
+
+**M2 — What dormant/downstream code does this change ACTIVATE?**
+A clean diff is not a safe diff. If your change causes code that previously
+did NOT run (or ran rarely) to now run — or run at scale — that code is in
+your blast radius even though you didn't edit it:
+- New dispatcher/reconciler/cron firing an existing task → the task's full
+  write path is yours to verify.
+- A gate/filter newly letting records through → the handler they reach is yours.
+- A loop now iterating 800 items where it used to see 3 → scale-dependent
+  failures (timeouts, quota, batch-size limits) are yours.
+- For each activated path: **does it actually persist end-to-end?** Verify with
+  a live-DB read, not the task's own success log. Apply Phase 0 (prior-fix
+  audit) and Section 2.6 (enum/constraint parity) to the activated path even
+  though it isn't in your diff.
+
 ---
 
 ## Post-Deploy Verification Protocol
@@ -260,10 +303,15 @@ For every changed code path:
 2. **Regression check**: For each endpoint/task touched by the deploy,
    trigger one execution. Check response code AND response body (200 with
    empty data is often a silent failure).
-3. **Data verification**: For each DB write in the deployed code, query
-   the table and verify at least one row was written with expected values.
-   If the write path hasn't fired yet, note as "UNEXERCISED" and schedule
-   a follow-up.
+3. **Data verification (the GATE — logs cannot close it)**: For a task/endpoint
+   that WRITES to the DB, "verified working" can ONLY be concluded from a
+   live-DB read showing the row actually changed — never from logs saying
+   "task complete" or a success/`errors=0` counter (those can lie; see Section
+   M). Query the table and confirm rows changed with the expected NEW values
+   (and ideally a fresh `updated_at`). A strong tell: re-run the SAME read
+   before and after — if a "successful" run left the data byte-identical, the
+   write is silently failing. If the write path hasn't fired yet, note as
+   "UNEXERCISED" and schedule a follow-up — do NOT mark VERIFIED off logs alone.
 4. **Pre-existing error triage**: Any errors found that are NOT in the
    deployed code: check if they're in BUGS.md. If not, file them.
 

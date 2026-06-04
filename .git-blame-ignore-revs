@@ -1,0 +1,6 @@
+# Revisions to ignore in `git blame` (bulk mechanical reformats — no logic change).
+# GitHub honors this file automatically. Locally, enable with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# style: ruff format entire backend (INF-013) — one-time big-bang `ruff format .`
+bd418889d7f7c89cb274d89de0103533ff90243a

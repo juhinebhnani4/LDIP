@@ -2236,6 +2236,33 @@ Seven commits land the cleanup (all behavior-preserving except #4):
 
 ---
 
+#### INF-014 — forensic-hunt findings (2026-06-04, evidence-backed)
+
+Ran the `forensic-hunt` protocol on this cluster. Reproduced the full suite (placeholder env + redis 7-alpine): **212 failed / 2846 passed / 4 skipped** locally — the local-vs-CI gap (212 vs 236) is the predicted `--cov` + `tests/integration` suite-order delta. Then captured one-line tracebacks for every failing file and grouped by **error signature** (not by file). Raw signature histogram and per-file evidence are in the session log.
+
+**Key correction to the framing above.** The earlier note implied a single shared SHAPE (a conftest boundary) would clear most failures. **The signature evidence falsifies that.** The 212 split into **three** shapes, and the structural one is the *minority*:
+
+| Shape | Count | % | Nature | Fix |
+|------|------:|---:|--------|-----|
+| **A — harness-boundary** (slowapi direct-call 18 · auth not overridden 9 · unmocked network · **state-pollution 16**) | **41** | **19%** | Structural: `conftest.py` is a *sticky-note-where-a-wall-belongs* (ARCH-PATTERNS P4/P1). It never established the test boundary, so every author improvised. | One `conftest` wall clears the whole class |
+| **B — contract/mock drift** (signature · return-shape · constant · renamed-internal · routing · mock-shape) | **167** | **79%** | Production legitimately changed; tests assert the old contract. **Not** structurally fixable. | Per-test mechanical repair to the *current* contract |
+| **C — bad PDF fixtures** | **4** | **2%** | Fake byte fixtures aren't parseable PDFs. | One real minimal-PDF fixture |
+
+Representative confirmed signatures: `TypeError: '>' not supported between 'MagicMock' and 'int'` (mock-shape drift, `test_intent_analyzer`); `SearchResult.__init__() missing 'bbox_ids'` (signature drift, `test_search`); `get_citations_by_document() missing 'matter_id'` (signature drift); `assert 401 == 200` (auth, `test_users`); `parameter 'request' must be ... starlette.Request` (slowapi, `test_summary`); `KeyError: 'count'` (return-shape, `test_query_cache`); `Failed to read PDF page count: Stream has ended` (bad fixture). The 16 state-pollution failures (`test_chunking_logging`) **pass in isolation and only fail in full-suite order** — proven by re-running the 11 densest files together (125 expected → 109 failed / 182 passed, the missing 16 being exactly that file).
+
+**Honesty caveats:** ~40 of the Shape-B failures landed in a coarse `other assert` bucket — confirmed drift, but the fine sub-type (constant vs return-shape vs routing) isn't resolvable from a one-line traceback. And the A/B/C percentages use denominator 212 (the 16 pollution failures folded into A); the per-signature run only classifies 196 because the 16 are invisible outside the full suite.
+
+**Meta-lesson (the durable one):** an unenforced gate doesn't just miss what it checks — it removes the back-pressure that keeps the whole layer honest. INF-013 was lint rot; INF-014 is the same disease one layer down (test rot). Two *different* kinds of rot accumulated invisibly for months behind one broken CI trigger.
+
+**Revised prosecution plan (supersedes the 3-step remediation above; ordered by leverage, not size):**
+1. **① Quarantine + enforce (highest leverage, smallest effort).** Apply `xfail(strict=True, reason="INF-014")` to the known-failing set via a **single central quarantine list + one `conftest` `pytest_collection_modifyitems` hook** — NOT 212 scattered decorators (that would be the ARCH-003 sticky-note shape). Then flip the `test` CI job to a **required** status check. This makes the gate a real wall *today* for the 2846 passing tests: any new drift to currently-green code blocks merge. `strict=True` is self-cleaning — a repaired test XPASSes and is *forced* off the list. The quarantine list must be built from the **authoritative CI failure set** (CI runs `--cov` and includes `tests/integration`), not the local 212.
+2. **② Build the Shape-A wall** (~41 tests, one focused PR): autouse Supabase + outbound-httpx mock; a canonical authed-client factory using `app.dependency_overrides[get_current_user]` + a real `Request`; an autouse global-state reset (kills the 16 pollution failures). Through `architecture-guard` before code, `hostile-review` after. As tests go green, their xfail entries self-remove.
+3. **③ Mechanical drift sweep for Shape B** (~167, the grind; parallelizes by file). Each fix must reflect intended current behavior, not be force-greened.
+4. **④ Real minimal-PDF fixture** for Shape C (~4).
+5. **⑤ Regression sentinel:** the now-required `test` job + the `xfail(strict=True)` self-cleaning quarantine is the sentinel — the suite can no longer rot silently, because new drift turns the required job red and fixed tests are forced off the list.
+
+---
+
 ## 7. Other
 
 ### OTH-001: A/B Duplicate Run Prevention Not Working

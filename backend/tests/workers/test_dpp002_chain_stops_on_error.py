@@ -12,14 +12,11 @@ Run:
     cd backend && python -m pytest tests/workers/test_dpp002_chain_stops_on_error.py -v
 """
 
-from unittest.mock import MagicMock, patch, call
 import pytest
-
 from celery import chain as celery_chain
 
 from app.workers.celery import celery_app
 from app.workers.tasks.pipeline_errors import PipelineTaskError
-
 
 # ---------------------------------------------------------------------------
 # Helpers: lightweight stub tasks that record execution order

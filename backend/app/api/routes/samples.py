@@ -5,10 +5,10 @@ Story 6.3: Sample Case Import
 Endpoints for importing sample documents for new users to explore the product.
 """
 
-import structlog
 from typing import Annotated
 from uuid import uuid4
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
@@ -246,7 +246,7 @@ def _generate_minimal_pdf(text_content: str) -> bytes:
 
     # Cross-reference table
     xref_offset = len(b"".join(pdf_parts))
-    xref = f"xref\n0 6\n0000000000 65535 f \n"
+    xref = "xref\n0 6\n0000000000 65535 f \n"
     for offset in offsets:
         xref += f"{offset:010d} 00000 n \n"
     pdf_parts.append(xref.encode())

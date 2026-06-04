@@ -8,9 +8,10 @@ Provides standardized error handling for LLM API calls with:
 - Rate limit detection and backoff recommendations
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 import structlog
 

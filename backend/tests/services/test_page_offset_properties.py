@@ -12,18 +12,14 @@ Properties validated:
 - Bboxes are sorted by (page, reading_order_index) after merge
 """
 
-from hypothesis import assume, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
-import pytest
-
-from app.services.pdf_chunker import PDFChunker
 from app.services.ocr_result_merger import (
     ChunkOCRResult,
-    MergeValidationError,
     OCRResultMerger,
 )
-
+from app.services.pdf_chunker import PDFChunker
 
 # =============================================================================
 # Strategies for generating test data

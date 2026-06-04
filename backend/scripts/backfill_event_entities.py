@@ -11,19 +11,21 @@ Usage:
     --force: Relink all events, even if they already have entities
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import argparse
+
 import structlog
-from app.services.supabase.client import get_service_client
+
 from app.engines.timeline.entity_linker import get_event_entity_linker
-from app.services.mig.graph import get_mig_graph_service
-from app.services.timeline_service import get_timeline_service
 from app.models.entity import EntityNode, EntityType
+from app.services.mig.graph import get_mig_graph_service
+from app.services.supabase.client import get_service_client
+from app.services.timeline_service import get_timeline_service
 
 logger = structlog.get_logger(__name__)
 
@@ -153,7 +155,7 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
         total_processed += len(batch)
 
     print(f"\n{'='*60}")
-    print(f"COMPLETED")
+    print("COMPLETED")
     print(f"  Total events processed: {total_processed}")
     print(f"  Total events updated: {total_updated}")
     print(f"{'='*60}\n")

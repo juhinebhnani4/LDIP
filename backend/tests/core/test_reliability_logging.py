@@ -13,8 +13,7 @@ All tests verify that logs follow the consistent schema required by NFR10/NFR14:
 
 import io
 import json
-from datetime import UTC, datetime
-from unittest.mock import patch
+from datetime import datetime
 
 import pytest
 import structlog

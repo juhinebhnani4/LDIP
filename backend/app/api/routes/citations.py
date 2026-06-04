@@ -1688,7 +1688,9 @@ async def get_citation_split_view(
                         section_str = citation.section_number or ""
 
                         try:
-                            from app.services.section_index_service import get_section_index_service
+                            from app.services.section_index_service import (
+                                get_section_index_service,
+                            )
 
                             section_service = get_section_index_service()
                             section_location = await asyncio.to_thread(

@@ -24,7 +24,7 @@ from app.engines.orchestrator.orchestrator import (
     QueryOrchestrator,
     get_query_orchestrator,
 )
-from app.models.orchestrator import EngineType, OrchestratorResult
+from app.models.orchestrator import OrchestratorResult
 from app.services.rag.embedder import EMBEDDING_MODEL
 
 logger = structlog.get_logger(__name__)

@@ -95,6 +95,7 @@ async def _run_migration(
 
     # Import voyageai directly to bypass circuit breaker for batch migration
     import voyageai
+
     from app.core.config import get_settings
 
     settings = get_settings()

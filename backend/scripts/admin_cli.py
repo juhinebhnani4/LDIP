@@ -120,7 +120,7 @@ def list_stale():
 
         click.echo(f"Stale job count: {data.get('stale_jobs_count', 0)}")
         click.echo(f"Recovered last hour: {data.get('recovered_last_hour', 0)}")
-        click.echo(f"\nConfiguration:")
+        click.echo("\nConfiguration:")
         click.echo(f"  Stale timeout: {config.get('stale_timeout_minutes', 30)} minutes")
         click.echo(f"  Max retries: {config.get('max_recovery_retries', 3)}")
         click.echo(f"  Recovery enabled: {config.get('recovery_enabled', True)}")

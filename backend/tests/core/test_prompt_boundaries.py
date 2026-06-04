@@ -6,7 +6,6 @@ Tests the XML boundary wrapping functions that protect against
 prompt injection attacks in LLM prompts.
 """
 
-import pytest
 
 from app.core.prompt_boundaries import (
     DOCUMENT_CONTENT_CLOSE,

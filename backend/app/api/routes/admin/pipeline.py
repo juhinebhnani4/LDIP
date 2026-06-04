@@ -11,7 +11,7 @@ Provides admin-only endpoints for:
 All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
-import asyncio
+from datetime import UTC
 from enum import Enum
 
 import structlog
@@ -318,7 +318,6 @@ async def retry_failed_tasks(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> RetryFailedResponse:
     """Retry all failed/stuck tasks for a document."""
-    from app.workers.celery import celery_app
 
     doc = await _get_document(document_id)
     tasks_triggered = []
@@ -419,8 +418,9 @@ async def retry_failed_tasks(
         await _cleanup_for_full_reprocess()
 
         # Full pipeline: process_document → post-OCR chain
-        from app.workers.tasks.document_tasks import process_document
         from celery import chain as celery_chain
+
+        from app.workers.tasks.document_tasks import process_document
         post_ocr = create_post_ocr_chain(
             document_id=document_id,
             matter_id=matter_id or "",
@@ -462,8 +462,9 @@ async def retry_failed_tasks(
 
     elif chunks_count > 0 and entities_count == 0:
         # Has chunks but no entities - run from embed onwards
-        from app.workers.tasks.document_tasks import embed_chunks, extract_entities
         from celery import chain as celery_chain
+
+        from app.workers.tasks.document_tasks import embed_chunks, extract_entities
         embed_chain = celery_chain(
             embed_chunks.s(
                 prev_result={"document_id": document_id, "status": "chunking_complete", "job_id": None},
@@ -653,14 +654,14 @@ async def reprocess_stuck_documents(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> ReprocessStuckResponse:
     """Find and reprocess stuck documents in a matter."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.workers.celery import celery_app
 
     client = get_service_client()
 
     # Calculate threshold time
-    threshold_time = datetime.now(timezone.utc) - timedelta(hours=hours_threshold)
+    threshold_time = datetime.now(UTC) - timedelta(hours=hours_threshold)
 
     # Find stuck documents
     response = (
@@ -688,7 +689,7 @@ async def reprocess_stuck_documents(
     stuck_infos = []
     for doc in stuck_docs:
         updated_at = datetime.fromisoformat(doc["updated_at"].replace("Z", "+00:00"))
-        hours_stuck = (datetime.now(timezone.utc) - updated_at).total_seconds() / 3600
+        hours_stuck = (datetime.now(UTC) - updated_at).total_seconds() / 3600
 
         stuck_infos.append(
             StuckDocumentInfo(
@@ -969,7 +970,7 @@ async def get_jobs_overview(
             for row in stage_query.data or []:
                 jid = row["job_id"]
                 if jid not in wait_times:
-                    from datetime import datetime, timezone
+                    from datetime import datetime
 
                     try:
                         job_created = next(
@@ -1053,10 +1054,10 @@ async def get_bottleneck_stats(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> BottleneckStatsResponse:
     """Get stage duration analytics to identify pipeline bottlenecks."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     client = get_service_client()
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
 
     try:
         # Get completed and failed stages with timing
@@ -1157,10 +1158,10 @@ async def get_error_patterns(
     admin: AuthenticatedUser = Depends(require_admin_access),
 ) -> ErrorPatternsResponse:
     """Get aggregated error patterns from job stage history."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     client = get_service_client()
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
 
     try:
         # Source 1: job_stage_history (normal pipeline tasks)

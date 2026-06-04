@@ -8,7 +8,6 @@ between different analysis engines (timeline, entity, citation, etc.).
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 

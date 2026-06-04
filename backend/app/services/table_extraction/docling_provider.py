@@ -95,7 +95,8 @@ class DoclingProvider:
         Returns:
             Detected version string, or "unknown" if all methods fail.
         """
-        from importlib.metadata import version as pkg_version, PackageNotFoundError
+        from importlib.metadata import PackageNotFoundError
+        from importlib.metadata import version as pkg_version
 
         # Strategy 1: importlib.metadata for "docling"
         try:

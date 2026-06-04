@@ -1,8 +1,10 @@
 import os
 import sys
 import time
+
 sys.path.insert(0, '.')
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from supabase import create_client

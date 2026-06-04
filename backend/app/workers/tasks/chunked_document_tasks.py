@@ -10,16 +10,14 @@ processing each chunk in parallel using Celery group().
 
 import hashlib
 import json
-import signal
 import time
 from io import BytesIO
 
 import pypdf
 import structlog
-from celery import chord, group
+from celery import chord
 from celery.exceptions import SoftTimeLimitExceeded
 
-from app.core.circuit_breaker import CircuitOpenError
 from app.core.config import get_settings
 from app.models.document import DocumentStatus
 from app.models.job import JobStatus
@@ -1875,8 +1873,8 @@ def finalize_chunked_document(
     # Update job tracking if available (non-critical - progress tracking)
     try:
         if job_id:
-            from app.services.job_tracking import get_job_tracking_service
             from app.models.job import ProcessingJobUpdate
+            from app.services.job_tracking import get_job_tracking_service
             job_tracker = get_job_tracking_service()
             update = ProcessingJobUpdate(
                 status=JobStatus.PROCESSING,

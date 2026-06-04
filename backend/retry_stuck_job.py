@@ -1,5 +1,6 @@
 """Retry the stuck processing job."""
 import os
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -18,7 +19,7 @@ job_data = jobs.data[0]
 job_id = job_data['id']
 document_id = job_data['document_id']
 
-print(f"Found stuck job:")
+print("Found stuck job:")
 print(f"  Job ID: {job_id}")
 print(f"  Document ID: {document_id}")
 print(f"  Status: {job_data['status']}")

@@ -4,10 +4,13 @@ These jobs should be advanced to the embedding stage since chunking
 is already complete.
 """
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     requeue = '--requeue' in sys.argv
@@ -92,7 +95,7 @@ def main():
             "error_message": None,
             "error_code": None,
             "retry_count": 0,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "metadata": {"fixed_stuck_chunking": True, "chunks_existed": item['chunk_count']},
         }).eq("id", job_id).execute()
 

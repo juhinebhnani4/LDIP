@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.table_extraction.extractor import TableExtractor, get_table_extractor
-from app.services.table_extraction.models import ExtractedTable, TableExtractionResult
 
 
 class TestTableExtractor:

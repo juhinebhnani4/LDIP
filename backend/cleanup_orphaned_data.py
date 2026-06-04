@@ -5,6 +5,7 @@ and removes their associated data from all related tables.
 """
 import os
 import sys
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -141,7 +142,7 @@ try:
         print(f"  [OK] documents: deleted {count} rows")
         total_deleted += count
     else:
-        print(f"  [--] documents: no orphaned data")
+        print("  [--] documents: no orphaned data")
 except Exception as e:
     print(f"  [ERR] documents: {str(e)[:80]}")
 
@@ -178,7 +179,7 @@ for doc_id in doc_ids[:10]:  # Limit to first 10 for safety
             if paths:
                 client.storage.from_("documents").remove(paths)
                 print(f"  [OK] Deleted {len(paths)} files for document {doc_id[:8]}...")
-    except Exception as e:
+    except Exception:
         pass  # Silently skip storage errors
 
 print("\n" + "="*60)

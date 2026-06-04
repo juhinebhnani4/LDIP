@@ -12,7 +12,7 @@ All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -218,7 +218,7 @@ async def get_chunk_metrics(
                 "recommendation": recommendation,
             },
             "alertsTriggered": alerts_triggered,
-            "lastUpdated": datetime.now(timezone.utc).isoformat(),
+            "lastUpdated": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:
@@ -391,7 +391,7 @@ async def get_quality_metrics(
                 "autoBaseline": settings.evaluation_auto_baseline,
             },
             "hasRegressions": regression_count > 0,
-            "lastUpdated": datetime.now(timezone.utc).isoformat(),
+            "lastUpdated": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:

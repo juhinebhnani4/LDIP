@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -75,7 +74,9 @@ class TestSendProcessingCompleteNotification:
             "app.core.config.get_settings",
             return_value=mock_settings,
         ):
-            from app.workers.tasks.email_tasks import send_processing_complete_notification
+            from app.workers.tasks.email_tasks import (
+                send_processing_complete_notification,
+            )
 
             result = send_processing_complete_notification(
                 matter_id="matter-123",
@@ -96,7 +97,9 @@ class TestSendProcessingCompleteNotification:
             "app.core.config.get_settings",
             return_value=mock_settings,
         ):
-            from app.workers.tasks.email_tasks import send_processing_complete_notification
+            from app.workers.tasks.email_tasks import (
+                send_processing_complete_notification,
+            )
 
             result = send_processing_complete_notification(
                 matter_id="matter-123",
@@ -136,7 +139,9 @@ class TestSendProcessingCompleteNotification:
             "app.services.supabase.client.get_service_client",
             return_value=mock_supabase_client,
         ):
-            from app.workers.tasks.email_tasks import send_processing_complete_notification
+            from app.workers.tasks.email_tasks import (
+                send_processing_complete_notification,
+            )
 
             result = send_processing_complete_notification(
                 matter_id="matter-123",
@@ -162,7 +167,9 @@ class TestSendProcessingCompleteNotification:
             "app.services.supabase.client.get_service_client",
             return_value=mock_supabase_client,
         ):
-            from app.workers.tasks.email_tasks import send_processing_complete_notification
+            from app.workers.tasks.email_tasks import (
+                send_processing_complete_notification,
+            )
 
             result = send_processing_complete_notification(
                 matter_id="matter-123",

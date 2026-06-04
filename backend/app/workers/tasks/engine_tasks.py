@@ -14,7 +14,6 @@ Job Tracking Integration:
 - Records completion and failure states
 """
 
-import asyncio
 
 import structlog
 
@@ -285,7 +284,7 @@ def extract_dates_from_document(
         # Pre-cache bounding boxes for accurate page number detection
         # Same pattern used by citation engine — load all bboxes once,
         # then per-date bbox filtering happens inside date_extractor._parse_single_date
-        from app.core.bbox_filter import set_document_bboxes, clear_document_bboxes
+        from app.core.bbox_filter import clear_document_bboxes, set_document_bboxes
 
         try:
             from app.services.bounding_box_service import get_bounding_box_service

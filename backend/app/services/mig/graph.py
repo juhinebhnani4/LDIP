@@ -18,6 +18,7 @@ from functools import lru_cache
 
 import structlog
 
+from app.core.bbox_filter import get_filtered_bbox_ids
 from app.models.entity import (
     EntityEdge,
     EntityEdgeCreate,
@@ -29,7 +30,6 @@ from app.models.entity import (
     ExtractedEntity,
 )
 from app.services.supabase.client import get_supabase_client
-from app.core.bbox_filter import get_filtered_bbox_ids
 
 
 def _normalize_for_matching(text: str) -> str:

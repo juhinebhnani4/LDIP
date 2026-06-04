@@ -15,7 +15,6 @@ import pytest
 
 from app.models.timeline import ExtractedDate
 
-
 # =============================================================================
 # Phase 1.1 — Dedup key tests
 # =============================================================================
@@ -343,12 +342,11 @@ class TestEntityLinkingThreshold:
     def test_default_threshold_is_070(self) -> None:
         """Default LINK_CONFIDENCE_THRESHOLD should be 0.70."""
         # Re-import to get current value
-        import importlib
         import app.engines.timeline.entity_linker as linker_module
 
         # The default (without env override) should be 0.70
         # We check the module-level constant
-        assert linker_module.LINK_CONFIDENCE_THRESHOLD == pytest.approx(0.70, abs=0.01)
+        assert pytest.approx(0.70, abs=0.01) == linker_module.LINK_CONFIDENCE_THRESHOLD
 
 
 # =============================================================================

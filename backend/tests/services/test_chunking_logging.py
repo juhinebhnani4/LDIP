@@ -10,18 +10,18 @@ Validates structured logging for the chunking pipeline:
 - Performance metrics logged for monitoring
 """
 
-import json
-import logging
-from io import BytesIO, StringIO
-from unittest.mock import MagicMock, patch
+from io import BytesIO
 
 import pytest
 import structlog
 from pypdf import PdfWriter
 
+from app.services.ocr_result_merger import (
+    ChunkOCRResult,
+    MergeValidationError,
+    OCRResultMerger,
+)
 from app.services.pdf_chunker import PDFChunker
-from app.services.ocr_result_merger import ChunkOCRResult, MergeValidationError, OCRResultMerger
-
 
 # =============================================================================
 # Fixtures

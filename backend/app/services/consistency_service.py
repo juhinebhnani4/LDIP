@@ -14,7 +14,7 @@ Pre-mortem fixes implemented:
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from supabase import Client
@@ -549,7 +549,7 @@ class ConsistencyService:
             update_data = {
                 "status": status.value,
                 "resolved_by": user_id if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED) else None,
-                "resolved_at": datetime.now(timezone.utc).isoformat() if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED) else None,
+                "resolved_at": datetime.now(UTC).isoformat() if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED) else None,
             }
             if resolution_notes:
                 update_data["resolution_notes"] = resolution_notes

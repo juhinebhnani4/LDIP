@@ -10,7 +10,6 @@ Provides estimated completion times for document processing based on:
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Literal
 
 import structlog

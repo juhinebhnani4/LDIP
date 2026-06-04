@@ -24,7 +24,6 @@ from app.services.pdf_chunker import (
     DEFAULT_CHUNK_SIZE,
     MEMORY_LIMIT_MB,
     STREAMING_THRESHOLD_MB,
-    MemoryLimitExceededError,
     PDFChunker,
     PDFChunkerError,
     StreamingChunkResult,

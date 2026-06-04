@@ -247,7 +247,7 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
     documents = doc_result.data or []
 
     if not documents:
-        print(f"No documents found" + (f" for matter {matter_id}" if matter_id else ""))
+        print("No documents found" + (f" for matter {matter_id}" if matter_id else ""))
         return
 
     if limit:
@@ -269,9 +269,9 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
             result = backfill_document_citations(doc_id, client, dry_run)
 
             if result["skipped"]:
-                print(f"  Skipped (no citations need backfill)")
+                print("  Skipped (no citations need backfill)")
             elif result.get("reason") == "no_chunks_with_pages":
-                print(f"  Skipped (no chunks with page numbers)")
+                print("  Skipped (no chunks with page numbers)")
             else:
                 print(f"  Updated {result['updated']}/{result['total']} citations")
                 total_updated += result["updated"]

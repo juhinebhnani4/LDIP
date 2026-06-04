@@ -5,11 +5,11 @@ Story 7.1: Per-Matter Cost Tracking Widget
 Code Review Fix: Tests updated for synchronous service method.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.services.matter_cost_service import MatterCostService
-from app.models.cost import MatterCostSummary, CostByOperation, CostByProvider
 
 
 class TestMatterCostService:

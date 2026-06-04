@@ -216,15 +216,7 @@ class RedisBridge:
         """
         parts = channel.split(":")
 
-        if channel.startswith("matter:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("processing:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("citations:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("features:") and len(parts) >= 2:
-            return parts[1]
-        elif channel.startswith("discoveries:") and len(parts) >= 2:
+        if channel.startswith("matter:") and len(parts) >= 2 or channel.startswith("processing:") and len(parts) >= 2 or channel.startswith("citations:") and len(parts) >= 2 or channel.startswith("features:") and len(parts) >= 2 or channel.startswith("discoveries:") and len(parts) >= 2:
             return parts[1]
 
         return None

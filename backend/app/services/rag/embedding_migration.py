@@ -13,18 +13,16 @@ CRITICAL: This allows zero-downtime upgrades of embedding models.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from functools import lru_cache
 from typing import Any
 
 import structlog
 
-from app.core.config import get_settings
-from app.core.supabase import get_service_client, get_supabase_client
+from app.core.supabase import get_service_client
 from app.services.rag.embedder import (
-    EMBEDDING_MODEL_VERSION,
     EmbeddingService,
     get_current_embedding_model_version,
     get_embedding_service,
@@ -165,7 +163,7 @@ class EmbeddingMigrationService:
             MigrationProgress with final status.
         """
         progress = MigrationProgress(
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         try:
@@ -178,7 +176,7 @@ class EmbeddingMigrationService:
                     source_version=config.source_model_version,
                     target_version=config.target_model_version,
                 )
-                progress.completed_at = datetime.now(timezone.utc)
+                progress.completed_at = datetime.now(UTC)
                 return progress
 
             logger.info(
@@ -224,7 +222,7 @@ class EmbeddingMigrationService:
                 if config.rate_limit_delay > 0:
                     await asyncio.sleep(config.rate_limit_delay)
 
-            progress.completed_at = datetime.now(timezone.utc)
+            progress.completed_at = datetime.now(UTC)
 
             logger.info(
                 "migration_completed",

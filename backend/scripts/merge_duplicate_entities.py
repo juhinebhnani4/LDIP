@@ -18,8 +18,8 @@ Usage:
     --delete:     Delete duplicate entities after merging (default: soft merge only)
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,8 +31,8 @@ from collections import defaultdict
 import structlog
 from rapidfuzz.distance import JaroWinkler as JaroWinklerModule
 
-from app.services.supabase.client import get_service_client
 from app.models.entity import EntityNode, EntityType
+from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 
@@ -508,7 +508,7 @@ def main():
     result = execute_merge(args.matter_id, merge_groups, delete_dupes=args.delete)
 
     print(f"\n{'='*60}")
-    print(f"MERGE COMPLETED")
+    print("MERGE COMPLETED")
     print(f"  Groups processed: {result['groups_processed']}")
     print(f"  Entities merged: {result['entities_merged']}")
     print(f"  Events updated: {result['events_updated']}")

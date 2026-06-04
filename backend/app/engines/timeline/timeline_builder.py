@@ -605,8 +605,8 @@ class TimelineBuilder:
         Returns:
             Deduplicated list of timeline events.
         """
-        from difflib import SequenceMatcher
         from datetime import date as date_type
+        from difflib import SequenceMatcher
 
         if not events:
             return []

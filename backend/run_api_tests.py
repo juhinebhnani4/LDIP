@@ -23,7 +23,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 import httpx
 from dotenv import load_dotenv

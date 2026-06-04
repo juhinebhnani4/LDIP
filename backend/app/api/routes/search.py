@@ -23,6 +23,7 @@ from app.api.deps import (
     MatterRole,
     require_matter_role,
 )
+from app.core.fuzzy_match import fuzzy_match_name
 from app.core.rate_limit import SEARCH_RATE_LIMIT, limiter
 from app.models.rerank import (
     RerankedSearchMeta,
@@ -30,14 +31,12 @@ from app.models.rerank import (
     RerankedSearchResultItem,
     RerankRequest,
 )
-from app.core.fuzzy_match import fuzzy_match_name
 from app.models.search import (
     AliasExpandedSearchMeta,
     AliasExpandedSearchRequest,
     AliasExpandedSearchResponse,
     BM25SearchRequest,
     FuzzyMatchInfo,
-    SearchFilters,
     SearchMeta,
     SearchRequest,
     SearchResponse,

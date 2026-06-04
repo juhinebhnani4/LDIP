@@ -5,7 +5,7 @@ Story 7.1: Per-Matter Cost Tracking Widget
 Provides cost aggregation and summary functionality for individual matters.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -122,8 +122,8 @@ class MatterCostService:
         """
         logger.info("fetching_matter_costs", matter_id=matter_id, days=days)
 
-        start_date = datetime.now(timezone.utc) - timedelta(days=days)
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        start_date = datetime.now(UTC) - timedelta(days=days)
+        seven_days_ago = datetime.now(UTC) - timedelta(days=7)
 
         # Fetch all cost records for this matter in the period
         result = (

@@ -9,11 +9,11 @@ Provides endpoints for:
 """
 
 import uuid as _uuid
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal
 
 from app.api.deps import get_matter_service
 from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter

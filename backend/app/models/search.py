@@ -6,7 +6,6 @@ All search operations are matter-isolated via the API layer.
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # Valid document types matching the documents table CHECK constraint
 VALID_DOCUMENT_TYPES = frozenset({"case_file", "act", "annexure", "other"})
 

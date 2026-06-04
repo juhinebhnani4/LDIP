@@ -12,8 +12,8 @@ CRITICAL: Celery stores queues in Redis as lists. The queue names in Redis are:
 - "low" for maintenance/background tasks
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal
 
 import structlog
@@ -169,7 +169,7 @@ class QueueMetricsService:
             List of QueueMetricsData for each queue.
         """
         metrics = []
-        for queue_name in QUEUE_REDIS_KEYS.keys():
+        for queue_name in QUEUE_REDIS_KEYS:
             try:
                 queue_metrics = await self.get_queue_metrics(queue_name)
                 metrics.append(queue_metrics)
@@ -290,7 +290,7 @@ class QueueMetricsService:
             "status": status,
             "redisConnected": redis_connected,
             "workerCount": worker_count,
-            "lastCheckedAt": datetime.now(timezone.utc).isoformat(),
+            "lastCheckedAt": datetime.now(UTC).isoformat(),
             "error": error_message,
         }
 

@@ -10,6 +10,7 @@ from functools import lru_cache
 import structlog
 from supabase import Client
 
+from app.engines.citation.abbreviations import normalize_act_name
 from app.models.document import (
     Document,
     DocumentListItem,
@@ -19,9 +20,8 @@ from app.models.document import (
     PaginationMeta,
     UploadedDocument,
 )
+from app.services.storage_service import StorageError, get_storage_service
 from app.services.supabase.client import get_supabase_client
-from app.services.storage_service import get_storage_service, StorageError
-from app.engines.citation.abbreviations import normalize_act_name
 
 logger = structlog.get_logger(__name__)
 
@@ -695,6 +695,7 @@ class DocumentService:
         """
         try:
             import asyncio
+
             from app.services.summary_service import get_summary_service
 
             # Run async cache invalidation in sync context
@@ -1284,7 +1285,9 @@ class DocumentService:
                             user_id=user_id,
                         )
 
-                        from app.workers.tasks.library_tasks import promote_chunks_to_library
+                        from app.workers.tasks.library_tasks import (
+                            promote_chunks_to_library,
+                        )
                         promote_chunks_to_library.apply_async(
                             kwargs={
                                 "library_document_id": library_doc_id,

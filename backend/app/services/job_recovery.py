@@ -351,8 +351,12 @@ class JobRecoveryService:
         """
         try:
             from app.workers.tasks.document_tasks import (
-                process_document, embed_chunks, extract_entities,
-                resolve_aliases, extract_citations, detect_contradictions,
+                detect_contradictions,
+                embed_chunks,
+                extract_citations,
+                extract_entities,
+                process_document,
+                resolve_aliases,
             )
 
             document_id = job.get("document_id")
@@ -546,7 +550,9 @@ class JobRecoveryService:
             }).eq("id", document_id).execute()
 
             # Dispatch chunked processing
-            from app.workers.tasks.chunked_document_tasks import process_document_chunked
+            from app.workers.tasks.chunked_document_tasks import (
+                process_document_chunked,
+            )
 
             process_document_chunked.apply_async(
                 kwargs={

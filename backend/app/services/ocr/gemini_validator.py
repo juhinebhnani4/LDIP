@@ -16,12 +16,6 @@ from functools import lru_cache
 
 import structlog
 
-from app.core.gemini_client import GeminiClientError, get_gemini_client
-from app.core.llm_rate_limiter import (
-    LLMProvider as RateLimitProvider,
-    get_distributed_rate_limiter,
-    get_rate_limiter,
-)
 from app.core.circuit_breaker import (
     CircuitOpenError,
     CircuitService,
@@ -29,7 +23,21 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
-from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost, persist_cost_sync
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+    persist_cost,
+    persist_cost_sync,
+)
+from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+)
+from app.core.llm_rate_limiter import (
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
 from app.models.ocr_validation import (
     CorrectionType,
     LowConfidenceWord,

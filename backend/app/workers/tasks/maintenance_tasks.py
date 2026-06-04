@@ -6,6 +6,8 @@ Periodic tasks for:
 - System health monitoring
 """
 
+from datetime import UTC
+
 import structlog
 
 from app.workers.celery import celery_app
@@ -262,7 +264,9 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
 
                 try:
                     if job_type == "DATE_EXTRACTION":
-                        from app.workers.tasks.engine_tasks import extract_dates_from_matter
+                        from app.workers.tasks.engine_tasks import (
+                            extract_dates_from_matter,
+                        )
 
                         extract_dates_from_matter.apply_async(
                             kwargs={
@@ -1146,7 +1150,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
     Returns:
         Dictionary with recovery results.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.services.supabase.client import get_service_client
 
@@ -1173,7 +1177,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
         # The old query: .eq("status", "ocr_complete").not_.is_("extracted_text", "null")
         # The new query: status NOT IN terminal states. Let _is_pipeline_data_complete()
         # decide what to do — it's the single source of truth for completion.
-        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=effective_minutes)
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=effective_minutes)
 
         _TERMINAL_STATUSES = ["completed", "failed", "deleted"]
         stuck_docs = (
@@ -1225,10 +1229,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     ).eq("id", doc_id).execute()
                     # Also complete any stuck processing jobs
                     try:
-                        from datetime import datetime as dt_cls, timezone as tz_cls
+                        from datetime import datetime as dt_cls
                         client.table("processing_jobs").update({
                             "status": "COMPLETED",
-                            "updated_at": dt_cls.now(tz_cls.utc).isoformat(),
+                            "updated_at": dt_cls.now(UTC).isoformat(),
                         }).eq("document_id", doc_id).in_(
                             "status", ["PROCESSING", "QUEUED"]
                         ).execute()
@@ -1261,10 +1265,10 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
 
                 # Also mark FAILED jobs for this doc as QUEUED so Part B can re-dispatch
                 try:
-                    from datetime import datetime as dt_cls2, timezone as tz_cls2
+                    from datetime import datetime as dt_cls2
                     client.table("processing_jobs").update({
                         "status": "QUEUED",
-                        "updated_at": dt_cls2.now(tz_cls2.utc).isoformat(),
+                        "updated_at": dt_cls2.now(UTC).isoformat(),
                     }).eq("document_id", doc_id).eq("status", "FAILED").execute()
                 except Exception:
                     pass  # Best effort — Part A handles recovery below
@@ -1395,7 +1399,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                         )
                         client.table("processing_jobs").update({
                             "status": "COMPLETED",
-                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                            "updated_at": datetime.now(UTC).isoformat(),
                         }).eq("id", job["id"]).execute()
                         results["resumed"] += 1
                         continue
@@ -1412,7 +1416,7 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     )
                     client.table("processing_jobs").update({
                         "status": "COMPLETED",
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                     }).eq("id", job["id"]).execute()
                     client.table("documents").update(
                         {"status": "completed"}
@@ -1443,7 +1447,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                             )
                         else:
                             # Re-dispatch contradiction detection
-                            from app.workers.tasks.document_tasks import detect_contradictions
+                            from app.workers.tasks.document_tasks import (
+                                detect_contradictions,
+                            )
                             detect_contradictions.apply_async(
                                 kwargs={"document_id": job_doc_id},
                                 queue="default",
@@ -1473,9 +1479,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                         results["resumed"] += 1
 
                     # Update job timestamp to prevent immediate re-dispatch
-                    from datetime import datetime as dt_cls, timezone as tz_cls
+                    from datetime import datetime as dt_cls
                     client.table("processing_jobs").update(
-                        {"updated_at": dt_cls.now(tz_cls.utc).isoformat()}
+                        {"updated_at": dt_cls.now(UTC).isoformat()}
                     ).eq("id", job["id"]).execute()
 
                     logger.info(
@@ -1536,7 +1542,9 @@ def resume_stuck_pipelines(self, stale_hours: int = 1, stale_minutes: int | None
                     )
                 elif lib_doc.get("storage_path"):
                     # No chunks — need full OCR + chunk + embed
-                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    from app.workers.tasks.library_tasks import (
+                        ocr_and_process_library_document,
+                    )
                     ocr_and_process_library_document.apply_async(
                         kwargs={"library_document_id": lib_doc_id, "storage_path": lib_doc["storage_path"]},
                         queue="default",
@@ -1959,7 +1967,9 @@ def repair_stuck_missing_acts(self) -> dict:
 
         # Trigger fetch pipeline to process the newly queued acts
         if results["transitioned"] > 0:
-            from app.workers.tasks.act_validation_tasks import fetch_acts_from_india_code
+            from app.workers.tasks.act_validation_tasks import (
+                fetch_acts_from_india_code,
+            )
             fetch_acts_from_india_code.apply_async(queue="low")
             logger.info("repair_stuck_missing_acts_fetch_triggered", count=results["transitioned"])
 

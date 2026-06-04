@@ -38,7 +38,7 @@ from app.engines.orchestrator.streaming import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.chat import ChatStreamRequest, StreamEventType
-from app.services.llm_error_handler import classify_error, format_error_for_response
+from app.services.llm_error_handler import classify_error
 from app.services.memory.query_cache_service import get_query_cache_service
 from app.services.summary_service import get_summary_service
 from app.services.timeline_cache import get_timeline_cache_service

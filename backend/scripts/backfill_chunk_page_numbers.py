@@ -25,13 +25,14 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import structlog
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from app.services.supabase.client import get_service_client
+import structlog
+
 from app.services.bounding_box_service import get_bounding_box_service
-from app.services.chunking.bbox_linker import link_chunks_to_bboxes, BboxPageIndex
+from app.services.chunking.bbox_linker import link_chunks_to_bboxes
 from app.services.chunking.parent_child_chunker import ChunkData
+from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 
@@ -159,7 +160,7 @@ async def backfill_all(matter_id: str | None = None, limit: int | None = None):
             result = await backfill_document_chunks(doc_id, client, bbox_service)
 
             if result["skipped"]:
-                print(f"  Skipped (no chunks without page_number)")
+                print("  Skipped (no chunks without page_number)")
             else:
                 print(f"  Updated {result['updated']}/{result['total_chunks']} chunks")
                 total_updated += result["updated"]

@@ -55,8 +55,8 @@ from app.api.routes.admin import maintenance as admin_maintenance
 from app.api.routes.admin import monitoring as admin_monitoring
 from app.api.routes.admin import pipeline as admin_pipeline
 from app.api.routes.admin import quota as admin_quota
-from app.core.config import get_settings
 from app.core.cache_control import CacheControlMiddleware
+from app.core.config import get_settings
 from app.core.correlation import CorrelationMiddleware
 from app.core.logging import configure_logging
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler

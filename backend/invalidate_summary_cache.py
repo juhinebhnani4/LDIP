@@ -1,10 +1,12 @@
 """Invalidate summary cache for all matters to pick up parties fix."""
 import asyncio
 import sys
+
 sys.path.insert(0, '.')
 
 from app.services.summary_service import get_summary_service
 from app.services.supabase.client import get_supabase_client
+
 
 async def main():
     client = get_supabase_client()

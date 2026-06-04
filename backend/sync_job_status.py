@@ -4,9 +4,11 @@ This script checks the actual state of documents (chunks, embeddings, entities, 
 and updates the processing_job status to match reality.
 """
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
 
 
@@ -92,7 +94,7 @@ def main():
                 "current_stage": actual_stage,
                 "completed_stages": completed_stages,
                 "progress_pct": progress_pct,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", job_id).execute()
 
             print(f"  [SYNC] {job_id[:12]}... {current_stage}({job['progress_pct']}%) -> {actual_stage}({progress_pct}%) [{new_status}]")

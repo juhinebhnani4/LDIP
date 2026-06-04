@@ -8,12 +8,10 @@ Tests cover:
 - HTML and plain text content
 """
 
-import pytest
 
 from app.services.email.templates.processing_complete import (
     render_processing_complete_email,
 )
-
 
 # =============================================================================
 # Template Rendering Tests

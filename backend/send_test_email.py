@@ -8,13 +8,14 @@ If no email provided, uses the test user email from .env
 
 import asyncio
 import sys
+
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-from app.services.email_service import get_email_service
 from app.core.config import get_settings
+from app.services.email_service import get_email_service
 
 
 async def send_test_email(recipient: str | None = None):
@@ -24,7 +25,7 @@ async def send_test_email(recipient: str | None = None):
     # Use provided email or default to test user
     to_email = recipient or "kiarabinwani@gmail.com"
 
-    print(f"Email Configuration:")
+    print("Email Configuration:")
     print(f"  - Resend API Key: {'***' + settings.resend_api_key[-4:] if settings.resend_api_key else 'NOT SET'}")
     print(f"  - From Address: {settings.email_from_address}")
     print(f"  - Notifications Enabled: {settings.email_notifications_enabled}")

@@ -8,9 +8,8 @@ All endpoints enforce matter isolation.
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
-from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
-
 from app.api.deps import get_matter_service
+from app.core.rate_limit import CRITICAL_RATE_LIMIT, READONLY_RATE_LIMIT, limiter
 from app.core.security import get_current_user
 from app.models.auth import AuthenticatedUser
 from app.models.evaluation import (

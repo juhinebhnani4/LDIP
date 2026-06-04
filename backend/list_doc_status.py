@@ -1,8 +1,10 @@
 """List all document statuses for a matter."""
 import sys
+
 sys.path.insert(0, '.')
 
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     client = get_supabase_client()

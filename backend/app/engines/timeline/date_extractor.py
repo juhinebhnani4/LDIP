@@ -20,8 +20,6 @@ from functools import lru_cache
 
 import structlog
 
-from app.engines.base import ReasoningCaptureMixin
-from app.models.reasoning_trace import EngineType
 from app.core.bbox_filter import get_filtered_bbox_ids
 from app.core.circuit_breaker import (
     CircuitOpenError,
@@ -29,12 +27,6 @@ from app.core.circuit_breaker import (
     with_circuit_breaker,
 )
 from app.core.config import get_settings
-from app.core.llm_rate_limiter import (
-    LLMProvider as RateLimitProvider,
-    get_distributed_rate_limiter,
-    get_rate_limiter,
-)
-from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.cost_tracking import (
     CostTracker,
     LLMProvider,
@@ -42,11 +34,21 @@ from app.core.cost_tracking import (
     persist_cost,
     persist_cost_sync,
 )
+from app.core.gemini_client import GeminiClientError, get_gemini_client
+from app.core.llm_rate_limiter import (
+    LLMProvider as RateLimitProvider,
+)
+from app.core.llm_rate_limiter import (
+    get_distributed_rate_limiter,
+    get_rate_limiter,
+)
+from app.engines.base import ReasoningCaptureMixin
 from app.engines.timeline.prompts import (
     DATE_EXTRACTION_BATCH_PROMPT,
     DATE_EXTRACTION_SYSTEM_PROMPT,
     DATE_EXTRACTION_USER_PROMPT,
 )
+from app.models.reasoning_trace import EngineType
 from app.models.timeline import (
     DateExtractionResult,
     ExtractedDate,

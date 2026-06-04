@@ -36,7 +36,7 @@ from app.models.chat import (
 from app.models.orchestrator import OrchestratorResult
 from app.services.memory.session import SessionMemoryService, get_session_memory_service
 from app.services.memory.summarizer import get_conversation_summarizer
-from app.services.rag.query_rewriter import MIN_MESSAGES_FOR_REWRITE, rewrite_query
+from app.services.rag.query_rewriter import rewrite_query
 
 logger = structlog.get_logger(__name__)
 
@@ -181,7 +181,7 @@ class StreamingOrchestrator:
                     await asyncio.wait_for(
                         asyncio.shield(task), timeout=KEEPALIVE_INTERVAL_S
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Task still running — send keepalive ping
                     msg = processing_messages[
                         min(ping_count, len(processing_messages) - 1)

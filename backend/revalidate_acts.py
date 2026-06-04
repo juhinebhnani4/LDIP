@@ -9,8 +9,6 @@ Usage:
 """
 
 import sys
-import asyncio
-from uuid import UUID
 
 # Fix Windows console encoding
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')

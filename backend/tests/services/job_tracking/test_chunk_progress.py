@@ -3,8 +3,9 @@
 Story 15.3: Integrate Chunk Progress with Job Tracking
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.models.job import JobStatus
 from app.models.ocr_chunk import ChunkProgress

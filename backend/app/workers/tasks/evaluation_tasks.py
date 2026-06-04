@@ -19,12 +19,14 @@ from typing import Any
 import structlog
 from celery.exceptions import SoftTimeLimitExceeded
 
-from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.supabase.client import (
-    get_supabase_client as get_supabase,
     get_service_client,
 )
+from app.services.supabase.client import (
+    get_supabase_client as get_supabase,
+)
+from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
 logger = structlog.get_logger(__name__)
@@ -267,7 +269,6 @@ def run_batch_evaluation(
 
     try:
         async def _evaluate_async() -> dict[str, Any]:
-            import time as _time
 
             from app.services.evaluation import get_ragas_evaluator
             from app.services.evaluation.golden_dataset import GoldenDatasetService
@@ -754,8 +755,8 @@ def run_scheduled_evaluation(
 
         # Per-matter timeout: .apply() runs inline so inner task's time_limit is
         # not enforced by Celery. We use signal.alarm (Unix) as a guard.
-        import signal
         import platform
+        import signal
         _is_unix = platform.system() != "Windows"
         PER_MATTER_TIMEOUT = 35 * 60  # 35 minutes (inner task has 30 min hard limit)
 

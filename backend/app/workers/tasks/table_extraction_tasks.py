@@ -16,18 +16,20 @@ from uuid import uuid4
 
 import structlog
 
-from app.workers.celery import celery_app
 from app.core.config import get_settings
 from app.services.document_service import DocumentService, get_document_service
 from app.services.storage_service import StorageService, get_storage_service
-from app.services.supabase.client import get_supabase_client as get_supabase
 from app.services.supabase.client import get_service_client
+from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from app.services.table_extraction.models import ExtractedTable, TableExtractionResult
+    from app.services.table_extraction.models import (
+        ExtractedTable,
+        TableExtractionResult,
+    )
 
 logger = structlog.get_logger(__name__)
 

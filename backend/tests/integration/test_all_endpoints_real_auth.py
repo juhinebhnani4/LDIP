@@ -19,15 +19,14 @@ Usage:
     pytest tests/integration/test_all_endpoints_real_auth.py -v --tb=short --json-report
 """
 
-import os
 import json
+import os
 import time
-from datetime import datetime
-from typing import Any
 from dataclasses import dataclass, field
+from datetime import datetime
 
-import pytest
 import httpx
+import pytest
 from dotenv import load_dotenv
 
 # Load environment variables

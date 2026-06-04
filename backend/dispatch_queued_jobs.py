@@ -4,9 +4,11 @@ This script finds jobs that are QUEUED but not being processed
 and dispatches them to the Celery queue.
 """
 import sys
+
 sys.path.insert(0, '.')
 
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     client = get_supabase_client()
@@ -26,9 +28,9 @@ def main():
 
     # Import Celery tasks
     from app.workers.tasks.document_tasks import (
-        process_document,
         embed_chunks,
         extract_entities,
+        process_document,
         resolve_aliases,
     )
 
@@ -70,7 +72,7 @@ def main():
         else:
             print(f"  [SKIP] {job_id[:12]}... - unknown stage: {stage}")
 
-    print(f"\n[DONE] Dispatched jobs to Celery")
+    print("\n[DONE] Dispatched jobs to Celery")
 
 if __name__ == "__main__":
     main()

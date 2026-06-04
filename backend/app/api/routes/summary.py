@@ -16,7 +16,7 @@ CRITICAL: Uses matter access validation for Layer 4 security.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -291,7 +291,7 @@ async def get_matter_summary(
             # Cache evicted — fall through to regenerate
 
         # 4. Check for recent FAILED job (within last 5 minutes)
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+        cutoff = datetime.now(UTC) - timedelta(minutes=5)
         recent_failed = next(
             (
                 j

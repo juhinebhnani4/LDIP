@@ -9,15 +9,17 @@ Simulates various failure scenarios in the chunked document processing pipeline:
 - No partial/corrupt data saved to database
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
 from app.services.ocr_chunk_service import OCRChunkService
-from app.services.ocr_result_merger import ChunkOCRResult, MergeValidationError, OCRResultMerger
-
+from app.services.ocr_result_merger import (
+    ChunkOCRResult,
+    MergeValidationError,
+    OCRResultMerger,
+)
 
 # =============================================================================
 # Fixtures
@@ -272,7 +274,9 @@ class TestAtomicOperations:
     def test_streaming_atomic_writes(self, tmp_path):
         """Streaming split uses atomic writes for chunk files."""
         from io import BytesIO
+
         from pypdf import PdfWriter
+
         from app.services.pdf_chunker import PDFChunker
 
         # Create test PDF

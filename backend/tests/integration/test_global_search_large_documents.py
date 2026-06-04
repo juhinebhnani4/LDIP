@@ -19,7 +19,6 @@ import pytest
 
 from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

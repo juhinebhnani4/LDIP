@@ -304,6 +304,7 @@ celery_app.autodiscover_tasks(["app.workers.tasks"])
 # task code. CELERY_BEAT_ONLY=true skips these heavy imports (~1GB RAM savings).
 
 import os
+
 import structlog
 
 _logger = structlog.get_logger(__name__)

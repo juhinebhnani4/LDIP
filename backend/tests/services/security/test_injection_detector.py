@@ -9,13 +9,12 @@ identifying prompt injection attempts in documents.
 import pytest
 
 from app.services.security.injection_detector import (
+    MAX_SCAN_LENGTH,
     InjectionDetector,
     InjectionRisk,
     InjectionScanResult,
     get_injection_detector,
     scan_document_for_injection,
-    MAX_SCAN_LENGTH,
-    MIN_LLM_SCAN_LENGTH,
 )
 
 

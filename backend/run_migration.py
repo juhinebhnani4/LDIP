@@ -26,7 +26,7 @@ def run_migration():
 
     print(f"Reading migration from: {migration_path}")
 
-    with open(migration_path, "r") as f:
+    with open(migration_path) as f:
         migration_sql = f.read()
 
     print("Running migration...")
@@ -65,7 +65,7 @@ def run_migration():
                     # Local development
                     db_url = "postgresql://postgres:postgres@localhost:54322/postgres"
 
-            print(f"Connecting to database...")
+            print("Connecting to database...")
             conn = psycopg2.connect(db_url)
             conn.autocommit = True
 

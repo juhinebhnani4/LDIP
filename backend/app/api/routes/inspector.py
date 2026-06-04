@@ -6,7 +6,7 @@ Only available when inspector_enabled=True in settings.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from app.api.deps import get_matter_service
 from app.core.config import get_settings

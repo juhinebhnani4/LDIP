@@ -24,7 +24,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import get_settings
-from app.core.data_loader import get_known_acts, get_known_act_info
+from app.core.data_loader import get_known_acts
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

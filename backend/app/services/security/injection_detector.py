@@ -16,13 +16,18 @@ from functools import lru_cache
 from typing import Any
 
 import structlog
-
 from google.genai import types
 
 from app.core.config import get_settings
-from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
+from app.core.cost_tracking import (
+    CostTracker,
+    LLMProvider,
+    estimate_tokens,
+    persist_cost,
+)
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.core.prompt_boundaries import detect_injection_patterns, has_injection_patterns
 
 logger = structlog.get_logger(__name__)

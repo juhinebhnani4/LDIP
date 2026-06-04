@@ -19,12 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.api.deps import MatterMembership, MatterRole, require_matter_role
 from app.models.consistency_issue import (
-    ConsistencyIssue,
     ConsistencyIssueListResponse,
-    ConsistencyIssueSummary,
     ConsistencyIssueSummaryResponse,
     ConsistencyIssueUpdate,
-    IssueStatus,
 )
 from app.models.cross_engine import (
     ContradictionContextResponse,

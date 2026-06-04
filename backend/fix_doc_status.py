@@ -4,10 +4,13 @@ Sets document status to 'ocr_complete' for documents whose jobs are COMPLETED
 but document status is still 'processing'.
 """
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     client = get_supabase_client()
@@ -45,7 +48,7 @@ def main():
         try:
             client.table("documents").update({
                 "status": "ocr_complete",
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", doc_id).execute()
             print(f"  Fixed: {d['filename'][:40]}...")
         except Exception as e:

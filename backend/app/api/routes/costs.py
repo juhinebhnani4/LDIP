@@ -8,7 +8,7 @@ Endpoints:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -119,7 +119,7 @@ async def get_cost_comparison(
                 detail={"error": {"code": "SERVICE_UNAVAILABLE", "message": "Database not configured"}},
             )
 
-        since = (datetime.now(tz=timezone.utc) - timedelta(days=days)).isoformat()
+        since = (datetime.now(tz=UTC) - timedelta(days=days)).isoformat()
 
         # Build query for all embedding + reranking providers
         all_provider_names = []

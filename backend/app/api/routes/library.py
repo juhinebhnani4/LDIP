@@ -11,34 +11,37 @@ Phase 2: Shared Legal Library feature.
 """
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, UploadFile, File
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    status,
+)
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import (
     MatterMembership,
     MatterRole,
-    require_matter_role,
     get_current_user,
+    require_matter_role,
 )
 from app.models.library import (
     LibraryDocument,
-    LibraryDocumentCreate,
-    LibraryDocumentListItem,
     LibraryDocumentListResponse,
-    LibraryDocumentSource,
     LibraryDocumentStatus,
     LibraryDocumentType,
     LibraryDuplicate,
     LibraryLinkRequest,
-    LibraryPaginationMeta,
     LinkedLibraryDocumentsResponse,
     MatterLibraryLink,
 )
 from app.services.library_service import (
-    get_library_service,
     LibraryDocumentNotFoundError,
     LibraryLinkExistsError,
     LibraryServiceError,
+    get_library_service,
 )
 
 # =============================================================================

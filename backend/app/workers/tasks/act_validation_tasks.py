@@ -15,7 +15,6 @@ from uuid import uuid4
 import structlog
 
 from app.core.config import get_settings
-from app.engines.citation.abbreviations import normalize_act_name, get_canonical_name
 from app.engines.citation.india_code import IndiaCodeClient, is_india_code_enabled
 from app.engines.citation.validation import (
     ActValidationService,
@@ -226,7 +225,9 @@ def _link_act_from_library(
                 # Library doc exists but was never processed — trigger OCR + processing
                 storage_path_existing = library_doc.get("storage_path")
                 if storage_path_existing:
-                    from app.workers.tasks.library_tasks import ocr_and_process_library_document
+                    from app.workers.tasks.library_tasks import (
+                        ocr_and_process_library_document,
+                    )
                     ocr_kwargs = {
                         "library_document_id": library_doc_id,
                         "storage_path": storage_path_existing,
@@ -567,7 +568,9 @@ def validate_acts_for_matter(self, matter_id: str) -> dict:
                 # Unknown — regex can't decide. Use LLM fallback before
                 # assuming valid and sending to India Code (wastes fetches).
                 try:
-                    from app.engines.citation.validation import validate_act_name_with_llm
+                    from app.engines.citation.validation import (
+                        validate_act_name_with_llm,
+                    )
                     llm_result = run_async(validate_act_name_with_llm(
                         act_name=act_display,
                         context=None,

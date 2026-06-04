@@ -7,7 +7,6 @@ Pydantic models for cross-engine link API endpoints.
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # =============================================================================
 # Cross-Linked Item Models
 # =============================================================================

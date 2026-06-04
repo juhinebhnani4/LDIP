@@ -26,8 +26,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 
-from app.services.supabase.client import get_service_client
 from app.services.section_index_service import SectionIndexService
+from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)
 
@@ -57,7 +57,7 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
     documents = doc_result.data or []
 
     if not documents:
-        print(f"No Act documents found" + (f" for matter {matter_id}" if matter_id else ""))
+        print("No Act documents found" + (f" for matter {matter_id}" if matter_id else ""))
         return
 
     # Filter to documents with bounding boxes

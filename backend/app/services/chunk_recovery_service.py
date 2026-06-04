@@ -6,7 +6,6 @@ This service detects chunks stuck in PROCESSING state and recovers them
 by resetting to PENDING for retry. Follows the JobRecoveryService pattern.
 """
 
-import asyncio
 from functools import lru_cache
 
 import structlog

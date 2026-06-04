@@ -22,7 +22,6 @@ from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import (
     CACHE_TTL,
     cache_key,
-    cache_pattern,
     query_version_key,
     validate_key_access,
 )

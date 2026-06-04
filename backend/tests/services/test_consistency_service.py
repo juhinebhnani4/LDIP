@@ -11,7 +11,6 @@ Test Categories:
 - Summary counts
 """
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,20 +20,19 @@ from app.models.consistency_issue import (
     ConsistencyIssueCreate,
     ConsistencyIssueSummary,
     EngineType,
-    IssueSeverity,
     IssueStatus,
     IssueType,
 )
 from app.services.consistency_service import (
-    ConsistencyService,
-    ConsistencyCheckResult,
-    normalize_date,
-    dates_match,
-    names_similar,
-    get_consistency_service,
-    reset_consistency_service,
     DATE_TOLERANCE_DAYS,
     FUZZY_NAME_THRESHOLD,
+    ConsistencyCheckResult,
+    ConsistencyService,
+    dates_match,
+    get_consistency_service,
+    names_similar,
+    normalize_date,
+    reset_consistency_service,
 )
 
 

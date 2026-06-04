@@ -11,13 +11,11 @@ Validates the full RAG pipeline works with large documents:
 - Highlighting renders correctly in PDF viewer
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
-
 
 # =============================================================================
 # Fixtures

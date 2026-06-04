@@ -16,6 +16,7 @@ from math import ceil
 
 import structlog
 
+from app.core.data_quality import DataQualityMetrics
 from app.models.timeline import (
     ClassifiedEvent,
     ClassifiedEventsListResponse,
@@ -34,7 +35,6 @@ from app.models.timeline import (
     UnclassifiedEventItem,
     UnclassifiedEventsResponse,
 )
-from app.core.data_quality import DataQualityMetrics
 from app.services.supabase.client import get_service_client
 
 logger = structlog.get_logger(__name__)

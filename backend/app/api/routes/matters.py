@@ -17,9 +17,8 @@ from app.api.deps import (
     get_tab_stats_service_dep,
     require_matter_role,
 )
-from app.models.cost import MatterCostResponse, MatterCostSummary
-from app.services.matter_cost_service import MatterCostService, get_matter_cost_service
 from app.core.rate_limit import STANDARD_RATE_LIMIT, limiter
+from app.models.cost import MatterCostResponse
 from app.models.matter import (
     MatterCreate,
     MatterInvite,
@@ -34,6 +33,7 @@ from app.models.matter import (
     MemberResponse,
 )
 from app.models.tab_stats import TabStatsResponse
+from app.services.matter_cost_service import MatterCostService, get_matter_cost_service
 from app.services.matter_service import (
     CannotRemoveOwnerError,
     MatterNotFoundError,

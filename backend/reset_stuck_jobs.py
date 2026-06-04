@@ -10,10 +10,13 @@ Usage:
     python reset_stuck_jobs.py [--requeue]
 """
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     requeue = '--requeue' in sys.argv
@@ -66,7 +69,7 @@ def main():
             "error_code": None,
             "retry_count": 0,
             "started_at": None,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "metadata": {},  # Clear recovery attempts
         }).eq("id", job_id).execute()
 
@@ -74,7 +77,7 @@ def main():
         if document_id:
             client.table("documents").update({
                 "status": "PENDING",
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", document_id).execute()
 
         reset_count += 1

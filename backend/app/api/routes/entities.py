@@ -34,7 +34,7 @@ from app.services.mig import (
     get_correction_learning_service,
     get_mig_graph_service,
 )
-from app.services.mig.entity_resolver import get_entity_resolver, EntityResolver
+from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver
 
 # =============================================================================
 # Request/Response Models for Alias Management

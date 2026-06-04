@@ -1,5 +1,6 @@
 """Clear existing chunks for a document to allow retry."""
 import os
+
 from dotenv import load_dotenv
 from supabase import create_client
 

@@ -26,11 +26,11 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import GeminiClientError, get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.engines.rag.prompts import (
-    MAX_CONTEXT_CHUNKS,
-    SYSTEM_PROMPTS,
     RAG_ANSWER_SYSTEM_PROMPT,
+    SYSTEM_PROMPTS,
     format_rag_answer_prompt,
 )
 from app.engines.rag.query_profile import QueryProfile

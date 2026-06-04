@@ -19,14 +19,14 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 import structlog
-
 from google.genai import types
 
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, estimate_tokens, persist_cost
 from app.core.cost_tracking import LLMProvider as CostLLMProvider
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.models.entity import EntityNode, EntityType
 from app.models.timeline import RawEvent
 from app.services.mig.entity_resolver import EntityResolver, get_entity_resolver

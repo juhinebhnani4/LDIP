@@ -3,10 +3,13 @@
 These jobs failed at chunking but actually have complete chunks.
 """
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     requeue = '--requeue' in sys.argv
@@ -77,14 +80,14 @@ def main():
             "error_message": None,
             "error_code": None,
             "retry_count": 0,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "metadata": {"recovered_from_failed": True},
         }).eq("id", job_id).execute()
 
         # Also update document status
         client.table("documents").update({
             "status": "processing",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }).eq("id", doc_id).execute()
 
         print(f"  Fixed: {job_id[:12]}...")

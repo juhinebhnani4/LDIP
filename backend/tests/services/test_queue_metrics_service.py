@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.queue_metrics_service import (
-    QueueMetricsService,
-    QueueMetricsData,
-    QUEUE_REDIS_KEYS,
     DEFAULT_ALERT_THRESHOLD,
+    QUEUE_REDIS_KEYS,
+    QueueMetricsData,
+    QueueMetricsService,
     get_queue_metrics_service,
     reset_queue_metrics_service,
 )

@@ -9,11 +9,11 @@ Usage:
 import argparse
 import os
 import sys
-from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from supabase import create_client
@@ -72,7 +72,7 @@ def diagnose_matter(matter_id: str | None = None):
     print(f"   Citations on other pages: {other_pages} ({other_pages/total_count*100:.1f}%)" if total_count > 0 else "")
 
     if page1_count > total_count * 0.5 and total_count > 10:
-        print(f"   [!] WARNING: High % of page 1 citations suggests data quality issue!")
+        print("   [!] WARNING: High % of page 1 citations suggests data quality issue!")
 
     # 2. Check source_bbox_ids
     print("\n2. SOURCE BBOX LINKAGE")
@@ -90,7 +90,7 @@ def diagnose_matter(matter_id: str | None = None):
     print(f"   Citations WITHOUT bbox links: {empty_bbox_count} ({empty_bbox_count/total_count*100:.1f}%)" if total_count > 0 else "")
 
     if empty_bbox_count > total_count * 0.3 and total_count > 10:
-        print(f"   [!] WARNING: Many citations missing bbox links - highlights won't work!")
+        print("   [!] WARNING: Many citations missing bbox links - highlights won't work!")
 
     # 3. Check chunk page_number population
     print("\n3. CHUNK PAGE NUMBER POPULATION")
@@ -123,7 +123,7 @@ def diagnose_matter(matter_id: str | None = None):
         print(f"   Chunks WITHOUT page_number: {chunks_without_page} ({chunks_without_page/total_chunks*100:.1f}%)" if total_chunks > 0 else "")
 
         if chunks_without_page > chunks_with_page:
-            print(f"   [!] WARNING: Many chunks missing page_number - this causes citation page issues!")
+            print("   [!] WARNING: Many chunks missing page_number - this causes citation page issues!")
 
     # 4. Specific problematic citations
     print("\n4. SAMPLE PROBLEMATIC CITATIONS (page=1 AND no bbox)")

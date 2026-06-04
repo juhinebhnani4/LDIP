@@ -25,6 +25,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from supabase import create_client
@@ -276,7 +277,7 @@ async def backfill_mentions(
     print(f"Mentions no match:       {stats['mentions_no_match']}")
 
     if dry_run:
-        print(f"\nThis was a DRY RUN. Run with --execute to apply changes.")
+        print("\nThis was a DRY RUN. Run with --execute to apply changes.")
 
     return stats
 

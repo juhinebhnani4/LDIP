@@ -8,6 +8,8 @@ Provides periodic tasks for:
 - Logging structured alerts to Axiom via structlog
 """
 
+from datetime import UTC
+
 import structlog
 
 from app.workers.celery import celery_app
@@ -145,10 +147,13 @@ async def _create_admin_notification(pq, supabase) -> None:
         supabase: Supabase client.
     """
     try:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from app.core.config import get_settings
-        from app.models.notification import NotificationPriorityEnum, NotificationTypeEnum
+        from app.models.notification import (
+            NotificationPriorityEnum,
+            NotificationTypeEnum,
+        )
         from app.services.notification_service import NotificationService
 
         settings = get_settings()
@@ -201,7 +206,7 @@ async def _create_admin_notification(pq, supabase) -> None:
 
         # Check for recent identical notification to avoid spam
         # Only create notification if no similar one in last 30 minutes
-        recent_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        recent_cutoff = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
 
         for admin_user in result.data:
             # F8/F12 fix: Use exact match on alert_key prefix instead of ILIKE

@@ -20,7 +20,6 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from app.api.ws.auth import (
     WS_CLOSE_ACCESS_DENIED,
-    WS_CLOSE_AUTH_FAILED,
     WS_CLOSE_SERVER_ERROR,
     WebSocketAuthError,
     authenticate_websocket,
@@ -220,7 +219,7 @@ async def websocket_endpoint(
                         except json.JSONDecodeError:
                             pass  # Ignore invalid JSON
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No message received - send server ping to keep connection alive
                 try:
                     await websocket.send_json({"type": "ping"})

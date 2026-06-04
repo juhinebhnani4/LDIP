@@ -17,7 +17,6 @@ from typing import Any
 import structlog
 
 from app.core.config import get_settings
-from app.core.ocr_cleaner import clean_for_display
 from app.models.orchestrator import (
     EngineExecutionResult,
     EngineType,

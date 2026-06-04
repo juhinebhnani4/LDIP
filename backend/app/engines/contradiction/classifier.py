@@ -18,10 +18,9 @@ from functools import lru_cache
 
 import structlog
 
-from app.engines.base import ReasoningCaptureMixin
-from app.models.reasoning_trace import EngineType
 from app.core.config import get_settings
 from app.core.cost_tracking import CostTracker, LLMProvider, persist_cost
+from app.engines.base import ReasoningCaptureMixin
 from app.engines.contradiction.prompts import (
     CLASSIFICATION_ENHANCEMENT_SYSTEM_PROMPT,
     format_classification_prompt,
@@ -37,6 +36,7 @@ from app.models.contradiction import (
     ExtractedValues,
     StatementPairComparison,
 )
+from app.models.reasoning_trace import EngineType
 
 logger = structlog.get_logger(__name__)
 

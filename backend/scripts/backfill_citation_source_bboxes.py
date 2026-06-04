@@ -10,13 +10,12 @@ Usage:
 import asyncio
 import os
 import sys
-from collections import Counter
-from uuid import UUID
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from rapidfuzz import fuzz
@@ -313,7 +312,7 @@ async def backfill_citations(
     print(f"Total bboxes linked:       {stats['bboxes_linked']}")
 
     if dry_run:
-        print(f"\nThis was a DRY RUN. Run with --execute to apply changes.")
+        print("\nThis was a DRY RUN. Run with --execute to apply changes.")
 
     return stats
 

@@ -26,7 +26,10 @@ import structlog
 
 from app.core.bbox_search import search_bboxes_for_text
 from app.core.page_detection import ACT_PATTERN, SECTION_PATTERN
-from app.core.reliability_logging import log_citation_page_detection, log_citation_page_fallback
+from app.core.reliability_logging import (
+    log_citation_page_detection,
+    log_citation_page_fallback,
+)
 
 logger = structlog.get_logger(__name__)
 

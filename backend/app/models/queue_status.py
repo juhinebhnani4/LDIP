@@ -5,7 +5,6 @@ Story 5.6: Queue Depth Visibility Dashboard
 Provides response models for the queue status monitoring API endpoints.
 """
 
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field

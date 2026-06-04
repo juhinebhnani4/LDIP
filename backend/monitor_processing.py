@@ -9,7 +9,6 @@ Live monitoring script to track:
 """
 
 import sys
-import time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, ".")

@@ -27,7 +27,9 @@ from app.services.rag.embedder import (
     get_current_embedding_model_version,
     get_embedding_service,
 )
-from app.services.rag.embedder_factory import EmbeddingProvider, get_embedding_service as get_embedding_service_by_provider
+from app.services.rag.embedder_factory import (
+    get_embedding_service as get_embedding_service_by_provider,
+)
 from app.services.rag.namespace import validate_namespace, validate_search_results
 from app.services.supabase.client import get_supabase_client
 
@@ -345,7 +347,7 @@ class HybridSearchService:
         rrf_k: int = 60,
         query_embedding: list[float] | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute hybrid search with RRF fusion.
 
@@ -576,7 +578,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> list[SearchResult]:
         """Internal BM25 search returning raw results.
 
@@ -656,7 +658,7 @@ class HybridSearchService:
         query: str,
         matter_id: str,
         limit: int = 30,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute BM25-only keyword search.
 
@@ -808,7 +810,7 @@ class HybridSearchService:
         query_embedding: list[float] | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking.
 
@@ -1123,7 +1125,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rrf_k: int = 60,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> HybridSearchResult:
         """Execute hybrid search on both matter chunks and linked library chunks.
 
@@ -1294,7 +1296,7 @@ class HybridSearchService:
         weights: SearchWeights | None = None,
         rerank_provider: str | None = None,
         embedding_provider: str | None = None,
-        filters: "SearchFilters | None" = None,
+        filters: SearchFilters | None = None,
     ) -> RerankedSearchResult:
         """Execute hybrid search with Cohere reranking AND library results.
 

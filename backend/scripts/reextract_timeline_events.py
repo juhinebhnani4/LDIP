@@ -28,8 +28,8 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.services.supabase.client import get_supabase_client
 from app.engines.timeline.date_extractor import get_date_extractor
+from app.services.supabase.client import get_supabase_client
 from app.services.timeline_service import get_timeline_service
 
 
@@ -222,7 +222,7 @@ def main():
         sys.exit(1)
 
     print(f"\n{'='*60}")
-    print(f"Re-extracting Timeline Events")
+    print("Re-extracting Timeline Events")
     print(f"Matter: {matter['name']}")
     print(f"ID: {args.matter_id}")
     print(f"Mode: {'DRY RUN' if args.dry_run else 'LIVE'}")
@@ -231,13 +231,13 @@ def main():
 
     # Count existing events
     counts = count_events(client, args.matter_id)
-    print(f"\nExisting events:")
+    print("\nExisting events:")
     print(f"  Total: {counts['total']}")
     print(f"  Manual: {counts['manual']}")
     print(f"  Extracted: {counts['extracted']}")
 
     # Step 1: Delete extracted events
-    print(f"\n--- Step 1: Delete existing extracted events ---")
+    print("\n--- Step 1: Delete existing extracted events ---")
     deleted = delete_extracted_events(
         client,
         args.matter_id,
@@ -249,7 +249,7 @@ def main():
         print(f"Deleted {deleted} extracted events")
 
     # Step 2: Get document chunks
-    print(f"\n--- Step 2: Get document chunks ---")
+    print("\n--- Step 2: Get document chunks ---")
     chunks = get_document_chunks(client, args.matter_id)
 
     if not chunks:
@@ -257,7 +257,7 @@ def main():
         return
 
     # Step 3: Re-extract events
-    print(f"\n--- Step 3: Extract events with improved prompts ---")
+    print("\n--- Step 3: Extract events with improved prompts ---")
     result = extract_events_from_chunks(
         chunks,
         args.matter_id,
@@ -271,7 +271,7 @@ def main():
     print('='*60)
     print(f"Chunks processed: {result['chunks_processed']}")
     print(f"Events extracted: {result['total_events']}")
-    print(f"\nEvents by type:")
+    print("\nEvents by type:")
     for event_type, count in sorted(result['events_by_type'].items(), key=lambda x: -x[1]):
         print(f"  {event_type}: {count}")
 
@@ -361,7 +361,10 @@ def main():
         print("\n--- Step 4: Trigger classification and entity linking (async) ---")
         print("WARNING: This requires Celery worker to be running. Use --sync-linking for guaranteed execution.")
         try:
-            from app.workers.tasks.engine_tasks import classify_events_for_matter, link_entities_for_matter
+            from app.workers.tasks.engine_tasks import (
+                classify_events_for_matter,
+                link_entities_for_matter,
+            )
 
             task1 = classify_events_for_matter.delay(matter_id=args.matter_id, force_reclassify=True)
             print(f"Classification task queued: {task1.id}")

@@ -22,9 +22,8 @@ import math
 from datetime import UTC, datetime
 from typing import Any
 
-from scipy import stats as scipy_stats
-
 import structlog
+from scipy import stats as scipy_stats
 
 from app.core.config import get_settings
 from app.services.supabase.client import get_service_client as _get_service_raw

@@ -1,14 +1,10 @@
 """Tests for maintenance Celery tasks."""
 
-from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from app.workers.tasks.maintenance_tasks import (
     sync_citation_statuses_with_resolutions,
 )
-
 
 # Patch path for the module where get_service_client is imported inside function
 SERVICE_CLIENT_PATCH = "app.services.supabase.client.get_service_client"

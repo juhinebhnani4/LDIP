@@ -20,7 +20,6 @@ from uuid import uuid4
 
 import pytest
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -431,7 +430,7 @@ class TestLargeDocumentScenarios:
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        print(f"\n422-page document benchmark:")
+        print("\n422-page document benchmark:")
         print(f"  Time: {elapsed:.2f}s")
         print(f"  Memory: {peak / (1024 * 1024):.2f}MB")
         print(f"  Bboxes: {len(bboxes)}")

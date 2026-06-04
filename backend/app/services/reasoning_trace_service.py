@@ -15,7 +15,6 @@ Implements:
 - AC 4.1.4: API retrieval of full chain-of-thought
 """
 
-from datetime import datetime
 
 import structlog
 from supabase import Client

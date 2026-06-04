@@ -21,6 +21,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from rapidfuzz import fuzz
@@ -278,7 +279,7 @@ async def backfill_chunks(
         print(f"  Loaded {len(all_bboxes)} bboxes across {len(set(b.get('page_number') for b in all_bboxes))} pages")
 
         if not all_bboxes:
-            print(f"  WARNING: No bboxes found for document!")
+            print("  WARNING: No bboxes found for document!")
             stats["chunks_no_match"] += len(doc_chunks)
             continue
 
@@ -330,7 +331,7 @@ async def backfill_chunks(
     print(f"Chunks no match found:   {stats['chunks_no_match']}")
 
     if dry_run:
-        print(f"\nThis was a DRY RUN. Run with --execute to apply changes.")
+        print("\nThis was a DRY RUN. Run with --execute to apply changes.")
 
     return stats
 

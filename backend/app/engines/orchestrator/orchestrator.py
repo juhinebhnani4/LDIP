@@ -44,10 +44,6 @@ from app.engines.orchestrator.query_history import (
     QueryHistoryStore,
     get_query_history_store,
 )
-from app.services.memory.query_cache_service import (
-    QueryCacheService,
-    get_query_cache_service,
-)
 from app.models.orchestrator import (
     EngineType,
     IntentAnalysisResult,
@@ -57,6 +53,10 @@ from app.models.orchestrator import (
     SourceReference,
 )
 from app.models.safety import SafetyCheckResult
+from app.services.memory.query_cache_service import (
+    QueryCacheService,
+    get_query_cache_service,
+)
 from app.services.safety import SafetyGuard, get_safety_guard
 from app.services.supabase.client import get_supabase_client
 

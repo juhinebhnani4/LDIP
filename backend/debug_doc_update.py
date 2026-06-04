@@ -1,9 +1,12 @@
 """Debug document status update."""
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from app.services.supabase.client import get_supabase_client
+
 
 def main():
     client = get_supabase_client()
@@ -33,7 +36,7 @@ def main():
     try:
         result = client.table("documents").update({
             "status": "searchable",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }).eq("id", doc_id).execute()
         print("SUCCESS!")
         print(f"Updated: {result.data}")
@@ -50,7 +53,7 @@ def main():
             result = client.table("documents").update({
                 "status": "searchable",
                 "page_count": max_page,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }).eq("id", doc_id).execute()
             print("SUCCESS with page_count!")
         except Exception as e2:

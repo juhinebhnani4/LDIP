@@ -9,10 +9,7 @@ Covers:
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.engines.rag.query_profile import QueryProfile, QueryType
-
 
 # =============================================================================
 # _scale_for_matter_size

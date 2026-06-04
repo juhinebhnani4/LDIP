@@ -22,7 +22,6 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.config import get_settings
 from app.services.supabase.client import get_supabase_client
 
 # Numbered role pattern (same as entity_resolver.py)
@@ -177,11 +176,11 @@ async def cleanup_aliases(dry_run: bool = True, matter_id: str | None = None):
         print(f"\nEntity: {entity['canonical_name']}")
         print(f"  ID: {entity['id']}")
         print(f"  Type: {entity['entity_type']}")
-        print(f"  BAD aliases to REMOVE:")
+        print("  BAD aliases to REMOVE:")
         for bad in entity["bad_aliases"]:
             print(f"    - {bad}")
         if entity["good_aliases"]:
-            print(f"  GOOD aliases to KEEP:")
+            print("  GOOD aliases to KEEP:")
             for good in entity["good_aliases"]:
                 print(f"    + {good}")
 

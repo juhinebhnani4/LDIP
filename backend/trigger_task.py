@@ -1,19 +1,21 @@
-import os
 import sys
+
 sys.path.insert(0, '.')
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from celery import chain
+
 from app.workers.celery import celery_app
 from app.workers.tasks.document_tasks import (
-    process_document,
-    validate_ocr,
     calculate_confidence,
     chunk_document,
     embed_chunks,
     extract_entities,
+    process_document,
     resolve_aliases,
+    validate_ocr,
 )
 
 doc_id = 'ed3313dc-0ff4-4079-8aee-656b48dad9e7'

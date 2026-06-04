@@ -12,7 +12,7 @@ All endpoints require admin access (configured via ADMIN_EMAILS env var).
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -36,18 +36,18 @@ from app.models.cost import (
     ProviderUsage,
     UsageDashboardResponse,
 )
-from app.models.quota import LLMQuotaData, LLMQuotaResponse, ProviderQuota
 from app.models.queue_status import (
     QueueHealthResponse,
     QueueMetrics,
     QueueStatusData,
     QueueStatusResponse,
 )
+from app.models.quota import LLMQuotaData, LLMQuotaResponse, ProviderQuota
+from app.services.matter_cost_service import normalize_operation
 from app.services.queue_metrics_service import (
     DEFAULT_ALERT_THRESHOLD,
     get_queue_metrics_service,
 )
-from app.services.matter_cost_service import normalize_operation
 from app.services.supabase.client import get_service_client
 
 router = APIRouter(prefix="/admin", tags=["admin-quota"])
@@ -229,7 +229,7 @@ async def get_llm_quota(
 
         data = LLMQuotaData(
             providers=providers,
-            lastUpdated=datetime.now(timezone.utc).isoformat(),
+            lastUpdated=datetime.now(UTC).isoformat(),
             alertThresholdPct=80,
             usdToInrRate=USD_TO_INR_RATE,
         )
@@ -391,7 +391,7 @@ async def get_queue_status(
             totalPending=total_pending,
             totalActive=total_active,
             activeWorkers=active_workers,
-            lastCheckedAt=datetime.now(timezone.utc).isoformat(),
+            lastCheckedAt=datetime.now(UTC).isoformat(),
             alertThreshold=DEFAULT_ALERT_THRESHOLD,
             isHealthy=is_healthy,
         )
@@ -475,7 +475,7 @@ async def get_queue_health(
                 "status": "unhealthy",
                 "redisConnected": False,
                 "workerCount": 0,
-                "lastCheckedAt": datetime.now(timezone.utc).isoformat(),
+                "lastCheckedAt": datetime.now(UTC).isoformat(),
                 "error": str(e),
             }
         )
@@ -557,7 +557,7 @@ async def get_monthly_cost_report(
         MonthlyCostReportResponse with practice group breakdown.
     """
     # Default to current month
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     report_year = year if year else now.year
     report_month = month if month else now.month
 
@@ -602,7 +602,7 @@ async def get_monthly_cost_report(
 
         report = MonthlyCostReport(
             report_month=f"{report_year}-{report_month:02d}",
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             total_cost_inr=round(total_cost_inr, 2),
             total_cost_usd=round(total_cost_usd, 6),
             practice_groups=practice_groups,
@@ -688,7 +688,7 @@ async def get_usage_dashboard(
 
     Queries llm_costs table and aggregates by day, provider, operation, matter.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     q_year = year if year else now.year
     q_month = month if month else now.month
 
@@ -704,11 +704,11 @@ async def get_usage_dashboard(
         settings = get_settings()
 
         # Build date range for the month
-        month_start = datetime(q_year, q_month, 1, tzinfo=timezone.utc)
+        month_start = datetime(q_year, q_month, 1, tzinfo=UTC)
         if q_month == 12:
-            month_end = datetime(q_year + 1, 1, 1, tzinfo=timezone.utc)
+            month_end = datetime(q_year + 1, 1, 1, tzinfo=UTC)
         else:
-            month_end = datetime(q_year, q_month + 1, 1, tzinfo=timezone.utc)
+            month_end = datetime(q_year, q_month + 1, 1, tzinfo=UTC)
 
         # Fetch all cost records for the month (paginate past Supabase 1000-row default)
         rows: list[dict] = []

@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from supabase import create_client
@@ -231,7 +232,7 @@ def verify_specific_citation(citation_id: str):
     if new_page != citation["source_page"]:
         print(f"\n[!] MISMATCH: Current={citation['source_page']}, Detected={new_page}")
     else:
-        print(f"\n[OK] Pages match")
+        print("\n[OK] Pages match")
 
     # Show relevant bboxes
     print("\n" + "-" * 70)

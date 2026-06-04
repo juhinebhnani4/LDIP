@@ -54,7 +54,9 @@ def get_embedding_service(provider: EmbeddingProvider | str | None = None):
             _instances[provider_enum] = get_voyage_embedding_service()
             logger.info("voyage_embedding_service_initialized")
         else:
-            from app.services.rag.embedder import get_embedding_service as get_openai_service
+            from app.services.rag.embedder import (
+                get_embedding_service as get_openai_service,
+            )
             _instances[provider_enum] = get_openai_service()
             logger.info("openai_embedding_service_initialized")
 

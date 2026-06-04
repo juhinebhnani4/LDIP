@@ -4,16 +4,15 @@ Tests for user management API routes.
 Story 14.14: Settings Page Implementation
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.auth import AuthenticatedUser
-
 
 # =============================================================================
 # Fixtures

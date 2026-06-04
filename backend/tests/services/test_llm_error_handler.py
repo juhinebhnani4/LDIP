@@ -10,21 +10,19 @@ Test Categories:
 - Response formatting
 """
 
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.services.llm_error_handler import (
-    LLMErrorCode,
-    LLMErrorResult,
     ERROR_MESSAGES,
     RETRY_RECOMMENDATIONS,
+    LLMErrorCode,
+    LLMErrorResult,
+    _classify_error_code,
     classify_error,
     format_error_for_response,
     with_error_handling,
-    _classify_error_code,
 )
-
 
 # =============================================================================
 # Error Classification Tests

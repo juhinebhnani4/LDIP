@@ -1,8 +1,8 @@
 """Detailed diagnosis of stuck jobs."""
 import sys
+
 sys.path.insert(0, '.')
 
-from datetime import datetime, timezone
 from app.services.supabase.client import get_supabase_client
 
 client = get_supabase_client()
@@ -37,12 +37,12 @@ for j in jobs:
             print(f"  Document Status: {doc.get('status', 'N/A')}")
             print(f"  Filename: {doc.get('filename', 'N/A')}")
         else:
-            print(f"  Document: NOT FOUND IN DB!")
+            print("  Document: NOT FOUND IN DB!")
 
     # Check metadata
     metadata = j.get('metadata', {})
     if metadata:
-        print(f"  Metadata:")
+        print("  Metadata:")
         for k, v in metadata.items():
             val_str = str(v)[:80]
             print(f"    {k}: {val_str}")

@@ -5,13 +5,17 @@ Directly calls OpenAI API and writes to Supabase, bypassing Celery.
 Safe to run multiple times — only processes chunks with NULL embeddings.
 """
 import sys
+
 sys.path.insert(0, '.')
 
 import os
 import time
+
 from dotenv import load_dotenv
+
 load_dotenv()
 from openai import OpenAI
+
 from app.services.supabase.client import get_supabase_client
 
 # Config — matches backend/app/services/rag/embedder.py

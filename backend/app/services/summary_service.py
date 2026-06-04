@@ -23,7 +23,6 @@ import structlog
 
 from app.core.config import get_settings
 from app.core.cost_tracking import (
-    BatchCostAggregator,
     CostTracker,
     LLMProvider,
     persist_cost,

@@ -17,6 +17,7 @@ import zipfile
 from typing import Any
 
 import structlog
+from celery import chain
 from fastapi import (
     APIRouter,
     Depends,
@@ -44,7 +45,6 @@ from app.models.document import (
     BulkDocumentUpdate,
     BulkUpdateResponse,
     BulkUploadResponse,
-    Document,
     DocumentDetailResponse,
     DocumentFeatures,
     DocumentListResponseWithPagination,
@@ -53,6 +53,11 @@ from app.models.document import (
     DocumentUpdate,
     DocumentWithFeatures,
     UploadedDocument,
+)
+from app.models.library import (
+    LibraryDocumentCreate,
+    LibraryDocumentSource,
+    LibraryDocumentType,
 )
 from app.models.ocr_confidence import OCRQualityResponse
 from app.services.document_service import (
@@ -65,11 +70,6 @@ from app.services.library_service import (
     LibraryService,
     LibraryServiceError,
     get_library_service,
-)
-from app.models.library import (
-    LibraryDocumentCreate,
-    LibraryDocumentSource,
-    LibraryDocumentType,
 )
 from app.services.matter_service import MatterService
 from app.services.ocr.confidence_calculator import (
@@ -94,7 +94,6 @@ from app.workers.tasks.document_tasks import (
     process_document,
     validate_ocr,
 )
-from celery import chain
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -1246,7 +1245,6 @@ async def upload_document(
 
                     # Return a document-like response for frontend compatibility
                     # Create a minimal Document-like object from library document
-                    from app.models.library import LibraryDocument
                     lib_doc = library_service.get_document(result["library_document_id"])
 
                     # Return as UploadedDocument to maintain API compatibility
@@ -2221,9 +2219,7 @@ async def retry_document_processing(
         if retry_type == "auto":
             # Statuses where OCR already succeeded → RAG-only retry
             rag_only_statuses = ["ocr_complete", "chunking_failed", "embedding_failed", "searchable"]
-            if doc.status.value in rag_only_statuses:
-                actual_retry_type = "rag"
-            elif doc.status.value in ["ocr_failed", "failed"] and doc.extracted_text:
+            if doc.status.value in rag_only_statuses or doc.status.value in ["ocr_failed", "failed"] and doc.extracted_text:
                 actual_retry_type = "rag"
             else:
                 actual_retry_type = "full"

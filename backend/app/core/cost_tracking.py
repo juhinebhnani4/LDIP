@@ -27,6 +27,7 @@ Usage:
 
 import time
 from dataclasses import dataclass, field
+from datetime import UTC
 from enum import Enum
 from functools import lru_cache
 from typing import Any
@@ -1138,9 +1139,9 @@ class QuotaMonitoringService:
             Dictionary keyed by provider with usage aggregations.
         """
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
-            today_start = datetime.now(timezone.utc).replace(
+            today_start = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
 
@@ -1199,9 +1200,9 @@ class QuotaMonitoringService:
             Dictionary keyed by provider with list of daily usage records.
         """
         try:
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
-            start_date = datetime.now(timezone.utc) - timedelta(days=7)
+            start_date = datetime.now(UTC) - timedelta(days=7)
 
             # Use the llm_costs_daily view for aggregated data
             result = (
@@ -1247,7 +1248,7 @@ class QuotaMonitoringService:
         Returns:
             Tuple of (projected_exhaustion_date_iso, trend).
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         if not daily_limit:
             return None, "stable"
@@ -1289,14 +1290,14 @@ class QuotaMonitoringService:
         remaining = daily_limit - current_usage
         if remaining <= 0:
             # Already exhausted
-            return datetime.now(timezone.utc).isoformat(), trend
+            return datetime.now(UTC).isoformat(), trend
 
         days_remaining = remaining / avg_daily
         if days_remaining > 365:
             # More than a year out, not meaningful
             return None, trend
 
-        exhaustion_date = datetime.now(timezone.utc) + timedelta(days=days_remaining)
+        exhaustion_date = datetime.now(UTC) + timedelta(days=days_remaining)
         return exhaustion_date.date().isoformat(), trend
 
     def check_threshold_breach(
@@ -1327,8 +1328,8 @@ class QuotaMonitoringService:
             Dictionary keyed by provider with rate limiter stats.
         """
         try:
-            from app.core.llm_rate_limiter import LLMRateLimiterRegistry
             from app.core.config import get_settings
+            from app.core.llm_rate_limiter import LLMRateLimiterRegistry
 
             registry = LLMRateLimiterRegistry()
             stats = registry.get_all_stats()

@@ -15,12 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.eta_calculator import (
-    ETACalculator,
-    ETAResult,
     FALLBACK_SECONDS_PER_PAGE,
-    MINIMUM_SAMPLES_FOR_CONFIDENCE,
-    REDIS_PROCESSING_TIMES_KEY,
     REDIS_AVG_TIME_KEY,
+    REDIS_PROCESSING_TIMES_KEY,
+    ETACalculator,
 )
 
 

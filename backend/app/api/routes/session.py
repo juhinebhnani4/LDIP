@@ -12,7 +12,7 @@ CRITICAL: User can only access their own session (user_id must match JWT).
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 
-from app.api.deps import get_current_user, validate_matter_access, MatterAccessContext
+from app.api.deps import MatterAccessContext, get_current_user, validate_matter_access
 from app.core.rate_limit import READONLY_RATE_LIMIT, limiter
 from app.models.auth import AuthenticatedUser
 from app.services.memory.session import (

@@ -16,7 +16,7 @@ from celery.exceptions import Retry
 
 from app.models.library import LibraryDocumentStatus
 from app.services.chunking.parent_child_chunker import ParentChildChunker
-from app.services.library_service import get_library_service, LibraryService
+from app.services.library_service import LibraryService, get_library_service
 from app.services.rag.embedder import EmbeddingService, get_embedding_service
 from app.services.supabase.client import get_service_client
 from app.workers.celery import celery_app
@@ -484,7 +484,9 @@ def embed_library_chunks(
             from app.core.config import get_settings
             settings = get_settings()
             if settings.voyage_api_key:
-                from app.services.rag.voyage_embedder import get_voyage_embedding_service
+                from app.services.rag.voyage_embedder import (
+                    get_voyage_embedding_service,
+                )
                 voyage_embedder = get_voyage_embedding_service()
 
                 for i in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
@@ -901,8 +903,9 @@ def ocr_and_process_library_document(
         extraction_method = "unknown"
 
         try:
-            import pypdf
             from io import BytesIO
+
+            import pypdf
             reader = pypdf.PdfReader(BytesIO(pdf_bytes))
             page_count = len(reader.pages)
             page_texts = []

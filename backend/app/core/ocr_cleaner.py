@@ -11,7 +11,6 @@ by only removing isolated garbage sequences, not coherent text.
 """
 
 import re
-import unicodedata
 from functools import lru_cache
 
 import structlog

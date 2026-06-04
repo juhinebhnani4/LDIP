@@ -31,12 +31,12 @@ from app.core.cost_tracking import (
 from app.core.gemini_client import GeminiClientError, get_gemini_client
 from app.core.llm_rate_limiter import (
     LLMProvider as RateLimitProvider,
+)
+from app.core.llm_rate_limiter import (
     get_distributed_rate_limiter,
     get_rate_limiter,
-    get_sync_rate_limiter,
 )
 from app.engines.base import ReasoningCaptureMixin
-from app.models.reasoning_trace import EngineType
 from app.engines.citation.abbreviations import (
     get_canonical_name,
     normalize_act_name,
@@ -49,6 +49,7 @@ from app.models.citation import (
     CitationExtractionResult,
     ExtractedCitation,
 )
+from app.models.reasoning_trace import EngineType
 
 logger = structlog.get_logger(__name__)
 

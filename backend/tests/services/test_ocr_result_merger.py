@@ -20,7 +20,6 @@ import pytest
 from app.services.ocr_result_merger import (
     ChunkOCRResult,
     MergeValidationError,
-    MergedOCRResult,
     OCRResultMerger,
     get_ocr_result_merger,
 )

@@ -25,12 +25,11 @@ from io import BytesIO
 import pytest
 from pypdf import PdfWriter
 
+from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
 from app.services.pdf_chunker import (
     MEMORY_LIMIT_MB,
     PDFChunker,
 )
-from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
-
 
 # =============================================================================
 # Fixtures

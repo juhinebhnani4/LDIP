@@ -11,14 +11,12 @@ validating:
 """
 
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pypdf import PdfWriter
 
-from app.services.pdf_chunker import PDFChunker
 from app.services.ocr_result_merger import ChunkOCRResult, OCRResultMerger
-
+from app.services.pdf_chunker import PDFChunker
 
 # =============================================================================
 # Fixtures

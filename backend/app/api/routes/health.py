@@ -1,6 +1,7 @@
 """Health check endpoints (Story 13.2, 13.3 - Circuit Breaker + Rate Limit Status)."""
 
 import asyncio
+from datetime import UTC
 from typing import Any
 
 import structlog
@@ -15,7 +16,6 @@ from app.core.circuit_breaker import (
 )
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import HEALTH_RATE_LIMIT, get_rate_limit_status, limiter
-from app.workers.celery import celery_app
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = structlog.get_logger(__name__)
@@ -425,7 +425,7 @@ async def get_pipeline_health(
             }
         }
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     # Configuration status
     config_status = {
@@ -468,7 +468,7 @@ async def get_pipeline_health(
                 )
                 ps["processing_jobs_count"] = jobs_resp.count or 0
 
-                stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
+                stuck_threshold = datetime.now(UTC) - timedelta(minutes=30)
                 stuck_resp = (
                     client.table("processing_jobs")
                     .select("id", count="exact")
@@ -478,7 +478,7 @@ async def get_pipeline_health(
                 )
                 ps["stuck_jobs_count"] = stuck_resp.count or 0
 
-                chunk_threshold = datetime.now(timezone.utc) - timedelta(
+                chunk_threshold = datetime.now(UTC) - timedelta(
                     seconds=settings.chunk_stale_threshold_seconds
                 )
                 stale_chunks_resp = (

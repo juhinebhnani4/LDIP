@@ -6,6 +6,8 @@ with proper matter isolation via matter_id validation.
 Story 2c-3: Background Job Status Tracking and Retry
 """
 
+from datetime import UTC
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
@@ -321,10 +323,11 @@ async def get_matter_job_stats(
 
     Story 5.7: Now includes ETA estimate for pending jobs.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.core.config import get_settings
-    from app.services.eta_calculator import get_eta_calculator
     from app.services.document_service import get_document_service
+    from app.services.eta_calculator import get_eta_calculator
 
     settings = get_settings()
 
@@ -340,10 +343,10 @@ async def get_matter_job_stats(
                 limit=100,
             )
             threshold_minutes = settings.job_stale_timeout_minutes
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for job in jobs:
                 if job.updated_at:
-                    updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=timezone.utc)
+                    updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=UTC)
                     age_minutes = (now - updated).total_seconds() / 60
                     if age_minutes > threshold_minutes:
                         stuck_count += 1
@@ -429,7 +432,8 @@ async def get_stuck_jobs(
     job_tracker: JobTrackingService = Depends(_get_job_tracker),
 ) -> StuckJobsResponse:
     """Get stuck jobs for a matter."""
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.core.config import get_settings
     settings = get_settings()
 
@@ -442,12 +446,12 @@ async def get_stuck_jobs(
             limit=100,
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stuck_jobs = []
 
         for job in jobs:
             if job.updated_at:
-                updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=timezone.utc)
+                updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=UTC)
                 age_minutes = (now - updated).total_seconds() / 60
                 if age_minutes > threshold:
                     recovery_attempts = 0

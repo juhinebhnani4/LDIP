@@ -281,6 +281,7 @@ def get_voyage_embedding_service() -> VoyageEmbeddingService:
     redis_client = None
     try:
         import redis.asyncio as aioredis
+
         from app.core.config import get_settings
 
         settings = get_settings()

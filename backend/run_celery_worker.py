@@ -1,6 +1,6 @@
 """Script to start Celery worker from Windows."""
-import sys
 import os
+import sys
 
 # Add backend to Python path
 backend_path = r"e:\Career coaching\100x\LDIP\backend"

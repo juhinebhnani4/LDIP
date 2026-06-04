@@ -17,6 +17,7 @@ import contextlib
 import structlog
 from celery.exceptions import Ignore, MaxRetriesExceededError, SoftTimeLimitExceeded
 
+from app.core.config import get_settings
 from app.engines.citation import (
     CitationExtractor,
     CitationExtractorError,
@@ -25,7 +26,12 @@ from app.engines.citation import (
     get_citation_storage_service,
 )
 from app.models.activity import ActivityTypeEnum
+from app.models.contradiction import (
+    ComparisonResult,
+    EntityComparisonsResponse,
+)
 from app.models.document import DocumentStatus
+from app.models.entity import EntityEdgeCreate
 from app.models.job import JobStatus, JobType
 from app.models.ocr_validation import CorrectionType, ValidationStatus
 from app.services.activity_service import (
@@ -46,19 +52,17 @@ from app.services.chunking.spatial_text_mapper import (
     enrich_layout_with_text,
     fetch_all_bboxes_for_document,
 )
-from app.services.table_extraction.layout_extractor import (
-    LayoutExtractor,
-    LayoutExtractorError,
-    get_layout_extractor,
+from app.services.contradiction import (
+    StatementComparisonService,
+    get_statement_comparison_service,
 )
-from app.services.table_extraction.models import DocumentLayout
+from app.services.contradiction.comparator import ComparisonServiceError
 from app.services.document_service import (
     DocumentService,
     DocumentServiceError,
     get_document_service,
 )
 from app.services.eta_calculator import get_eta_calculator
-from app.core.config import get_settings
 from app.services.job_tracking import (
     JobTrackingService,
     create_progress_tracker,
@@ -75,7 +79,6 @@ from app.services.mig import (
 )
 from app.services.mig.entity_resolver import AliasResolutionError
 from app.services.mig.extractor import MIGExtractorError
-from app.models.entity import EntityEdgeCreate
 from app.services.ocr import OCRProcessor, OCRServiceError, get_ocr_processor
 from app.services.ocr.confidence_calculator import (
     ConfidenceCalculatorError,
@@ -97,11 +100,13 @@ from app.services.ocr.validation_extractor import (
     ValidationExtractorError,
     get_validation_extractor,
 )
+from app.services.ocr_chunk_service import get_ocr_chunk_service
+from app.services.pdf_chunker import CHUNK_THRESHOLD
+from app.services.pdf_router import CHUNK_SIZE
 from app.services.pubsub_service import (
     FeatureType,
     broadcast_document_status,
     broadcast_entity_discovery,
-    broadcast_entity_streaming,
     broadcast_feature_ready,
     broadcast_job_progress,
     broadcast_job_status_change,
@@ -118,19 +123,11 @@ from app.services.storage_service import (
     get_storage_service,
 )
 from app.services.summary_service import get_summary_service
-from app.services.pdf_chunker import get_pdf_chunker, CHUNK_THRESHOLD
-from app.services.pdf_router import CHUNK_SIZE
-from app.services.ocr_chunk_service import get_ocr_chunk_service
-from app.services.contradiction import (
-    StatementComparisonService,
-    get_statement_comparison_service,
+from app.services.table_extraction.layout_extractor import (
+    LayoutExtractorError,
+    get_layout_extractor,
 )
-from app.services.contradiction.comparator import ComparisonServiceError
-from app.models.contradiction import (
-    ComparisonResult,
-    StatementPairComparison,
-    EntityComparisonsResponse,
-)
+from app.services.table_extraction.models import DocumentLayout
 from app.workers.celery import celery_app
 from app.workers.utils import run_async
 
@@ -183,6 +180,7 @@ def _get_pdf_page_count(pdf_content: bytes, document_id: str) -> int:
         OCRServiceError: If PDF cannot be parsed.
     """
     from io import BytesIO
+
     import pypdf
 
     try:
@@ -685,9 +683,9 @@ def _populate_verification_records(matter_id: str, document_id: str) -> None:
     Creates a `findings` row for each contradiction/failed citation first (FK requirement),
     then creates the `finding_verifications` record pointing to that `findings` row.
     """
+    from app.models.verification import FindingVerificationCreate
     from app.services.supabase.client import get_service_client
     from app.services.verification.verification_service import get_verification_service
-    from app.models.verification import FindingVerificationCreate
 
     try:
         client = get_service_client()
@@ -1551,7 +1549,7 @@ def _extract_layout_for_chunking(document_id: str, matter_id: str) -> DocumentLa
     import tempfile
     from pathlib import Path
 
-    from app.services.storage_service import StorageService, get_storage_service
+    from app.services.storage_service import get_storage_service
     from app.services.supabase.client import get_service_client
 
     try:
@@ -1776,7 +1774,9 @@ def process_document(
             ))
 
             # Import here to avoid circular dependency
-            from app.workers.tasks.chunked_document_tasks import process_document_chunked
+            from app.workers.tasks.chunked_document_tasks import (
+                process_document_chunked,
+            )
 
             # Dispatch to chunked processing task
             process_document_chunked.apply_async(
@@ -3859,7 +3859,6 @@ def index_act_sections(
         Task result with indexing summary.
     """
     from app.services.section_index_service import (
-        SectionIndexService,
         get_section_index_service,
     )
     from app.services.supabase.client import get_service_client
@@ -4979,10 +4978,10 @@ def resolve_aliases(
 
             # --- Phase 1: CPU-only pair finding (high + medium) ---
             # Use resolver's find_potential_aliases for each source entity
+            from app.models.entity import EntityType
             from app.services.mig.entity_resolver import (
                 MEDIUM_SIMILARITY_THRESHOLD,
             )
-            from app.models.entity import EntityType
 
             entities_by_type: dict[EntityType, list] = {}
             for entity in all_entities:
@@ -5036,7 +5035,6 @@ def resolve_aliases(
                             skipped_low += 1
 
             # --- Create high-confidence edges inline (CPU, fast) ---
-            from app.models.entity import RelationshipType
             for edge_data in high_confidence_edges:
                 await graph_service.create_alias_edge(
                     matter_id=matter_id,
@@ -5182,7 +5180,6 @@ def _dispatch_alias_finalize(
 ) -> None:
     """Dispatch Phase 3 finalization. Called when all Phase 2 batches are done,
     or immediately when there are no medium-confidence pairs."""
-    import json
     from app.workers.celery import celery_app as _celery_app
 
     _celery_app.send_task(
@@ -5222,6 +5219,7 @@ def resolve_aliases_batch(
     Runs on low queue (heavy worker, 10 greenlets). ~30-120 seconds per batch.
     """
     import json
+
     from app.services.distributed_lock import get_sync_redis_client
 
     if not document_id or not pairs:
@@ -5364,6 +5362,7 @@ def resolve_aliases_finalize(
     arrays on canonical entities. Cleans up Redis keys.
     """
     import json
+
     from app.services.distributed_lock import get_sync_redis_client
     from app.services.mig.entity_resolver import CONTEXT_CONFIDENCE_THRESHOLD
 

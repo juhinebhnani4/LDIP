@@ -525,10 +525,13 @@ async def validate_act_name_with_llm(
         )
 
     try:
-        from google.genai import types
-        from app.core.gemini_client import get_gemini_client
-        from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
         import json
+
+        from google.genai import types
+
+        from app.core.gemini_client import get_gemini_client
+        from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+        from app.core.llm_rate_limiter import get_rate_limiter
 
         client = get_gemini_client()
 
@@ -570,7 +573,12 @@ JSON response:'''
             )
 
         # Track cost
-        from app.core.cost_tracking import CostTracker, LLMProvider, estimate_tokens, persist_cost
+        from app.core.cost_tracking import (
+            CostTracker,
+            LLMProvider,
+            estimate_tokens,
+            persist_cost,
+        )
         usage = getattr(response, 'usage_metadata', None)
         tracker = CostTracker(
             provider=LLMProvider.GEMINI_FLASH,

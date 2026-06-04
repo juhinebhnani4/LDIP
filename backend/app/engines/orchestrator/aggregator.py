@@ -20,6 +20,7 @@ from functools import lru_cache
 import structlog
 
 from app.core.config import get_settings
+from app.core.ocr_cleaner import get_ocr_cleaner
 from app.engines.orchestrator.models import CompoundIntent
 from app.models.orchestrator import (
     EngineExecutionResult,
@@ -27,7 +28,6 @@ from app.models.orchestrator import (
     OrchestratorResult,
     SourceReference,
 )
-from app.core.ocr_cleaner import get_ocr_cleaner
 from app.services.safety.language_police import (
     LanguagePolice,
     get_language_police,

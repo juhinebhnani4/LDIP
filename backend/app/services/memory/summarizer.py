@@ -27,7 +27,8 @@ from app.core.cost_tracking import (
     persist_cost,
 )
 from app.core.gemini_client import get_gemini_client
-from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider, get_rate_limiter
+from app.core.llm_rate_limiter import LLMProvider as RateLimitProvider
+from app.core.llm_rate_limiter import get_rate_limiter
 from app.models.memory import SessionMessage
 from app.services.memory.redis_client import get_redis_client
 from app.services.memory.redis_keys import SESSION_TTL, _validate_uuid

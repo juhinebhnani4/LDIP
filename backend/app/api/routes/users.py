@@ -6,12 +6,12 @@ Endpoints for user profile and preferences management.
 """
 
 import asyncio
+from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
-from datetime import datetime
 from supabase import Client
 
 from app.core.security import get_current_user
@@ -70,7 +70,7 @@ class UserPreferences(BaseModel):
     onboarding_completed: bool = Field(
         default=False, description="Whether user has completed the onboarding wizard"
     )
-    onboarding_stage: Optional[str] = Field(
+    onboarding_stage: str | None = Field(
         default=None, description="Current onboarding wizard stage"
     )
 
@@ -85,15 +85,15 @@ class UserPreferencesResponse(UserPreferences):
 class UpdatePreferencesRequest(BaseModel):
     """Request to update user preferences (partial updates allowed)."""
 
-    email_notifications_processing: Optional[bool] = None
-    email_notifications_verification: Optional[bool] = None
-    browser_notifications: Optional[bool] = None
-    theme: Optional[Literal["light", "dark", "system"]] = None
+    email_notifications_processing: bool | None = None
+    email_notifications_verification: bool | None = None
+    browser_notifications: bool | None = None
+    theme: Literal["light", "dark", "system"] | None = None
     # Story 6.1: Progressive Disclosure
-    power_user_mode: Optional[bool] = None
+    power_user_mode: bool | None = None
     # Story 6.2: Onboarding Wizard
-    onboarding_completed: Optional[bool] = None
-    onboarding_stage: Optional[str] = None
+    onboarding_completed: bool | None = None
+    onboarding_stage: str | None = None
 
 
 class UserProfile(BaseModel):
@@ -101,15 +101,15 @@ class UserProfile(BaseModel):
 
     id: str
     email: str
-    full_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    full_name: str | None = None
+    avatar_url: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
     """Request to update user profile."""
 
-    full_name: Optional[str] = Field(None, max_length=100)
-    avatar_url: Optional[str] = Field(None, max_length=500)
+    full_name: str | None = Field(None, max_length=100)
+    avatar_url: str | None = Field(None, max_length=500)
 
 
 # =============================================================================

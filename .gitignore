@@ -66,9 +66,11 @@ docs/sample_files.zip
 docs/COST_TRACKING.md
 docs/COST_TRACKING.html
 
-# Claude Code temporary directories
+# Claude Code temporary directories + transient locks
 tmpclaude-*/
 **/tmpclaude-*/
+.claude/scheduled_tasks.lock
+.claude/*.lock
 
 # Playwright MCP screenshots/snapshots
 .playwright-mcp/
@@ -87,9 +89,28 @@ backend/.env.prod.bak
 *.jpeg
 !frontend/**/*.png
 
-# Temporary test/debug scripts (root-level)
-test_*.py
-test_*.js
+# Playwright generated output (HTML report + per-run failure screenshots/traces).
+# These re-include rule above (!frontend/**/*.png) would otherwise track the PNGs.
+/frontend/test-results/
+/frontend/playwright-report/
+
+# Debug/eval artifacts (cleanup 2026-06-04 — see BUGS.md INF-013). Anchored to
+# their real locations so they don't silently match real files elsewhere.
+/ldip_prod_logs*.txt
+/query_test_*.json
+/test5_*.py
+/test_*.pdf
+/Test_*.pdf
+/test_*.zip
+backend/api_test_report.json
+backend/test_b64.txt
+backend/shadow_test_*
+
+# Temporary test/debug scripts (root-level). ANCHORED to root: the previously
+# unanchored `test_*.py` silently ignored every test under backend/tests/, so all
+# 164 real tests were tracked only via `git add -f` (the watchman test hit this).
+/test_*.py
+/test_*.js
 check_*.py
 create_*.py
 update_*.py

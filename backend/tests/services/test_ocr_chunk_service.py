@@ -13,7 +13,6 @@ from app.models.ocr_chunk import (
     ChunkStatus,
 )
 from app.services.ocr_chunk_service import (
-    STALE_CHUNK_THRESHOLD_SECONDS,
     ChunkNotFoundError,
     DuplicateChunkError,
     InvalidPageRangeError,
@@ -914,6 +913,12 @@ class TestTimestampParsingRequired:
 class TestConstants:
     """Tests for service constants."""
 
-    def test_stale_threshold_is_90_seconds(self) -> None:
-        """Stale chunk threshold should be 90 seconds."""
-        assert STALE_CHUNK_THRESHOLD_SECONDS == 90
+    def test_stale_threshold_default_is_90_seconds(self) -> None:
+        """Stale chunk threshold defaults to 90 seconds.
+
+        Story 4.3 made this config-driven (settings.chunk_stale_threshold_seconds)
+        instead of a module-level constant; assert the default still holds.
+        """
+        from app.core.config import get_settings
+
+        assert get_settings().chunk_stale_threshold_seconds == 90

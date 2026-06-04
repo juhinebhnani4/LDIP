@@ -114,8 +114,16 @@ async def _verify_citations_batch_async(
                 act_name=act_name,
             )
 
-            # Update citation in database (async)
-            await storage.update_citation_verification(
+            # Update citation in database (async).
+            # update_citation_verification swallows DB errors and returns None on
+            # failure OR a 0-row match. Treat that as a real error — NOT success.
+            # A silent return masked enum/constraint drift
+            # (verification_status='section_not_found' rejected by the citations
+            # CHECK constraint) for months: the loop reported not_found=N with
+            # errors=0 while persisting nothing, so the citations never left
+            # 'pending'. The write outcome — not the verification verdict — is the
+            # source of truth for whether this citation made progress.
+            updated = await storage.update_citation_verification(
                 citation_id=citation.id,
                 matter_id=matter_id,
                 verification_status=result.status,
@@ -125,7 +133,20 @@ async def _verify_citations_batch_async(
                 confidence=result.similarity_score,
             )
 
-            # Update results counter
+            if updated is None:
+                # Write did not persist (exception or 0 rows). Count as error and
+                # do NOT mark the citation as resolved — it stays non-terminal so a
+                # reconciler retries once the underlying cause is fixed.
+                results["errors"] += 1
+                logger.error(
+                    "verification_persist_failed",
+                    citation_id=citation.id,
+                    matter_id=matter_id,
+                    status=result.status.value,
+                )
+                continue
+
+            # Update results counter (only when the write actually persisted)
             if result.status == VerificationStatus.VERIFIED:
                 results["verified"] += 1
             elif result.status == VerificationStatus.MISMATCH:

@@ -92,6 +92,7 @@ tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_minimum_cl
 tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_preserves_max_chunk_content
 tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_small_matter_applies_50_percent_scale
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorExtraction::test_extract_sync_with_mocked_gemini
+tests/engines/timeline/test_date_extractor.py::TestDateExtractorExtraction::test_extract_with_mocked_gemini
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorInit::test_init_creates_instance
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorParsing::test_parse_multiple_dates
 tests/engines/timeline/test_date_extractor.py::TestDatePrecision::test_year_precision
@@ -104,8 +105,11 @@ tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_retry_on_quo
 tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_retry_on_rate_limit_429
 tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_sync_retry_on_rate_limit
 tests/engines/timeline/test_event_classifier.py::TestBatchClassification::test_large_batch_splits_correctly
+tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_batch_classify_with_mocked_gemini
 tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_classify_sync_with_mocked_gemini
+tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_classify_with_mocked_gemini
 tests/engines/timeline/test_event_classifier.py::TestErrorHandling::test_missing_api_key
+tests/engines/timeline/test_event_classifier.py::TestErrorPaths::test_network_timeout_handling
 tests/engines/timeline/test_event_classifier.py::TestEventClassifierInit::test_init_creates_instance
 tests/engines/timeline/test_event_classifier.py::TestRetryLogic::test_max_retries_exhausted
 tests/engines/timeline/test_event_classifier.py::TestRetryLogic::test_no_retry_on_non_rate_limit_error

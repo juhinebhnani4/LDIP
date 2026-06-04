@@ -2032,56 +2032,18 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
     # verify task is a 0-Gemini no-op and this sweep stops selecting the Act.
     # Budget bucket: GEMINI_FLASH (operation="citation_verification"), behind the
     # existing get_rate_limiter(LLMProvider.GEMINI). No new queue/worker/quota.
+    from app.services.act_verification_state import act_doc_fully_embedded
     from app.workers.tasks.verification_tasks import trigger_verification_on_act_upload
 
     _NON_TERMINAL = ["act_unavailable", "pending"]
+    # Shared "fully embedded" definition (RISK-1(b) / GAP-21), now imported from
+    # app.services.act_verification_state so the auditor (audit_system_invariants)
+    # uses the IDENTICAL gate — see that module's docstring for why drift here is
+    # a correctness hazard. The run-scoped cache avoids re-querying the same Act.
     _embed_cache: dict[str, bool] = {}
 
     def _act_doc_fully_embedded(lib_doc_id: str | None) -> bool:
-        """True iff the library Act doc is COMPLETED with >=1 chunk and 0 NULL
-        embeddings — the GAP-21 derived-state definition of 'fully embedded'.
-        Verifying against partial embeddings yields false section_not_found
-        (RISK-1(b)), so this gate must pass before dispatch."""
-        if not lib_doc_id:
-            return False
-        if lib_doc_id in _embed_cache:
-            return _embed_cache[lib_doc_id]
-        ok = False
-        try:
-            doc = (
-                client.table("library_documents")
-                .select("status")
-                .eq("id", lib_doc_id)
-                .limit(1)
-                .execute()
-            )
-            if doc.data and doc.data[0].get("status") == "completed":
-                total = (
-                    client.table("library_chunks")
-                    .select("id", count="exact")
-                    .eq("library_document_id", lib_doc_id)
-                    .limit(1)
-                    .execute()
-                )
-                if (total.count or 0) > 0:
-                    null_emb = (
-                        client.table("library_chunks")
-                        .select("id", count="exact")
-                        .eq("library_document_id", lib_doc_id)
-                        .is_("embedding", "null")
-                        .limit(1)
-                        .execute()
-                    )
-                    ok = (null_emb.count or 0) == 0
-        except Exception as e:
-            logger.warning(
-                "act_doc_embed_gate_check_failed",
-                library_document_id=lib_doc_id,
-                error=str(e),
-            )
-            ok = False
-        _embed_cache[lib_doc_id] = ok
-        return ok
+        return act_doc_fully_embedded(client, lib_doc_id, cache=_embed_cache)
 
     try:
         client = get_service_client()
@@ -2682,3 +2644,84 @@ def write_worker_heartbeat() -> dict:
     r = get_sync_redis_client()
     r.setex("celery:worker:alive", 180, "1")
     return {"status": "heartbeat_written"}
+
+
+# =============================================================================
+# System Invariant Audit (silent-failure detection)
+# =============================================================================
+
+@celery_app.task(
+    name="app.workers.tasks.maintenance_tasks.audit_system_invariants",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def audit_system_invariants(self) -> dict:
+    """Assert app-wide invariants (`claimed_state => required_data_exists`) and
+    REPORT violations to the system_health table — the silent-failure detector.
+
+    Every P0/P1 incident in LDIP is a claimed success state not backed by its
+    data (GAP-2/3/11/23/24). This task runs the declarative catalog in
+    app.services.system_invariants and upserts one row per invariant into
+    system_health (read via GET /health/invariants). It NEVER heals — that is
+    the reconcilers' job; this task exists to make drift VISIBLE rather than
+    silently auto-fixed. New invariant = new catalog entry, not new code here.
+
+    Read-only on pipeline state; writes only its own system_health rows
+    (upsert on `name`, the single convergence point). Runs every 30 min on the
+    low-priority queue.
+    """
+    from datetime import UTC, datetime
+
+    from app.services.supabase.client import get_service_client
+    from app.services.system_invariants import run_all_invariants
+
+    logger.info("audit_system_invariants_started")
+
+    try:
+        client = get_service_client()
+        if client is None:
+            return {"error": "Database client not configured"}
+
+        results = run_all_invariants(client)
+        checked_at = datetime.now(UTC).isoformat()
+
+        rows = [
+            {
+                "name": r["name"],
+                "severity": r["severity"],
+                "ok": r["ok"],
+                "violating_count": r["violating_count"],
+                "sample": r["sample"],
+                "message": r["message"],
+                "checked_at": checked_at,
+            }
+            for r in results
+        ]
+
+        # Single convergence point: one upsert keyed on `name` (PK). Latest run
+        # overwrites the previous row for each invariant.
+        client.table("system_health").upsert(rows, on_conflict="name").execute()
+
+        violations = [r for r in results if not r["ok"]]
+        if violations:
+            logger.warning(
+                "system_invariants_violations_detected",
+                violation_count=len(violations),
+                invariants=[
+                    {"name": r["name"], "severity": r["severity"], "count": r["violating_count"]}
+                    for r in violations
+                ],
+            )
+        else:
+            logger.info("system_invariants_all_healthy", checked=len(results))
+
+        return {
+            "checked": len(results),
+            "violations": len(violations),
+            "results": results,
+        }
+
+    except Exception as e:
+        logger.error("audit_system_invariants_failed", error=str(e))
+        return {"error": str(e)}

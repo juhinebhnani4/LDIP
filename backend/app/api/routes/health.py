@@ -524,3 +524,71 @@ async def get_pipeline_health(
             "status": overall_status,
         }
     }
+
+
+@router.get("/invariants")
+async def get_invariant_health(
+    db: Any = Depends(get_db),
+) -> dict[str, Any]:
+    """Silent-failure detection: latest result of every app-wide invariant.
+
+    Reads the system_health table populated by the audit_system_invariants beat
+    task (every 30 min). Each row asserts `claimed_state => required_data_exists`;
+    `ok=false` means production data is in a state that should be impossible
+    (GAP-2/3/24 shapes). This endpoint only READS the last audit result — it does
+    not recompute (recomputation is the beat task's job, off the request path).
+
+    A stale `checked_at` (older than ~2x the 30-min cadence) means the auditor
+    itself stopped running, which is surfaced as `status: "stale"`.
+
+    Returns:
+        {"data": {"status": "healthy"|"violations"|"stale"|"unknown",
+                  "violations": int, "invariants": [<system_health rows>]}}
+    """
+    from datetime import UTC, datetime, timedelta
+
+    rows: list[dict] = []
+    if db:
+        try:
+            from app.services.supabase.client import get_service_client
+            client = get_service_client()
+
+            def _read_system_health() -> list[dict]:
+                resp = (
+                    client.table("system_health")
+                    .select("name, severity, ok, violating_count, sample, message, checked_at")
+                    .order("ok")  # surface not-ok (false) first
+                    .execute()
+                )
+                return resp.data or []
+
+            rows = await asyncio.to_thread(_read_system_health)
+        except Exception as e:
+            logger.warning("invariant_health_db_error", error=str(e))
+            return {"data": {"status": "unknown", "violations": 0, "invariants": []}}
+
+    if not rows:
+        # No audit has run yet (or table just created).
+        return {"data": {"status": "unknown", "violations": 0, "invariants": []}}
+
+    violations = [r for r in rows if not r.get("ok")]
+
+    # Auditor-liveness: if the freshest row is older than 2x the 30-min cadence,
+    # the auditor itself has stopped — itself a silent failure worth surfacing.
+    status = "violations" if violations else "healthy"
+    try:
+        newest = max(
+            datetime.fromisoformat(r["checked_at"]) for r in rows if r.get("checked_at")
+        )
+        if datetime.now(UTC) - newest > timedelta(minutes=60):
+            status = "stale"
+    except (ValueError, KeyError):
+        pass
+
+    return {
+        "data": {
+            "status": status,
+            "violations": len(violations),
+            "invariants": rows,
+        }
+    }

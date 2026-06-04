@@ -2099,6 +2099,53 @@ The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month
 
 ---
 
+### INF-012: Silent-Failure Detection — `system_health` Invariant Audit (the "watchman")
+| Field | Value |
+|-------|-------|
+| **Severity** | P1 (observability gap — these silent failures cost months of invisibility) |
+| **Status** | DEPLOYED + VERIFIED (2026-06-04) — worker+API live; migration applied; 9/9 tests pass; first prod audit ran end-to-end against live data, all 3 invariants `ok=true` (0/0/0 baseline), `GET /health/invariants` returns `status:healthy`. Beat re-runs every 30 min. |
+| **Date Found** | 2026-06-04 |
+| **Source** | Pattern across GAP-2, GAP-3, LLM-005 (GAP-11), GAP-23, GAP-24 |
+
+**The shape**: every P0/P1 in LDIP's history is *a claimed terminal/success state not backed by the data it promises* — the inverse of ARCH-003. `documents.status='completed'`+0 chunks (GAP-2); library doc 'embedded'+NULL embeddings (GAP-3); cost "tracked"+0 `llm_costs` rows (LLM-005); citation write "ok"+CHECK-rejected (GAP-23); Act pipeline "complete"+0% verified (GAP-24). Each sat **invisible for months** because the status lied and nothing asserted the backing data existed.
+
+**Fix**: one continuous, **read-only** beat task (`audit_system_invariants`, every 30 min, `low` queue) runs a declarative catalog of invariants asserting `claimed_state ⟹ required_data_exists` and **REPORTS** to a new `system_health` table (one upserted row per invariant — single convergence point). It never heals — that complements the silent-healing reconcilers (recover_stuck_documents, sync_citation_statuses_with_resolutions) which fix-and-forget and so hide drift. Read via `GET /health/invariants` (surfaces `healthy`/`violations`/`stale`/`unknown`; `stale` = the auditor itself stopped).
+
+**Seed invariants** (extensible — new shape = new catalog entry, never a new code path): `completed_docs_zero_chunks` [GAP-2], `embedded_library_docs_null_embeddings` [GAP-3], flagship `acts_resolved_embedded_zero_verified` [GAP-24]. All measured clean at baseline (0/0/0) on 2026-06-04, so any future >0 is a real signal.
+
+**Key design decisions** (verified live, not guessed):
+- **All-Python checks, not SQL strings.** The flagship's citation→Act join needs `normalize_act_name` (abbreviation/backronym resolution); a `lower/trim` SQL approximation matched **ZERO** rows live — i.e. it would be a dead guard that always reports "healthy". And there is no clean raw-SQL path in the app (no `exec_sql` RPC — a generic one contradicts SEC-002 hardening — and `DATABASE_URL` is not in config). The only DB-access path is the Supabase/postgrest client, so every invariant runs through it.
+- **Known-good carve-outs are mandatory** or the guard cries wolf: the flagship excludes `act_unavailable` citations (legitimate when an Act is not uploaded — e.g. doc `a65f4b17`, whose 867 citations are correctly `act_unavailable`), requires the Act to be fully embedded (shared `act_doc_fully_embedded` gate, extracted to `app/services/act_verification_state.py` so the auditor and the RISK-1 reconciler use ONE definition), and only counts `pending` citations older than a 60-min grace window.
+- **The watchman's own test proves it isn't a dead battery**: it must FLAG the GAP-24 shape and must NOT flag the `a65f4b17` carve-out.
+
+**Files**: `supabase/migrations/20260604000002_create_system_health_table.sql`, `backend/app/services/system_invariants.py`, `backend/app/services/act_verification_state.py`, `backend/app/workers/tasks/maintenance_tasks.py` (`audit_system_invariants`), `backend/app/workers/celery.py` (beat entry), `backend/app/api/routes/health.py` (`GET /health/invariants`), `backend/tests/services/test_system_invariants.py` (9 tests). See memory `silent-failure-detection-handoff`.
+
+**Layers note**: the watchman catches silent **data**-state failures in prod (layer 1). CI catches silent **code** regressions pre-deploy (layer 2 — see INF-013). Skills catch known **shapes** for human investigation (layer 3). This entry is layer 1; INF-013 is the layer-2 gap.
+
+---
+
+### INF-013: CI Is Configured But Not Actually Green — 517 Pre-Existing `ruff` Errors
+| Field | Value |
+|-------|-------|
+| **Severity** | P2 (CI is decoration until it can pass + block merges) |
+| **Status** | OPEN (discovered 2026-06-04) |
+| **Date Found** | 2026-06-04 |
+| **Source** | Silent-failure detection session (INF-012) |
+
+**Description**: `.github/workflows/ci-backend.yml` runs `uv run ruff check .` over the whole backend. On 2026-06-04 that step fails with **517 errors** in pre-existing committed code (config selects `E,F,I,UP,B,SIM`; local ruff 0.14.7 ≈ CI's pinned ≥0.14.10). So CI either has **never run green** (workflows added recently in Story 13.5; they only trigger on push to `main`/`develop`, and work happens on feature branches) or its failures are ignored. **A red CI that doesn't block merges is not a guard.**
+
+**Breakdown** (auto-fixable marked *): I001 unsorted-imports 140*, F401 unused-import 77*, B904 raise-without-from 67, UP017 datetime-utc 50*, F541 f-string-no-placeholder 37*, E402 import-not-at-top 27, F841 unused-var 21, B023 loop-var-in-closure 15, F821 undefined-name 7, plus assorted SIM/UP nits. ~334 of 517 fix with `ruff check --fix`.
+
+**F821 "undefined name" investigation (2026-06-04)** — all 7 checked; **none are active production bugs**:
+- `app/core/llm_rate_limiter.py:292,296,348` `threading` — quoted string annotations (never evaluated); `threading` imported locally where actually used. **False positive.**
+- `app/engines/orchestrator/adapters.py:781,782` `RerankedSearchResult` — quoted annotations pointing at an unimported name. Broken type-hint only, no runtime path. **Cosmetic.**
+- `app/workers/tasks/evaluation_tasks.py:1103` `e` — exception var referenced in a nested closure that is *called inside* the same `except` block (before Python auto-`del`s `e`). **Works today; fragile** (breaks only if the call is ever deferred).
+- `scripts/reextract_timeline_events.py:344` `timeline_service` — out-of-scope reference (assigned at line 132 in a different scope); would `NameError` if that branch runs. **Real defect, but in a manual one-off script, not the live app.**
+
+**Recommended path** (not yet done — deferred as out-of-scope for INF-012): (1) `ruff check --fix` the ~334 safe fixes in a dedicated cleanup PR; (2) hand-review B904/E402/B023; (3) fix the one real defect (`reextract_timeline_events.py:344`); (4) get CI green; (5) **turn on branch protection so a red CI blocks merges** — only then is CI a real layer-2 guard.
+
+---
+
 ## 7. Other
 
 ### OTH-001: A/B Duplicate Run Prevention Not Working

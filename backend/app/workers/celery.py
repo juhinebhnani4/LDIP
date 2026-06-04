@@ -276,6 +276,17 @@ celery_app.conf.update(
             "schedule": 60,  # Every 60s
             "options": {"queue": "low"},
         },
+        # System invariant audit (silent-failure detection) — asserts app-wide
+        # `claimed_state => required_data_exists` invariants and REPORTS drift to
+        # the system_health table (read via GET /health/invariants). Read-only on
+        # pipeline state; complements the silent-healing reconcilers by making
+        # drift visible instead of auto-fixed. New shapes = new catalog entries
+        # in app.services.system_invariants.
+        "audit-system-invariants": {
+            "task": "app.workers.tasks.maintenance_tasks.audit_system_invariants",
+            "schedule": 1800,  # Every 30 minutes
+            "options": {"queue": "low"},
+        },
     },
 )
 

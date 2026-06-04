@@ -2128,7 +2128,7 @@ The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month
 | Field | Value |
 |-------|-------|
 | **Severity** | P2 (CI is decoration until it can pass + block merges) |
-| **Status** | OPEN (discovered 2026-06-04) |
+| **Status** | IN PROGRESS (2026-06-04: lint + format green & regression-verified across 7 commits; pytest-green + branch-protection still pending — see **Progress** below) |
 | **Date Found** | 2026-06-04 |
 | **Source** | Silent-failure detection session (INF-012) |
 
@@ -2143,6 +2143,25 @@ The $14.28 estimate includes the first 6 days at full burn ($5.03). A full month
 - `scripts/reextract_timeline_events.py:344` `timeline_service` — out-of-scope reference (assigned at line 132 in a different scope); would `NameError` if that branch runs. **Real defect, but in a manual one-off script, not the live app.**
 
 **Recommended path** (not yet done — deferred as out-of-scope for INF-012): (1) `ruff check --fix` the ~334 safe fixes in a dedicated cleanup PR; (2) hand-review B904/E402/B023; (3) fix the one real defect (`reextract_timeline_events.py:344`); (4) get CI green; (5) **turn on branch protection so a red CI blocks merges** — only then is CI a real layer-2 guard.
+
+**Progress (2026-06-04, branch `ci-hardening-inf013`):**
+
+Re-confirmed with CI's pinned ruff 0.14.10: the real count was **676 errors / 416 auto-fixable** (the 517/0.14.7 figure undercounted). Also discovered two deeper "CI is decoration" facts the original entry missed:
+- **CI never *ran* at all.** `ci-backend.yml` triggered only on `main`/`develop`, which **don't exist** (default branch is `master`). Fixed first (commit 1) — keystone, since branch protection can't gate a check that never executes.
+- **`master` was 21 commits stale** vs the work branch; fast-forwarded `master` to current (incl. the INF-012 watchman) so the cleanup PRs have the right base.
+
+Seven commits land the cleanup (all behavior-preserving except #4):
+1. `ci:` wire `ci-backend.yml` to `master`.
+2. `chore:` `ruff --fix` 463 safe auto-fixes (160 files).
+3. `chore:` hand-fix the 260 non-auto-fixable — B904 `from e`/`from None`; per-case F841 (kept every side-effecting call, e.g. `_verify_document_access`; noqa+TODO on latent `storage_path`/`year` stubs); B023 default-arg binding (all verified same-iteration → no late-binding bug); SIM105/102/108 rewrites or noqa; B007 `_`-rename; **scoped** noqa for E402 load-order + the 6 F821 false-positives (NOT the reextract one).
+4. `fix:` the one real F821 defect — `reextract_timeline_events.py` entity-linking branch never created `timeline_service`; now does.
+5. `test:` unblock pytest **collection** — two pre-existing aborts: `hypothesis` never declared as a dep (added + relocked), and `test_ocr_chunk_service.py` imported the removed `STALE_CHUNK_THRESHOLD_SECONDS` constant (Story 4.3 made it config-driven; test rewritten to assert `settings.chunk_stale_threshold_seconds == 90`).
+6. `style:` big-bang `ruff format .` (415 files, semantically null) — makes the `ruff format --check` gate green.
+7. `chore:` `.git-blame-ignore-revs` for #6.
+
+`ruff check .` and `ruff format --check .` are now **clean**. **Regression-verified** against `master` using a throwaway local redis container (Docker) + CI's placeholder env: identical invocations on both branches yield **identical failure sets (196 = 196), 0 branch-only failures** → the cleanup introduced no behavior change any test detects.
+
+**NEW BLOCKER for step (4) "get CI green":** that 196 is a separate, pre-existing problem — **196 tests fail in a CI-like env** (placeholder Supabase/API keys) with `getaddrinfo`/`ConnectError`/`missing-api-key`. They fail **identically on `master`**, so they're not from this cleanup, but they will likely keep CI's **pytest** step red even after lint/format are green. Unknown whether they pass on CI's Linux env (could be Windows-local mock-patching quirks) — **the next step is to open a PR `ci-hardening-inf013` → `master` so CI actually runs and tells us the truth**, then decide whether the 196 are a real CI blocker (separate work item: proper Supabase/LLM mocking) before step (5) branch protection. Do **not** enable branch protection until CI's full job (lint + format + pytest + security-tests) is actually green.
 
 ---
 

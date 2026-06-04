@@ -6,11 +6,13 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/ci-backend.yml'
+  # NOTE: no `paths:` filter on pull_request — `lint` is a REQUIRED status check
+  # in branch protection, and GitHub leaves a required check *pending* (blocking
+  # merge) whenever its workflow is skipped by a path filter. Running on every PR
+  # guarantees `lint` always reports. `test`/`security-tests` keep `needs: lint`
+  # and remain non-blocking, so the extra runs on non-backend PRs are harmless.
   pull_request:
     branches: [master, main, develop]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/ci-backend.yml'
 
 jobs:
   # Fast, deterministic gate — ruff lint + format. This is the job to mark as a

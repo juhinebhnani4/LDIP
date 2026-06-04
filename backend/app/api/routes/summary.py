@@ -492,11 +492,11 @@ def _handle_verification_service_error(
 )
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def verify_summary_section(
-    http_request: Request,  # Required for rate limiter
+    request: Request,  # Required for rate limiter — slowapi locates it by this exact name
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
-    request: SummaryVerificationCreate = Body(...),
+    payload: SummaryVerificationCreate = Body(...),
     verification_service: SummaryVerificationService = Depends(
         get_summary_verification_service
     ),
@@ -508,7 +508,7 @@ async def verify_summary_section(
 
     Args:
         access: Validated matter access context (enforces Layer 4 security).
-        request: Verification request with section details and decision.
+        payload: Verification request with section details and decision.
         verification_service: Verification service instance.
         summary_service: Summary service instance (for cache invalidation).
 
@@ -523,17 +523,17 @@ async def verify_summary_section(
             "verify_section_request",
             matter_id=access.matter_id,
             user_id=access.user_id,
-            section_type=request.section_type.value,
-            section_id=request.section_id,
-            decision=request.decision.value,
+            section_type=payload.section_type.value,
+            section_id=payload.section_id,
+            decision=payload.decision.value,
         )
 
         verification = await verification_service.record_verification(
             matter_id=access.matter_id,
-            section_type=request.section_type,
-            section_id=request.section_id,
-            decision=request.decision,
-            notes=request.notes,
+            section_type=payload.section_type,
+            section_id=payload.section_id,
+            decision=payload.decision,
+            notes=payload.notes,
             user_id=access.user_id,
         )
 
@@ -613,11 +613,11 @@ async def verify_summary_section(
 )
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def add_summary_note(
-    http_request: Request,  # Required for rate limiter
+    request: Request,  # Required for rate limiter — slowapi locates it by this exact name
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
-    request: SummaryNoteCreate = Body(...),
+    payload: SummaryNoteCreate = Body(...),
     verification_service: SummaryVerificationService = Depends(
         get_summary_verification_service
     ),
@@ -628,7 +628,7 @@ async def add_summary_note(
 
     Args:
         access: Validated matter access context (enforces Layer 4 security).
-        request: Note request with section details and text.
+        payload: Note request with section details and text.
         verification_service: Verification service instance.
 
     Returns:
@@ -642,15 +642,15 @@ async def add_summary_note(
             "add_note_request",
             matter_id=access.matter_id,
             user_id=access.user_id,
-            section_type=request.section_type.value,
-            section_id=request.section_id,
+            section_type=payload.section_type.value,
+            section_id=payload.section_id,
         )
 
         note = await verification_service.add_note(
             matter_id=access.matter_id,
-            section_type=request.section_type,
-            section_id=request.section_id,
-            text=request.text,
+            section_type=payload.section_type,
+            section_id=payload.section_id,
+            text=payload.text,
             user_id=access.user_id,
         )
 
@@ -867,12 +867,12 @@ def _handle_edit_service_error(error: SummaryEditServiceError) -> HTTPException:
 )
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def save_section_edit(
-    http_request: Request,  # Required for rate limiter
+    request: Request,  # Required for rate limiter — slowapi locates it by this exact name
     section_type: str,
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
-    request: SummaryEditCreate = Body(...),
+    payload: SummaryEditCreate = Body(...),
     edit_service: SummaryEditService = Depends(get_summary_edit_service),
     summary_service: SummaryService = Depends(get_summary_service),
 ) -> SummaryEditResponse:
@@ -883,7 +883,7 @@ async def save_section_edit(
     Args:
         section_type: Section type from URL path.
         access: Validated matter access context (enforces Layer 4 security).
-        request: Edit request with content and section details.
+        payload: Edit request with content and section details.
         edit_service: Edit service instance.
         summary_service: Summary service instance (for cache invalidation).
 
@@ -915,15 +915,15 @@ async def save_section_edit(
             matter_id=access.matter_id,
             user_id=access.user_id,
             section_type=section_type,
-            section_id=request.section_id,
+            section_id=payload.section_id,
         )
 
         edit = await edit_service.save_edit(
             matter_id=access.matter_id,
             section_type=section_type_enum,
-            section_id=request.section_id,
-            content=request.content,
-            original_content=request.original_content,
+            section_id=payload.section_id,
+            content=payload.content,
+            original_content=payload.original_content,
             user_id=access.user_id,
         )
 
@@ -989,11 +989,11 @@ async def save_section_edit(
 )
 @limiter.limit(STANDARD_RATE_LIMIT)
 async def regenerate_section(
-    http_request: Request,  # Required for rate limiter
+    request: Request,  # Required for rate limiter — slowapi locates it by this exact name
     access: MatterAccessContext = Depends(
         validate_matter_access(require_role=MatterRole.EDITOR)
     ),
-    request: SummaryRegenerateRequest = Body(...),
+    payload: SummaryRegenerateRequest = Body(...),
     edit_service: SummaryEditService = Depends(get_summary_edit_service),
     summary_service: SummaryService = Depends(get_summary_service),
 ) -> MatterSummaryResponse:
@@ -1003,7 +1003,7 @@ async def regenerate_section(
 
     Args:
         access: Validated matter access context (enforces Layer 4 security).
-        request: Regenerate request with section type.
+        payload: Regenerate request with section type.
         edit_service: Edit service instance.
         summary_service: Summary service instance.
 
@@ -1018,7 +1018,7 @@ async def regenerate_section(
             "regenerate_section_request",
             matter_id=access.matter_id,
             user_id=access.user_id,
-            section_type=request.section_type.value,
+            section_type=payload.section_type.value,
         )
 
         # Delete existing edit for this section (revert to AI-generated)
@@ -1026,7 +1026,7 @@ async def regenerate_section(
         section_id = "main"
         await edit_service.delete_edit(
             matter_id=access.matter_id,
-            section_type=request.section_type,
+            section_type=payload.section_type,
             section_id=section_id,
         )
 

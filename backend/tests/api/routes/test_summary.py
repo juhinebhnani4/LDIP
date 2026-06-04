@@ -525,7 +525,7 @@ class TestVerifySummarySection:
 
     @pytest.mark.asyncio
     async def test_verify_section_success(
-        self, mock_editor_access, mock_verification_record, mock_summary
+        self, mock_request, mock_editor_access, mock_verification_record, mock_summary
     ) -> None:
         """Should successfully verify a section."""
         from app.api.routes.summary import verify_summary_section
@@ -540,7 +540,7 @@ class TestVerifySummarySection:
         mock_summary_service = MagicMock(spec=SummaryService)
         mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
 
-        request = SummaryVerificationCreate(
+        payload = SummaryVerificationCreate(
             section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
             section_id="main",
             decision=SummaryVerificationDecisionEnum.VERIFIED,
@@ -548,8 +548,9 @@ class TestVerifySummarySection:
         )
 
         response = await verify_summary_section(
+            request=mock_request,
             access=mock_editor_access,
-            request=request,
+            payload=payload,
             verification_service=mock_verification_service,
             summary_service=mock_summary_service,
         )
@@ -559,7 +560,9 @@ class TestVerifySummarySection:
         mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
 
     @pytest.mark.asyncio
-    async def test_flag_section_success(self, mock_editor_access, mock_summary) -> None:
+    async def test_flag_section_success(
+        self, mock_request, mock_editor_access, mock_summary
+    ) -> None:
         """Should successfully flag a section."""
         from app.api.routes.summary import verify_summary_section
         from app.services.summary_service import SummaryService
@@ -584,15 +587,16 @@ class TestVerifySummarySection:
         mock_summary_service = MagicMock(spec=SummaryService)
         mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
 
-        request = SummaryVerificationCreate(
+        payload = SummaryVerificationCreate(
             section_type=SummarySectionTypeEnum.CURRENT_STATUS,
             section_id="main",
             decision=SummaryVerificationDecisionEnum.FLAGGED,
         )
 
         response = await verify_summary_section(
+            request=mock_request,
             access=mock_editor_access,
-            request=request,
+            payload=payload,
             verification_service=mock_verification_service,
             summary_service=mock_summary_service,
         )
@@ -604,7 +608,9 @@ class TestAddSummaryNote:
     """Test POST /summary/notes endpoint."""
 
     @pytest.mark.asyncio
-    async def test_add_note_success(self, mock_editor_access, mock_note_record) -> None:
+    async def test_add_note_success(
+        self, mock_request, mock_editor_access, mock_note_record
+    ) -> None:
         """Should successfully add a note."""
         from app.api.routes.summary import add_summary_note
         from app.services.summary_verification_service import SummaryVerificationService
@@ -612,15 +618,16 @@ class TestAddSummaryNote:
         mock_verification_service = MagicMock(spec=SummaryVerificationService)
         mock_verification_service.add_note = AsyncMock(return_value=mock_note_record)
 
-        request = SummaryNoteCreate(
+        payload = SummaryNoteCreate(
             section_type=SummarySectionTypeEnum.PARTIES,
             section_id="entity-123",
             text="Need to verify this party",
         )
 
         response = await add_summary_note(
+            request=mock_request,
             access=mock_editor_access,
-            request=request,
+            payload=payload,
             verification_service=mock_verification_service,
         )
 
@@ -785,7 +792,7 @@ class TestSaveSectionEdit:
 
     @pytest.mark.asyncio
     async def test_save_edit_success(
-        self, mock_editor_access, mock_edit_record
+        self, mock_request, mock_editor_access, mock_edit_record
     ) -> None:
         """Should successfully save section edit."""
         from app.api.routes.summary import save_section_edit
@@ -799,16 +806,17 @@ class TestSaveSectionEdit:
         mock_summary_service = MagicMock(spec=SummaryService)
         mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
 
-        request = SummaryEditCreate(
+        payload = SummaryEditCreate(
             section_id="main",
             content="User-edited description with corrections.",
             original_content="Original AI-generated description.",
         )
 
         response = await save_section_edit(
+            request=mock_request,
             section_type="subject_matter",
             access=mock_editor_access,
-            request=request,
+            payload=payload,
             edit_service=mock_edit_service,
             summary_service=mock_summary_service,
         )
@@ -821,7 +829,9 @@ class TestSaveSectionEdit:
         mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
 
     @pytest.mark.asyncio
-    async def test_save_edit_invalid_section_type(self, mock_editor_access) -> None:
+    async def test_save_edit_invalid_section_type(
+        self, mock_request, mock_editor_access
+    ) -> None:
         """Should return 422 for invalid section type."""
         from fastapi import HTTPException
 
@@ -833,7 +843,7 @@ class TestSaveSectionEdit:
         mock_edit_service = MagicMock(spec=SummaryEditService)
         mock_summary_service = MagicMock(spec=SummaryService)
 
-        request = SummaryEditCreate(
+        payload = SummaryEditCreate(
             section_id="main",
             content="Test content",
             original_content="Original content",
@@ -841,9 +851,10 @@ class TestSaveSectionEdit:
 
         with pytest.raises(HTTPException) as exc_info:
             await save_section_edit(
+                request=mock_request,
                 section_type="invalid_type",
                 access=mock_editor_access,
-                request=request,
+                payload=payload,
                 edit_service=mock_edit_service,
                 summary_service=mock_summary_service,
             )
@@ -853,7 +864,7 @@ class TestSaveSectionEdit:
 
     @pytest.mark.asyncio
     async def test_save_edit_all_section_types(
-        self, mock_editor_access, mock_edit_record
+        self, mock_request, mock_editor_access, mock_edit_record
     ) -> None:
         """Should accept all valid section types."""
         from app.api.routes.summary import save_section_edit
@@ -880,16 +891,17 @@ class TestSaveSectionEdit:
             mock_summary_service = MagicMock(spec=SummaryService)
             mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
 
-            request = SummaryEditCreate(
+            payload = SummaryEditCreate(
                 section_id="main",
                 content="Edited",
                 original_content="Original",
             )
 
             response = await save_section_edit(
+                request=mock_request,
                 section_type=section_type,
                 access=mock_editor_access,
-                request=request,
+                payload=payload,
                 edit_service=mock_edit_service,
                 summary_service=mock_summary_service,
             )
@@ -904,7 +916,9 @@ class TestRegenerateSection:
     """
 
     @pytest.mark.asyncio
-    async def test_regenerate_success(self, mock_editor_access, mock_summary) -> None:
+    async def test_regenerate_success(
+        self, mock_request, mock_editor_access, mock_summary
+    ) -> None:
         """Should successfully regenerate section."""
         from app.api.routes.summary import regenerate_section
         from app.models.summary import SummaryRegenerateRequest, SummarySectionTypeEnum
@@ -918,13 +932,14 @@ class TestRegenerateSection:
         mock_summary_service.invalidate_cache = AsyncMock(return_value=True)
         mock_summary_service.get_summary = AsyncMock(return_value=mock_summary)
 
-        request = SummaryRegenerateRequest(
+        payload = SummaryRegenerateRequest(
             section_type=SummarySectionTypeEnum.SUBJECT_MATTER,
         )
 
         response = await regenerate_section(
+            request=mock_request,
             access=mock_editor_access,
-            request=request,
+            payload=payload,
             edit_service=mock_edit_service,
             summary_service=mock_summary_service,
         )

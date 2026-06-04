@@ -2,9 +2,14 @@
 # Applied as xfail(strict=False) by tests/conftest.py::pytest_collection_modifyitems.
 # RULE: when you FIX a test, DELETE its line here. This list must only ever SHRINK.
 # Built 2026-06-04 from Backend CI runs 26947697559 + 26951210169 (test job), UNIT failures.
-# Includes a flaky/order-dependent cluster in 3 worker-test files (anomaly_trigger,
-#   maintenance_tasks, timeline_phase1) that flip pass/fail across runs — Shape-A state
-#   pollution; strict=False tolerates their xpass. Root fix belongs to INF-014 ② (the wall).
+# 2026-06-04 INF-014 ② (the wall): removed 32 now-fixed lines — chunking_logging state
+#   pollution (16), auth-not-overridden test_users (9), slowapi get_verifications (2), and
+#   timeline/dpp002 state-pollution greens (5). See tests/conftest.py for the wall.
+# CORRECTION to the earlier note: the worker-test cluster (test_engine_tasks_anomaly_trigger,
+#   test_maintenance_tasks, test_timeline_phase1_fixes) is NOT Shape-A state pollution — it
+#   fails DETERMINISTICALLY in isolation (Shape-B mock/contract drift, e.g. citations_updated
+#   == 0). The wall does not fix it; it belongs to the ③ drift sweep. The genuine state-
+#   pollution cluster was test_chunking_logging, which the wall DID fix.
 # tests/integration/* are NOT here — excluded from the test job via --ignore (separate job).
 #
 tests/api/routes/test_entities.py::TestUnmergeEntityEndpoint::test_unmerge_endpoint_response_format
@@ -17,8 +22,6 @@ tests/api/routes/test_summary.py::TestAddSummaryNote::test_add_note_success
 tests/api/routes/test_summary.py::TestGetSummaryAuthenticated::test_force_refresh_bypasses_cache
 tests/api/routes/test_summary.py::TestGetSummaryAuthenticated::test_returns_summary
 tests/api/routes/test_summary.py::TestGetSummaryAuthenticated::test_viewer_can_access_summary
-tests/api/routes/test_summary.py::TestGetSummaryVerifications::test_get_verifications_success
-tests/api/routes/test_summary.py::TestGetSummaryVerifications::test_get_verifications_with_filter
 tests/api/routes/test_summary.py::TestRegenerateSection::test_regenerate_success
 tests/api/routes/test_summary.py::TestSaveSectionEdit::test_save_edit_all_section_types
 tests/api/routes/test_summary.py::TestSaveSectionEdit::test_save_edit_invalid_section_type
@@ -35,15 +38,6 @@ tests/api/test_documents.py::TestGetDocument::test_get_document_returns_200
 tests/api/test_documents.py::TestUpdateDocument::test_update_document_type_returns_200
 tests/api/test_documents.py::TestUploadDocument::test_upload_act_sets_reference_material
 tests/api/test_notifications.py::TestMarkNotificationRead::test_returns_404_for_nonexistent_notification
-tests/api/test_users.py::TestGetUserPreferences::test_get_preferences_creates_default_if_not_exists
-tests/api/test_users.py::TestGetUserPreferences::test_get_preferences_success
-tests/api/test_users.py::TestGetUserProfile::test_get_profile_success
-tests/api/test_users.py::TestUpdateUserPreferences::test_update_preferences_invalid_theme
-tests/api/test_users.py::TestUpdateUserPreferences::test_update_preferences_partial
-tests/api/test_users.py::TestUpdateUserPreferences::test_update_preferences_success
-tests/api/test_users.py::TestUpdateUserProfile::test_update_profile_empty_body
-tests/api/test_users.py::TestUpdateUserProfile::test_update_profile_name_too_long
-tests/api/test_users.py::TestUpdateUserProfile::test_update_profile_success
 tests/engines/citation/test_act_indexer.py::TestActIndexer::test_index_act_document_no_chunks
 tests/engines/citation/test_discovery.py::TestComputeResolutionStats::test_to_dict_returns_correct_structure
 tests/engines/citation/test_extractor.py::TestCitationConfigurationError::test_raises_on_missing_api_key
@@ -98,7 +92,6 @@ tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_minimum_cl
 tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_preserves_max_chunk_content
 tests/engines/rag/test_query_profile.py::TestScaleForMatterSize::test_small_matter_applies_50_percent_scale
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorExtraction::test_extract_sync_with_mocked_gemini
-tests/engines/timeline/test_date_extractor.py::TestDateExtractorExtraction::test_extract_with_mocked_gemini
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorInit::test_init_creates_instance
 tests/engines/timeline/test_date_extractor.py::TestDateExtractorParsing::test_parse_multiple_dates
 tests/engines/timeline/test_date_extractor.py::TestDatePrecision::test_year_precision
@@ -111,11 +104,8 @@ tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_retry_on_quo
 tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_retry_on_rate_limit_429
 tests/engines/timeline/test_date_extractor.py::TestRetryLogic::test_sync_retry_on_rate_limit
 tests/engines/timeline/test_event_classifier.py::TestBatchClassification::test_large_batch_splits_correctly
-tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_batch_classify_with_mocked_gemini
 tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_classify_sync_with_mocked_gemini
-tests/engines/timeline/test_event_classifier.py::TestClassificationWithMockedGemini::test_classify_with_mocked_gemini
 tests/engines/timeline/test_event_classifier.py::TestErrorHandling::test_missing_api_key
-tests/engines/timeline/test_event_classifier.py::TestErrorPaths::test_network_timeout_handling
 tests/engines/timeline/test_event_classifier.py::TestEventClassifierInit::test_init_creates_instance
 tests/engines/timeline/test_event_classifier.py::TestRetryLogic::test_max_retries_exhausted
 tests/engines/timeline/test_event_classifier.py::TestRetryLogic::test_no_retry_on_non_rate_limit_error
@@ -161,22 +151,6 @@ tests/services/table_extraction/test_extractor.py::TestTableExtractor::test_extr
 tests/services/table_extraction/test_extractor.py::TestTableExtractor::test_extract_tables_skips_empty_tables
 tests/services/table_extraction/test_extractor.py::TestTableExtractor::test_extract_tables_with_tables
 tests/services/table_extraction/test_extractor.py::TestTableExtractor::test_process_table_extracts_bounding_box
-tests/services/test_chunking_logging.py::TestChunkIndexTracking::test_chunk_index_in_extraction_logs
-tests/services/test_chunking_logging.py::TestCorrelationIdTracking::test_document_id_in_merge_logs
-tests/services/test_chunking_logging.py::TestFailurePointIdentification::test_failure_chunk_identified
-tests/services/test_chunking_logging.py::TestOCRResultMergerLogging::test_checksum_mismatch_logged
-tests/services/test_chunking_logging.py::TestOCRResultMergerLogging::test_merge_complete_logged
-tests/services/test_chunking_logging.py::TestOCRResultMergerLogging::test_validation_error_logged
-tests/services/test_chunking_logging.py::TestOCRResultMergerLogging::test_validation_logged
-tests/services/test_chunking_logging.py::TestPDFChunkerLogging::test_chunk_extracted_logged
-tests/services/test_chunking_logging.py::TestPDFChunkerLogging::test_cleanup_logged
-tests/services/test_chunking_logging.py::TestPDFChunkerLogging::test_error_logged_on_invalid_pdf
-tests/services/test_chunking_logging.py::TestPDFChunkerLogging::test_split_complete_logged
-tests/services/test_chunking_logging.py::TestPDFChunkerLogging::test_streaming_split_logged
-tests/services/test_chunking_logging.py::TestPerformanceMetricsLogging::test_bbox_count_logged
-tests/services/test_chunking_logging.py::TestPerformanceMetricsLogging::test_chunk_count_logged
-tests/services/test_chunking_logging.py::TestPerformanceMetricsLogging::test_confidence_logged
-tests/services/test_chunking_logging.py::TestPerformanceMetricsLogging::test_page_count_logged
 tests/services/test_global_search_service.py::TestGlobalSearchServiceRRFMerge::test_merge_results_rrf_deduplicates
 tests/services/test_global_search_service.py::TestGlobalSearchServiceRRFMerge::test_merge_results_rrf_matter_results_first
 tests/services/test_global_search_service.py::TestGlobalSearchServiceRRFMerge::test_merge_results_rrf_ranks_by_score
@@ -209,7 +183,6 @@ tests/workers/test_document_tasks.py::TestProcessDocumentTask::test_broadcasts_s
 tests/workers/test_document_tasks.py::TestProcessDocumentTask::test_successful_processing
 tests/workers/test_document_tasks.py::TestProcessDocumentTask::test_updates_status_to_ocr_complete
 tests/workers/test_document_tasks.py::TestProcessDocumentTask::test_updates_status_to_processing
-tests/workers/test_dpp002_chain_stops_on_error.py::TestDPP002RealChainConstruction::test_chain_has_link_error
 tests/workers/test_engine_tasks_anomaly_trigger.py::TestAnomalyTriggerGracefulFailure::test_document_linking_succeeds_even_if_anomaly_trigger_fails
 tests/workers/test_engine_tasks_anomaly_trigger.py::TestAnomalyTriggerGracefulFailure::test_entity_linking_succeeds_even_if_anomaly_trigger_fails
 tests/workers/test_engine_tasks_anomaly_trigger.py::TestDetectTimelineAnomaliesJobCreation::test_creates_job_when_job_id_is_none

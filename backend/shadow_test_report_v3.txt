@@ -1,0 +1,259 @@
+SHADOW TEST: Current vs Tighter Screening Prompt
+======================================================================
+
+Loaded 31 known contradiction pairs
+Sampled 150 non-contradiction pairs from 10 matters
+
+Total pairs to test: 181 (31 contradictions + 150 non-contradictions)
+Estimated cost: ~$0.09 (181 Gemini calls — V3 only)
+
+[1/181] CONTRADICTION — Nirav Jobalia... E:\Career coaching\100x\LDIP\backend\shadow_test_screening.py:153: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+v3=needs_review(0.9) [escalate]
+[2/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(0.9) [escalate]
+[3/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(0.9) [escalate]
+[4/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(1.0) [escalate]
+[5/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(0.9) [escalate]
+[6/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(1.0) [escalate]
+[7/181] CONTRADICTION — PW1... v3=consistent(0.9) [skip]
+[8/181] CONTRADICTION — PW1... v3=consistent(1.0) [skip]
+[9/181] CONTRADICTION — PW1... v3=consistent(1.0) [skip]
+[10/181] CONTRADICTION — Nalini... v3=consistent(0.9) [skip]
+[11/181] CONTRADICTION — Trial Court... v3=needs_review(0.9) [escalate]
+[12/181] CONTRADICTION — PW-2... v3=contradiction(1.0) [escalate]
+[13/181] CONTRADICTION — PW-2... v3=needs_review(0.9) [escalate]
+[14/181] CONTRADICTION — PW-2... v3=needs_review(0.9) [escalate]
+[15/181] CONTRADICTION — K. Parameshwar... v3=consistent(1.0) [skip]
+[16/181] CONTRADICTION — PW-1... v3=contradiction(1.0) [escalate]
+[17/181] CONTRADICTION — PW-2... v3=contradiction(1.0) [escalate]
+[18/181] CONTRADICTION — PW-2... v3=contradiction(1.0) [escalate]
+[19/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(0.0) [escalate]
+[20/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(1.0) [escalate]
+[21/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(1.0) [escalate]
+[22/181] CONTRADICTION — Nirav Jobalia... v3=needs_review(1.0) [escalate]
+[23/181] CONTRADICTION — Trial Court... v3=needs_review(0.9) [escalate]
+[24/181] CONTRADICTION — Heera Lal... v3=contradiction(1.0) [escalate]
+[25/181] CONTRADICTION — Heera Lal... v3=contradiction(1.0) [escalate]
+[26/181] CONTRADICTION — Heera Lal... v3=needs_review(0.9) [escalate]
+[27/181] CONTRADICTION — PW-2... v3=consistent(0.9) [skip]
+[28/181] CONTRADICTION — Prosecution Witness 2... v3=needs_review(0.9) [escalate]
+[29/181] CONTRADICTION — Prosecution Witness 1... v3=contradiction(1.0) [escalate]
+[30/181] CONTRADICTION — Prosecution Witness 1... v3=contradiction(1.0) [escalate]
+[31/181] CONTRADICTION — High Court... v3=consistent(1.0) [skip]
+[32/181] non-contradiction — The Custodian... v3=consistent(0.9) [skip]
+[33/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[34/181] non-contradiction — President of India... v3=consistent(1.0) [skip]
+[35/181] non-contradiction — Respondent No. 5... v3=needs_review(0.9) [escalate]
+[36/181] non-contradiction — Income Tax Department... v3=needs_review(0.9) [escalate]
+[37/181] non-contradiction — State (NCT of Delhi)... v3=needs_review(0.9) [escalate]
+[38/181] non-contradiction — Nirav Jobalia... v3=consistent(1.0) [skip]
+[39/181] non-contradiction — State (NCT of Delhi)... v3=unrelated(0.9) [skip]
+[40/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[41/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[42/181] non-contradiction — PW-2... v3=needs_review(0.9) [escalate]
+[43/181] non-contradiction — Respondent no 1... v3=needs_review(0.8) [escalate]
+[44/181] non-contradiction — High Court... v3=consistent(1.0) [skip]
+[45/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[46/181] non-contradiction — Parliament of India... v3=consistent(1.0) [skip]
+[47/181] non-contradiction — Kalpana Jhobalia... v3=needs_review(0.9) [escalate]
+[48/181] non-contradiction — Anokhilal... v3=needs_review(0.8) [escalate]
+[49/181] non-contradiction — The Custodian... v3=consistent(0.9) [skip]
+[50/181] non-contradiction — Respondent No. 2... v3=needs_review(0.9) [escalate]
+[51/181] non-contradiction — Jehangir Khajotia... v3=needs_review(0.9) [escalate]
+[52/181] non-contradiction — Respondent No. 2... v3=needs_review(0.9) [escalate]
+[53/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[54/181] non-contradiction — Central Government... v3=needs_review(0.8) [escalate]
+[55/181] non-contradiction — Anokhilal... v3=unrelated(0.0) [escalate]
+[56/181] non-contradiction — Applicant... v3=needs_review(0.8) [escalate]
+[57/181] non-contradiction — State of Madhya Pradesh... v3=consistent(1.0) [skip]
+[58/181] non-contradiction — Custodian... v3=unrelated(0.0) [escalate]
+[59/181] non-contradiction — Jehangir Khajotia... v3=needs_review(0.9) [escalate]
+[60/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[61/181] non-contradiction — Respondent No. 5... v3=consistent(0.9) [skip]
+[62/181] non-contradiction — The Custodian... v3=consistent(1.0) [skip]
+[63/181] non-contradiction — Trial Court... v3=needs_review(0.0) [escalate]
+[64/181] non-contradiction — Respondent No. 2... v3=needs_review(0.0) [escalate]
+[65/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[66/181] non-contradiction — Respondent No. 2... v3=needs_review(0.0) [escalate]
+[67/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[68/181] non-contradiction — Respondent No. 5... v3=consistent(0.9) [skip]
+[69/181] non-contradiction — Shiju K... v3=consistent(0.9) [skip]
+[70/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[71/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[72/181] non-contradiction — Respondent No. 2... v3=needs_review(0.8) [escalate]
+[73/181] non-contradiction — Respondent No. 5... v3=needs_review(0.9) [escalate]
+[74/181] non-contradiction — Respondent No. 2... v3=consistent(1.0) [skip]
+[75/181] non-contradiction — State of Maharashtra... v3=needs_review(0.8) [escalate]
+[76/181] non-contradiction — High Court... v3=needs_review(0.8) [escalate]
+[77/181] non-contradiction — Nirav Jobalia... v3=needs_review(0.9) [escalate]
+[78/181] non-contradiction — Income Tax Department... v3=needs_review(0.9) [escalate]
+[79/181] non-contradiction — State (NCT of Delhi)... v3=unrelated(1.0) [skip]
+[80/181] non-contradiction — Parliament of India... v3=consistent(1.0) [skip]
+[81/181] non-contradiction — Custodian... v3=consistent(0.9) [skip]
+[82/181] non-contradiction — Respondent No. 5... v3=consistent(1.0) [skip]
+[83/181] non-contradiction — Trial Court... v3=needs_review(0.8) [escalate]
+[84/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[85/181] non-contradiction — Central Government... v3=unrelated(0.9) [skip]
+[86/181] non-contradiction — Unit Trust of India... v3=consistent(1.0) [skip]
+[87/181] non-contradiction — Shivaji Sahabrao Bobade... v3=consistent(0.9) [skip]
+[88/181] non-contradiction — Respondent No. 2... v3=needs_review(0.0) [escalate]
+[89/181] non-contradiction — President of India... v3=consistent(0.9) [skip]
+[90/181] non-contradiction — Parliament of India... v3=needs_review(0.8) [escalate]
+[91/181] non-contradiction — Central Government... v3=unrelated(0.9) [skip]
+[92/181] non-contradiction — State of Maharashtra... v3=needs_review(0.9) [escalate]
+[93/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[94/181] non-contradiction — Anokhilal... v3=needs_review(0.9) [escalate]
+[95/181] non-contradiction — Nirav Jobalia... v3=needs_review(0.8) [escalate]
+[96/181] non-contradiction — Income Tax Department... v3=needs_review(0.0) [escalate]
+[97/181] non-contradiction — Karvy Fintech Private Limited... v3=consistent(0.9) [skip]
+[98/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[99/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[100/181] non-contradiction — Income Tax Department... v3=needs_review(0.8) [escalate]
+[101/181] non-contradiction — State of Maharashtra... v3=consistent(1.0) [skip]
+[102/181] non-contradiction — President of India... v3=consistent(1.0) [skip]
+[103/181] non-contradiction — President of India... v3=consistent(0.0) [escalate]
+[104/181] non-contradiction — Shiju K... v3=consistent(0.9) [skip]
+[105/181] non-contradiction — Custodian... v3=consistent(1.0) [skip]
+[106/181] non-contradiction — Respondent no 1... v3=consistent(1.0) [skip]
+[107/181] non-contradiction — Anokhilal... v3=consistent(0.9) [skip]
+[108/181] non-contradiction — Trial Court... v3=consistent(1.0) [skip]
+[109/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[110/181] non-contradiction — Nirav Jobalia... v3=consistent(1.0) [skip]
+[111/181] non-contradiction — Nirav Jobalia... v3=consistent(1.0) [skip]
+[112/181] non-contradiction — Respondent No. 5... v3=consistent(1.0) [skip]
+[113/181] non-contradiction — Nirav Jobalia... v3=needs_review(0.0) [escalate]
+[114/181] non-contradiction — Central Government... v3=needs_review(0.9) [escalate]
+[115/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[116/181] non-contradiction — High Court... v3=needs_review(0.8) [escalate]
+[117/181] non-contradiction — Supreme Court of India... v3=consistent(1.0) [skip]
+[118/181] non-contradiction — Talha Abdul Rahman... v3=consistent(1.0) [skip]
+[119/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[120/181] non-contradiction — Supreme Court of India... v3=needs_review(0.9) [escalate]
+[121/181] non-contradiction — High Court... v3=unrelated(0.9) [skip]
+[122/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[123/181] non-contradiction — Parliament of India... v3=consistent(1.0) [skip]
+[124/181] non-contradiction — Trial Court... v3=needs_review(0.9) [escalate]
+[125/181] non-contradiction — Trial Court... v3=consistent(0.9) [skip]
+[126/181] non-contradiction — Respondent No. 5... v3=consistent(1.0) [skip]
+[127/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[128/181] non-contradiction — Shiju K... v3=needs_review(0.7) [escalate]
+[129/181] non-contradiction — High Court... v3=unrelated(0.9) [skip]
+[130/181] non-contradiction — Trial Court... v3=consistent(1.0) [skip]
+[131/181] non-contradiction — Trial Court... v3=needs_review(0.9) [escalate]
+[132/181] non-contradiction — Respondent No. 5... v3=needs_review(0.8) [escalate]
+[133/181] non-contradiction — Respondent No. 2... v3=needs_review(0.8) [escalate]
+[134/181] non-contradiction — State of Maharashtra... v3=needs_review(0.9) [escalate]
+[135/181] non-contradiction — High Court... v3=needs_review(0.9) [escalate]
+[136/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[137/181] non-contradiction — Trial Court... v3=needs_review(0.9) [escalate]
+[138/181] non-contradiction — Custodian... v3=needs_review(0.8) [escalate]
+[139/181] non-contradiction — Supreme Court of India... v3=consistent(1.0) [skip]
+[140/181] non-contradiction — Respondent no 1... v3=needs_review(0.9) [escalate]
+[141/181] non-contradiction — Parliament of India... v3=consistent(0.9) [skip]
+[142/181] non-contradiction — Anokhilal... v3=consistent(1.0) [skip]
+[143/181] non-contradiction — Respondent No. 5... v3=consistent(0.9) [skip]
+[144/181] non-contradiction — Nirav Jobalia... v3=consistent(0.9) [skip]
+[145/181] non-contradiction — Respondent No. 5... v3=consistent(1.0) [skip]
+[146/181] non-contradiction — Nirav Jobalia... v3=needs_review(0.9) [escalate]
+[147/181] non-contradiction — Respondent No. 2... v3=consistent(1.0) [skip]
+[148/181] non-contradiction — The Custodian... v3=consistent(1.0) [skip]
+[149/181] non-contradiction — PW-2... v3=unrelated(0.9) [skip]
+[150/181] non-contradiction — The Custodian... v3=needs_review(0.9) [escalate]
+[151/181] non-contradiction — Custodian... v3=consistent(0.9) [skip]
+[152/181] non-contradiction — Parliament of India... v3=consistent(1.0) [skip]
+[153/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[154/181] non-contradiction — State of Maharashtra... v3=consistent(1.0) [skip]
+[155/181] non-contradiction — Respondent No. 2... v3=consistent(1.0) [skip]
+[156/181] non-contradiction — Custodian... v3=consistent(0.9) [skip]
+[157/181] non-contradiction — Central Government... v3=needs_review(0.8) [escalate]
+[158/181] non-contradiction — Respondent No. 5... v3=consistent(1.0) [skip]
+[159/181] non-contradiction — Anokhilal... v3=needs_review(0.9) [escalate]
+[160/181] non-contradiction — Kalpana Jhobalia... v3=needs_review(0.9) [escalate]
+[161/181] non-contradiction — Shiju K... v3=needs_review(0.9) [escalate]
+[162/181] non-contradiction — PW-2... v3=needs_review(0.8) [escalate]
+[163/181] non-contradiction — Respondent No. 2... v3=needs_review(0.9) [escalate]
+[164/181] non-contradiction — Respondent No. 5... v3=needs_review(0.9) [escalate]
+[165/181] non-contradiction — Nirav Jobalia... v3=consistent(1.0) [skip]
+[166/181] non-contradiction — Respondent No. 5... v3=consistent(0.9) [skip]
+[167/181] non-contradiction — Jyoti Mehta... v3=needs_review(0.9) [escalate]
+[168/181] non-contradiction — Respondent No. 2... v3=consistent(0.9) [skip]
+[169/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[170/181] non-contradiction — PW-2... v3=needs_review(0.9) [escalate]
+[171/181] non-contradiction — President of India... v3=consistent(1.0) [skip]
+[172/181] non-contradiction — State of Maharashtra... v3=consistent(0.9) [skip]
+[173/181] non-contradiction — Respondent No. 2... v3=needs_review(0.9) [escalate]
+[174/181] non-contradiction — Respondent No. 5... v3=consistent(0.9) [skip]
+[175/181] non-contradiction — Trial Court... v3=consistent(0.0) [escalate]
+[176/181] non-contradiction — The Custodian... v3=needs_review(0.9) [escalate]
+[177/181] non-contradiction — Nirav Jobalia... v3=needs_review(0.8) [escalate]
+[178/181] non-contradiction — Respondent No. 5... v3=needs_review(0.9) [escalate]
+[179/181] non-contradiction — Shiju K... v3=consistent(1.0) [skip]
+[180/181] non-contradiction — Jyoti Mehta... v3=consistent(1.0) [skip]
+[181/181] non-contradiction — Income Tax Department... v3=consistent(0.9) [skip]
+
+======================================================================
+RESULTS — V3 SHADOW TEST
+======================================================================
+
+--- SAFETY CHECK: 31 Known Contradictions ---
+  V3 prompt catches: 24/31 (77%)
+  (Prior results: V1=90%, V2=74%)
+
+  *** V3 MISSED 7 real contradictions: ***
+    Entity: PW1
+    V3 said: consistent (0.9)
+    Reason: Statement B summarizes the admission of part payment by PW1, which is detailed in Statement A. Statement B then draws a 
+
+    Entity: PW1
+    V3 said: consistent (1.0)
+    Reason: Statement B refers to and confirms the admission of part payment by PW1, which is detailed in Statement A. Statement B u
+
+    Entity: PW1
+    V3 said: consistent (1.0)
+    Reason: Statement B provides the legal reasoning and context, including the failure of lower courts to appreciate PW1's admissio
+
+    Entity: Nalini
+    V3 said: consistent (0.9)
+    Reason: Statement B provides the resolution to the issue raised in Statement A, specifically addressing the failure of lower cou
+
+    Entity: K. Parameshwar
+    V3 said: consistent (1.0)
+    Reason: Both statements identify K. Parameshwar as the senior counsel for the State/respondent and acknowledge his assistance to
+
+    Entity: PW-2
+    V3 said: consistent (0.9)
+    Reason: Statement B directly continues and elaborates on the discrepancy mentioned in Statement A regarding PW-2's testimony ver
+
+    Entity: High Court
+    V3 said: consistent (1.0)
+    Reason: Statement B is a direct subset of Statement A, containing identical text that is fully encompassed within Statement A.
+
+
+--- EFFECTIVENESS: 150 Non-Contradiction Pairs ---
+  V3 prompt escalates: 68/150 (45%)
+  (Prior results: V1=65%, V2=16%)
+  GPT-4o calls saved vs V1: 29/97
+
+--- V3 Classification Distribution ---
+  Contradictions: {'consistent': 7, 'contradiction': 8, 'needs_review': 16}
+  Non-contradictions: {'consistent': 77, 'needs_review': 64, 'unrelated': 9}
+
+--- COMPARISON: V1 vs V2 vs V3 ---
+  Metric                                     V1 (current)     V2 (tight)  V3 (balanced)
+  Contradictions caught                       28/31 (90%)    23/31 (74%)    24/31 (77%)
+  Non-contradictions escalated               97/150 (65%)   24/150 (16%)   68/150 (45%)
+
+--- Projected Production Impact ---
+  V1: ~519 GPT-4o calls per 804 screenings
+  V3: ~364 GPT-4o calls per 804 screenings
+  Savings: ~155 calls = ~$0.97
+  Safety: FAILED — DO NOT DEPLOY
+
+Raw results saved to: E:\Career coaching\100x\LDIP\backend\shadow_test_results_v3.json

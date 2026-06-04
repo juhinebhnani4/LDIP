@@ -1,0 +1,1450 @@
+[
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A lists Nirav D. Jobalia (Respondent No. 5) with one address, while Statement B, in the affidavit of Respondent No. 5, lists a different address for the same person."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to Nirav D. Jobalia but provide different residential addresses for him."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A lists Nirav D. Jobalia (Respondent 5) with one address, while Statement B, in the affidavit for Respondent 5, provides a different address for the same individual. Statement B also lists another Nirav D. Jobalia (Respondent 8.1 and 9.1) with a third address."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same person, Nirav D. Jobalia, but provide different residential addresses."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A lists Nirav D. Jobalia (Respondent No. 5) with one address, while Statement B, in the affidavit from the same Respondent No. 5, lists a different address. Additionally, Statement B lists other Nirav D. Jobalias (Respondent No. 8.1 and 9.1) with a third address, creating potential for confusion or multiple individuals with the same name."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to Nirav D. Jobalia but provide different residential addresses for him."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW1",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement B summarizes the admission of part payment by PW1, which is detailed in Statement A. Statement B then draws a legal conclusion based on this fact, without presenting any conflicting factual details."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW1",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B refers to and confirms the admission of part payment by PW1, which is detailed in Statement A. Statement B uses this fact to draw a legal conclusion, making it consistent with Statement A's factual claims."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW1",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B provides the legal reasoning and context, including the failure of lower courts to appreciate PW1's admission, which directly supports the conclusion and acquittal in Statement A. Both statements align on the facts of part payment, lack of endorsement, and PW1's admission."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nalini",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement B provides the resolution to the issue raised in Statement A, specifically addressing the failure of lower courts to appreciate PW1's admission regarding part payment, leading to the acquittal."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A outlines the general principle that an appellate court *can* seek explanations for unpresented material, while Statement B, discussing a specific case, concludes that due to extreme delay and incarceration, it would be *unjust* to cure the defect by seeking explanations at this stage, leading to acquittal. This difference in the applicability of the general principle to a specific factual scenario warrants review."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A claims that, according to the prosecution's case, PW-2 saw the appellant raping the victim, while Statement B explicitly states that PW-2 'did not depose that he had seen the commission of rape and murder by the appellant' in his examination-in-chief."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A describes PW-2 as seeing the appellant commit rape, while Statement B, quoting PW-1, states PW-2 saw rape and murder from outside the cabin, and then concludes that PW-2's evidence is not of 'sterling quality' and at best is 'last seen together' evidence, which conflicts with the eyewitness account in Statement A."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A says PW-2 was 7 years old at the time of the incident (May 27, 2009). Statement B says PW-2's evidence was recorded 2.5 years after the incident, and at that time, PW-2 was 10 years old. While this could be consistent depending on PW-2's exact birth date, the age difference (7 to 10 in 2.5 years) is a subtle factual detail that warrants expert review to confirm consistency."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "K. Parameshwar",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements identify K. Parameshwar as the senior counsel for the State/respondent and acknowledge his assistance to the court, with no conflicting details."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-1",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A describes PW-1 testifying that PW-2 witnessed the rape and murder. Statement B explicitly states that PW-2, in his own deposition, 'did not depose that he had seen the commission of rape and murder by the appellant,' directly contradicting PW-1's account of what PW-2 witnessed."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A claims PW-1 testified that PW-2 witnessed the rape and murder, while Statement B explicitly states that PW-2's own deposition was that he 'did not depose that he had seen the commission of rape and murder by the appellant'."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A says PW-2 did not depose seeing the commission of rape and murder, while Statement B states that PW-1 claims PW-2 reported seeing the appellant committing rape and murder, and the FIR recorded that PW-2 had seen the crime."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A lists Nirav D. Jobalia (Respondent No. 5) with one address, while Statement B, in the affidavit of the same Respondent No. 5, provides a different address. Additionally, Statement B lists other Nirav D. Jobalias (Respondents 8.1 and 9.1) with a third address, creating multiple differing addresses for individuals with the same name."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same person, Nirav D. Jobalia, in the same legal case, but provide different residential addresses."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A lists Nirav D. Jobalia (Respondent 5) with one address, while Statement B, in the affidavit for the same Respondent 5, lists a different address. Additionally, Statement B lists a Nirav D. Jobalia (Respondent 8.1 and 9.1) with a third, different address."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same person, Nirav D. Jobalia, but provide different residential addresses. This difference in factual detail about the same person requires review."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same procedural failure in the same criminal appeal (failure to put material circumstances to the accused), but Statement B provides additional specific examples of what was omitted that are not detailed in Statement A."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Heera Lal",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A claims the prosecution's case is that PW-2 saw the appellant raping the victim, while Statement B explicitly states that PW-2 did not depose that he had seen the commission of rape and murder by the appellant."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Heera Lal",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A claims PW-2 saw the appellant raping the victim, while Statement B explicitly states PW-2 'did not depose that he had seen the commission of rape and murder by the appellant'."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Heera Lal",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.95,
+    "v3_escalates": true,
+    "v3_reason": "Statement A describes the prosecution's case where PW-2 saw the appellant commit rape and murder, leading to conviction. Statement B critically evaluates PW-2's testimony, highlighting significant issues (delay, absence from charge sheet, dispute over statement) and concludes it's unsafe to base conviction solely on it, suggesting it's, at best, 'last seen together' evidence. This difference in the evaluation and weight of key evidence (PW-2's testimony) constitutes a potential conflict."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "PW-2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement B directly continues and elaborates on the discrepancy mentioned in Statement A regarding PW-2's testimony versus what PW-1 claimed PW-2 told him. Both statements are consistent in their analysis of the evidence."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Prosecution Witness 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss PW-2's eyewitness account of the crime, but Statement B introduces significant details about the unreliability and procedural issues surrounding PW-2's testimony, which are not present in Statement A, thus requiring expert review."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Prosecution Witness 1",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A claims PW-1 stated that PW-2 witnessed the commission of rape and murder, while Statement B explicitly states that PW-2 'did not depose that he had seen the commission of rape and murder by the appellant' and notes a conflict between PW-2's version and what PW-1 claimed PW-2 said."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "Prosecution Witness 1",
+    "v3_result": "contradiction",
+    "v3_confidence": 1.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A says PW-2 did not depose seeing the commission of rape and murder, while Statement B says PW-1 claims PW-2 reported seeing the appellant committing rape and murder."
+  },
+  {
+    "is_contradiction": true,
+    "entity_name": "High Court",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a direct subset of Statement A, containing identical text that is fully encompassed within Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements refer to the same legal case (Misc. Application No.10 of 2023) and consistently identify 'The Custodian' as a Respondent. Statement B provides additional, consistent detail about The Custodian's address and specific respondent number."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter and index for a legal document, and Statement B is the beginning of the legal document itself (the 'Reply to Additional Affidavit on behalf of Respondent No.5') that Statement A refers to and encloses. They are entirely consistent and complementary."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "President of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements refer to the President's assent to the Special Court (Trial of Offences Relating to Transactions in Securities) Bill, 1992, with Statement B providing the specific date of assent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses from Respondent No. 5 to an 'Additional Affidavit' but address different paragraphs and specific factual points within that affidavit, requiring review to ensure overall consistency."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Income Tax Department",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses to an 'Additional Affidavit' and discuss related denials concerning collusion, Benami shares, and the Income Tax Department, but with different specific details and framing of the denials that could be significant."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State (NCT of Delhi)",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement B provides additional factual details about the Bashira case in paragraph 20.3 that are not present in Statement A, and Statement A contains paragraph 20.1 which is not in Statement B, indicating differences in scope and detail about the same legal topics."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A identifies Nirav D. Jobalia as Respondent No. 5 in a legal application, and Statement B is a submission made on behalf of Respondent No. 5 in the same legal context, with no conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State (NCT of Delhi)",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A discusses specific arguments made in a criminal appeal regarding evidence and procedural issues, including a mention of legal aid. Statement B discusses general legal principles and precedents concerning the right to free legal services and the object of criminal trials. While both touch upon legal aid, they are not discussing the same specific facts, events, or arguments in a way that would lead to conflict or require review for subtle differences."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is the content of an affidavit filed by Respondent No. 5 in a case involving Jyoti H. Mehta. Statement B is a transmittal letter from the advocate for Respondent No. 5, enclosing and referring to the very same reply affidavit."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are from the perspective of a Respondent (likely Respondent No. 5 or an aligned party) and consistently deny the Applicant's claims regarding shares of Respondent No. 2, asserting the Respondent's rightful position without any conflicting details."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "PW-2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal proceeding and the non-compliance with Section 313 CrPC, but Statement A introduces additional factual details about the case, such as the date of occurrence, the appellant's incarceration period, and the Trial Court's imposition of the death penalty, which are not present in Statement B."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent no 1",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are from the same 'answering Respondent' and refer to the same 'Additional Affidavit', but they address different paragraphs and contain different specific claims or observations, which an expert would need to review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements present the identical text of Section 5 of 'THE SPECIAL COURT (TRIAL OF OFFENCES RELATING TO TRANSACTIONS IN SECURITIES) ACT, 1992'. Statement B additionally includes amendment notes which clarify the source of the bracketed text, but this does not create any factual difference in the legal provisions themselves."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal case and applicant, but Statement A attributes the address '32, Madhuli Apartments' to the applicant's advocate, while Statement B attributes '32, Madhuli' to the applicant herself, which is a subtle factual difference that needs expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a table of contents for the Act, and Statement B provides the actual text for the initial sections of the same Act, directly corresponding to the entries in Statement A without any discrepancies."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Kalpana Jhobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements mention Kalpana Jhobalia in the context of the legal proceedings, but provide different factual details about her involvement or connection, which an expert should review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Statement A cites the case of 'Anokhilal' as a legal precedent, while Statement B provides a detailed quote about the right to legal aid for prisoners and the state's duty. Both are from the same legal document and discuss related legal principles, suggesting Statement B might be the content of the 'Anokhilal' case or a related precedent. An expert would need to confirm the exact relationship and ensure no subtle differences exist."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a transmittal letter for the document contained in Statement B. Both refer to the same case and the same 'Reply to Additional Affidavit on behalf of Respondent No.5'. The dates differ because one is the transmittal date and the others are the document creation/affirmation dates, which is not a conflict. The scope of representation in Statement A (multiple respondents) is consistent with Statement B being for one of those respondents (No. 5)."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement A implies an accusation against Respondent No. 2 regarding collusion and Benami shares, which Respondent No. 5 denies. Statement B, from Respondent No. 2, repeatedly claims no accusation has been passed against him regarding his shares, which could be a factual difference."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jehangir Khajotia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements identify Jehangir Khajotia as an advocate for Respondent No. 5 in the same case, but provide slightly different details for his address (Nagindas Master Road vs. M.G. Road, Fort), which requires review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses from different respondents (Respondent No. 2 and Respondent No. 5) to the same 'Additional Affidavit' by the Applicant, addressing related claims about collusion, malafide intent, and share ownership of Respondent No. 2. While their denials are generally aligned against the Applicant, they are distinct accounts from different parties regarding the same core facts and events, warranting expert review for any subtle differences or omissions."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a direct continuation of the affidavit introduced and started in Statement A. They are parts of the same document and argument, with Statement A providing the introduction and Statement B providing the detailed response."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Central Government",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss different factual details about the Central Government's role and legal standing under the same Act, which an expert might need to review together."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A discusses a ruling from the 'Anokhilal' case regarding legal aid advocate qualifications. Statement B discusses the general right to legal aid for prisoners and the State's duty, without mentioning 'Anokhilal' or specific advocate qualifications."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Applicant",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses from the same 'answering Respondent' to different paragraphs and exhibits of the 'Applicant's Additional Affidavit'. While they don't directly contradict, they address different specific points within the same legal context, and an expert would need to review them to ensure overall consistency of the response."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Madhya Pradesh",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B contains a direct quote from paragraph 25, a significant portion of which is also present verbatim in Statement A. Both statements are from the same legal document and discuss the same legal principles regarding the state's duty to provide and pay for legal aid. Statement A then continues the discussion by referencing other cases and paragraphs, but the shared content is identical and consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A discusses protection for the Custodian and the Act's overriding effect, while Statement B details the Custodian's power to cancel contracts and the appeal process. They cover different provisions of the same Act without overlapping factual claims that could conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jehangir Khajotia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements identify Jehangir Khajotia as an advocate in the same legal case (Misc. Application No. 10 of 2023), but Statement A indicates he represents Respondent No. 5, while Statement B indicates he represents Respondent Nos. 5, 8.1, and 9.1. This difference in client representation for the same case warrants review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements consistently deny that Respondent No. 5 holds Benami shares of Respondent No. 2 and challenge the validity of claims or evidence from the IT Department/Deputy Commissioner regarding these shares."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are from Respondent No. 5, responding to different paragraphs of the same Additional Affidavit, and consistently assert Respondent No. 5's rightful ownership of shares and deny any wrongdoing or pending recovery related to them."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is the concluding part of the 'Reply to Additional Affidavit on behalf of Respondent No.5', which Statement B is a cover letter for, confirming its enclosure and service."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same criminal appeal and refer to the same prosecution witnesses (PW-1 and PW-2), but focus on different aspects of the case (procedural error vs. case background and witness roles). These different factual details about the same event warrant review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses from an 'answering Respondent' to an 'Additional Affidavit' and discuss matters related to 'Respondent No. 2' and its shares, but they address different specific paragraphs and allegations, requiring expert review for potential subtle differences or omissions."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal proceeding involving Jyoti H. Mehta and an affidavit by Nirav D. Jobalia. While Nirav D. Jobalia (Respondent No. 5) lists the same address in both, Statement B also lists Nirav D. Jobalia as Respondent No. 8.1 and 9.1 with a different address, which requires review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are from Respondent No. 5 (or an 'answering Respondent' likely to be Respondent No. 5) and discuss claims related to shares of Respondent No. 2, but they focus on different aspects of these claims, which could warrant expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter serving the document that is Statement B. They are directly related and consistent, with Statement B being the content referred to in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements consistently present Respondent No. 5's defense, denying collusion with Respondent No. 2 and asserting rightful ownership of shares and adherence to due process, without any conflicting details."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shiju K",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A describes a specific case outcome and factual finding (no endorsement), while Statement B provides the general legal definition of an endorsement under the same act. They are complementary and do not conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is the content of a reply affidavit, and Statement B provides the formal details (affiant, case title, advocate, dates) for that same reply affidavit. They are complementary parts of the same document."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal proceeding involving Jyoti H. Mehta as the applicant and Nirav D. Jobalia as Respondent No. 5, but Statement B provides additional details about the procedural history and contentions within that proceeding that are not present in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.85,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses from different respondents (R2 and R5) in the same legal proceeding, addressing the Applicant's claims and denying them, but focusing on different specific documents and events within that proceeding, which could lead to subtle differences or omissions requiring expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are from Respondent No. 5's reply to an Additional Affidavit, discussing the same general legal proceeding. While they address different paragraphs of the affidavit, they contain different factual details (e.g., exhibits in A, share recovery and a third party in B) about the same person and proceeding, which an expert should review for potential subtle conflicts or omissions."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements contain identical procedural responses, stating no comments are offered because no accusation has been made regarding shares of Respondent No. 2. They are consistent in their content, merely addressing different paragraphs of an affidavit."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss legal principles related to fair procedure and legal representation in criminal cases, citing different Supreme Court judgments (M.H. Hoskot v. State of Maharashtra in A, and Bashira v. State of U.P. and Ambadas Laxman Shinde v. State of Maharashtra in B). While not directly contradictory, an expert would need to review how these different precedents and discussions of legal procedure interact or apply, especially since both involve the 'State of Maharashtra' in case names."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are excerpts from the same legal act concerning the Special Court and the High Court's role, but they describe different sections and aspects of the act (establishment/composition vs. case distribution/jurisdiction). An expert should review to ensure all provisions are fully compatible."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Statement B identifies Nirav D. Jobalia as Respondent No. 5 and confirms he is filing an affidavit. Statement A provides content from an affidavit by 'the answering Respondent' (likely Nirav D. Jobalia) regarding shares of Respondent No. 2. While not contradictory, they provide different factual details about the same person and legal proceeding, warranting expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Income Tax Department",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are denials from a respondent regarding claims about shares and collusion, and both specifically mention the Income Tax Department's involvement in making claims or filing documents, but the specific claims denied are different."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State (NCT of Delhi)",
+    "v3_result": "unrelated",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A discusses the constitutional and statutory provisions for free legal aid and principles of criminal trial. Statement B discusses specific arguments made by counsel in a particular case regarding evidence and procedure, with a brief mention of the State's counsel assisting on the issue of legal aid. They discuss different topics and do not make comparable factual claims."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same Act; Statement A details specific provisions, while Statement B provides a table of contents. They are complementary and do not present any conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements describe different legal provisions and roles of the Custodian under the same Act without any conflicting information or factual claims to compare."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter for a document filed on behalf of Respondent No. 5, and Statement B is an excerpt from that very document (the reply to the additional affidavit on behalf of Respondent No. 5). They are entirely consistent and complementary."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Statement A applies legal principles to a specific case, concluding that a defect cannot be cured due to long passage of time, while Statement B discusses the general possibility of curing such defects and remanding cases, listing passage of time as a consideration. The specific conclusion in A (not curable) could be reviewed against the general possibilities in B."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are replies from the 'answering Respondent' to different paragraphs of the same 'Additional Affidavit' and contain identical phrasing regarding 'shares of Respondent No.2 owned by him', indicating a consistent stance and no conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Central Government",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A discusses protection for the Central Government and the overriding effect of the Act, while Statement B details the powers of the Special Court. They address different aspects of the same Act without overlapping factual claims."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Unit Trust of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same legal act and contain identical definitions for 'securities', which includes 'units of the Unit Trust of India'. The additional information in each statement (e.g., commencement in B, more details on custodian functions in A) does not create any conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shivaji Sahabrao Bobade",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A cites the Shivaji Sahabrao Bobade case as a precedent for legal principles, while Statement B outlines those general legal principles. They are from the same document and discuss related legal topics without any conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same Additional Affidavit and discuss accusations regarding shares of Respondent No.2, with Statement A providing specific denials (collusion, Benami shares) not explicitly present in Statement B, which primarily reiterates a 'no comment' stance for various sub-paragraphs."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "President of India",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A explicitly states the President assented to the Act on August 18, 1992. Statement B refers to the 'assent of the Special Court (Trial of Offences Relating to Transactions in Securities) Bill, 1992' as a reference point for a deadline, which is consistent with the President's role in assenting to the Bill to make it an Act."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss different aspects of the same Act and the role of the Parliament of India in relation to it (enactment vs. rule review), presenting different factual details about the same proceeding, which falls under 'needs_review' as per the guidelines."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Central Government",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A details the powers of the Special Court, while Statement B provides definitions and information about the appointment of a Custodian; they discuss different provisions of the same Act without overlapping factual claims."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the principle of fair legal representation and the role of counsel in the justice system, citing different case precedents and emphasizing different aspects of this right. An expert would need to review how these different legal interpretations apply."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is the introductory part (header and deponent details) of an affidavit, and Statement A is the content of that same affidavit, specifically the reply to Jyoti H. Mehta's additional affidavit. They are parts of the same document and are entirely consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same case (Anokhilal) and discuss the provision of legal aid, but Statement A emphasizes the right to free legal aid at all material stages, while Statement B quotes a principle suggesting discretion and that it's 'not done in all cases but only where public justice suffers otherwise,' which could be a subtle difference in scope or conditions."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Statement B identifies Nirav Jobalia as a respondent in a legal case. Statement A, likely from a respondent in the same case, describes a legal position regarding accusations about shares of 'Respondent No.2'. These are different factual details about the same person in the same legal proceeding, warranting expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Income Tax Department",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are denials from a respondent regarding allegations of collusion, share ownership, and the involvement of the Income Tax Department, but they deny different specific claims, requiring expert review to determine if these differences are significant or if the denials are related to the same underlying facts."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Karvy Fintech Private Limited",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a procedural letter issued by Karvy Fintech, detailing a specific process. Statement B provides administrative information about Karvy Fintech. They discuss the same entity but do not make conflicting factual claims about the entity itself or any shared event."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter enclosing the 'Reply to Additional Affidavit on behalf of Respondent No.5', and Statement B contains the verification pages of that very 'Reply to Additional Affidavit on behalf of Respondent No.5'. Both documents pertain to the same legal case and parties, with Statement A serving as the transmittal for the document partially shown in Statement B. The dates reflect the preparation of the affidavit (January 2024) and its subsequent service (August 2024), which is a logical sequence."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter and index for a legal reply, and Statement B is the beginning of that very reply, both concerning the same parties and legal action."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Income Tax Department",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements involve Respondent No.5 denying claims or actions related to the Income Tax Department, specifically regarding affidavits and furnishing particulars of benami shares, which could be related aspects of the same legal dispute requiring expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B continues the enumeration of norms (31.1, 31.2, 31.3, 31.4) that Statement A introduces and begins to quote (31.1). They are directly sequential and complementary parts of the same document and discussion."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "President of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements contain identical text regarding the President's assent to the Special Court Bill, with Statement B being a slightly longer excerpt that includes the relevant parts of Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "President of India",
+    "v3_result": "consistent",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A explicitly states the President assented to the Act on August 18, 1992, which is the same enactment date mentioned in Statement B. Statement A provides a specific detail that is consistent with the general information in Statement B."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shiju K",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A provides the case details and context for 'Shiju K vs Nalini', while Statement B is an excerpt discussing a legal point (Section 15 of N.I. Act) from the same legal document, indicating they are parts of the same consistent record."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A discusses the protection afforded to the Custodian, while Statement B defines the Custodian and outlines their appointment and functions. Both statements are from the same Act and provide complementary information about the Custodian without any conflicting details."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent no 1",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a direct continuation of Statement A, completing a sentence and then proceeding with the next points in the same document. They are parts of a single, coherent response."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements refer to the case of Anokhilal and discuss principles related to legal aid. Statement B provides a specific principle that was 'held in the case of Anokhilal,' which is consistent with Statement A's general mention that the Anokhilal case 'summarised the principles laid down from time to time.'"
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements discuss the same non-compliance with Section 313 of the CrPC by the Trial Court in the same case, with Statement B elaborating on the consequences of the issues described in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal proceeding involving Jyoti Mehta and Nirav D. Jobalia, but Statement B lists Nirav D. Jobalia with two different addresses depending on his respondent number (5 vs. 8.1/9.1), which could be a significant factual difference."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is the verification and title page for the affidavit whose content is provided in Statement A, confirming Nirav D. Jobalia as Respondent No. 5 and the affiant. They are parts of the same document and are entirely consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a direct continuation of Statement A, both being parts of the same affidavit from Respondent No.5 (Nirav Jobalia). They form a single, coherent response."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is content from a legal reply, and Statement B is the cover letter and index for that same reply, indicating that Statement A is a part of the document described in Statement B."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are responses to an 'Additional Affidavit' and discuss claims related to shares of 'Respondent No.2'. Statement A claims no accusation has been made against 'the answering Respondent' regarding these shares, leading to no comment. Statement B, from 'Respondent No.5', directly denies the Applicant's claim on the shares of 'Respondent No.2'. This difference in how the claims about shares are addressed warrants expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Central Government",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal act and its definitions, but Statement B includes details about the Act's commencement and assent not present in Statement A, and Statement A provides more complete details on the Custodian's functions than Statement B."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are submissions from or on behalf of Respondent No. 5, consistently denying the Applicant's claims and asserting Respondent No. 5's rightful ownership of shares in Respondent No. 2. They present a unified and non-conflicting defense."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the Special Court from the same Act, providing different factual details about its composition and powers. While not directly contradictory, these different details about the same entity warrant expert review to ensure no subtle conflicts or implications are missed, aligning with the 'needs_review' criteria for different factual details about the same proceeding."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Supreme Court of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same act and describe different, but consistent, aspects of appeals to the Supreme Court from the Special Court. Statement B establishes the right to appeal, while Statement A details the time limit for such appeals."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Talha Abdul Rahman",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements contain the exact same information regarding Talha Abdul Rahman's role as amicus curiae."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements refer to the same legal case (Misc. Application No. 10 of 2023) with Jyoti H. Mehta as the applicant and the Custodian as a respondent. Statement B provides additional procedural details (a reply to an affidavit) and an advocate's information, which is consistent with the context established in Statement A and does not present any conflicting facts."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Supreme Court of India",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are excerpts from the same Act and contain an identical portion of Section 10. However, Statement A includes the full Section 10 and Section 11, while Statement B includes a partial Section 10 and Section 9-B. The inclusion of different additional sections from the same Act constitutes a difference that could matter and warrants expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statements discuss different provisions of the same Act: Statement A covers contempt powers and protection of action, while Statement B covers case distribution and jurisdiction of the Special Court. They do not describe the same facts or events."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same 'Reply to Additional Affidavit' in the same case, but Statement A's cover letter is dated August 2nd, 2024, while Statement B (the affidavit itself) is dated January 18th, 2024, with an affirmation on January 30th, 2024. These different dates for the same document/event require expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same Act. Statement A provides the text of specific sections (14 and 15), while Statement B provides a table of contents for other sections (1-9B). They are complementary and do not present any conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal proceeding, 'Criminal Appeal No. 771 of 2024', but discuss different aspects of it (legal principles/precedents vs. procedural history/facts of the case). These different details about the same event warrant review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A describes a specific instance of an irregularity (failure to put material circumstances to the accused) and poses the question of whether it can be cured by remand. Statement B provides general legal principles and considerations for curing such irregularities, explicitly stating that a case 'can be remanded to the Trial Court' for this purpose. Statement B provides the legal framework relevant to the question raised in Statement A, making them consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a cover letter for the document from which Statement A is extracted. They are consistent as B refers to the document A is part of."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a cover letter transmitting Statement A, which is the 'Reply to Additional Affidavit on behalf of Respondent No.5'. They are entirely consistent and complementary."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shiju K",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.7,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss different sections of the Negotiable Instruments Act (N.I. Act) related to 'indorsement' within the same legal proceeding, requiring an expert to ensure consistent application and interpretation."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A discusses the Special Court's power to punish for contempt and protection for actions taken in good faith, while Statement B discusses the establishment and composition of the Special Court. They cover different aspects of the same Act without overlapping factual claims that could conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B directly continues the discussion from Statement A, answering the question posed at the end of A and providing further details and conclusions that are in full agreement with the issues raised in A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal case and the evidence of PW-1 and PW-2, with Statement B providing additional, detailed factual issues and analysis regarding PW-2's testimony and other evidence that are not present in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are from Respondent No. 5 responding to an 'Additional Affidavit' and discuss Respondent No. 5's involvement with shares of Respondent No. 2, but they address different paragraphs and exhibits with slightly different responses (claiming no accusation vs. denying collusion and asserting ownership), which an expert should review for consistency."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss Respondent No. 2 and refer to an 'Additional Affidavit'. Statement A repeatedly states 'no comments are offered' regarding shares of Respondent No. 2 for paragraphs 2(i) through 2(v) of the Additional Affidavit. Statement B also uses this exact phrase for paragraph 5 of the Additional Affidavit, and includes other denials for paragraphs 4 and 6. While the specific phrase is identical, they refer to different paragraphs of the Additional Affidavit, indicating different factual details about the same proceeding."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "The statements are largely identical but have subtle differences in formatting and the inclusion of a footnote reference number ('4') next to the case name in Statement A, which is absent in Statement B. These minor differences warrant review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "High Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the role of the Chief Justice of the High Court in relation to the Special Court under the same Act, but describe different functions (case distribution vs. judge nomination), which are distinct factual details about the same entity's role."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are denials of claims made in the 'Additional Affidavit' by the Applicant, specifically concerning Respondent No. 5 and shares of Respondent No. 2. Respondent No. 2 denies collusion with Respondent No. 5 and that Respondent No. 5 is a Benami shareholder, while Respondent No. 5 generally denies the Applicant's claims and denies taking an illegal stand. Their denials are aligned and mutually supportive, indicating consistency rather than conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same criminal appeal and the testimony of the same prosecution witnesses (PW-1 and PW-2), but from different angles (procedural issues in examination vs. substantive quality of evidence). These different aspects of the same facts could matter and require expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the role and powers of the Custodian within the same Act, but describe different functions and appeal processes, which an expert might need to review for potential interdependencies or subtle implications."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Supreme Court of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements contain identical text regarding the appeal period to the Supreme Court and the discharge of liabilities, with no conflicting information. Statement B provides additional context on the appeal process, and Statement A mentions another section, but these additions do not create any conflict."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent no 1",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the status of shares (Benami/attached) and mention 'Kalpana Jhobalia' in the context of the same legal proceeding, but they are presented from the perspective of different respondents (Respondent no 1 in Statement A and Respondent no 5 in Statement B), which requires expert review for potential subtle conflicts or differing accounts."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are direct excerpts from different, non-overlapping sections of the same legal document (THE SPECIAL COURT (TRIAL OF OFFENCES RELATING TO TRANSACTIONS IN SECURITIES) ACT, 1992). They present different provisions of the Act and are inherently consistent as parts of the same authoritative source, with no conflicting information or differing accounts of the same facts."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B contains the complete text of the sentence that is truncated in Statement A regarding the Anokhilal case, and also includes an identical preceding paragraph. They are excerpts from the same continuous document and are fully consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements assert that the shares in question were never declared Benami, with Statement B providing additional context and support for this claim."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A identifies Nirav D. Jobalia as Respondent No.5 and provides his details. Statement B is the affidavit from Respondent No.5, Nirav D. Jobalia, and contains no conflicting information about his identity or role."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a cover letter transmitting the document from which Statement A is an excerpt. They are entirely consistent and refer to the same legal filing."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements pertain to Nirav Jobalia as Respondent No. 5 in the same legal proceeding, with Statement A providing verification details and Statement B providing content from a reply, representing different factual details about the same person and event."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a direct continuation of Statement A, specifically picking up in the middle of paragraph 14. They are part of the same continuous text and argument, thus inherently consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A contains content (affidavit and verification) from the 'Reply to Additional Affidavit on behalf of Respondent No.5', which Statement B is a cover letter for, enclosing the same document. They are parts of the same legal filing."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "PW-2",
+    "v3_result": "unrelated",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A details the testimony of PW-1 and PW-2, while Statement B discusses procedural issues, the date of occurrence, and the appellant's incarceration, without providing conflicting factual details about the testimony itself."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal case and applicant, but Statement B provides additional factual details about the applicant's capacity and the Custodian's address that are not present in Statement A, warranting expert review for potential relevance."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same legal act and describe the definition, appointment, and functions of the Custodian without any conflicting information. Statement B elaborates on additional powers and procedures related to the Custodian, building upon the foundational information in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Parliament of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements contain identical text from the same sections of 'THE SPECIAL COURT (TRIAL OF OFFENCES RELATING TO TRANSACTIONS IN SECURITIES) ACT, 1992', with no factual differences."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is a cover letter and index for the legal document presented in Statement A. They are entirely consistent, with B describing A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A establishes the fundamental right to legal aid, while Statement B provides specific procedural guidelines for implementing that right, making them complementary and consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements consistently state that no comments are offered regarding shares of Respondent No. 2 because no accusation has been made against the answering Respondent concerning those shares, in response to different paragraphs of the Additional Affidavit."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Custodian",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are excerpts from the same legal act and provide complementary information about the Custodian's definition, appointment, functions, and interaction with the Special Court, without any conflicting details."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Central Government",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the Central Government's role and status under the same Act, but describe different aspects (protection from legal proceedings vs. power to appoint custodians), which are different factual details about the same entity and proceeding."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A is a cover letter and index for a 'Reply to Additional Affidavit on behalf of Respondent No.5', and Statement B is an excerpt from the content of that very 'Reply to Additional Affidavit'. They are entirely consistent as one describes the document and the other provides its content."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Anokhilal",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the principles of legal aid and the State's duty to provide it, with significant overlapping text. Statement A specifically refers to the Anokhilal case and its summary of principles (paragraph 20), noting that Anokhilal 'revisited the law on this aspect'. Statement B quotes a different paragraph (paragraph 25) detailing some of these principles. An expert would need to review if Anokhilal's 'revisiting' of the law (as summarized in para 20) has any implications for the principles stated in para 25, making it a 'needs_review' scenario."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Kalpana Jhobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements mention Kalpana Jhobalia but provide different factual details about her involvement or connection to the case, which could be significant."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shiju K",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal case (Shiju K vs Nalini, Crl. Rev. Pet. No. 1251 of 2005). Statement A provides the case's procedural details, while Statement B discusses specific legal arguments and findings within that case, particularly concerning the Negotiable Instruments Act. They describe the same proceeding but with different factual details, warranting expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "PW-2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Statement A discusses a procedural issue regarding PW-2's testimony (it was not put to the appellant), while Statement B details the content of PW-2's testimony. These are different factual details about the same proceeding involving PW-2 that an expert should review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal proceeding (Misc. Petition No. 99 of 1998) and an affidavit from the Income Tax Department, involving Respondent No. 2 and Respondent No. 5 in the context of share ownership. Statement A denies collusion and asserts ownership, while Statement B provides additional details about the petition's disposition and the status of shares, which an expert would need to review for potential implications or subtle differences."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are from Respondent No. 5 and respond to an 'Additional Affidavit,' but they reference different paragraph numbers (e.g., A refers to paragraph 7 and 8, while B refers to 14, 15, and 16) for what appear to be similar points of contention. The responses to these points also differ in their framing and content, such as Statement A directly denying an accusation while Statement B claims no accusation was passed against the respondent for the same paragraph."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A identifies Nirav D. Jobalia as Respondent No. 5 in a legal application, and Statement B is a submission made on behalf of Respondent No. 5 in the same legal context, with no conflicting information."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are responses from Respondent No. 5, consistently denying accusations and asserting their position regarding shares of Respondent No. 2, without any conflicting details."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same legal application and applicant, but Statement A includes the detail that Jyoti H. Mehta is the 'sole legal heirs of late Harshad S Mehta,' which is omitted in Statement B. This is a factual difference that could matter."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "consistent",
+    "v3_confidence": 0.95,
+    "v3_escalates": false,
+    "v3_reason": "Both statements consistently deny collusion between Respondent No.2 and Respondent No.5 and refer to the answering respondent's ownership of shares in Respondent No.2."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement B is the cover page and affirmation for the document whose content is partially presented in Statement A. Both refer to the same legal proceeding and the same parties, with Statement A being the body of the reply affidavit and Statement B identifying it as such."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "PW-2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss PW-2 and his testimony, but Statement A details the content of his deposition, while Statement B highlights a procedural failure regarding his testimony not being put to the appellant. These are different factual details about the same witness and proceeding that could matter."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "President of India",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A provides specific details from sections of the Act, while Statement B provides the table of contents and introductory information for the exact same Act. They are entirely consistent and complementary."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "State of Maharashtra",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Statement A establishes the fundamental principle of the right to legal aid, citing a Supreme Court decision. Statement B provides specific guidelines and procedures for the implementation of legal aid, which are entirely consistent with and elaborate upon the principle discussed in Statement A."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 2",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements are denials in response to an 'Additional Affidavit' and discuss similar issues involving Respondent No. 2 and Respondent No. 5, including collusion and share ownership, but with subtle differences in how they address specific accusations or claims, warranting expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are from Respondent No. 5 and consistently deny accusations regarding shares of Respondent No. 2, specifically mentioning 800 shares and denying they are 'attached' or that Respondent No. 5 is a 'Benami Shareholder'."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Trial Court",
+    "v3_result": "consistent",
+    "v3_confidence": 0.0,
+    "v3_escalates": true,
+    "v3_reason": "Statement A describes a specific instance of an irregularity (failure to put material circumstances to the accused) and raises the question of whether it can be cured by remand. Statement B provides general legal principles and considerations for curing such irregularities, including the possibility of remand to the Trial Court for recording a supplementary statement. Statement B provides the legal context and potential solutions for the problem described in Statement A, making them consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "The Custodian",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements refer to the same legal case and applicant. Statement A lists the applicant's advocate's address as '32, Madhuli Apartments...', while Statement B lists the applicant's own residence as '32, Madhuli...'. While the address is the same, the association with the advocate versus the applicant is a subtle factual difference that could warrant expert review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Nirav Jobalia",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.8,
+    "v3_escalates": true,
+    "v3_reason": "Statement A identifies Nirav D. Jobalia as Respondent 5. Statement B is a legal response from 'the answering Respondent' regarding accusations related to shares of Respondent No. 2. Assuming Nirav D. Jobalia is 'the answering Respondent', these statements provide different factual details about the same person (identification vs. legal position), which warrants review."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Respondent No. 5",
+    "v3_result": "needs_review",
+    "v3_confidence": 0.9,
+    "v3_escalates": true,
+    "v3_reason": "Both statements discuss the same Misc. Petition No. 99 of 1998 and an affidavit from the Income Tax Department, with both denying or not admitting its contents regarding Respondent No. 5, but they provide different specific details and arguments related to it."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Shiju K",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Statement A provides the case details and parties, while Statement B describes the legal reasoning and final judgment of that exact same case, leading to the acquittal of the revision petitioner (Shiju K). They are parts of the same document and are entirely consistent."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Jyoti Mehta",
+    "v3_result": "consistent",
+    "v3_confidence": 1.0,
+    "v3_escalates": false,
+    "v3_reason": "Both statements refer to the same legal case (Misc. Application No. 10 of 2023 with Jyoti H. Mehta as applicant) and discuss the 'Reply to Additional Affidavit on behalf of Respondent No.5'. Statement B is a cover letter transmitting the document partially shown in Statement A, confirming they relate to the same filing."
+  },
+  {
+    "is_contradiction": false,
+    "entity_name": "Income Tax Department",
+    "v3_result": "consistent",
+    "v3_confidence": 0.9,
+    "v3_escalates": false,
+    "v3_reason": "Both statements are denials from a respondent's perspective, consistently refuting claims of collusion, benami shareholding, and the validity of the Income Tax Department's affidavit regarding shares of Respondent No.2."
+  }
+]

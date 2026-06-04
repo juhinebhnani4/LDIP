@@ -1,500 +1,500 @@
-[2026-02-14 12:52:20,492: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Harshad Mehta Family' pairs_compared=0
-[2026-02-14 12:52:20,492: WARNING/MainProcess] 2026-02-14 12:52:20 [debug    ] detect_contradictions_name_complete canonical_name='Harshad Mehta Family' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:52:20,492: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_statements_by_canonical_name_request canonical_name='J. Chandran' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:20,670: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2818af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:20,671: WARNING/MainProcess] 2026-02-14 12:52:20 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=444d1672-b534-41e4-a106-670113e84fe6 max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=2
-[2026-02-14 12:52:20,671: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] no_pairs_to_compare            entity_id=444d1672-b534-41e4-a106-670113e84fe6 total_statements=2
-[2026-02-14 12:52:20,671: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Jehangir Khajotia' pairs_compared=0
-[2026-02-14 12:52:20,671: WARNING/MainProcess] 2026-02-14 12:52:20 [debug    ] detect_contradictions_name_complete canonical_name='Jehangir Khajotia' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=0 stored=0
-[2026-02-14 12:52:20,672: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_statements_by_canonical_name_request canonical_name='The Custodian' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:20,692: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.J.+Chandran "HTTP/1.1 200 OK"
-[2026-02-14 12:52:20,870: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.The+Custodian "HTTP/1.1 200 OK"
-[2026-02-14 12:52:20,871: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_by_name_cross_type_match canonical_name='The Custodian' entity_count=2 entity_types=['INSTITUTION', 'ORG']
-[2026-02-14 12:52:20,890: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bc1408472-667d-4165-872e-6636abade453%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:20,891: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='J. Chandran'
-[2026-02-14 12:52:20,891: WARNING/MainProcess] 2026-02-14 12:52:20 [debug    ] detect_contradictions_name_complete canonical_name='J. Chandran' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:52:20,891: WARNING/MainProcess] 2026-02-14 12:52:20 [info     ] compare_statements_by_canonical_name_request canonical_name='Hero Motocorp Limited' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:21,072: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B193cb53f-ebd0-4a5d-babe-9d40e2ebc089%2C077ae863-a629-4b99-b3f1-432e209b3e0d%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,089: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Hero+Motocorp+Limited "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,096: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,097: WARNING/MainProcess] 2026-02-14 12:52:21 [debug    ] screening_escalating_to_gpt4   entity_name=Custodian screening_confidence=0.8 screening_result=needs_review
-[2026-02-14 12:52:21,099: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:21,274: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,276: WARNING/MainProcess] 2026-02-14 12:52:21 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=193cb53f-ebd0-4a5d-babe-9d40e2ebc089 max_pairs=25 selected_pairs=9 total_candidate_pairs=9 total_statements=6
-[2026-02-14 12:52:21,276: WARNING/MainProcess] 2026-02-14 12:52:21 [info     ] starting_entity_comparison     batch_size=5 entity_id=193cb53f-ebd0-4a5d-babe-9d40e2ebc089 entity_name='The Custodian' total_pairs=9
-[2026-02-14 12:52:21,290: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B26a0d11c-ffda-4bae-8925-8a2c2ff676fb%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,492: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,493: WARNING/MainProcess] 2026-02-14 12:52:21 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=26a0d11c-ffda-4bae-8925-8a2c2ff676fb max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=3
-[2026-02-14 12:52:21,493: WARNING/MainProcess] 2026-02-14 12:52:21 [info     ] no_pairs_to_compare            entity_id=26a0d11c-ffda-4bae-8925-8a2c2ff676fb total_statements=3
-[2026-02-14 12:52:21,493: WARNING/MainProcess] 2026-02-14 12:52:21 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Hero Motocorp Limited' pairs_compared=0
-[2026-02-14 12:52:21,493: WARNING/MainProcess] 2026-02-14 12:52:21 [debug    ] detect_contradictions_name_complete canonical_name='Hero Motocorp Limited' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:52:21,494: WARNING/MainProcess] 2026-02-14 12:52:21 [info     ] compare_statements_by_canonical_name_request canonical_name='Respondent No.2' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:21,696: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Respondent+No.2 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:21,898: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bc30650af-5a30-4e06-be10-9dfa8b3747ac%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:22,098: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:22,101: WARNING/MainProcess] 2026-02-14 12:52:22 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac max_pairs=25 selected_pairs=4 total_candidate_pairs=4 total_statements=5
-[2026-02-14 12:52:22,101: WARNING/MainProcess] 2026-02-14 12:52:22 [info     ] starting_entity_comparison     batch_size=5 entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac entity_name='Respondent No.2' total_pairs=4
-[2026-02-14 12:52:22,203: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:22,204: WARNING/MainProcess] 2026-02-14 12:52:22 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.644999999999999e-05 entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' escalated=False processing_time_ms=14409 result=consistent
-[2026-02-14 12:52:22,205: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:22,523: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:22,525: WARNING/MainProcess] 2026-02-14 12:52:22 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010942499999999999 entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' escalated=False processing_time_ms=14729 result=consistent
-[2026-02-14 12:52:22,525: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:25,431: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:25,432: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=17391 input_cost_inr=0.0081 input_tokens=1299 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0383 output_tokens=1529 provider=gemini-2.5-flash total_cost_inr=0.0464 total_cost_usd=0.00055612
-[2026-02-14 12:52:25,432: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,432: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,432: WARNING/MainProcess] 2026-02-14 12:52:25 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:52:25,432: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:52:25,433: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_fallback         chunk_page=None document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_fallback fallback_reason=no_bbox_data matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 session_id=None user_id=None
-[2026-02-14 12:52:25,434: WARNING/MainProcess] 2026-02-14 12:52:25 [info     ] citation_page_detected_chunk   bbox_id=None chunk_id=None citation_id=None confidence=None detection_method=chunk document_id=91cc755a-f53b-4033-816c-7121aeb07320 event_category=reliability event_id=None event_type=citation_page_detected_chunk matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 page_number=None session_id=None user_id=None
-[2026-02-14 12:52:25,434: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:26,656: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:26,657: WARNING/MainProcess] 2026-02-14 12:52:26 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00011669999999999999 entity_name='Harshad S. Mehta' escalated=False processing_time_ms=15447 result=consistent
-[2026-02-14 12:52:26,657: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:26,958: WARNING/MainProcess] 2026-02-14 12:52:26 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=1524 input_cost_inr=0.0015 input_tokens=242 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0002 output_tokens=7 provider=gemini-2.5-flash total_cost_inr=0.0017 total_cost_usd=2.025e-05
-[2026-02-14 12:52:26,958: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:26,957: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:30,093: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:30,095: WARNING/MainProcess] 2026-02-14 12:52:30 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000119775 entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' escalated=False processing_time_ms=22299 result=unrelated
-[2026-02-14 12:52:30,095: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:30,108: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:30,109: WARNING/MainProcess] 2026-02-14 12:52:30 [debug    ] screening_escalating_to_gpt4   entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:52:30,124: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:30,125: WARNING/MainProcess] 2026-02-14 12:52:30 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00012255 entity_name='Harshad S. Mehta' escalated=False processing_time_ms=18915 result=consistent
-[2026-02-14 12:52:30,188: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:52:30,194: WARNING/MainProcess] 2026-02-14 12:52:30 [info     ] statement_comparison_complete  confidence=0.9 cost_usd=0.028277124999999997 entity_name=Custodian escalated=True processing_time_ms=26039 result=unrelated
-[2026-02-14 12:52:30,296: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:30,497: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:32,260: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:32,261: WARNING/MainProcess] 2026-02-14 12:52:32 [info     ] statement_comparison_screened  confidence=1.0 cost_usd=8.6175e-05 entity_name='Harshad S. Mehta' escalated=False processing_time_ms=21051 result=consistent
-[2026-02-14 12:52:32,261: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:33,864: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:33,866: WARNING/MainProcess] 2026-02-14 12:52:33 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010672499999999998 entity_name='Harshad S. Mehta' escalated=False processing_time_ms=22656 result=consistent
-[2026-02-14 12:52:33,867: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:33,911: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:33,912: WARNING/MainProcess] 2026-02-14 12:52:33 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010222499999999999 entity_name='Harshad S. Mehta' escalated=False processing_time_ms=22702 result=consistent
-[2026-02-14 12:52:34,067: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:36,116: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:36,117: WARNING/MainProcess] 2026-02-14 12:52:36 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000106275 entity_name='Nirav Jobalia' escalated=False processing_time_ms=22355 result=consistent
-[2026-02-14 12:52:36,118: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:37,579: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:37,580: WARNING/MainProcess] 2026-02-14 12:52:37 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=10621 input_cost_inr=0.0082 input_tokens=1306 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0267 output_tokens=1065 provider=gemini-2.5-flash total_cost_inr=0.0349 total_cost_usd=0.00041745
-[2026-02-14 12:52:37,580: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:38,076: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:38,077: WARNING/MainProcess] 2026-02-14 12:52:38 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00011369999999999999 entity_name='Nirav Jobalia' escalated=False processing_time_ms=24315 result=consistent
-[2026-02-14 12:52:38,077: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:38,774: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:52:38,779: WARNING/MainProcess] 2026-02-14 12:52:38 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.02761205 entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' escalated=True processing_time_ms=30983 result=consistent
-[2026-02-14 12:52:38,779: WARNING/MainProcess] 2026-02-14 12:52:38 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=22090c69-0d62-4af6-9e25-01c59235406c pairs_compared=4 processing_time_ms=30984 total_cost_usd=0.0275
-[2026-02-14 12:52:38,779: WARNING/MainProcess] 2026-02-14 12:52:38 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' pairs_compared=4
-[2026-02-14 12:52:38,779: WARNING/MainProcess] 2026-02-14 12:52:38 [debug    ] detect_contradictions_name_complete canonical_name='Special Court (Trial of Offences Relating to Transaction in Securities) Act, 1992' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=4 stored=0
-[2026-02-14 12:52:38,779: WARNING/MainProcess] 2026-02-14 12:52:38 [info     ] compare_statements_by_canonical_name_request canonical_name='Respondent No.2' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:39,021: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Respondent+No.2 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:39,236: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bc30650af-5a30-4e06-be10-9dfa8b3747ac%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:39,453: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:39,456: WARNING/MainProcess] 2026-02-14 12:52:39 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac max_pairs=25 selected_pairs=4 total_candidate_pairs=4 total_statements=5
-[2026-02-14 12:52:39,456: WARNING/MainProcess] 2026-02-14 12:52:39 [info     ] starting_entity_comparison     batch_size=5 entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac entity_name='Respondent No.2' total_pairs=4
-[2026-02-14 12:52:39,744: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:39,745: WARNING/MainProcess] 2026-02-14 12:52:39 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000113025 entity_name='Nirav Jobalia' escalated=False processing_time_ms=25983 result=consistent
-[2026-02-14 12:52:39,745: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:40,549: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:40,551: WARNING/MainProcess] 2026-02-14 12:52:40 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000134325 entity_name='Nirav Jobalia' escalated=False processing_time_ms=26789 result=consistent
-[2026-02-14 12:52:40,551: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:40,960: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:40,962: WARNING/MainProcess] 2026-02-14 12:52:40 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=0.000110475 entity_name='Nirav Jobalia' escalated=False processing_time_ms=27200 result=consistent
-[2026-02-14 12:52:40,962: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:44,404: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:44,406: WARNING/MainProcess] 2026-02-14 12:52:44 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.329999999999999e-05 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=30018 result=consistent
-[2026-02-14 12:52:44,406: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:44,564: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:44,565: WARNING/MainProcess] 2026-02-14 12:52:44 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00011429999999999999 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=30177 result=consistent
-[2026-02-14 12:52:44,607: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:44,823: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:44,824: WARNING/MainProcess] 2026-02-14 12:52:44 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010027499999999998 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=30436 result=consistent
-[2026-02-14 12:52:44,824: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:47,790: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:47,791: WARNING/MainProcess] 2026-02-14 12:52:47 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.802499999999998e-05 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=33403 result=consistent
-[2026-02-14 12:52:47,791: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:48,867: WARNING/MainProcess] 2026-02-14 12:52:48 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=0.00010372499999999999 entity_name='The Custodian' escalated=False processing_time_ms=33666 result=consistent
-[2026-02-14 12:52:48,867: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:48,865: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:49,261: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:49,262: WARNING/MainProcess] 2026-02-14 12:52:49 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=9.659999999999999e-05 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=34874 result=consistent
-[2026-02-14 12:52:49,262: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:51,134: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:51,135: WARNING/MainProcess] 2026-02-14 12:52:51 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=13555 input_cost_inr=0.0032 input_tokens=504 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0036 output_tokens=144 provider=gemini-2.5-flash total_cost_inr=0.0068 total_cost_usd=8.1e-05
-[2026-02-14 12:52:51,136: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:51,203: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:51,204: WARNING/MainProcess] 2026-02-14 12:52:51 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010477499999999999 entity_name='The Custodian' escalated=False processing_time_ms=36004 result=consistent
-[2026-02-14 12:52:51,204: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:51,673: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:51,674: WARNING/MainProcess] 2026-02-14 12:52:51 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=0.00010387499999999999 entity_name='The Custodian' escalated=False processing_time_ms=36473 result=consistent
-[2026-02-14 12:52:51,674: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:52,495: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:52,497: WARNING/MainProcess] 2026-02-14 12:52:52 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010237499999999998 entity_name='The Custodian' escalated=False processing_time_ms=37296 result=consistent
-[2026-02-14 12:52:52,497: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:52,866: WARNING/MainProcess] 2026-02-14 12:52:52 [warning  ] detect_contradictions_name_timeout canonical_name='Harshad S. Mehta' document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d timeout_seconds=120
-[2026-02-14 12:52:52,866: WARNING/MainProcess] 2026-02-14 12:52:52 [info     ] compare_statements_by_canonical_name_request canonical_name='Ashwin Mehta' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:52:53,272: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Ashwin+Mehta "HTTP/1.1 200 OK"
-[2026-02-14 12:52:53,534: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bdad86014-c937-4cb6-84a0-ed182ca0bfd9%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:52:53,779: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:52:53,780: WARNING/MainProcess] 2026-02-14 12:52:53 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=dad86014-c937-4cb6-84a0-ed182ca0bfd9 max_pairs=25 selected_pairs=1 total_candidate_pairs=1 total_statements=2
-[2026-02-14 12:52:53,781: WARNING/MainProcess] 2026-02-14 12:52:53 [info     ] starting_entity_comparison     batch_size=5 entity_id=dad86014-c937-4cb6-84a0-ed182ca0bfd9 entity_name='Ashwin Mehta' total_pairs=1
-[2026-02-14 12:52:54,944: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:54,946: WARNING/MainProcess] 2026-02-14 12:52:54 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=0.00010529999999999998 entity_name='The Custodian' escalated=False processing_time_ms=39746 result=consistent
-[2026-02-14 12:52:54,947: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:56,172: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:56,174: WARNING/MainProcess] 2026-02-14 12:52:56 [debug    ] screening_escalating_to_gpt4   entity_name='Ashwin Mehta' screening_confidence=0.8 screening_result=needs_review
-[2026-02-14 12:52:56,176: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:56,867: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:56,869: WARNING/MainProcess] 2026-02-14 12:52:56 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00011655 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=39685 result=consistent
-[2026-02-14 12:52:56,869: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:58,058: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:58,059: WARNING/MainProcess] 2026-02-14 12:52:58 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00011205 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=40876 result=consistent
-[2026-02-14 12:52:58,060: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:59,663: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:59,665: WARNING/MainProcess] 2026-02-14 12:52:59 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=9.982499999999999e-05 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=42482 result=consistent
-[2026-02-14 12:52:59,665: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:52:59,862: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:52:59,863: WARNING/MainProcess] 2026-02-14 12:52:59 [info     ] statement_comparison_screened  confidence=1.0 cost_usd=0.00011084999999999997 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=42680 result=consistent
-[2026-02-14 12:52:59,866: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:02,104: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:02,105: WARNING/MainProcess] 2026-02-14 12:53:02 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000111 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=44922 result=consistent
-[2026-02-14 12:53:02,105: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:02,387: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:02,390: WARNING/MainProcess] 2026-02-14 12:53:02 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=11254 input_cost_inr=0.0082 input_tokens=1307 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0211 output_tokens=841 provider=gemini-2.5-flash total_cost_inr=0.0293 total_cost_usd=0.00035032
-[2026-02-14 12:53:02,390: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:03,588: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:03,590: WARNING/MainProcess] 2026-02-14 12:53:03 [info     ] statement_comparison_screened  confidence=1.0 cost_usd=0.00010312499999999999 entity_name='The Custodian' escalated=False processing_time_ms=42313 result=consistent
-[2026-02-14 12:53:03,590: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:04,115: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:04,116: WARNING/MainProcess] 2026-02-14 12:53:04 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010267499999999999 entity_name='The Custodian' escalated=False processing_time_ms=42839 result=consistent
-[2026-02-14 12:53:04,116: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:05,376: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] compare_statements_by_canonical_name_request canonical_name='Investor Education and Protection Fund Authority' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:05,371: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:05,375: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.02964235 entity_name='Ashwin Mehta' escalated=True processing_time_ms=50001 result=unrelated
-[2026-02-14 12:53:05,375: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=dad86014-c937-4cb6-84a0-ed182ca0bfd9 pairs_compared=1 processing_time_ms=50002 total_cost_usd=0.02953
-[2026-02-14 12:53:05,376: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Ashwin Mehta' pairs_compared=1
-[2026-02-14 12:53:05,376: WARNING/MainProcess] 2026-02-14 12:53:05 [debug    ] detect_contradictions_name_complete canonical_name='Ashwin Mehta' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=1 stored=0
-[2026-02-14 12:53:05,601: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Investor+Education+and+Protection+Fund+Authority "HTTP/1.1 200 OK"
-[2026-02-14 12:53:05,663: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:05,664: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.517499999999998e-05 entity_name='The Custodian' escalated=False processing_time_ms=44387 result=consistent
-[2026-02-14 12:53:05,664: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:05,823: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B8d0ba961-941b-4a7f-864b-caf85a2adcc5%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:05,824: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Investor Education and Protection Fund Authority'
-[2026-02-14 12:53:05,824: WARNING/MainProcess] 2026-02-14 12:53:05 [debug    ] detect_contradictions_name_complete canonical_name='Investor Education and Protection Fund Authority' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:05,824: WARNING/MainProcess] 2026-02-14 12:53:05 [info     ] compare_statements_by_canonical_name_request canonical_name='Karvy Fintech Private Ltd' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:06,041: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Karvy+Fintech+Private+Ltd "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,195: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,196: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] statement_comparison_screened  confidence=1.0 cost_usd=0.00010357499999999998 entity_name='The Custodian' escalated=False processing_time_ms=44919 result=consistent
-[2026-02-14 12:53:06,196: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:06,251: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B756bc269-06da-4234-922d-51c76432c02e%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,252: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Karvy Fintech Private Ltd'
-[2026-02-14 12:53:06,252: WARNING/MainProcess] 2026-02-14 12:53:06 [debug    ] detect_contradictions_name_complete canonical_name='Karvy Fintech Private Ltd' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:06,252: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] compare_statements_by_canonical_name_request canonical_name='Jobalia family' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:06,456: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Jobalia+family "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,457: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] compare_by_name_cross_type_match canonical_name='Jobalia family' entity_count=2 entity_types=['PERSON', 'ORG']
-[2026-02-14 12:53:06,664: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Be4898cc2-53fa-42ca-a100-29ffeeeea57b%2C9454b867-a46b-40ba-9a64-681b570050bb%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,868: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:06,870: WARNING/MainProcess] 2026-02-14 12:53:06 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=e4898cc2-53fa-42ca-a100-29ffeeeea57b max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=6
-[2026-02-14 12:53:06,870: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] no_pairs_to_compare            entity_id=e4898cc2-53fa-42ca-a100-29ffeeeea57b total_statements=6
-[2026-02-14 12:53:06,871: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=2 entity_name='Jobalia family' pairs_compared=0
-[2026-02-14 12:53:06,871: WARNING/MainProcess] 2026-02-14 12:53:06 [debug    ] detect_contradictions_name_complete canonical_name='Jobalia family' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:06,871: WARNING/MainProcess] 2026-02-14 12:53:06 [info     ] compare_statements_by_canonical_name_request canonical_name='Special Court (TORTS) Act' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:07,075: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Special+Court+%28TORTS%29+Act "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,278: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B099540de-eaf2-4bbe-8d03-d954c467e1f9%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,280: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Special Court (TORTS) Act'
-[2026-02-14 12:53:07,281: WARNING/MainProcess] 2026-02-14 12:53:07 [debug    ] detect_contradictions_name_complete canonical_name='Special Court (TORTS) Act' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:07,281: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] compare_statements_by_canonical_name_request canonical_name='Ashwin S. Mehta' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:07,310: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,311: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=0.00010229999999999999 entity_name='The Custodian' escalated=False processing_time_ms=46034 result=consistent
-[2026-02-14 12:53:07,311: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:07,485: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Ashwin+S.+Mehta "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,690: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Ba15b4777-d2c8-48af-b9d2-232d31d127d7%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,892: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:07,894: WARNING/MainProcess] 2026-02-14 12:53:07 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=a15b4777-d2c8-48af-b9d2-232d31d127d7 max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=3
-[2026-02-14 12:53:07,894: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] no_pairs_to_compare            entity_id=a15b4777-d2c8-48af-b9d2-232d31d127d7 total_statements=3
-[2026-02-14 12:53:07,894: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Ashwin S. Mehta' pairs_compared=0
-[2026-02-14 12:53:07,894: WARNING/MainProcess] 2026-02-14 12:53:07 [debug    ] detect_contradictions_name_complete canonical_name='Ashwin S. Mehta' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:07,894: WARNING/MainProcess] 2026-02-14 12:53:07 [info     ] compare_statements_by_canonical_name_request canonical_name='Special Court Constituted Under The Special Court (Torts) Act, 1992' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:08,097: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Special+Court+Constituted+Under+The+Special+Court+%28Torts%29+Act%2C+1992 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:08,300: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B720afcb7-66e6-434a-93ed-ba9cb9ffa818%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:08,301: WARNING/MainProcess] 2026-02-14 12:53:08 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Special Court Constituted Under The Special Court (Torts) Act, 1992'
-[2026-02-14 12:53:08,301: WARNING/MainProcess] 2026-02-14 12:53:08 [debug    ] detect_contradictions_name_complete canonical_name='Special Court Constituted Under The Special Court (Torts) Act, 1992' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:08,301: WARNING/MainProcess] 2026-02-14 12:53:08 [info     ] compare_statements_by_canonical_name_request canonical_name='2000 shares' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:08,511: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.2000+shares "HTTP/1.1 200 OK"
-[2026-02-14 12:53:08,715: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B935a45c5-7926-448d-b125-068feb8854db%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:08,716: WARNING/MainProcess] 2026-02-14 12:53:08 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='2000 shares'
-[2026-02-14 12:53:08,716: WARNING/MainProcess] 2026-02-14 12:53:08 [debug    ] detect_contradictions_name_complete canonical_name='2000 shares' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:08,716: WARNING/MainProcess] 2026-02-14 12:53:08 [info     ] compare_statements_by_canonical_name_request canonical_name='Chairman, Investor Education & Protection Fund' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:08,918: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Chairman%2C+Investor+Education+%26+Protection+Fund "HTTP/1.1 200 OK"
-[2026-02-14 12:53:09,121: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B997a1662-1427-457f-86be-7faf86f9aa9d%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:09,122: WARNING/MainProcess] 2026-02-14 12:53:09 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Chairman, Investor Education & Protection Fund'
-[2026-02-14 12:53:09,122: WARNING/MainProcess] 2026-02-14 12:53:09 [debug    ] detect_contradictions_name_complete canonical_name='Chairman, Investor Education & Protection Fund' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:09,122: WARNING/MainProcess] 2026-02-14 12:53:09 [info     ] compare_statements_by_canonical_name_request canonical_name=Company matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:09,325: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Company "HTTP/1.1 200 OK"
-[2026-02-14 12:53:09,528: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B2596ce18-af03-4248-9921-5737239589a8%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:09,731: WARNING/MainProcess] 2026-02-14 12:53:09 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=2596ce18-af03-4248-9921-5737239589a8 max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=3
-[2026-02-14 12:53:09,731: WARNING/MainProcess] 2026-02-14 12:53:09 [info     ] no_pairs_to_compare            entity_id=2596ce18-af03-4248-9921-5737239589a8 total_statements=3
-[2026-02-14 12:53:09,732: WARNING/MainProcess] 2026-02-14 12:53:09 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name=Company pairs_compared=0
-[2026-02-14 12:53:09,732: WARNING/MainProcess] 2026-02-14 12:53:09 [debug    ] detect_contradictions_name_complete canonical_name=Company contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:09,732: WARNING/MainProcess] 2026-02-14 12:53:09 [info     ] compare_statements_by_canonical_name_request canonical_name='Special Court (Torts) Act, 1992' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:09,730: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:09,933: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Special+Court+%28Torts%29+Act%2C+1992 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,053: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,055: WARNING/MainProcess] 2026-02-14 12:53:10 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.9 screening_result=needs_review
-[2026-02-14 12:53:10,056: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:10,137: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bc86cad48-3b45-4c52-9855-a2f47141e3c3%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,341: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,343: WARNING/MainProcess] 2026-02-14 12:53:10 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=c86cad48-3b45-4c52-9855-a2f47141e3c3 max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=3
-[2026-02-14 12:53:10,343: WARNING/MainProcess] 2026-02-14 12:53:10 [info     ] no_pairs_to_compare            entity_id=c86cad48-3b45-4c52-9855-a2f47141e3c3 total_statements=3
-[2026-02-14 12:53:10,343: WARNING/MainProcess] 2026-02-14 12:53:10 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Special Court (Torts) Act, 1992' pairs_compared=0
-[2026-02-14 12:53:10,343: WARNING/MainProcess] 2026-02-14 12:53:10 [debug    ] detect_contradictions_name_complete canonical_name='Special Court (Torts) Act, 1992' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:10,343: WARNING/MainProcess] 2026-02-14 12:53:10 [info     ] compare_statements_by_canonical_name_request canonical_name=Applicant matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:10,547: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Applicant "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,750: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Bf6fdcb56-7fae-4b2a-9b4e-f06263fa60fb%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,767: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,768: WARNING/MainProcess] 2026-02-14 12:53:10 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.8 screening_result=unrelated
-[2026-02-14 12:53:10,769: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:10,952: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:10,954: WARNING/MainProcess] 2026-02-14 12:53:10 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=f6fdcb56-7fae-4b2a-9b4e-f06263fa60fb max_pairs=25 selected_pairs=4 total_candidate_pairs=4 total_statements=5
-[2026-02-14 12:53:10,954: WARNING/MainProcess] 2026-02-14 12:53:10 [info     ] starting_entity_comparison     batch_size=5 entity_id=f6fdcb56-7fae-4b2a-9b4e-f06263fa60fb entity_name=Applicant total_pairs=4
-[2026-02-14 12:53:13,877: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:13,878: WARNING/MainProcess] 2026-02-14 12:53:13 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=11487 input_cost_inr=0.0026 input_tokens=412 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0186 output_tokens=742 provider=gemini-2.5-flash total_cost_inr=0.0212 total_cost_usd=0.0002535
-[2026-02-14 12:53:13,878: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:14,186: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:14,188: WARNING/MainProcess] 2026-02-14 12:53:14 [debug    ] screening_escalating_to_gpt4   entity_name=Custodian screening_confidence=0.8 screening_result=consistent
-[2026-02-14 12:53:14,189: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:15,624: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:15,625: WARNING/MainProcess] 2026-02-14 12:53:15 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:15,627: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:17,247: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:17,252: WARNING/MainProcess] 2026-02-14 12:53:17 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.029295250000000002 entity_name='Respondent No.2' escalated=True processing_time_ms=55151 result=unrelated
-[2026-02-14 12:53:18,761: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:18,767: WARNING/MainProcess] 2026-02-14 12:53:18 [info     ] statement_comparison_complete  confidence=1.0 cost_usd=0.028962400000000003 entity_name='Respondent No.2' escalated=True processing_time_ms=56666 result=contradiction
-[2026-02-14 12:53:19,685: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:19,687: WARNING/MainProcess] 2026-02-14 12:53:19 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.9 screening_result=needs_review
-[2026-02-14 12:53:19,689: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:19,828: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:19,829: WARNING/MainProcess] 2026-02-14 12:53:19 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00012037499999999999 entity_name='Respondent No.2' escalated=False processing_time_ms=57728 result=consistent
-[2026-02-14 12:53:19,890: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:20,240: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:20,241: WARNING/MainProcess] 2026-02-14 12:53:20 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:20,243: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:21,588: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:21,591: WARNING/MainProcess] 2026-02-14 12:53:21 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.0262356 entity_name=Custodian escalated=True processing_time_ms=51397 result=unrelated
-[2026-02-14 12:53:21,592: WARNING/MainProcess] 2026-02-14 12:53:21 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=bcf693d9-70ab-4cf5-977a-febcdbc9c1cc pairs_compared=6 processing_time_ms=77437 total_cost_usd=0.08116999999999999
-[2026-02-14 12:53:21,592: WARNING/MainProcess] 2026-02-14 12:53:21 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=2 entity_name=Custodian pairs_compared=6
-[2026-02-14 12:53:21,592: WARNING/MainProcess] 2026-02-14 12:53:21 [debug    ] detect_contradictions_name_complete canonical_name=Custodian contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=6 stored=0
-[2026-02-14 12:53:21,592: WARNING/MainProcess] 2026-02-14 12:53:21 [info     ] compare_statements_by_canonical_name_request canonical_name='kalpana Jhobalia' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:21,817: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.kalpana+Jhobalia "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,019: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B6b520811-c00f-48cb-9cd9-81b75a842f15%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,224: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2818af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,225: WARNING/MainProcess] 2026-02-14 12:53:22 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=6b520811-c00f-48cb-9cd9-81b75a842f15 max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=2
-[2026-02-14 12:53:22,225: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] no_pairs_to_compare            entity_id=6b520811-c00f-48cb-9cd9-81b75a842f15 total_statements=2
-[2026-02-14 12:53:22,225: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='kalpana Jhobalia' pairs_compared=0
-[2026-02-14 12:53:22,225: WARNING/MainProcess] 2026-02-14 12:53:22 [debug    ] detect_contradictions_name_complete canonical_name='kalpana Jhobalia' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=0 stored=0
-[2026-02-14 12:53:22,226: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_statements_by_canonical_name_request canonical_name='Hero Metro Corp Ltd.' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:22,428: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Hero+Metro+Corp+Ltd. "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,436: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,441: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.024640099999999998 entity_name='Respondent No.2' escalated=True processing_time_ms=60339 result=unrelated
-[2026-02-14 12:53:22,441: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] entity_comparison_complete     contradictions_found=1 entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac pairs_compared=4 processing_time_ms=60340 total_cost_usd=0.08254
-[2026-02-14 12:53:22,441: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_merged_statements_success contradictions_found=1 entity_ids_count=1 entity_name='Respondent No.2' pairs_compared=4
-[2026-02-14 12:53:22,446: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] supabase_service_client_created http_version=1.1 retries=3
-[2026-02-14 12:53:22,635: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7Beff08a65-f2ef-4211-bd0b-e8f48fab6ccd%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,745: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/statement_comparisons?columns=%22evidence%22%2C%22contradiction_type%22%2C%22explanation%22%2C%22matter_id%22%2C%22statement_b_id%22%2C%22confidence%22%2C%22entity_id%22%2C%22statement_a_id%22%2C%22result%22%2C%22reasoning%22%2C%22severity%22 "HTTP/1.1 201 Created"
-[2026-02-14 12:53:22,746: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] contradiction_results_stored   contradictions_stored=1 entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9
-[2026-02-14 12:53:22,746: WARNING/MainProcess] 2026-02-14 12:53:22 [debug    ] detect_contradictions_name_complete canonical_name='Respondent No.2' contradictions=1 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=4 stored=1
-[2026-02-14 12:53:22,746: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_statements_by_canonical_name_request canonical_name='Investor Education and Protection Fund' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:22,946: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Investor+Education+and+Protection+Fund "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,959: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2818af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:22,960: WARNING/MainProcess] 2026-02-14 12:53:22 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=eff08a65-f2ef-4211-bd0b-e8f48fab6ccd max_pairs=25 selected_pairs=0 total_candidate_pairs=0 total_statements=4
-[2026-02-14 12:53:22,960: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] no_pairs_to_compare            entity_id=eff08a65-f2ef-4211-bd0b-e8f48fab6ccd total_statements=4
-[2026-02-14 12:53:22,960: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Hero Metro Corp Ltd.' pairs_compared=0
-[2026-02-14 12:53:22,960: WARNING/MainProcess] 2026-02-14 12:53:22 [debug    ] detect_contradictions_name_complete canonical_name='Hero Metro Corp Ltd.' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=0 stored=0
-[2026-02-14 12:53:22,961: WARNING/MainProcess] 2026-02-14 12:53:22 [info     ] compare_statements_by_canonical_name_request canonical_name='Income Tax Department' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:23,154: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B21d7ad03-a5bc-4468-a73d-402179992c9e%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:23,160: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Income+Tax+Department "HTTP/1.1 200 OK"
-[2026-02-14 12:53:23,360: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:23,364: WARNING/MainProcess] 2026-02-14 12:53:23 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=21d7ad03-a5bc-4468-a73d-402179992c9e max_pairs=25 selected_pairs=10 total_candidate_pairs=10 total_statements=11
-[2026-02-14 12:53:23,364: WARNING/MainProcess] 2026-02-14 12:53:23 [info     ] starting_entity_comparison     batch_size=5 entity_id=21d7ad03-a5bc-4468-a73d-402179992c9e entity_name='Investor Education and Protection Fund' total_pairs=10
-[2026-02-14 12:53:23,364: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B28542993-f4e1-46e7-be5e-49cd104fee27%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:23,568: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/documents?select=id%2Cfilename&id=in.%2891cc755a-f53b-4033-816c-7121aeb07320%2C18af99d2-6dc2-4ef2-8a2d-61b0986a190d%29 "HTTP/1.1 200 OK"
-[2026-02-14 12:53:23,570: WARNING/MainProcess] 2026-02-14 12:53:23 [debug    ] statement_pairs_generated      cross_document_only=True entity_id=28542993-f4e1-46e7-be5e-49cd104fee27 max_pairs=25 selected_pairs=1 total_candidate_pairs=1 total_statements=2
-[2026-02-14 12:53:23,570: WARNING/MainProcess] 2026-02-14 12:53:23 [info     ] starting_entity_comparison     batch_size=5 entity_id=28542993-f4e1-46e7-be5e-49cd104fee27 entity_name='Income Tax Department' total_pairs=1
-[2026-02-14 12:53:25,574: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:25,576: WARNING/MainProcess] 2026-02-14 12:53:25 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:25,577: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:25,736: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:25,737: WARNING/MainProcess] 2026-02-14 12:53:25 [debug    ] screening_escalating_to_gpt4   entity_name='Respondent No.2' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:25,778: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:26,191: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:26,196: WARNING/MainProcess] 2026-02-14 12:53:26 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.028493349999999997 entity_name='Respondent No.2' escalated=True processing_time_ms=46740 result=unrelated
-[2026-02-14 12:53:26,501: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:26,506: WARNING/MainProcess] 2026-02-14 12:53:26 [info     ] statement_comparison_complete  confidence=1.0 cost_usd=0.0299233 entity_name='Respondent No.2' escalated=True processing_time_ms=47049 result=contradiction
-[2026-02-14 12:53:27,224: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:27,226: WARNING/MainProcess] 2026-02-14 12:53:27 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00012532499999999997 entity_name='Nirav Jobalia' escalated=False processing_time_ms=46262 result=consistent
-[2026-02-14 12:53:27,226: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:31,016: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:31,022: WARNING/MainProcess] 2026-02-14 12:53:31 [info     ] statement_comparison_complete  confidence=1.0 cost_usd=0.0251789 entity_name='Respondent No.2' escalated=True processing_time_ms=51566 result=unrelated
-[2026-02-14 12:53:32,073: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:32,074: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00012629999999999998 entity_name='Nirav Jobalia' escalated=False processing_time_ms=51110 result=consistent
-[2026-02-14 12:53:32,074: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:32,482: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:32,486: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.029359875000000004 entity_name='Respondent No.2' escalated=True processing_time_ms=53030 result=unrelated
-[2026-02-14 12:53:32,487: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] entity_comparison_complete     contradictions_found=1 entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac pairs_compared=4 processing_time_ms=53031 total_cost_usd=0.11245000000000001
-[2026-02-14 12:53:32,487: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] compare_merged_statements_success contradictions_found=1 entity_ids_count=1 entity_name='Respondent No.2' pairs_compared=4
-[2026-02-14 12:53:32,492: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] supabase_service_client_created http_version=1.1 retries=3
-[2026-02-14 12:53:32,713: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/statement_comparisons?columns=%22evidence%22%2C%22contradiction_type%22%2C%22explanation%22%2C%22matter_id%22%2C%22statement_b_id%22%2C%22confidence%22%2C%22entity_id%22%2C%22statement_a_id%22%2C%22result%22%2C%22reasoning%22%2C%22severity%22 "HTTP/1.1 409 Conflict"
-[2026-02-14 12:53:32,713: WARNING/MainProcess] 2026-02-14 12:53:32 [error    ] contradiction_storage_failed   entity_id=c30650af-5a30-4e06-be10-9dfa8b3747ac error='{\'message\': \'duplicate key value violates unique constraint "unique_statement_pair"\', \'code\': \'23505\', \'hint\': None, \'details\': \'Key (matter_id, statement_a_id, statement_b_id)=(8e3e0e15-739a-4a62-811f-e3eded794fa9, 99d26339-32d3-4b1a-bb1c-eacb194ce101, 758aed88-6ebe-4bb6-b38a-90219ad4b954) already exists.\'}' error_type=APIError matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9
-[2026-02-14 12:53:32,713: WARNING/MainProcess] 2026-02-14 12:53:32 [debug    ] detect_contradictions_name_complete canonical_name='Respondent No.2' contradictions=1 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=4 stored=0
-[2026-02-14 12:53:32,714: WARNING/MainProcess] 2026-02-14 12:53:32 [info     ] compare_statements_by_canonical_name_request canonical_name='Aditi N. Jobalia' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:32,854: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:32,856: WARNING/MainProcess] 2026-02-14 12:53:32 [debug    ] screening_escalating_to_gpt4   entity_name='Nirav Jobalia' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:32,858: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:32,949: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Aditi+N.+Jobalia "HTTP/1.1 200 OK"
-[2026-02-14 12:53:33,151: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B254d51cf-a512-4ba3-997d-f02b6a24362f%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:33,152: WARNING/MainProcess] 2026-02-14 12:53:33 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Aditi N. Jobalia'
-[2026-02-14 12:53:33,152: WARNING/MainProcess] 2026-02-14 12:53:33 [debug    ] detect_contradictions_name_complete canonical_name='Aditi N. Jobalia' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=0 stored=0
-[2026-02-14 12:53:36,059: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:36,061: WARNING/MainProcess] 2026-02-14 12:53:36 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010965 entity_name='Nirav Jobalia' escalated=False processing_time_ms=55097 result=consistent
-[2026-02-14 12:53:36,062: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:39,274: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:39,275: WARNING/MainProcess] 2026-02-14 12:53:39 [debug    ] screening_escalating_to_gpt4   entity_name='Miscellaneous Application No. 10 of 2023' screening_confidence=0.8 screening_result=needs_review
-[2026-02-14 12:53:39,277: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:39,552: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:39,554: WARNING/MainProcess] 2026-02-14 12:53:39 [debug    ] screening_escalating_to_gpt4   entity_name='Nirav Jobalia' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:53:39,555: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:42,203: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:42,209: WARNING/MainProcess] 2026-02-14 12:53:42 [info     ] statement_comparison_complete  confidence=0.9 cost_usd=0.030226675 entity_name='Nirav Jobalia' escalated=True processing_time_ms=61245 result=unrelated
-[2026-02-14 12:53:42,469: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:42,471: WARNING/MainProcess] 2026-02-14 12:53:42 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.314999999999999e-05 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=53206 result=consistent
-[2026-02-14 12:53:42,471: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:43,234: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:43,235: WARNING/MainProcess] 2026-02-14 12:53:43 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010004999999999999 entity_name='Miscellaneous Application No. 10 of 2023' escalated=False processing_time_ms=53971 result=consistent
-[2026-02-14 12:53:43,236: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:44,109: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:44,111: WARNING/MainProcess] 2026-02-14 12:53:44 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=30232 input_cost_inr=0.0079 input_tokens=1268 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.071 output_tokens=2833 provider=gemini-2.5-flash total_cost_inr=0.0789 total_cost_usd=0.000945
-[2026-02-14 12:53:44,111: WARNING/MainProcess] 2026-02-14 12:53:44 [warning  ] date_response_json_error       error='Unterminated string starting at: line 154 column 24 (char 11297)' response_preview='```json\n{\n  "dates": [\n    {\n      "date_text": "6/3/2014",\n      "extracted_date": "2014-03-06",\n      "date_precision": "day",\n      "event_type": "document",\n      "event_description": "Office of C'
-[2026-02-14 12:53:44,111: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:44,293: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:44,294: WARNING/MainProcess] 2026-02-14 12:53:44 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.682499999999998e-05 entity_name='The Custodian' escalated=False processing_time_ms=49346 result=consistent
-[2026-02-14 12:53:44,295: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:44,691: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:44,693: WARNING/MainProcess] 2026-02-14 12:53:44 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010664999999999999 entity_name='Ashwin Mehta' escalated=False processing_time_ms=50911 result=consistent
-[2026-02-14 12:53:44,693: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:44,694: WARNING/MainProcess] 2026-02-14 12:53:44 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=dad86014-c937-4cb6-84a0-ed182ca0bfd9 pairs_compared=1 processing_time_ms=50913 total_cost_usd=0.0
-[2026-02-14 12:53:44,694: WARNING/MainProcess] 2026-02-14 12:53:44 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Ashwin Mehta' pairs_compared=1
-[2026-02-14 12:53:44,694: WARNING/MainProcess] 2026-02-14 12:53:44 [debug    ] detect_contradictions_name_complete canonical_name='Ashwin Mehta' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=1 stored=0
-[2026-02-14 12:53:44,997: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:45,002: WARNING/MainProcess] 2026-02-14 12:53:45 [info     ] statement_comparison_complete  confidence=1.0 cost_usd=0.02733905 entity_name='Miscellaneous Application No. 10 of 2023' escalated=True processing_time_ms=55738 result=consistent
-[2026-02-14 12:53:45,003: WARNING/MainProcess] 2026-02-14 12:53:45 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=205f21d3-5a9d-4f55-bfb1-d5425aecbb70 pairs_compared=8 processing_time_ms=90615 total_cost_usd=0.02723
-[2026-02-14 12:53:45,003: WARNING/MainProcess] 2026-02-14 12:53:45 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=1 entity_name='Miscellaneous Application No. 10 of 2023' pairs_compared=8
-[2026-02-14 12:53:45,003: WARNING/MainProcess] 2026-02-14 12:53:45 [debug    ] detect_contradictions_name_complete canonical_name='Miscellaneous Application No. 10 of 2023' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=8 stored=0
-[2026-02-14 12:53:45,241: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:45,243: WARNING/MainProcess] 2026-02-14 12:53:45 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=1131 input_cost_inr=0.002 input_tokens=315 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0002 output_tokens=7 provider=gemini-2.5-flash total_cost_inr=0.0021 total_cost_usd=2.572e-05
-[2026-02-14 12:53:45,243: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:45,985: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:45,987: WARNING/MainProcess] 2026-02-14 12:53:45 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=7.964999999999998e-05 entity_name='The Custodian' escalated=False processing_time_ms=51038 result=consistent
-[2026-02-14 12:53:45,987: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:46,382: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:53:46,386: WARNING/MainProcess] 2026-02-14 12:53:46 [info     ] statement_comparison_complete  confidence=0.95 cost_usd=0.029047950000000003 entity_name='Nirav Jobalia' escalated=True processing_time_ms=65422 result=unrelated
-[2026-02-14 12:53:47,760: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:47,761: WARNING/MainProcess] 2026-02-14 12:53:47 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.3975e-05 entity_name='The Custodian' escalated=False processing_time_ms=52812 result=consistent
-[2026-02-14 12:53:47,761: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:48,152: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:48,153: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=7.95e-05 entity_name='The Custodian' escalated=False processing_time_ms=53204 result=consistent
-[2026-02-14 12:53:48,153: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:48,154: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=193cb53f-ebd0-4a5d-babe-9d40e2ebc089 pairs_compared=9 processing_time_ms=92954 total_cost_usd=0.0
-[2026-02-14 12:53:48,154: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=2 entity_name='The Custodian' pairs_compared=9
-[2026-02-14 12:53:48,154: WARNING/MainProcess] 2026-02-14 12:53:48 [debug    ] detect_contradictions_name_complete canonical_name='The Custodian' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=9 stored=0
-[2026-02-14 12:53:48,155: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] compare_statements_by_canonical_name_request canonical_name='Neeraj Sharna' matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 max_pairs=25
-[2026-02-14 12:53:48,370: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/identity_nodes?select=id%2Ccanonical_name%2Centity_type&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&canonical_name=eq.Neeraj+Sharna "HTTP/1.1 200 OK"
-[2026-02-14 12:53:48,530: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:48,532: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00010627499999999998 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=46425 result=consistent
-[2026-02-14 12:53:48,532: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:48,583: INFO/MainProcess] HTTP Request: GET https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/chunks?select=id%2Cdocument_id%2Ccontent%2Cpage_number%2Cbbox_ids%2Centity_ids&matter_id=eq.8e3e0e15-739a-4a62-811f-e3eded794fa9&entity_ids=ov.%7B7e281aa6-a513-40da-8459-e0abdc38173e%7D&order=document_id.asc%2Cpage_number.asc "HTTP/1.1 200 OK"
-[2026-02-14 12:53:48,584: WARNING/MainProcess] 2026-02-14 12:53:48 [info     ] compare_merged_insufficient_statements chunk_count=1 entity_name='Neeraj Sharna'
-[2026-02-14 12:53:48,584: WARNING/MainProcess] 2026-02-14 12:53:48 [debug    ] detect_contradictions_name_complete canonical_name='Neeraj Sharna' contradictions=0 document_id=91cc755a-f53b-4033-816c-7121aeb07320 pairs_compared=0 stored=0
-[2026-02-14 12:53:50,421: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:50,422: WARNING/MainProcess] 2026-02-14 12:53:50 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.277499999999998e-05 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=48315 result=consistent
-[2026-02-14 12:53:50,422: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:50,614: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:50,616: WARNING/MainProcess] 2026-02-14 12:53:50 [info     ] statement_comparison_screened  confidence=0.95 cost_usd=8.767499999999999e-05 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=48509 result=consistent
-[2026-02-14 12:53:50,623: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:52,009: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:52,011: WARNING/MainProcess] 2026-02-14 12:53:52 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.802499999999998e-05 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=49904 result=consistent
-[2026-02-14 12:53:52,011: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:52,490: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:52,492: WARNING/MainProcess] 2026-02-14 12:53:52 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.682499999999998e-05 entity_name='The Custodian' escalated=False processing_time_ms=45179 result=consistent
-[2026-02-14 12:53:52,492: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:53,337: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:53,338: WARNING/MainProcess] 2026-02-14 12:53:53 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.9e-05 entity_name='Jyoti H. Mehta' escalated=False processing_time_ms=51231 result=consistent
-[2026-02-14 12:53:53,338: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:54,886: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:54,887: WARNING/MainProcess] 2026-02-14 12:53:54 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=8.984999999999999e-05 entity_name='The Custodian' escalated=False processing_time_ms=47575 result=consistent
-[2026-02-14 12:53:54,888: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:55,672: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:55,673: WARNING/MainProcess] 2026-02-14 12:53:55 [info     ] llm_cost_tracked               document_id=91cc755a-f53b-4033-816c-7121aeb07320 duration_ms=10430 input_cost_inr=0.0048 input_tokens=760 matter_id=8e3e0e15-739a-4a62-811f-e3eded794fa9 operation=date_extraction_sync output_cost_inr=0.0204 output_tokens=814 provider=gemini-2.5-flash total_cost_inr=0.0252 total_cost_usd=0.0003012
-[2026-02-14 12:53:55,673: WARNING/MainProcess] 2026-02-14 12:53:55 [debug    ] date_rejected_bracket_number   date_text=2023 reason='Looks like paragraph reference [NNN], not a date'
-[2026-02-14 12:53:55,673: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:55,822: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:55,824: WARNING/MainProcess] 2026-02-14 12:53:55 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=9.3075e-05 entity_name='The Custodian' escalated=False processing_time_ms=48511 result=consistent
-[2026-02-14 12:53:55,824: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:56,791: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:53:56,793: WARNING/MainProcess] 2026-02-14 12:53:56 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=8.73e-05 entity_name='The Custodian' escalated=False processing_time_ms=49480 result=consistent
-[2026-02-14 12:53:56,793: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:53:56,794: WARNING/MainProcess] 2026-02-14 12:53:56 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=193cb53f-ebd0-4a5d-babe-9d40e2ebc089 pairs_compared=9 processing_time_ms=95517 total_cost_usd=0.0
-[2026-02-14 12:53:56,794: WARNING/MainProcess] 2026-02-14 12:53:56 [info     ] compare_merged_statements_success contradictions_found=0 entity_ids_count=2 entity_name='The Custodian' pairs_compared=9
-[2026-02-14 12:53:56,794: WARNING/MainProcess] 2026-02-14 12:53:56 [debug    ] detect_contradictions_name_complete canonical_name='The Custodian' contradictions=0 document_id=18af99d2-6dc2-4ef2-8a2d-61b0986a190d pairs_compared=9 stored=0
-[2026-02-14 12:54:00,589: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:00,590: WARNING/MainProcess] 2026-02-14 12:54:00 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.000133425 entity_name=Applicant escalated=False processing_time_ms=49636 result=unrelated
-[2026-02-14 12:54:00,590: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:04,758: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:04,760: WARNING/MainProcess] 2026-02-14 12:54:04 [debug    ] screening_escalating_to_gpt4   entity_name=Applicant screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:54:04,761: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:05,080: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:05,082: WARNING/MainProcess] 2026-02-14 12:54:05 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.0001314 entity_name=Applicant escalated=False processing_time_ms=54127 result=unrelated
-[2026-02-14 12:54:05,082: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:10,262: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:10,263: WARNING/MainProcess] 2026-02-14 12:54:10 [debug    ] screening_escalating_to_gpt4   entity_name='Investor Education and Protection Fund' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:54:10,264: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:11,338: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:11,339: WARNING/MainProcess] 2026-02-14 12:54:11 [debug    ] screening_escalating_to_gpt4   entity_name='Investor Education and Protection Fund' screening_confidence=0.9 screening_result=needs_review
-[2026-02-14 12:54:11,342: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:12,401: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:12,403: WARNING/MainProcess] 2026-02-14 12:54:12 [debug    ] screening_escalating_to_gpt4   entity_name=Applicant screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:54:12,404: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:13,130: WARNING/MainProcess] 2026-02-14 12:54:13 [warning  ] detect_contradictions_name_timeout canonical_name='Nirav Jobalia' document_id=91cc755a-f53b-4033-816c-7121aeb07320 timeout_seconds=120
-[2026-02-14 12:54:14,174: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:54:14,179: WARNING/MainProcess] 2026-02-14 12:54:14 [info     ] statement_comparison_complete  confidence=0.9 cost_usd=0.026286649999999998 entity_name=Applicant escalated=True processing_time_ms=63224 result=unrelated
-[2026-02-14 12:54:15,258: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:15,259: WARNING/MainProcess] 2026-02-14 12:54:15 [info     ] statement_comparison_screened  confidence=0.9 cost_usd=0.00012232499999999998 entity_name='Investor Education and Protection Fund' escalated=False processing_time_ms=51894 result=unrelated
-[2026-02-14 12:54:15,259: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:15,663: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:15,665: WARNING/MainProcess] 2026-02-14 12:54:15 [debug    ] screening_escalating_to_gpt4   entity_name='Investor Education and Protection Fund' screening_confidence=0.7 screening_result=needs_review
-[2026-02-14 12:54:15,667: INFO/MainProcess] AFC is enabled with max remote calls: 10.
-[2026-02-14 12:54:16,101: INFO/MainProcess] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-[2026-02-14 12:54:16,106: WARNING/MainProcess] 2026-02-14 12:54:16 [info     ] statement_comparison_complete  confidence=1.0 cost_usd=0.02829165 entity_name='Investor Education and Protection Fund' escalated=True processing_time_ms=52741 result=unrelated
-[2026-02-14 12:54:16,401: WARNING/MainProcess] 2026-02-14 12:54:16 [warning  ] detect_contradictions_name_timeout canonical_name='Jyoti H. Mehta' document_id=91cc755a-f53b-4033-816c-7121aeb07320 timeout_seconds=120
-[2026-02-14 12:54:16,985: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:16,987: WARNING/MainProcess] 2026-02-14 12:54:16 [debug    ] screening_escalating_to_gpt4   entity_name='Investor Education and Protection Fund' screening_confidence=0.9 screening_result=needs_review
-[2026-02-14 12:54:19,397: INFO/MainProcess] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
-[2026-02-14 12:54:19,399: WARNING/MainProcess] 2026-02-14 12:54:19 [info     ] entity_comparison_complete     contradictions_found=0 entity_id=28542993-f4e1-46e7-be5e-49cd104fee27 pairs_compared=1 processing_time_ms=55829 total_cost_usd=0.0
-[2026-02-14 12:54:20,112: WARNING/MainProcess] 2026-02-14 12:54:20 [debug    ] stage_completed                job_id=9b0f5a15-68ee-473e-a650-4dbd4b91162c stage_name=contradiction_detection
+[2026-02-25 09:54:29,536: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:29,537: WARNING/MainProcess] 2026-02-25 09:54:29 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:29,538: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:29,979: WARNING/MainProcess] 2026-02-25 09:54:29 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0439 input_tokens=1617 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2987 output_tokens=1320 provider=gemini-2.5-flash total_cost_inr=0.3426 total_cost_usd=0.0037851
+[2026-02-25 09:54:30,191: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:30,192: WARNING/MainProcess] 2026-02-25 09:54:30 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:30,192: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:35,393: WARNING/MainProcess] 2026-02-25 09:54:35 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0637 input_tokens=2348 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2858 output_tokens=1263 provider=gemini-2.5-flash total_cost_inr=0.3495 total_cost_usd=0.0038619
+[2026-02-25 09:54:35,618: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:35,619: WARNING/MainProcess] 2026-02-25 09:54:35 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:35,619: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:36,754: WARNING/MainProcess] 2026-02-25 09:54:36 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1061 input_tokens=3908 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.231 output_tokens=1021 provider=gemini-2.5-flash total_cost_inr=0.3371 total_cost_usd=0.0037249
+[2026-02-25 09:54:36,976: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:36,977: WARNING/MainProcess] 2026-02-25 09:54:36 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:36,978: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:37,417: WARNING/MainProcess] 2026-02-25 09:54:37 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0745 input_tokens=2745 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.198 output_tokens=875 provider=gemini-2.5-flash total_cost_inr=0.2725 total_cost_usd=0.003011
+[2026-02-25 09:54:37,622: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:37,622: WARNING/MainProcess] 2026-02-25 09:54:37 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:37,623: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:38,029: WARNING/MainProcess] 2026-02-25 09:54:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0329 input_tokens=1211 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2557 output_tokens=1130 provider=gemini-2.5-flash total_cost_inr=0.2885 total_cost_usd=0.0031883
+[2026-02-25 09:54:38,235: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:38,236: WARNING/MainProcess] 2026-02-25 09:54:38 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:38,236: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:41,573: WARNING/MainProcess] 2026-02-25 09:54:41 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1061 input_tokens=3908 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.233 output_tokens=1030 provider=gemini-2.5-flash total_cost_inr=0.3391 total_cost_usd=0.0037474
+[2026-02-25 09:54:41,775: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:41,776: WARNING/MainProcess] 2026-02-25 09:54:41 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:41,777: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:43,449: WARNING/MainProcess] 2026-02-25 09:54:43 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0355 input_tokens=1307 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.229 output_tokens=1012 provider=gemini-2.5-flash total_cost_inr=0.2645 total_cost_usd=0.0029221
+[2026-02-25 09:54:43,655: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:43,655: WARNING/MainProcess] 2026-02-25 09:54:43 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:43,656: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:46,113: WARNING/MainProcess] 2026-02-25 09:54:46 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0826 input_tokens=3044 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2025 output_tokens=895 provider=gemini-2.5-flash total_cost_inr=0.2851 total_cost_usd=0.0031507
+[2026-02-25 09:54:46,330: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:46,331: WARNING/MainProcess] 2026-02-25 09:54:46 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:46,331: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:47,863: WARNING/MainProcess] 2026-02-25 09:54:47 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.035 input_tokens=1290 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2688 output_tokens=1188 provider=gemini-2.5-flash total_cost_inr=0.3038 total_cost_usd=0.003357
+[2026-02-25 09:54:48,079: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:48,079: WARNING/MainProcess] 2026-02-25 09:54:48 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:48,080: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:49,313: WARNING/MainProcess] 2026-02-25 09:54:49 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0455 input_tokens=1677 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2122 output_tokens=938 provider=gemini-2.5-flash total_cost_inr=0.2578 total_cost_usd=0.0028481
+[2026-02-25 09:54:49,522: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:49,522: WARNING/MainProcess] 2026-02-25 09:54:49 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:49,523: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:53,280: WARNING/MainProcess] 2026-02-25 09:54:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1113 input_tokens=4101 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2554 output_tokens=1129 provider=gemini-2.5-flash total_cost_inr=0.3668 total_cost_usd=0.0040528
+[2026-02-25 09:54:53,366: WARNING/MainProcess] 2026-02-25 09:54:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0737 input_tokens=2713 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2394 output_tokens=1058 provider=gemini-2.5-flash total_cost_inr=0.313 total_cost_usd=0.0034589
+[2026-02-25 09:54:53,491: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:53,492: WARNING/MainProcess] 2026-02-25 09:54:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:53,492: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:53,575: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:53,576: WARNING/MainProcess] 2026-02-25 09:54:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:53,576: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:53,578: WARNING/MainProcess] 2026-02-25 09:54:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0351 input_tokens=1293 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2161 output_tokens=955 provider=gemini-2.5-flash total_cost_inr=0.2512 total_cost_usd=0.0027754
+[2026-02-25 09:54:53,780: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:53,781: WARNING/MainProcess] 2026-02-25 09:54:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:53,782: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:53,783: WARNING/MainProcess] 2026-02-25 09:54:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0489 input_tokens=1801 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2138 output_tokens=945 provider=gemini-2.5-flash total_cost_inr=0.2627 total_cost_usd=0.0029028
+[2026-02-25 09:54:53,982: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:53,983: WARNING/MainProcess] 2026-02-25 09:54:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:53,984: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:56,751: WARNING/MainProcess] 2026-02-25 09:54:56 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0826 input_tokens=3044 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2552 output_tokens=1128 provider=gemini-2.5-flash total_cost_inr=0.3379 total_cost_usd=0.0037332
+[2026-02-25 09:54:56,953: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:56,954: WARNING/MainProcess] 2026-02-25 09:54:56 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:56,954: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:58,102: WARNING/MainProcess] 2026-02-25 09:54:58 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0737 input_tokens=2713 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2586 output_tokens=1143 provider=gemini-2.5-flash total_cost_inr=0.3323 total_cost_usd=0.0036714
+[2026-02-25 09:54:58,335: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:58,336: WARNING/MainProcess] 2026-02-25 09:54:58 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:58,336: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:54:58,367: WARNING/MainProcess] 2026-02-25 09:54:58 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0418 input_tokens=1539 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2527 output_tokens=1117 provider=gemini-2.5-flash total_cost_inr=0.2945 total_cost_usd=0.0032542
+[2026-02-25 09:54:58,637: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:54:58,637: WARNING/MainProcess] 2026-02-25 09:54:58 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:54:58,638: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:02,910: WARNING/MainProcess] 2026-02-25 09:55:02 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0439 input_tokens=1617 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2462 output_tokens=1088 provider=gemini-2.5-flash total_cost_inr=0.2901 total_cost_usd=0.0032051
+[2026-02-25 09:55:03,284: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:03,285: WARNING/MainProcess] 2026-02-25 09:55:03 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:03,285: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:03,287: WARNING/MainProcess] 2026-02-25 09:55:03 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2285 output_tokens=1010 provider=gemini-2.5-flash total_cost_inr=0.2711 total_cost_usd=0.0029957
+[2026-02-25 09:55:03,452: WARNING/MainProcess] 2026-02-25 09:55:03 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.035 input_tokens=1290 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.241 output_tokens=1065 provider=gemini-2.5-flash total_cost_inr=0.276 total_cost_usd=0.0030495
+[2026-02-25 09:55:03,494: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:03,495: WARNING/MainProcess] 2026-02-25 09:55:03 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:03,495: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:03,719: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:03,720: WARNING/MainProcess] 2026-02-25 09:55:03 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:03,720: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:04,454: WARNING/MainProcess] 2026-02-25 09:55:04 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1113 input_tokens=4101 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.248 output_tokens=1096 provider=gemini-2.5-flash total_cost_inr=0.3593 total_cost_usd=0.0039703
+[2026-02-25 09:55:04,658: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:04,658: WARNING/MainProcess] 2026-02-25 09:55:04 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:04,659: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:04,660: WARNING/MainProcess] 2026-02-25 09:55:04 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3192 output_tokens=1411 provider=gemini-2.5-flash total_cost_inr=0.3618 total_cost_usd=0.0039982
+[2026-02-25 09:55:04,863: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:04,865: WARNING/MainProcess] 2026-02-25 09:55:04 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:06,821: WARNING/MainProcess] 2026-02-25 09:55:06 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0499 input_tokens=1837 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2448 output_tokens=1082 provider=gemini-2.5-flash total_cost_inr=0.2947 total_cost_usd=0.0032561
+[2026-02-25 09:55:07,030: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:07,030: WARNING/MainProcess] 2026-02-25 09:55:07 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:07,284: WARNING/MainProcess] 2026-02-25 09:55:07 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.035 input_tokens=1290 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2 output_tokens=884 provider=gemini-2.5-flash total_cost_inr=0.235 total_cost_usd=0.002597
+[2026-02-25 09:55:07,487: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:07,488: WARNING/MainProcess] 2026-02-25 09:55:07 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:07,488: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:11,123: WARNING/MainProcess] 2026-02-25 09:55:11 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0329 input_tokens=1211 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2346 output_tokens=1037 provider=gemini-2.5-flash total_cost_inr=0.2675 total_cost_usd=0.0029558
+[2026-02-25 09:55:11,384: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:11,385: WARNING/MainProcess] 2026-02-25 09:55:11 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:11,385: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:13,417: WARNING/MainProcess] 2026-02-25 09:55:13 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0637 input_tokens=2348 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.229 output_tokens=1012 provider=gemini-2.5-flash total_cost_inr=0.2927 total_cost_usd=0.0032344
+[2026-02-25 09:55:13,672: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:13,673: WARNING/MainProcess] 2026-02-25 09:55:13 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:13,673: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:16,691: WARNING/MainProcess] 2026-02-25 09:55:16 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0329 input_tokens=1211 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2631 output_tokens=1163 provider=gemini-2.5-flash total_cost_inr=0.296 total_cost_usd=0.0032708
+[2026-02-25 09:55:16,923: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:16,924: WARNING/MainProcess] 2026-02-25 09:55:16 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:16,924: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:17,240: WARNING/MainProcess] 2026-02-25 09:55:17 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0413 input_tokens=1520 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2269 output_tokens=1003 provider=gemini-2.5-flash total_cost_inr=0.2682 total_cost_usd=0.0029635
+[2026-02-25 09:55:17,479: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:17,479: WARNING/MainProcess] 2026-02-25 09:55:17 [debug    ] alias_batch_analysis_complete  pairs_count=8 results_count=1
+[2026-02-25 09:55:17,820: WARNING/MainProcess] 2026-02-25 09:55:17 [info     ] alias_context_analysis_start   batch_count=40 batch_size=10 concurrent_limit=3 total_pairs=399
+[2026-02-25 09:55:17,821: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:17,822: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:17,823: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:19,601: WARNING/MainProcess] 2026-02-25 09:55:19 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0351 input_tokens=1293 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1697 output_tokens=750 provider=gemini-2.5-flash total_cost_inr=0.2048 total_cost_usd=0.0022629
+[2026-02-25 09:55:19,830: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:19,830: WARNING/MainProcess] 2026-02-25 09:55:19 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:19,831: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:23,963: WARNING/MainProcess] 2026-02-25 09:55:23 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1061 input_tokens=3908 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2093 output_tokens=925 provider=gemini-2.5-flash total_cost_inr=0.3154 total_cost_usd=0.0034849
+[2026-02-25 09:55:24,197: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:24,198: WARNING/MainProcess] 2026-02-25 09:55:24 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:24,199: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:24,578: WARNING/MainProcess] 2026-02-25 09:55:24 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0355 input_tokens=1307 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2536 output_tokens=1121 provider=gemini-2.5-flash total_cost_inr=0.2891 total_cost_usd=0.0031946
+[2026-02-25 09:55:24,807: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:24,808: WARNING/MainProcess] 2026-02-25 09:55:24 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:24,808: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:25,450: WARNING/MainProcess] 2026-02-25 09:55:25 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0737 input_tokens=2713 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2609 output_tokens=1153 provider=gemini-2.5-flash total_cost_inr=0.3345 total_cost_usd=0.0036964
+[2026-02-25 09:55:25,683: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:25,683: WARNING/MainProcess] 2026-02-25 09:55:25 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:25,684: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:22,480: WARNING/MainProcess] 2026-02-25 09:55:22 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0351 input_tokens=1293 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.202 output_tokens=893 provider=gemini-2.5-flash total_cost_inr=0.2371 total_cost_usd=0.0026204
+[2026-02-25 09:55:22,725: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:22,726: WARNING/MainProcess] 2026-02-25 09:55:22 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:22,726: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:22,728: WARNING/MainProcess] 2026-02-25 09:55:22 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0355 input_tokens=1307 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2557 output_tokens=1130 provider=gemini-2.5-flash total_cost_inr=0.2911 total_cost_usd=0.0032171
+[2026-02-25 09:55:22,969: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:22,970: WARNING/MainProcess] 2026-02-25 09:55:22 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:22,971: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:31,650: WARNING/MainProcess] 2026-02-25 09:55:31 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1779 input_tokens=6552 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.226 output_tokens=999 provider=gemini-2.5-flash total_cost_inr=0.4039 total_cost_usd=0.0044631
+[2026-02-25 09:55:31,899: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:31,900: WARNING/MainProcess] 2026-02-25 09:55:31 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:31,900: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:32,065: WARNING/MainProcess] 2026-02-25 09:55:32 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1368 input_tokens=5037 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2539 output_tokens=1122 provider=gemini-2.5-flash total_cost_inr=0.3906 total_cost_usd=0.0043161
+[2026-02-25 09:55:32,297: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:32,298: WARNING/MainProcess] 2026-02-25 09:55:32 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:32,298: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:34,020: WARNING/MainProcess] 2026-02-25 09:55:34 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3514 output_tokens=1553 provider=gemini-2.5-flash total_cost_inr=0.394 total_cost_usd=0.0043532
+[2026-02-25 09:55:34,261: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:34,262: WARNING/MainProcess] 2026-02-25 09:55:34 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:34,263: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:35,180: WARNING/MainProcess] 2026-02-25 09:55:35 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0826 input_tokens=3044 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2507 output_tokens=1108 provider=gemini-2.5-flash total_cost_inr=0.3333 total_cost_usd=0.0036832
+[2026-02-25 09:55:35,418: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:35,419: WARNING/MainProcess] 2026-02-25 09:55:35 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:35,419: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:38,358: WARNING/MainProcess] 2026-02-25 09:55:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0499 input_tokens=1837 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2984 output_tokens=1319 provider=gemini-2.5-flash total_cost_inr=0.3483 total_cost_usd=0.0038486
+[2026-02-25 09:55:38,463: WARNING/MainProcess] 2026-02-25 09:55:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2677 output_tokens=1183 provider=gemini-2.5-flash total_cost_inr=0.3103 total_cost_usd=0.0034282
+[2026-02-25 09:55:38,574: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:38,575: WARNING/MainProcess] 2026-02-25 09:55:38 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:38,668: WARNING/MainProcess] 2026-02-25 09:55:38 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:38,668: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:38,667: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:38,800: WARNING/MainProcess] 2026-02-25 09:55:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0499 input_tokens=1837 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2215 output_tokens=979 provider=gemini-2.5-flash total_cost_inr=0.2714 total_cost_usd=0.0029986
+[2026-02-25 09:55:39,003: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:39,004: WARNING/MainProcess] 2026-02-25 09:55:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:39,521: WARNING/MainProcess] 2026-02-25 09:55:39 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.236 output_tokens=1043 provider=gemini-2.5-flash total_cost_inr=0.2786 total_cost_usd=0.0030782
+[2026-02-25 09:55:39,723: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:39,724: WARNING/MainProcess] 2026-02-25 09:55:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:40,476: WARNING/MainProcess] 2026-02-25 09:55:40 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1113 input_tokens=4101 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.286 output_tokens=1264 provider=gemini-2.5-flash total_cost_inr=0.3973 total_cost_usd=0.0043903
+[2026-02-25 09:55:40,662: WARNING/MainProcess] 2026-02-25 09:55:40 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2174 output_tokens=961 provider=gemini-2.5-flash total_cost_inr=0.26 total_cost_usd=0.0028732
+[2026-02-25 09:55:40,686: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:40,687: WARNING/MainProcess] 2026-02-25 09:55:40 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:40,687: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:40,868: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:40,869: WARNING/MainProcess] 2026-02-25 09:55:40 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:44,663: WARNING/MainProcess] 2026-02-25 09:55:44 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0883 input_tokens=3252 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2885 output_tokens=1275 provider=gemini-2.5-flash total_cost_inr=0.3768 total_cost_usd=0.0041631
+[2026-02-25 09:55:44,883: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:44,884: WARNING/MainProcess] 2026-02-25 09:55:44 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:44,884: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:44,886: WARNING/MainProcess] 2026-02-25 09:55:44 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.035 input_tokens=1290 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2149 output_tokens=950 provider=gemini-2.5-flash total_cost_inr=0.25 total_cost_usd=0.002762
+[2026-02-25 09:55:45,089: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:45,090: WARNING/MainProcess] 2026-02-25 09:55:45 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:45,090: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:48,252: WARNING/MainProcess] 2026-02-25 09:55:48 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0413 input_tokens=1520 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1946 output_tokens=860 provider=gemini-2.5-flash total_cost_inr=0.2358 total_cost_usd=0.002606
+[2026-02-25 09:55:48,488: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:48,488: WARNING/MainProcess] 2026-02-25 09:55:48 [debug    ] alias_batch_analysis_complete  pairs_count=8 results_count=1
+[2026-02-25 09:55:48,823: WARNING/MainProcess] 2026-02-25 09:55:48 [info     ] alias_context_analysis_start   batch_count=40 batch_size=10 concurrent_limit=3 total_pairs=399
+[2026-02-25 09:55:48,823: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:48,825: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:48,825: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:49,467: WARNING/MainProcess] 2026-02-25 09:55:49 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0413 input_tokens=1520 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2045 output_tokens=904 provider=gemini-2.5-flash total_cost_inr=0.2458 total_cost_usd=0.002716
+[2026-02-25 09:55:49,672: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:49,673: WARNING/MainProcess] 2026-02-25 09:55:49 [debug    ] alias_batch_analysis_complete  pairs_count=8 results_count=1
+[2026-02-25 09:55:50,012: WARNING/MainProcess] 2026-02-25 09:55:50 [info     ] alias_context_analysis_start   batch_count=40 batch_size=10 concurrent_limit=3 total_pairs=399
+[2026-02-25 09:55:50,013: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:50,014: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:50,015: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:53,194: WARNING/MainProcess] 2026-02-25 09:55:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0625 input_tokens=2303 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3059 output_tokens=1352 provider=gemini-2.5-flash total_cost_inr=0.3684 total_cost_usd=0.0040709
+[2026-02-25 09:55:53,398: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:53,399: WARNING/MainProcess] 2026-02-25 09:55:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:53,399: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:54,921: WARNING/MainProcess] 2026-02-25 09:55:54 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0556 input_tokens=2048 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1939 output_tokens=857 provider=gemini-2.5-flash total_cost_inr=0.2495 total_cost_usd=0.0027569
+[2026-02-25 09:55:55,126: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:55,127: WARNING/MainProcess] 2026-02-25 09:55:55 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:55,127: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:55,306: WARNING/MainProcess] 2026-02-25 09:55:55 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0329 input_tokens=1211 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2654 output_tokens=1173 provider=gemini-2.5-flash total_cost_inr=0.2983 total_cost_usd=0.0032958
+[2026-02-25 09:55:55,509: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:55,510: WARNING/MainProcess] 2026-02-25 09:55:55 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:55,510: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:56,337: WARNING/MainProcess] 2026-02-25 09:55:56 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0917 input_tokens=3379 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2235 output_tokens=988 provider=gemini-2.5-flash total_cost_inr=0.3153 total_cost_usd=0.0034837
+[2026-02-25 09:55:56,544: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:56,545: WARNING/MainProcess] 2026-02-25 09:55:56 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:56,545: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:55:57,729: WARNING/MainProcess] 2026-02-25 09:55:57 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0351 input_tokens=1293 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1778 output_tokens=786 provider=gemini-2.5-flash total_cost_inr=0.2129 total_cost_usd=0.0023529
+[2026-02-25 09:55:57,936: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:55:57,937: WARNING/MainProcess] 2026-02-25 09:55:57 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:55:57,937: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:04,133: WARNING/MainProcess] 2026-02-25 09:56:04 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1375 input_tokens=5065 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2389 output_tokens=1056 provider=gemini-2.5-flash total_cost_inr=0.3764 total_cost_usd=0.0041595
+[2026-02-25 09:56:04,357: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:04,358: WARNING/MainProcess] 2026-02-25 09:56:04 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:04,358: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:05,806: WARNING/MainProcess] 2026-02-25 09:56:05 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0355 input_tokens=1307 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3043 output_tokens=1345 provider=gemini-2.5-flash total_cost_inr=0.3398 total_cost_usd=0.0037546
+[2026-02-25 09:56:06,009: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:06,010: WARNING/MainProcess] 2026-02-25 09:56:06 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:06,010: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:06,450: WARNING/MainProcess] 2026-02-25 09:56:06 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0551 input_tokens=2028 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2439 output_tokens=1078 provider=gemini-2.5-flash total_cost_inr=0.299 total_cost_usd=0.0033034
+[2026-02-25 09:56:06,654: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:06,655: WARNING/MainProcess] 2026-02-25 09:56:06 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:06,655: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:07,028: WARNING/MainProcess] 2026-02-25 09:56:07 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1699 input_tokens=6257 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1957 output_tokens=865 provider=gemini-2.5-flash total_cost_inr=0.3656 total_cost_usd=0.0040396
+[2026-02-25 09:56:07,254: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:07,256: WARNING/MainProcess] 2026-02-25 09:56:07 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:07,256: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:08,280: WARNING/MainProcess] 2026-02-25 09:56:08 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1118 input_tokens=4118 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.212 output_tokens=937 provider=gemini-2.5-flash total_cost_inr=0.3238 total_cost_usd=0.0035779
+[2026-02-25 09:56:08,488: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:08,488: WARNING/MainProcess] 2026-02-25 09:56:08 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:08,489: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:06,908: WARNING/MainProcess] 2026-02-25 09:56:06 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:06,909: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:01,371: WARNING/MainProcess] 2026-02-25 09:56:01 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0609 input_tokens=2244 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2597 output_tokens=1148 provider=gemini-2.5-flash total_cost_inr=0.3207 total_cost_usd=0.0035432
+[2026-02-25 09:56:01,586: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:01,587: WARNING/MainProcess] 2026-02-25 09:56:01 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:01,587: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:06,680: WARNING/MainProcess] 2026-02-25 09:56:06 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.4062 input_tokens=14963 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2369 output_tokens=1047 provider=gemini-2.5-flash total_cost_inr=0.6431 total_cost_usd=0.0071064
+[2026-02-25 09:56:06,907: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:11,635: WARNING/MainProcess] 2026-02-25 09:56:11 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2272 output_tokens=1004 provider=gemini-2.5-flash total_cost_inr=0.2698 total_cost_usd=0.0029807
+[2026-02-25 09:56:11,840: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:11,841: WARNING/MainProcess] 2026-02-25 09:56:11 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:11,841: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:12,327: WARNING/MainProcess] 2026-02-25 09:56:12 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.197 input_tokens=7256 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2118 output_tokens=936 provider=gemini-2.5-flash total_cost_inr=0.4088 total_cost_usd=0.0045168
+[2026-02-25 09:56:12,536: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:12,537: WARNING/MainProcess] 2026-02-25 09:56:12 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:12,537: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:13,713: WARNING/MainProcess] 2026-02-25 09:56:13 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0426 input_tokens=1569 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2172 output_tokens=960 provider=gemini-2.5-flash total_cost_inr=0.2598 total_cost_usd=0.0028707
+[2026-02-25 09:56:13,917: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:13,918: WARNING/MainProcess] 2026-02-25 09:56:13 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:19,585: WARNING/MainProcess] 2026-02-25 09:56:19 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0499 input_tokens=1837 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2439 output_tokens=1078 provider=gemini-2.5-flash total_cost_inr=0.2938 total_cost_usd=0.0032461
+[2026-02-25 09:56:19,806: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:19,807: WARNING/MainProcess] 2026-02-25 09:56:19 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:21,239: WARNING/MainProcess] 2026-02-25 09:56:21 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0558 input_tokens=2054 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2554 output_tokens=1129 provider=gemini-2.5-flash total_cost_inr=0.3112 total_cost_usd=0.0034387
+[2026-02-25 09:56:21,453: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:21,453: WARNING/MainProcess] 2026-02-25 09:56:21 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:21,454: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:22,023: WARNING/MainProcess] 2026-02-25 09:56:22 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1158 input_tokens=4264 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2394 output_tokens=1058 provider=gemini-2.5-flash total_cost_inr=0.3551 total_cost_usd=0.0039242
+[2026-02-25 09:56:22,235: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:22,236: WARNING/MainProcess] 2026-02-25 09:56:22 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:22,236: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:22,238: WARNING/MainProcess] 2026-02-25 09:56:22 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0412 input_tokens=1516 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2688 output_tokens=1188 provider=gemini-2.5-flash total_cost_inr=0.3099 total_cost_usd=0.0034248
+[2026-02-25 09:56:22,454: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:22,454: WARNING/MainProcess] 2026-02-25 09:56:22 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:22,455: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:22,567: WARNING/MainProcess] 2026-02-25 09:56:22 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.2378 input_tokens=8759 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1984 output_tokens=877 provider=gemini-2.5-flash total_cost_inr=0.4362 total_cost_usd=0.0048202
+[2026-02-25 09:56:22,781: WARNING/MainProcess] 2026-02-25 09:56:22 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:22,782: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:22,781: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:26,422: WARNING/MainProcess] 2026-02-25 09:56:26 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0883 input_tokens=3252 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3321 output_tokens=1468 provider=gemini-2.5-flash total_cost_inr=0.4204 total_cost_usd=0.0046456
+[2026-02-25 09:56:26,630: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:26,631: WARNING/MainProcess] 2026-02-25 09:56:26 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:26,632: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:27,167: WARNING/MainProcess] 2026-02-25 09:56:27 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0413 input_tokens=1520 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2229 output_tokens=985 provider=gemini-2.5-flash total_cost_inr=0.2641 total_cost_usd=0.0029185
+[2026-02-25 09:56:27,378: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:27,379: WARNING/MainProcess] 2026-02-25 09:56:27 [debug    ] alias_batch_analysis_complete  pairs_count=8 results_count=1
+[2026-02-25 09:56:27,720: WARNING/MainProcess] 2026-02-25 09:56:27 [info     ] alias_context_analysis_start   batch_count=40 batch_size=10 concurrent_limit=3 total_pairs=399
+[2026-02-25 09:56:27,721: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:27,722: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:27,723: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:23,253: WARNING/MainProcess] 2026-02-25 09:56:23 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1097 input_tokens=4040 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3299 output_tokens=1458 provider=gemini-2.5-flash total_cost_inr=0.4396 total_cost_usd=0.004857
+[2026-02-25 09:56:23,481: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:23,482: WARNING/MainProcess] 2026-02-25 09:56:23 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:23,482: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:26,737: WARNING/MainProcess] 2026-02-25 09:56:26 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0599 input_tokens=2205 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2278 output_tokens=1007 provider=gemini-2.5-flash total_cost_inr=0.2877 total_cost_usd=0.003179
+[2026-02-25 09:56:26,949: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:26,949: WARNING/MainProcess] 2026-02-25 09:56:26 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:26,950: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:27,626: WARNING/MainProcess] 2026-02-25 09:56:27 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0888 input_tokens=3272 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2898 output_tokens=1281 provider=gemini-2.5-flash total_cost_inr=0.3787 total_cost_usd=0.0041841
+[2026-02-25 09:56:27,846: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:27,847: WARNING/MainProcess] 2026-02-25 09:56:27 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:27,847: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:30,926: WARNING/MainProcess] 2026-02-25 09:56:30 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0902 input_tokens=3321 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2077 output_tokens=918 provider=gemini-2.5-flash total_cost_inr=0.2979 total_cost_usd=0.0032913
+[2026-02-25 09:56:31,141: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:31,141: WARNING/MainProcess] 2026-02-25 09:56:31 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:31,142: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:31,143: WARNING/MainProcess] 2026-02-25 09:56:31 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0449 input_tokens=1655 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1801 output_tokens=796 provider=gemini-2.5-flash total_cost_inr=0.225 total_cost_usd=0.0024865
+[2026-02-25 09:56:31,355: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:31,355: WARNING/MainProcess] 2026-02-25 09:56:31 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:31,356: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:37,139: WARNING/MainProcess] 2026-02-25 09:56:37 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.046 input_tokens=1696 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1941 output_tokens=858 provider=gemini-2.5-flash total_cost_inr=0.2402 total_cost_usd=0.0026538
+[2026-02-25 09:56:37,375: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:37,376: WARNING/MainProcess] 2026-02-25 09:56:37 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:37,377: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:37,456: WARNING/MainProcess] 2026-02-25 09:56:37 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0602 input_tokens=2216 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1925 output_tokens=851 provider=gemini-2.5-flash total_cost_inr=0.2527 total_cost_usd=0.0027923
+[2026-02-25 09:56:37,720: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:37,721: WARNING/MainProcess] 2026-02-25 09:56:37 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:37,721: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:38,522: WARNING/MainProcess] 2026-02-25 09:56:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1543 input_tokens=5684 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2778 output_tokens=1228 provider=gemini-2.5-flash total_cost_inr=0.4322 total_cost_usd=0.0047752
+[2026-02-25 09:56:38,740: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:38,741: WARNING/MainProcess] 2026-02-25 09:56:38 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:38,741: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:39,327: WARNING/MainProcess] 2026-02-25 09:56:39 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.488 input_tokens=17973 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1991 output_tokens=880 provider=gemini-2.5-flash total_cost_inr=0.6871 total_cost_usd=0.0075919
+[2026-02-25 09:56:39,527: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:39,527: WARNING/MainProcess] 2026-02-25 09:56:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:39,528: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:40,116: WARNING/MainProcess] 2026-02-25 09:56:40 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0586 input_tokens=2158 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2156 output_tokens=953 provider=gemini-2.5-flash total_cost_inr=0.2742 total_cost_usd=0.0030299
+[2026-02-25 09:56:40,321: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:40,322: WARNING/MainProcess] 2026-02-25 09:56:40 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:40,323: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:41,326: WARNING/MainProcess] 2026-02-25 09:56:41 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1898 input_tokens=6989 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2106 output_tokens=931 provider=gemini-2.5-flash total_cost_inr=0.4004 total_cost_usd=0.0044242
+[2026-02-25 09:56:41,525: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:41,521: WARNING/MainProcess] 2026-02-25 09:56:41 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0571 input_tokens=2103 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2376 output_tokens=1050 provider=gemini-2.5-flash total_cost_inr=0.2947 total_cost_usd=0.0032559
+[2026-02-25 09:56:41,526: WARNING/MainProcess] 2026-02-25 09:56:41 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:41,526: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:41,736: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:41,735: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:41,736: WARNING/MainProcess] 2026-02-25 09:56:41 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:45,152: WARNING/MainProcess] 2026-02-25 09:56:45 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3871 input_tokens=14259 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.264 output_tokens=1167 provider=gemini-2.5-flash total_cost_inr=0.6512 total_cost_usd=0.0071952
+[2026-02-25 09:56:45,356: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:45,356: WARNING/MainProcess] 2026-02-25 09:56:45 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:45,357: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:46,742: WARNING/MainProcess] 2026-02-25 09:56:46 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1255 input_tokens=4624 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3059 output_tokens=1352 provider=gemini-2.5-flash total_cost_inr=0.4314 total_cost_usd=0.0047672
+[2026-02-25 09:56:46,946: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:46,947: WARNING/MainProcess] 2026-02-25 09:56:46 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:46,947: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:47,983: WARNING/MainProcess] 2026-02-25 09:56:47 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:47,983: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:47,762: WARNING/MainProcess] 2026-02-25 09:56:47 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.2716 input_tokens=10003 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2509 output_tokens=1109 provider=gemini-2.5-flash total_cost_inr=0.5225 total_cost_usd=0.0057734
+[2026-02-25 09:56:47,981: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:48,736: WARNING/MainProcess] 2026-02-25 09:56:48 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0894 input_tokens=3292 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1885 output_tokens=833 provider=gemini-2.5-flash total_cost_inr=0.2778 total_cost_usd=0.0030701
+[2026-02-25 09:56:48,938: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:48,939: WARNING/MainProcess] 2026-02-25 09:56:48 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:48,940: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:50,260: WARNING/MainProcess] 2026-02-25 09:56:50 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3408 input_tokens=12552 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2258 output_tokens=998 provider=gemini-2.5-flash total_cost_inr=0.5666 total_cost_usd=0.0062606
+[2026-02-25 09:56:50,472: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:50,473: WARNING/MainProcess] 2026-02-25 09:56:50 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:50,473: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:52,905: WARNING/MainProcess] 2026-02-25 09:56:52 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.2631 input_tokens=9691 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1894 output_tokens=837 provider=gemini-2.5-flash total_cost_inr=0.4525 total_cost_usd=0.0049998
+[2026-02-25 09:56:53,106: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:53,107: WARNING/MainProcess] 2026-02-25 09:56:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:53,107: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:53,109: WARNING/MainProcess] 2026-02-25 09:56:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0778 input_tokens=2867 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2455 output_tokens=1085 provider=gemini-2.5-flash total_cost_inr=0.3233 total_cost_usd=0.0035726
+[2026-02-25 09:56:53,308: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:53,310: WARNING/MainProcess] 2026-02-25 09:56:53 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:53,311: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:53,983: WARNING/MainProcess] 2026-02-25 09:56:53 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0419 input_tokens=1544 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2124 output_tokens=939 provider=gemini-2.5-flash total_cost_inr=0.2544 total_cost_usd=0.0028107
+[2026-02-25 09:56:54,182: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:54,183: WARNING/MainProcess] 2026-02-25 09:56:54 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:54,183: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:55,108: WARNING/MainProcess] 2026-02-25 09:56:55 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0956 input_tokens=3521 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2591 output_tokens=1145 provider=gemini-2.5-flash total_cost_inr=0.3547 total_cost_usd=0.0039188
+[2026-02-25 09:56:55,310: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:55,311: WARNING/MainProcess] 2026-02-25 09:56:55 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:55,311: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:57,163: WARNING/MainProcess] 2026-02-25 09:56:57 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1792 input_tokens=6602 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2093 output_tokens=925 provider=gemini-2.5-flash total_cost_inr=0.3885 total_cost_usd=0.0042931
+[2026-02-25 09:56:57,377: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:57,378: WARNING/MainProcess] 2026-02-25 09:56:57 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:57,379: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:57,704: WARNING/MainProcess] 2026-02-25 09:56:57 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0614 input_tokens=2263 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.229 output_tokens=1012 provider=gemini-2.5-flash total_cost_inr=0.2904 total_cost_usd=0.0032089
+[2026-02-25 09:56:57,914: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:57,914: WARNING/MainProcess] 2026-02-25 09:56:57 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:57,915: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:59,524: WARNING/MainProcess] 2026-02-25 09:56:59 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1317 input_tokens=4850 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2181 output_tokens=964 provider=gemini-2.5-flash total_cost_inr=0.3498 total_cost_usd=0.003865
+[2026-02-25 09:56:59,717: WARNING/MainProcess] 2026-02-25 09:56:59 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3888 input_tokens=14320 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.183 output_tokens=809 provider=gemini-2.5-flash total_cost_inr=0.5718 total_cost_usd=0.0063185
+[2026-02-25 09:56:59,726: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:59,727: WARNING/MainProcess] 2026-02-25 09:56:59 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:59,727: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:56:59,925: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:56:59,926: WARNING/MainProcess] 2026-02-25 09:56:59 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:56:59,926: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:00,053: WARNING/MainProcess] 2026-02-25 09:57:00 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1097 input_tokens=4040 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3263 output_tokens=1442 provider=gemini-2.5-flash total_cost_inr=0.4359 total_cost_usd=0.004817
+[2026-02-25 09:57:00,261: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:00,262: WARNING/MainProcess] 2026-02-25 09:57:00 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:00,263: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:03,103: WARNING/MainProcess] 2026-02-25 09:57:03 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1047 input_tokens=3858 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2188 output_tokens=967 provider=gemini-2.5-flash total_cost_inr=0.3235 total_cost_usd=0.0035749
+[2026-02-25 09:57:03,307: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:03,308: WARNING/MainProcess] 2026-02-25 09:57:03 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:03,308: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:03,579: WARNING/MainProcess] 2026-02-25 09:57:03 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.075 input_tokens=2764 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2059 output_tokens=910 provider=gemini-2.5-flash total_cost_inr=0.2809 total_cost_usd=0.0031042
+[2026-02-25 09:57:03,783: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:03,784: WARNING/MainProcess] 2026-02-25 09:57:03 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:03,784: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:04,567: WARNING/MainProcess] 2026-02-25 09:57:04 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1047 input_tokens=3858 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2147 output_tokens=949 provider=gemini-2.5-flash total_cost_inr=0.3195 total_cost_usd=0.0035299
+[2026-02-25 09:57:04,770: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:04,771: WARNING/MainProcess] 2026-02-25 09:57:04 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:04,771: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:07,015: WARNING/MainProcess] 2026-02-25 09:57:07 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0567 input_tokens=2089 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.1887 output_tokens=834 provider=gemini-2.5-flash total_cost_inr=0.2454 total_cost_usd=0.0027117
+[2026-02-25 09:57:07,218: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:07,219: WARNING/MainProcess] 2026-02-25 09:57:07 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:07,220: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:07,461: WARNING/MainProcess] 2026-02-25 09:57:07 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1293 input_tokens=4762 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3253 output_tokens=1438 provider=gemini-2.5-flash total_cost_inr=0.4546 total_cost_usd=0.0050236
+[2026-02-25 09:57:07,665: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:07,667: WARNING/MainProcess] 2026-02-25 09:57:07 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:07,667: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:09,989: WARNING/MainProcess] 2026-02-25 09:57:09 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0536 input_tokens=1973 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2192 output_tokens=969 provider=gemini-2.5-flash total_cost_inr=0.2728 total_cost_usd=0.0030144
+[2026-02-25 09:57:10,192: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:10,193: WARNING/MainProcess] 2026-02-25 09:57:10 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:10,193: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:10,809: WARNING/MainProcess] 2026-02-25 09:57:10 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0714 input_tokens=2629 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2783 output_tokens=1230 provider=gemini-2.5-flash total_cost_inr=0.3497 total_cost_usd=0.0038637
+[2026-02-25 09:57:11,011: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:11,010: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:11,011: WARNING/MainProcess] 2026-02-25 09:57:11 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:13,185: WARNING/MainProcess] 2026-02-25 09:57:13 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.5847 input_tokens=21536 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2005 output_tokens=886 provider=gemini-2.5-flash total_cost_inr=0.7852 total_cost_usd=0.0086758
+[2026-02-25 09:57:13,413: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:13,414: WARNING/MainProcess] 2026-02-25 09:57:13 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:13,415: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:14,646: WARNING/MainProcess] 2026-02-25 09:57:14 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.2517 input_tokens=9271 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2812 output_tokens=1243 provider=gemini-2.5-flash total_cost_inr=0.5329 total_cost_usd=0.0058888
+[2026-02-25 09:57:14,852: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:14,853: WARNING/MainProcess] 2026-02-25 09:57:14 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:14,853: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:16,779: WARNING/MainProcess] 2026-02-25 09:57:16 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1741 input_tokens=6414 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2959 output_tokens=1308 provider=gemini-2.5-flash total_cost_inr=0.4701 total_cost_usd=0.0051942
+[2026-02-25 09:57:16,983: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:16,984: WARNING/MainProcess] 2026-02-25 09:57:16 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:16,984: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:17,775: WARNING/MainProcess] 2026-02-25 09:57:17 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1758 input_tokens=6474 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2604 output_tokens=1151 provider=gemini-2.5-flash total_cost_inr=0.4362 total_cost_usd=0.0048197
+[2026-02-25 09:57:17,975: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:17,976: WARNING/MainProcess] 2026-02-25 09:57:17 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:17,976: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:19,723: WARNING/MainProcess] 2026-02-25 09:57:19 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.5814 input_tokens=21416 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2471 output_tokens=1092 provider=gemini-2.5-flash total_cost_inr=0.8285 total_cost_usd=0.0091548
+[2026-02-25 09:57:19,924: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:19,925: WARNING/MainProcess] 2026-02-25 09:57:19 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:19,925: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:20,305: WARNING/MainProcess] 2026-02-25 09:57:20 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1373 input_tokens=5057 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2446 output_tokens=1081 provider=gemini-2.5-flash total_cost_inr=0.3819 total_cost_usd=0.0042196
+[2026-02-25 09:57:20,507: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:20,508: WARNING/MainProcess] 2026-02-25 09:57:20 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:20,508: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:21,155: WARNING/MainProcess] 2026-02-25 09:57:21 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3209 input_tokens=11820 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2448 output_tokens=1082 provider=gemini-2.5-flash total_cost_inr=0.5657 total_cost_usd=0.006251
+[2026-02-25 09:57:21,363: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:21,364: WARNING/MainProcess] 2026-02-25 09:57:21 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:21,364: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:23,809: WARNING/MainProcess] 2026-02-25 09:57:23 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.2792 input_tokens=10285 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2808 output_tokens=1241 provider=gemini-2.5-flash total_cost_inr=0.56 total_cost_usd=0.006188
+[2026-02-25 09:57:24,024: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:24,025: WARNING/MainProcess] 2026-02-25 09:57:24 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:24,026: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:24,996: WARNING/MainProcess] 2026-02-25 09:57:24 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1405 input_tokens=5174 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3152 output_tokens=1393 provider=gemini-2.5-flash total_cost_inr=0.4556 total_cost_usd=0.0050347
+[2026-02-25 09:57:25,197: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:25,198: WARNING/MainProcess] 2026-02-25 09:57:25 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:25,198: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:26,987: WARNING/MainProcess] 2026-02-25 09:57:26 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1314 input_tokens=4839 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2894 output_tokens=1279 provider=gemini-2.5-flash total_cost_inr=0.4208 total_cost_usd=0.0046492
+[2026-02-25 09:57:27,187: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:27,188: WARNING/MainProcess] 2026-02-25 09:57:27 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:27,188: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:27,962: WARNING/MainProcess] 2026-02-25 09:57:27 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3635 input_tokens=13388 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2041 output_tokens=902 provider=gemini-2.5-flash total_cost_inr=0.5676 total_cost_usd=0.0062714
+[2026-02-25 09:57:28,087: WARNING/MainProcess] 2026-02-25 09:57:28 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.5123 input_tokens=18871 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2484 output_tokens=1098 provider=gemini-2.5-flash total_cost_inr=0.7608 total_cost_usd=0.0084063
+[2026-02-25 09:57:28,170: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:28,171: WARNING/MainProcess] 2026-02-25 09:57:28 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:28,171: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:28,293: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:28,294: WARNING/MainProcess] 2026-02-25 09:57:28 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:28,294: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:32,256: WARNING/MainProcess] 2026-02-25 09:57:32 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0894 input_tokens=3292 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2106 output_tokens=931 provider=gemini-2.5-flash total_cost_inr=0.3 total_cost_usd=0.0033151
+[2026-02-25 09:57:32,461: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:32,463: WARNING/MainProcess] 2026-02-25 09:57:32 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:32,463: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:33,101: WARNING/MainProcess] 2026-02-25 09:57:33 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.083 input_tokens=3056 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.3477 output_tokens=1537 provider=gemini-2.5-flash total_cost_inr=0.4307 total_cost_usd=0.0047593
+[2026-02-25 09:57:33,311: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:33,311: WARNING/MainProcess] 2026-02-25 09:57:33 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:33,312: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:33,751: WARNING/MainProcess] 2026-02-25 09:57:33 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.3684 input_tokens=13568 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2432 output_tokens=1075 provider=gemini-2.5-flash total_cost_inr=0.6116 total_cost_usd=0.0067579
+[2026-02-25 09:57:33,968: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:33,969: WARNING/MainProcess] 2026-02-25 09:57:33 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:33,969: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:36,163: WARNING/MainProcess] 2026-02-25 09:57:36 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1158 input_tokens=4264 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2378 output_tokens=1051 provider=gemini-2.5-flash total_cost_inr=0.3536 total_cost_usd=0.0039067
+[2026-02-25 09:57:36,368: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:36,369: WARNING/MainProcess] 2026-02-25 09:57:36 [warning  ] alias_batch_parse_error        error="Expecting ',' delimiter: line 55 column 48 (char 2323)"
+[2026-02-25 09:57:36,370: WARNING/MainProcess] 2026-02-25 09:57:36 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=0
+[2026-02-25 09:57:36,370: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:38,672: WARNING/MainProcess] 2026-02-25 09:57:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0609 input_tokens=2243 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2602 output_tokens=1150 provider=gemini-2.5-flash total_cost_inr=0.3211 total_cost_usd=0.0035479
+[2026-02-25 09:57:38,884: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:38,885: WARNING/MainProcess] 2026-02-25 09:57:38 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:38,885: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:38,953: WARNING/MainProcess] 2026-02-25 09:57:38 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.1033 input_tokens=3805 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2455 output_tokens=1085 provider=gemini-2.5-flash total_cost_inr=0.3488 total_cost_usd=0.003854
+[2026-02-25 09:57:39,157: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:39,156: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:39,156: WARNING/MainProcess] 2026-02-25 09:57:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:39,622: WARNING/MainProcess] 2026-02-25 09:57:39 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0778 input_tokens=2867 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2163 output_tokens=956 provider=gemini-2.5-flash total_cost_inr=0.2941 total_cost_usd=0.0032501
+[2026-02-25 09:57:39,676: WARNING/MainProcess] 2026-02-25 09:57:39 [info     ] llm_cost_tracked               duration_ms=0 input_cost_inr=0.0978 input_tokens=3604 matter_id=91a4a4db-bc3d-40df-8dcc-49179ac49108 operation=entity_alias_resolution_batch output_cost_inr=0.2197 output_tokens=971 provider=gemini-2.5-flash total_cost_inr=0.3175 total_cost_usd=0.0035087
+[2026-02-25 09:57:39,826: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:39,827: WARNING/MainProcess] 2026-02-25 09:57:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:39,827: INFO/MainProcess] AFC is enabled with max remote calls: 10.
+[2026-02-25 09:57:39,897: INFO/MainProcess] HTTP Request: POST https://xmbtcgmjvdouqstiqqom.supabase.co/rest/v1/llm_costs "HTTP/1.1 201 Created"
+[2026-02-25 09:57:39,898: WARNING/MainProcess] 2026-02-25 09:57:39 [debug    ] alias_batch_analysis_complete  pairs_count=10 results_count=1
+[2026-02-25 09:57:39,898: INFO/MainProcess] AFC is enabled with max remote calls: 10.

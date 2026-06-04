@@ -44,6 +44,25 @@ SECTION_REFERENCE_PATTERN: Final[re.Pattern] = re.compile(
     re.IGNORECASE,
 )
 
+# Quality flags that mean a library Act's searchable body is INCOMPLETE — the
+# pipeline's own record that its text/chunks did not fully materialize. An Act
+# carrying any of these cannot yield a trustworthy "section not found" verdict
+# (its sections may simply be missing from the index), so it must be treated as
+# unavailable for verification rather than letting it emit confident-but-false
+# section_not_found at scale. Section lookup is text/regex-based over chunk
+# content, so EMBEDDING-only flags are deliberately excluded here — they affect
+# retrieval, not whether the section text is present to be found.
+# (2026-06-04: legacy doc a65f4b17 — chunking_failed, 3 chunks of a 9-page Act —
+#  drove 867 false section_not_found before this gate existed.)
+ACT_BODY_INCOMPLETE_FLAGS: Final[frozenset[str]] = frozenset({
+    "chunking_failed",
+    "zero_chunks",
+    "ocr_empty_text",
+    "ocr_failed",
+    "storage_missing",
+    "chain_error",
+})
+
 
 # =============================================================================
 # Data Classes
@@ -186,6 +205,27 @@ class ActIndexer:
             return self._index_cache[document_id]
 
         try:
+            # INPUT-QUALITY GATE: refuse to index a library Act whose pipeline
+            # recorded a body-incompleteness flag. Such a doc has an incomplete
+            # searchable body, so a "section not found" verdict from it would be
+            # confident-but-false. Raising here routes to verify_citation's
+            # existing ActIndexerError -> ACT_UNAVAILABLE path (no verifier change)
+            # and short-circuits BEFORE any not-found-explanation LLM call.
+            incomplete_reason = await asyncio.to_thread(
+                self._act_body_incompleteness_reason, document_id
+            )
+            if incomplete_reason:
+                logger.info(
+                    "act_index_skipped_body_incomplete",
+                    document_id=document_id,
+                    quality_flag=incomplete_reason,
+                )
+                raise ActIndexerError(
+                    f"Act document {document_id} body incomplete "
+                    f"({incomplete_reason}); cannot verify sections against it",
+                    code="ACT_BODY_INCOMPLETE",
+                )
+
             # Load all chunks (use parent chunks for better context)
             chunks, parent_count, _ = await asyncio.to_thread(
                 self.chunk_service.get_chunks_for_document,
@@ -267,6 +307,46 @@ class ActIndexer:
                 f"Failed to index Act document: {e}",
                 code="INDEXING_FAILED",
             ) from e
+
+    def _act_body_incompleteness_reason(self, document_id: str) -> str | None:
+        """Return the quality flag making this Act's body unusable for section
+        verification, or None if the Act is healthy or is not a library document.
+
+        Derived from the pipeline's OWN recorded ``library_documents.quality_flags``
+        (observed DB state) — not a heuristic threshold. A library Act flagged
+        chunking_failed / zero_chunks / etc. has an incomplete searchable body, so
+        any "section not found" verdict against it is unsafe.
+
+        Fail-open: any lookup error returns None so a transient DB hiccup can never
+        block verification of a genuinely healthy Act. Matter-document Acts (which
+        have no ``library_documents`` row) also return None and are never gated.
+        """
+        client = self.chunk_service.client
+        if client is None:
+            return None
+        try:
+            resp = (
+                client.table("library_documents")
+                .select("quality_flags")
+                .eq("id", document_id)
+                .limit(1)
+                .execute()
+            )
+        except Exception as e:  # noqa: BLE001 — fail-open on any lookup error
+            logger.warning(
+                "act_body_health_check_failed",
+                document_id=document_id,
+                error=str(e),
+            )
+            return None
+        rows = resp.data or []
+        if not rows:
+            return None  # not a library document -> no gate
+        flags = rows[0].get("quality_flags") or []
+        for flag in flags:
+            if flag in ACT_BODY_INCOMPLETE_FLAGS:
+                return flag
+        return None
 
     async def get_section_chunks(
         self,
